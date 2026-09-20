@@ -88,7 +88,7 @@ function applyColorSuggestionToRequirement(requirementLabel, mediaKey, termText)
   if (!requirement || !term || !key) return;
 
   var alreadyInGroup = colorSuggestionTermExists(requirement, term);
-  var alreadyTagged = hasTagForMediaKey(key, term);
+  var alreadyTagged = hasChecklistAssignedTagForMediaKey(key, requirement, term);
   if (alreadyInGroup && alreadyTagged) {
     setStatus('Color already selected: ' + term);
     return;
@@ -96,6 +96,7 @@ function applyColorSuggestionToRequirement(requirementLabel, mediaKey, termText)
 
   var previousKeywords = JSON.parse(JSON.stringify(checklistKeywordsByItem || {}));
   var previousTags = JSON.parse(JSON.stringify(captionItemTagsByMedia || {}));
+  var previousAssignments = JSON.parse(JSON.stringify(checklistAssignmentsByMedia || {}));
   var previousChecked = JSON.parse(JSON.stringify(checklistCheckedByMedia || {}));
   var previousDescriptors = JSON.parse(JSON.stringify(checklistTermDescriptorsByMedia || {}));
   var previousReviewed = new Set(state.reviewedSet || []);
@@ -108,11 +109,11 @@ function applyColorSuggestionToRequirement(requirementLabel, mediaKey, termText)
   }
 
   if (!alreadyTagged) {
-    addTagToMediaKey(key, term, {
+    assignChecklistTagToMediaKey(key, requirement, term, {
+      consumeUnscoped: true,
       skipSave: true,
       skipRefresh: true,
-      skipUndo: true,
-      reviewRequirementLabel: requirement
+      skipUndo: true
     });
   }
   syncReviewedFromChecklistAll();
@@ -121,6 +122,7 @@ function applyColorSuggestionToRequirement(requirementLabel, mediaKey, termText)
   if (!capturedSave) {
     checklistKeywordsByItem = previousKeywords;
     captionItemTagsByMedia = previousTags;
+    checklistAssignmentsByMedia = previousAssignments;
     checklistCheckedByMedia = previousChecked;
     checklistTermDescriptorsByMedia = previousDescriptors;
     state.reviewedSet = previousReviewed;
@@ -133,6 +135,7 @@ function applyColorSuggestionToRequirement(requirementLabel, mediaKey, termText)
     if (!ok) {
       checklistKeywordsByItem = previousKeywords;
       captionItemTagsByMedia = previousTags;
+      checklistAssignmentsByMedia = previousAssignments;
       checklistCheckedByMedia = previousChecked;
       checklistTermDescriptorsByMedia = previousDescriptors;
       state.reviewedSet = previousReviewed;
@@ -205,7 +208,7 @@ function renderColorSuggestionsForGroup(groupEl, requirementLabel, mediaKey, exi
     btn.title = inGroup
       ? ('Apply detected color: ' + term)
       : ('Add ' + term + ' to ' + requirementLabel + ' and apply it');
-    btn.disabled = hasTagForMediaKey(mediaKey, term);
+    btn.disabled = hasChecklistAssignedTagForMediaKey(mediaKey, requirementLabel, term);
 
     var swatch = document.createElement('span');
     swatch.className = 'group-workbench-color-swatch';

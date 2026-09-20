@@ -2554,57 +2554,40 @@ iframe {
   border-radius: 6px;
   background: var(--panel-soft);
 }
-.test-generations-session-info-grid {
-  display: grid;
-  grid-template-columns: minmax(190px, .7fr) minmax(320px, 1.15fr) minmax(420px, 680px);
-  align-items: start;
-  gap: 12px;
-  min-width: 0;
-}
-.test-generations-session-detail-column,
-.test-generations-session-prompts,
-.test-generations-prompt-expectations {
-  min-width: 0;
-}
-.test-generations-session-detail-column > strong,
-.test-generations-session-prompt > strong,
-.test-generations-prompt-expectations > strong {
-  font-size: 11px;
-}
 .test-generations-session-detail-grid {
   display: grid;
-  gap: 0;
-  margin-top: 4px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: var(--panel);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
 }
 .test-generations-session-detail-grid > div {
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-  padding: 5px 0;
-  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  gap: 2px;
 }
-.test-generations-session-detail-grid > div:first-child { border-top: 0; }
 .test-generations-session-detail-grid span {
   color: var(--muted);
   font-size: 10px;
 }
 .test-generations-session-detail-grid strong {
-  min-width: 0;
   overflow: hidden;
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.test-generations-session-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(220px, .8fr);
+  align-items: start;
+  gap: 12px;
+  margin-top: 10px;
 }
 .test-generations-session-prompts {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 .test-generations-session-prompt { min-width: 0; }
+.test-generations-session-prompt > strong,
+.test-generations-prompt-expectations > strong { font-size: 11px; }
 .test-generations-session-prompt pre {
   margin: 4px 0 0;
   padding: 8px;
@@ -2678,14 +2661,8 @@ iframe {
   color: var(--muted);
   font-size: 10px;
 }
-@media (max-width: 1250px) {
-  .test-generations-session-info-grid {
-    grid-template-columns: minmax(190px, .7fr) minmax(320px, 1fr);
-  }
-  .test-generations-session-prompts {
-    grid-column: 1 / -1;
-    max-width: 760px;
-  }
+@media (max-width: 980px) {
+  .test-generations-session-lower { grid-template-columns: minmax(0, 1fr); }
 }
 .test-generations-library {
   display: grid;

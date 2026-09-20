@@ -268,17 +268,13 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     assert "status.duration" in script
     assert "status.seed" in script
     assert ".test-generations-session-details" in css
-    assert ".test-generations-session-info-grid" in css
-    assert "grid-template-columns: minmax(190px, .7fr) minmax(320px, 1.15fr) minmax(420px, 680px);" in css
-    assert ".test-generations-session-detail-column" in css
+    assert ".test-generations-session-lower" in css
     assert ".test-generations-prompt-expectations" in css
     assert ".test-generations-expectation-table" in css
     assert ".test-generations-expectation-row" in css
     assert "grid-template-columns: 72px minmax(0, 1fr) 92px minmax(0, .9fr);" in css
     assert ".test-generations-color-swatch" in css
     assert ".test-generations-session-prompt pre" in css
-    assert "@media (max-width: 1250px)" in css
-    assert "max-width: 760px;" in css
 
 
 def test_test_identity_is_owned_by_shell_header():

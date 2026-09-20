@@ -75,6 +75,9 @@ function normalizeAppConfigShape(cfg) {
   if (!out.requirements.termWrappersByTerm || typeof out.requirements.termWrappersByTerm !== 'object') {
     out.requirements.termWrappersByTerm = {};
   }
+  if (!out.requirements.termWrappersByGroup || typeof out.requirements.termWrappersByGroup !== 'object') {
+    out.requirements.termWrappersByGroup = {};
+  }
   if (out.requirements.termWrapperPrefixesByTerm && typeof out.requirements.termWrapperPrefixesByTerm === 'object') {
     Object.keys(out.requirements.termWrapperPrefixesByTerm).forEach(function (termKey) {
       if (!Object.prototype.hasOwnProperty.call(out.requirements.termWrappersByTerm, termKey)) {

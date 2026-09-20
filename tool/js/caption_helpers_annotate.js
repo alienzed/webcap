@@ -66,6 +66,32 @@ function buildSetTagUsageEntries(terms, limit) {
     });
 }
 
+function buildGroupTagUsageEntries(requirementLabel, limit) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requirement) return [];
+  var counts = {};
+  var labels = {};
+  getChecklistKeywordTermsForRequirement(requirement).forEach(function (term) {
+    var key = normalizeAnnotateUsageKey(term);
+    if (!key || labels[key]) return;
+    labels[key] = term;
+    counts[key] = 0;
+  });
+  (state.items || []).forEach(function (item) {
+    if (!item || !item.key) return;
+    getChecklistAssignedTagsForMediaKey(item.key, requirement).forEach(function (term) {
+      var key = normalizeAnnotateUsageKey(term);
+      if (!labels[key]) labels[key] = term;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+  });
+  return Object.keys(counts)
+    .filter(function (key) { return counts[key] > 0; })
+    .sort(function (a, b) { return counts[b] - counts[a] || labels[a].localeCompare(labels[b]); })
+    .slice(0, Math.max(1, Number(limit) || 6))
+    .map(function (key) { return { term: labels[key], count: counts[key] }; });
+}
+
 var ANNOTATE_STRIP_CONTEXT_PERCENT = 0.08;
 var ANNOTATE_STRIP_CONTEXT_FLOOR = 12;
 var ANNOTATE_STRIP_CONTEXT_CEILING = 40;
@@ -163,22 +189,21 @@ function buildAnnotateStripUsageStats(groups) {
     maxCountByGroup[groupKey] = 0;
     preparedGroups.push({
       key: groupKey,
+      requirement: String(group.requirement || group.name || '').trim(),
       terms: preparedTerms
     });
   });
 
   function countItem(item, targetCountsByGroupTerm, updateMax) {
-    if (!item || !item.key || typeof getTagsForMediaKey !== 'function') return;
-    var tags = getTagsForMediaKey(item.key);
-    if (!tags.length) return;
-    var tagSet = {};
-    tags.forEach(function (tag) {
-      var tagKey = normalizeAnnotateUsageKey(tag);
-      if (tagKey) tagSet[tagKey] = true;
-    });
+    if (!item || !item.key) return;
     preparedGroups.forEach(function (group) {
+      var selected = {};
+      getChecklistAssignedTagsForMediaKey(item.key, group.requirement).forEach(function (tag) {
+        var tagKey = normalizeAnnotateUsageKey(tag);
+        if (tagKey) selected[tagKey] = true;
+      });
       group.terms.forEach(function (term) {
-        if (!tagSet[term.key]) return;
+        if (!selected[term.key]) return;
         var countKey = group.key + '::' + term.key;
         targetCountsByGroupTerm[countKey] = (targetCountsByGroupTerm[countKey] || 0) + 1;
         if (updateMax && targetCountsByGroupTerm[countKey] > maxCountByGroup[group.key]) {
@@ -293,22 +318,20 @@ function setAnnotateStripVisible(nextVisible, persistNow) {
   }
 }
 
-function toggleAnnotateTag(term, options) {
+function toggleAnnotateTag(requirementLabel, term) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
   var text = normalizeCatalogTerm(term);
-  if (!text) return;
+  if (!requirement || !text) return;
   if (!state.currentItem || !state.currentItem.key) {
     setStatus('Select a media item to annotate.');
     return;
   }
   var mediaKey = state.currentItem.key;
-  if (hasTagForMediaKey(mediaKey, text)) {
-    if (typeof removeTagFromCurrentMedia === 'function') {
-      removeTagFromCurrentMedia(text);
-    }
-    renderAnnotateStrip();
-    return;
+  if (hasChecklistAssignedTagForMediaKey(mediaKey, requirement, text)) {
+    unassignChecklistTagFromMediaKey(mediaKey, requirement, text);
+  } else {
+    assignChecklistTagToMediaKey(mediaKey, requirement, text);
   }
-  addTagToCurrentMedia(text, options);
   renderAnnotateStrip();
 }
 
@@ -432,7 +455,7 @@ function renderAnnotateStrip() {
     var hasActiveTerm = false;
     var termEntries = [];
     group.terms.forEach(function (term) {
-      if (hasTagForMediaKey(mediaKey, term)) {
+      if (hasChecklistAssignedTagForMediaKey(mediaKey, groupRequirementLabel, term)) {
         hasActiveTerm = true;
       }
     });
@@ -462,7 +485,7 @@ function renderAnnotateStrip() {
     var activeTermsByKey = {};
     var activeTermCount = 0;
     group.terms.forEach(function (term) {
-      if (!hasTagForMediaKey(mediaKey, term)) return;
+      if (!hasChecklistAssignedTagForMediaKey(mediaKey, groupRequirementLabel, term)) return;
       var activeTermKey = normalizeAnnotateUsageKey(term);
       if (!activeTermKey || activeTermsByKey[activeTermKey]) return;
       activeTermsByKey[activeTermKey] = true;
@@ -481,9 +504,7 @@ function renderAnnotateStrip() {
       chip.className = 'annotate-strip-chip';
       chip.setAttribute('data-heat-level', String(heatLevel));
       var isActiveTerm = !!activeTermsByKey[termKey];
-      var isInCaption = typeof tagAppearsInCurrentCaption === 'function'
-        ? tagAppearsInCurrentCaption(term)
-        : false;
+      var isInCaption = checklistGroupTermAppearsInCurrentCaption(groupRequirementLabel, term, mediaKey);
       if (isActiveTerm) {
         chip.classList.add('active');
         hasActiveTerm = true;
@@ -522,11 +543,11 @@ function renderAnnotateStrip() {
       chipTitle += ' - right-click to edit prefix/suffix';
       chip.title = chipTitle;
       chip.onclick = function () {
-        toggleAnnotateTag(term);
+        toggleAnnotateTag(groupRequirementLabel, term);
       };
       chip.oncontextmenu = function (e) {
         e.preventDefault();
-        openChecklistTermAffixesModal(term);
+        openChecklistTermAffixesModal(groupRequirementLabel, term);
       };
       termEntries.push({
         term: term,

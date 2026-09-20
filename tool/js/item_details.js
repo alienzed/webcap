@@ -1,6 +1,6 @@
 // Per-item tags and metadata loading
-var captionItemTagsByMedia = {};
-var itemTagsClipboard = [];
+var captionItemTagsByMedia = {}; // Unscoped tags only.
+var itemTagsClipboard = null; // { unscoped: [], groups: { requirement: [] } }
 var mediaMetadataLoading = false;
 
 function isMediaMetadataLoading() {
@@ -13,13 +13,60 @@ function normalizeItemTag(text) {
   return String(text || '').trim().replace(/\s+/g, ' ');
 }
 
-function getTagsForMediaKey(mediaKey) {
+function getUnscopedTagsForMediaKey(mediaKey) {
   var tags = captionItemTagsByMedia[mediaKey];
   return Array.isArray(tags) ? tags.slice() : [];
 }
 
+function getTagsForMediaKey(mediaKey) {
+  var seen = {};
+  var out = [];
+  getUnscopedTagsForMediaKey(mediaKey).concat(
+    typeof getChecklistAssignedTermsForMediaKey === 'function'
+      ? getChecklistAssignedTermsForMediaKey(mediaKey)
+      : []
+  ).forEach(function (rawTag) {
+    var tag = normalizeItemTag(rawTag);
+    var low = tag.toLowerCase();
+    if (!tag || seen[low]) return;
+    seen[low] = true;
+    out.push(tag);
+  });
+  return out;
+}
+
+function hasUnscopedTagForMediaKey(mediaKey, tagText) {
+  var target = normalizeItemTag(tagText).toLowerCase();
+  if (!target) return false;
+  return getUnscopedTagsForMediaKey(mediaKey).some(function (tag) {
+    return normalizeItemTag(tag).toLowerCase() === target;
+  });
+}
+
 function getTagClipboardTags() {
-  return Array.isArray(itemTagsClipboard) ? itemTagsClipboard.slice() : [];
+  var clipboard = itemTagsClipboard && typeof itemTagsClipboard === 'object'
+    ? itemTagsClipboard
+    : { unscoped: [], groups: {} };
+  var seen = {};
+  var out = [];
+  (Array.isArray(clipboard.unscoped) ? clipboard.unscoped : []).forEach(function (tag) {
+    var clean = normalizeItemTag(tag);
+    var low = clean.toLowerCase();
+    if (!clean || seen[low]) return;
+    seen[low] = true;
+    out.push(clean);
+  });
+  var groups = clipboard.groups && typeof clipboard.groups === 'object' ? clipboard.groups : {};
+  Object.keys(groups).forEach(function (requirement) {
+    (Array.isArray(groups[requirement]) ? groups[requirement] : []).forEach(function (tag) {
+      var clean = normalizeItemTag(tag);
+      var low = clean.toLowerCase();
+      if (!clean || seen[low]) return;
+      seen[low] = true;
+      out.push(clean);
+    });
+  });
+  return out;
 }
 
 function hasTagClipboardTags() {
@@ -50,16 +97,28 @@ function copyTagsForMediaKey(mediaKey) {
     setStatus('No media item selected to copy tags.');
     return false;
   }
-  var tags = getTagsForMediaKey(key)
+  var unscoped = getUnscopedTagsForMediaKey(key)
     .map(function (tag) { return normalizeItemTag(tag); })
     .filter(Boolean);
-  if (!tags.length) {
+  var groups = {};
+  if (typeof getChecklistAssignmentsForMediaKey === 'function') {
+    var assignmentMap = getChecklistAssignmentsForMediaKey(key);
+    Object.keys(assignmentMap).forEach(function (requirement) {
+      var terms = getChecklistAssignedTagsForMediaKey(key, requirement);
+      if (terms.length) groups[requirement] = terms;
+    });
+  }
+  var flattened = getTagsForMediaKey(key);
+  if (!flattened.length) {
     setStatus('No tags to copy.');
     return false;
   }
-  itemTagsClipboard = tags.slice();
+  itemTagsClipboard = {
+    unscoped: unscoped,
+    groups: groups
+  };
   updateTagClipboardUi();
-  setStatus('Copied ' + tags.length + ' tag' + (tags.length === 1 ? '' : 's') + '.');
+  setStatus('Copied ' + flattened.length + ' tag' + (flattened.length === 1 ? '' : 's') + '.');
   return true;
 }
 
@@ -78,7 +137,7 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
     return { added: 0, alreadyPresent: 0 };
   }
   var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
-  var current = getTagsForMediaKey(key);
+  var current = getUnscopedTagsForMediaKey(key);
   var seen = {};
   current.forEach(function (tag) {
     var low = normalizeItemTag(tag).toLowerCase();
@@ -97,9 +156,6 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
     }
     seen[low] = true;
     next.push(tag);
-    if (typeof commitChecklistDescriptorSnapshotForMediaKey === 'function') {
-      commitChecklistDescriptorSnapshotForMediaKey(key, tag);
-    }
     ensureCaptionHelperPhraseInCatalog(tag, true);
     added += 1;
   });
@@ -118,6 +174,9 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
 function pasteClipboardTagsToMediaKey(mediaKey) {
   var key = String(mediaKey || '').trim();
   var clipboardTags = getTagClipboardTags();
+  var clipboard = itemTagsClipboard && typeof itemTagsClipboard === 'object'
+    ? itemTagsClipboard
+    : { unscoped: [], groups: {} };
   if (!key) {
     setStatus('No media item selected to paste tags into.');
     return false;
@@ -130,9 +189,36 @@ function pasteClipboardTagsToMediaKey(mediaKey) {
     setStatus('Paste tags cancelled.');
     return false;
   }
-  var result = mergeTagsIntoMediaKey(key, clipboardTags);
+
+  var unscopedResult = mergeTagsIntoMediaKey(key, clipboard.unscoped || []);
+  var assigned = 0;
+  var alreadyAssigned = 0;
+  var groups = clipboard.groups && typeof clipboard.groups === 'object' ? clipboard.groups : {};
+  Object.keys(groups).forEach(function (requirement) {
+    (Array.isArray(groups[requirement]) ? groups[requirement] : []).forEach(function (term) {
+      if (hasChecklistAssignedTagForMediaKey(key, requirement, term)) {
+        alreadyAssigned += 1;
+        return;
+      }
+      if (assignChecklistTagToMediaKey(key, requirement, term, {
+        consumeUnscoped: true,
+        skipSave: true,
+        skipRefresh: true,
+        skipUndo: true
+      })) assigned += 1;
+    });
+  });
+  if (assigned) {
+    saveChecklistToFolderState();
+    refreshTagDrivenPanelsForMediaKey(key);
+    if (shouldLiveSyncEditorToTemplateForMediaKey(key)) syncEditorToCurrentTemplatePreview();
+  }
   updateTagClipboardUi();
-  setStatus('Merged ' + result.added + ' tag' + (result.added === 1 ? '' : 's') + ' (' + result.alreadyPresent + ' already present).');
+  setStatus(
+    'Merged ' + (unscopedResult.added + assigned) + ' annotation' +
+    ((unscopedResult.added + assigned) === 1 ? '' : 's') +
+    ' (' + (unscopedResult.alreadyPresent + alreadyAssigned) + ' already present).'
+  );
   return true;
 }
 
@@ -472,12 +558,11 @@ function computeRequirementProgressForMediaKey(mediaKey) {
   for (var i = 0; i < requirements.length; i++) {
     var requirementLabel = String(requirements[i] || '').trim();
     if (!requirementLabel) continue;
-    var terms = parseRequirementProgressTerms(getChecklistKeywordTermsForRequirement(requirementLabel).join(', '));
-    if (!terms.length) continue;
+    var terms = getChecklistAssignedTagsForMediaKey(mediaKey, requirementLabel);
+    var configuredTerms = getChecklistKeywordTermsForRequirement(requirementLabel);
+    if (!configuredTerms.length && !terms.length) continue;
     total += 1;
-    var hasMatch = terms.some(function (term) {
-      return hasTagForMediaKey(mediaKey, term);
-    });
+    var hasMatch = terms.length > 0;
     if (hasMatch) {
       completed += 1;
     } else {
@@ -531,24 +616,35 @@ function getUniqueNormalizedTagsForMediaKey(mediaKey) {
 }
 
 function computeTagMatchProgressForText(mediaKey, captionText) {
-  var tags = getUniqueNormalizedTagsForMediaKey(mediaKey);
+  var annotations = [];
+  getChecklistAssignmentEntriesForMediaKey(mediaKey).forEach(function (entry) {
+    annotations.push({
+      label: entry.requirement + ' / ' + entry.term,
+      term: entry.term,
+      rendered: renderChecklistGroupTermWithAffixes(entry.requirement, entry.term, mediaKey)
+    });
+  });
+  getUnscopedTagsForMediaKey(mediaKey).forEach(function (tag) {
+    annotations.push({
+      label: tag + ' / unscoped',
+      term: tag,
+      rendered: renderChecklistTermWithAffixes(tag, mediaKey)
+    });
+  });
+
   var completed = 0;
   var missing = [];
-  for (var tagIdx = 0; tagIdx < tags.length; tagIdx++) {
-    var tag = tags[tagIdx];
-    var rendered = (typeof renderChecklistTermWithAffixes === 'function')
-      ? renderChecklistTermWithAffixes(tag, mediaKey)
-      : tag;
+  annotations.forEach(function (annotation) {
     if (
-      (rendered && captionContainsPhrase(captionText, rendered)) ||
-      captionContainsTagWithAllowances(captionText, tag)
+      (annotation.rendered && captionContainsPhrase(captionText, annotation.rendered)) ||
+      captionContainsTagWithAllowances(captionText, annotation.term)
     ) {
       completed += 1;
     } else {
-      missing.push(tag);
+      missing.push(annotation.label);
     }
-  }
-  return { completed: completed, total: tags.length, missing: missing };
+  });
+  return { completed: completed, total: annotations.length, missing: missing };
 }
 
 function computeTagMatchProgressForMediaKey(mediaKey) {
@@ -1094,7 +1190,7 @@ function swapTagOrderForMediaKey(mediaKey, firstTagText, secondTagText) {
   var firstTarget = normalizeItemTag(firstTagText).toLowerCase();
   var secondTarget = normalizeItemTag(secondTagText).toLowerCase();
   if (!key || !firstTarget || !secondTarget || firstTarget === secondTarget) return false;
-  var current = getTagsForMediaKey(key);
+  var current = getUnscopedTagsForMediaKey(key);
   if (current.length < 2) return false;
   var firstIdx = -1;
   var secondIdx = -1;
@@ -1117,7 +1213,10 @@ function addTagToMediaKey(mediaKey, tagText, options) {
   var tag = normalizeItemTag(tagText);
   if (!key || !tag) return false;
   var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
-  var current = getTagsForMediaKey(key);
+  if (opts.reviewRequirementLabel) {
+    throw new Error('Group annotations must use assignChecklistTagToMediaKey().');
+  }
+  var current = getUnscopedTagsForMediaKey(key);
   var low = tag.toLowerCase();
   var exists = current.some(function (t) { return String(t).toLowerCase() === low; });
   if (exists) return false;
@@ -1132,14 +1231,6 @@ function addTagToMediaKey(mediaKey, tagText, options) {
   }
   current.push(tag);
   captionItemTagsByMedia[key] = current;
-  if (typeof commitChecklistDescriptorSnapshotForMediaKey === 'function') {
-    commitChecklistDescriptorSnapshotForMediaKey(key, tag);
-  }
-  if (opts.reviewRequirementLabel) {
-    clearChecklistReviewedRequirementsForMediaKey(key, [opts.reviewRequirementLabel], { skipRender: true });
-  } else {
-    invalidateChecklistReviewedRequirementsForTagChange(key, tag, { skipRender: true });
-  }
   ensureCaptionHelperPhraseInCatalog(tag, !opts.skipSave);
   if (!opts.skipSave) {
     saveItemTagsToFolderState();
@@ -1172,7 +1263,7 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   var target = normalizeItemTag(tagText).toLowerCase();
   if (!key || !target) return false;
   var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
-  var current = getTagsForMediaKey(key);
+  var current = getUnscopedTagsForMediaKey(key);
   if (!current.length) return false;
   var next = current.filter(function (tag) {
     return normalizeItemTag(tag).toLowerCase() !== target;
@@ -1196,6 +1287,32 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();
   }
+  return true;
+}
+
+function consumeUnscopedTagForMediaKey(mediaKey, tagText, options) {
+  var opts = options || {};
+  var key = String(mediaKey || '').trim();
+  var target = normalizeItemTag(tagText).toLowerCase();
+  if (!key || !target) return false;
+  var current = getUnscopedTagsForMediaKey(key);
+  var next = current.filter(function (tag) {
+    return normalizeItemTag(tag).toLowerCase() !== target;
+  });
+  if (next.length === current.length) return false;
+  if (next.length) captionItemTagsByMedia[key] = next;
+  else delete captionItemTagsByMedia[key];
+  if (!opts.skipUndo) {
+    recordUndoOperation({
+      type: 'tag',
+      mediaKey: key,
+      tagText: normalizeItemTag(tagText),
+      previousValue: true,
+      nextValue: false
+    });
+  }
+  if (!opts.skipSave) saveItemTagsToFolderState();
+  if (!opts.skipRefresh) refreshTagDrivenPanelsForMediaKey(key);
   return true;
 }
 
@@ -1251,6 +1368,8 @@ function renderItemTagsPanel() {
   updateTagClipboardUi();
   var key = state.currentItem.key;
   var tags = getTagsForMediaKey(key).slice();
+  var unscopedTags = getUnscopedTagsForMediaKey(key);
+  var assignmentEntries = getChecklistAssignmentEntriesForMediaKey(key);
   var row = getMetadataForMedia(state.currentItem.fileName);
   var suggestedTags = (typeof getSelectionPoseSuggestedTags === 'function')
     ? getSelectionPoseSuggestedTags(row, tags)
@@ -1274,17 +1393,44 @@ function renderItemTagsPanel() {
     return !selectedTagKeys[frequentKey] && !suggestedTagKeys[frequentKey];
   }).slice(0, 10);
 
-  if (tags.length) {
-    tags.sort(function (a, b) {
-      var aText = String(a || '');
-      var bText = String(b || '');
-      var aPresent = tagAppearsInCurrentCaption(aText);
-      var bPresent = tagAppearsInCurrentCaption(bText);
-      if (aPresent !== bPresent) return aPresent ? 1 : -1;
-      return aText.toLowerCase().localeCompare(bText.toLowerCase());
+  if (assignmentEntries.length || unscopedTags.length) {
+    assignmentEntries.forEach(function (entry) {
+      var rowEl = document.createElement('div');
+      rowEl.className = 'row-inline';
+
+      var tagBtn = document.createElement('button');
+      tagBtn.type = 'button';
+      tagBtn.className = 'phrase-copy-item-btn';
+      var inCaption = checklistGroupTermAppearsInCurrentCaption(entry.requirement, entry.term, key);
+      tagBtn.classList.add(inCaption ? 'item-tag-pill-present' : 'item-tag-pill-missing');
+      tagBtn.textContent = entry.term + ' · ' + entry.requirement;
+      tagBtn.title = inCaption
+        ? 'Remove ' + entry.requirement + ' / ' + entry.term + ' from caption'
+        : 'Insert ' + entry.requirement + ' / ' + entry.term + ' at cursor';
+      tagBtn.onclick = function () {
+        toggleCaptionGroupTagAtCursor(entry.requirement, entry.term);
+        renderItemTagsPanel();
+      };
+      tagBtn.oncontextmenu = function (event) {
+        event.preventDefault();
+        openChecklistTermAffixesModal(entry.requirement, entry.term);
+      };
+
+      var rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'stats-phrase-mini-btn';
+      rmBtn.textContent = 'x';
+      rmBtn.title = 'Remove assignment from ' + entry.requirement;
+      rmBtn.onclick = function () {
+        unassignChecklistTagFromMediaKey(key, entry.requirement, entry.term);
+      };
+
+      rowEl.appendChild(tagBtn);
+      rowEl.appendChild(rmBtn);
+      listEl.appendChild(rowEl);
     });
 
-    tags.forEach(function (tag) {
+    unscopedTags.forEach(function (tag) {
       var rowEl = document.createElement('div');
       rowEl.className = 'row-inline';
 
@@ -1293,10 +1439,10 @@ function renderItemTagsPanel() {
       tagBtn.className = 'phrase-copy-item-btn';
       var inCaption = tagAppearsInCurrentCaption(tag);
       tagBtn.classList.add(inCaption ? 'item-tag-pill-present' : 'item-tag-pill-missing');
-      tagBtn.textContent = tag;
-      tagBtn.title = inCaption ? 'Remove from caption' : 'Insert at cursor';
+      tagBtn.textContent = tag + ' · unscoped';
+      tagBtn.title = inCaption ? 'Remove unscoped tag from caption' : 'Insert unscoped tag at cursor';
       tagBtn.onclick = function () {
-        toggleCaptionTagAtCursor(tag);        
+        toggleCaptionTagAtCursor(tag);
         renderItemTagsPanel();
       };
 
@@ -1304,9 +1450,9 @@ function renderItemTagsPanel() {
       rmBtn.type = 'button';
       rmBtn.className = 'stats-phrase-mini-btn';
       rmBtn.textContent = 'x';
+      rmBtn.title = 'Remove unscoped tag';
       rmBtn.onclick = function () {
         removeTagFromMediaKey(key, tag);
-        renderAnnotateStrip();        
       };
 
       rowEl.appendChild(tagBtn);
@@ -1465,5 +1611,8 @@ function refreshMediaResolutionCache(options) {
 }
 
 window.addTagToCurrentMedia = addTagToCurrentMedia;
+window.getUnscopedTagsForMediaKey = getUnscopedTagsForMediaKey;
+window.hasUnscopedTagForMediaKey = hasUnscopedTagForMediaKey;
 window.hasTagForMediaKey = hasTagForMediaKey;
+window.consumeUnscopedTagForMediaKey = consumeUnscopedTagForMediaKey;
 window.removeTagFromCurrentMedia = removeTagFromCurrentMedia;

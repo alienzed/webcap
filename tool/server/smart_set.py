@@ -103,6 +103,172 @@ def _parse_filter_query(raw: str) -> dict:
     return out
 
 
+def _effective_requirement_catalog(folder_state: dict) -> dict[str, list[str]]:
+    cfg = app_config.get_config_snapshot()
+    cfg_requirements = cfg.get("requirements") if isinstance(cfg, dict) else {}
+    cfg_items = cfg_requirements.get("items") if isinstance(cfg_requirements, dict) else []
+    cfg_keywords = cfg_requirements.get("keywordsByItem") if isinstance(cfg_requirements, dict) else {}
+
+    folder_items = folder_state.get("caption_requirements")
+    requirements = folder_items if isinstance(folder_items, list) else (cfg_items if isinstance(cfg_items, list) else [])
+    folder_keywords = folder_state.get("caption_requirement_keywords")
+    if not isinstance(folder_keywords, dict):
+        folder_keywords = {}
+    if not isinstance(cfg_keywords, dict):
+        cfg_keywords = {}
+
+    out = {}
+    for raw_group in requirements:
+        group = str(raw_group or "").strip()
+        if not group:
+            continue
+        seen = set()
+        terms = []
+        for source in (folder_keywords.get(group), cfg_keywords.get(group)):
+            values = source if isinstance(source, list) else str(source or "").split(",")
+            for raw_term in values:
+                term = re.sub(r"\s+", " ", str(raw_term or "").strip())
+                key = term.casefold()
+                if not term or key in seen:
+                    continue
+                seen.add(key)
+                terms.append(term)
+        out[group] = terms
+    return out
+
+
+def _legacy_group_tags_for_media(folder_state: dict, media_name: str) -> dict[str, list[str]]:
+    if "caption_group_tags_by_media" in folder_state:
+        return {}
+    raw_tags = folder_state.get("caption_tags_by_media")
+    values = raw_tags.get(media_name) if isinstance(raw_tags, dict) else []
+    if not isinstance(values, list):
+        return {}
+    catalog = _effective_requirement_catalog(folder_state)
+    out = {}
+    for raw_tag in values:
+        term = re.sub(r"\s+", " ", str(raw_tag or "").strip())
+        if not term:
+            continue
+        term_key = term.casefold()
+        matches = []
+        for group, group_terms in catalog.items():
+            if any(str(candidate or "").strip().casefold() == term_key for candidate in group_terms):
+                matches.append(group)
+        if len(matches) != 1:
+            continue
+        out.setdefault(matches[0], []).append(term)
+    return out
+
+
+def _normalize_group_tags_for_media(folder_state: dict, media_name: str) -> dict[str, list[str]]:
+    raw_map = folder_state.get("caption_group_tags_by_media")
+    raw_groups = raw_map.get(media_name) if isinstance(raw_map, dict) else None
+    if not isinstance(raw_groups, dict):
+        return _legacy_group_tags_for_media(folder_state, media_name)
+    out = {}
+    for raw_group, raw_terms in raw_groups.items():
+        group = str(raw_group or "").strip()
+        if not group or not isinstance(raw_terms, list):
+            continue
+        seen = set()
+        terms = []
+        for raw_term in raw_terms:
+            term = re.sub(r"\s+", " ", str(raw_term or "").strip())
+            key = term.casefold()
+            if not term or key in seen:
+                continue
+            seen.add(key)
+            terms.append(term)
+        if terms:
+            out[group] = terms
+    return out
+
+
+def _combined_tags_for_media(folder_state: dict, media_name: str) -> list[str]:
+    seen = set()
+    out = []
+    raw_tags = folder_state.get("caption_tags_by_media")
+    if isinstance(raw_tags, dict):
+        values = raw_tags.get(media_name)
+        if isinstance(values, list):
+            for raw_tag in values:
+                tag = re.sub(r"\s+", " ", str(raw_tag or "").strip())
+                key = tag.casefold()
+                if not tag or key in seen:
+                    continue
+                seen.add(key)
+                out.append(tag)
+    for terms in _normalize_group_tags_for_media(folder_state, media_name).values():
+        for term in terms:
+            key = term.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(term)
+    return out
+
+
+def _apply_affix_pair(base_text: str, prefix: str, suffix: str) -> str:
+    result = str(base_text or "")
+    if not result:
+        return ""
+    prefix = str(prefix or "").strip()
+    suffix = str(suffix or "").strip()
+    if prefix:
+        result = prefix + ("" if re.search(r"[\s([{\"'-]$", prefix) else " ") + result
+    if suffix:
+        result = result + ("" if re.match(r"^[\s)\]}:;,.!?\"'-]", suffix) else " ") + suffix
+    return re.sub(r"\s+", " ", result).strip()
+
+
+def _group_term_affix(folder_state: dict, field: str, group: str, term: str) -> dict:
+    root = folder_state.get(field)
+    if not isinstance(root, dict):
+        return {}
+    group_map = root.get(group)
+    if not isinstance(group_map, dict):
+        return {}
+    entry = group_map.get(str(term or "").strip().lower())
+    return entry if isinstance(entry, dict) else {}
+
+
+def _global_group_wrapper(group: str, term: str) -> dict:
+    cfg = app_config.get_config_snapshot()
+    requirements = cfg.get("requirements") if isinstance(cfg, dict) else {}
+    by_group = requirements.get("termWrappersByGroup") if isinstance(requirements, dict) else {}
+    group_map = by_group.get(group) if isinstance(by_group, dict) else {}
+    entry = group_map.get(str(term or "").strip().lower()) if isinstance(group_map, dict) else {}
+    return entry if isinstance(entry, dict) else {}
+
+
+def _render_scoped_term(folder_state: dict, media_name: str, group: str, term: str) -> str:
+    group = str(group or "").strip()
+    term = re.sub(r"\s+", " ", str(term or "").strip())
+    if not group or not term:
+        return term
+
+    descriptor = {}
+    media_descriptors = folder_state.get("caption_group_term_descriptors_by_media")
+    if isinstance(media_descriptors, dict):
+        media_groups = media_descriptors.get(media_name)
+        if isinstance(media_groups, dict):
+            media_terms = media_groups.get(group)
+            if isinstance(media_terms, dict):
+                entry = media_terms.get(term.lower())
+                if isinstance(entry, dict):
+                    descriptor = entry
+    if not descriptor:
+        descriptor = _group_term_affix(folder_state, "caption_group_term_descriptor_defaults", group, term)
+
+    local_wrapper = _group_term_affix(folder_state, "caption_group_term_wrappers", group, term)
+    global_wrapper = _global_group_wrapper(group, term)
+    wrapper_prefix = global_wrapper.get("prefix") or local_wrapper.get("prefix")
+    wrapper_suffix = global_wrapper.get("suffix") or local_wrapper.get("suffix")
+    rendered = _apply_affix_pair(term, descriptor.get("prefix"), descriptor.get("suffix"))
+    return _apply_affix_pair(rendered, wrapper_prefix, wrapper_suffix)
+
+
 def _matches_filter_query(match: dict, query: dict, mode: str = "all") -> bool:
     tags = match.get("tags") if isinstance(match.get("tags"), list) else []
     haystack = "\n".join(
@@ -149,6 +315,15 @@ def _plural_token_variants(token: str) -> set[str]:
     return {variant for variant in variants if variant}
 
 
+def _caption_contains_phrase(caption_text: str, phrase: str) -> bool:
+    text = str(caption_text or "")
+    value = str(phrase or "").strip()
+    if not value:
+        return False
+    pattern = re.compile(r"(^|[^A-Za-z0-9_])(" + re.escape(value) + r")(?=$|[^A-Za-z0-9_])", re.IGNORECASE)
+    return pattern.search(text) is not None
+
+
 def _caption_contains_tag_with_allowances(caption_text: str, tag_text: str) -> bool:
     caption_tokens = [token for token in _canonicalize_match_text(caption_text).split(" ") if token]
     tag_tokens = [token for token in _canonicalize_match_text(tag_text).split(" ") if token]
@@ -172,13 +347,34 @@ def _caption_contains_tag_with_allowances(caption_text: str, tag_text: str) -> b
     return False
 
 
-def _match_has_tag_mismatch(match: dict) -> bool:
-    tags = [str(tag or "").strip() for tag in (match.get("tags") if isinstance(match.get("tags"), list) else [])]
-    tags = [tag for tag in tags if tag]
-    if not tags:
-        return True
+def _match_has_tag_mismatch(match: dict, folder_state: dict | None = None) -> bool:
     caption_text = str(match.get("caption") or "")
-    return any(not _caption_contains_tag_with_allowances(caption_text, tag) for tag in tags)
+    media_name = str(match.get("media_name") or "")
+    scoped_groups = _normalize_group_tags_for_media(folder_state or {}, media_name)
+    unscoped_tags = []
+    raw_tags = (folder_state or {}).get("caption_tags_by_media")
+    if isinstance(raw_tags, dict):
+        raw_values = raw_tags.get(media_name)
+        if isinstance(raw_values, list):
+            unscoped_tags = [str(tag or "").strip() for tag in raw_values if str(tag or "").strip()]
+
+    total = 0
+    for group, terms in scoped_groups.items():
+        for term in terms:
+            total += 1
+            rendered = _render_scoped_term(folder_state or {}, media_name, group, term)
+            if rendered and rendered.casefold() != term.casefold():
+                if not _caption_contains_phrase(caption_text, rendered):
+                    return True
+            elif not _caption_contains_tag_with_allowances(caption_text, term):
+                return True
+
+    for tag in unscoped_tags:
+        total += 1
+        if not _caption_contains_tag_with_allowances(caption_text, tag):
+            return True
+
+    return total == 0
 
 
 def _normalize_rating(value) -> int:
@@ -236,30 +432,20 @@ def _requirement_key(label: str) -> str:
 
 
 def _match_has_incomplete_requirements(match: dict, folder_state: dict) -> bool:
-    requirements = folder_state.get("caption_requirements")
-    if not isinstance(requirements, list) or not requirements:
+    catalog = _effective_requirement_catalog(folder_state)
+    if not catalog:
         return False
-    keywords_by_item = folder_state.get("caption_requirement_keywords")
-    if not isinstance(keywords_by_item, dict):
-        keywords_by_item = {}
     media_name = str(match.get("media_name") or "")
-    tags = [str(tag or "") for tag in (match.get("tags") if isinstance(match.get("tags"), list) else [])]
+    scoped_groups = _normalize_group_tags_for_media(folder_state, media_name)
+
     total = 0
     completed = 0
-    for raw_label in requirements:
-        label = str(raw_label or "").strip()
-        if not label:
-            continue
-        terms = _parse_requirement_terms(str(keywords_by_item.get(label) or ""))
-        if not terms:
+    for label, configured_terms in catalog.items():
+        assigned_terms = scoped_groups.get(label, [])
+        if not configured_terms and not assigned_terms:
             continue
         total += 1
-        found = False
-        for term in terms:
-            if any(str(tag or "").strip().lower() == term.strip().lower() for tag in tags):
-                found = True
-                break
-        if found:
+        if assigned_terms:
             completed += 1
     return total > 0 and completed < total
 
@@ -341,12 +527,10 @@ def _collect_matches(root: Path, term: str) -> list[dict]:
         if state is None:
             state = _load_folder_state(dir_path)
             state_cache[rel_key] = state
-        tags_map = state.get("caption_tags_by_media") if isinstance(state.get("caption_tags_by_media"), dict) else {}
-
         for media_path in media_files:
             media_name = media_path.name
             caption_text = _read_caption_text(dir_path, media_name)
-            tags_text = " ".join(tags_map.get(media_name) or []) if isinstance(tags_map.get(media_name), list) else ""
+            tags_text = " ".join(_combined_tags_for_media(state, media_name))
             haystack = "\n".join([caption_text, tags_text]).lower()
             if term_text not in haystack:
                 continue
@@ -425,9 +609,7 @@ def _collect_superset_matches(criteria: dict) -> list[dict]:
         for media_path in media_files:
             media_name = media_path.name
             caption_text = _read_caption_text(dir_path, media_name)
-            tags = tags_map.get(media_name)
-            if not isinstance(tags, list):
-                tags = []
+            tags = _combined_tags_for_media(folder_state, media_name)
             metadata = folder_metadata.get(media_name)
             if not isinstance(metadata, dict):
                 metadata = {}
@@ -459,7 +641,7 @@ def _collect_superset_matches(criteria: dict) -> list[dict]:
                 continue
             if incomplete_only and not _match_has_incomplete_requirements(match, folder_state):
                 continue
-            if tag_mismatch_only and not _match_has_tag_mismatch(match):
+            if tag_mismatch_only and not _match_has_tag_mismatch(match, folder_state):
                 continue
             if star_filter["values"] or star_filter["include_no_star"]:
                 if rating <= 0:
@@ -530,10 +712,14 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
     reviewed_keys = []
     flags = {}
     tags_by_media = {}
+    group_tags_by_media = {}
     ratings_by_media = {}
     caption_term_wrappers = None
     caption_term_descriptor_defaults = None
     caption_term_descriptors_by_media = {}
+    caption_group_term_wrappers = None
+    caption_group_term_descriptor_defaults = None
+    caption_group_term_descriptors_by_media = {}
     created_items = []
     originals_copied = 0
 
@@ -588,9 +774,19 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
             if isinstance(tag_list, list) and tag_list:
                 tags_by_media[dest_name] = [str(tag).strip() for tag in tag_list if str(tag).strip()]
 
+        group_map = _normalize_group_tags_for_media(src_state, media_name)
+        if group_map:
+            group_tags_by_media[dest_name] = json.loads(json.dumps(group_map))
+
         src_ratings = src_state.get("ratings_by_media")
         if isinstance(src_ratings, dict) and media_name in src_ratings:
             ratings_by_media[dest_name] = src_ratings[media_name]
+
+        src_group_descriptors = src_state.get("caption_group_term_descriptors_by_media")
+        if isinstance(src_group_descriptors, dict):
+            group_descriptor_map = src_group_descriptors.get(media_name)
+            if isinstance(group_descriptor_map, dict) and group_descriptor_map:
+                caption_group_term_descriptors_by_media[dest_name] = json.loads(json.dumps(group_descriptor_map))
 
         if caption_term_wrappers is None:
             src_term_wrappers = src_state.get("caption_term_wrappers")
@@ -603,6 +799,14 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
             src_descriptor_defaults = src_state.get("caption_term_descriptor_defaults")
             if isinstance(src_descriptor_defaults, dict):
                 caption_term_descriptor_defaults = json.loads(json.dumps(src_descriptor_defaults))
+        if caption_group_term_wrappers is None:
+            src_group_wrappers = src_state.get("caption_group_term_wrappers")
+            if isinstance(src_group_wrappers, dict):
+                caption_group_term_wrappers = json.loads(json.dumps(src_group_wrappers))
+        if caption_group_term_descriptor_defaults is None:
+            src_group_defaults = src_state.get("caption_group_term_descriptor_defaults")
+            if isinstance(src_group_defaults, dict):
+                caption_group_term_descriptor_defaults = json.loads(json.dumps(src_group_defaults))
 
         src_descriptors_by_media = src_state.get("caption_term_descriptors_by_media")
         if isinstance(src_descriptors_by_media, dict):
@@ -620,12 +824,13 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
 
     reviewed_unique = sorted(set([str(v) for v in reviewed_keys if str(v).strip()]))
     dest_state = {
-        "version": 1,
+        "version": 2,
         "stats": {"requiredPhrase": "", "phrases": "", "tokenRules": ""},
         "primer": {"template": "", "defaults": "", "mappings": ""},
         "reviewedKeys": reviewed_unique,
         "flags": flags,
         "caption_tags_by_media": tags_by_media,
+        "caption_group_tags_by_media": group_tags_by_media,
         "ratings_by_media": ratings_by_media,
     }
     if isinstance(caption_term_wrappers, dict):
@@ -635,6 +840,12 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
         dest_state["caption_term_descriptor_defaults"] = caption_term_descriptor_defaults
     if isinstance(caption_term_descriptors_by_media, dict) and caption_term_descriptors_by_media:
         dest_state["caption_term_descriptors_by_media"] = caption_term_descriptors_by_media
+    if isinstance(caption_group_term_wrappers, dict):
+        dest_state["caption_group_term_wrappers"] = caption_group_term_wrappers
+    if isinstance(caption_group_term_descriptor_defaults, dict):
+        dest_state["caption_group_term_descriptor_defaults"] = caption_group_term_descriptor_defaults
+    if caption_group_term_descriptors_by_media:
+        dest_state["caption_group_term_descriptors_by_media"] = caption_group_term_descriptors_by_media
     dest_state_path = dest_dir / ".webcap_state.json"
     dest_state_path.write_text(json.dumps(dest_state, indent=2), encoding="utf-8")
     normalize_path_permissions(dest_state_path)
@@ -799,6 +1010,39 @@ def _merge_requirement_keywords(existing: dict[str, str], raw_keywords) -> dict[
     return existing
 
 
+def _canonicalize_group_map(raw_map, requirement_labels: list[str]):
+    if not isinstance(raw_map, dict):
+        return {}
+    canonical = {
+        str(label or "").strip().casefold(): str(label or "").strip()
+        for label in requirement_labels
+        if str(label or "").strip()
+    }
+    out = {}
+    for raw_group, raw_value in raw_map.items():
+        group = str(raw_group or "").strip()
+        if not group:
+            continue
+        dest_group = canonical.get(group.casefold(), group)
+        value = json.loads(json.dumps(raw_value))
+        if dest_group not in out:
+            out[dest_group] = value
+            continue
+        current = out[dest_group]
+        if isinstance(current, dict) and isinstance(value, dict):
+            current.update(value)
+        elif isinstance(current, list) and isinstance(value, list):
+            seen = {str(item or "").casefold() for item in current}
+            for item in value:
+                key = str(item or "").casefold()
+                if key not in seen:
+                    seen.add(key)
+                    current.append(item)
+        elif isinstance(current, bool) and isinstance(value, bool):
+            out[dest_group] = current or value
+    return out
+
+
 def create_set_from_results_response(data: dict):
     payload = data or {}
     try:
@@ -838,12 +1082,16 @@ def create_set_from_results_response(data: dict):
         reviewed_keys = []
         flags = {}
         tags_by_media = {}
+        group_tags_by_media = {}
         ratings_by_media = {}
         caption_requirements = []
         caption_requirement_keywords = {}
         caption_term_wrappers = None
         caption_term_descriptor_defaults = None
         caption_term_descriptors_by_media = {}
+        caption_group_term_wrappers = None
+        caption_group_term_descriptor_defaults = None
+        caption_group_term_descriptors_by_media = {}
         caption_requirements_checked = {}
         dest_media_metadata = {}
         source_folder_order = []
@@ -878,6 +1126,14 @@ def create_set_from_results_response(data: dict):
                 src_descriptor_defaults = src_state.get("caption_term_descriptor_defaults")
                 if isinstance(src_descriptor_defaults, dict):
                     caption_term_descriptor_defaults = json.loads(json.dumps(src_descriptor_defaults))
+            if caption_group_term_wrappers is None:
+                src_group_wrappers = src_state.get("caption_group_term_wrappers")
+                if isinstance(src_group_wrappers, dict):
+                    caption_group_term_wrappers = json.loads(json.dumps(src_group_wrappers))
+            if caption_group_term_descriptor_defaults is None:
+                src_group_descriptor_defaults = src_state.get("caption_group_term_descriptor_defaults")
+                if isinstance(src_group_descriptor_defaults, dict):
+                    caption_group_term_descriptor_defaults = json.loads(json.dumps(src_group_descriptor_defaults))
 
             source_caption_path = source_media_path.parent / _caption_name_for_media(media_name)
             if source_caption_path.exists() and source_caption_path.is_file():
@@ -909,6 +1165,13 @@ def create_set_from_results_response(data: dict):
                 if isinstance(tag_list, list) and tag_list:
                     tags_by_media[dest_media_name] = [str(tag).strip() for tag in tag_list if str(tag).strip()]
 
+            group_map = _canonicalize_group_map(
+                _normalize_group_tags_for_media(src_state, media_name),
+                caption_requirements,
+            )
+            if group_map:
+                group_tags_by_media[dest_media_name] = group_map
+
             src_ratings = src_state.get("ratings_by_media")
             if isinstance(src_ratings, dict) and media_name in src_ratings:
                 ratings_by_media[dest_media_name] = src_ratings[media_name]
@@ -917,13 +1180,25 @@ def create_set_from_results_response(data: dict):
             if isinstance(src_requirements_checked, dict):
                 media_checked_map = src_requirements_checked.get(media_name)
                 if isinstance(media_checked_map, dict):
-                    caption_requirements_checked[dest_media_name] = json.loads(json.dumps(media_checked_map))
+                    caption_requirements_checked[dest_media_name] = _canonicalize_group_map(
+                        media_checked_map,
+                        caption_requirements,
+                    )
 
             src_descriptors_by_media = src_state.get("caption_term_descriptors_by_media")
             if isinstance(src_descriptors_by_media, dict):
                 media_descriptors = src_descriptors_by_media.get(media_name)
                 if isinstance(media_descriptors, dict) and media_descriptors:
                     caption_term_descriptors_by_media[dest_media_name] = json.loads(json.dumps(media_descriptors))
+
+            src_group_descriptors = src_state.get("caption_group_term_descriptors_by_media")
+            if isinstance(src_group_descriptors, dict):
+                media_group_descriptors = src_group_descriptors.get(media_name)
+                if isinstance(media_group_descriptors, dict) and media_group_descriptors:
+                    caption_group_term_descriptors_by_media[dest_media_name] = _canonicalize_group_map(
+                        media_group_descriptors,
+                        caption_requirements,
+                    )
 
             source_meta = src_media_metadata.get(media_name)
             if isinstance(source_meta, dict):
@@ -944,12 +1219,13 @@ def create_set_from_results_response(data: dict):
             primer_block = _clone_primer_block(state_by_folder.get(first_folder_key, {}))
 
         dest_state = {
-            "version": 1,
+            "version": 2,
             "stats": {"requiredPhrase": "", "phrases": "", "tokenRules": ""},
             "primer": primer_block,
             "reviewedKeys": sorted(set([str(v) for v in reviewed_keys if str(v).strip()])),
             "flags": flags,
             "caption_tags_by_media": tags_by_media,
+            "caption_group_tags_by_media": group_tags_by_media,
             "ratings_by_media": ratings_by_media,
         }
         if caption_requirements:
@@ -963,6 +1239,12 @@ def create_set_from_results_response(data: dict):
             dest_state["caption_term_descriptor_defaults"] = caption_term_descriptor_defaults
         if caption_term_descriptors_by_media:
             dest_state["caption_term_descriptors_by_media"] = caption_term_descriptors_by_media
+        if isinstance(caption_group_term_wrappers, dict):
+            dest_state["caption_group_term_wrappers"] = caption_group_term_wrappers
+        if isinstance(caption_group_term_descriptor_defaults, dict):
+            dest_state["caption_group_term_descriptor_defaults"] = caption_group_term_descriptor_defaults
+        if caption_group_term_descriptors_by_media:
+            dest_state["caption_group_term_descriptors_by_media"] = caption_group_term_descriptors_by_media
         if caption_requirements_checked:
             dest_state["caption_requirements_checked"] = caption_requirements_checked
         dest_state_path = dest_dir / ".webcap_state.json"

@@ -196,3 +196,39 @@ def test_legacy_flat_tags_only_migrate_when_group_scope_is_unambiguous():
         "function renderItemTagsPanel", 1
     )[0]
     assert "checklistLegacyScopedTermsByMedia[mediaKey][low]" in load_tags
+
+
+def test_generic_frequent_tag_suggestions_only_use_unscoped_tags():
+    details = _read("tool/js/item_details.js")
+
+    helper = details.split("function buildUnscopedTagUsageEntries", 1)[1].split(
+        "function renderItemTagsPanel", 1
+    )[0]
+    assert "getUnscopedTagsForMediaKey(item.key)" in helper
+
+    render = details.split("function renderItemTagsPanel", 1)[1].split(
+        "function refreshMediaResolutionCache", 1
+    )[0]
+    assert "buildUnscopedTagUsageEntries(20)" in render
+    assert "getAnnotateStripGroups()" not in render
+
+
+def test_caption_helper_catalog_includes_scoped_assignments_including_orphans():
+    catalog = _read("tool/js/caption_helpers_catalog.js")
+
+    terms = catalog.split("function getCaptionHelperCatalogTerms", 1)[1].split(
+        "function captionPhraseBoundaryPattern", 1
+    )[0]
+    assert "checklistAssignmentsByMedia" in terms
+    assert "getChecklistAssignmentEntriesForMediaKey(mediaKey)" in terms
+    assert "entry.term" in terms
+
+
+def test_incomplete_progress_does_not_render_empty_parentheses():
+    details = _read("tool/js/item_details.js")
+
+    progress = details.split("function computeRequirementProgressForMediaKey", 1)[1].split(
+        "function computeReviewedProgressForMediaKey", 1
+    )[0]
+    assert "missing.push(requirementLabel);" in progress
+    assert "terms.join(', ')" not in progress

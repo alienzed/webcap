@@ -42,6 +42,8 @@ def _rename_media_key_in_folder_state(folder_state, old_name, new_name):
         "flags",
         "caption_requirements_checked",
         "caption_term_descriptors_by_media",
+        "caption_group_tags_by_media",
+        "caption_group_term_descriptors_by_media",
         "caption_tags_by_media",
         "ratings_by_media",
     ):

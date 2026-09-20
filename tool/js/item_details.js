@@ -578,7 +578,7 @@ function computeRequirementProgressForMediaKey(mediaKey) {
     if (hasMatch) {
       completed += 1;
     } else {
-      missing.push(requirementLabel + ' (' + terms.join(', ') + ')');
+      missing.push(requirementLabel);
     }
   }
   return { completed: completed, total: total, missing: missing };
@@ -1372,6 +1372,31 @@ function loadItemTagsFromFolderState(folderState) {
   renderItemTagsPanel();
 }
 
+function buildUnscopedTagUsageEntries(limit) {
+  var counts = {};
+  var labels = {};
+  (state.items || []).forEach(function (item) {
+    if (!item || !item.key) return;
+    var seenOnItem = {};
+    getUnscopedTagsForMediaKey(item.key).forEach(function (rawTag) {
+      var tag = normalizeItemTag(rawTag);
+      var key = tag.toLowerCase();
+      if (!tag || seenOnItem[key]) return;
+      seenOnItem[key] = true;
+      labels[key] = labels[key] || tag;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+  });
+  return Object.keys(counts)
+    .sort(function (a, b) {
+      return counts[b] - counts[a] || labels[a].localeCompare(labels[b]);
+    })
+    .slice(0, Math.max(1, Number(limit) || 10))
+    .map(function (key) {
+      return { term: labels[key], count: counts[key] };
+    });
+}
+
 function renderItemTagsPanel() {
   var listEl = document.getElementById('item-tags-list');
   if (!listEl) return;
@@ -1400,11 +1425,7 @@ function renderItemTagsPanel() {
     var suggestedKey = normalizeItemTag(tag).toLowerCase();
     if (suggestedKey) suggestedTagKeys[suggestedKey] = true;
   });
-  var groupTerms = [];
-  getAnnotateStripGroups().forEach(function (group) {
-    groupTerms = groupTerms.concat(group.terms || []);
-  });
-  var frequentTags = buildSetTagUsageEntries(groupTerms, 20).filter(function (entry) {
+  var frequentTags = buildUnscopedTagUsageEntries(20).filter(function (entry) {
     var frequentKey = normalizeItemTag(entry.term).toLowerCase();
     return !selectedTagKeys[frequentKey] && !suggestedTagKeys[frequentKey];
   }).slice(0, 10);

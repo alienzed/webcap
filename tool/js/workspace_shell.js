@@ -216,25 +216,18 @@ function deriveShellNavigationState() {
 
 function syncApplicationShellContext() {
   var navigation = deriveShellNavigationState();
-  var folderEl = document.getElementById('app-header-folder');
-  if (folderEl) {
-    var folder = String(state && state.folder || '');
-    var label = folder || (typeof ROOT_FOLDER_LABEL === 'string' && ROOT_FOLDER_LABEL ? ROOT_FOLDER_LABEL : 'root');
-    folderEl.textContent = label;
-    folderEl.title = label;
-  }
-
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var workspaceTitle = document.getElementById('app-header-workspace-title');
   var workspaceContext = document.getElementById('app-header-workspace-context');
+  var modelControl = document.getElementById('app-header-model-control');
   var sidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
   var testOpen = navigation.activity === 'test';
+  var setFolder = String(state && state.folder || '').trim();
+
   if (sidebarToggle) {
     var sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');
     sidebarToggle.classList.toggle('hidden', !sidebarToggleVisible);
-    if (typeof updateSidebarCollapseUi === 'function') {
-      updateSidebarCollapseUi(ui && ui.appEl ? ui.appEl.classList.contains('left-rail-collapsed') : false);
-    }
+    updateSidebarCollapseUi(ui && ui.appEl ? ui.appEl.classList.contains('left-rail-collapsed') : false);
   }
   if (workspaceTitle) {
     workspaceTitle.textContent = testOpen
@@ -248,18 +241,24 @@ function syncApplicationShellContext() {
   if (workspaceContext) {
     var workspaceContextText = '';
     if (testOpen) {
-      workspaceContextText = 'Generations';
+      workspaceContextText = setFolder ? 'Generations · ' + setFolder : 'Generations';
     } else if (surface === 'training') {
       var entryKind = getTrainingWorkspaceEntryKind();
       workspaceContextText = entryKind === 'global'
         ? 'Global'
-        : (entryKind === 'set' ? '' : 'Select a set');
-    } else if (surface === 'reviewOutput' && typeof getReviewWorkspaceShellContext === 'function') {
+        : (entryKind === 'set' && setFolder ? setFolder : (entryKind === 'set' ? '' : 'Select a set'));
+    } else if (surface === 'reviewOutput') {
       workspaceContextText = getReviewWorkspaceShellContext();
     } else if (surface === 'grid') {
       workspaceContextText = mediaGridGetSourceLabel();
+    } else if (setFolder) {
+      workspaceContextText = setFolder;
     }
     workspaceContext.textContent = workspaceContextText;
+  }
+  if (modelControl) {
+    var modelRelevant = testOpen || surface === 'training';
+    modelControl.classList.toggle('hidden', !modelRelevant);
   }
 
   var prepBtn = document.getElementById('activity-prep-btn');

@@ -69,16 +69,27 @@ function getTagClipboardTags() {
   return out;
 }
 
+function getTagClipboardAnnotationCount() {
+  var clipboard = itemTagsClipboard && typeof itemTagsClipboard === 'object'
+    ? itemTagsClipboard
+    : { unscoped: [], groups: {} };
+  var count = Array.isArray(clipboard.unscoped) ? clipboard.unscoped.length : 0;
+  var groups = clipboard.groups && typeof clipboard.groups === 'object' ? clipboard.groups : {};
+  Object.keys(groups).forEach(function (requirement) {
+    count += Array.isArray(groups[requirement]) ? groups[requirement].length : 0;
+  });
+  return count;
+}
+
 function hasTagClipboardTags() {
-  return getTagClipboardTags().length > 0;
+  return getTagClipboardAnnotationCount() > 0;
 }
 
 function updateTagClipboardUi() {
   var copyBtn = ui && ui.itemTagsCopyBtnEl;
   var pasteBtn = ui && ui.itemTagsPasteBtnEl;
   var hasSelection = !!(state && state.currentItem && state.currentItem.key);
-  var clipboardTags = getTagClipboardTags();
-  var clipboardCount = clipboardTags.length;
+  var clipboardCount = getTagClipboardAnnotationCount();
   if (copyBtn) {
     copyBtn.disabled = !hasSelection;
   }
@@ -117,8 +128,9 @@ function copyTagsForMediaKey(mediaKey) {
     unscoped: unscoped,
     groups: groups
   };
+  var annotationCount = getTagClipboardAnnotationCount();
   updateTagClipboardUi();
-  setStatus('Copied ' + flattened.length + ' tag' + (flattened.length === 1 ? '' : 's') + '.');
+  setStatus('Copied ' + annotationCount + ' annotation' + (annotationCount === 1 ? '' : 's') + '.');
   return true;
 }
 
@@ -173,7 +185,7 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
 
 function pasteClipboardTagsToMediaKey(mediaKey) {
   var key = String(mediaKey || '').trim();
-  var clipboardTags = getTagClipboardTags();
+  var clipboardCount = getTagClipboardAnnotationCount();
   var clipboard = itemTagsClipboard && typeof itemTagsClipboard === 'object'
     ? itemTagsClipboard
     : { unscoped: [], groups: {} };
@@ -181,11 +193,11 @@ function pasteClipboardTagsToMediaKey(mediaKey) {
     setStatus('No media item selected to paste tags into.');
     return false;
   }
-  if (!clipboardTags.length) {
-    setStatus('No copied tags to paste.');
+  if (!clipboardCount) {
+    setStatus('No copied annotations to paste.');
     return false;
   }
-  if (!confirm('Merge ' + clipboardTags.length + ' copied tag' + (clipboardTags.length === 1 ? '' : 's') + ' into this item?')) {
+  if (!confirm('Merge ' + clipboardCount + ' copied annotation' + (clipboardCount === 1 ? '' : 's') + ' into this item?')) {
     setStatus('Paste tags cancelled.');
     return false;
   }
@@ -620,6 +632,7 @@ function computeTagMatchProgressForText(mediaKey, captionText) {
   getChecklistAssignmentEntriesForMediaKey(mediaKey).forEach(function (entry) {
     annotations.push({
       label: entry.requirement + ' / ' + entry.term,
+      requirement: entry.requirement,
       term: entry.term,
       rendered: renderChecklistGroupTermWithAffixes(entry.requirement, entry.term, mediaKey)
     });
@@ -635,14 +648,14 @@ function computeTagMatchProgressForText(mediaKey, captionText) {
   var completed = 0;
   var missing = [];
   annotations.forEach(function (annotation) {
-    if (
-      (annotation.rendered && captionContainsPhrase(captionText, annotation.rendered)) ||
-      captionContainsTagWithAllowances(captionText, annotation.term)
-    ) {
-      completed += 1;
-    } else {
-      missing.push(annotation.label);
-    }
+    var matches = annotation.requirement
+      ? checklistGroupTermAppearsInCaptionText(annotation.requirement, annotation.term, mediaKey, captionText)
+      : (
+          (annotation.rendered && captionContainsPhrase(captionText, annotation.rendered)) ||
+          captionContainsTagWithAllowances(captionText, annotation.term)
+        );
+    if (matches) completed += 1;
+    else missing.push(annotation.label);
   });
   return { completed: completed, total: annotations.length, missing: missing };
 }

@@ -303,8 +303,6 @@ def _merge_folder_and_legacy_jobs(folder_path, actions):
                 jobs.append(record)
                 if job_id:
                     by_id[job_id] = record
-                continue
-        jobs.append(legacy)
     jobs.sort(
         key=lambda item: float(item.get("finishedAt") or item.get("startedAt") or item.get("createdAt") or 0),
         reverse=True,
@@ -619,6 +617,17 @@ def record_job(folder_path, job):
         _write_job_record(folder, job)
     return read_history(folder)
 
+
+def remove_job_record(job):
+    path = _job_record_path(job)
+    if path is None:
+        return False
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    return True
+
 def history_payload(folder_path):
     history = read_history(folder_path)
     # This is an explicit resume picker, not startup recovery. It discovers
@@ -703,8 +712,6 @@ def all_history_payload(query="", folder=""):
                     jobs.append(record)
                     if job_id:
                         known.add(job_id)
-                    continue
-            jobs.append(legacy)
         jobs = [
             _history_job_view(job) for job in jobs
             if job.get("status") != "cancelled"

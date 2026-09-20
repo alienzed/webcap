@@ -218,14 +218,18 @@ def test_test_bench_activity_rail_and_live_session_contract():
 
 
 
-def test_compare_polling_preserves_video_elements():
+def test_compare_polling_preserves_video_elements_and_refreshes_navigation_only():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
 
     assert "var compareKey = resultFolder + '|'" in compare_block
     assert "host.dataset.compareKey = compareKey" in compare_block
     assert "host.querySelector('.test-generations-compare-stage')" in compare_block
-    assert compare_block.index("host.querySelector('.test-generations-compare-stage')") < compare_block.index("host.innerHTML = '';")
+    assert "existingPrevious.disabled = compareIndex <= 0;" in compare_block
+    assert "existingNext.disabled = compareIndex >= results.length - 2;" in compare_block
+    assert "existingPosition.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);" in compare_block
+    assert compare_block.index("existingNext.disabled = compareIndex >= results.length - 2;") < compare_block.index("return;")
+    assert compare_block.index("return;") < compare_block.index("host.innerHTML = '';")
     assert "if (resultsView === 'compare') renderCompare(status || {});" in script
 
 

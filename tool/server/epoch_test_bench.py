@@ -1247,6 +1247,7 @@ def _build_queued_request(
         "sourcePrompt": prompt,
         "resolvedPrompt": resolved_prompt,
         "selectedFiles": [path.name for path in loras],
+        "stagingDirectory": str(test_directory),
         "candidateSnapshots": [_queued_candidate_snapshot(path) for path in loras],
         "seed": settings["seed"],
         "aspectRatio": settings["aspectRatio"],
@@ -1339,7 +1340,8 @@ def start_queued(folder_path, request):
         _atomic_write_json(_status_path(session_directory), payload)
 
     try:
-        test_directory = _h3_test_directory(folder_path)
+        staging_directory = str(request.get("stagingDirectory") or "").strip()
+        test_directory = Path(staging_directory) if staging_directory else _h3_test_directory(folder_path)
         loras = _selected_lora_files(test_directory, selected_files=request.get("selectedFiles"))
         if not loras:
             raise ValueError("The H3 Test folder contains no queued .safetensors files.")

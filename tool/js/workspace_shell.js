@@ -333,34 +333,82 @@ function refreshShellSystemStatus() {
     });
 }
 
+function renderApplicationHeaderBreadcrumb(navigation) {
+  var host = document.getElementById('app-header-breadcrumb');
+  var separator = document.getElementById('app-header-context-separator');
+  if (!host || !separator) return;
+
+  var entries = state && Array.isArray(state.dirStack) ? state.dirStack : [];
+  var showPath = navigation.contextKind === 'set' && entries.length > 0;
+  host.innerHTML = '';
+  host.classList.toggle('hidden', !showPath);
+  separator.classList.toggle('hidden', !showPath);
+  if (!showPath) return;
+
+  entries.forEach(function (entry, index) {
+    if (index > 0) {
+      var divider = document.createElement('span');
+      divider.className = 'app-header-breadcrumb-separator';
+      divider.setAttribute('aria-hidden', 'true');
+      divider.textContent = '›';
+      host.appendChild(divider);
+    }
+
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'app-header-breadcrumb-item';
+    button.setAttribute('data-dir-index', String(index));
+    var label = String(entry && entry.name || '').trim();
+    if (!label && index === 0 && typeof ROOT_FOLDER_LABEL === 'string') label = ROOT_FOLDER_LABEL;
+    if (!label) label = index === 0 ? 'root' : 'folder';
+    button.textContent = label;
+    button.title = index === entries.length - 1
+      ? 'Open this set in Prep'
+      : 'Open ' + label + ' in Prep';
+    if (index === entries.length - 1) {
+      button.classList.add('is-current');
+      button.setAttribute('aria-current', 'location');
+    }
+    host.appendChild(button);
+  });
+}
+
+function handleApplicationHeaderBreadcrumbClick(event) {
+  var button = event && event.target ? event.target.closest('.app-header-breadcrumb-item') : null;
+  if (!button) return;
+  var index = Number(button.getAttribute('data-dir-index'));
+  if (!isFinite(index) || !state || !Array.isArray(state.dirStack) || !state.dirStack.length) return;
+  var lastIndex = state.dirStack.length - 1;
+
+  if (index === lastIndex) {
+    if (deriveShellNavigationState().activity !== 'prep') openPrepActivity();
+    return;
+  }
+
+  if (deriveShellNavigationState().activity !== 'prep') openPrepActivity();
+  navigateToDirStackIndex(index);
+}
+
 function syncApplicationShellContext() {
   var navigation = deriveShellNavigationState();
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var folder = String(state && state.folder || '');
-  var folderParts = folder.split(/[\\/]/).filter(function (part) { return !!part; });
-  var folderLabel = folderParts.length
-    ? folderParts[folderParts.length - 1]
-    : (typeof ROOT_FOLDER_LABEL === 'string' && ROOT_FOLDER_LABEL ? ROOT_FOLDER_LABEL : 'root');
   var workspaceTitle = document.getElementById('app-header-workspace-title');
   var workspaceContext = document.getElementById('app-header-workspace-context');
-  var contextSeparator = document.getElementById('app-header-context-separator');
-  var folderBtn = document.getElementById('app-header-folder-btn');
-  var folderEl = document.getElementById('app-header-folder');
+  var modelControl = document.getElementById('app-header-model-control');
+  var modelSelect = document.getElementById('app-header-model-profile-select');
   var sidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
   var testOpen = navigation.activity === 'test';
-  var contextUsesFolder = true;
-  var contextText = folderLabel;
+  var contextText = '';
 
   if (testOpen) {
-    contextUsesFolder = !!folder;
-    contextText = folder ? folderLabel : 'Select a set';
+    contextText = folder ? '' : 'Select a set';
   } else if (surface === 'training') {
-    var entryKind = getTrainingWorkspaceEntryKind();
-    contextUsesFolder = entryKind === 'set' && !!folder;
-    contextText = entryKind === 'global' ? 'Global' : (folder ? folderLabel : 'Select a set');
-  } else if (!folder) {
-    contextUsesFolder = false;
-    contextText = folderLabel;
+    contextText = getTrainingWorkspaceEntryKind() === 'global'
+      ? 'Global'
+      : (folder ? '' : 'Select a set');
+  } else if (!folder && navigation.contextKind !== 'set') {
+    contextText = typeof ROOT_FOLDER_LABEL === 'string' && ROOT_FOLDER_LABEL ? ROOT_FOLDER_LABEL : 'root';
   }
 
   if (workspaceTitle) {
@@ -374,19 +422,21 @@ function syncApplicationShellContext() {
             ? 'Grid'
             : (surface === 'focus' ? 'Focus' : 'Prep'))));
   }
-  if (folderEl) {
-    folderEl.textContent = folderLabel;
-    folderEl.title = folder || folderLabel;
-  }
-  if (folderBtn) {
-    folderBtn.classList.toggle('hidden', !contextUsesFolder);
-    folderBtn.title = contextUsesFolder ? 'Open ' + folderLabel + ' in Prep' : '';
-    folderBtn.setAttribute('aria-label', contextUsesFolder ? 'Open ' + folderLabel + ' in Prep' : 'Current set');
-  }
+
+  renderApplicationHeaderBreadcrumb(navigation);
+
   if (workspaceContext) {
-    workspaceContext.textContent = contextUsesFolder ? '' : contextText;
+    workspaceContext.textContent = contextText;
   }
-  if (contextSeparator) contextSeparator.classList.toggle('hidden', !contextUsesFolder);
+
+  var modelRelevant = navigation.activity === 'training' || navigation.activity === 'test';
+  if (modelControl) modelControl.classList.toggle('hidden', !modelRelevant);
+  if (modelSelect) {
+    modelSelect.disabled = navigation.activity === 'test';
+    modelSelect.title = navigation.activity === 'test'
+      ? 'Base Model is fixed while Test Generations is open.'
+      : '';
+  }
 
   if (sidebarToggle) {
     var sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');
@@ -640,10 +690,10 @@ function isApplicationOverlayOpen() {
 }
 
 function wireWorkspaceHeaderUi() {
-  var headerFolderBtn = document.getElementById('app-header-folder-btn');
-  if (headerFolderBtn && !headerFolderBtn.__workspaceWired) {
-    headerFolderBtn.__workspaceWired = true;
-    headerFolderBtn.onclick = openPrepActivity;
+  var breadcrumb = document.getElementById('app-header-breadcrumb');
+  if (breadcrumb && !breadcrumb.__workspaceWired) {
+    breadcrumb.__workspaceWired = true;
+    breadcrumb.onclick = handleApplicationHeaderBreadcrumbClick;
   }
   var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
   if (reviewOutputBtn && !reviewOutputBtn.__workspaceWired) {

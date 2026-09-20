@@ -996,11 +996,18 @@ function deleteChecklistGroupByIndex(index) {
     requirementLabel: requirementLabel,
     hasLocalTerms: hasLocalTerms,
     localTerms: hasLocalTerms ? checklistKeywordsByItem[requirement] : '',
+    hasPrimerSeparator: Object.prototype.hasOwnProperty.call(checklistPrimerSeparatorsByGroup, requirement),
+    primerSeparator: Object.prototype.hasOwnProperty.call(checklistPrimerSeparatorsByGroup, requirement)
+      ? checklistPrimerSeparatorsByGroup[requirement]
+      : '',
+    primerPrecedence: JSON.parse(JSON.stringify(checklistPrimerPrecedenceByGroup[requirement] || {})),
     reviewedByMedia: reviewedByMedia
   });
 
   checklistItems.splice(idx, 1);
   delete checklistKeywordsByItem[requirement];
+  delete checklistPrimerSeparatorsByGroup[requirement];
+  delete checklistPrimerPrecedenceByGroup[requirement];
   delete checklistSessionHiddenTermsByRequirement[requirement];
   delete checklistExpandedRequirements[requirement];
   Object.keys(checklistCheckedByMedia).forEach(function (mediaKey) {
@@ -1023,6 +1030,20 @@ function restoreDeletedChecklistGroup(operation) {
   checklistItems.splice(index, 0, requirementLabel);
   if (op.hasLocalTerms) checklistKeywordsByItem[requirement] = String(op.localTerms || '');
   else delete checklistKeywordsByItem[requirement];
+  if (op.hasPrimerSeparator) {
+    checklistPrimerSeparatorsByGroup[requirement] = normalizeChecklistPrimerSeparator(op.primerSeparator);
+  } else {
+    delete checklistPrimerSeparatorsByGroup[requirement];
+  }
+  if (op.primerPrecedence && typeof op.primerPrecedence === 'object' && Object.keys(op.primerPrecedence).length) {
+    checklistPrimerPrecedenceByGroup[requirement] = sanitizeChecklistPrimerPrecedence((function () {
+      var map = {};
+      map[requirement] = op.primerPrecedence;
+      return map;
+    })())[requirement] || {};
+  } else {
+    delete checklistPrimerPrecedenceByGroup[requirement];
+  }
   var reviewedByMedia = (op.reviewedByMedia && typeof op.reviewedByMedia === 'object') ? op.reviewedByMedia : {};
   Object.keys(reviewedByMedia).forEach(function (mediaKey) {
     var checked = JSON.parse(JSON.stringify(getChecklistCheckedMapForMediaKey(mediaKey)));

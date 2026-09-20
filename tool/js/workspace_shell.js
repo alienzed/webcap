@@ -410,6 +410,7 @@ function syncApplicationShellContext() {
   var workspaceContext = document.getElementById('app-header-workspace-context');
   var modelControl = document.getElementById('app-header-model-control');
   var modelSelect = document.getElementById('app-header-model-profile-select');
+  var previewHeader = document.getElementById('preview-header');
   var sidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
   var testOpen = navigation.activity === 'test';
   var contextText = '';
@@ -441,6 +442,9 @@ function syncApplicationShellContext() {
   if (workspaceContext) {
     workspaceContext.textContent = contextText;
   }
+
+  var previewContextRelevant = !testOpen && (surface === 'default' || surface === 'focus');
+  previewHeader.classList.toggle('shell-context-hidden', !previewContextRelevant);
 
   var modelRelevant = navigation.activity === 'training' || navigation.activity === 'test';
   if (modelControl) modelControl.classList.toggle('hidden', !modelRelevant);

@@ -529,7 +529,7 @@ function renderPreviewHeaderMeta() {
       break;
     }
   }
-  if (currentIndex >= 0 && visibleMedia.length > 0) {
+  if (!focusOpen && currentIndex >= 0 && visibleMedia.length > 0) {
     positionEl.textContent = 'Item ' + (currentIndex + 1) + ' / ' + visibleMedia.length;
     positionEl.classList.remove('hidden');
   }

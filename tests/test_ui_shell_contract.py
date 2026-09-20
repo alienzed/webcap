@@ -174,27 +174,27 @@ def test_grid_identity_and_prep_exit_are_owned_by_shell_without_removing_local_b
     assert 'id="media-grid-surface-close-btn"' in html
 
 
-def test_single_item_preview_header_keeps_item_controls_local_and_moves_shell_toggle_up():
+def test_single_item_preview_context_is_hosted_by_permanent_header():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     item_details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
-    prep_root = html.index('id="prep-workspace-root"')
-    sidebar_panel = html.index('id="sidebar-panel"')
+    header_start = html.index('id="app-header"')
     preview_start = html.index('id="preview-header"')
-    sidebar_toggle = html.index('id="sidebar-collapse-toggle-btn"')
+    prep_root = html.index('id="prep-workspace-root"')
+    preview_shell = html.index('id="preview-shell"')
 
-    assert prep_root < sidebar_toggle < sidebar_panel < preview_start
-    assert html.count('id="sidebar-collapse-toggle-btn"') == 1
+    assert header_start < preview_start < prep_root < preview_shell
+    assert html.count('id="preview-header"') == 1
     assert 'id="preview-header-position"' in html
     assert 'id="preview-header-meta"' in html
     assert 'id="preview-action-rating"' in html
     assert 'id="preview-mutation-indicator"' in html
     assert 'id="preview-open-focused-btn"' in html
-    assert "ui.previewHeaderEl.classList.add('hidden');" in item_details
-    assert "ui.sidebarCollapseToggleBtn.classList.toggle('hidden'" not in item_details
-    assert ".app.shell-revamp .sidebar-edge-toggle-btn {" in css
-    assert ".app-header-sidebar-toggle-btn {" not in css
+    assert ".app-header > .preview-header {" in css
+    assert "previewHeader.classList.toggle('shell-context-hidden', !previewContextRelevant);" in shell
+    assert "if (!focusOpen && currentIndex >= 0 && visibleMedia.length > 0)" in item_details
 
 
 def test_focus_uses_shell_identity_but_keeps_local_cleanup_exit():

@@ -233,7 +233,6 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
         "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
         "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
     })
-    monkeypatch.setattr(bench, "_release_gpu_for_test_generations", lambda: None)
 
     def queue(workflow):
         item = (
@@ -342,46 +341,20 @@ def test_visible_status_marks_persisted_running_session_interrupted_without_work
     assert "restarted" in status["error"]
 
 
-def test_start_refuses_when_training_gpu_is_unavailable(tmp_path, monkeypatch):
-    staged = tmp_path / "staged"
-    staged.mkdir()
-    lora = staged / "epoch01.safetensors"
-    lora.write_bytes(b"weights")
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
-    monkeypatch.setattr(bench, "_read_json_response", lambda *args, **kwargs: {})
-    monkeypatch.setattr(bench, "_resolve_comfy_loras", lambda _loras: [(lora, "mh3/set/epoch01.safetensors")])
-    monkeypatch.setattr(bench, "_load_template", lambda: {
-        "115": {"inputs": {"aspect_ratio": "2:3", "megapixels": 0.2}},
-        "129": {"inputs": {"noise_seed": 123}},
-        "133": {"inputs": {"value": 7}},
-    })
-    monkeypatch.setattr(bench, "_resolve_comfy_template_assets", lambda template: template)
-    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
-    monkeypatch.setattr(bench, "_reserve_gpu_for_test_generations", lambda: False)
-
-    with pytest.raises(RuntimeError, match="GPU is busy"):
-        bench.start(tmp_path, "prompt")
-
-    assert not (tmp_path / bench.TEST_RESULTS_DIR).exists()
-
-
-def test_run_batch_releases_gpu_reservation_when_template_load_fails(tmp_path, monkeypatch):
+def test_run_batch_marks_failed_when_template_load_fails(tmp_path, monkeypatch):
     session = tmp_path / "session"
     session.mkdir()
     bench._atomic_write_json(
         session / "test.json",
         {"status": "running", "completed": 0, "total": 1, "current": "", "error": ""},
     )
-    released = []
     monkeypatch.setattr(bench, "_load_template", lambda: (_ for _ in ()).throw(RuntimeError("template boom")))
-    monkeypatch.setattr(bench, "_release_gpu_for_test_generations", lambda: released.append(bench.GPU_RESERVATION_OWNER))
 
     bench._run_batch("folder-key", session, [], "prompt")
 
     status = bench._read_status(session)
     assert status["status"] == "failed"
     assert status["error"] == "template boom"
-    assert released == [bench.GPU_RESERVATION_OWNER]
 
 
 
@@ -461,7 +434,6 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
         "_move_saved_video",
         lambda _ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
-    monkeypatch.setattr(bench, "_release_gpu_for_test_generations", lambda: None)
 
     bench._run_batch(
         "folder-key",
@@ -473,39 +445,6 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
 
     assert seen == ["mh3/linux-model.safetensors"]
     assert bench._read_status(session)["status"] == "complete"
-
-
-
-def test_epoch_test_bench_does_not_import_training_runner_at_module_load():
-    source = Path(bench.__file__).read_text(encoding="utf-8")
-    top_level = source.split("def _reserve_gpu_for_test_generations", 1)[0]
-    assert "from .training_runner import" not in top_level
-
-
-
-def test_test_generation_gpu_helpers_call_training_runner(monkeypatch):
-    from tool.server import training_runner
-
-    calls = []
-    monkeypatch.setattr(training_runner, "reserve_gpu_for_external_work", lambda owner: calls.append(("reserve", owner)) or True)
-    monkeypatch.setattr(training_runner, "release_gpu_for_external_work", lambda owner: calls.append(("release", owner)))
-
-    assert bench._reserve_gpu_for_test_generations() is True
-    bench._release_gpu_for_test_generations()
-
-    assert calls == [
-        ("reserve", bench.GPU_RESERVATION_OWNER),
-        ("release", bench.GPU_RESERVATION_OWNER),
-    ]
-
-
-
-def test_test_generation_gpu_calls_go_through_lazy_wrappers():
-    source = Path(bench.__file__).read_text(encoding="utf-8")
-    assert source.count("reserve_gpu_for_external_work(GPU_RESERVATION_OWNER)") == 1
-    assert source.count("release_gpu_for_external_work(GPU_RESERVATION_OWNER)") == 1
-    assert source.count("_reserve_gpu_for_test_generations()") >= 2
-    assert source.count("_release_gpu_for_test_generations()") >= 3
 
 
 
@@ -678,7 +617,6 @@ def test_prepare_then_start_from_session_folder_reuses_same_staged_loras(tmp_pat
     monkeypatch.setattr(bench, "_resolve_comfy_loras", lambda loras: [(loras[0], "HH4013/" + loras[0].name)])
     monkeypatch.setattr(bench, "_resolve_comfy_template_assets", lambda template: template)
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
-    monkeypatch.setattr(bench, "_reserve_gpu_for_test_generations", lambda: True)
     monkeypatch.setattr(bench, "_active_threads", {})
     monkeypatch.setattr(bench, "_active_sessions", {})
     monkeypatch.setattr(bench, "_stop_requests", set())
@@ -698,7 +636,8 @@ def test_prepare_then_start_from_session_folder_reuses_same_staged_loras(tmp_pat
     prepared = bench.prepare(session_folder)
     assert prepared["files"] == [candidate.name]
 
-    started = bench.start(session_folder, "test prompt")
+    request = bench._build_queued_request(session_folder, "test prompt")
+    started = bench.start_queued(session_folder, request)
     assert started["status"] == "running"
     assert started["total"] == 2
     assert (set_folder / bench.TEST_RESULTS_DIR / started["session"] / "test.json").is_file()

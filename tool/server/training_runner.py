@@ -63,7 +63,6 @@ _monitor_thread = None
 _startup_reconciled = False
 _state_file_seen = None
 _persisted_managed_job_ids = set()
-_external_gpu_owner = ""
 _logger = logging.getLogger(__name__)
 _CHECKPOINT_SAVE_PATH_PATTERN = re.compile(r"Saving model checkpoint:\s+(.+?)[/\\]global_step\d+[/\\]")
 _TRAINING_LOG_TIMESTAMP_PATTERN = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\]", re.MULTILINE)
@@ -101,32 +100,6 @@ def _jobs_root():
 
 def _ensure_runtime_dirs():
     _runtime_root().mkdir(parents=True, exist_ok=True)
-
-
-def reserve_gpu_for_external_work(owner):
-    owner = str(owner or "").strip()
-    if not owner:
-        raise ValueError("GPU reservation owner is required.")
-    global _external_gpu_owner
-    with _lock:
-        state = _read_state()
-        jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
-        if any(job.get("status") in ACTIVE_STATUSES for job in jobs):
-            return False
-        if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
-            return False
-        if _external_gpu_owner:
-            return False
-        _external_gpu_owner = owner
-        return True
-
-
-def release_gpu_for_external_work(owner):
-    owner = str(owner or "").strip()
-    global _external_gpu_owner
-    with _lock:
-        if _external_gpu_owner == owner:
-            _external_gpu_owner = ""
 
 
 def _default_state():
@@ -1724,8 +1697,6 @@ def _refresh_test_job(job):
 def _launch_next_queued_job(state):
     if state.get("queuePaused"):
         return
-    if _external_gpu_owner:
-        return
     if any(job.get("status") in ACTIVE_STATUSES for job in state.get("jobs", [])):
         return
     state["activeJobId"] = ""
@@ -2130,6 +2101,30 @@ def enqueue_test_response(folder, test_request):
             "jobs": [_public_job(job)],
             "queued": job.get("status") == "queued",
         }, 200
+
+
+def queued_test_jobs_using_candidate(folder, file_name):
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    name = str(file_name or "").strip()
+    if not folder_text or not name:
+        return []
+    with _lock:
+        state = _read_state_readonly()
+        matches = []
+        for job in state.get("jobs", []):
+            if job.get("status") != "queued" or _job_kind(job) != "test":
+                continue
+            if str(job.get("folder") or "") != folder_text:
+                continue
+            request = job.get("testRequest") if isinstance(job.get("testRequest"), dict) else {}
+            selected = request.get("selectedFiles") if isinstance(request.get("selectedFiles"), list) else []
+            if name not in selected:
+                continue
+            matches.append({
+                "id": str(job.get("id") or ""),
+                "runName": str(job.get("runName") or ""),
+            })
+        return matches
 
 
 def queued_test_jobs_for_folder(folder):

@@ -974,3 +974,76 @@ def test_candidate_scores_reuse_normal_session_folder_ratings(tmp_path, monkeypa
     opened = bench.open_session(tmp_path, second.name)
     assert opened["name"] == "Red colour test"
     assert opened["results"][0]["rating"] == 5
+
+
+
+def test_queued_request_freezes_prompt_seed_and_selected_files(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    first = staged / "epoch01.safetensors"
+    second = staged / "epoch02.safetensors"
+    first.write_bytes(b"one")
+    second.write_bytes(b"two")
+
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [first, second])
+    monkeypatch.setattr(bench, "_load_template", lambda: {"template": True})
+    monkeypatch.setattr(bench, "_normalized_test_settings", lambda *_args, **_kwargs: {
+        "seed": 12345,
+        "aspectRatio": "2:3 (Portrait Photo)",
+        "megapixels": 0.2,
+        "duration": 7,
+    })
+    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt.replace("{place}", "studio") + " #" + str(seed))
+
+    payload = bench._build_queued_request(
+        tmp_path,
+        "person in {place}",
+        seed=12345,
+        name="Prompt B",
+        selected_files=[first.name, second.name],
+    )
+
+    assert payload["name"] == "Prompt B"
+    assert payload["sourcePrompt"] == "person in {place}"
+    assert payload["resolvedPrompt"] == "person in studio #12345"
+    assert payload["seed"] == 12345
+    assert payload["selectedFiles"] == [first.name, second.name]
+    assert payload["total"] == 3
+
+
+def test_enqueue_test_delegates_to_shared_queue(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch01.safetensors"
+    candidate.write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
+    monkeypatch.setattr(bench, "_load_template", lambda: {})
+    monkeypatch.setattr(bench, "_normalized_test_settings", lambda *_args, **_kwargs: {
+        "seed": 77,
+        "aspectRatio": "1:1 (Square)",
+        "megapixels": 0.2,
+        "duration": 5,
+    })
+    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
+    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
+    monkeypatch.setattr(bench, "status", lambda _folder: {"status": "idle"})
+
+    from tool.server import training_runner
+    seen = {}
+
+    def enqueue_response(folder, request):
+        seen["folder"] = folder
+        seen["request"] = request
+        return {"ok": True, "job": {"id": "job-1", "kind": "test", "status": "queued"}, "queued": True}, 200
+
+    monkeypatch.setattr(training_runner, "enqueue_test_response", enqueue_response)
+
+    payload = bench.enqueue(tmp_path, "prompt", name="Named", selected_files=[candidate.name])
+
+    assert payload["operation"] == "test_enqueue"
+    assert payload["queued"] is True
+    assert seen["folder"] == "sets/subject"
+    assert seen["request"]["name"] == "Named"
+    assert seen["request"]["selectedFiles"] == [candidate.name]

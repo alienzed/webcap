@@ -759,12 +759,12 @@
                         </section>
                         <section id="training-global-context" class="training-global-context" aria-label="Training activity">
                             <div class="training-global-label"><span class="training-workflow-step-number">2</span><span>Training</span></div>
-                            <section class="training-runner-card" aria-label="Training queue">
+                            <section class="training-runner-card" aria-label="Execution queue">
                                 <div class="training-runner-card-header">
-                                    <div class="training-workspace-section-title">Training Queue</div>
+                                    <div class="training-workspace-section-title">Queue</div>
                                     <div id="training-gpu-status" class="training-gpu-status" aria-label="GPU status"></div>
                                 </div>
-                                <div id="training-runner-summary" class="training-runner-summary">No managed training jobs.</div>
+                                <div id="training-runner-summary" class="training-runner-summary">No queued or active jobs.</div>
                                 <div id="training-runner-actions" class="training-runner-actions hidden">
                                     <button id="training-runner-finish-btn" type="button" class="training-btn" title="Finish the current step, save a resumable checkpoint, mark this run finished early, and continue the queue.">Finish</button>
                                     <button id="training-runner-pause-btn" type="button" class="review-captions-btn" title="Finish the current step, save a resumable checkpoint, then keep this job first for Resume.">Pause</button>
@@ -772,7 +772,7 @@
                                     <button id="training-runner-resume-queue-btn" type="button" class="training-btn hidden">Resume</button>
                                     <button id="training-runner-console-btn" type="button" class="review-captions-btn">Show Run Log</button>
                                 </div>
-                                <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued training jobs"></div>
+                                <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued jobs"></div>
                             </section>
                             <section class="training-history-card" aria-label="Recent training runs">
                                 <div class="training-history-heading">

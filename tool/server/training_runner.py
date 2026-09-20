@@ -78,6 +78,15 @@ _LOW_DISK_REASON_PREFIX = "Queue auto-paused: low disk space"
 _DISK_INSPECTION_NOTICE_PREFIX = "Training disk-space protection could not inspect the output volume"
 
 
+def _job_kind(job):
+    kind = str(job.get("kind") or "").strip().lower() if isinstance(job, dict) else ""
+    return kind or "training"
+
+
+def _is_training_job(job):
+    return _job_kind(job) == "training"
+
+
 def _runtime_root():
     return Path(app_config.FS_ROOT) / RUNNER_DIR_NAME
 
@@ -184,7 +193,9 @@ def _low_disk_may_replace_pause_reason(reason):
 
 
 def _apply_training_disk_protection(state, active_jobs, queued_jobs):
-    """Best-effort disk protection; unavailable measurements intentionally fail open."""
+    """Best-effort Training disk protection; non-Training queue jobs are intentionally ignored."""
+    active_jobs = [job for job in active_jobs if _is_training_job(job)]
+    queued_jobs = [job for job in queued_jobs if _is_training_job(job)]
     if not active_jobs and not queued_jobs:
         return "safe"
     disk = _training_disk_space(_training_disk_target(active_jobs, queued_jobs))
@@ -309,6 +320,8 @@ def recover_state_response():
 
 
 def _sync_job_history(job):
+    if not _is_training_job(job):
+        return ""
     if job.get("historyHidden") or job.get("status") not in HISTORY_STATUSES:
         return ""
     folder = str(job.get("folder") or "").strip()
@@ -1604,6 +1617,110 @@ def _refresh_job(job):
     }
 
 
+def _launch_test_job(job, folder_path):
+    from .epoch_test_bench import start_queued as start_queued_test
+
+    now = time.time()
+    if not job.get("startedAt"):
+        job["startedAt"] = now
+    job["updatedAt"] = now
+    job["status"] = "starting"
+    job["stage"] = "test"
+    try:
+        payload = start_queued_test(folder_path, job.get("testRequest") or {})
+    except Exception as exc:
+        job["status"] = "failed"
+        job["stage"] = "test"
+        job["error"] = "Could not start Test Generations: " + str(exc)
+        job["finishedAt"] = time.time()
+        return False
+
+    job["testSession"] = str(payload.get("session") or "")
+    job["resultFolder"] = str(payload.get("resultFolder") or "")
+    job["testProgress"] = {
+        "completed": int(payload.get("completed") or 0),
+        "failed": int(payload.get("failed") or 0),
+        "total": int(payload.get("total") or job.get("testTotal") or 0),
+        "current": str(payload.get("current") or ""),
+    }
+    status = str(payload.get("status") or "")
+    if status == "failed":
+        job["status"] = "failed"
+        job["error"] = str(payload.get("error") or "Test Generations could not start.")
+        job["finishedAt"] = time.time()
+        return False
+    job["status"] = "running" if status == "running" else "starting"
+    job["stage"] = "test"
+    job.pop("error", None)
+    return True
+
+
+def _refresh_test_job(job):
+    if str(job.get("status") or "") in QUEUE_STATUSES | {"cancelled"}:
+        return {"holdReason": ""}
+    session_name = str(job.get("testSession") or "").strip()
+    if not session_name:
+        if str(job.get("status") or "") in ACTIVE_STATUSES:
+            job["status"] = "failed"
+            job["stage"] = "test"
+            job["error"] = "Queued Test Generations job has no session record."
+            job["finishedAt"] = time.time()
+            job["updatedAt"] = time.time()
+        return {"holdReason": ""}
+
+    from .epoch_test_bench import queue_session_status
+
+    try:
+        folder_path = app_config.safe_join_fs_root(str(job.get("folder") or ""))
+        payload = queue_session_status(folder_path, session_name)
+    except Exception as exc:
+        job["status"] = "failed"
+        job["stage"] = "test"
+        job["error"] = "Could not read Test Generations status: " + str(exc)
+        job["finishedAt"] = time.time()
+        job["updatedAt"] = time.time()
+        return {"holdReason": ""}
+
+    status = str(payload.get("status") or "")
+    job["testProgress"] = {
+        "completed": int(payload.get("completed") or 0),
+        "failed": int(payload.get("failed") or 0),
+        "total": int(payload.get("total") or job.get("testTotal") or 0),
+        "current": str(payload.get("current") or ""),
+    }
+    job["resultFolder"] = str(payload.get("resultFolder") or job.get("resultFolder") or "")
+    job["stage"] = "test"
+    job["updatedAt"] = time.time()
+    if status in ("starting", "running", "stopping"):
+        job["status"] = status
+        if payload.get("error"):
+            job["error"] = str(payload.get("error"))
+        else:
+            job.pop("error", None)
+        return {"holdReason": ""}
+
+    terminal_status = {
+        "complete": "completed",
+        "completed": "completed",
+        "failed": "failed",
+        "stopped": "stopped",
+        "interrupted": "interrupted",
+    }.get(status)
+    if terminal_status:
+        job["status"] = terminal_status
+        job["finishedAt"] = time.time()
+        if payload.get("error"):
+            job["error"] = str(payload.get("error"))
+        elif terminal_status != "failed":
+            job.pop("error", None)
+        return {"holdReason": ""}
+
+    job["status"] = "failed"
+    job["error"] = "Unexpected Test Generations session state: " + (status or "unknown")
+    job["finishedAt"] = time.time()
+    return {"holdReason": ""}
+
+
 def _launch_next_queued_job(state):
     if state.get("queuePaused"):
         return
@@ -1616,7 +1733,17 @@ def _launch_next_queued_job(state):
         if job.get("status") not in QUEUE_STATUSES:
             continue
         folder_path = app_config.safe_join_fs_root(job["folder"])
-        _launch_job(job, folder_path)
+        kind = _job_kind(job)
+        if kind == "training":
+            _launch_job(job, folder_path)
+        elif kind == "test":
+            _launch_test_job(job, folder_path)
+        else:
+            job["status"] = "failed"
+            job["stage"] = "launch"
+            job["error"] = "Unsupported queue job kind: " + kind
+            job["finishedAt"] = time.time()
+            job["updatedAt"] = time.time()
         if job.get("status") in ACTIVE_STATUSES:
             state["activeJobId"] = job["id"]
             return
@@ -1630,18 +1757,32 @@ def _refresh_state(state):
     pause_requested = False
     recovered_jobs = []
     for job in state.get("jobs", []):
-        if job.get("status") == "queued" and not job.get("progressPlan"):
+        training_job = _is_training_job(job)
+        if training_job and job.get("status") == "queued" and not job.get("progressPlan"):
             job["progressPlan"] = _default_progress_plan()
         if (
-            job.get("status") == "queued"
+            training_job
+            and job.get("status") == "queued"
             and job.get("resumeFromCheckpoint")
             and not job.get("resumePoint")
             and not job.get("resumePointError")
         ):
             _populate_queued_resume_point(job)
-        if job.get("status") == "completed":
+        if training_job and job.get("status") == "completed":
             _annotate_completed_job(job)
-        outcome = _refresh_job(job) if job.get("status") not in QUEUE_STATUSES | {"cancelled"} else None
+        if job.get("status") in QUEUE_STATUSES | {"cancelled"}:
+            outcome = None
+        elif training_job:
+            outcome = _refresh_job(job)
+        elif _job_kind(job) == "test":
+            outcome = _refresh_test_job(job)
+        else:
+            job["status"] = "failed"
+            job["stage"] = "refresh"
+            job["error"] = "Unsupported queue job kind: " + _job_kind(job)
+            job["finishedAt"] = time.time()
+            job["updatedAt"] = time.time()
+            outcome = {"holdReason": ""}
         if outcome and outcome.get("holdReason"):
             hold_reason = outcome["holdReason"]
         if outcome and outcome.get("pauseQueue"):
@@ -1655,7 +1796,7 @@ def _refresh_state(state):
     state["activeJobId"] = active_jobs[0]["id"] if active_jobs else ""
     if len(active_jobs) > 1:
         state["runnerNotice"] = (
-            str(len(active_jobs)) + " managed runners are active or awaiting confirmation. "
+            str(len(active_jobs)) + " queue jobs are active or awaiting confirmation. "
             "The queue will wait until only derived terminal results remain."
         )
     else:
@@ -1702,7 +1843,7 @@ def start_observer():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
+    fields = ("id", "kind", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete", "testSession", "testProgress", "testTotal", "resultFolder")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -1944,6 +2085,71 @@ def _bundle_from_recorded_capture(action_id, capture_path, folder_path, profile_
     }
 
 
+def _new_test_job(folder, test_request):
+    request = dict(test_request or {})
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    if not folder_text:
+        raise ValueError("Test Generations queue job requires a set folder.")
+    app_config.safe_join_fs_root(folder_text)
+    selected_files = [str(value) for value in request.get("selectedFiles", []) if str(value or "").strip()]
+    total = int(request.get("total") or (len(selected_files) + 1 if selected_files else 0))
+    now = time.time()
+    return {
+        "id": uuid.uuid4().hex[:12],
+        "kind": "test",
+        "folder": folder_text,
+        "modelLabel": "MiniMax H3",
+        "runName": str(request.get("name") or "").strip(),
+        "status": "queued",
+        "stage": "queued",
+        "createdAt": now,
+        "updatedAt": now,
+        "testRequest": request,
+        "testTotal": total,
+    }
+
+
+def enqueue_test_response(folder, test_request):
+    try:
+        job = _new_test_job(folder, test_request)
+    except Exception as exc:
+        return {"ok": False, "error": "Could not queue Test Generations: " + str(exc)}, 400
+
+    with _lock:
+        _ensure_monitor_started()
+        state = _read_state()
+        state["jobs"].append(job)
+        if not state.get("queuePaused") and not any(
+            item.get("status") in ACTIVE_STATUSES for item in state.get("jobs", []) if item is not job
+        ):
+            _launch_next_queued_job(state)
+        _write_state(state)
+        return {
+            "ok": True,
+            "job": _public_job(job),
+            "jobs": [_public_job(job)],
+            "queued": job.get("status") == "queued",
+        }, 200
+
+
+def queued_test_jobs_for_folder(folder):
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    with _lock:
+        state = _read_state_readonly()
+        position = 0
+        result = []
+        for job in state.get("jobs", []):
+            if job.get("status") != "queued":
+                continue
+            position += 1
+            if _job_kind(job) != "test" or str(job.get("folder") or "") != folder_text:
+                continue
+            payload = _public_job(job)
+            payload["queuePosition"] = position
+            result.append(payload)
+        return result
+
+
 def start_response(
     folder,
     queue=False,
@@ -2098,7 +2304,7 @@ def folder_statuses_for_folders(folder_paths):
         except TrainingStateError:
             _logger.exception("Training queue state is unavailable; omitting folder training badges.")
             return {}
-        jobs = list(state.get("jobs", []))
+        jobs = [job for job in state.get("jobs", []) if _is_training_job(job)]
     queue_position = 0
     queued_by_folder = {}
     for job in jobs:
@@ -2283,20 +2489,37 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
         _refresh_state(state)
         job = _find_job(state, job_id)
         if not job:
-            return {"ok": False, "error": "Training job not found"}, 404
+            return {"ok": False, "error": "Queue job not found"}, 404
+        kind = _job_kind(job)
         if job.get("status") in QUEUE_STATUSES and cancel:
             job["status"] = "cancelled"
             job["stage"] = "cancelled"
             job["finishedAt"] = time.time()
             job["updatedAt"] = time.time()
             job["historyHidden"] = True
-            folder = str(job.get("folder") or "").strip()
-            if folder:
-                clear_history_job(app_config.safe_join_fs_root(folder), job.get("id"))
+            if kind == "training":
+                folder = str(job.get("folder") or "").strip()
+                if folder:
+                    clear_history_job(app_config.safe_join_fs_root(folder), job.get("id"))
+            _write_state(state)
+            return {"ok": True, "job": _public_job(job)}, 200
+        if kind == "test":
+            if pause or finish:
+                return {"ok": False, "error": "Pause and Finish apply only to Training jobs."}, 400
+            if job.get("status") not in ACTIVE_STATUSES:
+                return {"ok": False, "error": "Test Generations job is not running."}, 400
+            try:
+                from .epoch_test_bench import stop as stop_test_generations
+                stop_test_generations(app_config.safe_join_fs_root(str(job.get("folder") or "")))
+            except Exception as exc:
+                return {"ok": False, "error": "Could not stop Test Generations: " + str(exc)}, 409
+            job["status"] = "stopping"
+            job["stage"] = "test"
+            job["updatedAt"] = time.time()
             _write_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
         if cancel:
-            return {"ok": False, "error": "Only queued training jobs can be cancelled. Use Pause or Finish for the active job."}, 400
+            return {"ok": False, "error": "Only queued Training jobs can be cancelled. Use Pause or Finish for the active job."}, 400
         if job.get("status") not in ACTIVE_STATUSES:
             return {"ok": False, "error": "Training job is not running."}, 400
         action = "pause" if pause else "finish" if finish else "stop"
@@ -2316,7 +2539,6 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
         job.pop("finishScheduledAt", None)
         _write_state(state)
         return {"ok": True, "job": _public_job(job)}, 200
-
 
 def finish_schedule_response(job_id, epoch=None, cancel=False):
     with _lock:
@@ -2363,11 +2585,11 @@ def reorder_response(job_id, direction):
         queued_indexes = [index for index, job in enumerate(state.get("jobs", [])) if job.get("status") in QUEUE_STATUSES]
         current = next((index for index in queued_indexes if state["jobs"][index].get("id") == job_id), None)
         if current is None:
-            return {"ok": False, "error": "Queued training job not found."}, 404
+            return {"ok": False, "error": "Queued job not found."}, 404
         queue_position = queued_indexes.index(current)
         target_position = queue_position - 1 if direction == "up" else queue_position + 1
         if target_position < 0 or target_position >= len(queued_indexes):
-            return {"ok": False, "error": "Training job cannot move further in the queue."}, 400
+            return {"ok": False, "error": "Queue job cannot move further in the queue."}, 400
         target = queued_indexes[target_position]
         state["jobs"][current], state["jobs"][target] = state["jobs"][target], state["jobs"][current]
         state["jobs"][current]["updatedAt"] = time.time()

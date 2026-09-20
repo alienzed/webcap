@@ -201,7 +201,7 @@ def test_run_setup_is_one_form_without_trained_badge_and_history_is_flat():
     assert 'Training Queue' not in html
     assert '<div class="training-workspace-section-title">Queue</div>' in html
     assert 'aria-label="Execution queue"' in html
-    assert '>Recent Runs</button>' in html
+    assert '>Training History</button>' in html
 
     fields_rule = css.split(".app.shell-revamp .training-run-layout .training-run-setup-fields {", 1)[1].split("}", 1)[0]
     assert "grid-template-columns: 150px minmax(0, 1fr);" in fields_rule

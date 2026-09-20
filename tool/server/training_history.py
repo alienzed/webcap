@@ -620,8 +620,7 @@ def summarize_history(folder_path):
 def record_job(folder_path, job):
     folder = Path(folder_path)
     with _history_lock:
-        _write_job_record(folder, job)
-    return read_history(folder)
+        return _write_job_record(folder, job)
 
 
 def remove_job_record(job):

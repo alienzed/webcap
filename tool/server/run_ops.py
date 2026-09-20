@@ -12,10 +12,6 @@ from .training_review import prepare_training_review, resolve_saved_initializer
 from .training_runtime import build_training_launcher, to_wsl_path, training_runtime_settings
 
 
-def _to_wsl_path(path_obj: Path, distribution=""):
-    return to_wsl_path(path_obj, distribution)
-
-
 def train_run_response(
     folder: str,
     stages="",
@@ -93,7 +89,7 @@ def train_run_response(
         for stage in stage_names:
             stage_output = action_root / "output"
             stage_output.mkdir(parents=True, exist_ok=True)
-            output_dir = _to_wsl_path(stage_output, runtime_settings["wslDistribution"])
+            output_dir = to_wsl_path(stage_output, runtime_settings["wslDistribution"])
             output_dirs[stage] = output_dir
         bundle = materialize_training_bundle(
             folder_path,
@@ -120,7 +116,7 @@ def train_run_response(
         update_action(action_id_for_root(action_root), mark_manual)
         artifacts = bundle["artifacts"]
         stage_configs = {
-            stage: _to_wsl_path(artifacts[stage + "Config"], runtime_settings["wslDistribution"])
+            stage: to_wsl_path(artifacts[stage + "Config"], runtime_settings["wslDistribution"])
             for stage in stage_names
         }
         hi_wsl = stage_configs.get("hi") or next(iter(stage_configs.values()))
@@ -130,7 +126,7 @@ def train_run_response(
             diffusion_pipe_wsl = "<set training.diffusion_pipe_wsl>"
 
         resume_command_path = resume_from_checkpoint if str(resume_from_checkpoint).startswith("/") else (
-            _to_wsl_path(Path(resume_from_checkpoint), runtime_settings["wslDistribution"]) if resume_from_checkpoint else ""
+            to_wsl_path(Path(resume_from_checkpoint), runtime_settings["wslDistribution"]) if resume_from_checkpoint else ""
         )
         command_plan = build_training_command_plan(
             hi_wsl,

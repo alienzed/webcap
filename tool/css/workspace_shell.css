@@ -61,7 +61,7 @@
   grid-area: header;
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 0 10px;
@@ -70,7 +70,6 @@
 }
 
 .app-header-context,
-.app-header-workspace-controls,
 .app-header-global {
   min-width: 0;
   display: flex;
@@ -79,6 +78,14 @@
 }
 
 .app-header-context {
+  overflow: hidden;
+}
+
+.app-header-workspace-identity {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
   overflow: hidden;
 }
 
@@ -184,29 +191,6 @@
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.app-header-workspace-controls {
-  justify-content: center;
-}
-
-.app-header-sidebar-toggle-btn {
-  width: 28px;
-  min-width: 28px;
-  min-height: 26px;
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--panel-soft);
-  color: var(--muted);
-  box-shadow: none;
-  cursor: pointer;
-}
-
-.app-header-sidebar-toggle-btn:hover,
-.app-header-sidebar-toggle-btn:focus-visible {
-  border-color: var(--accent);
-  color: var(--text);
 }
 
 .app-header-workspace-title {
@@ -318,6 +302,34 @@
   overflow: hidden;
   padding: 0;
   box-shadow: none;
+}
+
+.sidebar-collapse-toggle-btn {
+  position: absolute;
+  top: 8px;
+  left: calc(var(--sidebar-width) - 14px);
+  z-index: 8;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+}
+
+.sidebar-collapse-toggle-btn:hover,
+.sidebar-collapse-toggle-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.app.shell-revamp.left-rail-collapsed .sidebar-collapse-toggle-btn,
+.app.shell-revamp.sidebar-hidden .sidebar-collapse-toggle-btn {
+  left: 4px;
 }
 
 .app.shell-revamp.left-rail-collapsed .sidebar-panel {
@@ -752,10 +764,6 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     max-width: 125px;
   }
 
-  .app-header-workspace-controls {
-    display: none;
-  }
-
   .app-header-global {
     grid-column: 2;
   }
@@ -774,6 +782,11 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   .app.shell-revamp.left-rail-collapsed .sidebar-panel,
   .app.shell-revamp.sidebar-hidden .sidebar-panel {
     display: none;
+  }
+
+  .sidebar-collapse-toggle-btn {
+    top: 4px;
+    left: 4px;
   }
 
   .app.shell-revamp.left-rail-collapsed,

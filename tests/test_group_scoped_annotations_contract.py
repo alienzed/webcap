@@ -260,3 +260,15 @@ def test_groups_helper_keeps_label_space_with_management_controls():
     assert "white-space: nowrap;" in css
     assert "#checklist-items .checklist-group-visibility-btn.is-hidden" in css
 
+
+def test_shell_groups_helper_disables_legacy_multicolumn_flow():
+    css = _read("tool/css/workbench.css")
+
+    block = css.split(
+        ".app.shell-revamp #caption-checklist-panel.group-tools-card #checklist-items {", 1
+    )[1].split("}", 1)[0]
+    assert "columns: auto;" in block
+    assert "column-count: initial;" in block
+    assert "column-width: initial;" in block
+    assert "overflow-x: hidden !important;" in block
+

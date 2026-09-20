@@ -1121,7 +1121,7 @@ function addTagToMediaKey(mediaKey, tagText, options) {
   var low = tag.toLowerCase();
   var exists = current.some(function (t) { return String(t).toLowerCase() === low; });
   if (exists) return false;
-  if (typeof recordUndoOperation === 'function') {
+  if (!opts.skipUndo && typeof recordUndoOperation === 'function') {
     recordUndoOperation({
       type: 'tag',
       mediaKey: key,
@@ -1140,9 +1140,13 @@ function addTagToMediaKey(mediaKey, tagText, options) {
   } else {
     invalidateChecklistReviewedRequirementsForTagChange(key, tag, { skipRender: true });
   }
-  ensureCaptionHelperPhraseInCatalog(tag, true);
-  saveItemTagsToFolderState();
-  refreshTagDrivenPanelsForMediaKey(key);
+  ensureCaptionHelperPhraseInCatalog(tag, !opts.skipSave);
+  if (!opts.skipSave) {
+    saveItemTagsToFolderState();
+  }
+  if (!opts.skipRefresh) {
+    refreshTagDrivenPanelsForMediaKey(key);
+  }
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();
   }

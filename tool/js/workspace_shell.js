@@ -236,7 +236,9 @@ function syncApplicationShellContext() {
         ? 'Training'
         : (surface === 'reviewOutput'
           ? 'Review Set'
-          : (surface === 'grid' ? 'Grid' : (surface === 'focus' ? 'Focus' : ''))));
+          : (surface === 'grid'
+            ? 'Grid'
+            : (surface === 'focus' ? 'Focus' : (surface === 'configEditor' ? 'Config' : 'Prep')))));
   }
   if (workspaceContext) {
     var workspaceContextText = '';

@@ -149,14 +149,20 @@ def rename_response(data):
             new_rel = str(Path(folder) / new_name).replace("\\", "/").strip("/")
             try:
                 from .training_runner import relocate_folder_jobs
+                from .training_action import relocate_folder_actions
                 updated_jobs = relocate_folder_jobs(old_rel, new_rel)
-            except Exception as queue_error:
-                app_config.debug_print("[fs_rename] Folder renamed but training queue could not be updated:", queue_error)
+                updated_actions = relocate_folder_actions(old_rel, new_rel)
+            except Exception as training_error:
+                app_config.debug_print("[fs_rename] Folder renamed but Training metadata could not be updated:", training_error)
                 return jsonify({
                     "ok": True,
-                    "warning": "Folder was renamed, but the training queue could not be updated: " + str(queue_error),
+                    "warning": "Folder was renamed, but Training metadata could not be updated: " + str(training_error),
                 })
-            return jsonify({"ok": True, "updatedTrainingJobs": updated_jobs})
+            return jsonify({
+                "ok": True,
+                "updatedTrainingJobs": updated_jobs,
+                "updatedTrainingActions": updated_actions,
+            })
         if old_path.is_file():
             originals_path = folder_path / "originals"
             old_orig_media = originals_path / old_name if originals_path.exists() else None

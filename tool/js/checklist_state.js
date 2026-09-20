@@ -14,6 +14,7 @@ var checklistTermDescriptorDefaultsByGroup = {}; // { requirement: { termLower: 
 var checklistTermDescriptorsByMedia = {}; // { mediaKey: { requirement: { termLower: { prefix: "", suffix: "" } } } }
 var checklistTermAffixesByKey = {}; // Legacy mirror of unscoped wrappers.
 var checklistExpandedRequirements = {};
+var checklistHiddenRequirements = {}; // { requirement: true } persisted per folder/set
 
 function checklistSort(a, b) {
   return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
@@ -247,6 +248,53 @@ function toggleChecklistRequirementExpanded(requirementLabel) {
   var req = normalizeChecklistRequirementKey(requirementLabel);
   if (!req) return false;
   return setChecklistRequirementExpanded(req, !isChecklistRequirementExpanded(req));
+}
+
+function sanitizeChecklistHiddenRequirements(rawList) {
+  var configured = {};
+  (Array.isArray(checklistItems) ? checklistItems : []).forEach(function (requirementLabel) {
+    var requirement = normalizeChecklistRequirementKey(requirementLabel);
+    if (requirement) configured[requirement] = true;
+  });
+  var hidden = {};
+  (Array.isArray(rawList) ? rawList : []).forEach(function (rawRequirement) {
+    var requirement = normalizeChecklistRequirementKey(rawRequirement);
+    if (requirement && configured[requirement]) hidden[requirement] = true;
+  });
+  return hidden;
+}
+
+function getChecklistHiddenRequirements() {
+  return (Array.isArray(checklistItems) ? checklistItems : [])
+    .map(normalizeChecklistRequirementKey)
+    .filter(function (requirement) {
+      return !!requirement && !!checklistHiddenRequirements[requirement];
+    });
+}
+
+function isChecklistRequirementHidden(requirementLabel) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  return !!requirement && !!checklistHiddenRequirements[requirement];
+}
+
+function setChecklistRequirementHidden(requirementLabel, hidden, options) {
+  var opts = options || {};
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requirement || !Array.isArray(checklistItems) || checklistItems.indexOf(requirement) < 0) return false;
+  var nextHidden = !!hidden;
+  if (isChecklistRequirementHidden(requirement) === nextHidden) return false;
+  if (nextHidden) checklistHiddenRequirements[requirement] = true;
+  else delete checklistHiddenRequirements[requirement];
+  if (!opts.skipSave) saveChecklistToFolderState();
+  return true;
+}
+
+function showAllChecklistRequirements(options) {
+  var opts = options || {};
+  if (!getChecklistHiddenRequirements().length) return false;
+  checklistHiddenRequirements = {};
+  if (!opts.skipSave) saveChecklistToFolderState();
+  return true;
 }
 
 function getChecklistTermWrapper(termText) {
@@ -903,6 +951,7 @@ function syncReviewedFromChecklistAll() {
 function saveChecklistToFolderState() {
   var snapshot = snapshotFolderStateFromDom();
   snapshot.caption_requirements = checklistItems.slice();
+  snapshot.caption_hidden_requirements = getChecklistHiddenRequirements();
   snapshot.caption_requirements_checked = JSON.parse(JSON.stringify(checklistCheckedByMedia));
   snapshot.caption_requirement_keywords = JSON.parse(JSON.stringify(checklistKeywordsByItem));
   snapshot.caption_term_wrappers = JSON.parse(JSON.stringify(checklistTermWrappersByKey));
@@ -923,6 +972,7 @@ function loadChecklistFromFolderState(folderState) {
   } else {
     checklistItems = getDefaultRequirementItems().slice();
   }
+  checklistHiddenRequirements = sanitizeChecklistHiddenRequirements(folderState.caption_hidden_requirements);
   if (folderState.caption_requirements_checked && typeof folderState.caption_requirements_checked === 'object') {
     checklistCheckedByMedia = JSON.parse(JSON.stringify(folderState.caption_requirements_checked));
   } else {

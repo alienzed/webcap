@@ -1062,7 +1062,7 @@ def _mark_stopped(session_directory):
     return status
 
 
-def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None):
+def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None, release_gpu=True):
     status_file = _status_path(session_directory)
     try:
         template = copy.deepcopy(template) if template is not None else _load_template()
@@ -1168,7 +1168,9 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
             _active_threads.pop(folder_key, None)
             _active_sessions.pop(folder_key, None)
             _stop_requests.discard(folder_key)
-        _release_gpu_for_test_generations()
+        if release_gpu:
+            _release_gpu_for_test_generations()
+
 
 def prepare(folder_path):
     template = _load_template()

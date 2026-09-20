@@ -1,19 +1,4 @@
 // Active training jobs, queue controls, progress, console output, and polling.
-function getTrainingRunnerSelectedJob() {
-  var jobs = trainingWorkspaceState.runnerJobs || [];
-  for (var activeIndex = 0; activeIndex < jobs.length; activeIndex++) {
-    if (jobs[activeIndex].id === trainingWorkspaceState.runnerActiveJobId) return jobs[activeIndex];
-  }
-  var selectedId = trainingWorkspaceState.runnerSelectedJobId;
-  for (var i = 0; i < jobs.length; i++) {
-    if (jobs[i].id === selectedId && jobs[i].status === 'queued') return jobs[i];
-  }
-  for (var queuedIndex = 0; queuedIndex < jobs.length; queuedIndex++) {
-    if (jobs[queuedIndex].status === 'queued') return jobs[queuedIndex];
-  }
-  return null;
-}
-
 function queueJobKind(job) {
   return String(job && job.kind || 'training').toLowerCase() === 'test' ? 'test' : 'training';
 }
@@ -501,7 +486,6 @@ function startManagedTraining() {
     })
     .then(function (payload) {
       if (!payload) return;
-      trainingWorkspaceState.runnerSelectedJobId = payload.job.id;
       trainingWorkspaceState.launchedJobId = payload.job.id;
       trainingWorkspaceState.launchedJobFolder = state.folder;
       trainingWorkspaceState.launchedJob = payload.job;
@@ -520,7 +504,7 @@ function startManagedTraining() {
 }
 
 function stopManagedTraining(cancel, pause, finish) {
-  var job = getTrainingRunnerSelectedJob();
+  var job = getTrainingRunnerActiveJob();
   if (!job || !job.id) return;
   var isTestJob = queueJobKind(job) === 'test';
   var label = isTestJob
@@ -762,7 +746,6 @@ function buildTrainingQueueHtml(queuedJobs) {
       }
       var status = String(queuedJob.status || 'queued');
       var error = queuedJob.error ? '<div class="training-runner-queue-resume">' + escapeHtml(queuedJob.error) + '</div>' : '';
-      var selected = queuedJob.id === trainingWorkspaceState.runnerSelectedJobId;
       var exceptionalStatus = status !== 'queued'
         ? '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>'
         : '';
@@ -771,7 +754,7 @@ function buildTrainingQueueHtml(queuedJobs) {
           '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' +
           (queuedJob.actionPath ? '<button type="button" class="training-runner-queue-control" data-training-job-action="' + escapeHtml(queuedJob.id) + '" title="Open action folder" aria-label="Open action folder">&#128451;</button>' : '')
         : '';
-      return '<div class="training-runner-queue-item' + (selected ? ' active' : '') + '" data-training-queue-job="' + escapeHtml(queuedJob.id) + '">' +
+      return '<div class="training-runner-queue-item">' +
         '<div class="training-runner-queue-spine" aria-hidden="true"><span>' + (index + 1) + '</span></div>' +
         '<div class="training-runner-queue-copy">' +
           '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(label) + '</strong>' + workload + '</div>' +
@@ -1005,9 +988,6 @@ function renderTrainingRunner() {
     if (els.runnerCancelBtn) els.runnerCancelBtn.classList.add('hidden');
     if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
     return;
-  }
-  if (!getTrainingRunnerJobById(trainingWorkspaceState.runnerSelectedJobId)) {
-    trainingWorkspaceState.runnerSelectedJobId = job.id;
   }
   if (queueJobKind(job) === 'test') {
     var testProgress = job.testProgress && typeof job.testProgress === 'object' ? job.testProgress : {};

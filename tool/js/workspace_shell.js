@@ -235,16 +235,29 @@ function formatShellDiskSpace(value) {
   return (bytes / (1024 * 1024 * 1024)).toFixed(bytes >= 100 * 1024 * 1024 * 1024 ? 0 : 1) + ' GiB';
 }
 
+var shellWorkloadState = {
+  trainingActive: false,
+  testingActive: false
+};
+
 function getShellWorkloadStatus() {
-  var trainingBtn = document.getElementById('activity-training-btn');
-  var testBtn = document.getElementById('activity-test-btn');
-  if (trainingBtn && trainingBtn.classList.contains('training-running')) {
+  if (shellWorkloadState.trainingActive) {
     return { key: 'training', label: 'Training' };
   }
-  if (testBtn && testBtn.classList.contains('test-running')) {
+  if (shellWorkloadState.testingActive) {
     return { key: 'testing', label: 'Testing' };
   }
   return { key: 'idle', label: 'Idle' };
+}
+
+function setShellTrainingActive(active) {
+  shellWorkloadState.trainingActive = !!active;
+  renderShellSystemStatus();
+}
+
+function setShellTestingActive(active) {
+  shellWorkloadState.testingActive = !!active;
+  renderShellSystemStatus();
 }
 
 function renderShellSystemStatus() {
@@ -866,3 +879,5 @@ function clearEditorAndPreview() {
 
 
 window.renderShellSystemStatus = renderShellSystemStatus;
+window.setShellTrainingActive = setShellTrainingActive;
+window.setShellTestingActive = setShellTestingActive;

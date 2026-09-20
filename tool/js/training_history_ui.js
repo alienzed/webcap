@@ -311,7 +311,6 @@ function resumeTrainingHistoryJob(jobId) {
       reuseCapturePath: job.inputPath
     })
   }).then(function (payload) {
-    trainingWorkspaceState.runnerSelectedJobId = payload.job.id;
     trainingWorkspaceState.runnerLogOffsets[payload.job.id] = 0;
     setStatus(payload.queued ? 'Resume job queued.' : 'Resume job started.');
     refreshTrainingRunnerStatus();

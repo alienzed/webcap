@@ -216,26 +216,34 @@ function deriveShellNavigationState() {
 
 function syncApplicationShellContext() {
   var navigation = deriveShellNavigationState();
-  var folderEl = document.getElementById('app-header-folder');
-  if (folderEl) {
-    var folder = String(state && state.folder || '');
-    var label = folder || (typeof ROOT_FOLDER_LABEL === 'string' && ROOT_FOLDER_LABEL ? ROOT_FOLDER_LABEL : 'root');
-    folderEl.textContent = label;
-    folderEl.title = label;
-  }
-
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  var folder = String(state && state.folder || '');
+  var folderParts = folder.split(/[\\/]/).filter(function (part) { return !!part; });
+  var folderLabel = folderParts.length
+    ? folderParts[folderParts.length - 1]
+    : (typeof ROOT_FOLDER_LABEL === 'string' && ROOT_FOLDER_LABEL ? ROOT_FOLDER_LABEL : 'root');
   var workspaceTitle = document.getElementById('app-header-workspace-title');
   var workspaceContext = document.getElementById('app-header-workspace-context');
+  var contextSeparator = document.getElementById('app-header-context-separator');
+  var folderBtn = document.getElementById('app-header-folder-btn');
+  var folderEl = document.getElementById('app-header-folder');
   var sidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
   var testOpen = navigation.activity === 'test';
-  if (sidebarToggle) {
-    var sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');
-    sidebarToggle.classList.toggle('hidden', !sidebarToggleVisible);
-    if (typeof updateSidebarCollapseUi === 'function') {
-      updateSidebarCollapseUi(ui && ui.appEl ? ui.appEl.classList.contains('left-rail-collapsed') : false);
-    }
+  var contextUsesFolder = true;
+  var contextText = folderLabel;
+
+  if (testOpen) {
+    contextUsesFolder = !!folder;
+    contextText = folder ? folderLabel : 'Select a set';
+  } else if (surface === 'training') {
+    var entryKind = getTrainingWorkspaceEntryKind();
+    contextUsesFolder = entryKind === 'set' && !!folder;
+    contextText = entryKind === 'global' ? 'Global' : (folder ? folderLabel : 'Select a set');
+  } else if (!folder) {
+    contextUsesFolder = false;
+    contextText = folderLabel;
   }
+
   if (workspaceTitle) {
     workspaceTitle.textContent = testOpen
       ? 'Test Generations'
@@ -243,23 +251,26 @@ function syncApplicationShellContext() {
         ? 'Training'
         : (surface === 'reviewOutput'
           ? 'Review Set'
-          : (surface === 'grid' ? 'Grid' : (surface === 'focus' ? 'Focus' : ''))));
+          : (surface === 'grid'
+            ? 'Grid'
+            : (surface === 'focus' ? 'Focus' : 'Prep'))));
   }
+  if (folderEl) {
+    folderEl.textContent = folderLabel;
+    folderEl.title = folder || folderLabel;
+  }
+  if (folderBtn) folderBtn.classList.toggle('hidden', !contextUsesFolder);
   if (workspaceContext) {
-    var workspaceContextText = '';
-    if (testOpen) {
-      workspaceContextText = '';
-    } else if (surface === 'training') {
-      var entryKind = getTrainingWorkspaceEntryKind();
-      workspaceContextText = entryKind === 'global'
-        ? 'Global'
-        : (entryKind === 'set' ? '' : 'Select a set');
-    } else if (surface === 'reviewOutput' && typeof getReviewWorkspaceShellContext === 'function') {
-      workspaceContextText = getReviewWorkspaceShellContext();
-    } else if (surface === 'grid') {
-      workspaceContextText = mediaGridGetSourceLabel();
+    workspaceContext.textContent = contextUsesFolder ? '' : contextText;
+  }
+  if (contextSeparator) contextSeparator.classList.toggle('hidden', !contextText);
+
+  if (sidebarToggle) {
+    var sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');
+    sidebarToggle.classList.toggle('hidden', !sidebarToggleVisible);
+    if (typeof updateSidebarCollapseUi === 'function') {
+      updateSidebarCollapseUi(ui && ui.appEl ? ui.appEl.classList.contains('left-rail-collapsed') : false);
     }
-    workspaceContext.textContent = workspaceContextText;
   }
 
   var prepBtn = document.getElementById('activity-prep-btn');

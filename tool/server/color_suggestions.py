@@ -6,7 +6,7 @@ from PIL import Image, ImageOps
 
 
 COLOR_SUGGESTIONS_VERSION = 1
-COLOR_SUGGESTIONS_METHOD = "pillow_lab_v1"
+COLOR_SUGGESTIONS_METHOD = "pillow_lab_v2"
 COLOR_SUGGESTION_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
 COLOR_SUGGESTION_MAX_DIMENSION = 180
 COLOR_SUGGESTION_BORDER_FRACTION = 0.08
@@ -156,31 +156,44 @@ def analyze_image_color_suggestions(file_path) -> dict:
         counts = {}
         rgb_sums = {}
         sampled_pixels = 0
-        ignored_skin_pixels = 0
+        downweighted_skin_pixels = 0
         ignored_transparent_pixels = 0
+        width, height = image.size
+        center_x = max(1.0, (width - 1) / 2.0)
+        center_y = max(1.0, (height - 1) / 2.0)
 
-        for r, g, b, a in image.getdata():
+        for index, (r, g, b, a) in enumerate(image.getdata()):
             if a < 64:
                 ignored_transparent_pixels += 1
                 continue
             sampled_pixels += 1
+            x = index % width
+            y = index // width
+            dx = abs((x - center_x) / center_x)
+            dy = abs((y - center_y) / center_y)
+            edge_distance = min(1.0, max(dx, dy))
+            spatial_weight = 1.0 - (0.65 * edge_distance)
+
             rgb = (r, g, b)
             if _is_likely_skin(rgb):
-                ignored_skin_pixels += 1
-                continue
+                # Color alone cannot distinguish skin from beige/tan/brown clothing.
+                # Keep those pixels eligible, but reduce their influence.
+                downweighted_skin_pixels += 1
+                spatial_weight *= 0.45
+
             name = _nearest_color_name(rgb)
-            counts[name] = counts.get(name, 0) + 1
-            current = rgb_sums.get(name, [0, 0, 0])
-            current[0] += r
-            current[1] += g
-            current[2] += b
+            counts[name] = counts.get(name, 0.0) + spatial_weight
+            current = rgb_sums.get(name, [0.0, 0.0, 0.0])
+            current[0] += r * spatial_weight
+            current[1] += g * spatial_weight
+            current[2] += b * spatial_weight
             rgb_sums[name] = current
 
-        retained_pixels = sum(counts.values())
+        retained_weight = sum(counts.values())
         suggestions = []
-        if retained_pixels > 0:
+        if retained_weight > 0:
             for name, count in counts.items():
-                share = float(count) / float(retained_pixels)
+                share = float(count) / float(retained_weight)
                 if share < COLOR_SUGGESTION_MIN_SHARE:
                     continue
                 sums = rgb_sums[name]
@@ -203,7 +216,7 @@ def analyze_image_color_suggestions(file_path) -> dict:
             "method": COLOR_SUGGESTIONS_METHOD,
             "suggestions": suggestions,
             "sampled_pixels": sampled_pixels,
-            "retained_pixels": retained_pixels,
-            "ignored_skin_pixels": ignored_skin_pixels,
+            "retained_weight": round(retained_weight, 3),
+            "downweighted_skin_pixels": downweighted_skin_pixels,
             "ignored_transparent_pixels": ignored_transparent_pixels,
         }

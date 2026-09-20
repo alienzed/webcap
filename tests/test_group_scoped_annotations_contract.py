@@ -280,3 +280,46 @@ def test_shell_groups_helper_is_not_captured_by_legacy_wide_desktop_layout():
     wide_section = css.split("@media (min-width: 1500px) {", 1)[1]
     assert ".app:not(.shell-revamp) .editor-panel.checklist-visible #caption-checklist-panel.checklist-panel" in wide_section
     assert "\n  .editor-panel.checklist-visible #caption-checklist-panel.checklist-panel" not in wide_section
+
+
+def test_primer_group_separator_and_learned_order_are_persisted_and_applied():
+    checklist = _read("tool/js/checklist_state.js")
+    folder_state = _read("tool/js/folder_state.js")
+    modal = _read("tool/js/checklist_modals.js")
+    html = _read("tool/tool.html")
+
+    assert "var checklistPrimerSeparatorsByGroup = {}" in checklist
+    assert "var checklistPrimerPrecedenceByGroup = {}" in checklist
+    assert "caption_group_primer_separators" in checklist
+    assert "caption_group_primer_precedence" in checklist
+    assert "recordChecklistPrimerPrecedence(requirement, tagText, crossedTerm)" in checklist
+    assert "recordChecklistPrimerPrecedence(requirement, crossedTerm, tagText)" in checklist
+    assert "sortChecklistPrimerEntriesForRequirement(requirement, entries)" in folder_state
+    assert "getChecklistPrimerSeparatorForRequirement(checklistItems[i])" in folder_state
+    assert ".join(separator)" in folder_state
+    assert 'id="checklist-group-primer-separator"' in html
+    assert "setChecklistPrimerSeparatorForRequirement(checklistGroupTermsModalState.requirement, this.value)" in modal
+
+
+def test_primer_group_settings_survive_folder_sanitization_and_group_undo():
+    checklist = _read("tool/js/checklist_state.js")
+    folder_state = _read("tool/js/folder_state.js")
+
+    assert "captionGroupPrimerSeparators" in folder_state
+    assert "captionGroupPrimerPrecedence" in folder_state
+    assert "caption_group_primer_separators: captionGroupPrimerSeparators" in folder_state
+    assert "caption_group_primer_precedence: captionGroupPrimerPrecedence" in folder_state
+
+    delete_block = checklist.split("function deleteChecklistGroupByIndex", 1)[1].split(
+        "function restoreDeletedChecklistGroup", 1
+    )[0]
+    assert "hasPrimerSeparator" in delete_block
+    assert "primerPrecedence" in delete_block
+    assert "delete checklistPrimerSeparatorsByGroup[requirement]" in delete_block
+    assert "delete checklistPrimerPrecedenceByGroup[requirement]" in delete_block
+
+    restore_block = checklist.split("function restoreDeletedChecklistGroup", 1)[1].split(
+        "function requirementKeywordsMatch", 1
+    )[0]
+    assert "checklistPrimerSeparatorsByGroup[requirement]" in restore_block
+    assert "checklistPrimerPrecedenceByGroup[requirement]" in restore_block

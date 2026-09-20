@@ -458,8 +458,6 @@ def color_suggestions_response(rel_path, file_name):
     rel_path = str(rel_path or "").strip()
     file_name = str(file_name or "").strip()
     try:
-        if not rel_path:
-            return jsonify({"error": "Missing folder argument."}), 400
         if not file_name:
             return jsonify({"error": "Missing file argument."}), 400
         if Path(file_name).name != file_name:

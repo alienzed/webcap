@@ -119,7 +119,6 @@ function getTrainingWorkspaceEls() {
     runnerConsoleRevealBtn: document.getElementById('training-runner-console-reveal-btn'),
     runnerConsoleCloseBtn: document.getElementById('training-runner-console-close-btn'),
     runnerPreflight: document.getElementById('training-runner-preflight'),
-    gpuStatus: document.getElementById('training-gpu-status'),
     historySummary: document.getElementById('training-history-summary'),
     historyList: document.getElementById('training-history-list'),
     historyContent: document.getElementById('training-history-content'),

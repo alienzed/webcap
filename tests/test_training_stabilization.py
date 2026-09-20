@@ -1221,3 +1221,20 @@ def test_external_gpu_reservation_fossil_is_removed():
     assert "_external_gpu_owner" not in source
     assert "reserve_gpu_for_external_work" not in source
     assert "release_gpu_for_external_work" not in source
+
+
+
+def test_queue_row_selection_fossil_is_removed():
+    root = Path(__file__).parents[1] / "tool"
+    runner_ui = (root / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    workspace = (root / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    state = (root / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
+    history = (root / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    styles = (root / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "runnerSelectedJobId" not in runner_ui
+    assert "runnerSelectedJobId" not in workspace
+    assert "runnerSelectedJobId" not in state
+    assert "runnerSelectedJobId" not in history
+    assert "data-training-queue-job" not in runner_ui
+    assert "training-runner-queue-item.active" not in styles

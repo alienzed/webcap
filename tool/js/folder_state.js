@@ -28,14 +28,34 @@ function sanitizeFolderState(data) {
     : (typeof primer.mappings === 'string' ? String(primer.mappings) : []);
   var reviewedKeys = Array.isArray(src.reviewedKeys) ? src.reviewedKeys : [];
   reviewedKeys = reviewedKeys.map(function (key) { return String(key || ''); }).filter(Boolean);
-  var tagMap = {};
-  if (typeof src.caption_tags_by_media === 'object' && src.caption_tags_by_media) {
-    Object.keys(src.caption_tags_by_media).forEach(function (mediaKey) {
-      var list = Array.isArray(src.caption_tags_by_media[mediaKey]) ? src.caption_tags_by_media[mediaKey] : [];
-      var clean = list.map(function (v) { return String(v || '').trim(); }).filter(Boolean);
-      if (clean.length) {
-        tagMap[String(mediaKey || '')] = clean;
-      }
+  function sanitizeStringListMap(rawMap) {
+    var cleanMap = {};
+    if (!rawMap || typeof rawMap !== 'object') return cleanMap;
+    Object.keys(rawMap).forEach(function (rawKey) {
+      var key = String(rawKey || '').trim();
+      if (!key) return;
+      var seen = {};
+      var values = (Array.isArray(rawMap[rawKey]) ? rawMap[rawKey] : [])
+        .map(function (value) { return String(value || '').trim().replace(/\s+/g, ' '); })
+        .filter(function (value) {
+          var low = value.toLowerCase();
+          if (!value || seen[low]) return false;
+          seen[low] = true;
+          return true;
+        });
+      if (values.length) cleanMap[key] = values;
+    });
+    return cleanMap;
+  }
+  var tagMap = sanitizeStringListMap(src.caption_tags_by_media);
+  var groupTagsByMedia = {};
+  if (src.caption_group_tags_by_media && typeof src.caption_group_tags_by_media === 'object') {
+    Object.keys(src.caption_group_tags_by_media).forEach(function (rawMediaKey) {
+      var mediaKey = String(rawMediaKey || '').trim();
+      var rawGroups = src.caption_group_tags_by_media[rawMediaKey];
+      if (!mediaKey || !rawGroups || typeof rawGroups !== 'object' || Array.isArray(rawGroups)) return;
+      var cleanGroups = sanitizeStringListMap(rawGroups);
+      if (Object.keys(cleanGroups).length) groupTagsByMedia[mediaKey] = cleanGroups;
     });
   }
   var ratingsByMedia = {};
@@ -69,16 +89,28 @@ function sanitizeFolderState(data) {
     });
     return cleanMap;
   }
+  function sanitizeGroupAffixMap(rawMap, allowEmpty) {
+    var out = {};
+    if (!rawMap || typeof rawMap !== 'object') return out;
+    Object.keys(rawMap).forEach(function (rawGroup) {
+      var group = String(rawGroup || '').trim();
+      if (!group) return;
+      var byTerm = sanitizeAffixMap(rawMap[rawGroup], !!allowEmpty);
+      if (Object.keys(byTerm).length) out[group] = byTerm;
+    });
+    return out;
+  }
   var captionTermWrappers = sanitizeAffixMap(src.caption_term_wrappers || src.caption_term_affixes, false);
   var captionTermDescriptorDefaults = sanitizeAffixMap(src.caption_term_descriptor_defaults, false);
-  var captionTermDescriptorsByMedia = {};
-  if (typeof src.caption_term_descriptors_by_media === 'object' && src.caption_term_descriptors_by_media) {
-    Object.keys(src.caption_term_descriptors_by_media).forEach(function (mediaKey) {
+  var captionGroupTermWrappers = sanitizeGroupAffixMap(src.caption_group_term_wrappers, false);
+  var captionGroupTermDescriptorDefaults = sanitizeGroupAffixMap(src.caption_group_term_descriptor_defaults, false);
+  var captionGroupTermDescriptorsByMedia = {};
+  if (src.caption_group_term_descriptors_by_media && typeof src.caption_group_term_descriptors_by_media === 'object') {
+    Object.keys(src.caption_group_term_descriptors_by_media).forEach(function (mediaKey) {
       var key = String(mediaKey || '').trim();
       if (!key) return;
-      var cleanMap = sanitizeAffixMap(src.caption_term_descriptors_by_media[mediaKey], true);
-      if (!Object.keys(cleanMap).length) return;
-      captionTermDescriptorsByMedia[key] = cleanMap;
+      var cleanMap = sanitizeGroupAffixMap(src.caption_group_term_descriptors_by_media[mediaKey], true);
+      if (Object.keys(cleanMap).length) captionGroupTermDescriptorsByMedia[key] = cleanMap;
     });
   }
   var mediaFilterStars = Array.isArray(mediaFilters.stars) ? mediaFilters.stars : [];
@@ -114,7 +146,10 @@ function sanitizeFolderState(data) {
     caption_term_wrappers: captionTermWrappers,
     caption_term_affixes: JSON.parse(JSON.stringify(captionTermWrappers)),
     caption_term_descriptor_defaults: captionTermDescriptorDefaults,
-    caption_term_descriptors_by_media: captionTermDescriptorsByMedia,
+    caption_group_tags_by_media: groupTagsByMedia,
+    caption_group_term_wrappers: captionGroupTermWrappers,
+    caption_group_term_descriptor_defaults: captionGroupTermDescriptorDefaults,
+    caption_group_term_descriptors_by_media: captionGroupTermDescriptorsByMedia,
     caption_set_notes: String(src.caption_set_notes || ''),
     test_generation_prompt: String(src.test_generation_prompt || ''),
     test_generation_settings: {
@@ -289,7 +324,10 @@ function snapshotFolderStateFromDom() {
     caption_term_wrappers: (typeof window.checklistTermWrappersByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermWrappersByKey)) : undefined,
     caption_term_affixes: (typeof window.checklistTermAffixesByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermAffixesByKey)) : undefined,
     caption_term_descriptor_defaults: (typeof window.checklistTermDescriptorDefaultsByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorDefaultsByKey)) : undefined,
-    caption_term_descriptors_by_media: (typeof window.checklistTermDescriptorsByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorsByMedia)) : undefined,
+    caption_group_tags_by_media: (typeof window.checklistAssignmentsByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistAssignmentsByMedia)) : undefined,
+    caption_group_term_wrappers: (typeof window.checklistTermWrappersByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermWrappersByGroup)) : undefined,
+    caption_group_term_descriptor_defaults: (typeof window.checklistTermDescriptorDefaultsByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorDefaultsByGroup)) : undefined,
+    caption_group_term_descriptors_by_media: (typeof window.checklistTermDescriptorsByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorsByMedia)) : undefined,
     caption_set_notes: String(window.captionHelperNotes || ''),
     test_generation_prompt: String(state.testGenerationPrompt || ''),
     test_generation_settings: (state.testGenerationSettings && typeof state.testGenerationSettings === 'object')
@@ -620,83 +658,58 @@ function getRequirementDefaultPrimerMappings() {
 
 function buildPrimerFromConfig(fileName, mediaKey, config) {
   var template = String(config && config.template || '');
-  if (!template.trim()) {
-    return '';
-  }
+  if (!template.trim()) return '';
+
   var valuesByKey = {};
   var seenValueByKey = {};
   var fileNorm = String(fileName || '').toLowerCase();
-  var customRows = (typeof getPrimerMappingsRows === 'function')
-    ? getPrimerMappingsRows()
-    : [];
-  var defaultRows = getRequirementDefaultPrimerMappings();
+
+  function pushValue(key, value) {
+    var normalizedKey = String(key || '').trim().toLowerCase();
+    var outputValue = String(value || '').trim();
+    if (!normalizedKey || !outputValue) return;
+    if (!valuesByKey[normalizedKey]) {
+      valuesByKey[normalizedKey] = [];
+      seenValueByKey[normalizedKey] = {};
+    }
+    var dedupeValue = outputValue.toLowerCase();
+    if (seenValueByKey[normalizedKey][dedupeValue]) return;
+    seenValueByKey[normalizedKey][dedupeValue] = true;
+    valuesByKey[normalizedKey].push(outputValue);
+  }
+
+  if (mediaKey && typeof getChecklistAssignmentEntriesForMediaKey === 'function') {
+    getChecklistAssignmentEntriesForMediaKey(mediaKey).forEach(function (entry) {
+      var key = normalizeRequirementPrimerKey(entry.requirement);
+      var value = renderChecklistGroupTermWithAffixes(entry.requirement, entry.term, mediaKey) || entry.term;
+      pushValue(key, value);
+    });
+  }
+
   var mediaTags = [];
-  if (mediaKey && typeof getTagsForMediaKey === 'function') {
-    mediaTags = getTagsForMediaKey(mediaKey).map(function (tag) { return String(tag || '').toLowerCase(); });
-  }
-  if (mediaTags.length && defaultRows.length) {
-    var mediaTagOrder = {};
-    mediaTags.forEach(function (tag, idx) {
-      if (typeof mediaTagOrder[tag] === 'undefined') {
-        mediaTagOrder[tag] = idx;
-      }
-    });
-    defaultRows = defaultRows.map(function (row, idx) {
-      return { row: row, idx: idx };
-    }).sort(function (a, b) {
-      var aRow = a.row || {};
-      var bRow = b.row || {};
-      var aScope = String(aRow.scope || 'file').toLowerCase();
-      var bScope = String(bRow.scope || 'file').toLowerCase();
-      if (aScope !== 'tag' || bScope !== 'tag') {
-        return a.idx - b.idx;
-      }
-      var aToken = String(aRow.token || '').trim().toLowerCase();
-      var bToken = String(bRow.token || '').trim().toLowerCase();
-      var aOrder = typeof mediaTagOrder[aToken] === 'number' ? mediaTagOrder[aToken] : Number.MAX_SAFE_INTEGER;
-      var bOrder = typeof mediaTagOrder[bToken] === 'number' ? mediaTagOrder[bToken] : Number.MAX_SAFE_INTEGER;
-      if (aOrder !== bOrder) return aOrder - bOrder;
-      return a.idx - b.idx;
-    }).map(function (entry) {
-      return entry.row;
+  if (mediaKey && typeof getUnscopedTagsForMediaKey === 'function') {
+    mediaTags = getUnscopedTagsForMediaKey(mediaKey).map(function (tag) {
+      return String(tag || '').toLowerCase();
     });
   }
-  // Custom mappings run first; requirement defaults fill in afterward.
-  var rows = customRows.concat(defaultRows);
-  rows.forEach(function (rawRow) {
+
+  var customRows = (typeof getPrimerMappingsRows === 'function') ? getPrimerMappingsRows() : [];
+  customRows.forEach(function (rawRow) {
     var row = rawRow || {};
-    var enabled = row.enabled !== false;
-    if (!enabled) return;
+    if (row.enabled === false) return;
     var scope = String(row.scope || 'file').toLowerCase();
     var token = String(row.token || '').trim().toLowerCase();
     var key = String(row.key || '').trim().toLowerCase();
     var value = String(row.value || '').trim();
     if (!value) value = token;
     if (!token || !key) return;
-    var matched = false;
-    if (scope === 'tag') {
-      matched = mediaTags.some(function (tagValue) {
-        return textMatchesNormalizedText(tagValue, token);
-      });
-    } else {
-      matched = textContainsWholeToken(fileNorm, token);
-    }
+    var matched = scope === 'tag'
+      ? mediaTags.some(function (tagValue) { return textMatchesNormalizedText(tagValue, token); })
+      : textContainsWholeToken(fileNorm, token);
     if (!matched) return;
-    if (!valuesByKey[key]) {
-      valuesByKey[key] = [];
-      seenValueByKey[key] = {};
-    }
-    var outputValue = value;
-    if (scope === 'tag' && typeof renderChecklistTermWithAffixes === 'function') {
-      if (textMatchesNormalizedText(value, token)) {
-        outputValue = renderChecklistTermWithAffixes(token, mediaKey) || value;
-      }
-    }
-    var dedupeValue = outputValue.toLowerCase();
-    if (seenValueByKey[key][dedupeValue]) return;
-    seenValueByKey[key][dedupeValue] = true;
-    valuesByKey[key].push(outputValue);
+    pushValue(key, value);
   });
+
   var values = {};
   Object.keys(valuesByKey).forEach(function (key) {
     values[key] = removeSubsumedPrimerValues(valuesByKey[key]).join(', ');

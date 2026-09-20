@@ -446,7 +446,7 @@
                                 </div>
                                 <div id="training-config-empty" class="training-editor-empty hidden">Choose a configuration file in Step 2.</div>
                                 <div id="training-runner-output-view" class="training-runner-output-view hidden">
-                                    <div id="training-runner-empty" class="training-editor-empty">No active run log. Select a completed run from Recent Runs to open its log.</div>
+                                    <div id="training-runner-empty" class="training-editor-empty">No active run log. Select a completed run from Training History to open its log.</div>
                                     <section id="training-runner-console" class="training-runner-console hidden" aria-label="Run log">
                                         <div class="training-runner-console-heading">
                                             <strong id="training-runner-console-title">Run Log</strong>
@@ -774,16 +774,15 @@
                                 </div>
                                 <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued jobs"></div>
                             </section>
-                            <section class="training-history-card" aria-label="Recent training runs">
+                            <section class="training-history-card" aria-label="Training History">
                                 <div class="training-history-heading">
-                                    <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Recent Runs</button>
+                                    <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Training History</button>
                                     <div id="training-history-tools" class="training-history-tools hidden">
-                                        <div id="training-history-scope" class="training-history-scope hidden" role="group" aria-label="Recent runs scope">
+                                        <div id="training-history-scope" class="training-history-scope hidden" role="group" aria-label="Training History scope">
                                             <button type="button" class="review-captions-btn" data-training-history-scope="set" aria-pressed="false">Current Set</button>
                                             <button type="button" class="review-captions-btn" data-training-history-scope="all" aria-pressed="true">All Sets</button>
                                         </div>
-                                        <input id="training-history-search" type="search" placeholder="Filter recent runs" aria-label="Filter recent runs">
-                                        <button id="training-history-clear-btn" type="button" class="review-captions-btn">Clear all history</button>
+                                        <input id="training-history-search" type="search" placeholder="Filter Training History" aria-label="Filter Training History">
                                         <button id="training-history-show-all-btn" type="button" class="review-captions-btn hidden">Show all</button>
                                     </div>
                                 </div>

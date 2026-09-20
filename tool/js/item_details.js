@@ -561,12 +561,9 @@ function computeRequirementProgressForMediaKey(mediaKey) {
   for (var i = 0; i < requirements.length; i++) {
     var requirementLabel = String(requirements[i] || '').trim();
     if (!requirementLabel) continue;
-    var terms = parseRequirementProgressTerms(getChecklistKeywordTermsForRequirement(requirementLabel).join(', '));
-    if (!terms.length) continue;
+    var terms = getChecklistAssignedTagsForMediaKey(mediaKey, requirementLabel);
     total += 1;
-    var hasMatch = terms.some(function (term) {
-      return hasTagForMediaKey(mediaKey, term);
-    });
+    var hasMatch = terms.length > 0;
     if (hasMatch) {
       completed += 1;
     } else {
@@ -620,24 +617,35 @@ function getUniqueNormalizedTagsForMediaKey(mediaKey) {
 }
 
 function computeTagMatchProgressForText(mediaKey, captionText) {
-  var tags = getUniqueNormalizedTagsForMediaKey(mediaKey);
+  var annotations = [];
+  getChecklistAssignmentEntriesForMediaKey(mediaKey).forEach(function (entry) {
+    annotations.push({
+      label: entry.requirement + ' / ' + entry.term,
+      term: entry.term,
+      rendered: renderChecklistGroupTermWithAffixes(entry.requirement, entry.term, mediaKey)
+    });
+  });
+  getUnscopedTagsForMediaKey(mediaKey).forEach(function (tag) {
+    annotations.push({
+      label: tag + ' / unscoped',
+      term: tag,
+      rendered: renderChecklistTermWithAffixes(tag, mediaKey)
+    });
+  });
+
   var completed = 0;
   var missing = [];
-  for (var tagIdx = 0; tagIdx < tags.length; tagIdx++) {
-    var tag = tags[tagIdx];
-    var rendered = (typeof renderChecklistTermWithAffixes === 'function')
-      ? renderChecklistTermWithAffixes(tag, mediaKey)
-      : tag;
+  annotations.forEach(function (annotation) {
     if (
-      (rendered && captionContainsPhrase(captionText, rendered)) ||
-      captionContainsTagWithAllowances(captionText, tag)
+      (annotation.rendered && captionContainsPhrase(captionText, annotation.rendered)) ||
+      captionContainsTagWithAllowances(captionText, annotation.term)
     ) {
       completed += 1;
     } else {
-      missing.push(tag);
+      missing.push(annotation.label);
     }
-  }
-  return { completed: completed, total: tags.length, missing: missing };
+  });
+  return { completed: completed, total: annotations.length, missing: missing };
 }
 
 function computeTagMatchProgressForMediaKey(mediaKey) {
@@ -1183,7 +1191,7 @@ function swapTagOrderForMediaKey(mediaKey, firstTagText, secondTagText) {
   var firstTarget = normalizeItemTag(firstTagText).toLowerCase();
   var secondTarget = normalizeItemTag(secondTagText).toLowerCase();
   if (!key || !firstTarget || !secondTarget || firstTarget === secondTarget) return false;
-  var current = getTagsForMediaKey(key);
+  var current = getUnscopedTagsForMediaKey(key);
   if (current.length < 2) return false;
   var firstIdx = -1;
   var secondIdx = -1;

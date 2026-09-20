@@ -1,0 +1,25 @@
+name: Folder-backed Training History check
+
+on:
+  push:
+    branches:
+      - training-history-folder-evidence
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - run: cp tool/config.example.json tool/config.json
+      - run: python -m py_compile tool/server/training_action.py tool/server/training_history.py tool/server/training_runner.py tool/server/file_ops.py tool/server/app.py
+      - run: node --check tool/js/training_history_ui.js
+      - run: node --check tool/js/training_workspace.js
+      - run: PYTHONPATH=. pytest -q tests/test_training_history_ui_contract.py
+      - run: >
+          PYTHONPATH=. pytest -q tests/test_training_stabilization.py
+          -k "recent_runs_v1_migrates_only_when_managed_job_folder_exists or legacy_recent_run_without_managed_job_folder_is_not_history or training_history_record_is_job_folder_evidence_not_recent_runs_index or training_action_history_survives_set_rename_without_moving_output_tree or missing_history_is_empty_and_invalid_legacy_index_does_not_gate_folder_history or terminal_training_job_waits_for_durable_history_record or terminal_training_job_retires_after_durable_history_record or recent_run_resume_reuses_its_recorded_capture or shared_queue_test_jobs_do_not_enter_training_history"

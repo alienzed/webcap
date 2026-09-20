@@ -1,6 +1,6 @@
 // Per-item tags and metadata loading
-var captionItemTagsByMedia = {};
-var itemTagsClipboard = [];
+var captionItemTagsByMedia = {}; // Unscoped tags only.
+var itemTagsClipboard = null; // { unscoped: [], groups: { requirement: [] } }
 var mediaMetadataLoading = false;
 
 function isMediaMetadataLoading() {
@@ -13,13 +13,60 @@ function normalizeItemTag(text) {
   return String(text || '').trim().replace(/\s+/g, ' ');
 }
 
-function getTagsForMediaKey(mediaKey) {
+function getUnscopedTagsForMediaKey(mediaKey) {
   var tags = captionItemTagsByMedia[mediaKey];
   return Array.isArray(tags) ? tags.slice() : [];
 }
 
+function getTagsForMediaKey(mediaKey) {
+  var seen = {};
+  var out = [];
+  getUnscopedTagsForMediaKey(mediaKey).concat(
+    typeof getChecklistAssignedTermsForMediaKey === 'function'
+      ? getChecklistAssignedTermsForMediaKey(mediaKey)
+      : []
+  ).forEach(function (rawTag) {
+    var tag = normalizeItemTag(rawTag);
+    var low = tag.toLowerCase();
+    if (!tag || seen[low]) return;
+    seen[low] = true;
+    out.push(tag);
+  });
+  return out;
+}
+
+function hasUnscopedTagForMediaKey(mediaKey, tagText) {
+  var target = normalizeItemTag(tagText).toLowerCase();
+  if (!target) return false;
+  return getUnscopedTagsForMediaKey(mediaKey).some(function (tag) {
+    return normalizeItemTag(tag).toLowerCase() === target;
+  });
+}
+
 function getTagClipboardTags() {
-  return Array.isArray(itemTagsClipboard) ? itemTagsClipboard.slice() : [];
+  var clipboard = itemTagsClipboard && typeof itemTagsClipboard === 'object'
+    ? itemTagsClipboard
+    : { unscoped: [], groups: {} };
+  var seen = {};
+  var out = [];
+  (Array.isArray(clipboard.unscoped) ? clipboard.unscoped : []).forEach(function (tag) {
+    var clean = normalizeItemTag(tag);
+    var low = clean.toLowerCase();
+    if (!clean || seen[low]) return;
+    seen[low] = true;
+    out.push(clean);
+  });
+  var groups = clipboard.groups && typeof clipboard.groups === 'object' ? clipboard.groups : {};
+  Object.keys(groups).forEach(function (requirement) {
+    (Array.isArray(groups[requirement]) ? groups[requirement] : []).forEach(function (tag) {
+      var clean = normalizeItemTag(tag);
+      var low = clean.toLowerCase();
+      if (!clean || seen[low]) return;
+      seen[low] = true;
+      out.push(clean);
+    });
+  });
+  return out;
 }
 
 function hasTagClipboardTags() {
@@ -50,16 +97,28 @@ function copyTagsForMediaKey(mediaKey) {
     setStatus('No media item selected to copy tags.');
     return false;
   }
-  var tags = getTagsForMediaKey(key)
+  var unscoped = getUnscopedTagsForMediaKey(key)
     .map(function (tag) { return normalizeItemTag(tag); })
     .filter(Boolean);
-  if (!tags.length) {
+  var groups = {};
+  if (typeof getChecklistAssignmentsForMediaKey === 'function') {
+    var assignmentMap = getChecklistAssignmentsForMediaKey(key);
+    Object.keys(assignmentMap).forEach(function (requirement) {
+      var terms = getChecklistAssignedTagsForMediaKey(key, requirement);
+      if (terms.length) groups[requirement] = terms;
+    });
+  }
+  var flattened = getTagsForMediaKey(key);
+  if (!flattened.length) {
     setStatus('No tags to copy.');
     return false;
   }
-  itemTagsClipboard = tags.slice();
+  itemTagsClipboard = {
+    unscoped: unscoped,
+    groups: groups
+  };
   updateTagClipboardUi();
-  setStatus('Copied ' + tags.length + ' tag' + (tags.length === 1 ? '' : 's') + '.');
+  setStatus('Copied ' + flattened.length + ' tag' + (flattened.length === 1 ? '' : 's') + '.');
   return true;
 }
 
@@ -78,7 +137,7 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
     return { added: 0, alreadyPresent: 0 };
   }
   var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
-  var current = getTagsForMediaKey(key);
+  var current = getUnscopedTagsForMediaKey(key);
   var seen = {};
   current.forEach(function (tag) {
     var low = normalizeItemTag(tag).toLowerCase();
@@ -118,6 +177,9 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
 function pasteClipboardTagsToMediaKey(mediaKey) {
   var key = String(mediaKey || '').trim();
   var clipboardTags = getTagClipboardTags();
+  var clipboard = itemTagsClipboard && typeof itemTagsClipboard === 'object'
+    ? itemTagsClipboard
+    : { unscoped: [], groups: {} };
   if (!key) {
     setStatus('No media item selected to paste tags into.');
     return false;
@@ -130,9 +192,36 @@ function pasteClipboardTagsToMediaKey(mediaKey) {
     setStatus('Paste tags cancelled.');
     return false;
   }
-  var result = mergeTagsIntoMediaKey(key, clipboardTags);
+
+  var unscopedResult = mergeTagsIntoMediaKey(key, clipboard.unscoped || []);
+  var assigned = 0;
+  var alreadyAssigned = 0;
+  var groups = clipboard.groups && typeof clipboard.groups === 'object' ? clipboard.groups : {};
+  Object.keys(groups).forEach(function (requirement) {
+    (Array.isArray(groups[requirement]) ? groups[requirement] : []).forEach(function (term) {
+      if (hasChecklistAssignedTagForMediaKey(key, requirement, term)) {
+        alreadyAssigned += 1;
+        return;
+      }
+      if (assignChecklistTagToMediaKey(key, requirement, term, {
+        consumeUnscoped: true,
+        skipSave: true,
+        skipRefresh: true,
+        skipUndo: true
+      })) assigned += 1;
+    });
+  });
+  if (assigned) {
+    saveChecklistToFolderState();
+    refreshTagDrivenPanelsForMediaKey(key);
+    if (shouldLiveSyncEditorToTemplateForMediaKey(key)) syncEditorToCurrentTemplatePreview();
+  }
   updateTagClipboardUi();
-  setStatus('Merged ' + result.added + ' tag' + (result.added === 1 ? '' : 's') + ' (' + result.alreadyPresent + ' already present).');
+  setStatus(
+    'Merged ' + (unscopedResult.added + assigned) + ' annotation' +
+    ((unscopedResult.added + assigned) === 1 ? '' : 's') +
+    ' (' + (unscopedResult.alreadyPresent + alreadyAssigned) + ' already present).'
+  );
   return true;
 }
 
@@ -1117,7 +1206,10 @@ function addTagToMediaKey(mediaKey, tagText, options) {
   var tag = normalizeItemTag(tagText);
   if (!key || !tag) return false;
   var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
-  var current = getTagsForMediaKey(key);
+  if (opts.reviewRequirementLabel) {
+    throw new Error('Group annotations must use assignChecklistTagToMediaKey().');
+  }
+  var current = getUnscopedTagsForMediaKey(key);
   var low = tag.toLowerCase();
   var exists = current.some(function (t) { return String(t).toLowerCase() === low; });
   if (exists) return false;
@@ -1134,11 +1226,6 @@ function addTagToMediaKey(mediaKey, tagText, options) {
   captionItemTagsByMedia[key] = current;
   if (typeof commitChecklistDescriptorSnapshotForMediaKey === 'function') {
     commitChecklistDescriptorSnapshotForMediaKey(key, tag);
-  }
-  if (opts.reviewRequirementLabel) {
-    clearChecklistReviewedRequirementsForMediaKey(key, [opts.reviewRequirementLabel], { skipRender: true });
-  } else {
-    invalidateChecklistReviewedRequirementsForTagChange(key, tag, { skipRender: true });
   }
   ensureCaptionHelperPhraseInCatalog(tag, !opts.skipSave);
   if (!opts.skipSave) {
@@ -1172,7 +1259,7 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   var target = normalizeItemTag(tagText).toLowerCase();
   if (!key || !target) return false;
   var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
-  var current = getTagsForMediaKey(key);
+  var current = getUnscopedTagsForMediaKey(key);
   if (!current.length) return false;
   var next = current.filter(function (tag) {
     return normalizeItemTag(tag).toLowerCase() !== target;
@@ -1196,6 +1283,32 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();
   }
+  return true;
+}
+
+function consumeUnscopedTagForMediaKey(mediaKey, tagText, options) {
+  var opts = options || {};
+  var key = String(mediaKey || '').trim();
+  var target = normalizeItemTag(tagText).toLowerCase();
+  if (!key || !target) return false;
+  var current = getUnscopedTagsForMediaKey(key);
+  var next = current.filter(function (tag) {
+    return normalizeItemTag(tag).toLowerCase() !== target;
+  });
+  if (next.length === current.length) return false;
+  if (next.length) captionItemTagsByMedia[key] = next;
+  else delete captionItemTagsByMedia[key];
+  if (!opts.skipUndo) {
+    recordUndoOperation({
+      type: 'tag',
+      mediaKey: key,
+      tagText: normalizeItemTag(tagText),
+      previousValue: true,
+      nextValue: false
+    });
+  }
+  if (!opts.skipSave) saveItemTagsToFolderState();
+  if (!opts.skipRefresh) refreshTagDrivenPanelsForMediaKey(key);
   return true;
 }
 
@@ -1465,5 +1578,8 @@ function refreshMediaResolutionCache(options) {
 }
 
 window.addTagToCurrentMedia = addTagToCurrentMedia;
+window.getUnscopedTagsForMediaKey = getUnscopedTagsForMediaKey;
+window.hasUnscopedTagForMediaKey = hasUnscopedTagForMediaKey;
 window.hasTagForMediaKey = hasTagForMediaKey;
+window.consumeUnscopedTagForMediaKey = consumeUnscopedTagForMediaKey;
 window.removeTagFromCurrentMedia = removeTagFromCurrentMedia;

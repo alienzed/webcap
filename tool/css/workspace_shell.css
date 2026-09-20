@@ -183,16 +183,6 @@
   stroke-linejoin: round;
 }
 
-.app-header-folder {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .app-header-workspace-title {
   color: var(--text);
   font-size: 12px;
@@ -694,17 +684,13 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 
 @media (max-width: 1180px) {
   .app-header {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     padding-inline: 8px;
   }
 
-  .app-header-workspace-controls {
-    justify-content: flex-end;
-  }
-
   .app-header-global {
-    grid-column: 3;
+    grid-column: 2;
   }
 
   .app-header-model-control select {

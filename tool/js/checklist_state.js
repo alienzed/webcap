@@ -782,21 +782,26 @@ function toggleChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel
   );
 }
 
+function moveChecklistItemToIndex(fromIndex, toIndex) {
+  var from = Number(fromIndex);
+  var to = Number(toIndex);
+  if (!isFinite(from) || !isFinite(to)) return false;
+  if (!Array.isArray(checklistItems) || !checklistItems.length) return false;
+  if (from < 0 || from >= checklistItems.length || to < 0 || to >= checklistItems.length) return false;
+  if (from === to) return false;
+  var next = checklistItems.slice();
+  var moved = next.splice(from, 1)[0];
+  next.splice(to, 0, moved);
+  checklistItems = next;
+  refreshChecklistGroupConfigurationUi();
+  return true;
+}
+
 function moveChecklistItemByOffset(index, offset) {
   var idx = Number(index);
   var step = Number(offset);
   if (!isFinite(idx) || !isFinite(step)) return false;
-  if (!Array.isArray(checklistItems) || !checklistItems.length) return false;
-  if (idx < 0 || idx >= checklistItems.length) return false;
-  var nextIdx = idx + step;
-  if (nextIdx < 0 || nextIdx >= checklistItems.length) return false;
-  var next = checklistItems.slice();
-  var temp = next[idx];
-  next[idx] = next[nextIdx];
-  next[nextIdx] = temp;
-  checklistItems = next;
-  refreshChecklistGroupConfigurationUi();
-  return true;
+  return moveChecklistItemToIndex(idx, idx + step);
 }
 
 function refreshChecklistGroupConfigurationUi() {

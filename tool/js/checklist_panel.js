@@ -1,3 +1,22 @@
+var checklistDragSourceIndex = null;
+
+function clearChecklistDropIndicators() {
+  var rows = document.querySelectorAll('#checklist-items .checklist-row-block');
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].classList.remove('checklist-drop-before', 'checklist-drop-after');
+    rows[i].removeAttribute('data-checklist-drop-after');
+  }
+}
+
+function clearChecklistDragState() {
+  clearChecklistDropIndicators();
+  var rows = document.querySelectorAll('#checklist-items .checklist-row-block');
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].classList.remove('is-dragging');
+  }
+  checklistDragSourceIndex = null;
+}
+
 function renderChecklistPanel(options) {
   var opts = options || {};
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
@@ -52,6 +71,39 @@ function renderChecklistPanel(options) {
     var item = checklistItems[i];
     var row = document.createElement('div');
     row.className = 'checklist-row-block';
+    row.setAttribute('data-checklist-index', String(i));
+    (function (targetIndex, rowEl) {
+      rowEl.ondragover = function (event) {
+        if (checklistDragSourceIndex === null) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        clearChecklistDropIndicators();
+        if (checklistDragSourceIndex === targetIndex) return;
+        var rect = rowEl.getBoundingClientRect();
+        var dropAfter = event.clientY > rect.top + (rect.height / 2);
+        rowEl.classList.add(dropAfter ? 'checklist-drop-after' : 'checklist-drop-before');
+        rowEl.setAttribute('data-checklist-drop-after', dropAfter ? 'true' : 'false');
+      };
+      rowEl.ondragleave = function (event) {
+        if (event.relatedTarget && rowEl.contains(event.relatedTarget)) return;
+        rowEl.classList.remove('checklist-drop-before', 'checklist-drop-after');
+        rowEl.removeAttribute('data-checklist-drop-after');
+      };
+      rowEl.ondrop = function (event) {
+        if (checklistDragSourceIndex === null) return;
+        event.preventDefault();
+        var fromIndex = checklistDragSourceIndex;
+        var dropAfter = rowEl.getAttribute('data-checklist-drop-after') === 'true';
+        clearChecklistDragState();
+        if (fromIndex === targetIndex) return;
+        var toIndex = targetIndex + (dropAfter ? 1 : 0);
+        if (fromIndex < toIndex) toIndex -= 1;
+        var movedLabel = checklistItems[fromIndex];
+        if (moveChecklistItemToIndex(fromIndex, toIndex)) {
+          setStatus('Moved requirement: ' + movedLabel);
+        }
+      };
+    })(i, row);
 
     var summaryRow = document.createElement('div');
     summaryRow.className = 'row-inline checklist-row-summary';
@@ -74,9 +126,30 @@ function renderChecklistPanel(options) {
       };
     })(item);
 
+    var dragHandle = document.createElement('span');
+    dragHandle.className = 'checklist-row-drag-handle';
+    dragHandle.textContent = '\u283f';
+    dragHandle.title = 'Drag to reorder';
+    dragHandle.draggable = true;
+    dragHandle.setAttribute('aria-hidden', 'true');
+    (function (sourceIndex, rowEl) {
+      dragHandle.ondragstart = function (event) {
+        checklistDragSourceIndex = sourceIndex;
+        rowEl.classList.add('is-dragging');
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', String(sourceIndex));
+        }
+      };
+      dragHandle.ondragend = function () {
+        clearChecklistDragState();
+      };
+    })(i, row);
+
     var labelText = document.createElement('span');
     labelText.className = 'checklist-row-label-text';
     labelText.textContent = item;
+    label.appendChild(dragHandle);
     label.appendChild(toggleBtn);
     label.appendChild(labelText);
     summaryRow.appendChild(label);
@@ -91,68 +164,90 @@ function renderChecklistPanel(options) {
     var actions = document.createElement('div');
     actions.className = 'checklist-row-actions';
 
+    var editTermsBtn = document.createElement('button');
+    editTermsBtn.type = 'button';
+    editTermsBtn.textContent = 'Edit terms';
+    editTermsBtn.className = 'checklist-row-menu-item';
+    editTermsBtn.setAttribute('role', 'menuitem');
+    (function (requirementLabel) {
+      editTermsBtn.onclick = function () {
+        menuDetails.open = false;
+        openChecklistGroupTermsModal(requirementLabel);
+      };
+    })(item);
+
     var moveUpBtn = document.createElement('button');
-    moveUpBtn.textContent = '\u2191';
-    moveUpBtn.title = 'Move requirement up';
-    moveUpBtn.className = 'checklist-row-action-btn checklist-row-action-move';
+    moveUpBtn.type = 'button';
+    moveUpBtn.textContent = 'Move up';
+    moveUpBtn.className = 'checklist-row-menu-item';
+    moveUpBtn.setAttribute('role', 'menuitem');
     moveUpBtn.disabled = (i === 0);
     (function (idx, label) {
       moveUpBtn.onclick = function () {
-        var moved = moveChecklistItemByOffset(idx, -1);
-        if (moved) {
+        menuDetails.open = false;
+        if (moveChecklistItemByOffset(idx, -1)) {
           setStatus('Moved requirement up: ' + label);
         }
       };
     })(i, item);
-    actions.appendChild(moveUpBtn);
 
-    var editTermsBtn = document.createElement('button');
-    editTermsBtn.textContent = '\u270e';
-    editTermsBtn.title = 'Edit requirement terms';
-    editTermsBtn.className = 'checklist-row-action-btn checklist-group-edit-btn';
-    (function (requirementLabel) {
-      editTermsBtn.onclick = function () {
-        openChecklistGroupTermsModal(requirementLabel);
-      };
-    })(item);
-    actions.appendChild(editTermsBtn);
-
-    var visibilityBtn = document.createElement('button');
-    visibilityBtn.type = 'button';
-    visibilityBtn.textContent = '👁';
-    visibilityBtn.className = 'checklist-row-action-btn checklist-group-visibility-btn';
-    var isGroupHidden = isChecklistRequirementHidden(item);
-    visibilityBtn.classList.toggle('is-hidden', isGroupHidden);
-    visibilityBtn.title = isGroupHidden
-      ? 'Show ' + item + ' in Annotation Groups'
-      : 'Hide ' + item + ' from Annotation Groups';
-    visibilityBtn.setAttribute('aria-label', visibilityBtn.title);
-    visibilityBtn.setAttribute('aria-pressed', isGroupHidden ? 'false' : 'true');
-    (function (requirementLabel, nextHidden) {
-      visibilityBtn.onclick = function () {
-        if (!setChecklistRequirementHidden(requirementLabel, nextHidden)) return;
-        setStatus((nextHidden ? 'Hidden from' : 'Shown in') + ' Annotation Groups: ' + requirementLabel);
-        renderChecklistPanel({ skipItemDetailRefresh: true });
-      };
-    })(item, !isGroupHidden);
-    actions.appendChild(visibilityBtn);
-
-    var rmBtn = document.createElement('button');
-    rmBtn.textContent = '\u00D7';
-    rmBtn.title = 'Remove requirement';
-    rmBtn.className = 'checklist-row-action-btn checklist-row-action-remove';
-    (function (idx, requirementLabel) {
-      rmBtn.onclick = function () {
-        checklistItems.splice(idx, 1);
-        for (var k in checklistCheckedByMedia) {
-          if (checklistCheckedByMedia[k]) delete checklistCheckedByMedia[k][requirementLabel];
+    var moveDownBtn = document.createElement('button');
+    moveDownBtn.type = 'button';
+    moveDownBtn.textContent = 'Move down';
+    moveDownBtn.className = 'checklist-row-menu-item';
+    moveDownBtn.setAttribute('role', 'menuitem');
+    moveDownBtn.disabled = (i === checklistItems.length - 1);
+    (function (idx, label) {
+      moveDownBtn.onclick = function () {
+        menuDetails.open = false;
+        if (moveChecklistItemByOffset(idx, 1)) {
+          setStatus('Moved requirement down: ' + label);
         }
-        syncReviewedFromChecklistAll();
-        saveChecklistToFolderState();
-        renderChecklistPanel();
       };
     })(i, item);
-    actions.appendChild(rmBtn);
+
+    var rmBtn = document.createElement('button');
+    rmBtn.type = 'button';
+    rmBtn.textContent = 'Remove group';
+    rmBtn.className = 'checklist-row-menu-item checklist-row-menu-item-danger';
+    rmBtn.setAttribute('role', 'menuitem');
+    (function (idx) {
+      rmBtn.onclick = function () {
+        menuDetails.open = false;
+        deleteChecklistGroupByIndex(idx);
+      };
+    })(i);
+
+    var menuDetails = document.createElement('details');
+    menuDetails.className = 'checklist-row-overflow';
+    menuDetails.ontoggle = function () {
+      if (!menuDetails.open) return;
+      var openMenus = document.querySelectorAll('#checklist-items .checklist-row-overflow[open]');
+      for (var menuIndex = 0; menuIndex < openMenus.length; menuIndex++) {
+        if (openMenus[menuIndex] !== menuDetails) openMenus[menuIndex].open = false;
+      }
+    };
+    menuDetails.onfocusout = function (event) {
+      if (!menuDetails.contains(event.relatedTarget)) menuDetails.open = false;
+    };
+
+    var menuSummary = document.createElement('summary');
+    menuSummary.className = 'checklist-row-overflow-btn';
+    menuSummary.textContent = '\u22ee';
+    menuSummary.title = 'More group actions';
+    menuSummary.setAttribute('aria-label', 'More actions for ' + item);
+
+    var menu = document.createElement('div');
+    menu.className = 'checklist-row-menu';
+    menu.setAttribute('role', 'menu');
+    menu.appendChild(editTermsBtn);
+    menu.appendChild(moveUpBtn);
+    menu.appendChild(moveDownBtn);
+    menu.appendChild(rmBtn);
+    menuDetails.appendChild(menuSummary);
+    menuDetails.appendChild(menu);
+
+    actions.appendChild(menuDetails);
 
     summaryRow.appendChild(actions);
     row.appendChild(summaryRow);

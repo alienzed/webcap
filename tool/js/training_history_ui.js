@@ -122,10 +122,9 @@ function renderTrainingHistory() {
   if (els.historyContent) els.historyContent.classList.toggle('hidden', trainingWorkspaceState.historyCollapsed);
   if (els.historyTools) els.historyTools.classList.toggle('hidden', trainingWorkspaceState.historyCollapsed);
   if (els.historyCollapseBtn) {
-    els.historyCollapseBtn.textContent = 'Recent Runs' + (jobs.length ? ' · ' + jobs.length : '');
+    els.historyCollapseBtn.textContent = 'Training History' + (jobs.length ? ' · ' + jobs.length : '');
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');
   }
-  if (els.historyClearBtn) els.historyClearBtn.textContent = 'Clear all history';
   els.historySummary.classList.toggle('hidden', !!latest);
   els.historySummary.textContent = latest ? '' : (scope === 'set'
     ? 'No completed or actionable training outcomes for this set yet.'
@@ -233,7 +232,6 @@ function renderTrainingHistory() {
        '<details class="training-history-more"><summary class="training-history-action" title="More run actions" aria-label="More run actions">&#8230;</summary><div class="training-history-more-menu">' +
          (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">&#128193; Open output</button>' : '') +
          (job.actionAvailable !== false && job.actionPath ? '<button type="button" data-training-history-action="' + escapeHtml(job.id || '') + '">&#128451; Open action folder</button>' : '') +
-         '<button type="button" data-training-history-clear="' + escapeHtml(job.id || '') + '" title="Remove from Recent Runs — keeps files and output">Remove from Recent Runs</button>' +
        '</div></details>' +
        '</div></div>';
   }).join('');
@@ -262,27 +260,6 @@ function renderTrainingHistory() {
   syncManagedTrainingResumeUi();
 }
 
-function clearTrainingHistory() {
-  if (!window.confirm('Clear all Recent Runs history? Output files, logs, and checkpoints will remain.')) return;
-  trainingRunnerRequest('/fs/training_history/clear', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
-  }).then(function () { refreshTrainingHistory(true); }).catch(function (err) { setStatus('Could not clear training history: ' + String(err.message || err)); });
-}
-
-function clearTrainingHistoryJob(jobId) {
-  var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
-    ? trainingWorkspaceState.history.jobs : [];
-  var job = jobs.filter(function (item) { return item.id === jobId; })[0];
-  if (!job || !job.folder) throw new Error('Training history entry does not identify its set folder.');
-  trainingRunnerRequest('/fs/training_history/job/clear', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: job.folder, jobId: jobId })
-  }).then(function (payload) {
-    if (!payload.cleared) throw new Error('Training history entry was not found.');
-    setStatus('Removed the run from Recent Runs. Logs and artifacts were kept.');
-    refreshTrainingHistory(true);
-  }).catch(function (err) { setStatus('Could not clear training history entry: ' + String(err.message || err)); });
-}
-
 function resumeTrainingHistoryJob(jobId) {
   var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
     ? trainingWorkspaceState.history.jobs : [];
@@ -293,7 +270,7 @@ function resumeTrainingHistoryJob(jobId) {
     throw new Error('This historical run no longer has a resumable checkpoint.');
   }
   if (!job.actionId || !job.inputPath) {
-    throw new Error('This Recent Run has no recorded capture. Resume it from Run Setup if you want to create a new capture.');
+    throw new Error('This Training History run has no recorded capture. Resume it from Run Setup if you want to create a new capture.');
   }
   trainingRunnerRequest('/fs/training_runner/start', {
     method: 'POST',

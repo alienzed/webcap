@@ -632,10 +632,10 @@
 }
 
 #checklist-items .checklist-row-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 30;
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  z-index: 1000;
   min-width: 132px;
   padding: 4px;
   border: 1px solid #d9dde3;

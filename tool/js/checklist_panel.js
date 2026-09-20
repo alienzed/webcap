@@ -17,6 +17,28 @@ function clearChecklistDragState() {
   checklistDragSourceIndex = null;
 }
 
+function positionChecklistRowOverflowMenu(summaryEl, menuEl) {
+  var triggerRect = summaryEl.getBoundingClientRect();
+  var menuWidth = menuEl.offsetWidth;
+  var menuHeight = menuEl.offsetHeight;
+  var viewportWidth = document.documentElement.clientWidth;
+  var viewportHeight = document.documentElement.clientHeight;
+  var gap = 4;
+  var edge = 6;
+
+  var left = triggerRect.right - menuWidth;
+  left = Math.max(edge, Math.min(left, viewportWidth - menuWidth - edge));
+
+  var top = triggerRect.bottom + gap;
+  if (top + menuHeight > viewportHeight - edge) {
+    top = triggerRect.top - menuHeight - gap;
+  }
+  top = Math.max(edge, Math.min(top, viewportHeight - menuHeight - edge));
+
+  menuEl.style.left = Math.round(left) + 'px';
+  menuEl.style.top = Math.round(top) + 'px';
+}
+
 function renderChecklistPanel(options) {
   var opts = options || {};
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
@@ -246,6 +268,9 @@ function renderChecklistPanel(options) {
       for (var menuIndex = 0; menuIndex < openMenus.length; menuIndex++) {
         if (openMenus[menuIndex] !== menuDetails) openMenus[menuIndex].open = false;
       }
+      requestAnimationFrame(function () {
+        if (menuDetails.open) positionChecklistRowOverflowMenu(menuSummary, menu);
+      });
     };
     menuDetails.onfocusout = function (event) {
       if (!menuDetails.contains(event.relatedTarget)) menuDetails.open = false;

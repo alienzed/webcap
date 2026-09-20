@@ -146,6 +146,7 @@
     activityButton.classList.toggle('hidden', !visible);
     activityButton.classList.toggle('test-running', !!active);
     activityButton.classList.toggle('active', isOpen());
+    if (typeof window.renderShellSystemStatus === 'function') window.renderShellSystemStatus();
     activityButton.setAttribute('aria-pressed', isOpen() ? 'true' : 'false');
     activityButton.dataset.testBenchFolder = targetFolder;
     if (active) {

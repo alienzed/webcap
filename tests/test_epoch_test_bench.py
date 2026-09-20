@@ -986,3 +986,37 @@ def test_enqueue_test_delegates_to_shared_queue(tmp_path, monkeypatch):
     assert seen["folder"] == "sets/subject"
     assert seen["request"]["name"] == "Named"
     assert seen["request"]["selectedFiles"] == [candidate.name]
+
+
+
+def test_queued_candidate_snapshot_rejects_changed_weights(tmp_path):
+    candidate = tmp_path / "epoch10.safetensors"
+    candidate.write_bytes(b"first")
+    snapshots = bench._candidate_file_snapshots([candidate])
+
+    candidate.write_bytes(b"changed-weights")
+
+    with pytest.raises(RuntimeError, match="changed after enqueue"):
+        bench._verify_candidate_file_snapshots([candidate], snapshots)
+
+
+def test_remove_candidate_refuses_when_queued_test_references_it(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch10.safetensors"
+    candidate.write_bytes(b"weights")
+
+    from tool.server import training_runner
+
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
+    monkeypatch.setattr(
+        training_runner,
+        "queued_test_job_references_candidate",
+        lambda folder, name: folder == "sets/subject" and name == candidate.name,
+    )
+
+    with pytest.raises(RuntimeError, match="referenced by a queued Test session"):
+        bench.remove_candidate(tmp_path, candidate.name)
+
+    assert candidate.is_file()

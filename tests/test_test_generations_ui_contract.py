@@ -218,12 +218,19 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     assert "function sessionMetaText(status)" in script
     assert "function renderSessionMeta(status)" in script
     assert "function extractPromptColorTargets(prompt)" in script
-    assert "function renderPromptColorTargets(prompt)" in script
+    assert "function extractPromptExpectations(prompt)" in script
+    assert "function extractHairPromptItems(prompt)" in script
+    assert "function extractNamedPromptItems(prompt, terms, type)" in script
+    assert "function renderPromptExpectations(prompt)" in script
     assert "TEST_PROMPT_COLOR_SWATCHES" in script
+    assert "TEST_PROMPT_HAIR_STYLES" in script
+    assert "TEST_PROMPT_ACCESSORIES" in script
+    assert "TEST_PROMPT_SCENE_OBJECTS" in script
     assert "matching\\s+(.+)" in script
+    assert "Only direct prompt correlations are shown." in script
     assert "title=\"" in script
     assert "status.resolvedPrompt || status.prompt" in script
-    assert "renderPromptColorTargets(resolvedPrompt)" in script
+    assert "renderPromptExpectations(resolvedPrompt)" in script
     assert "status.sourcePrompt" in script
     assert "status.aspectRatio" in script
     assert "status.megapixels" in script
@@ -231,8 +238,10 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     assert "status.seed" in script
     assert ".test-generations-session-details" in css
     assert ".test-generations-session-lower" in css
-    assert ".test-generations-color-targets" in css
-    assert ".test-generations-color-target" in css
+    assert ".test-generations-prompt-expectations" in css
+    assert ".test-generations-expectation-table" in css
+    assert ".test-generations-expectation-row" in css
+    assert "grid-template-columns: 72px minmax(0, 1fr) 92px minmax(0, .9fr);" in css
     assert ".test-generations-color-swatch" in css
     assert ".test-generations-session-prompt pre" in css
 

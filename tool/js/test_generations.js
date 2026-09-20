@@ -952,6 +952,13 @@
     'tan': '#c49a6c',
     'beige': '#d8c7a5',
     'cream': '#eee1bd',
+    'platinum blonde': '#e5dfc8',
+    'strawberry blonde': '#c98262',
+    'dirty blonde': '#b7a16b',
+    'blonde': '#d8bd72',
+    'blond': '#d8bd72',
+    'auburn': '#8b4a2f',
+    'brunette': '#5a3825',
     'skin-colored': '#c99a7a',
     'skin colored': '#c99a7a',
     'colorful': 'linear-gradient(90deg, #d13c3c, #e0c43b, #3f8f5f, #3e73c7, #7b4bb7)',
@@ -964,6 +971,26 @@
   var TEST_PROMPT_COLOR_PATTERN = '\\b(?:' + TEST_PROMPT_COLOR_TERMS.map(function (value) {
     return value.replace(/\s+/g, '\\s+');
   }).join('|') + ')\\b';
+  var TEST_PROMPT_HAIR_STYLES = [
+    'shoulder-length', 'waist-length', 'chin-length', 'slicked back', 'tied back',
+    'high ponytail', 'low ponytail', 'messy bun', 'pixie cut', 'ponytail',
+    'pigtails', 'braided', 'braids', 'bangs', 'fringe', 'curly', 'straight',
+    'wavy', 'long', 'short', 'bob', 'bun', 'loose'
+  ];
+  var TEST_PROMPT_ACCESSORIES = [
+    'hoop earrings', 'bow tie', 'hair clip', 'sunglasses', 'eyeglasses', 'glasses',
+    'earrings', 'necklace', 'choker', 'bracelet', 'wristwatch', 'headband', 'beanie',
+    'handbag', 'backpack', 'gloves', 'scarf', 'belt', 'purse', 'brooch', 'rings',
+    'ring', 'hat', 'cap'
+  ];
+  var TEST_PROMPT_SCENE_OBJECTS = [
+    'curtains', 'curtain', 'blanket', 'bookshelf', 'bookshelves',
+    'nightstand', 'countertop', 'television', 'paintings', 'painting', 'posters',
+    'poster', 'pillows', 'pillow', 'cushions', 'cushion', 'windows', 'window',
+    'doors', 'door', 'mirror', 'sofa', 'couch', 'chairs', 'chair', 'table',
+    'desk', 'bed', 'lamps', 'lamp', 'rug', 'carpet', 'shelves', 'shelf',
+    'plants', 'plant', 'dresser', 'wardrobe', 'stools', 'stool', 'tv'
+  ];
 
   function promptColorMatches(text) {
     var matches = [];
@@ -992,8 +1019,12 @@
     target = target.replace(/^(?:a|an|the)\s+/i, '');
     target = target.replace(/\s+(?:who|that|which|while|where|when)\b.*$/i, '').trim();
     target = target.replace(/\s+(?:standing|sitting|walking|holding|wearing|creating)\b.*$/i, '').trim();
-    var words = target.split(/\s+/).filter(Boolean);
-    if (words.length > 7) target = words.slice(0, 7).join(' ');
+    var hasMatchingTarget = /\s+(?:and|with)\s+(?:(?:a|an|the)\s+)?matching\s+/i.test(target);
+    if (!hasMatchingTarget) {
+      target = target.replace(/\s+(?:with|in|on|at|near|beside|behind|under|over|against|inside|outside|by|from)\b.*$/i, '').trim();
+      var words = target.split(/\s+/).filter(Boolean);
+      if (words.length > 5) target = words.slice(0, 5).join(' ');
+    }
     return target;
   }
 
@@ -1019,7 +1050,7 @@
       var matches = promptColorMatches(clause);
       if (!matches.length) continue;
 
-      var phrase = clause.slice(matches[0].index).trim();
+      var phrase = clause;
       var parsed = matches.map(function (match, index) {
         var next = matches[index + 1];
         return {
@@ -1028,7 +1059,8 @@
             clause.slice(match.end, next ? next.index : clause.length),
             !!next
           ),
-          phrase: phrase
+          phrase: phrase,
+          index: clauseMatch.index + match.index
         };
       });
 
@@ -1048,6 +1080,7 @@
           var key = expanded.color + '|' + expanded.target.toLowerCase();
           if (seen[key]) return;
           seen[key] = true;
+          expanded.index = item.index;
           expanded.swatch = TEST_PROMPT_COLOR_SWATCHES[expanded.color] || '#808080';
           targets.push(expanded);
         });
@@ -1057,7 +1090,173 @@
     return targets;
   }
 
-  function escapePromptColorTitle(value) {
+  function promptClauseAt(source, index) {
+    var text = String(source || '');
+    var start = index;
+    var end = index;
+    while (start > 0 && !/[,.!?;\n:]/.test(text.charAt(start - 1))) start -= 1;
+    while (end < text.length && !/[,.!?;\n:]/.test(text.charAt(end))) end += 1;
+    return text.slice(start, end).trim();
+  }
+
+  function promptTermMatches(source, term) {
+    var pattern = String(term || '').replace(/\s+/g, '\\s+');
+    var regex = new RegExp('\\b' + pattern + '\\b', 'gi');
+    var matches = [];
+    var match;
+    while ((match = regex.exec(String(source || ''))) !== null) {
+      matches.push({ index: match.index, end: match.index + match[0].length, text: match[0] });
+    }
+    return matches;
+  }
+
+  function extractNamedPromptItems(prompt, terms, type) {
+    var source = String(prompt || '');
+    var items = [];
+    var occupied = [];
+    terms.slice().sort(function (a, b) { return b.length - a.length; }).forEach(function (term) {
+      promptTermMatches(source, term).forEach(function (match) {
+        var overlaps = occupied.some(function (range) {
+          return match.index < range.end && match.end > range.start;
+        });
+        if (overlaps) return;
+        occupied.push({ start: match.index, end: match.end });
+        items.push({
+          type: type,
+          target: String(match.text || '').toLowerCase(),
+          color: '',
+          detail: '',
+          phrase: promptClauseAt(source, match.index),
+          index: match.index
+        });
+      });
+    });
+    return items.sort(function (a, b) { return a.index - b.index; });
+  }
+
+  function extractHairPromptItems(prompt) {
+    var source = String(prompt || '');
+    var items = [];
+    promptTermMatches(source, 'hair').forEach(function (match) {
+      var clause = promptClauseAt(source, match.index);
+      var hairOffset = clause.toLowerCase().indexOf('hair');
+      var before = hairOffset >= 0 ? clause.slice(0, hairOffset) : '';
+      var after = hairOffset >= 0 ? clause.slice(hairOffset + 4) : '';
+      var attributeTerms = TEST_PROMPT_COLOR_TERMS.concat(TEST_PROMPT_HAIR_STYLES).sort(function (a, b) {
+        return b.length - a.length;
+      });
+      var directTerms = [];
+
+      attributeTerms.forEach(function (term) {
+        promptTermMatches(before, term).forEach(function (termMatch) {
+          var tail = before.slice(termMatch.index);
+          attributeTerms.forEach(function (candidate) {
+            var candidatePattern = String(candidate).replace(/\s+/g, '\\s+');
+            tail = tail.replace(new RegExp('\\b' + candidatePattern + '\\b', 'gi'), ' ');
+          });
+          if (!tail.replace(/[\s\u2013\u2014-]+/g, '')) {
+            directTerms.push({ term: term.toLowerCase(), index: termMatch.index });
+          }
+        });
+      });
+
+      directTerms.sort(function (a, b) { return a.index - b.index; });
+      var directColors = directTerms.filter(function (item) {
+        return Object.prototype.hasOwnProperty.call(TEST_PROMPT_COLOR_SWATCHES, item.term);
+      });
+      var directStyles = directTerms.filter(function (item) {
+        return TEST_PROMPT_HAIR_STYLES.indexOf(item.term) >= 0;
+      }).map(function (item) { return item.term; });
+
+      var afterStyle = String(after || '').match(/^\s*(tied back|slicked back)\b/i);
+      if (!afterStyle) {
+        afterStyle = String(after || '').match(/^\s*(?:(?:is\s+)?(?:worn|styled|pulled|tied)\s+)?(?:(?:in|into)\s+(?:a\s+)?)?(high ponytail|low ponytail|messy bun|ponytail|pigtails|pixie cut|bun|braids|braided)\b/i);
+      }
+      if (afterStyle && directStyles.indexOf(afterStyle[1].toLowerCase()) < 0) {
+        directStyles.push(afterStyle[1].toLowerCase());
+      }
+
+      items.push({
+        type: 'Hair',
+        target: 'hair',
+        color: directColors.length ? directColors[directColors.length - 1].term : '',
+        detail: directStyles.join(' '),
+        phrase: clause,
+        index: match.index
+      });
+    });
+    return items;
+  }
+
+  function normalizedPromptTarget(value) {
+    return String(value || '').toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function promptTargetsMatch(first, second) {
+    return normalizedPromptTarget(first) === normalizedPromptTarget(second);
+  }
+
+  function classifyColorTarget(target) {
+    var normalized = normalizedPromptTarget(target);
+    if (normalized === 'hair' || normalized.indexOf('hair ') === 0) return 'Hair';
+    if (TEST_PROMPT_ACCESSORIES.some(function (term) { return promptTargetsMatch(normalized, term); })) return 'Accessory';
+    if (TEST_PROMPT_SCENE_OBJECTS.some(function (term) { return promptTargetsMatch(normalized, term); })) return 'Scene';
+    return 'Colour';
+  }
+
+  function extractPromptExpectations(prompt) {
+    var source = String(prompt || '');
+    var items = []
+      .concat(extractHairPromptItems(source))
+      .concat(extractNamedPromptItems(source, TEST_PROMPT_ACCESSORIES, 'Accessory'))
+      .concat(extractNamedPromptItems(source, TEST_PROMPT_SCENE_OBJECTS, 'Scene'));
+
+    extractPromptColorTargets(source).forEach(function (colorItem) {
+      var type = classifyColorTarget(colorItem.target);
+      var existing = items.find(function (item) {
+        if (item.type !== type) return false;
+        if (type === 'Hair') return true;
+        return promptTargetsMatch(item.target, colorItem.target);
+      });
+      if (existing) {
+        var colors = String(existing.color || '').split(' + ').filter(Boolean);
+        if (colors.indexOf(colorItem.color) < 0) colors.push(colorItem.color);
+        existing.color = colors.join(' + ');
+        if (colors.length === 1) {
+          existing.swatch = colorItem.swatch;
+        } else {
+          var swatches = colors.map(function (color) {
+            var value = TEST_PROMPT_COLOR_SWATCHES[color] || '#808080';
+            return value.indexOf('gradient(') >= 0 ? '#808080' : value;
+          });
+          existing.swatch = 'linear-gradient(90deg, ' + swatches.join(', ') + ')';
+        }
+        if (!existing.phrase) existing.phrase = colorItem.phrase;
+        return;
+      }
+      items.push({
+        type: type,
+        target: colorItem.target,
+        color: colorItem.color,
+        swatch: colorItem.swatch,
+        detail: '',
+        phrase: colorItem.phrase,
+        index: colorItem.index
+      });
+    });
+
+    var seen = {};
+    return items
+      .filter(function (item) {
+        var key = item.type + '|' + normalizedPromptTarget(item.target) + '|' + String(item.color || '') + '|' + String(item.detail || '');
+        if (seen[key]) return false;
+        seen[key] = true;
+        return true;
+      })
+      .sort(function (a, b) { return a.index - b.index; });
+  }
+
+  function escapePromptExpectationTitle(value) {
     return String(value || '')
       .replace(/&/g, '&amp;')
       .replace(/"/g, '&quot;')
@@ -1065,27 +1264,35 @@
       .replace(/>/g, '&gt;');
   }
 
-  function renderPromptColorTargets(prompt) {
-    var targets = extractPromptColorTargets(prompt);
-    if (!targets.length) {
-      return '<div class="test-generations-color-targets">' +
-        '<strong>Colour targets</strong>' +
-        '<div class="test-generations-color-target-empty">No explicit colour targets found.</div>' +
+  function renderPromptExpectations(prompt) {
+    var items = extractPromptExpectations(prompt);
+    if (!items.length) {
+      return '<div class="test-generations-prompt-expectations">' +
+        '<strong>Prompt expectations</strong>' +
+        '<div class="test-generations-expectation-empty">No direct prompt attributes found.</div>' +
         '</div>';
     }
-    return '<div class="test-generations-color-targets">' +
-      '<strong>Colour targets</strong>' +
-      '<div class="test-generations-color-target-list">' +
-      targets.map(function (item) {
-        return '<span class="test-generations-color-target" title="' + escapePromptColorTitle(item.phrase) + '">' +
-          '<i class="test-generations-color-swatch" style="--test-color-swatch:' + item.swatch + '"></i>' +
-          '<span><b>' + escapeHtml(item.color) + '</b> · ' + escapeHtml(item.target) + '</span>' +
-          '</span>';
+    return '<div class="test-generations-prompt-expectations">' +
+      '<strong>Prompt expectations</strong>' +
+      '<div class="test-generations-expectation-table">' +
+      '<div class="test-generations-expectation-head"><span>Type</span><span>Target</span><span>Colour</span><span>Detail</span></div>' +
+      items.map(function (item) {
+        var swatch = item.color
+          ? '<i class="test-generations-color-swatch" style="--test-color-swatch:' +
+            (item.swatch || TEST_PROMPT_COLOR_SWATCHES[item.color] || '#808080') + '"></i>'
+          : '';
+        return '<div class="test-generations-expectation-row" title="' + escapePromptExpectationTitle(item.phrase) + '">' +
+          '<span class="test-generations-expectation-type">' + escapeHtml(item.type) + '</span>' +
+          '<span class="test-generations-expectation-target">' + escapeHtml(item.target) + '</span>' +
+          '<span class="test-generations-expectation-color">' + swatch + escapeHtml(item.color || '—') + '</span>' +
+          '<span class="test-generations-expectation-detail">' + escapeHtml(item.detail || '—') + '</span>' +
+          '</div>';
       }).join('') +
       '</div>' +
-      '<small>Hover a target for its full prompt phrase.</small>' +
+      '<small>Only direct prompt correlations are shown. Hover a row for its full phrase.</small>' +
       '</div>';
   }
+
 
   function sessionMetaText(status) {
     if (!status || !status.session) return '';
@@ -1131,7 +1338,7 @@
       '<div class="test-generations-session-prompt"><strong>Resolved prompt</strong><pre>' + escapeHtml(resolvedPrompt || '—') + '</pre></div>',
       '<div class="test-generations-session-prompt"><strong>Source prompt</strong><pre>' + escapeHtml(sourcePrompt || '—') + '</pre></div>',
       '</div>',
-      renderPromptColorTargets(resolvedPrompt),
+      renderPromptExpectations(resolvedPrompt),
       '</div>'
     ].join('');
   }

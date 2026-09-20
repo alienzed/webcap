@@ -2587,7 +2587,7 @@ iframe {
 }
 .test-generations-session-prompt { min-width: 0; }
 .test-generations-session-prompt > strong,
-.test-generations-color-targets > strong { font-size: 11px; }
+.test-generations-prompt-expectations > strong { font-size: 11px; }
 .test-generations-session-prompt pre {
   margin: 4px 0 0;
   padding: 8px;
@@ -2601,35 +2601,50 @@ iframe {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.test-generations-color-targets {
+.test-generations-prompt-expectations {
   min-width: 0;
   padding: 8px;
   border-radius: 4px;
   background: var(--panel);
 }
-.test-generations-color-target-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.test-generations-expectation-table {
+  display: grid;
+  gap: 1px;
   margin-top: 6px;
 }
-.test-generations-color-target {
-  display: inline-flex;
+.test-generations-expectation-head,
+.test-generations-expectation-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 92px minmax(0, .9fr);
   align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 3px 7px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel-soft);
-  font-size: 11px;
-  line-height: 1.3;
+  gap: 8px;
+  min-width: 0;
 }
-.test-generations-color-target > span {
+.test-generations-expectation-head {
+  padding: 0 6px 4px;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.test-generations-expectation-row {
+  min-height: 27px;
+  padding: 4px 6px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+.test-generations-expectation-row > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.test-generations-expectation-type { color: var(--muted); }
+.test-generations-expectation-target { color: var(--text); }
+.test-generations-expectation-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 .test-generations-color-swatch {
   flex: 0 0 auto;
@@ -2639,8 +2654,8 @@ iframe {
   border-radius: 50%;
   background: var(--test-color-swatch);
 }
-.test-generations-color-targets small,
-.test-generations-color-target-empty {
+.test-generations-prompt-expectations small,
+.test-generations-expectation-empty {
   display: block;
   margin-top: 6px;
   color: var(--muted);

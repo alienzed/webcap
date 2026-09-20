@@ -316,6 +316,17 @@
   white-space: nowrap;
 }
 
+.shell-workload-status {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.shell-workload-status.is-training,
+.shell-workload-status.is-testing {
+  color: var(--text);
+}
+
 .shell-gpu-status strong {
   color: var(--text);
   font-weight: 600;

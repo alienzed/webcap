@@ -14,7 +14,7 @@ import tomllib
 
 from . import config as app_config
 from .training_config_files import output_dir_from_config, training_config_path
-from .training_action import actions_root, managed_actions, managed_actions_for_folder, read_action
+from .training_action import actions_root, managed_actions_for_folder, read_action
 from .training_profiles import config_for_id, config_for_stage
 
 
@@ -256,25 +256,33 @@ def _read_job_record(path):
     return dict(payload["job"])
 
 
-def _job_records_for_actions(actions, folder_key=""):
-    jobs = []
-    for action_root, action in actions:
-        action_folder = str(action.get("folder") or "")
-        if folder_key and action_folder != folder_key:
-            continue
-        jobs_root = action_root / "jobs"
-        if not jobs_root.is_dir() or jobs_root.is_symlink():
-            continue
-        for job_dir in jobs_root.iterdir():
-            record_path = job_dir / JOB_RECORD_FILE_NAME
-            if not job_dir.is_dir() or job_dir.is_symlink() or not record_path.is_file() or record_path.is_symlink():
+def _managed_job_record_paths():
+    root = actions_root()
+    if not root.is_dir():
+        return []
+    paths = []
+    seen = set()
+    for pattern in ("*/jobs/*/" + JOB_RECORD_FILE_NAME, "*/*/jobs/*/" + JOB_RECORD_FILE_NAME):
+        for path in root.glob(pattern):
+            try:
+                resolved = path.resolve()
+            except OSError:
                 continue
-            job = _read_job_record(record_path)
-            if folder_key and str(job.get("folder") or "") != folder_key:
+            if resolved in seen or not path.is_file() or path.is_symlink() or path.parent.is_symlink():
                 continue
-            jobs.append(job)
-    return jobs
+            seen.add(resolved)
+            paths.append(path)
+    return paths
 
+
+def _job_records(folder_key=""):
+    jobs = []
+    for record_path in _managed_job_record_paths():
+        job = _read_job_record(record_path)
+        if folder_key and str(job.get("folder") or "") != folder_key:
+            continue
+        jobs.append(job)
+    return jobs
 
 def _legacy_jobs(folder_key=""):
     try:
@@ -299,9 +307,9 @@ def _migrate_legacy_job(folder_path, job):
     return True
 
 
-def _merge_folder_and_legacy_jobs(folder_path, actions):
+def _merge_folder_and_legacy_jobs(folder_path):
     folder_key = _folder_key(folder_path)
-    jobs = _job_records_for_actions(actions, folder_key)
+    jobs = _job_records(folder_key)
     by_id = {str(job.get("id") or ""): job for job in jobs if str(job.get("id") or "")}
     for legacy in _legacy_jobs(folder_key):
         job_id = str(legacy.get("id") or "")
@@ -444,7 +452,7 @@ def read_history(folder_path):
     folder = Path(folder_path)
     with _history_lock:
         result = _default_history(folder)
-        result["jobs"] = _merge_folder_and_legacy_jobs(folder, managed_actions_for_folder(folder))
+        result["jobs"] = _merge_folder_and_legacy_jobs(folder)
         return result
 
 
@@ -705,8 +713,7 @@ def all_history_payload(query="", folder=""):
     del query
     folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
     with _history_lock:
-        actions = managed_actions()
-        jobs = _job_records_for_actions(actions, folder_text)
+        jobs = _job_records(folder_text)
         known = {str(job.get("id") or "") for job in jobs if str(job.get("id") or "")}
         for legacy in _legacy_jobs(folder_text):
             job_id = str(legacy.get("id") or "")

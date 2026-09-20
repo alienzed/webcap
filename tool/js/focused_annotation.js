@@ -223,6 +223,13 @@ function stopFocusedAnnotation() {
 }
 
 function showFocusedAnnotationSurface() {
+  var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  var requirementLabel = getFocusedAnnotationCurrentRequirement();
+  var itemKey = String(focusedAnnotationState.itemKey || '').trim();
+  if (!itemKey || !requirementLabel || requirements.indexOf(requirementLabel) < 0) {
+    setStatus('Focused annotation could not open because no annotation group is selected.');
+    return false;
+  }
   var els = getFocusedAnnotationEls();
   if (els.normalGroupsCard) els.normalGroupsCard.classList.add('hidden');
   if (els.workbench) els.workbench.classList.remove('hidden');
@@ -231,6 +238,7 @@ function showFocusedAnnotationSurface() {
   setWorkspaceSurface('focus', { sidebarHidden: true });
   setWorkspaceWorkflowMode('annotate');
   renderPreviewHeaderMeta();
+  return true;
 }
 
 function syncFocusedAnnotationQueue(options) {
@@ -925,7 +933,7 @@ function startFocusedAnnotation(targetMediaKey) {
     return;
   }
   applyFocusedAnnotationNavigationResult(next);
-  showFocusedAnnotationSurface();
+  if (!showFocusedAnnotationSurface()) return;
   navigateFocusedAnnotation(next);
 }
 

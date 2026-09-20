@@ -566,10 +566,31 @@ def test_post_refactor_hygiene_has_one_sidebar_control_and_no_legacy_shell_fossi
     assert "#utility-training-btn" not in styles
     assert "#utility-test-bench-btn" not in styles
     assert ".console-toggle-btn" not in styles
-    assert 'id="preview-action-primary-a"' not in html
-    assert 'id="preview-action-primary-b"' not in html
-    assert 'id="preview-action-more"' not in html
-    assert "previewPrimaryActionAEl" not in constants
-    assert "previewPrimaryActionBEl" not in constants
-    assert "previewMoreActionsEl" not in constants
+    assert 'id="preview-action-primary-a"' in html
+    assert 'id="preview-action-primary-b"' in html
+    assert 'id="preview-action-more"' in html
+    assert "previewPrimaryActionAEl: document.getElementById('preview-action-primary-a')" in constants
+    assert "previewPrimaryActionBEl: document.getElementById('preview-action-primary-b')" in constants
+    assert "previewMoreActionsEl: document.getElementById('preview-action-more')" in constants
     assert ">Train Set</button>" in html
+
+
+def test_single_item_preview_actions_keep_their_runtime_contract():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    constants = (ROOT / "tool" / "js" / "constants.js").read_text(encoding="utf-8")
+    media = (ROOT / "tool" / "js" / "media.js").read_text(encoding="utf-8")
+    main = (ROOT / "tool" / "js" / "main.js").read_text(encoding="utf-8")
+
+    for element_id in (
+        "preview-action-primary-a",
+        "preview-action-primary-b",
+        "preview-action-more",
+    ):
+        assert f'id="{element_id}"' in html
+
+    assert "previewPrimaryActionAEl" in constants
+    assert "previewPrimaryActionBEl" in constants
+    assert "previewMoreActionsEl" in constants
+    assert "getPreviewPrimaryActionPlan" in media
+    assert "wirePreviewActionControls()" in main
+    assert "updatePreviewActionControls()" in main

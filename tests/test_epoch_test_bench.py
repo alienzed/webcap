@@ -601,7 +601,7 @@ def test_test_bench_resolves_session_folder_back_to_owning_set(tmp_path, monkeyp
     assert bench._session_root(session_folder) == set_folder.resolve() / bench.TEST_RESULTS_DIR
 
 
-def test_prepare_then_queued_start_from_session_folder_reuses_same_staged_loras(tmp_path, monkeypatch):
+def test_queued_start_reuses_frozen_staging_directory_after_set_rename(tmp_path, monkeypatch):
     set_folder = tmp_path / "sets" / "HH4013"
     session_folder = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1037-h3"
     staged = tmp_path / "test-root" / "WebCap" / "HH4013"
@@ -643,10 +643,16 @@ def test_prepare_then_queued_start_from_session_folder_reuses_same_staged_loras(
     assert prepared["files"] == [candidate.name]
 
     request = bench._build_queued_request(session_folder, "test prompt")
-    started = bench.start_queued(session_folder, request)
+    assert request["stagingDirectory"] == str(staged)
+
+    renamed_set_folder = tmp_path / "sets" / "HH4013-renamed"
+    set_folder.rename(renamed_set_folder)
+    renamed_session_folder = renamed_set_folder / bench.TEST_RESULTS_DIR / session_folder.name
+
+    started = bench.start_queued(renamed_session_folder, request)
     assert started["status"] == "running"
     assert started["total"] == 2
-    assert (set_folder / bench.TEST_RESULTS_DIR / started["session"] / "test.json").is_file()
+    assert (renamed_set_folder / bench.TEST_RESULTS_DIR / started["session"] / "test.json").is_file()
 
 
 

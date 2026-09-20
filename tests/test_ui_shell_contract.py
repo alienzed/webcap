@@ -70,20 +70,26 @@ def test_shell_activity_controls_are_real_navigation_without_replacing_legacy_pa
     assert "window.closeTestBenchActivity()" in script
 
 
-def test_shell_header_tracks_current_folder_without_owning_folder_state():
+def test_shell_header_uses_workspace_first_clickable_breadcrumb_without_parallel_folder_state():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
-    assert 'id="app-header-folder"' in html
-    assert 'id="app-header-context-separator"' in html
-    assert "String(state && state.folder || '')" in shell
-    assert "folderParts[folderParts.length - 1]" in shell
-    assert "folderEl.textContent = folderLabel" in shell
-    assert "headerFolderBtn.onclick = openPrepActivity" in shell
-    assert "contextSeparator.classList.toggle('hidden', !contextUsesFolder)" in shell
+    assert 'id="app-header-workspace-title"' in html
+    assert 'id="app-header-breadcrumb"' in html
+    assert 'id="app-header-folder"' not in html
+    assert html.index('id="app-header-workspace-title"') < html.index('id="app-header-breadcrumb"')
+    assert "function renderApplicationHeaderBreadcrumb(navigation)" in shell
+    assert "state && Array.isArray(state.dirStack)" in shell
+    assert "data-dir-index" in shell
+    assert "navigateToDirStackIndex(index);" in shell
+    assert "if (index === lastIndex)" in shell
+    assert "if (deriveShellNavigationState().activity !== 'prep') openPrepActivity();" in shell
     assert "? 'Test Generations'" in shell
     assert "? 'Focus' : 'Prep'" in shell
+    assert ".app-header-breadcrumb-item:hover" in css
+    assert "background: transparent;" in css
     assert "window.syncApplicationShellContext = syncApplicationShellContext" in shell
     assert "window.syncApplicationShellContext()" in ui
 
@@ -236,11 +242,17 @@ def test_model_selector_is_single_real_control_in_permanent_header():
 
     assert header_start < model_select < workspace_start
     assert html.count('id="app-header-model-profile-select"') == 1
+    assert 'id="app-header-model-control" class="app-header-model-control hidden"' in html
     assert '<span class="app-header-model-label">Base Model</span>' in html
     assert 'aria-label="Base Model"' in html
+    assert "modelRelevant = navigation.activity === 'training' || navigation.activity === 'test'" in shell
+    assert "modelControl.classList.toggle('hidden', !modelRelevant)" in shell
+    assert "modelSelect.disabled = navigation.activity === 'test'" in shell
     assert "modelProfileSelect:" not in training_state
     assert "getWorkingModelProfileSelect()" in training
     assert "syncWorkingModelProfileSelect(folder)" in training
+    assert "select.disabled = false" not in training
+    assert "window.syncApplicationShellContext()" in training
     assert "window.refreshWorkingModelSelector = refreshWorkingModelSelector" in training
     assert "window.refreshWorkingModelSelector()" in ui
     assert "if (isTrainingWorkspaceActive())" in training
@@ -474,6 +486,7 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "window.renderShellSystemStatus = renderShellSystemStatus" in shell
     assert "window.renderShellSystemStatus()" in runner
     assert ".shell-workload-status {" in css
+    assert "color: var(--accent);" in css
     assert "font-size: 12px;" in css
     assert ".shell-gpu-status .shell-system-disk {" in css
     assert "gap: 4px;" in css

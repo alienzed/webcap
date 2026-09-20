@@ -567,17 +567,14 @@ function saveCaptionDirect(folder, media, text, mediaKey, options) {
         if (
           updatesCurrentFolder &&
           hasCaption &&
-          updatedKey &&
-          typeof getTagsForMediaKey === 'function' &&
-          typeof commitChecklistDescriptorSnapshotsForMediaKey === 'function'
+          updatedKey
         ) {
-          commitChecklistDescriptorSnapshotsForMediaKey(updatedKey, getTagsForMediaKey(updatedKey));
+          commitChecklistGroupDescriptorSnapshotsForMediaKey(updatedKey);
         } else if (
           updatesCurrentFolder &&
           !hasCaption &&
           updatedKey &&
-          previousHasCaption &&
-          typeof clearChecklistDescriptorSnapshotsForMediaKey === 'function'
+          previousHasCaption
         ) {
           clearChecklistDescriptorSnapshotsForMediaKey(updatedKey);
         }

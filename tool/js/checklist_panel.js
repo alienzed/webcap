@@ -1,4 +1,40 @@
 var checklistDragSourceIndex = null;
+var checklistHideReviewed = false;
+
+function isChecklistHideReviewedAvailable() {
+  if (!state || !state.currentItem || !state.currentItem.key) return false;
+  if (typeof workspaceState !== 'undefined'
+      && workspaceState
+      && workspaceState.surface === 'grid') {
+    return false;
+  }
+  return true;
+}
+
+function syncChecklistHideReviewedUi() {
+  var btn = document.getElementById('checklist-hide-reviewed-btn');
+  if (!btn) return;
+  var available = isChecklistHideReviewedAvailable();
+  btn.classList.toggle('hidden', !available);
+  btn.classList.toggle('active', !!checklistHideReviewed);
+  btn.setAttribute('aria-pressed', checklistHideReviewed ? 'true' : 'false');
+  btn.title = checklistHideReviewed
+    ? 'Show reviewed groups for this item'
+    : 'Hide groups already reviewed for this item';
+}
+
+function toggleChecklistHideReviewed() {
+  checklistHideReviewed = !checklistHideReviewed;
+  syncChecklistHideReviewedUi();
+  renderChecklistPanel({ skipItemDetailRefresh: true });
+}
+
+function wireChecklistHideReviewedUi() {
+  var btn = document.getElementById('checklist-hide-reviewed-btn');
+  if (!btn || btn.__hideReviewedWired) return;
+  btn.__hideReviewedWired = true;
+  btn.onclick = toggleChecklistHideReviewed;
+}
 
 function clearChecklistDropIndicators() {
   var rows = document.querySelectorAll('#checklist-items .checklist-row-block');
@@ -41,6 +77,8 @@ function positionChecklistRowOverflowMenu(summaryEl, menuEl) {
 
 function renderChecklistPanel(options) {
   var opts = options || {};
+  wireChecklistHideReviewedUi();
+  syncChecklistHideReviewedUi();
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   var itemsDiv = document.getElementById('checklist-items');
   var groupWorkbenchList = document.getElementById('group-workbench-list');
@@ -89,8 +127,11 @@ function renderChecklistPanel(options) {
   itemsDiv.innerHTML = '';
   var checkedMap = checklistCheckedByMedia[state.currentItem.key] || {};
   var mediaKey = state.currentItem.key;
+  var renderedGroupCount = 0;
   for (var i = 0; i < checklistItems.length; i++) {
     var item = checklistItems[i];
+    if (checklistHideReviewed && !!checkedMap[item]) continue;
+    renderedGroupCount += 1;
     var row = document.createElement('div');
     row.className = 'checklist-row-block';
     row.setAttribute('data-checklist-index', String(i));
@@ -359,6 +400,12 @@ function renderChecklistPanel(options) {
     }
 
     itemsDiv.appendChild(row);
+  }
+  if (checklistHideReviewed && renderedGroupCount === 0) {
+    var reviewedEmpty = document.createElement('div');
+    reviewedEmpty.className = 'checklist-hide-reviewed-empty';
+    reviewedEmpty.textContent = 'No unreviewed groups.';
+    itemsDiv.appendChild(reviewedEmpty);
   }
   if (!opts.skipItemDetailRefresh) {
     renderItemTagsPanel();

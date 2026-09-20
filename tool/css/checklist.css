@@ -1397,6 +1397,37 @@
   margin-bottom: 8px;
 }
 
+.checklist-hide-reviewed-btn {
+  min-height: 22px;
+  padding: 2px 6px;
+  border: 1px solid #b8c3d1;
+  border-radius: 4px;
+  background: #f9fbfd;
+  color: #5d6672;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.checklist-hide-reviewed-btn:hover,
+.checklist-hide-reviewed-btn:focus-visible {
+  background: #eef2f7;
+  color: #3f454d;
+}
+
+.checklist-hide-reviewed-btn.active {
+  border-color: #7aa58b;
+  background: #e7f4ec;
+  color: #28583b;
+}
+
+.checklist-hide-reviewed-empty {
+  padding: 8px 4px;
+  color: #7a8492;
+  font-size: 12px;
+  text-align: center;
+}
+
 .checklist-settings-btn {
   padding: 4px 6px;
   font-size: 14px;
@@ -1811,6 +1842,28 @@ html[data-theme="dark"] #caption-checklist-panel #checklist-items .checklist-row
 html[data-theme="dark"] #caption-checklist-panel #checklist-items .checklist-row-menu-item-danger {
   color: #e09aa5;
 }
+html[data-theme="dark"] .checklist-hide-reviewed-btn {
+  border-color: #344154;
+  background: #1f2937;
+  color: #c7d0dc;
+}
+
+html[data-theme="dark"] .checklist-hide-reviewed-btn:hover,
+html[data-theme="dark"] .checklist-hide-reviewed-btn:focus-visible {
+  background: #243041;
+  color: #e5e7eb;
+}
+
+html[data-theme="dark"] .checklist-hide-reviewed-btn.active {
+  border-color: #4f7b61;
+  background: rgba(22, 101, 52, 0.34);
+  color: #ccebd7;
+}
+
+html[data-theme="dark"] .checklist-hide-reviewed-empty {
+  color: #9eabba;
+}
+
 html[data-theme="dark"] .checklist-settings-btn,
 html[data-theme="dark"] .checklist-close-btn {
   color: var(--text);

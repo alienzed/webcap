@@ -375,17 +375,18 @@
 .app.shell-revamp .sidebar-edge-toggle-btn {
   position: absolute;
   z-index: 8;
-  top: 8px;
-  left: calc(var(--sidebar-width) - 14px);
-  width: 28px;
-  min-width: 28px;
+  top: auto;
+  bottom: 8px;
+  left: calc(var(--sidebar-width) - 32px);
+  width: 24px;
+  min-width: 24px;
   height: 28px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 5px;
   background: var(--panel);
   color: var(--muted);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  box-shadow: none;
   cursor: pointer;
 }
 
@@ -397,7 +398,7 @@
 
 .app.shell-revamp.left-rail-collapsed .sidebar-edge-toggle-btn,
 .app.shell-revamp.sidebar-hidden .sidebar-edge-toggle-btn {
-  left: 4px;
+  left: 8px;
 }
 
 .app.shell-revamp .sidebar-panel {
@@ -780,7 +781,7 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   }
 
   .app.shell-revamp:not(.left-rail-collapsed):not(.sidebar-hidden) .sidebar-edge-toggle-btn {
-    left: calc(260px - 14px);
+    left: calc(260px - 32px);
   }
 
   .app-header-model-control select {

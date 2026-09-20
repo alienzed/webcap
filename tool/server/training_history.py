@@ -14,7 +14,7 @@ import tomllib
 
 from . import config as app_config
 from .training_config_files import output_dir_from_config, training_config_path
-from .training_action import managed_actions, managed_actions_for_folder, read_action
+from .training_action import actions_root, managed_actions, managed_actions_for_folder, read_action
 from .training_profiles import config_for_id, config_for_stage
 
 
@@ -218,9 +218,20 @@ def _normalized_job_record(folder_path, job):
 
 def _job_record_path(job):
     artifact_dir = str((job or {}).get("artifactDir") or (job or {}).get("artifactPath") or "").strip()
-    if not artifact_dir:
+    job_id = str((job or {}).get("id") or "").strip()
+    if not artifact_dir or not job_id:
         return None
-    return Path(artifact_dir) / JOB_RECORD_FILE_NAME
+    directory = Path(artifact_dir)
+    try:
+        resolved_root = actions_root().resolve()
+        resolved_directory = directory.resolve()
+    except OSError:
+        return None
+    if resolved_root not in resolved_directory.parents:
+        return None
+    if resolved_directory.name != job_id or resolved_directory.parent.name != "jobs":
+        return None
+    return directory / JOB_RECORD_FILE_NAME
 
 
 def _write_job_record(folder_path, job):

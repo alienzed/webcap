@@ -1154,3 +1154,45 @@ def test_queued_test_positions_follow_the_unified_queue(tmp_path, monkeypatch):
     assert jobs[0]["id"] == "test-second"
     assert jobs[0]["queuePosition"] == 2
     assert jobs[0]["runName"] == "Prompt B"
+
+
+
+def test_shared_queue_advances_from_completed_test_to_training(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    launched = []
+
+    monkeypatch.setattr(training_runner, "_startup_reconciled", True)
+    monkeypatch.setattr(training_runner, "_external_gpu_owner", "")
+    monkeypatch.setattr(training_runner, "_apply_training_disk_protection", lambda *_args, **_kwargs: "safe")
+
+    def refresh_test(job):
+        job["status"] = "completed"
+        job["stage"] = "test"
+        return {"holdReason": ""}
+
+    def launch_training(job, _folder):
+        launched.append(job["id"])
+        job["status"] = "running"
+        job["stage"] = "h3"
+
+    monkeypatch.setattr(training_runner, "_refresh_test_job", refresh_test)
+    monkeypatch.setattr(training_runner, "_launch_job", launch_training)
+
+    state = {
+        "version": 3,
+        "activeJobId": "test-active",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [
+            {"id": "test-active", "kind": "test", "status": "running", "stage": "test", "folder": "sets/subject"},
+            {"id": "train-next", "status": "queued", "stage": "queued", "folder": "sets/subject"},
+        ],
+    }
+
+    training_runner._refresh_state(state)
+
+    assert launched == ["train-next"]
+    assert state["activeJobId"] == "train-next"
+    assert state["jobs"][0]["status"] == "completed"
+    assert state["jobs"][1]["status"] == "running"

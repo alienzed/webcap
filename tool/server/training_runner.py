@@ -195,15 +195,15 @@ def _apply_training_disk_protection(state, active_jobs, queued_jobs):
 def _state_job_ids(state, path):
     jobs = state.get("jobs") if isinstance(state, dict) else None
     if not isinstance(jobs, list):
-        raise TrainingStateError("Existing training queue jobs are invalid; the state was left unchanged: " + str(path))
+        raise TrainingStateError("Existing queue jobs are invalid; the state was left unchanged: " + str(path))
     job_ids = []
     for job in jobs:
         job_id = str(job.get("id") or "") if isinstance(job, dict) else ""
         if not job_id:
-            raise TrainingStateError("Existing training queue contains a job without an ID; the state was left unchanged: " + str(path))
+            raise TrainingStateError("Existing queue contains a job without an ID; the state was left unchanged: " + str(path))
         job_ids.append(job_id)
     if len(job_ids) != len(set(job_ids)):
-        raise TrainingStateError("Existing training queue contains duplicate job IDs; the state was left unchanged: " + str(path))
+        raise TrainingStateError("Existing queue contains duplicate job IDs; the state was left unchanged: " + str(path))
     return set(job_ids)
 
 
@@ -226,11 +226,11 @@ def _read_state():
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise TrainingStateError("Could not read the existing training queue state; it was left unchanged: " + str(path)) from exc
+        raise TrainingStateError("Could not read the existing queue state; it was left unchanged: " + str(path)) from exc
     if not isinstance(parsed, dict):
-        raise TrainingStateError("Existing training queue state is not a JSON object; it was left unchanged: " + str(path))
+        raise TrainingStateError("Existing queue state is not a JSON object; it was left unchanged: " + str(path))
     if parsed.get("version") not in (3, 4):
-        raise TrainingStateError("Unsupported training queue state version; the state was left unchanged: " + str(path))
+        raise TrainingStateError("Unsupported queue state version; the state was left unchanged: " + str(path))
     # Version 4 has the same additive queue shape; normalize it on the next
     # ordinary state write.
     parsed["version"] = 3
@@ -252,9 +252,9 @@ def _read_state_readonly():
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise TrainingStateError("Could not read the existing training queue state: " + str(path)) from exc
+        raise TrainingStateError("Could not read the existing queue state: " + str(path)) from exc
     if not isinstance(parsed, dict) or parsed.get("version") not in (3, 4):
-        raise TrainingStateError("Existing training queue state is invalid: " + str(path))
+        raise TrainingStateError("Existing queue state is invalid: " + str(path))
     parsed.setdefault("jobs", [])
     _state_job_ids(parsed, path)
     return parsed
@@ -2604,7 +2604,7 @@ def resume_queue_response():
         if state.get("queuePaused") and not state.get("activeJobId"):
             return {
                 "ok": False,
-                "error": state.get("queuePauseReason") or "No queued training job was started.",
+                "error": state.get("queuePauseReason") or "No queued job was started.",
                 "jobs": [_public_job(job) for job in state["jobs"]],
             }, 409
         return {"ok": True, "activeJobId": state.get("activeJobId") or "", "jobs": [_public_job(job) for job in state["jobs"]]}, 200

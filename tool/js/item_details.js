@@ -156,9 +156,6 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
     }
     seen[low] = true;
     next.push(tag);
-    if (typeof commitChecklistDescriptorSnapshotForMediaKey === 'function') {
-      commitChecklistDescriptorSnapshotForMediaKey(key, tag);
-    }
     ensureCaptionHelperPhraseInCatalog(tag, true);
     added += 1;
   });
@@ -1232,9 +1229,6 @@ function addTagToMediaKey(mediaKey, tagText, options) {
   }
   current.push(tag);
   captionItemTagsByMedia[key] = current;
-  if (typeof commitChecklistDescriptorSnapshotForMediaKey === 'function') {
-    commitChecklistDescriptorSnapshotForMediaKey(key, tag);
-  }
   ensureCaptionHelperPhraseInCatalog(tag, !opts.skipSave);
   if (!opts.skipSave) {
     saveItemTagsToFolderState();

@@ -236,6 +236,8 @@ def test_model_selector_is_single_real_control_in_permanent_header():
 
     assert header_start < model_select < workspace_start
     assert html.count('id="app-header-model-profile-select"') == 1
+    assert '<span class="app-header-model-label">Base Model</span>' in html
+    assert 'aria-label="Base Model"' in html
     assert "modelProfileSelect:" not in training_state
     assert "getWorkingModelProfileSelect()" in training
     assert "syncWorkingModelProfileSelect(folder)" in training

@@ -302,10 +302,10 @@
   max-width: 520px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -318,8 +318,14 @@
   color: var(--border);
 }
 
+.shell-gpu-status .shell-system-disk {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
 .shell-gpu-status .is-warning {
-  color: var(--warning, #b45309);
+  color: color-mix(in srgb, var(--warning, #b45309) 58%, white);
 }
 
 .shell-status-bar {

@@ -465,6 +465,10 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "if (trainingWorkspaceState.runnerStatusPending) return;" in runner
     assert ".shell-status-bar {" in css
     assert ".shell-gpu-status {" in css
+    assert "font-size: 12px;" in css
+    assert ".shell-gpu-status .shell-system-disk {" in css
+    assert "gap: 4px;" in css
+    assert "color-mix(in srgb, var(--warning, #b45309) 58%, white)" in css
 
 
 def test_phase_audit_retires_duplicate_view_state_and_empty_split_bridge():

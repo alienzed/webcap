@@ -6,7 +6,6 @@ var checklistCheckedByMedia = {}; // { mediaKey: { item: true/false, ... } }
 var debouncedChecklistSave = debounceCreate(400); // Debounce saves for checkbox changes
 var checklistKeywordsByItem = {}; // { requirement: "keyword1, keyword2, ..." }
 var checklistSessionHiddenTermsByRequirement = {}; // { requirement: { termLower: true } } session-only
-var checklistLegacyScopedTermsByMedia = {}; // Session-only v1 interpretation: { mediaKey: { termLower: requirement } }
 var checklistAssignmentsByMedia = {}; // { mediaKey: { requirement: ["term", ...] } }
 var checklistTermWrappersByKey = {}; // Legacy unscoped wrapper map.
 var checklistTermDescriptorDefaultsByKey = {}; // Legacy unscoped descriptor defaults.
@@ -916,73 +915,9 @@ function saveChecklistToFolderState() {
   writeFolderStateFile(state.folder, snapshot);
 }
 
-function migrateLegacyChecklistAssignments(folderState) {
-  checklistLegacyScopedTermsByMedia = {};
-  if (!folderState || Object.prototype.hasOwnProperty.call(folderState, 'caption_group_tags_by_media')) {
-    return false;
-  }
-  var rawTagsByMedia = (folderState.caption_tags_by_media && typeof folderState.caption_tags_by_media === 'object')
-    ? folderState.caption_tags_by_media
-    : {};
-  var legacyDescriptors = sanitizeChecklistTermDescriptorsByMedia(folderState.caption_term_descriptors_by_media);
-  var changed = false;
-
-  Object.keys(rawTagsByMedia).forEach(function (rawMediaKey) {
-    var mediaKey = String(rawMediaKey || '').trim();
-    if (!mediaKey) return;
-    var terms = Array.isArray(rawTagsByMedia[rawMediaKey]) ? rawTagsByMedia[rawMediaKey] : [];
-    terms.forEach(function (rawTerm) {
-      var term = normalizeChecklistTerm(rawTerm);
-      if (!term) return;
-      var requirements = getChecklistRequirementsForTag(term);
-      if (requirements.length !== 1) return;
-
-      var requirement = requirements[0];
-      var mediaMap = JSON.parse(JSON.stringify(getChecklistAssignmentsForMediaKey(mediaKey)));
-      var assigned = normalizeChecklistAssignedTerms(mediaMap[requirement]);
-      var termKey = term.toLowerCase();
-      if (!assigned.some(function (value) { return normalizeChecklistTerm(value).toLowerCase() === termKey; })) {
-        assigned.push(term);
-        mediaMap[requirement] = assigned;
-        checklistAssignmentsByMedia[mediaKey] = mediaMap;
-        changed = true;
-      }
-
-      if (!checklistLegacyScopedTermsByMedia[mediaKey]) checklistLegacyScopedTermsByMedia[mediaKey] = {};
-      checklistLegacyScopedTermsByMedia[mediaKey][termKey] = requirement;
-
-      var existingGroupWrapper = getChecklistGroupTermWrapper(requirement, term);
-      var legacyWrapper = getChecklistTermWrapper(term);
-      if (!existingGroupWrapper.prefix && !existingGroupWrapper.suffix && (legacyWrapper.prefix || legacyWrapper.suffix)) {
-        setChecklistGroupTermWrapper(requirement, term, legacyWrapper.prefix, legacyWrapper.suffix);
-      }
-
-      var existingGroupDefault = getChecklistGroupTermDescriptorDefault(requirement, term);
-      var legacyDefault = getChecklistTermDescriptorDefault(term);
-      if (!existingGroupDefault.prefix && !existingGroupDefault.suffix && (legacyDefault.prefix || legacyDefault.suffix)) {
-        setChecklistGroupTermDescriptorDefault(requirement, term, legacyDefault.prefix, legacyDefault.suffix);
-      }
-
-      var legacyMediaMap = legacyDescriptors[mediaKey];
-      var legacyMediaDescriptor = legacyMediaMap && legacyMediaMap[termKey];
-      if (legacyMediaDescriptor && !getChecklistGroupTermDescriptorForMediaKey(mediaKey, requirement, term)) {
-        setChecklistGroupTermDescriptorForMediaKey(
-          mediaKey,
-          requirement,
-          term,
-          legacyMediaDescriptor.prefix,
-          legacyMediaDescriptor.suffix
-        );
-      }
-    });
-  });
-  return changed;
-}
-
 function loadChecklistFromFolderState(folderState) {
   checklistExpandedRequirements = {};
   checklistSessionHiddenTermsByRequirement = {};
-  checklistLegacyScopedTermsByMedia = {};
   if (folderState.caption_requirements && Object.prototype.toString.call(folderState.caption_requirements) === '[object Array]') {
     checklistItems = folderState.caption_requirements.slice();
   } else {
@@ -1007,7 +942,6 @@ function loadChecklistFromFolderState(folderState) {
   checklistTermDescriptorDefaultsByGroup = sanitizeChecklistGroupTermAffixesMap(folderState.caption_group_term_descriptor_defaults, false);
   checklistTermDescriptorsByMedia = sanitizeChecklistGroupTermDescriptorsByMedia(folderState.caption_group_term_descriptors_by_media);
   syncChecklistLegacyAffixesMirror();
-  migrateLegacyChecklistAssignments(folderState);
 
   syncReviewedFromChecklistAll();
   renderChecklistPanel();

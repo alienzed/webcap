@@ -1356,10 +1356,7 @@ function loadItemTagsFromFolderState(folderState) {
       var tag = normalizeItemTag(raw);
       if (!tag) return;
       var low = tag.toLowerCase();
-      var migrated = checklistLegacyScopedTermsByMedia
-        && checklistLegacyScopedTermsByMedia[mediaKey]
-        && checklistLegacyScopedTermsByMedia[mediaKey][low];
-      if (migrated || seen[low]) return;
+      if (seen[low]) return;
       seen[low] = true;
       clean.push(tag);
     });

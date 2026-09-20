@@ -278,6 +278,36 @@ def _selected_lora_files(test_directory, selected_files=None):
     return [path for path in available if path.name in requested_set]
 
 
+def _candidate_file_snapshots(paths):
+    snapshots = []
+    for path in paths:
+        stat = Path(path).stat()
+        snapshots.append({
+            "name": Path(path).name,
+            "size": int(stat.st_size),
+            "mtimeNs": int(stat.st_mtime_ns),
+        })
+    return snapshots
+
+
+def _verify_candidate_file_snapshots(paths, snapshots):
+    if not snapshots:
+        return
+    expected = {
+        str(item.get("name") or ""): item
+        for item in snapshots
+        if isinstance(item, dict) and str(item.get("name") or "").strip()
+    }
+    for path in paths:
+        name = Path(path).name
+        item = expected.get(name)
+        if not item:
+            raise RuntimeError("Queued Test candidate snapshot is missing for " + name + ". Requeue this Test session.")
+        stat = Path(path).stat()
+        if int(item.get("size") or -1) != int(stat.st_size) or int(item.get("mtimeNs") or -1) != int(stat.st_mtime_ns):
+            raise RuntimeError("Queued Test candidate changed after enqueue: " + name + ". Requeue this Test session.")
+
+
 def _relative_set_folder(folder_path):
     value = _relative_to_fs_root(_owning_set_directory(folder_path))
     return "" if value == "." else value
@@ -389,6 +419,12 @@ def remove_candidate(folder_path, file_name, session_name=None):
         or not name.lower().endswith(".safetensors")
     ):
         raise ValueError("A staged .safetensors filename is required.")
+    from .training_runner import queued_test_job_references_candidate
+
+    references = queued_test_job_references_candidate(_relative_set_folder(folder_path), name)
+    if references:
+        raise RuntimeError("Cannot remove a staged Test candidate referenced by a queued Test session. Remove that queued session first.")
+
     test_directory = _h3_test_directory(folder_path)
     candidate = test_directory / name
     if not candidate.is_file() or candidate.is_symlink():
@@ -1199,6 +1235,7 @@ def _build_queued_request(
         "sourcePrompt": prompt,
         "resolvedPrompt": resolved_prompt,
         "selectedFiles": [path.name for path in loras],
+        "selectedFileSnapshots": _candidate_file_snapshots(loras),
         "seed": settings["seed"],
         "aspectRatio": settings["aspectRatio"],
         "megapixels": settings["megapixels"],
@@ -1294,6 +1331,7 @@ def start_queued(folder_path, request):
         loras = _selected_lora_files(test_directory, selected_files=request.get("selectedFiles"))
         if not loras:
             raise ValueError("The H3 Test folder contains no queued .safetensors files.")
+        _verify_candidate_file_snapshots(loras, request.get("selectedFileSnapshots"))
         _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
         resolved_loras = _resolve_comfy_loras(loras)
         template = _resolve_comfy_template_assets(_load_template())

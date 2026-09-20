@@ -273,10 +273,11 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     assert "status.seed" in script
     assert ".test-generations-session-details" in css
     assert ".test-generations-session-info-grid" in css
-    assert ".test-generations-session-info-left" in css
-    assert ".test-generations-session-detail-column" in css
-    assert "grid-template-columns: minmax(360px, .85fr) minmax(460px, 1.15fr);" in css
-    assert "max-width: 700px;" in css
+    assert ".test-generations-session-detail-column" not in css
+    assert "grid-template-columns: minmax(300px, 30%) minmax(0, 70%);" in css
+    assert "max-width: 700px;" not in css
+    assert "width: 100%;" in css
+    assert "box-sizing: border-box;" in css
     assert ".test-generations-prompt-expectations" in css
     assert ".test-generations-expectation-table" in css
     assert ".test-generations-expectation-row" in css
@@ -285,7 +286,8 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     assert ".test-generations-session-prompt pre" in css
 
     details_block = script.split("details.innerHTML = [", 1)[1].split("].join('');", 1)[0]
-    assert details_block.index("test-generations-session-detail-column") < details_block.index("renderPromptExpectations(resolvedPrompt)")
+    assert "Run details" not in details_block
+    assert "test-generations-session-detail-grid" not in details_block
     assert details_block.index("renderPromptExpectations(resolvedPrompt)") < details_block.index("test-generations-session-prompts")
 
 

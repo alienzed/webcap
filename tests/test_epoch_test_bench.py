@@ -404,7 +404,7 @@ def test_comfy_name_resolution_fails_loudly_when_asset_is_missing():
         )
 
 
-def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch):
+def test_run_batch_uses_resolved_template(tmp_path, monkeypatch):
     session = tmp_path / "session"
     session.mkdir()
     bench._atomic_write_json(
@@ -601,7 +601,7 @@ def test_test_bench_resolves_session_folder_back_to_owning_set(tmp_path, monkeyp
     assert bench._session_root(session_folder) == set_folder.resolve() / bench.TEST_RESULTS_DIR
 
 
-def test_prepare_then_start_from_session_folder_reuses_same_staged_loras(tmp_path, monkeypatch):
+def test_prepare_then_queued_start_from_session_folder_reuses_same_staged_loras(tmp_path, monkeypatch):
     set_folder = tmp_path / "sets" / "HH4013"
     session_folder = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1037-h3"
     staged = tmp_path / "test-root" / "WebCap" / "HH4013"

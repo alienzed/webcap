@@ -177,6 +177,15 @@ def _group_term_affix(folder_state: dict, field: str, group: str, term: str) -> 
     return entry if isinstance(entry, dict) else {}
 
 
+def _global_group_wrapper(group: str, term: str) -> dict:
+    cfg = app_config.get_config_snapshot()
+    requirements = cfg.get("requirements") if isinstance(cfg, dict) else {}
+    by_group = requirements.get("termWrappersByGroup") if isinstance(requirements, dict) else {}
+    group_map = by_group.get(group) if isinstance(by_group, dict) else {}
+    entry = group_map.get(str(term or "").strip().lower()) if isinstance(group_map, dict) else {}
+    return entry if isinstance(entry, dict) else {}
+
+
 def _render_scoped_term(folder_state: dict, media_name: str, group: str, term: str) -> str:
     group = str(group or "").strip()
     term = re.sub(r"\s+", " ", str(term or "").strip())
@@ -196,9 +205,12 @@ def _render_scoped_term(folder_state: dict, media_name: str, group: str, term: s
     if not descriptor:
         descriptor = _group_term_affix(folder_state, "caption_group_term_descriptor_defaults", group, term)
 
-    wrapper = _group_term_affix(folder_state, "caption_group_term_wrappers", group, term)
+    local_wrapper = _group_term_affix(folder_state, "caption_group_term_wrappers", group, term)
+    global_wrapper = _global_group_wrapper(group, term)
+    wrapper_prefix = global_wrapper.get("prefix") or local_wrapper.get("prefix")
+    wrapper_suffix = global_wrapper.get("suffix") or local_wrapper.get("suffix")
     rendered = _apply_affix_pair(term, descriptor.get("prefix"), descriptor.get("suffix"))
-    return _apply_affix_pair(rendered, wrapper.get("prefix"), wrapper.get("suffix"))
+    return _apply_affix_pair(rendered, wrapper_prefix, wrapper_suffix)
 
 
 def _matches_filter_query(match: dict, query: dict, mode: str = "all") -> bool:

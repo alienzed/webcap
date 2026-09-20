@@ -160,3 +160,11 @@ def test_focus_modal_suppression_uses_central_overlay_state_not_feature_inventor
     ):
         assert modal_id not in focus
     assert "function isApplicationOverlayOpen()" in shell
+
+
+def test_focus_requires_a_valid_group_before_opening():
+    focus = (ROOT / "tool" / "js" / "focused_annotation.js").read_text(encoding="utf-8")
+
+    assert "if (!itemKey || !requirementLabel || requirements.indexOf(requirementLabel) < 0)" in focus
+    assert "Focused annotation could not open because no annotation group is selected." in focus
+    assert "if (!showFocusedAnnotationSurface()) return;" in focus

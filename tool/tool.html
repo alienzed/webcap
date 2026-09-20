@@ -71,6 +71,23 @@
                         </div>
                     </div>
                 </div>
+                <div id="app-header-annotation-actions" class="app-header-annotation-actions hidden" aria-label="Annotation view controls">
+                    <button
+                        id="group-workbench-hide-reviewed-btn"
+                        type="button"
+                        class="group-workbench-hide-reviewed-btn"
+                        title="Hide groups already reviewed for this item"
+                        aria-label="Hide reviewed groups"
+                        aria-pressed="false"
+                    >Hide reviewed</button>
+                    <button
+                        id="group-workbench-show-all-btn"
+                        type="button"
+                        class="group-workbench-show-all-btn hidden"
+                        title="Show all annotation groups"
+                        aria-label="Show all annotation groups"
+                    >&#128065;</button>
+                </div>
                 <div id="app-header-global" class="app-header-global">
                     <div id="shell-gpu-status" class="shell-gpu-status hidden" aria-live="polite"></div>
                 </div>
@@ -413,26 +430,6 @@
                     <div class="workbench-main-stack">
                         <div class="workbench-card groups-card">
                             <section id="group-workbench" class="group-workbench" aria-label="Annotation groups">
-                                <div class="group-workbench-header">
-                                    <div class="group-workbench-title">Annotation Groups</div>
-                                    <div class="group-workbench-header-actions">
-                                        <button
-                                            id="group-workbench-hide-reviewed-btn"
-                                            type="button"
-                                            class="group-workbench-hide-reviewed-btn"
-                                            title="Hide groups already reviewed for this item"
-                                            aria-label="Hide reviewed groups"
-                                            aria-pressed="false"
-                                        >Hide reviewed</button>
-                                        <button
-                                            id="group-workbench-show-all-btn"
-                                        type="button"
-                                        class="group-workbench-show-all-btn hidden"
-                                        title="Show all annotation groups"
-                                        aria-label="Show all annotation groups"
-                                    >&#128065;</button>
-                                    </div>
-                                </div>
                                 <div id="group-workbench-list" class="group-workbench-list"></div>
                             </section>
                         </div>

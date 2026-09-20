@@ -127,13 +127,12 @@ function createGroupWorkbenchActionButton(className, text, title, ariaLabel) {
 
 function syncGroupWorkbenchVisibilityHeader(targetEl, mode) {
   if (!targetEl || targetEl.id !== 'group-workbench-list') return 0;
-  var workbench = targetEl.closest('.group-workbench');
   var showAllBtn = document.getElementById('group-workbench-show-all-btn');
   var hideReviewedBtn = document.getElementById('group-workbench-hide-reviewed-btn');
+  var headerActions = document.getElementById('app-header-annotation-actions');
   var isItemMode = mode === 'item';
   var hiddenCount = isItemMode ? getChecklistHiddenRequirements().length : 0;
-  workbench.classList.toggle('has-item-controls', isItemMode);
-  workbench.classList.toggle('has-hidden-groups', hiddenCount > 0);
+  headerActions.classList.toggle('hidden', !isItemMode);
   hideReviewedBtn.classList.toggle('hidden', !isItemMode);
   hideReviewedBtn.classList.toggle('active', groupWorkbenchHideReviewed);
   hideReviewedBtn.setAttribute('aria-pressed', groupWorkbenchHideReviewed ? 'true' : 'false');

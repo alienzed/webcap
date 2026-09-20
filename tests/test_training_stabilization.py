@@ -1090,15 +1090,15 @@ def test_finish_after_epoch_does_not_require_a_configured_savepoint(tmp_path, mo
     assert training_runner._read_state()["jobs"][0]["finishAfterEpoch"] == 3
 
 
-def test_missing_history_is_empty_and_invalid_history_is_loud(tmp_path, monkeypatch):
+def test_missing_history_is_empty_and_invalid_legacy_index_does_not_gate_folder_history(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
     assert training_history.read_history(folder)["jobs"] == []
     recent = tmp_path / ".webcap_training" / "recent_runs.json"
     recent.parent.mkdir()
     recent.write_text("{bad", encoding="utf-8")
-    with pytest.raises(ValueError):
-        training_history.read_history(folder)
+
+    assert training_history.read_history(folder)["jobs"] == []
 
 
 def test_training_modules_do_not_apply_permissions_repairs():

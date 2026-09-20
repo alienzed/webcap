@@ -12,6 +12,7 @@ from flask import jsonify
 
 from . import config as app_config
 from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
+from .color_suggestions import COLOR_SUGGESTIONS_VERSION, analyze_image_color_suggestions, is_color_suggestion_image
 from .face_focus import FACE_FOCUS_VERSION, analyze_image_face_focus, get_face_focus_detector, is_face_focus_image
 from .originals import MEDIA_ALL_EXTS, ensure_original_by_hash, ensure_originals_folder, is_transient_media_name, restore_original_media, restore_original_media_video_only
 from .permissions import normalize_path_permissions, run_with_directory_repair
@@ -452,6 +453,47 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
     return metadata
 
 
+
+def color_suggestions_response(rel_path, file_name):
+    rel_path = str(rel_path or "").strip()
+    file_name = str(file_name or "").strip()
+    try:
+        if not rel_path:
+            return jsonify({"error": "Missing folder argument."}), 400
+        if not file_name:
+            return jsonify({"error": "Missing file argument."}), 400
+        if Path(file_name).name != file_name:
+            return jsonify({"error": "Color suggestions require a file in the selected folder."}), 400
+
+        folder_path = safe_join_fs_root(rel_path)
+        if not folder_path.exists() or not folder_path.is_dir():
+            return jsonify({"error": f"Folder does not exist: {rel_path}"}), 404
+
+        file_path = folder_path / file_name
+        if not file_path.exists() or not file_path.is_file() or is_transient_media_name(file_name):
+            return jsonify({"error": f"Media file does not exist: {file_name}"}), 404
+        if not is_color_suggestion_image(file_path):
+            return jsonify({"error": "Color suggestions currently support still images only."}), 400
+
+        metadata = update_media_metadata(folder_path, scoped_filenames=[file_name])
+        info = metadata.get(file_name)
+        if not isinstance(info, dict):
+            raise RuntimeError(f"Metadata missing for media file: {file_name}")
+
+        cached = info.get("color_suggestions")
+        if not isinstance(cached, dict) or cached.get("version") != COLOR_SUGGESTIONS_VERSION:
+            info["color_suggestions"] = analyze_image_color_suggestions(file_path)
+            write_media_metadata_file(folder_path / "media_metadata.json", metadata)
+
+        payload = dict(info["color_suggestions"])
+        payload["file"] = file_name
+        return jsonify(payload)
+    except Exception as exc:
+        logger.exception("COLOR SUGGESTIONS FAILED for %r / %r: %s", rel_path, file_name, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+
 def media_restore_response(data):
     data = data or {}
     app_config.debug_print("[caption_restore] Restore request received.")
@@ -681,6 +723,9 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
                 record["selection_pose_body_orientation"] = selection_pose.get("body_orientation", "unknown")
                 record["selection_pose_pose_class"] = selection_pose.get("pose_class", "unknown")
                 record["selection_pose_arm_position"] = selection_pose.get("arm_position", "unknown")
+            color_suggestions = info.get("color_suggestions") if isinstance(info.get("color_suggestions"), dict) else None
+            if color_suggestions and color_suggestions.get("version") == COLOR_SUGGESTIONS_VERSION:
+                record["color_suggestions"] = color_suggestions
             scene_complexity = info.get("scene_complexity") if isinstance(info.get("scene_complexity"), dict) else None
             if scene_complexity:
                 score = scene_complexity.get("score")

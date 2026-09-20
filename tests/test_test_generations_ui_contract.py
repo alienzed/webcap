@@ -350,10 +350,14 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "selectedFiles: selectedCandidateFiles()" in script
     assert "Array.isArray(state.testGenerationSettings.selectedFiles)" in script
     assert "selectedCandidates = new Set(savedSelection === null ? files : savedSelection);" in script
-    assert 'id="test-generations-select-all-btn"' in html
-    assert 'id="test-generations-deselect-all-btn"' in html
-    assert "selectedCandidates = new Set(files);" in script
-    assert "selectedCandidates = new Set();" in script
+    assert 'id="test-generations-master-select"' in html
+    assert 'id="test-generations-select-all-btn"' not in html
+    assert 'id="test-generations-deselect-all-btn"' not in html
+    assert "function syncCandidateMasterSelect(files)" in script
+    assert "master.indeterminate = selectedCount > 0 && selectedCount < available.length;" in script
+    assert "selectedCandidates = this.checked ? new Set(files) : new Set();" in script
+    assert 'id="test-generations-reset-prompt-btn"' not in html
+    assert "test-generations-reset-prompt-btn" not in script
     assert "name: name" in script
     assert "candidateScores" in script
     assert "function openResultsFolder(folder)" in script
@@ -395,3 +399,16 @@ def test_test_generations_queue_contract():
     assert "Pause Training before starting Test Generations." in backend
     assert "enqueue_test_response" not in backend
 
+
+
+
+def test_test_generations_rail_has_clear_working_history_navigation_hierarchy():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'class="test-generations-library-panel test-generations-staged-panel"' in html
+    assert 'class="test-generations-library-section test-generations-sessions"' in html
+    assert 'class="test-generations-library-section test-generations-recent-sets"' in html
+    assert "grid-template-columns: minmax(400px, 430px) minmax(0, 1fr);" in css
+    assert ".test-generations-library-section > .test-generations-library-heading" in css
+    assert ".test-generations-recent-sets {" in css

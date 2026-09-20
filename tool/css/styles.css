@@ -2487,7 +2487,7 @@ iframe {
 .test-generations-body {
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(400px, 430px) minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -2601,6 +2601,33 @@ iframe {
   border-radius: 6px;
   background: var(--panel-soft);
 }
+.test-generations-staged-panel {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 65%, transparent);
+}
+.test-generations-library-section {
+  min-width: 0;
+}
+.test-generations-library-section > .test-generations-library-heading {
+  padding: 4px 2px 6px;
+  border-bottom: 0;
+  background: transparent;
+}
+.test-generations-library-heading-primary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.test-generations-master-select {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.test-generations-master-select:disabled {
+  cursor: default;
+}
 .test-generations-library-heading {
   display: flex;
   align-items: center;
@@ -2677,7 +2704,7 @@ iframe {
   gap: 5px;
   max-height: 220px;
   min-width: 0;
-  padding: 7px;
+  padding: 2px 0 0;
   overflow: auto;
 }
 .test-generations-session-row {
@@ -2884,10 +2911,19 @@ iframe {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.test-generations-recent-sets {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.test-generations-recent-sets > .test-generations-library-heading {
+  color: var(--muted);
+  font-size: 11px;
+}
 .test-generations-recent-sets-list {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
 }
 .test-generations-recent-set-row {
   display: grid;
@@ -2895,10 +2931,13 @@ iframe {
   align-items: center;
   gap: 7px;
   min-width: 0;
-  padding: 6px 7px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel-soft);
+  padding: 5px 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+.test-generations-recent-set-row:hover {
+  background: var(--hover);
 }
 .test-generations-recent-set-copy {
   min-width: 0;

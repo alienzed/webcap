@@ -253,6 +253,18 @@
     return Array.from(selectedCandidates);
   }
 
+  function syncCandidateMasterSelect(files) {
+    var master = el('test-generations-master-select');
+    if (!master) return;
+    var available = Array.isArray(files) ? files : [];
+    var selectedCount = available.reduce(function (count, fileName) {
+      return count + (selectedCandidates instanceof Set && selectedCandidates.has(String(fileName || '')) ? 1 : 0);
+    }, 0);
+    master.disabled = !available.length;
+    master.checked = !!available.length && selectedCount === available.length;
+    master.indeterminate = selectedCount > 0 && selectedCount < available.length;
+  }
+
   function renderStagedFiles(payload) {
     var count = Number(payload && payload.count || 0);
     var files = payload && Array.isArray(payload.files) ? payload.files : [];
@@ -280,6 +292,7 @@
     host.innerHTML = '';
     if (!files.length) {
       host.innerHTML = '<div class="test-generations-library-empty">No staged LoRAs.</div>';
+      syncCandidateMasterSelect(files);
       return;
     }
     files.forEach(function (fileName) {
@@ -319,6 +332,7 @@
       row.appendChild(remove);
       host.appendChild(row);
     });
+    syncCandidateMasterSelect(files);
   }
 
   function renderSessions(sessions, queuedJobs) {
@@ -1231,22 +1245,17 @@
       var fileName = String(checkbox.dataset.candidateSelect || '');
       if (checkbox.checked) selectedCandidates.add(fileName);
       else selectedCandidates.delete(fileName);
+      syncCandidateMasterSelect(prepared && Array.isArray(prepared.files) ? prepared.files : []);
       saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
       syncActiveRunControls(currentStatus);
     });
-    el('test-generations-select-all-btn').onclick = function () {
+    el('test-generations-master-select').addEventListener('change', function () {
       var files = prepared && Array.isArray(prepared.files) ? prepared.files : [];
-      selectedCandidates = new Set(files);
+      selectedCandidates = this.checked ? new Set(files) : new Set();
       renderStagedFiles(prepared || { files: [], count: 0, candidateScores: {} });
       saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
       syncActiveRunControls(currentStatus);
-    };
-    el('test-generations-deselect-all-btn').onclick = function () {
-      selectedCandidates = new Set();
-      renderStagedFiles(prepared || { files: [], count: 0, candidateScores: {} });
-      saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
-      syncActiveRunControls(currentStatus);
-    };
+    });
     el('test-generations-files').onclick = function (event) {
       var button = event.target.closest('[data-file-name]');
       if (!button) return;
@@ -1330,18 +1339,6 @@
     el('test-generations-session-info-btn').onclick = function () {
       el('test-generations-session-details').classList.toggle('hidden');
     };
-    el('test-generations-reset-prompt-btn').onclick = function () {
-      if (!prepared) throw new Error('Test Generations defaults are not loaded.');
-      var defaults = prepared.defaults || {};
-      var prompt = String(prepared.defaultPrompt || '');
-      el('test-generations-prompt').value = prompt;
-      el('test-generations-aspect').value = String(defaults.aspectRatio || '');
-      el('test-generations-megapixels').value = String(defaults.megapixels || '');
-      el('test-generations-duration').value = String(defaults.duration || '');
-      el('test-generations-seed').value = String(randomSeed());
-      saveTestBenchState(prompt);
-    };
-
     window.addEventListener('webcap:working-model-changed', function () {
       syncLaunchVisibility();
       syncActiveRunControls(currentStatus);

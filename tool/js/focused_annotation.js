@@ -380,14 +380,7 @@ function updateFocusedAnnotationGroupClipboardUi() {
 }
 
 function getFocusedAnnotationSelectedGroupTags(mediaKey, requirementLabel) {
-  var groupTermsByKey = {};
-  getFocusedAnnotationTermsForRequirement(requirementLabel).forEach(function (term) {
-    var key = normalizeChecklistTerm(term).toLowerCase();
-    if (key) groupTermsByKey[key] = term;
-  });
-  return getTagsForMediaKey(mediaKey).map(function (tag) {
-    return groupTermsByKey[normalizeChecklistTerm(tag).toLowerCase()] || '';
-  }).filter(Boolean);
+  return getChecklistAssignedTagsForMediaKey(mediaKey, requirementLabel);
 }
 
 function copyFocusedAnnotationSelectedGroupTags() {
@@ -414,20 +407,30 @@ function pasteFocusedAnnotationSelectedGroupTags() {
   var requirementLabel = getFocusedAnnotationCurrentRequirement();
   var mediaKey = state.currentItem && state.currentItem.key;
   if (!requirementLabel || !mediaKey || focusedAnnotationTagClipboardSource !== requirementLabel || !focusedAnnotationTagClipboard.length) return false;
-  var result = mergeTagsIntoMediaKey(mediaKey, focusedAnnotationTagClipboard);
-  if (!result.added) {
+  var added = 0;
+  focusedAnnotationTagClipboard.forEach(function (term) {
+    if (hasChecklistAssignedTagForMediaKey(mediaKey, requirementLabel, term)) return;
+    if (assignChecklistTagToMediaKey(mediaKey, requirementLabel, term, {
+      skipSave: true,
+      skipRefresh: true,
+      skipUndo: true
+    })) added += 1;
+  });
+  if (!added) {
     showFocusedAnnotationGroupClipboardNotice('All copied tags are already selected.', 'focused-annotation-badge-reviewed');
     setStatus('All copied tags are already selected.');
     return false;
   }
+  saveChecklistToFolderState();
+  refreshTagDrivenPanelsForMediaKey(mediaKey);
   var syncResult = syncFocusedAnnotationQueue({ anchorMediaKey: mediaKey });
   if (syncResult.retained) {
     showFocusedAnnotationGroupClipboardNotice(
-      'Selected ' + result.added + ' copied tag' + (result.added === 1 ? '' : 's') + '.',
+      'Selected ' + added + ' copied tag' + (added === 1 ? '' : 's') + '.',
       'focused-annotation-badge-reviewed'
     );
   }
-  setStatus('Selected ' + result.added + ' copied tag' + (result.added === 1 ? '' : 's') + '.');
+  setStatus('Selected ' + added + ' copied tag' + (added === 1 ? '' : 's') + '.');
   return true;
 }
 
@@ -509,10 +512,10 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
   }
 
   terms.forEach(function (term) {
-    if (hasTagForMediaKey(mediaKey, term)) {
+    if (hasChecklistAssignedTagForMediaKey(mediaKey, requirementLabel, term)) {
       addEntry(term, 'Selected', 100, 'active');
     }
-    if (typeof tagAppearsInCurrentCaption === 'function' && tagAppearsInCurrentCaption(term)) {
+    if (checklistGroupTermAppearsInCurrentCaption(requirementLabel, term, mediaKey)) {
       addEntry(term, 'Caption match', 80, 'matched');
     }
   });
@@ -568,7 +571,7 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
 }
 
 function buildFocusedAnnotationSetUsageEntries(requirementLabel) {
-  return buildSetTagUsageEntries(getFocusedAnnotationTermsForRequirement(requirementLabel), 6);
+  return buildGroupTagUsageEntries(requirementLabel, 6);
 }
 
 function appendFocusedAnnotationQuickPickRow(list, requirementLabel, term, metaText, classes) {
@@ -579,13 +582,13 @@ function appendFocusedAnnotationQuickPickRow(list, requirementLabel, term, metaT
   btn.className = 'btn focused-annotation-quick-pick-btn';
   (classes || []).forEach(function (className) { btn.classList.add(className); });
   btn.textContent = term;
-  var isActive = hasTagForMediaKey(state.currentItem.key, term);
+  var isActive = hasChecklistAssignedTagForMediaKey(state.currentItem.key, requirementLabel, term);
   var buttonTitle = (isActive ? 'Remove "' : 'Add "') + term + '" on the current item';
   btn.title = buttonTitle;
   btn.onclick = function () {
     toggleFocusedAnnotationTerm(requirementLabel, term);
   };
-  bindFocusedAnnotationTermAffixContextMenu(btn, term, buttonTitle);
+  bindFocusedAnnotationTermAffixContextMenu(btn, requirementLabel, term, buttonTitle);
   row.appendChild(btn);
   if (metaText) {
     var meta = document.createElement('div');
@@ -644,7 +647,7 @@ function renderFocusedAnnotationQuickPicks(requirementLabel, entries) {
         requirementLabel,
         entry.term,
         entry.count + ' item' + (entry.count === 1 ? '' : 's'),
-        hasTagForMediaKey(state.currentItem.key, entry.term) ? ['active'] : []
+        hasChecklistAssignedTagForMediaKey(state.currentItem.key, requirementLabel, entry.term) ? ['active'] : []
       );
     });
     usageSection.appendChild(usageList);
@@ -663,10 +666,9 @@ function renderFocusedAnnotationCurrentTags(parentEl) {
   title.textContent = 'Current Tags';
   section.appendChild(title);
 
-  var tags = (typeof getTagsForMediaKey === 'function')
-    ? getTagsForMediaKey(state.currentItem.key)
-    : [];
-  if (!tags.length) {
+  var unscoped = getUnscopedTagsForMediaKey(state.currentItem.key);
+  var assignments = getChecklistAssignmentEntriesForMediaKey(state.currentItem.key);
+  if (!unscoped.length && !assignments.length) {
     var empty = document.createElement('div');
     empty.className = 'focused-annotation-current-tags-empty';
     empty.textContent = 'No tags on this item yet.';
@@ -677,11 +679,23 @@ function renderFocusedAnnotationCurrentTags(parentEl) {
 
   var list = document.createElement('div');
   list.className = 'focused-annotation-current-tag-list';
-  tags.forEach(function (tag) {
+  assignments.forEach(function (entry) {
     var chip = document.createElement('span');
     chip.className = 'focused-annotation-current-tag';
-    chip.textContent = tag;
-    bindFocusedAnnotationTermAffixContextMenu(chip, tag, 'Current tag "' + tag + '"');
+    chip.textContent = entry.term + ' · ' + entry.requirement;
+    bindFocusedAnnotationTermAffixContextMenu(
+      chip,
+      entry.requirement,
+      entry.term,
+      'Current ' + entry.requirement + ' tag "' + entry.term + '"'
+    );
+    list.appendChild(chip);
+  });
+  unscoped.forEach(function (tag) {
+    var chip = document.createElement('span');
+    chip.className = 'focused-annotation-current-tag';
+    chip.textContent = tag + ' · unscoped';
+    chip.title = 'Unscoped tag "' + tag + '"';
     list.appendChild(chip);
   });
   section.appendChild(list);
@@ -691,27 +705,26 @@ function renderFocusedAnnotationCurrentTags(parentEl) {
 function toggleFocusedAnnotationTerm(requirementLabel, termText) {
   if (!state.currentItem || !state.currentItem.key) return;
   var mediaKey = state.currentItem.key;
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
   var term = normalizeChecklistTerm(termText);
-  if (!term) return;
-  var changed = false;
-  if (!hasTagForMediaKey(mediaKey, term)) {
-    changed = addTagToCurrentMedia(term, { reviewRequirementLabel: requirementLabel });
-  } else {
-    changed = removeTagFromCurrentMedia(term);
-  }
+  if (!requirement || !term) return;
+  var changed = hasChecklistAssignedTagForMediaKey(mediaKey, requirement, term)
+    ? unassignChecklistTagFromMediaKey(mediaKey, requirement, term)
+    : assignChecklistTagToMediaKey(mediaKey, requirement, term);
   if (changed) syncFocusedAnnotationQueue({ anchorMediaKey: mediaKey });
 }
 
-function bindFocusedAnnotationTermAffixContextMenu(targetEl, termText, titlePrefix) {
+function bindFocusedAnnotationTermAffixContextMenu(targetEl, requirementLabel, termText, titlePrefix) {
   if (!targetEl) return;
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
   var term = normalizeChecklistTerm(termText);
-  if (!term) return;
+  if (!requirement || !term) return;
   var baseTitle = String(titlePrefix || '').trim();
   targetEl.title = (baseTitle ? (baseTitle + ' - ') : '') + 'Right-click to edit prefix/suffix';
   targetEl.addEventListener('contextmenu', function (event) {
     event.preventDefault();
     event.stopPropagation();
-    openChecklistTermAffixesModal(term);
+    openChecklistTermAffixesModal(requirement, term);
   });
 }
 
@@ -739,8 +752,8 @@ function renderFocusedAnnotationTerms(mediaKey, requirementLabel, quickPickEntri
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'focused-annotation-term-btn';
-    if (hasTagForMediaKey(mediaKey, term)) btn.classList.add('active');
-    if (typeof tagAppearsInCurrentCaption === 'function' && tagAppearsInCurrentCaption(term)) {
+    if (hasChecklistAssignedTagForMediaKey(mediaKey, requirementLabel, term)) btn.classList.add('active');
+    if (checklistGroupTermAppearsInCurrentCaption(requirementLabel, term, mediaKey)) {
       btn.classList.add('matched');
     }
     var quickPickEntry = quickPickLookup[normalizeChecklistTerm(term).toLowerCase()];
@@ -748,19 +761,19 @@ function renderFocusedAnnotationTerms(mediaKey, requirementLabel, quickPickEntri
       btn.classList.add('suggested');
     }
     btn.textContent = term;
-    var buttonTitle = hasTagForMediaKey(mediaKey, term)
-      ? ('Remove "' + term + '" from the current item')
-      : ('Add "' + term + '" to the current item');
+    var buttonTitle = hasChecklistAssignedTagForMediaKey(mediaKey, requirementLabel, term)
+      ? ('Remove "' + term + '" from ' + requirementLabel)
+      : ('Add "' + term + '" to ' + requirementLabel);
     btn.title = buttonTitle;
     btn.onclick = function () {
       toggleFocusedAnnotationTerm(requirementLabel, term);
     };
-    bindFocusedAnnotationTermAffixContextMenu(btn, term, buttonTitle);
+    bindFocusedAnnotationTermAffixContextMenu(btn, requirementLabel, term, buttonTitle);
     row.appendChild(btn);
     termEntries.push({
       term: term,
       row: row,
-      isActive: hasTagForMediaKey(mediaKey, term),
+      isActive: hasChecklistAssignedTagForMediaKey(mediaKey, requirementLabel, term),
       isMatched: btn.classList.contains('matched'),
       isSuggested: btn.classList.contains('suggested')
     });

@@ -154,7 +154,8 @@ def test_test_bench_activity_rail_and_live_session_contract():
 
     assert "function setRunSettingsDisabled" not in script
     controls_block = script.split("function syncActiveRunControls(status)", 1)[1].split("function renderStatus(status)", 1)[0]
-    assert "runBtn.disabled = active" in controls_block
+    assert "runBtn.disabled = active" not in controls_block
+    assert "runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;" in controls_block
     assert "stopBtn.classList.toggle('hidden', !active)" in controls_block
     assert ".disabled = !!disabled" not in controls_block
 
@@ -277,7 +278,7 @@ def test_test_execution_is_h3_gated_even_when_workspace_is_opened_indirectly():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert "function isTestModelSupported()" in script
-    assert "runBtn.disabled = active || !prepared || !prepared.count || !supported;" in script
+    assert "runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;" in script
     assert "if (!isTestModelSupported())" in script
     assert "New Test runs currently require MiniMax H3 as the working model." in script
     assert "syncLaunchVisibility();" in script[script.index("function testGenerationsFolderLoaded()"):script.index("function stagedFileParts(", script.index("function testGenerationsFolderLoaded()"))]
@@ -345,3 +346,22 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
 
     staged_rule = css.split(".test-generations-staged-row {", 1)[1].split("}", 1)[0]
     assert "grid-template-columns: auto minmax(0, 1fr) auto;" in staged_rule
+
+
+def test_test_generations_queue_contract():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+
+    assert "request('test_enqueue'" in script
+    assert "request('test_queue')" in script
+    assert "var queuedTestJobs = [];" in script
+    assert "remove.dataset.queueCancel" in script
+    assert "queueCancel.dataset.queueCancel" in script
+    assert "pollTimer = setTimeout(pollStatus, 5000)" in script
+    assert "def enqueue(" in backend
+    assert "def queued_jobs(" in backend
+    assert "def start_queued(" in backend
+    assert 'operation == "test_enqueue"' in backend
+    assert 'operation == "test_queue"' in backend
+    assert "release_gpu=True" in backend
+    assert "if release_gpu:" in backend

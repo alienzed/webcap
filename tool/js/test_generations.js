@@ -1339,6 +1339,10 @@
     var resolvedPrompt = String(status.resolvedPrompt || status.prompt || '');
     var sourcePrompt = String(status.sourcePrompt || '');
     details.innerHTML = [
+      '<div class="test-generations-session-info-grid">',
+      '<div class="test-generations-session-info-left">',
+      '<div class="test-generations-session-detail-column">',
+      '<strong>Run details</strong>',
       '<div class="test-generations-session-detail-grid">',
       '<div><span>Name</span><strong>' + escapeHtml(String(status.name || '—')) + '</strong></div>',
       '<div><span>Status</span><strong>' + escapeHtml(String(status.status || '')) + '</strong></div>',
@@ -1347,12 +1351,13 @@
       '<div><span>Duration</span><strong>' + escapeHtml(status.duration !== undefined && status.duration !== null ? String(status.duration) + 's' : '—') + '</strong></div>',
       '<div><span>Seed</span><strong>' + escapeHtml(status.seed !== undefined && status.seed !== null ? String(status.seed) : '—') + '</strong></div>',
       '</div>',
-      '<div class="test-generations-session-lower">',
+      '</div>',
+      renderPromptExpectations(resolvedPrompt),
+      '</div>',
       '<div class="test-generations-session-prompts">',
       '<div class="test-generations-session-prompt"><strong>Resolved prompt</strong><pre>' + escapeHtml(resolvedPrompt || '—') + '</pre></div>',
       '<div class="test-generations-session-prompt"><strong>Source prompt</strong><pre>' + escapeHtml(sourcePrompt || '—') + '</pre></div>',
       '</div>',
-      renderPromptExpectations(resolvedPrompt),
       '</div>'
     ].join('');
   }

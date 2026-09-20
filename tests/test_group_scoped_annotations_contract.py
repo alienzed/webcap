@@ -72,6 +72,16 @@ def test_group_term_styling_is_scoped_locally_and_in_global_config():
     assert 'requirements.get("termWrappersByGroup")' in server_config
 
 
+def test_orphaned_group_assignment_keeps_saved_group_wrapper_available():
+    checklist = _read("tool/js/checklist_state.js")
+
+    wrapper_block = checklist.split("function getChecklistGlobalGroupWrapper", 1)[1].split(
+        "function getChecklistGlobalGroupWrapperPrefix", 1
+    )[0]
+    assert "getConfigRequirementTermWrappersByGroup()" in wrapper_block
+    assert "isChecklistGroupTermPinnedGlobally" not in wrapper_block
+
+
 def test_group_vocabulary_changes_do_not_delete_stored_assignments():
     checklist = _read("tool/js/checklist_state.js")
 

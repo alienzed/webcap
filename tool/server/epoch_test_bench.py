@@ -1172,6 +1172,177 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
             _release_gpu_for_test_generations()
 
 
+
+def queue_session_status(folder_path, session_name):
+    return _visible_session_status(folder_path, _session_directory(folder_path, session_name))
+
+
+def _build_queued_request(
+    folder_path,
+    prompt,
+    aspect_ratio=None,
+    megapixels=None,
+    duration=None,
+    seed=None,
+    name=None,
+    selected_files=None,
+):
+    prompt = str(prompt or "").strip()
+    if not prompt:
+        raise ValueError("A test prompt is required.")
+    test_directory = _h3_test_directory(folder_path)
+    loras = _selected_lora_files(test_directory, selected_files=selected_files)
+    if not loras:
+        raise ValueError("The H3 Test folder contains no .safetensors files.")
+    session_name = str(name or "").strip()
+    if len(session_name) > 120:
+        raise ValueError("Test session name must be 120 characters or fewer.")
+    template = _load_template()
+    settings = _normalized_test_settings(
+        template,
+        aspect_ratio=aspect_ratio,
+        megapixels=megapixels,
+        duration=duration,
+        seed=seed,
+    )
+    resolved_prompt = _resolve_wildcard_prompt(prompt, settings["seed"])
+    return {
+        "model": "h3",
+        "name": session_name,
+        "sourcePrompt": prompt,
+        "resolvedPrompt": resolved_prompt,
+        "selectedFiles": [path.name for path in loras],
+        "seed": settings["seed"],
+        "aspectRatio": settings["aspectRatio"],
+        "megapixels": settings["megapixels"],
+        "duration": settings["duration"],
+        "total": len(loras) + 1,
+    }
+
+
+def enqueue(
+    folder_path,
+    prompt,
+    aspect_ratio=None,
+    megapixels=None,
+    duration=None,
+    seed=None,
+    name=None,
+    selected_files=None,
+):
+    request = _build_queued_request(
+        folder_path,
+        prompt,
+        aspect_ratio=aspect_ratio,
+        megapixels=megapixels,
+        duration=duration,
+        seed=seed,
+        name=name,
+        selected_files=selected_files,
+    )
+    from .training_runner import enqueue_test_response
+    payload, status_code = enqueue_test_response(_relative_set_folder(folder_path), request)
+    if status_code != 200 or not payload.get("ok"):
+        raise RuntimeError(str(payload.get("error") or "Could not queue Test Generations."))
+    return {
+        "operation": "test_enqueue",
+        "job": payload.get("job") or {},
+        "queued": bool(payload.get("queued")),
+        "latest": status(folder_path),
+    }
+
+
+def queued_jobs(folder_path):
+    from .training_runner import queued_test_jobs_for_folder
+    return {
+        "operation": "test_queue",
+        "jobs": queued_test_jobs_for_folder(_relative_set_folder(folder_path)),
+    }
+
+
+def start_queued(folder_path, request):
+    request = dict(request or {})
+    prompt = str(request.get("resolvedPrompt") or "").strip()
+    source_prompt = str(request.get("sourcePrompt") or prompt).strip()
+    if not prompt:
+        raise ValueError("Queued Test Generations job has no resolved prompt.")
+    session_name = str(request.get("name") or "").strip()
+    folder_key = _folder_key(folder_path)
+
+    with _lock:
+        dead_keys = [key for key, thread in _active_threads.items() if not thread.is_alive()]
+        for key in dead_keys:
+            _active_threads.pop(key, None)
+            _active_sessions.pop(key, None)
+            _stop_requests.discard(key)
+        active = _active_threads.get(folder_key)
+        if active and active.is_alive():
+            raise RuntimeError("This set already has an active Test Generations batch.")
+        session_directory = _new_session_directory(folder_path)
+        payload = {
+            "status": "starting",
+            "model": "h3",
+            "session": session_directory.name,
+            "name": session_name,
+            "sourcePrompt": source_prompt,
+            "resolvedPrompt": prompt,
+            "prompt": prompt,
+            "total": int(request.get("total") or 0),
+            "completed": 0,
+            "failed": 0,
+            "failures": [],
+            "current": "",
+            "error": "",
+            "seed": request.get("seed"),
+            "aspectRatio": request.get("aspectRatio"),
+            "megapixels": request.get("megapixels"),
+            "duration": request.get("duration"),
+            "results": [],
+            "resultFolder": _relative_to_fs_root(session_directory),
+        }
+        _atomic_write_json(_status_path(session_directory), payload)
+
+    try:
+        test_directory = _h3_test_directory(folder_path)
+        loras = _selected_lora_files(test_directory, selected_files=request.get("selectedFiles"))
+        if not loras:
+            raise ValueError("The H3 Test folder contains no queued .safetensors files.")
+        _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
+        resolved_loras = _resolve_comfy_loras(loras)
+        template = _resolve_comfy_template_assets(_load_template())
+        settings = _normalized_test_settings(
+            template,
+            aspect_ratio=request.get("aspectRatio"),
+            megapixels=request.get("megapixels"),
+            duration=request.get("duration"),
+            seed=request.get("seed"),
+        )
+        payload["seed"] = settings["seed"]
+        payload["aspectRatio"] = settings["aspectRatio"]
+        payload["megapixels"] = settings["megapixels"]
+        payload["duration"] = settings["duration"]
+        payload["total"] = len(resolved_loras) + 1
+        payload["status"] = "running"
+        _atomic_write_json(_status_path(session_directory), payload)
+        thread = threading.Thread(
+            target=_run_batch,
+            args=(folder_key, session_directory, resolved_loras, prompt, settings, template, False),
+            name="webcap-h3-test-generations",
+            daemon=True,
+        )
+        with _lock:
+            _stop_requests.discard(folder_key)
+            _active_sessions[folder_key] = session_directory
+            _active_threads[folder_key] = thread
+            thread.start()
+        return payload
+    except Exception as exc:
+        payload["status"] = "failed"
+        payload["error"] = str(exc)
+        payload["current"] = ""
+        _atomic_write_json(_status_path(session_directory), payload)
+        return payload
+
 def prepare(folder_path):
     template = _load_template()
     try:
@@ -1311,6 +1482,8 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return status(folder_path)
     if operation == "test_sessions":
         return {"operation": "test_sessions", "sessions": list_sessions(folder_path)}
+    if operation == "test_queue":
+        return queued_jobs(folder_path)
     if operation == "test_open_session":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return open_session(folder_path, criteria.get("session"))
@@ -1325,6 +1498,18 @@ def handle_request(folder_path, mode, selection_criteria=None):
             folder_path,
             criteria.get("fileName"),
             session_name=criteria.get("session"),
+        )
+    if operation == "test_enqueue":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return enqueue(
+            folder_path,
+            criteria.get("prompt"),
+            aspect_ratio=criteria.get("aspectRatio"),
+            megapixels=criteria.get("megapixels"),
+            duration=criteria.get("duration"),
+            seed=criteria.get("seed"),
+            name=criteria.get("name"),
+            selected_files=criteria.get("selectedFiles"),
         )
     if operation == "test_start":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}

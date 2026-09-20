@@ -153,6 +153,17 @@ function getCaptionHelperCatalogTerms() {
       });
     });
   }
+  if (typeof checklistAssignmentsByMedia === 'object' && checklistAssignmentsByMedia) {
+    Object.keys(checklistAssignmentsByMedia).forEach(function (mediaKey) {
+      getChecklistAssignmentEntriesForMediaKey(mediaKey).forEach(function (entry) {
+        var clean = normalizeCatalogTerm(entry.term);
+        var low = clean.toLowerCase();
+        if (!clean || seen[low]) return;
+        seen[low] = true;
+        out.push(clean);
+      });
+    });
+  }
   out.sort(captionHelperSort);
   return out;
 }

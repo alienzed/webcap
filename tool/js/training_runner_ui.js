@@ -34,11 +34,12 @@ function syncUtilityTrainingActivity() {
   var activityTrainingBtn = document.getElementById('activity-training-btn');
   if (!activityTrainingBtn) return;
   var running = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
-    return job.status === 'running';
+    return job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
   });
   activityTrainingBtn.classList.toggle('training-running', running);
   activityTrainingBtn.title = running ? 'Open Training (training in progress)' : 'Open Training';
   activityTrainingBtn.setAttribute('aria-label', running ? 'Open Training (training in progress)' : 'Open Training');
+  setShellTrainingActive(running);
 }
 
 function isTrainingRunnerConsoleVisible() {
@@ -240,15 +241,6 @@ function refreshTrainingRunnerStatus() {
         trainingWorkspaceState.historyCollapsed = false;
         refreshTrainingHistory(true);
       }
-      var hasActiveJob = trainingWorkspaceState.runnerJobs.some(function (job) {
-        return job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
-      });
-      var now = Date.now();
-      var activeStateChanged = trainingWorkspaceState.gpuForActiveJob !== hasActiveJob;
-      trainingWorkspaceState.gpuForActiveJob = hasActiveJob;
-      if (activeStateChanged || !trainingWorkspaceState.gpuLastFetchedAt || now - trainingWorkspaceState.gpuLastFetchedAt >= 20000) {
-        refreshTrainingGpuStatus();
-      }
       if (isTrainingRunnerConsoleVisible()) {
         var activeJob = getTrainingRunnerActiveJob();
         if (trainingWorkspaceState.runnerConsoleFollowsActiveJob && activeJob && activeJob.id !== trainingWorkspaceState.runnerConsoleJobId) {
@@ -293,26 +285,6 @@ function recoverManagedTrainingQueue() {
     })
     .catch(function (err) {
       setStatus('Could not recover queue: ' + String(err && err.message ? err.message : err));
-    });
-}
-
-function refreshTrainingGpuStatus() {
-  if (trainingWorkspaceState.gpuStatusPending) return;
-  if (!isTrainingWorkspaceActive() && !trainingWorkspaceState.gpuForActiveJob) return;
-  trainingWorkspaceState.gpuStatusPending = true;
-  renderTrainingRunner();
-  trainingRunnerRequest('/fs/training_runner/gpu')
-    .then(function (payload) {
-      trainingWorkspaceState.gpu = payload.gpu || null;
-    })
-    .catch(function (err) {
-      trainingWorkspaceState.gpu = { available: false, error: String(err && err.message ? err.message : err) };
-    })
-    .then(function () {
-      trainingWorkspaceState.gpuLastFetchedAt = Date.now();
-      trainingWorkspaceState.gpuStatusPending = false;
-      renderTrainingRunner();
-      syncShellTrainingGpuStatus();
     });
 }
 
@@ -803,43 +775,6 @@ function buildTrainingRunnerProgressHtml(job) {
     '</div>';
 }
 
-function formatTrainingGpuMemory(value) {
-  var mib = Number(value);
-  if (!isFinite(mib) || mib < 0) return '';
-  var gib = mib / 1024;
-  return gib.toFixed(1) + ' GiB';
-}
-
-function syncShellTrainingGpuStatus() {
-  if (typeof renderShellSystemStatus === 'function') renderShellSystemStatus();
-}
-
-function buildTrainingGpuStatusHtml() {
-  var gpu = trainingWorkspaceState.gpu;
-  if (!gpu) {
-    return trainingWorkspaceState.gpuStatusPending
-      ? 'Checking GPU activity...'
-      : '';
-  }
-  if (!gpu.available) {
-    return '<span class="is-warning" title="' + escapeHtml(gpu.error || 'GPU status unavailable.') + '">GPU status unavailable</span>';
-  }
-  var gpus = Array.isArray(gpu.gpus) ? gpu.gpus : [];
-  if (!gpus.length) return '<span class="is-warning">No NVIDIA GPU reported</span>';
-  var primary = gpus[0];
-  var utilization = Number(primary.utilization);
-  var memoryUsed = formatTrainingGpuMemory(primary.memoryUsed);
-  var memoryTotal = formatTrainingGpuMemory(primary.memoryTotal);
-  var details = [];
-  if (primary.temperature && primary.temperature !== '[N/A]') details.push(primary.temperature + '°C');
-  if (primary.powerDraw && primary.powerDraw !== '[N/A]') details.push(primary.powerDraw + ' W');
-  var primarySummary = 'GPU' + (primary.index !== '' ? ' ' + primary.index : '') +
-    (isFinite(utilization) ? ' ' + Math.round(utilization) + '%' : '') +
-    (memoryUsed && memoryTotal ? ' · VRAM ' + memoryUsed + ' / ' + memoryTotal : '') +
-    (details.length ? ' · ' + details.join(' · ') : '');
-  return '<strong title="Live GPU utilization, VRAM use, temperature, and power draw.">' + escapeHtml(primarySummary) + '</strong>';
-}
-
 function trainingQueueHoldLabel() {
   return trainingWorkspaceState.runnerQueuePauseReason === 'Queue waiting for manual start after WebCap restarted.'
     ? 'Queue waiting for manual start'
@@ -912,7 +847,6 @@ function renderTrainingLaunchStatus() {
 function renderTrainingRunner() {
   var els = getTrainingWorkspaceEls();
   syncUtilityTrainingActivity();
-  syncShellTrainingGpuStatus();
   renderTrainingLaunchStatus();
   if (!els.runnerSummary || !els.runnerActions) return;
   if (trainingWorkspaceState.runnerStatusError) {
@@ -922,7 +856,6 @@ function renderTrainingRunner() {
         : '');
     els.runnerActions.classList.add('hidden');
     if (els.runnerQueue) els.runnerQueue.classList.add('hidden');
-    if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
     return;
   }
   var jobs = trainingWorkspaceState.runnerJobs || [];
@@ -931,7 +864,6 @@ function renderTrainingRunner() {
   var queuedCount = queuedJobs.length;
   var job = getTrainingRunnerActiveJob();
   var followingQueuedJobs = queuedJobs;
-  if (els.gpuStatus) els.gpuStatus.innerHTML = buildTrainingGpuStatusHtml();
   syncTrainingQueueResumeButton(els, queuedJobs);
   if (els.runnerQueue) {
     if (!followingQueuedJobs.length) {

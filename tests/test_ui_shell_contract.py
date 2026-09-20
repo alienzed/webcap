@@ -70,20 +70,26 @@ def test_shell_activity_controls_are_real_navigation_without_replacing_legacy_pa
     assert "window.closeTestBenchActivity()" in script
 
 
-def test_shell_header_tracks_current_folder_without_owning_folder_state():
+def test_shell_header_uses_workspace_first_clickable_breadcrumb_without_parallel_folder_state():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
-    assert 'id="app-header-folder"' in html
-    assert 'id="app-header-context-separator"' in html
-    assert "String(state && state.folder || '')" in shell
-    assert "folderParts[folderParts.length - 1]" in shell
-    assert "folderEl.textContent = folderLabel" in shell
-    assert "headerFolderBtn.onclick = openPrepActivity" in shell
-    assert "contextSeparator.classList.toggle('hidden', !contextUsesFolder)" in shell
+    assert 'id="app-header-workspace-title"' in html
+    assert 'id="app-header-breadcrumb"' in html
+    assert 'id="app-header-folder"' not in html
+    assert html.index('id="app-header-workspace-title"') < html.index('id="app-header-breadcrumb"')
+    assert "function renderApplicationHeaderBreadcrumb(navigation)" in shell
+    assert "state && Array.isArray(state.dirStack)" in shell
+    assert "data-dir-index" in shell
+    assert "navigateToDirStackIndex(index);" in shell
+    assert "if (index === lastIndex)" in shell
+    assert "if (deriveShellNavigationState().activity !== 'prep') openPrepActivity();" in shell
     assert "? 'Test Generations'" in shell
     assert "? 'Focus' : 'Prep'" in shell
+    assert ".app-header-breadcrumb-item:hover" in css
+    assert "background: transparent;" in css
     assert "window.syncApplicationShellContext = syncApplicationShellContext" in shell
     assert "window.syncApplicationShellContext()" in ui
 
@@ -236,9 +242,17 @@ def test_model_selector_is_single_real_control_in_permanent_header():
 
     assert header_start < model_select < workspace_start
     assert html.count('id="app-header-model-profile-select"') == 1
+    assert 'id="app-header-model-control" class="app-header-model-control hidden"' in html
+    assert '<span class="app-header-model-label">Base Model</span>' in html
+    assert 'aria-label="Base Model"' in html
+    assert "modelRelevant = navigation.activity === 'training' || navigation.activity === 'test'" in shell
+    assert "modelControl.classList.toggle('hidden', !modelRelevant)" in shell
+    assert "modelSelect.disabled = navigation.activity === 'test'" in shell
     assert "modelProfileSelect:" not in training_state
     assert "getWorkingModelProfileSelect()" in training
     assert "syncWorkingModelProfileSelect(folder)" in training
+    assert "select.disabled = false" not in training
+    assert "window.syncApplicationShellContext()" in training
     assert "window.refreshWorkingModelSelector = refreshWorkingModelSelector" in training
     assert "window.refreshWorkingModelSelector()" in ui
     assert "if (isTrainingWorkspaceActive())" in training
@@ -442,6 +456,7 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     training = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    test_bench = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
@@ -465,6 +480,26 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "if (trainingWorkspaceState.runnerStatusPending) return;" in runner
     assert ".shell-status-bar {" in css
     assert ".shell-gpu-status {" in css
+    assert "function getShellWorkloadStatus()" in shell
+    assert "var shellWorkloadState =" in shell
+    assert "classList.contains('training-running')" not in shell
+    assert "classList.contains('test-running')" not in shell
+    assert "function setShellTrainingActive(active)" in shell
+    assert "function setShellTestingActive(active)" in shell
+    assert "shell-workload-status is-" in shell
+    assert "window.setShellTrainingActive = setShellTrainingActive" in shell
+    assert "window.setShellTestingActive = setShellTestingActive" in shell
+    assert "window.renderShellSystemStatus" not in shell
+    assert "setShellTrainingActive(running);" in runner
+    assert "setShellTestingActive(!!active);" in test_bench
+    assert "typeof window.renderShellSystemStatus" not in runner
+    assert "typeof window.renderShellSystemStatus" not in test_bench
+    assert ".shell-workload-status {" in css
+    assert "color: var(--accent);" in css
+    assert "font-size: 12px;" in css
+    assert ".shell-gpu-status .shell-system-disk {" in css
+    assert "gap: 4px;" in css
+    assert "color-mix(in srgb, var(--warning, #b45309) 58%, white)" in css
 
 
 def test_phase_audit_retires_duplicate_view_state_and_empty_split_bridge():
@@ -480,8 +515,11 @@ def test_phase_audit_restores_shared_editor_after_training_and_owns_checklist_vi
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     workbench = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
+    checklist_state = (ROOT / "tool" / "js" / "checklist_state.js").read_text(encoding="utf-8")
     assert 'id="caption-checklist-panel" class="checklist-panel workbench-card group-tools-card hidden"' in html
     assert 'style="display:none;"' not in html
+    assert "checklistPanelEl.classList.toggle('hidden', !visible);" in checklist_state
+    assert "checklistPanelEl.style.display" not in checklist_state
     assert "#caption-checklist-panel.group-tools-card.checklist-panel {\n  display: flex;" in workbench
     assert "#caption-checklist-panel.group-tools-card.checklist-panel {\n  display: flex !important;" not in workbench
     assert "ui.appEl.classList.remove('training-config-selected')" in shell

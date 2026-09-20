@@ -61,14 +61,13 @@ function getWorkingModelProfileSelect() {
 function syncWorkingModelProfileSelect(folder) {
   var select = getWorkingModelProfileSelect();
   if (!select) return;
-  select.disabled = false;
   var profiles = trainingWorkspaceState.profiles || [];
   var selectedProfileId = syncWorkingModelProfileForFolder(folder, profiles);
   select.innerHTML = profiles.map(function (profile) {
     return '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(profile.label) + '</option>';
   }).join('');
   select.value = selectedProfileId;
-  select.title = '';
+  if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
   if (isTrainingWorkspaceActive()) {
     var storedMode = '';
     try { storedMode = localStorage.getItem(trainingModeStorageKey(folder)) || ''; } catch (err) {}

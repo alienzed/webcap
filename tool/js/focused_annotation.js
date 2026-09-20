@@ -29,7 +29,6 @@ function getFocusedAnnotationEls() {
     copyTagsBtn: document.getElementById('focused-annotation-copy-tags-btn'),
     pasteTagsBtn: document.getElementById('focused-annotation-paste-tags-btn'),
     editTermsBtn: document.getElementById('focused-annotation-edit-terms-btn'),
-    groupDeleteBtn: document.getElementById('focused-annotation-group-delete-btn'),
     closeBtn: document.getElementById('focused-annotation-close-btn'),
     doneBtn: document.getElementById('focused-annotation-done-btn')
   };
@@ -236,7 +235,6 @@ function showFocusedAnnotationSurface() {
   if (els.itemNav) els.itemNav.classList.remove('hidden');
   focusedAnnotationState.open = true;
   setWorkspaceSurface('focus', { sidebarHidden: true });
-  setWorkspaceWorkflowMode('annotate');
   renderPreviewHeaderMeta();
   return true;
 }
@@ -841,9 +839,6 @@ function renderFocusedAnnotationSurface() {
   if (els.editTermsBtn) {
     els.editTermsBtn.disabled = !requirementLabel;
   }
-  if (els.groupDeleteBtn) {
-    els.groupDeleteBtn.disabled = !requirementLabel;
-  }
   updateFocusedAnnotationGroupClipboardUi();
   if (els.doneBtn) {
     els.doneBtn.disabled = !requirementLabel;
@@ -930,15 +925,6 @@ function openFocusedAnnotationTermsEditor() {
   }
 }
 
-function deleteFocusedAnnotationCurrentGroup() {
-  var mediaKey = state.currentItem && state.currentItem.key;
-  var groupIndex = checklistItems.indexOf(getFocusedAnnotationCurrentRequirement());
-  if (groupIndex < 0) return;
-  if (!deleteChecklistGroupByIndex(groupIndex)) return;
-  focusedAnnotationState.groupIndex = Math.max(0, Math.min(checklistItems.length - 1, groupIndex));
-  syncFocusedAnnotationQueue({ anchorMediaKey: mediaKey });
-}
-
 function startFocusedAnnotation(targetMediaKey) {
   var next = FocusedAnnotationNavigation.start(getFocusedAnnotationNavigationScope(), targetMediaKey);
   if (next.outcome !== 'active') {
@@ -1000,9 +986,6 @@ function wireFocusedAnnotationSurface() {
   }
   if (els.editTermsBtn) {
     els.editTermsBtn.addEventListener('click', openFocusedAnnotationTermsEditor);
-  }
-  if (els.groupDeleteBtn) {
-    els.groupDeleteBtn.addEventListener('click', deleteFocusedAnnotationCurrentGroup);
   }
   if (els.copyTagsBtn) {
     els.copyTagsBtn.addEventListener('click', function () {

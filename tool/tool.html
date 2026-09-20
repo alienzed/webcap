@@ -30,14 +30,13 @@
         <div id="app-frame" class="app-frame">
             <header id="app-header" class="app-header" aria-label="Application header">
                 <div id="app-header-context" class="app-header-context" aria-live="polite">
-                    <button id="app-header-folder-btn" type="button" class="app-header-folder-btn" title="Open current set in Prep" aria-label="Open current set in Prep">
-                        <span id="app-header-folder" class="app-header-folder"></span>
-                    </button>
-                    <span id="app-header-context-separator" class="app-header-context-separator" aria-hidden="true">/</span>
                     <span id="app-header-workspace-title" class="app-header-workspace-title"></span>
+                    <span id="app-header-context-separator" class="app-header-context-separator hidden" aria-hidden="true">›</span>
+                    <nav id="app-header-breadcrumb" class="app-header-breadcrumb" aria-label="Current path"></nav>
                     <span id="app-header-workspace-context" class="app-header-workspace-context"></span>
-                    <label class="app-header-model-control">
-                        <select id="app-header-model-profile-select" aria-label="Working model"></select>
+                    <label id="app-header-model-control" class="app-header-model-control hidden">
+                        <span class="app-header-model-label">Base Model</span>
+                        <select id="app-header-model-profile-select" aria-label="Base Model"></select>
                     </label>
                 </div>
                 <div id="app-header-global" class="app-header-global">
@@ -402,7 +401,6 @@
                                     <div id="focused-annotation-group-name" class="focused-annotation-group-name"></div>
                                     <div class="focused-annotation-header-actions">
                                         <button id="focused-annotation-edit-terms-btn" type="button" class="btn focused-annotation-inline-btn">Edit Terms</button>
-                                        <button id="focused-annotation-group-delete-btn" type="button" class="btn focused-annotation-inline-btn" title="Delete group" aria-label="Delete group">&times;</button>
                                         <button id="focused-annotation-copy-tags-btn" type="button" class="btn focused-annotation-inline-btn">Copy Tags</button>
                                         <button id="focused-annotation-paste-tags-btn" type="button" class="btn focused-annotation-inline-btn" disabled>Paste Tags</button>
                                     </div>
@@ -479,7 +477,7 @@
                         >&#9654;</button>
                      </div>
                      <aside class="workbench-side-stack">
-                        <div id="caption-checklist-panel" class="checklist-panel workbench-card group-tools-card" data-layout="split" style="display:none;">
+                        <div id="caption-checklist-panel" class="checklist-panel workbench-card group-tools-card hidden" data-layout="split">
                             <div id="caption-helper-tabs" class="caption-helper-tabs hidden">
                                 <button
                                     id="caption-helper-tab-requirements-btn"
@@ -763,7 +761,6 @@
                             <section class="training-runner-card" aria-label="Training queue">
                                 <div class="training-runner-card-header">
                                     <div class="training-workspace-section-title">Training Queue</div>
-                                    <div id="training-gpu-status" class="training-gpu-status" aria-label="GPU status"></div>
                                 </div>
                                 <div id="training-runner-summary" class="training-runner-summary">No queued or active jobs.</div>
                                 <div id="training-runner-actions" class="training-runner-actions hidden">

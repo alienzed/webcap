@@ -180,19 +180,52 @@ def test_orphaned_global_wrapper_editor_keeps_global_ownership():
     assert "var shouldSaveGlobalWrapper = isGlobal && (" in modal
 
 
-def test_legacy_flat_tags_only_migrate_when_group_scope_is_unambiguous():
+def test_legacy_flat_tags_remain_unscoped_without_group_inference():
     checklist = _read("tool/js/checklist_state.js")
     details = _read("tool/js/item_details.js")
 
-    migrate = checklist.split("function migrateLegacyChecklistAssignments", 1)[1].split(
-        "function loadChecklistFromFolderState", 1
-    )[0]
-    assert "Object.prototype.hasOwnProperty.call(folderState, 'caption_group_tags_by_media')" in migrate
-    assert "if (requirements.length !== 1) return;" in migrate
-    assert "checklistLegacyScopedTermsByMedia" in migrate
-    assert "migrateLegacyChecklistAssignments(folderState);" in checklist
+    assert "migrateLegacyChecklistAssignments" not in checklist
+    assert "checklistLegacyScopedTermsByMedia" not in checklist
+    assert "checklistLegacyScopedTermsByMedia" not in details
 
     load_tags = details.split("function loadItemTagsFromFolderState", 1)[1].split(
+        "function buildUnscopedTagUsageEntries", 1
+    )[0]
+    assert "caption_tags_by_media" in load_tags
+    assert "clean.push(tag);" in load_tags
+
+
+def test_generic_frequent_tag_suggestions_only_use_unscoped_tags():
+    details = _read("tool/js/item_details.js")
+
+    helper = details.split("function buildUnscopedTagUsageEntries", 1)[1].split(
         "function renderItemTagsPanel", 1
     )[0]
-    assert "checklistLegacyScopedTermsByMedia[mediaKey][low]" in load_tags
+    assert "getUnscopedTagsForMediaKey(item.key)" in helper
+
+    render = details.split("function renderItemTagsPanel", 1)[1].split(
+        "function refreshMediaResolutionCache", 1
+    )[0]
+    assert "buildUnscopedTagUsageEntries(20)" in render
+    assert "getAnnotateStripGroups()" not in render
+
+
+def test_caption_helper_catalog_includes_scoped_assignments_including_orphans():
+    catalog = _read("tool/js/caption_helpers_catalog.js")
+
+    terms = catalog.split("function getCaptionHelperCatalogTerms", 1)[1].split(
+        "function captionPhraseBoundaryPattern", 1
+    )[0]
+    assert "checklistAssignmentsByMedia" in terms
+    assert "getChecklistAssignmentEntriesForMediaKey(mediaKey)" in terms
+    assert "entry.term" in terms
+
+
+def test_incomplete_progress_does_not_render_empty_parentheses():
+    details = _read("tool/js/item_details.js")
+
+    progress = details.split("function computeRequirementProgressForMediaKey", 1)[1].split(
+        "function computeReviewedProgressForMediaKey", 1
+    )[0]
+    assert "missing.push(requirementLabel);" in progress
+    assert "terms.join(', ')" not in progress

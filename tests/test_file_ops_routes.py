@@ -24,6 +24,32 @@ def write_image(path: Path, size=(128, 128)):
     image.save(path)
 
 
+def test_rename_media_key_in_folder_state_moves_scoped_annotation_maps():
+    state = {
+        "caption_group_tags_by_media": {
+            "old.png": {"Hair": ["brown"], "Background": ["blue"]},
+            "other.png": {"Hair": ["black"]},
+        },
+        "caption_group_term_descriptors_by_media": {
+            "old.png": {"Hair": {"brown": {"prefix": "", "suffix": "hair"}}},
+        },
+        "caption_tags_by_media": {"old.png": ["outdoors"]},
+        "ratings_by_media": {"old.png": 4},
+    }
+
+    renamed = file_ops_module._rename_media_key_in_folder_state(state, "old.png", "new.png")
+
+    assert renamed["caption_group_tags_by_media"] == {
+        "new.png": {"Hair": ["brown"], "Background": ["blue"]},
+        "other.png": {"Hair": ["black"]},
+    }
+    assert renamed["caption_group_term_descriptors_by_media"] == {
+        "new.png": {"Hair": {"brown": {"prefix": "", "suffix": "hair"}}},
+    }
+    assert renamed["caption_tags_by_media"] == {"new.png": ["outdoors"]}
+    assert renamed["ratings_by_media"] == {"new.png": 4}
+
+
 def test_duplicate_folder_route(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     src = fs_root / "set_a"
@@ -1053,6 +1079,12 @@ def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path
                 "reviewedKeys": ["shared.png"],
                 "flags": {"shared.png": "green"},
                 "caption_tags_by_media": {"shared.png": ["dragon", "profile"]},
+                "caption_group_tags_by_media": {"shared.png": {"Pose": ["profile"]}},
+                "caption_group_term_wrappers": {"Pose": {"profile": {"prefix": "", "suffix": "view"}}},
+                "caption_group_term_descriptor_defaults": {"Pose": {"profile": {"prefix": "clear", "suffix": ""}}},
+                "caption_group_term_descriptors_by_media": {
+                    "shared.png": {"Pose": {"profile": {"prefix": "", "suffix": "pose"}}}
+                },
                 "ratings_by_media": {"shared.png": 4},
                 "caption_term_affixes": {"floor": {"prefix": "on the", "suffix": ""}},
                 "caption_phrases": ["legacy phrase"],
@@ -1072,6 +1104,10 @@ def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path
                 "reviewedKeys": ["shared.png"],
                 "flags": {"shared.png": "red"},
                 "caption_tags_by_media": {"shared.png": ["dragon", "alt"]},
+                "caption_group_tags_by_media": {"shared.png": {"Pose": ["alt"]}},
+                "caption_group_term_descriptors_by_media": {
+                    "shared.png": {"Pose": {"alt": {"prefix": "", "suffix": "pose"}}}
+                },
                 "ratings_by_media": {"shared.png": 5},
             }
         ),
@@ -1111,7 +1147,12 @@ def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path
     assert sorted(out_state["reviewedKeys"]) == sorted(dest_names)
     assert sorted(out_state["flags"].keys()) == sorted(dest_names)
     assert sorted(out_state["caption_tags_by_media"].keys()) == sorted(dest_names)
+    assert sorted(out_state["caption_group_tags_by_media"].keys()) == sorted(dest_names)
+    assert sorted(out_state["caption_group_term_descriptors_by_media"].keys()) == sorted(dest_names)
+    assert out_state["caption_group_term_wrappers"] == {"Pose": {"profile": {"prefix": "", "suffix": "view"}}}
+    assert out_state["caption_group_term_descriptor_defaults"] == {"Pose": {"profile": {"prefix": "clear", "suffix": ""}}}
     assert sorted(out_state["ratings_by_media"].keys()) == sorted(dest_names)
+    assert out_state["version"] == 2
     assert out_state["caption_term_affixes"] == {"floor": {"prefix": "on the", "suffix": ""}}
     assert out_state["stats"]["phrases"] == ""
     assert "caption_phrases" not in out_state
@@ -1226,6 +1267,94 @@ def test_superset_search_matches_current_folder_and_subfolders_with_filters(tmp_
     ]
 
 
+def test_superset_search_uses_scoped_tags_for_search_incomplete_and_mismatch(tmp_path, monkeypatch):
+    monkeypatch.setattr(smart_set_module.app_config, "get_config_snapshot", lambda: {"requirements": {}})
+    fs_root = tmp_path / "fs_root"
+    source_dir = fs_root / "sets" / "scoped"
+    source_dir.mkdir(parents=True)
+
+    write_image(source_dir / "good.png")
+    write_text(source_dir / "good.txt", "brown hair against a blue wall")
+    write_image(source_dir / "mismatch.png")
+    write_text(source_dir / "mismatch.txt", "brown hair")
+    write_image(source_dir / "incomplete.png")
+    write_text(source_dir / "incomplete.txt", "black hair")
+
+    write_text(
+        source_dir / ".webcap_state.json",
+        json.dumps(
+            {
+                "version": 2,
+                "caption_requirements": ["Hair", "Background"],
+                "caption_requirement_keywords": {
+                    "Hair": "brown, black",
+                    "Background": "brown, blue",
+                },
+                "caption_group_tags_by_media": {
+                    "good.png": {"Hair": ["brown"], "Background": ["blue"]},
+                    "mismatch.png": {"Hair": ["brown"], "Background": ["brown"]},
+                    "incomplete.png": {"Hair": ["black"]},
+                },
+                "caption_group_term_wrappers": {
+                    "Hair": {
+                        "brown": {"prefix": "", "suffix": "hair"},
+                        "black": {"prefix": "", "suffix": "hair"},
+                    },
+                    "Background": {
+                        "brown": {"prefix": "", "suffix": "wall"},
+                        "blue": {"prefix": "", "suffix": "wall"},
+                    },
+                },
+            }
+        ),
+    )
+
+    monkeypatch.setattr(smart_set_module.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", fs_root)
+
+    client = app_module.app.test_client()
+
+    search_response = client.post(
+        "/fs/superset_search",
+        json={"criteria": {"source_folder": "sets/scoped", "filter_text": "blue"}},
+    )
+    assert search_response.status_code == 200
+    assert [row["media_name"] for row in search_response.get_json()["results"]] == ["good.png"]
+
+    mismatch_response = client.post(
+        "/fs/superset_search",
+        json={"criteria": {"source_folder": "sets/scoped", "tag_mismatch_only": True}},
+    )
+    assert mismatch_response.status_code == 200
+    assert [row["media_name"] for row in mismatch_response.get_json()["results"]] == ["mismatch.png"]
+
+    incomplete_response = client.post(
+        "/fs/superset_search",
+        json={"criteria": {"source_folder": "sets/scoped", "incomplete_only": True}},
+    )
+    assert incomplete_response.status_code == 200
+    assert [row["media_name"] for row in incomplete_response.get_json()["results"]] == ["incomplete.png"]
+
+
+
+
+def test_smart_set_does_not_infer_group_scope_for_legacy_flat_tags(monkeypatch):
+    monkeypatch.setattr(smart_set_module.app_config, "get_config_snapshot", lambda: {"requirements": {}})
+    state = {
+        "caption_requirements": ["Hair", "Background"],
+        "caption_requirement_keywords": {
+            "Hair": "black, brown",
+            "Background": "brown, blue",
+        },
+        "caption_tags_by_media": {
+            "one.png": ["black", "brown", "outdoors"],
+        },
+    }
+
+    assert smart_set_module._normalize_group_tags_for_media(state, "one.png") == {}
+    assert smart_set_module._combined_tags_for_media(state, "one.png") == ["black", "brown", "outdoors"]
+
+
 def test_superset_search_preserves_alias_for_source_resolved_outside_root(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     external_set = tmp_path / "external" / "hair-set"
@@ -1296,7 +1425,13 @@ def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, m
                 },
                 "reviewedKeys": ["one.png"],
                 "flags": {"one.png": "blue"},
-                "caption_tags_by_media": {"one.png": ["tag-a", "tag-b"]},
+                "caption_tags_by_media": {"one.png": ["tag-a"]},
+                "caption_group_tags_by_media": {"one.png": {"Pose": ["tag-b"]}},
+                "caption_group_term_wrappers": {"Pose": {"tag-b": {"prefix": "", "suffix": "pose"}}},
+                "caption_group_term_descriptor_defaults": {"Pose": {"tag-b": {"prefix": "clear", "suffix": ""}}},
+                "caption_group_term_descriptors_by_media": {
+                    "one.png": {"Pose": {"tag-b": {"prefix": "saved", "suffix": ""}}}
+                },
                 "caption_requirements": ["Pose"],
                 "caption_requirement_keywords": {"Pose": "tag-b, tag-a"},
                 "ratings_by_media": {"one.png": 5},
@@ -1345,7 +1480,13 @@ def test_create_set_from_results_copies_media_captions_and_originals(tmp_path, m
     assert out_state["primer"]["mappings"][0]["key"] == "view"
     assert out_state["reviewedKeys"] == ["one.png"]
     assert out_state["flags"] == {"one.png": "blue"}
-    assert out_state["caption_tags_by_media"] == {"one.png": ["tag-a", "tag-b"]}
+    assert out_state["caption_tags_by_media"] == {"one.png": ["tag-a"]}
+    assert out_state["caption_group_tags_by_media"] == {"one.png": {"Pose": ["tag-b"]}}
+    assert out_state["caption_group_term_wrappers"] == {"Pose": {"tag-b": {"prefix": "", "suffix": "pose"}}}
+    assert out_state["caption_group_term_descriptor_defaults"] == {"Pose": {"tag-b": {"prefix": "clear", "suffix": ""}}}
+    assert out_state["caption_group_term_descriptors_by_media"] == {
+        "one.png": {"Pose": {"tag-b": {"prefix": "saved", "suffix": ""}}}
+    }
     assert out_state["caption_requirements"] == ["Pose"]
     assert out_state["caption_requirement_keywords"] == {"Pose": "tag-a, tag-b"}
     assert out_state["ratings_by_media"] == {"one.png": 5}
@@ -1396,6 +1537,11 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
                 "reviewedKeys": ["shared.png"],
                 "flags": {"shared.png": "green"},
                 "caption_tags_by_media": {"shared.png": ["from-a"]},
+                "caption_group_tags_by_media": {"shared.png": {"Pose": ["standing"]}},
+                "caption_group_term_descriptors_by_media": {
+                    "shared.png": {"Pose": {"standing": {"prefix": "", "suffix": "pose"}}}
+                },
+                "caption_requirements_checked": {"shared.png": {"Pose": True}},
                 "caption_requirements": ["Source", "Pose"],
                 "caption_requirement_keywords": {"Source": "from-a, Shared", "Pose": "standing"},
                 "ratings_by_media": {"shared.png": 3},
@@ -1409,6 +1555,16 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
                 "reviewedKeys": ["shared.png"],
                 "flags": {"shared.png": "red"},
                 "caption_tags_by_media": {"shared.png": ["from-b"]},
+                "caption_group_tags_by_media": {
+                    "shared.png": {"source": ["from-b"], "Lighting": ["rim light"]}
+                },
+                "caption_group_term_descriptors_by_media": {
+                    "shared.png": {
+                        "source": {"from-b": {"prefix": "", "suffix": "source"}},
+                        "Lighting": {"rim light": {"prefix": "", "suffix": "lighting"}}
+                    }
+                },
+                "caption_requirements_checked": {"shared.png": {"source": True, "Lighting": True}},
                 "caption_requirements": ["source", "Lighting"],
                 "caption_requirement_keywords": {"source": "FROM-A, from-b", "Lighting": "rim light"},
                 "ratings_by_media": {"shared.png": 4},
@@ -1452,6 +1608,21 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
     assert sorted(out_state["reviewedKeys"]) == ["shared.png", "shared_2.png"]
     assert out_state["flags"] == {"shared.png": "green", "shared_2.png": "red"}
     assert out_state["caption_tags_by_media"] == {"shared.png": ["from-a"], "shared_2.png": ["from-b"]}
+    assert out_state["caption_group_tags_by_media"] == {
+        "shared.png": {"Pose": ["standing"]},
+        "shared_2.png": {"Source": ["from-b"], "Lighting": ["rim light"]},
+    }
+    assert out_state["caption_group_term_descriptors_by_media"] == {
+        "shared.png": {"Pose": {"standing": {"prefix": "", "suffix": "pose"}}},
+        "shared_2.png": {
+            "Source": {"from-b": {"prefix": "", "suffix": "source"}},
+            "Lighting": {"rim light": {"prefix": "", "suffix": "lighting"}},
+        },
+    }
+    assert out_state["caption_requirements_checked"] == {
+        "shared.png": {"Pose": True},
+        "shared_2.png": {"Source": True, "Lighting": True},
+    }
     assert out_state["caption_requirements"] == ["Source", "Pose", "Lighting"]
     assert out_state["caption_requirement_keywords"] == {
         "Source": "from-a, from-b, Shared",

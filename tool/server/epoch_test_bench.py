@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import config as app_config
 from .folder_state_store import read_folder_state
-from .training_history import host_path_for_training_path
+from .training_test_paths import test_copy_path
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "comfyui" / "minimax_h3_test_api.json"
@@ -230,21 +230,7 @@ def _folder_key(folder_path):
 
 
 def _h3_test_directory(folder_path):
-    saved_config = app_config.load_config_from_disk()
-    training = saved_config.get("training") if isinstance(saved_config.get("training"), dict) else {}
-    roots = training.get("test_copy_roots") if isinstance(training.get("test_copy_roots"), dict) else {}
-    root_text = str(roots.get("h3") or "").strip()
-    if not root_text:
-        raise ValueError("Configure the Copy to Test H3 root in Training Settings.")
-    root = Path(host_path_for_training_path(root_text))
-    subfolder = str(training.get("test_copy_subfolder") or "").strip()
-    set_name = _owning_set_directory(folder_path).name
-    if not set_name or set_name in (".", ".."):
-        raise ValueError("The current set has no usable folder name.")
-    destination = root
-    if subfolder:
-        destination = destination / subfolder
-    return destination / set_name
+    return test_copy_path("h3", _owning_set_directory(folder_path).name)
 
 
 def _lora_files(test_directory):

@@ -29,6 +29,7 @@ from .training_preflight import (
     prepared_dataset_is_ready as _prepared_dataset_is_ready,
     resolve_folder as _resolve_folder,
 )
+from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 from .training_progress import (
     annotate_completed_job as _annotate_completed_job,
     annotate_finished_early_job as _annotate_finished_early_job,
@@ -560,15 +561,6 @@ def candidate_epoch_folder_path(folder, job_id, epoch):
     return directory
 
 
-_TEST_COPY_STAGE_LABELS = {
-    "h3": "H3",
-    "krea2": "Krea 2",
-    "wan21": "Wan 2.1",
-    "hi": "Wan 2.2 High",
-    "lo": "Wan 2.2 Low",
-}
-
-
 def _candidate_safetensors_path(folder, job_id, epoch):
     directory = candidate_epoch_folder_path(folder, job_id, epoch)
     artifacts = [
@@ -607,20 +599,13 @@ def _copy_to_test_directory(root, parts, create_missing=True):
 
 def _candidate_test_directory_for_run(run, create_missing):
     stage = str(run.get("stages") or "").strip().lower()
-    if stage not in _TEST_COPY_STAGE_LABELS:
+    if stage not in TEST_COPY_STAGE_LABELS:
         raise ValueError("Recorded training job has no supported Copy to Test model stage.")
-    saved_config = app_config.load_config_from_disk()
-    training = saved_config.get("training") if isinstance(saved_config.get("training"), dict) else {}
-    roots = training.get("test_copy_roots") if isinstance(training.get("test_copy_roots"), dict) else {}
-    root_text = str(roots.get(stage) or "").strip()
-    if not root_text:
-        raise ValueError("Configure the Copy to Test " + _TEST_COPY_STAGE_LABELS[stage] + " root in Training Settings.")
-    root = host_path_for_training_path(root_text)
-    subfolder = str(training.get("test_copy_subfolder") or "").strip()
     set_name = PurePosixPath(str(run.get("folder") or "")).name
     if not set_name or set_name in (".", ".."):
         raise RuntimeError("Recorded training folder has no usable set name.")
-    return _copy_to_test_directory(root, ([subfolder] if subfolder else []) + [set_name], create_missing=create_missing)
+    root, parts = test_copy_destination(stage, set_name)
+    return _copy_to_test_directory(root, parts, create_missing=create_missing)
 
 
 def candidate_test_folder_path(folder, job_id):

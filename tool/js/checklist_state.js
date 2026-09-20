@@ -1274,7 +1274,7 @@ function getChecklistGlobalWrapperSuffix(termText) {
 function getChecklistGlobalGroupWrapper(requirementLabel, termText) {
   var requirement = normalizeChecklistRequirementKey(requirementLabel);
   var key = normalizeChecklistTermAffixKey(termText);
-  if (!requirement || !key || !isChecklistGroupTermPinnedGlobally(requirement, termText)) {
+  if (!requirement || !key) {
     return { prefix: '', suffix: '' };
   }
   var byGroup = getConfigRequirementTermWrappersByGroup();

@@ -21,7 +21,6 @@ COMFY_BASE_URL = "http://127.0.0.1:8188"
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "comfyui" / "minimax_h3_test_api.json"
 TEST_RESULTS_DIR = "test-generations"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
-GPU_RESERVATION_OWNER = "test-generations"
 TEST_ASPECT_RATIO_OPTIONS = (
     "1:1 (Square)",
     "2:3 (Portrait Photo)",
@@ -37,16 +36,6 @@ _active_threads = {}
 _active_sessions = {}
 _stop_requests = set()
 _recent_sets_cache = {"expires": 0.0, "items": []}
-
-
-def _reserve_gpu_for_test_generations():
-    from .training_runner import reserve_gpu_for_external_work
-    return reserve_gpu_for_external_work(GPU_RESERVATION_OWNER)
-
-
-def _release_gpu_for_test_generations():
-    from .training_runner import release_gpu_for_external_work
-    release_gpu_for_external_work(GPU_RESERVATION_OWNER)
 
 
 def _windows_curl_path():
@@ -1062,7 +1051,7 @@ def _mark_stopped(session_directory):
     return status
 
 
-def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None, release_gpu=True):
+def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None):
     status_file = _status_path(session_directory)
     try:
         template = copy.deepcopy(template) if template is not None else _load_template()
@@ -1168,8 +1157,6 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
             _active_threads.pop(folder_key, None)
             _active_sessions.pop(folder_key, None)
             _stop_requests.discard(folder_key)
-        if release_gpu:
-            _release_gpu_for_test_generations()
 
 
 
@@ -1326,7 +1313,7 @@ def start_queued(folder_path, request):
         _atomic_write_json(_status_path(session_directory), payload)
         thread = threading.Thread(
             target=_run_batch,
-            args=(folder_key, session_directory, resolved_loras, prompt, settings, template, False),
+            args=(folder_key, session_directory, resolved_loras, prompt, settings, template),
             name="webcap-h3-test-generations",
             daemon=True,
         )
@@ -1375,90 +1362,6 @@ def status(folder_path):
     return _with_session_ratings(_session_directory(folder_path, session_name), payload)
 
 
-def start(
-    folder_path,
-    prompt,
-    aspect_ratio=None,
-    megapixels=None,
-    duration=None,
-    seed=None,
-    name=None,
-    selected_files=None,
-):
-    prompt = str(prompt or "").strip()
-    if not prompt:
-        raise ValueError("A test prompt is required.")
-    test_directory = _h3_test_directory(folder_path)
-    loras = _selected_lora_files(test_directory, selected_files=selected_files)
-    if not loras:
-        raise ValueError("The H3 Test folder contains no .safetensors files.")
-    session_name = str(name or "").strip()
-    if len(session_name) > 120:
-        raise ValueError("Test session name must be 120 characters or fewer.")
-    _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
-    resolved_loras = _resolve_comfy_loras(loras)
-    template = _resolve_comfy_template_assets(_load_template())
-    settings = _normalized_test_settings(
-        template,
-        aspect_ratio=aspect_ratio,
-        megapixels=megapixels,
-        duration=duration,
-        seed=seed,
-    )
-    resolved_prompt = _resolve_wildcard_prompt(prompt, settings["seed"])
-    folder_key = _folder_key(folder_path)
-    with _lock:
-        dead_keys = [key for key, thread in _active_threads.items() if not thread.is_alive()]
-        for key in dead_keys:
-            _active_threads.pop(key, None)
-            _active_sessions.pop(key, None)
-            _stop_requests.discard(key)
-        active = _active_threads.get(folder_key)
-        if active and active.is_alive():
-            return _latest_status(folder_path)
-    if not _reserve_gpu_for_test_generations():
-        raise RuntimeError("GPU is busy with managed training or another Test Generations batch.")
-    try:
-        with _lock:
-            session_directory = _new_session_directory(folder_path)
-            payload = {
-                "status": "running",
-                "model": "h3",
-                "session": session_directory.name,
-                "name": session_name,
-                "sourcePrompt": prompt,
-                "resolvedPrompt": resolved_prompt,
-                "prompt": resolved_prompt,
-                "total": len(resolved_loras) + 1,
-                "completed": 0,
-                "failed": 0,
-                "failures": [],
-                "current": "",
-                "error": "",
-                "seed": settings["seed"],
-                "aspectRatio": settings["aspectRatio"],
-                "megapixels": settings["megapixels"],
-                "duration": settings["duration"],
-                "results": [],
-                "resultFolder": _relative_to_fs_root(session_directory),
-            }
-            _atomic_write_json(_status_path(session_directory), payload)
-            thread = threading.Thread(
-                target=_run_batch,
-                args=(folder_key, session_directory, resolved_loras, resolved_prompt, settings, template),
-                name="webcap-h3-test-generations",
-                daemon=True,
-            )
-            _stop_requests.discard(folder_key)
-            _active_sessions[folder_key] = session_directory
-            _active_threads[folder_key] = thread
-            thread.start()
-    except Exception:
-        _release_gpu_for_test_generations()
-        raise
-    return payload
-
-
 def stop(folder_path):
     folder_key = _folder_key(folder_path)
     with _lock:
@@ -1502,18 +1405,6 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_enqueue":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return enqueue(
-            folder_path,
-            criteria.get("prompt"),
-            aspect_ratio=criteria.get("aspectRatio"),
-            megapixels=criteria.get("megapixels"),
-            duration=criteria.get("duration"),
-            seed=criteria.get("seed"),
-            name=criteria.get("name"),
-            selected_files=criteria.get("selectedFiles"),
-        )
-    if operation == "test_start":
-        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return start(
             folder_path,
             criteria.get("prompt"),
             aspect_ratio=criteria.get("aspectRatio"),

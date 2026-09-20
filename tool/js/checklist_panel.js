@@ -2,18 +2,13 @@ var checklistDragSourceIndex = null;
 var checklistHideReviewed = false;
 
 function isChecklistHideReviewedAvailable() {
-  if (!state || !state.currentItem || !state.currentItem.key) return false;
-  if (typeof workspaceState !== 'undefined'
-      && workspaceState
-      && workspaceState.surface === 'grid') {
-    return false;
-  }
+  if (!state.currentItem || !state.currentItem.key) return false;
+  if (workspaceState.surface === 'grid') return false;
   return true;
 }
 
 function syncChecklistHideReviewedUi() {
   var btn = document.getElementById('checklist-hide-reviewed-btn');
-  if (!btn) return;
   var available = isChecklistHideReviewedAvailable();
   btn.classList.toggle('hidden', !available);
   btn.classList.toggle('active', !!checklistHideReviewed);
@@ -31,9 +26,24 @@ function toggleChecklistHideReviewed() {
 
 function wireChecklistHideReviewedUi() {
   var btn = document.getElementById('checklist-hide-reviewed-btn');
-  if (!btn || btn.__hideReviewedWired) return;
+  if (btn.__hideReviewedWired) return;
   btn.__hideReviewedWired = true;
   btn.onclick = toggleChecklistHideReviewed;
+}
+
+function closeChecklistRowOverflowMenus() {
+  var openMenus = document.querySelectorAll('#checklist-items .checklist-row-overflow[open]');
+  for (var i = 0; i < openMenus.length; i++) {
+    openMenus[i].open = false;
+  }
+}
+
+function wireChecklistRowOverflowDismissal() {
+  var itemsDiv = document.getElementById('checklist-items');
+  if (itemsDiv.__overflowDismissWired) return;
+  itemsDiv.__overflowDismissWired = true;
+  itemsDiv.addEventListener('scroll', closeChecklistRowOverflowMenus);
+  window.addEventListener('resize', closeChecklistRowOverflowMenus);
 }
 
 function clearChecklistDropIndicators() {
@@ -79,6 +89,7 @@ function renderChecklistPanel(options) {
   var opts = options || {};
   wireChecklistHideReviewedUi();
   syncChecklistHideReviewedUi();
+  wireChecklistRowOverflowDismissal();
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   var itemsDiv = document.getElementById('checklist-items');
   var groupWorkbenchList = document.getElementById('group-workbench-list');

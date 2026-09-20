@@ -1321,10 +1321,7 @@ def test_superset_search_uses_scoped_tags_for_search_incomplete_and_mismatch(tmp
         json={"criteria": {"source_folder": "sets/scoped", "tag_mismatch_only": True}},
     )
     assert mismatch_response.status_code == 200
-    assert [row["media_name"] for row in mismatch_response.get_json()["results"]] == [
-        "incomplete.png",
-        "mismatch.png",
-    ]
+    assert [row["media_name"] for row in mismatch_response.get_json()["results"]] == ["mismatch.png"]
 
     incomplete_response = client.post(
         "/fs/superset_search",

@@ -198,7 +198,9 @@ def test_run_setup_is_one_form_without_trained_badge_and_history_is_flat():
     assert 'Already trained' not in history
     assert 'class="training-run-option training-run-model-option"' not in html
     assert 'class="training-global-secondary"' not in html
-    assert 'Training Queue' in html
+    assert 'Training Queue' not in html
+    assert '<div class="training-workspace-section-title">Queue</div>' in html
+    assert 'aria-label="Execution queue"' in html
     assert '>Recent Runs</button>' in html
 
     fields_rule = css.split(".app.shell-revamp .training-run-layout .training-run-setup-fields {", 1)[1].split("}", 1)[0]

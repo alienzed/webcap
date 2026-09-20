@@ -62,7 +62,7 @@
   grid-area: header;
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 0 10px;
@@ -71,25 +71,85 @@
 }
 
 .app-header-context,
-.app-header-workspace-controls,
 .app-header-global {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .app-header-context {
   overflow: hidden;
 }
 
+.app-header-workspace-title {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.app-header-context-separator {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.app-header-context-separator.hidden {
+  display: none;
+}
+
+.app-header-folder-btn {
+  min-width: 0;
+  max-width: 260px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.app-header-folder-btn.hidden {
+  display: none;
+}
+
+.app-header-folder {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header-folder-btn:hover .app-header-folder,
+.app-header-folder-btn:focus-visible .app-header-folder {
+  color: var(--text);
+}
+
+.app-header-workspace-context {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header-workspace-context:empty {
+  display: none;
+}
+
 .app-header-model-control {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   min-width: 0;
-  margin-left: 4px;
+  margin-left: 6px;
   padding-left: 10px;
   border-left: 1px solid var(--border);
 }
@@ -104,6 +164,10 @@
   background: var(--panel-soft);
   color: var(--text);
   font-size: 11px;
+}
+
+.app-header-global {
+  justify-content: flex-end;
 }
 
 .activity-rail {
@@ -315,6 +379,34 @@
 .app.shell-revamp.left-rail-collapsed {
   grid-template-columns: minmax(340px, 0.9fr) minmax(560px, 1.1fr);
   grid-template-areas: "preview workbench";
+}
+
+.app.shell-revamp .sidebar-edge-toggle-btn {
+  position: absolute;
+  z-index: 8;
+  top: 8px;
+  left: calc(var(--sidebar-width) - 14px);
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+}
+
+.app.shell-revamp .sidebar-edge-toggle-btn:hover,
+.app.shell-revamp .sidebar-edge-toggle-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.app.shell-revamp.left-rail-collapsed .sidebar-edge-toggle-btn,
+.app.shell-revamp.sidebar-hidden .sidebar-edge-toggle-btn {
+  left: 4px;
 }
 
 .app.shell-revamp .sidebar-panel {
@@ -687,17 +779,17 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 
 @media (max-width: 1180px) {
   .app-header {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     padding-inline: 8px;
   }
 
-  .app-header-workspace-controls {
-    justify-content: flex-end;
+  .app-header-global {
+    grid-column: 2;
   }
 
-  .app-header-global {
-    grid-column: 3;
+  .app.shell-revamp:not(.left-rail-collapsed):not(.sidebar-hidden) .sidebar-edge-toggle-btn {
+    left: calc(260px - 14px);
   }
 
   .app-header-model-control select {
@@ -740,8 +832,8 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .app-header-workspace-context {
-    display: none;
+  .app-header-folder-btn {
+    max-width: 160px;
   }
 
   .app-header-context {
@@ -757,12 +849,13 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     max-width: 125px;
   }
 
-  .app-header-workspace-controls {
-    display: none;
-  }
-
   .app-header-global {
     grid-column: 2;
+  }
+
+  .app.shell-revamp:not(.left-rail-collapsed):not(.sidebar-hidden) .sidebar-edge-toggle-btn {
+    left: auto;
+    right: 8px;
   }
 
   .app.shell-revamp,

@@ -11,7 +11,6 @@ def test_outer_shell_wraps_existing_workspace_without_replacing_it():
     assert 'id="app-header"' in html
     assert 'id="activity-rail"' in html
     assert 'id="app-header-context"' in html
-    assert 'id="app-header-workspace-controls"' in html
     assert 'id="app-header-global"' in html
 
     assert 'class="app shell-revamp workspace-view-single workspace-surface-default"' in html
@@ -76,8 +75,12 @@ def test_shell_header_tracks_current_folder_without_owning_folder_state():
     ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
 
     assert 'id="app-header-folder"' in html
+    assert 'id="app-header-context-separator"' in html
     assert "String(state && state.folder || '')" in shell
-    assert "folderEl.textContent = label" in shell
+    assert "folderParts[folderParts.length - 1]" in shell
+    assert "folderEl.textContent = folderLabel" in shell
+    assert "? 'Test Generations'" in shell
+    assert "? 'Focus' : 'Prep'" in shell
     assert "window.syncApplicationShellContext = syncApplicationShellContext" in shell
     assert "window.syncApplicationShellContext()" in ui
 
@@ -118,8 +121,10 @@ def test_training_identity_is_owned_by_shell_header():
     assert 'id="app-header-workspace-context"' in html
     assert html.count('id="sidebar-collapse-toggle-btn"') == 1
     assert 'id="training-sidebar-collapse-toggle-btn"' not in html
-    assert "surface === 'training' ? 'Training'" in shell
+    assert "surface === 'training'" in shell
+    assert "? 'Training'" in shell
     assert "entryKind === 'global'" in shell
+    assert "contextText = entryKind === 'global' ? 'Global'" in shell
 
 
 def test_test_workspace_uses_shell_identity_and_prep_exit():
@@ -137,8 +142,8 @@ def test_review_identity_is_owned_by_shell_header():
     review = (ROOT / "tool" / "js" / "review_output.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
-    assert "surface === 'reviewOutput' ? 'Review Set'" in shell
-    assert "getReviewWorkspaceShellContext" in shell
+    assert "surface === 'reviewOutput'" in shell
+    assert "? 'Review Set'" in shell
     assert "function getReviewWorkspaceShellContext()" in review
     assert 'class="review-output-surface-title"' not in html
     assert 'id="review-output-summary-folder"' not in html
@@ -153,8 +158,8 @@ def test_grid_identity_and_prep_exit_are_owned_by_shell_without_removing_local_b
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
 
-    assert "surface === 'grid' ? 'Grid'" in shell
-    assert "workspaceContextText = mediaGridGetSourceLabel()" in shell
+    assert "surface === 'grid'" in shell
+    assert "? 'Grid'" in shell
     assert "normalizeWorkspaceSurface(workspaceState.surface) === 'grid'" in shell
     assert "closeMediaGridSurface();" in shell
     assert 'id="media-grid-surface-close-btn"' in html
@@ -165,11 +170,12 @@ def test_single_item_preview_header_keeps_item_controls_local_and_moves_shell_to
     item_details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
-    header_start = html.index('id="app-header-workspace-controls"')
+    prep_root = html.index('id="prep-workspace-root"')
+    sidebar_panel = html.index('id="sidebar-panel"')
     preview_start = html.index('id="preview-header"')
     sidebar_toggle = html.index('id="sidebar-collapse-toggle-btn"')
 
-    assert header_start < sidebar_toggle < preview_start
+    assert prep_root < sidebar_toggle < sidebar_panel < preview_start
     assert html.count('id="sidebar-collapse-toggle-btn"') == 1
     assert 'id="preview-header-position"' in html
     assert 'id="preview-header-meta"' in html
@@ -178,15 +184,16 @@ def test_single_item_preview_header_keeps_item_controls_local_and_moves_shell_to
     assert 'id="preview-open-focused-btn"' in html
     assert "ui.previewHeaderEl.classList.add('hidden');" in item_details
     assert "ui.sidebarCollapseToggleBtn.classList.toggle('hidden'" not in item_details
-    assert ".app-header-sidebar-toggle-btn {" in css
-    assert ".app.shell-revamp #sidebar-collapse-toggle-btn {" not in css
+    assert ".app.shell-revamp .sidebar-edge-toggle-btn {" in css
+    assert ".app-header-sidebar-toggle-btn {" not in css
 
 
 def test_focus_uses_shell_identity_but_keeps_local_cleanup_exit():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
 
-    assert "surface === 'focus' ? 'Focus'" in shell
+    assert "surface === 'focus'" in shell
+    assert "? 'Focus' : 'Prep'" in shell
     assert "sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');" in shell
     assert "stopFocusedAnnotation();" in shell
     assert 'id="focused-annotation-close-btn"' in html
@@ -347,8 +354,8 @@ def test_responsive_shell_compresses_header_without_dropping_permanent_rail():
     assert "@media (max-width: 880px)" in css
     assert ".activity-rail-btn {" in css
     assert "width: 32px;" in css
-    assert ".app-header-workspace-controls {" in css
-    assert "display: none;" in css
+    assert ".app-header-context {" in css
+    assert ".sidebar-edge-toggle-btn" in css
     assert ".app.shell-revamp.workspace-surface-config-editor.left-rail-collapsed" in workbench
     assert 'grid-template-areas: "workbench";' in workbench
 
@@ -503,7 +510,8 @@ def test_post_refactor_hygiene_has_one_sidebar_control_and_no_legacy_shell_fossi
 
     assert html.count('id="sidebar-collapse-toggle-btn"') == 1
     assert "training-sidebar-collapse-toggle-btn" not in html + training + shell
-    assert 'class="app-header-sidebar-toggle-btn"' in html
+    assert 'class="sidebar-edge-toggle-btn"' in html
+    assert 'id="app-header-workspace-controls"' not in html
     assert ".utility-bar" not in styles
     assert "#utility-training-btn" not in styles
     assert "#utility-test-bench-btn" not in styles

@@ -30,24 +30,15 @@
         <div id="app-frame" class="app-frame">
             <header id="app-header" class="app-header" aria-label="Application header">
                 <div id="app-header-context" class="app-header-context" aria-live="polite">
+                    <span id="app-header-workspace-title" class="app-header-workspace-title"></span>
+                    <span id="app-header-context-separator" class="app-header-context-separator" aria-hidden="true">&middot;</span>
                     <button id="app-header-folder-btn" type="button" class="app-header-folder-btn" title="Go to root folder" aria-label="Go to root folder">
                         <span id="app-header-folder" class="app-header-folder"></span>
                     </button>
+                    <span id="app-header-workspace-context" class="app-header-workspace-context"></span>
                     <label class="app-header-model-control">
                         <select id="app-header-model-profile-select" aria-label="Working model"></select>
                     </label>
-                </div>
-                <div id="app-header-workspace-controls" class="app-header-workspace-controls">
-                    <button
-                        id="sidebar-collapse-toggle-btn"
-                        type="button"
-                        class="app-header-sidebar-toggle-btn"
-                        title="Collapse sidebar"
-                        aria-label="Collapse sidebar"
-                        aria-pressed="false"
-                    >&lt;</button>
-                    <span id="app-header-workspace-title" class="app-header-workspace-title"></span>
-                    <span id="app-header-workspace-context" class="app-header-workspace-context"></span>
                 </div>
                 <div id="app-header-global" class="app-header-global">
                     <div id="shell-gpu-status" class="shell-gpu-status hidden" aria-live="polite"></div>
@@ -139,6 +130,14 @@
             </div>
             <button id="shell-immersive-exit-btn" type="button" class="shell-immersive-exit-btn hidden" aria-label="Exit immersive workspace" title="Exit immersive workspace (Esc)">Exit immersive</button>
             <div id="prep-workspace-root" class="app shell-revamp workspace-view-single workspace-surface-default" data-workspace-root="prep">
+            <button
+                id="sidebar-collapse-toggle-btn"
+                type="button"
+                class="sidebar-edge-toggle-btn"
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+                aria-pressed="false"
+            >&lt;</button>
             <div id="sidebar-panel" class="panel stack sidebar-panel">
                 <div class="panel-scrollable">
                     <div id="sidebar-content" class="sidebar-content">

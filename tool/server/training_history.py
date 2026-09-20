@@ -277,7 +277,11 @@ def _job_records_for_actions(actions, folder_key=""):
 
 
 def _legacy_jobs(folder_key=""):
-    recent = _read_recent_runs()
+    try:
+        recent = _read_recent_runs()
+    except ValueError as exc:
+        app_config.debug_print("[training_history] Ignoring unreadable legacy Recent Runs index:", exc)
+        return []
     return [
         dict(job) for job in recent["jobs"]
         if isinstance(job, dict)

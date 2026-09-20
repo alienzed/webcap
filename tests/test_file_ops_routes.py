@@ -1268,6 +1268,7 @@ def test_superset_search_matches_current_folder_and_subfolders_with_filters(tmp_
 
 
 def test_superset_search_uses_scoped_tags_for_search_incomplete_and_mismatch(tmp_path, monkeypatch):
+    monkeypatch.setattr(smart_set_module.app_config, "get_config_snapshot", lambda: {"requirements": {}})
     fs_root = tmp_path / "fs_root"
     source_dir = fs_root / "sets" / "scoped"
     source_dir.mkdir(parents=True)
@@ -1334,6 +1335,26 @@ def test_superset_search_uses_scoped_tags_for_search_incomplete_and_mismatch(tmp
     assert incomplete_response.status_code == 200
     assert [row["media_name"] for row in incomplete_response.get_json()["results"]] == ["incomplete.png"]
 
+
+
+
+def test_smart_set_legacy_scope_inference_is_conservative(monkeypatch):
+    monkeypatch.setattr(smart_set_module.app_config, "get_config_snapshot", lambda: {"requirements": {}})
+    state = {
+        "caption_requirements": ["Hair", "Background"],
+        "caption_requirement_keywords": {
+            "Hair": "black, brown",
+            "Background": "brown, blue",
+        },
+        "caption_tags_by_media": {
+            "one.png": ["black", "brown", "outdoors"],
+        },
+    }
+
+    scoped = smart_set_module._normalize_group_tags_for_media(state, "one.png")
+
+    assert scoped == {"Hair": ["black"]}
+    assert smart_set_module._combined_tags_for_media(state, "one.png") == ["black", "brown", "outdoors"]
 
 def test_superset_search_preserves_alias_for_source_resolved_outside_root(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"

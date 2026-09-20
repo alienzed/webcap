@@ -12,6 +12,7 @@
   var pendingRatingFolder = '';
   var testActivity = {};
   var selectedCandidates = null;
+  var queuedTestJobs = [];
   var debouncedPromptSave = debounceCreate(500);
 
   function el(id) { return document.getElementById(id); }
@@ -311,17 +312,50 @@
     });
   }
 
-  function renderSessions(sessions) {
+  function renderSessions(sessions, queuedJobs) {
     var items = Array.isArray(sessions) ? sessions : [];
+    var queued = Array.isArray(queuedJobs) ? queuedJobs : [];
     var countEl = el('test-generations-sessions-count');
     var host = el('test-generations-sessions-list');
-    if (countEl) countEl.textContent = String(items.length);
+    if (countEl) countEl.textContent = String(items.length + queued.length);
     if (!host) return;
     host.innerHTML = '';
-    if (!items.length) {
+    if (!items.length && !queued.length) {
       host.innerHTML = '<div class="test-generations-library-empty">No test sessions yet.</div>';
       return;
     }
+    queued.forEach(function (job) {
+      var row = document.createElement('div');
+      row.className = 'test-generations-session-row';
+      row.dataset.queueJobId = String(job.id || '');
+
+      var copy = document.createElement('div');
+      copy.className = 'test-generations-session-copy';
+      var title = document.createElement('strong');
+      title.textContent = String(job.runName || '').trim() || 'Queued Test';
+      var meta = document.createElement('span');
+      var total = Number(job.testTotal || 0);
+      var position = Number(job.queuePosition || 0);
+      meta.textContent = 'queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
+      copy.appendChild(title);
+      copy.appendChild(meta);
+
+      var actions = document.createElement('div');
+      actions.className = 'test-generations-session-actions';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'test-generations-remove-candidate';
+      remove.dataset.queueCancel = String(job.id || '');
+      remove.title = 'Remove this queued Test session';
+      remove.setAttribute('aria-label', 'Remove queued Test session ' + title.textContent);
+      remove.textContent = '×';
+      actions.appendChild(remove);
+
+      row.appendChild(copy);
+      row.appendChild(actions);
+      host.appendChild(row);
+    });
+
     items.forEach(function (session) {
       var name = String(session.session || '');
       var row = document.createElement('div');
@@ -366,9 +400,32 @@
   }
 
   function refreshSessions() {
-    return request('test_sessions').then(function (payload) {
-      renderSessions(payload && payload.sessions);
-      return payload;
+    return Promise.all([request('test_sessions'), request('test_queue')]).then(function (payloads) {
+      var sessionPayload = payloads[0] || {};
+      var queuePayload = payloads[1] || {};
+      queuedTestJobs = Array.isArray(queuePayload.jobs) ? queuePayload.jobs : [];
+      renderSessions(sessionPayload.sessions, queuedTestJobs);
+      return { sessions: sessionPayload.sessions || [], jobs: queuedTestJobs };
+    });
+  }
+
+  function cancelQueuedTest(jobId) {
+    var id = String(jobId || '').trim();
+    if (!id) return Promise.resolve();
+    return fetch('/fs/training_runner/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobId: id, cancel: true })
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Could not remove queued Test session.');
+        }
+        return payload;
+      });
+    }).then(function () {
+      if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();
+      return refreshSessions();
     });
   }
 
@@ -746,9 +803,9 @@
     var stopBtn = el('test-generations-stop-btn');
     if (runBtn) {
       var supported = isTestModelSupported();
-      runBtn.disabled = active || !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;
+      runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;
       runBtn.title = supported
-        ? 'Run this frozen Test batch.'
+        ? 'Queue this frozen Test batch.'
         : 'New Test runs currently require MiniMax H3 as the working model.';
     }
     if (stopBtn) {
@@ -842,7 +899,9 @@
       if (status && (status.status === 'running' || status.status === 'stopping')) {
         pollTimer = setTimeout(pollStatus, 2000);
       } else {
-        refreshSessions().catch(showError);
+        refreshSessions().then(function () {
+          if (queuedTestJobs.length && isOpen()) pollTimer = setTimeout(pollStatus, 5000);
+        }).catch(showError);
       }
     }).catch(showError);
   }
@@ -1021,11 +1080,13 @@
     request('test_prepare').then(function (payload) {
       prepared = payload;
       renderStagedFiles(payload);
-      renderSessions(payload.sessions);
+      renderSessions(payload.sessions, []);
       populateControls(payload);
       syncActiveRunControls(payload.latest || { status: 'idle' });
       renderStatus(payload.latest || { status: 'idle' });
-      if (payload.latest && (payload.latest.status === 'running' || payload.latest.status === 'stopping')) pollStatus();
+      refreshSessions().then(function () {
+        if ((payload.latest && (payload.latest.status === 'running' || payload.latest.status === 'stopping')) || queuedTestJobs.length) pollStatus();
+      }).catch(showError);
     }).catch(function (err) {
       if (summary) summary.textContent = 'Test Generations is unavailable.';
       showError(err);
@@ -1051,7 +1112,7 @@
     var errorEl = el('test-generations-error');
     if (runBtn) runBtn.disabled = true;
     if (errorEl) errorEl.classList.add('hidden');
-    request('test_start', {
+    request('test_enqueue', {
       name: name,
       selectedFiles: selectedFiles,
       prompt: prompt,
@@ -1059,12 +1120,18 @@
       megapixels: megapixels,
       duration: duration,
       seed: seed
-    }).then(function (status) {
+    }).then(function (payload) {
+      var status = payload && payload.latest ? payload.latest : currentStatus;
       syncActiveRunControls(status);
       refreshActivityButton();
-      renderStatus(status);
+      if (status && status.session) renderStatus(status);
       var nextSeed = el('test-generations-seed');
       if (nextSeed) nextSeed.value = String(randomSeed());
+      var nameInput = el('test-generations-session-name');
+      if (nameInput) nameInput.value = '';
+      return refreshSessions();
+    }).then(function () {
+      if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();
       pollStatus();
     }).catch(function (err) {
       syncActiveRunControls(currentStatus);
@@ -1164,6 +1231,12 @@
       openTestBenchFolder(open.dataset.recentTestOpen);
     };
     el('test-generations-sessions-list').onclick = function (event) {
+      var queueCancel = event.target.closest('[data-queue-cancel]');
+      if (queueCancel) {
+        queueCancel.disabled = true;
+        cancelQueuedTest(queueCancel.dataset.queueCancel).catch(showError);
+        return;
+      }
       var open = event.target.closest('[data-session-open]');
       if (open) {
         openSession(open.dataset.sessionOpen);

@@ -310,20 +310,28 @@ def _sync_job_history(job):
 
 def _sync_histories(state):
     errors = []
+    failed_job_ids = set()
     for job in state.get("jobs", []):
         error = _sync_job_history(job)
         if error:
             errors.append(error)
-    return errors
+            job_id = str(job.get("id") or "")
+            if job_id:
+                failed_job_ids.add(job_id)
+    return errors, failed_job_ids
 
 
-def _retire_terminal_jobs(state):
-    """Keep only scheduler work; durable job folders never gate queue retirement."""
+def _retire_terminal_jobs(state, protected_job_ids=()):
+    """Retire terminal scheduler work only after durable Training evidence exists."""
+    protected = {str(job_id) for job_id in protected_job_ids}
     retained = []
     retired_job_ids = set()
     for job in state.get("jobs", []):
         status = str(job.get("status") or "")
         job_id = str(job.get("id") or "")
+        if job_id in protected:
+            retained.append(job)
+            continue
         if status == "cancelled" or status in HISTORY_STATUSES:
             retired_job_ids.add(job_id)
             continue
@@ -333,10 +341,11 @@ def _retire_terminal_jobs(state):
 
 
 def _persist_reconciled_state(state):
-    history_errors = _sync_histories(state) or []
+    history_errors, failed_history_job_ids = _sync_histories(state)
     for error in history_errors:
         _logger.error(error)
-    retired_job_ids = _retire_terminal_jobs(state)
+        _append_runner_notice(state, error)
+    retired_job_ids = _retire_terminal_jobs(state, failed_history_job_ids)
     if retired_job_ids:
         _write_state(state, retired_job_ids=retired_job_ids)
     else:

@@ -56,23 +56,53 @@ def set_root_name(folder_path):
     return _folder_slug(folder_path) + "--" + digest
 
 
-def set_root_for_folder(folder_path):
-    """Find the existing prefixed root for a set without mutating the tree."""
-    identity = set_root_name(folder_path)
+def _managed_set_roots():
+    root = actions_root()
     try:
-        with os.scandir(actions_root()) as entries:
-            names = [entry.name for entry in entries if entry.is_dir(follow_symlinks=False)]
+        with os.scandir(root) as entries:
+            return [
+                root / entry.name
+                for entry in entries
+                if entry.is_dir(follow_symlinks=False) and re.match(r"^\d+-", entry.name)
+            ]
     except FileNotFoundError:
-        return None
+        return []
     except OSError as exc:
         raise RuntimeError("Could not inspect the training actions root.") from exc
-    matches = [
-        actions_root() / name for name in names
-        if re.fullmatch(r"\d+-" + re.escape(identity), name)
+
+
+def _set_root_claims_folder(root, folder_key):
+    for path in Path(root).iterdir():
+        if not path.is_dir() or path.is_symlink() or not _ACTION_NAME.match(path.name):
+            continue
+        action_id = (PurePosixPath(Path(root).name) / path.name).as_posix()
+        try:
+            _action_root, data = read_action(action_id)
+        except ValueError:
+            continue
+        if str(data.get("folder") or "") == folder_key:
+            return True
+    return False
+
+
+def set_root_for_folder(folder_path):
+    """Find the existing managed root for a set without mutating the tree."""
+    identity = set_root_name(folder_path)
+    roots = _managed_set_roots()
+    direct = [
+        root for root in roots
+        if re.fullmatch(r"\d+-" + re.escape(identity), root.name)
     ]
-    if len(matches) > 1:
+    if len(direct) > 1:
         raise RuntimeError("Multiple training set roots claim the same set identity: " + identity)
-    return matches[0] if matches else None
+    if direct:
+        return direct[0]
+
+    folder_key = _relative_folder(folder_path)
+    claimed = [root for root in roots if _set_root_claims_folder(root, folder_key)]
+    if len(claimed) > 1:
+        raise RuntimeError("Multiple training set roots claim the same folder: " + folder_key)
+    return claimed[0] if claimed else None
 
 
 def _allocate_set_root(folder_path):
@@ -222,6 +252,63 @@ def fingerprint_files(paths):
         digest.update(path.name.encode("utf-8"))
         digest.update(path.read_bytes())
     return "sha256:" + digest.hexdigest()
+
+
+def managed_actions():
+    rows = []
+    for root in _managed_set_roots():
+        for path in root.iterdir():
+            if not path.is_dir() or path.is_symlink() or not _ACTION_NAME.match(path.name):
+                continue
+            action_id = (PurePosixPath(root.name) / path.name).as_posix()
+            try:
+                action, data = read_action(action_id)
+            except ValueError as exc:
+                raise ValueError("Managed training action is invalid: " + str(path)) from exc
+            rows.append((action, data))
+    return rows
+
+
+def _replace_folder_prefix(value, old_folder, new_folder):
+    current = str(value or "").strip().replace("\\", "/").strip("/")
+    old = str(old_folder or "").strip().replace("\\", "/").strip("/")
+    new = str(new_folder or "").strip().replace("\\", "/").strip("/")
+    if current == old:
+        return new
+    prefix = old + "/"
+    if current.startswith(prefix):
+        return new + current[len(old):]
+    return current
+
+
+def relocate_folder_actions(old_folder, new_folder):
+    old = str(old_folder or "").strip().replace("\\", "/").strip("/")
+    new = str(new_folder or "").strip().replace("\\", "/").strip("/")
+    if not old or not new or old == new:
+        return 0
+    changed = 0
+    for action_root, data in managed_actions():
+        next_folder = _replace_folder_prefix(data.get("folder"), old, new)
+        if next_folder == str(data.get("folder") or ""):
+            continue
+        data["folder"] = next_folder
+        _atomic_write(_manifest_path(action_root), data)
+        jobs_root = action_root / "jobs"
+        if jobs_root.is_dir():
+            for job_dir in jobs_root.iterdir():
+                record_path = job_dir / "job.json"
+                if not job_dir.is_dir() or job_dir.is_symlink() or not record_path.is_file() or record_path.is_symlink():
+                    continue
+                try:
+                    payload = json.loads(record_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if not isinstance(payload, dict) or not isinstance(payload.get("job"), dict):
+                    continue
+                payload["job"]["folder"] = _replace_folder_prefix(payload["job"].get("folder"), old, new)
+                _atomic_write(record_path, payload)
+        changed += 1
+    return changed
 
 
 def managed_actions_for_folder(folder_path):

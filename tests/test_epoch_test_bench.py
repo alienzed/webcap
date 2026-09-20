@@ -1211,8 +1211,18 @@ def test_queued_request_freezes_prompt_seed_and_selected_files(tmp_path, monkeyp
     assert payload["resolvedPrompt"] == "person in studio #12345"
     assert payload["seed"] == 12345
     assert payload["selectedFiles"] == [first.name, second.name]
+    assert payload["includeBase"] is True
     assert "selectedFileSnapshots" not in payload
     assert payload["total"] == 3
+
+    without_base = bench._build_queued_request(
+        tmp_path,
+        "person in {place}",
+        selected_files=[first.name, second.name],
+        include_base=False,
+    )
+    assert without_base["includeBase"] is False
+    assert without_base["total"] == 2
 
 
 
@@ -1384,5 +1394,4 @@ def test_remove_candidate_allows_local_test_fifo_reference(tmp_path, monkeypatch
 
     assert payload["removed"] == candidate.name
     assert not candidate.exists()
-
 

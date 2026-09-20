@@ -50,7 +50,8 @@
       aspectRatio: String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim(),
       megapixels: Number(el('test-generations-megapixels') && el('test-generations-megapixels').value || 0),
       duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0),
-      selectedFiles: selectedCandidateFiles()
+      selectedFiles: selectedCandidateFiles(),
+      includeBase: !el('test-generations-base-include') || el('test-generations-base-include').checked
     };
   }
 
@@ -289,22 +290,29 @@
 
     var baseRow = document.createElement('div');
     baseRow.className = 'test-generations-staged-row test-generations-base-row';
-    baseRow.title = 'Base rendition is always included in every Test run';
+    baseRow.title = 'Include a Base rendition for comparison in the next Test run';
 
     var baseInclude = document.createElement('input');
+    var includeBase = !(state
+      && String(state.folder || '') === String(launchFolder || '')
+      && state.testGenerationSettings
+      && state.testGenerationSettings.includeBase === false);
     baseInclude.type = 'checkbox';
+    baseInclude.id = 'test-generations-base-include';
     baseInclude.className = 'test-generations-candidate-checkbox';
-    baseInclude.checked = true;
-    baseInclude.disabled = true;
-    baseInclude.title = 'Base is always included';
-    baseInclude.setAttribute('aria-label', 'Base rendition is always included');
+    baseInclude.checked = includeBase;
+    baseInclude.title = 'Include the Base rendition in the next Test run';
+    baseInclude.setAttribute('aria-label', 'Include Base rendition in next Test run');
+    baseInclude.addEventListener('change', function () {
+      saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || '').trim());
+    });
 
     var baseCopy = document.createElement('div');
     baseCopy.className = 'test-generations-staged-copy';
     var baseName = document.createElement('strong');
     baseName.textContent = 'Base';
     var baseDetail = document.createElement('span');
-    baseDetail.textContent = 'Always included';
+    baseDetail.textContent = 'Reference comparison';
     baseCopy.appendChild(baseName);
     baseCopy.appendChild(baseDetail);
 
@@ -1592,6 +1600,8 @@
     var name = String(el('test-generations-session-name') && el('test-generations-session-name').value || '').trim();
     var prompt = String(el('test-generations-prompt') && el('test-generations-prompt').value || '').trim();
     var selectedFiles = selectedCandidateFiles();
+    var baseInclude = el('test-generations-base-include');
+    var includeBase = !baseInclude || baseInclude.checked;
     var aspectRatio = String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim();
     var megapixels = String(el('test-generations-megapixels') && el('test-generations-megapixels').value || '').trim();
     var duration = String(el('test-generations-duration') && el('test-generations-duration').value || '').trim();
@@ -1607,6 +1617,7 @@
     request('test_enqueue', {
       name: name,
       selectedFiles: selectedFiles,
+      includeBase: includeBase,
       prompt: prompt,
       aspectRatio: aspectRatio,
       megapixels: megapixels,

@@ -1059,12 +1059,12 @@ def _mark_stopped(session_directory):
     return status
 
 
-def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None):
+def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None, include_base=True):
     status_file = _status_path(session_directory)
     try:
         template = copy.deepcopy(template) if template is not None else _load_template()
         candidates = []
-        if loras:
+        if include_base:
             candidates.append({
                 "label": "Base",
                 "file": None,
@@ -1180,6 +1180,7 @@ def _build_queued_request(
     seed=None,
     name=None,
     selected_files=None,
+    include_base=True,
 ):
     prompt = str(prompt or "").strip()
     if not prompt:
@@ -1200,17 +1201,19 @@ def _build_queued_request(
         seed=seed,
     )
     resolved_prompt = _resolve_wildcard_prompt(prompt, settings["seed"])
+    include_base = include_base is not False
     return {
         "model": "h3",
         "name": session_name,
         "sourcePrompt": prompt,
         "resolvedPrompt": resolved_prompt,
         "selectedFiles": [path.name for path in loras],
+        "includeBase": include_base,
         "seed": settings["seed"],
         "aspectRatio": settings["aspectRatio"],
         "megapixels": settings["megapixels"],
         "duration": settings["duration"],
-        "total": len(loras) + 1,
+        "total": len(loras) + (1 if include_base else 0),
     }
 
 
@@ -1286,7 +1289,7 @@ def clear_queued(folder_path):
         _pending_tests[:] = kept
     return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path)["jobs"]}
 
-def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None, seed=None, name=None, selected_files=None):
+def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None, seed=None, name=None, selected_files=None, include_base=True):
     request = _build_queued_request(
         folder_path,
         prompt,
@@ -1296,6 +1299,7 @@ def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=No
         seed=seed,
         name=name,
         selected_files=selected_files,
+        include_base=include_base,
     )
     folder = _relative_set_folder(folder_path)
     job = {
@@ -1376,6 +1380,7 @@ def start_queued(folder_path, request):
             "aspectRatio": request.get("aspectRatio"),
             "megapixels": request.get("megapixels"),
             "duration": request.get("duration"),
+            "includeBase": request.get("includeBase") is not False,
             "results": [],
             "resultFolder": _relative_to_fs_root(session_directory),
         }
@@ -1399,12 +1404,14 @@ def start_queued(folder_path, request):
         payload["aspectRatio"] = settings["aspectRatio"]
         payload["megapixels"] = settings["megapixels"]
         payload["duration"] = settings["duration"]
-        payload["total"] = len(loras) + 1
+        include_base = request.get("includeBase") is not False
+        payload["includeBase"] = include_base
+        payload["total"] = len(loras) + (1 if include_base else 0)
         payload["status"] = "running"
         _atomic_write_json(_status_path(session_directory), payload)
         thread = threading.Thread(
             target=_run_batch,
-            args=(folder_key, session_directory, loras, prompt, settings, template),
+            args=(folder_key, session_directory, loras, prompt, settings, template, include_base),
             name="webcap-h3-test-generations",
             daemon=True,
         )
@@ -1509,6 +1516,6 @@ def handle_request(folder_path, mode, selection_criteria=None):
             seed=criteria.get("seed"),
             name=criteria.get("name"),
             selected_files=criteria.get("selectedFiles"),
+            include_base=criteria.get("includeBase"),
         )
     raise ValueError("Unsupported Test Generations operation: " + operation)
-

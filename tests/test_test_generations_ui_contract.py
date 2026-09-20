@@ -442,9 +442,10 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "function syncCandidateMasterSelect(files)" in script
     assert "master.indeterminate = selectedCount > 0 && selectedCount < available.length;" in script
     assert "baseName.textContent = 'Base';" in script
-    assert "baseDetail.textContent = 'Always included';" in script
-    assert "baseInclude.checked = true;" in script
-    assert "baseInclude.disabled = true;" in script
+    assert "baseDetail.textContent = 'Reference comparison';" in script
+    assert "baseInclude.checked = includeBase;" in script
+    assert "baseInclude.disabled = true;" not in script
+    assert "includeBase: includeBase" in script
     assert "var allSelected = !!files.length && files.every" in script
     assert "selectedCandidates = allSelected ? new Set() : new Set(files);" in script
     assert 'id="test-generations-reset-prompt-btn"' not in html

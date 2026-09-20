@@ -80,6 +80,8 @@ def test_shell_header_tracks_current_folder_without_owning_folder_state():
     assert "String(state && state.folder || '')" in shell
     assert "folderParts[folderParts.length - 1]" in shell
     assert "folderEl.textContent = folderLabel" in shell
+    assert "headerFolderBtn.onclick = openPrepActivity" in shell
+    assert "contextSeparator.classList.toggle('hidden', !contextUsesFolder)" in shell
     assert "? 'Test Generations'" in shell
     assert "? 'Focus' : 'Prep'" in shell
     assert "window.syncApplicationShellContext = syncApplicationShellContext" in shell
@@ -440,6 +442,7 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     training = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
     assert 'class="app-header-brand"' not in html
@@ -454,6 +457,11 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "function syncTrainingWorkspaceDetailUi()" in training
     assert "function syncTrainingEntryChrome()" in training
     assert "function syncShellTrainingGpuStatus()" in runner
+    assert "renderShellSystemStatus()" in runner
+    assert "function refreshShellSystemStatus()" in shell
+    assert "fetch('/fs/system_status')" in shell
+    assert 'route("/fs/system_status"' in app
+    assert "shutil.disk_usage(app_config.FS_ROOT)" in app
     assert "if (trainingWorkspaceState.runnerStatusPending) return;" in runner
     assert ".shell-status-bar {" in css
     assert ".shell-gpu-status {" in css

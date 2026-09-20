@@ -642,10 +642,12 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
     reviewed_keys = []
     flags = {}
     tags_by_media = {}
+    group_tags_by_media = {}
     ratings_by_media = {}
     caption_term_wrappers = None
     caption_term_descriptor_defaults = None
     caption_term_descriptors_by_media = {}
+    caption_group_term_descriptors_by_media = {}
     created_items = []
     originals_copied = 0
 
@@ -700,9 +702,21 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
             if isinstance(tag_list, list) and tag_list:
                 tags_by_media[dest_name] = [str(tag).strip() for tag in tag_list if str(tag).strip()]
 
+        src_group_tags = src_state.get("caption_group_tags_by_media")
+        if isinstance(src_group_tags, dict):
+            group_map = src_group_tags.get(media_name)
+            if isinstance(group_map, dict) and group_map:
+                group_tags_by_media[dest_name] = json.loads(json.dumps(group_map))
+
         src_ratings = src_state.get("ratings_by_media")
         if isinstance(src_ratings, dict) and media_name in src_ratings:
             ratings_by_media[dest_name] = src_ratings[media_name]
+
+        src_group_descriptors = src_state.get("caption_group_term_descriptors_by_media")
+        if isinstance(src_group_descriptors, dict):
+            group_descriptor_map = src_group_descriptors.get(media_name)
+            if isinstance(group_descriptor_map, dict) and group_descriptor_map:
+                caption_group_term_descriptors_by_media[dest_name] = json.loads(json.dumps(group_descriptor_map))
 
         if caption_term_wrappers is None:
             src_term_wrappers = src_state.get("caption_term_wrappers")
@@ -732,12 +746,13 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
 
     reviewed_unique = sorted(set([str(v) for v in reviewed_keys if str(v).strip()]))
     dest_state = {
-        "version": 1,
+        "version": 2,
         "stats": {"requiredPhrase": "", "phrases": "", "tokenRules": ""},
         "primer": {"template": "", "defaults": "", "mappings": ""},
         "reviewedKeys": reviewed_unique,
         "flags": flags,
         "caption_tags_by_media": tags_by_media,
+        "caption_group_tags_by_media": group_tags_by_media,
         "ratings_by_media": ratings_by_media,
     }
     if isinstance(caption_term_wrappers, dict):
@@ -747,6 +762,8 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
         dest_state["caption_term_descriptor_defaults"] = caption_term_descriptor_defaults
     if isinstance(caption_term_descriptors_by_media, dict) and caption_term_descriptors_by_media:
         dest_state["caption_term_descriptors_by_media"] = caption_term_descriptors_by_media
+    if caption_group_term_descriptors_by_media:
+        dest_state["caption_group_term_descriptors_by_media"] = caption_group_term_descriptors_by_media
     dest_state_path = dest_dir / ".webcap_state.json"
     dest_state_path.write_text(json.dumps(dest_state, indent=2), encoding="utf-8")
     normalize_path_permissions(dest_state_path)
@@ -950,12 +967,16 @@ def create_set_from_results_response(data: dict):
         reviewed_keys = []
         flags = {}
         tags_by_media = {}
+        group_tags_by_media = {}
         ratings_by_media = {}
         caption_requirements = []
         caption_requirement_keywords = {}
         caption_term_wrappers = None
         caption_term_descriptor_defaults = None
         caption_term_descriptors_by_media = {}
+        caption_group_term_wrappers = None
+        caption_group_term_descriptor_defaults = None
+        caption_group_term_descriptors_by_media = {}
         caption_requirements_checked = {}
         dest_media_metadata = {}
         source_folder_order = []
@@ -990,6 +1011,14 @@ def create_set_from_results_response(data: dict):
                 src_descriptor_defaults = src_state.get("caption_term_descriptor_defaults")
                 if isinstance(src_descriptor_defaults, dict):
                     caption_term_descriptor_defaults = json.loads(json.dumps(src_descriptor_defaults))
+            if caption_group_term_wrappers is None:
+                src_group_wrappers = src_state.get("caption_group_term_wrappers")
+                if isinstance(src_group_wrappers, dict):
+                    caption_group_term_wrappers = json.loads(json.dumps(src_group_wrappers))
+            if caption_group_term_descriptor_defaults is None:
+                src_group_descriptor_defaults = src_state.get("caption_group_term_descriptor_defaults")
+                if isinstance(src_group_descriptor_defaults, dict):
+                    caption_group_term_descriptor_defaults = json.loads(json.dumps(src_group_descriptor_defaults))
 
             source_caption_path = source_media_path.parent / _caption_name_for_media(media_name)
             if source_caption_path.exists() and source_caption_path.is_file():
@@ -1021,6 +1050,12 @@ def create_set_from_results_response(data: dict):
                 if isinstance(tag_list, list) and tag_list:
                     tags_by_media[dest_media_name] = [str(tag).strip() for tag in tag_list if str(tag).strip()]
 
+            src_group_tags = src_state.get("caption_group_tags_by_media")
+            if isinstance(src_group_tags, dict):
+                group_map = src_group_tags.get(media_name)
+                if isinstance(group_map, dict) and group_map:
+                    group_tags_by_media[dest_media_name] = json.loads(json.dumps(group_map))
+
             src_ratings = src_state.get("ratings_by_media")
             if isinstance(src_ratings, dict) and media_name in src_ratings:
                 ratings_by_media[dest_media_name] = src_ratings[media_name]
@@ -1036,6 +1071,12 @@ def create_set_from_results_response(data: dict):
                 media_descriptors = src_descriptors_by_media.get(media_name)
                 if isinstance(media_descriptors, dict) and media_descriptors:
                     caption_term_descriptors_by_media[dest_media_name] = json.loads(json.dumps(media_descriptors))
+
+            src_group_descriptors = src_state.get("caption_group_term_descriptors_by_media")
+            if isinstance(src_group_descriptors, dict):
+                media_group_descriptors = src_group_descriptors.get(media_name)
+                if isinstance(media_group_descriptors, dict) and media_group_descriptors:
+                    caption_group_term_descriptors_by_media[dest_media_name] = json.loads(json.dumps(media_group_descriptors))
 
             source_meta = src_media_metadata.get(media_name)
             if isinstance(source_meta, dict):
@@ -1056,12 +1097,13 @@ def create_set_from_results_response(data: dict):
             primer_block = _clone_primer_block(state_by_folder.get(first_folder_key, {}))
 
         dest_state = {
-            "version": 1,
+            "version": 2,
             "stats": {"requiredPhrase": "", "phrases": "", "tokenRules": ""},
             "primer": primer_block,
             "reviewedKeys": sorted(set([str(v) for v in reviewed_keys if str(v).strip()])),
             "flags": flags,
             "caption_tags_by_media": tags_by_media,
+            "caption_group_tags_by_media": group_tags_by_media,
             "ratings_by_media": ratings_by_media,
         }
         if caption_requirements:
@@ -1075,6 +1117,12 @@ def create_set_from_results_response(data: dict):
             dest_state["caption_term_descriptor_defaults"] = caption_term_descriptor_defaults
         if caption_term_descriptors_by_media:
             dest_state["caption_term_descriptors_by_media"] = caption_term_descriptors_by_media
+        if isinstance(caption_group_term_wrappers, dict):
+            dest_state["caption_group_term_wrappers"] = caption_group_term_wrappers
+        if isinstance(caption_group_term_descriptor_defaults, dict):
+            dest_state["caption_group_term_descriptor_defaults"] = caption_group_term_descriptor_defaults
+        if caption_group_term_descriptors_by_media:
+            dest_state["caption_group_term_descriptors_by_media"] = caption_group_term_descriptors_by_media
         if caption_requirements_checked:
             dest_state["caption_requirements_checked"] = caption_requirements_checked
         dest_state_path = dest_dir / ".webcap_state.json"

@@ -217,13 +217,23 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     assert "test-generations-session-details" in script
     assert "function sessionMetaText(status)" in script
     assert "function renderSessionMeta(status)" in script
+    assert "function extractPromptColorTargets(prompt)" in script
+    assert "function renderPromptColorTargets(prompt)" in script
+    assert "TEST_PROMPT_COLOR_SWATCHES" in script
+    assert "matching\\s+(.+)" in script
+    assert "title=\"" in script
     assert "status.resolvedPrompt || status.prompt" in script
+    assert "renderPromptColorTargets(resolvedPrompt)" in script
     assert "status.sourcePrompt" in script
     assert "status.aspectRatio" in script
     assert "status.megapixels" in script
     assert "status.duration" in script
     assert "status.seed" in script
     assert ".test-generations-session-details" in css
+    assert ".test-generations-session-lower" in css
+    assert ".test-generations-color-targets" in css
+    assert ".test-generations-color-target" in css
+    assert ".test-generations-color-swatch" in css
     assert ".test-generations-session-prompt pre" in css
 
 

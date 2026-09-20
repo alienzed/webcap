@@ -910,6 +910,183 @@
     }
   }
 
+  var TEST_PROMPT_COLOR_SWATCHES = {
+    'black': '#111111',
+    'white': '#f4f4f4',
+    'gray': '#808080',
+    'grey': '#808080',
+    'silver': '#c0c0c0',
+    'red': '#d13c3c',
+    'dark red': '#8b0000',
+    'burgundy': '#800020',
+    'maroon': '#800000',
+    'orange': '#e8892f',
+    'yellow': '#e0c43b',
+    'gold': '#d4af37',
+    'green': '#3f8f5f',
+    'dark green': '#1f5f3b',
+    'forest green': '#228b22',
+    'olive': '#808000',
+    'olive green': '#6b7d2a',
+    'lime': '#63b32e',
+    'lime green': '#63b32e',
+    'blue': '#3e73c7',
+    'light blue': '#8ecae6',
+    'sky blue': '#87ceeb',
+    'dark blue': '#234f8a',
+    'navy': '#000080',
+    'navy blue': '#000080',
+    'royal blue': '#4169e1',
+    'teal': '#218a8a',
+    'turquoise': '#40b8b3',
+    'cyan': '#2ab7ca',
+    'purple': '#7b4bb7',
+    'violet': '#8f5cc7',
+    'lavender': '#b8a1d9',
+    'magenta': '#c33ca6',
+    'pink': '#e979a6',
+    'light pink': '#f1a7c3',
+    'hot pink': '#e84a9b',
+    'peach': '#f0b38f',
+    'brown': '#8b5a3c',
+    'tan': '#c49a6c',
+    'beige': '#d8c7a5',
+    'cream': '#eee1bd',
+    'skin-colored': '#c99a7a',
+    'skin colored': '#c99a7a',
+    'colorful': 'linear-gradient(90deg, #d13c3c, #e0c43b, #3f8f5f, #3e73c7, #7b4bb7)',
+    'multicolored': 'linear-gradient(90deg, #d13c3c, #e0c43b, #3f8f5f, #3e73c7, #7b4bb7)',
+    'multi-colored': 'linear-gradient(90deg, #d13c3c, #e0c43b, #3f8f5f, #3e73c7, #7b4bb7)'
+  };
+  var TEST_PROMPT_COLOR_TERMS = Object.keys(TEST_PROMPT_COLOR_SWATCHES).sort(function (a, b) {
+    return b.length - a.length;
+  });
+  var TEST_PROMPT_COLOR_PATTERN = '\\b(?:' + TEST_PROMPT_COLOR_TERMS.map(function (value) {
+    return value.replace(/\s+/g, '\\s+');
+  }).join('|') + ')\\b';
+
+  function promptColorMatches(text) {
+    var matches = [];
+    var pattern = new RegExp(TEST_PROMPT_COLOR_PATTERN, 'gi');
+    var match;
+    while ((match = pattern.exec(String(text || ''))) !== null) {
+      matches.push({
+        color: String(match[0] || '').toLowerCase(),
+        index: match.index,
+        end: match.index + match[0].length
+      });
+    }
+    return matches;
+  }
+
+  function cleanPromptColorTarget(value, hasNextColor) {
+    var target = String(value || '')
+      .replace(/^[\s,:;()\[\]{}\u2013\u2014-]+/, '')
+      .replace(/[\s,:;()\[\]{}\u2013\u2014-]+$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (hasNextColor) {
+      target = target.replace(/\s+(?:with|and|or|plus|&)\s*$/i, '').trim();
+      target = target.replace(/^(?:with|and|or|plus|&)$/i, '').trim();
+    }
+    target = target.replace(/^(?:a|an|the)\s+/i, '');
+    target = target.replace(/\s+(?:who|that|which|while|where|when)\b.*$/i, '').trim();
+    target = target.replace(/\s+(?:standing|sitting|walking|holding|wearing|creating)\b.*$/i, '').trim();
+    var words = target.split(/\s+/).filter(Boolean);
+    if (words.length > 7) target = words.slice(0, 7).join(' ');
+    return target;
+  }
+
+  function expandMatchingPromptColorTargets(color, target, phrase) {
+    var match = String(target || '').match(/^(.+?)\s+(?:and|with)\s+(?:(?:a|an|the)\s+)?matching\s+(.+)$/i);
+    if (!match) return [{ color: color, target: target, phrase: phrase }];
+    return [
+      { color: color, target: cleanPromptColorTarget(match[1], false), phrase: phrase },
+      { color: color, target: cleanPromptColorTarget(match[2], false), phrase: phrase }
+    ];
+  }
+
+  function extractPromptColorTargets(prompt) {
+    var targets = [];
+    var seen = {};
+    var clausePattern = /[^,;.!?\n:]+/g;
+    var source = String(prompt || '');
+    var clauseMatch;
+
+    while ((clauseMatch = clausePattern.exec(source)) !== null) {
+      var clause = String(clauseMatch[0] || '').trim();
+      if (!clause) continue;
+      var matches = promptColorMatches(clause);
+      if (!matches.length) continue;
+
+      var phrase = clause.slice(matches[0].index).trim();
+      var parsed = matches.map(function (match, index) {
+        var next = matches[index + 1];
+        return {
+          color: match.color,
+          target: cleanPromptColorTarget(
+            clause.slice(match.end, next ? next.index : clause.length),
+            !!next
+          ),
+          phrase: phrase
+        };
+      });
+
+      parsed.forEach(function (item, index) {
+        if (item.target || index >= parsed.length - 1) return;
+        var bridge = clause.slice(matches[index].end, matches[index + 1].index)
+          .replace(/[\s\u2013\u2014/&-]+/g, ' ')
+          .trim()
+          .toLowerCase();
+        if (bridge === 'and' || bridge === 'or') item.target = parsed[index + 1].target;
+      });
+
+      parsed.forEach(function (item) {
+        if (!item.target) return;
+        expandMatchingPromptColorTargets(item.color, item.target, item.phrase).forEach(function (expanded) {
+          if (!expanded.target) return;
+          var key = expanded.color + '|' + expanded.target.toLowerCase();
+          if (seen[key]) return;
+          seen[key] = true;
+          expanded.swatch = TEST_PROMPT_COLOR_SWATCHES[expanded.color] || '#808080';
+          targets.push(expanded);
+        });
+      });
+    }
+
+    return targets;
+  }
+
+  function escapePromptColorTitle(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function renderPromptColorTargets(prompt) {
+    var targets = extractPromptColorTargets(prompt);
+    if (!targets.length) {
+      return '<div class="test-generations-color-targets">' +
+        '<strong>Colour targets</strong>' +
+        '<div class="test-generations-color-target-empty">No explicit colour targets found.</div>' +
+        '</div>';
+    }
+    return '<div class="test-generations-color-targets">' +
+      '<strong>Colour targets</strong>' +
+      '<div class="test-generations-color-target-list">' +
+      targets.map(function (item) {
+        return '<span class="test-generations-color-target" title="' + escapePromptColorTitle(item.phrase) + '">' +
+          '<i class="test-generations-color-swatch" style="--test-color-swatch:' + item.swatch + '"></i>' +
+          '<span><b>' + escapeHtml(item.color) + '</b> · ' + escapeHtml(item.target) + '</span>' +
+          '</span>';
+      }).join('') +
+      '</div>' +
+      '<small>Hover a target for its full prompt phrase.</small>' +
+      '</div>';
+  }
+
   function sessionMetaText(status) {
     if (!status || !status.session) return '';
     var parts = [];
@@ -949,8 +1126,13 @@
       '<div><span>Duration</span><strong>' + escapeHtml(status.duration !== undefined && status.duration !== null ? String(status.duration) + 's' : '—') + '</strong></div>',
       '<div><span>Seed</span><strong>' + escapeHtml(status.seed !== undefined && status.seed !== null ? String(status.seed) : '—') + '</strong></div>',
       '</div>',
+      '<div class="test-generations-session-lower">',
+      '<div class="test-generations-session-prompts">',
       '<div class="test-generations-session-prompt"><strong>Resolved prompt</strong><pre>' + escapeHtml(resolvedPrompt || '—') + '</pre></div>',
-      '<div class="test-generations-session-prompt"><strong>Source prompt</strong><pre>' + escapeHtml(sourcePrompt || '—') + '</pre></div>'
+      '<div class="test-generations-session-prompt"><strong>Source prompt</strong><pre>' + escapeHtml(sourcePrompt || '—') + '</pre></div>',
+      '</div>',
+      renderPromptColorTargets(resolvedPrompt),
+      '</div>'
     ].join('');
   }
 

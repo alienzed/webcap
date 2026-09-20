@@ -6,7 +6,7 @@
   flex-direction: column;
   gap: 6px;
   min-height: 0;
-  padding: 70px 8px 8px;
+  padding: 8px;
   background:
     linear-gradient(180deg, rgba(243, 244, 246, 0.98), rgba(229, 231, 235, 0.96)),
     radial-gradient(circle at top left, rgba(245, 158, 11, 0.12), transparent 28%),

@@ -467,6 +467,13 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "if (trainingWorkspaceState.runnerStatusPending) return;" in runner
     assert ".shell-status-bar {" in css
     assert ".shell-gpu-status {" in css
+    assert "function getShellWorkloadStatus()" in shell
+    assert "training-running" in shell
+    assert "test-running" in shell
+    assert "shell-workload-status is-" in shell
+    assert "window.renderShellSystemStatus = renderShellSystemStatus" in shell
+    assert "window.renderShellSystemStatus()" in runner
+    assert ".shell-workload-status {" in css
     assert "font-size: 12px;" in css
     assert ".shell-gpu-status .shell-system-disk {" in css
     assert "gap: 4px;" in css

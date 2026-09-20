@@ -1,5 +1,4 @@
 (function () {
-  var PROFILE_ID = '__test_generations__';
   var H3_PROFILE_ID = 'minimax_h3';
   var pollTimer = null;
   var prepared = null;
@@ -24,14 +23,13 @@
     return index === -1 ? value : value.slice(0, index);
   }
 
-  function request(mode, criteria) {
+  function request(operation, criteria) {
     var body = {
       folder: owningSetFolder(launchFolder || (state && state.folder) || ''),
-      profileId: PROFILE_ID,
-      mode: mode
+      operation: operation
     };
-    if (criteria) body.selection_criteria = criteria;
-    return fetch('/fs/training_setup', {
+    if (criteria) body.criteria = criteria;
+    return fetch('/fs/test_generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -1850,4 +1848,3 @@
   window.testGenerationsRatingChanged = completeRatingReviewIfFinished;
   bindUi();
 })();
-

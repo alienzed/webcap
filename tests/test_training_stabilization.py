@@ -717,6 +717,26 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     assert "--resume_from_checkpoint /wsl" + custom.as_posix() + " --reset_dataloader --trust_cache" in split_text
 
 
+def test_managed_run_rejects_initializer_stage_outside_selected_run(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+
+    payload, status = training_runner.start_response(
+        "sets/subject",
+        queue=True,
+        stages="h3",
+        profile_id=MINIMAX_H3_PROFILE_ID,
+        run_id="train",
+        selected_media=["one.png"],
+        initializer_stage="other",
+        initializer_custom_path="C:/models/initializer.safetensors",
+    )
+
+    assert status == 400
+    assert payload == {"ok": False, "error": "Could not create the training capture: Initializer target stage does not belong to this run."}
+
+
 def test_initializer_picker_lists_only_current_set_managed_epoch_exports(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)

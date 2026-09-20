@@ -2006,6 +2006,8 @@ def start_response(
                 raise ValueError("A recorded-capture resume cannot add a LoRA initializer.")
             if resume_from_checkpoint or resume_output_id:
                 raise ValueError("Checkpoint Resume and LoRA initialization cannot be combined.")
+            if initializer_stage not in stages:
+                raise ValueError("Initializer target stage does not belong to this run.")
             if initializer_custom_path:
                 initializer = {
                     "sourcePath": Path(str(initializer_custom_path).strip()),

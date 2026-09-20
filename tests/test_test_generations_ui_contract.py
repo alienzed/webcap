@@ -307,7 +307,19 @@ def test_test_generations_canonicalizes_session_paths_to_owning_set():
     assert "function owningSetFolder(folder)" in script
     assert "var marker = '/test-generations/'" in script
     assert "folder: owningSetFolder(launchFolder || (state && state.folder) || '')" in script
+    assert "operation: operation" in script
+    assert "body.criteria = criteria" in script
+    assert "fetch('/fs/test_generations'" in script
+    assert "__test_generations__" not in script
+    assert "fetch('/fs/training_setup'" not in script
     assert "launchFolder = owningSetFolder(state && state.folder || '')" in script
+
+
+def test_test_generation_sessions_are_not_training_set_contexts():
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
+
+    blacklist = common.split("function isBlacklistedSetSubfolderName", 1)[1].split("function isSetFolderPath", 1)[0]
+    assert "n === 'test-generations'" in blacklist
 
 
 def test_rendered_test_status_resynchronizes_run_controls():

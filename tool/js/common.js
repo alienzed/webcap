@@ -229,11 +229,11 @@ function undoLastOperation() {
 
 function isBlacklistedSetSubfolderName(name) {
   var n = String(name || '').toLowerCase();
-  return n === 'originals' || n === 'auto_dataset' || n === 'src_videos';
+  return n === 'originals' || n === 'auto_dataset' || n === 'src_videos' || n === 'test-generations';
 }
 
 // Path-only check: non-root folder path that does not include known
-// system subfolders (originals/auto_dataset) at any level.
+// system or generated-result subfolders at any level.
 function isSetFolderPath(path) {
   var value = String(path || '').trim();
   if (!value) return false;

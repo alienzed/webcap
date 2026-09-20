@@ -103,6 +103,104 @@ def _parse_filter_query(raw: str) -> dict:
     return out
 
 
+def _normalize_group_tags_for_media(folder_state: dict, media_name: str) -> dict[str, list[str]]:
+    raw_map = folder_state.get("caption_group_tags_by_media")
+    if not isinstance(raw_map, dict):
+        return {}
+    raw_groups = raw_map.get(media_name)
+    if not isinstance(raw_groups, dict):
+        return {}
+    out = {}
+    for raw_group, raw_terms in raw_groups.items():
+        group = str(raw_group or "").strip()
+        if not group or not isinstance(raw_terms, list):
+            continue
+        seen = set()
+        terms = []
+        for raw_term in raw_terms:
+            term = re.sub(r"\s+", " ", str(raw_term or "").strip())
+            key = term.casefold()
+            if not term or key in seen:
+                continue
+            seen.add(key)
+            terms.append(term)
+        if terms:
+            out[group] = terms
+    return out
+
+
+def _combined_tags_for_media(folder_state: dict, media_name: str) -> list[str]:
+    seen = set()
+    out = []
+    raw_tags = folder_state.get("caption_tags_by_media")
+    if isinstance(raw_tags, dict):
+        values = raw_tags.get(media_name)
+        if isinstance(values, list):
+            for raw_tag in values:
+                tag = re.sub(r"\s+", " ", str(raw_tag or "").strip())
+                key = tag.casefold()
+                if not tag or key in seen:
+                    continue
+                seen.add(key)
+                out.append(tag)
+    for terms in _normalize_group_tags_for_media(folder_state, media_name).values():
+        for term in terms:
+            key = term.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(term)
+    return out
+
+
+def _apply_affix_pair(base_text: str, prefix: str, suffix: str) -> str:
+    result = str(base_text or "")
+    if not result:
+        return ""
+    prefix = str(prefix or "").strip()
+    suffix = str(suffix or "").strip()
+    if prefix:
+        result = prefix + ("" if re.search(r"[\s([{\"'-]$", prefix) else " ") + result
+    if suffix:
+        result = result + ("" if re.match(r"^[\s)\]}:;,.!?\"'-]", suffix) else " ") + suffix
+    return re.sub(r"\s+", " ", result).strip()
+
+
+def _group_term_affix(folder_state: dict, field: str, group: str, term: str) -> dict:
+    root = folder_state.get(field)
+    if not isinstance(root, dict):
+        return {}
+    group_map = root.get(group)
+    if not isinstance(group_map, dict):
+        return {}
+    entry = group_map.get(str(term or "").strip().lower())
+    return entry if isinstance(entry, dict) else {}
+
+
+def _render_scoped_term(folder_state: dict, media_name: str, group: str, term: str) -> str:
+    group = str(group or "").strip()
+    term = re.sub(r"\s+", " ", str(term or "").strip())
+    if not group or not term:
+        return term
+
+    descriptor = {}
+    media_descriptors = folder_state.get("caption_group_term_descriptors_by_media")
+    if isinstance(media_descriptors, dict):
+        media_groups = media_descriptors.get(media_name)
+        if isinstance(media_groups, dict):
+            media_terms = media_groups.get(group)
+            if isinstance(media_terms, dict):
+                entry = media_terms.get(term.lower())
+                if isinstance(entry, dict):
+                    descriptor = entry
+    if not descriptor:
+        descriptor = _group_term_affix(folder_state, "caption_group_term_descriptor_defaults", group, term)
+
+    wrapper = _group_term_affix(folder_state, "caption_group_term_wrappers", group, term)
+    rendered = _apply_affix_pair(term, descriptor.get("prefix"), descriptor.get("suffix"))
+    return _apply_affix_pair(rendered, wrapper.get("prefix"), wrapper.get("suffix"))
+
+
 def _matches_filter_query(match: dict, query: dict, mode: str = "all") -> bool:
     tags = match.get("tags") if isinstance(match.get("tags"), list) else []
     haystack = "\n".join(
@@ -172,13 +270,34 @@ def _caption_contains_tag_with_allowances(caption_text: str, tag_text: str) -> b
     return False
 
 
-def _match_has_tag_mismatch(match: dict) -> bool:
-    tags = [str(tag or "").strip() for tag in (match.get("tags") if isinstance(match.get("tags"), list) else [])]
-    tags = [tag for tag in tags if tag]
-    if not tags:
-        return True
+def _match_has_tag_mismatch(match: dict, folder_state: dict | None = None) -> bool:
     caption_text = str(match.get("caption") or "")
-    return any(not _caption_contains_tag_with_allowances(caption_text, tag) for tag in tags)
+    media_name = str(match.get("media_name") or "")
+    scoped_groups = _normalize_group_tags_for_media(folder_state or {}, media_name)
+    unscoped_tags = []
+    raw_tags = (folder_state or {}).get("caption_tags_by_media")
+    if isinstance(raw_tags, dict):
+        raw_values = raw_tags.get(media_name)
+        if isinstance(raw_values, list):
+            unscoped_tags = [str(tag or "").strip() for tag in raw_values if str(tag or "").strip()]
+
+    total = 0
+    for group, terms in scoped_groups.items():
+        for term in terms:
+            total += 1
+            rendered = _render_scoped_term(folder_state or {}, media_name, group, term)
+            if rendered and rendered.casefold() != term.casefold():
+                if rendered.casefold() not in caption_text.casefold():
+                    return True
+            elif not _caption_contains_tag_with_allowances(caption_text, term):
+                return True
+
+    for tag in unscoped_tags:
+        total += 1
+        if not _caption_contains_tag_with_allowances(caption_text, tag):
+            return True
+
+    return total == 0
 
 
 def _normalize_rating(value) -> int:
@@ -243,23 +362,20 @@ def _match_has_incomplete_requirements(match: dict, folder_state: dict) -> bool:
     if not isinstance(keywords_by_item, dict):
         keywords_by_item = {}
     media_name = str(match.get("media_name") or "")
-    tags = [str(tag or "") for tag in (match.get("tags") if isinstance(match.get("tags"), list) else [])]
+    scoped_groups = _normalize_group_tags_for_media(folder_state, media_name)
+
     total = 0
     completed = 0
     for raw_label in requirements:
         label = str(raw_label or "").strip()
         if not label:
             continue
-        terms = _parse_requirement_terms(str(keywords_by_item.get(label) or ""))
-        if not terms:
+        configured_terms = _parse_requirement_terms(str(keywords_by_item.get(label) or ""))
+        assigned_terms = scoped_groups.get(label, [])
+        if not configured_terms and not assigned_terms:
             continue
         total += 1
-        found = False
-        for term in terms:
-            if any(str(tag or "").strip().lower() == term.strip().lower() for tag in tags):
-                found = True
-                break
-        if found:
+        if assigned_terms:
             completed += 1
     return total > 0 and completed < total
 
@@ -341,12 +457,10 @@ def _collect_matches(root: Path, term: str) -> list[dict]:
         if state is None:
             state = _load_folder_state(dir_path)
             state_cache[rel_key] = state
-        tags_map = state.get("caption_tags_by_media") if isinstance(state.get("caption_tags_by_media"), dict) else {}
-
         for media_path in media_files:
             media_name = media_path.name
             caption_text = _read_caption_text(dir_path, media_name)
-            tags_text = " ".join(tags_map.get(media_name) or []) if isinstance(tags_map.get(media_name), list) else ""
+            tags_text = " ".join(_combined_tags_for_media(state, media_name))
             haystack = "\n".join([caption_text, tags_text]).lower()
             if term_text not in haystack:
                 continue
@@ -425,9 +539,7 @@ def _collect_superset_matches(criteria: dict) -> list[dict]:
         for media_path in media_files:
             media_name = media_path.name
             caption_text = _read_caption_text(dir_path, media_name)
-            tags = tags_map.get(media_name)
-            if not isinstance(tags, list):
-                tags = []
+            tags = _combined_tags_for_media(folder_state, media_name)
             metadata = folder_metadata.get(media_name)
             if not isinstance(metadata, dict):
                 metadata = {}
@@ -459,7 +571,7 @@ def _collect_superset_matches(criteria: dict) -> list[dict]:
                 continue
             if incomplete_only and not _match_has_incomplete_requirements(match, folder_state):
                 continue
-            if tag_mismatch_only and not _match_has_tag_mismatch(match):
+            if tag_mismatch_only and not _match_has_tag_mismatch(match, folder_state):
                 continue
             if star_filter["values"] or star_filter["include_no_star"]:
                 if rating <= 0:

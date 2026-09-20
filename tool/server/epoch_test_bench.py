@@ -1354,12 +1354,17 @@ def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=No
         had_active_test = any(thread and thread.is_alive() for thread in _active_threads.values())
         _pending_tests.append(job)
     started = _advance_test_queue()
-    if not started and not had_active_test:
-        with _lock:
-            _pending_tests[:] = [item for item in _pending_tests if str(item.get("id") or "") != job["id"]]
-        raise RuntimeError("Pause Training before starting Test Generations.")
     with _lock:
         still_queued = any(str(item.get("id") or "") == job["id"] for item in _pending_tests)
+    if not started and not had_active_test:
+        if still_queued:
+            with _lock:
+                _pending_tests[:] = [item for item in _pending_tests if str(item.get("id") or "") != job["id"]]
+            raise RuntimeError("Pause Training before starting Test Generations.")
+        latest = status(folder_path)
+        if str((latest or {}).get("status") or "") == "failed":
+            raise RuntimeError(str((latest or {}).get("error") or "Test Generations could not start."))
+        raise RuntimeError("Test Generations did not start.")
     return {
         "operation": "test_enqueue",
         "job": _queue_job_payload(job),

@@ -149,9 +149,9 @@ function renderChecklistPanel(options) {
     var labelText = document.createElement('span');
     labelText.className = 'checklist-row-label-text';
     labelText.textContent = item;
-    label.appendChild(dragHandle);
     label.appendChild(toggleBtn);
     label.appendChild(labelText);
+    label.appendChild(dragHandle);
     summaryRow.appendChild(label);
 
     var captionText = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
@@ -163,6 +163,26 @@ function renderChecklistPanel(options) {
 
     var actions = document.createElement('div');
     actions.className = 'checklist-row-actions';
+
+    var visibilityBtn = document.createElement('button');
+    visibilityBtn.type = 'button';
+    visibilityBtn.textContent = '👁';
+    visibilityBtn.className = 'checklist-row-action-btn checklist-group-visibility-btn';
+    var isGroupHidden = isChecklistRequirementHidden(item);
+    visibilityBtn.classList.toggle('is-hidden', isGroupHidden);
+    visibilityBtn.title = isGroupHidden
+      ? 'Show ' + item + ' in Annotation Groups'
+      : 'Hide ' + item + ' from Annotation Groups';
+    visibilityBtn.setAttribute('aria-label', visibilityBtn.title);
+    visibilityBtn.setAttribute('aria-pressed', isGroupHidden ? 'false' : 'true');
+    (function (requirementLabel, nextHidden) {
+      visibilityBtn.onclick = function () {
+        if (!setChecklistRequirementHidden(requirementLabel, nextHidden)) return;
+        setStatus((nextHidden ? 'Hidden from' : 'Shown in') + ' Annotation Groups: ' + requirementLabel);
+        renderChecklistPanel({ skipItemDetailRefresh: true });
+      };
+    })(item, !isGroupHidden);
+    actions.appendChild(visibilityBtn);
 
     var editTermsBtn = document.createElement('button');
     editTermsBtn.type = 'button';

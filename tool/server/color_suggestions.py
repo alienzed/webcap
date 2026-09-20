@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 
-COLOR_SUGGESTIONS_VERSION = 1
+COLOR_SUGGESTIONS_VERSION = 2
 COLOR_SUGGESTIONS_METHOD = "pillow_lab_v2"
 COLOR_SUGGESTION_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
 COLOR_SUGGESTION_MAX_DIMENSION = 180

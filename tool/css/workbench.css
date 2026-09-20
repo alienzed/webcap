@@ -2118,6 +2118,53 @@ html[data-theme="dark"] .training-runner-card {
   color: #1f2937;
 }
 
+
+.group-workbench-color-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px 6px;
+  border-top: 1px solid var(--border-soft, var(--border));
+}
+
+.group-workbench-color-suggestions-label,
+.group-workbench-color-suggestions-status {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.group-workbench-color-suggestion {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 1px solid var(--border-soft, var(--border));
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.group-workbench-color-suggestion.novel {
+  border-style: dashed;
+}
+
+.group-workbench-color-suggestion:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.group-workbench-color-swatch {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border: 1px solid rgba(127, 127, 127, 0.45);
+  border-radius: 999px;
+}
+
 .group-workbench-term-btn:disabled,
 .group-workbench-term-btn:disabled:hover {
   border-color: var(--border-soft, var(--border));

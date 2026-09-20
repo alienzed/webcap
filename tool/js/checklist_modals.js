@@ -490,6 +490,15 @@ if (document.getElementById('checklist-group-terms-add-btn')) {
   });
 }
 
+if (document.getElementById('checklist-group-primer-separator')) {
+  document.getElementById('checklist-group-primer-separator').addEventListener('change', function () {
+    if (!checklistGroupTermsModalState) return;
+    if (setChecklistPrimerSeparatorForRequirement(checklistGroupTermsModalState.requirement, this.value)) {
+      setStatus('Updated primer separator for ' + checklistGroupTermsModalState.requirement + '.');
+    }
+  });
+}
+
 if (document.getElementById('checklist-group-terms-input')) {
   document.getElementById('checklist-group-terms-input').addEventListener('input', function () {
     renderChecklistGroupTermsModalResults(this.value);

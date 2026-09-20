@@ -1153,3 +1153,73 @@ def test_shared_queue_advances_from_completed_test_to_training(tmp_path, monkeyp
     assert state["activeJobId"] == "train-next"
     assert state["jobs"][0]["status"] == "completed"
     assert state["jobs"][1]["status"] == "running"
+
+
+
+def test_low_disk_does_not_block_test_ahead_of_training(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    launched = []
+
+    monkeypatch.setattr(training_runner, "_startup_reconciled", True)
+    monkeypatch.setattr(
+        training_runner,
+        "_training_disk_space",
+        lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1},
+    )
+
+    def launch_test(job, _folder):
+        launched.append(job["id"])
+        job["status"] = "running"
+        job["stage"] = "test"
+
+    monkeypatch.setattr(training_runner, "_launch_test_job", launch_test)
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda *_args, **_kwargs: pytest.fail("later Training job must not launch before the Test job"),
+    )
+
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [
+            {"id": "test-first", "kind": "test", "status": "queued", "folder": "sets/subject"},
+            {
+                "id": "train-second",
+                "status": "queued",
+                "folder": "sets/subject",
+                "outputRoot": str(tmp_path / "output"),
+            },
+        ],
+    }
+
+    training_runner._refresh_state(state)
+
+    assert launched == ["test-first"]
+    assert state["activeJobId"] == "test-first"
+    assert state["queuePaused"] is False
+    assert state["jobs"][1]["status"] == "queued"
+
+
+def test_queued_test_candidate_reference_query(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [{
+            "id": "test-one",
+            "kind": "test",
+            "status": "queued",
+            "folder": "sets/subject",
+            "testRequest": {"selectedFiles": ["epoch10.safetensors"]},
+        }],
+    })
+
+    assert training_runner.queued_test_job_references_candidate("sets/subject", "epoch10.safetensors") is True
+    assert training_runner.queued_test_job_references_candidate("sets/subject", "epoch20.safetensors") is False
+    assert training_runner.queued_test_job_references_candidate("sets/other", "epoch10.safetensors") is False

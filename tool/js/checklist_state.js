@@ -15,6 +15,8 @@ var checklistTermDescriptorsByMedia = {}; // { mediaKey: { requirement: { termLo
 var checklistTermAffixesByKey = {}; // Legacy mirror of unscoped wrappers.
 var checklistExpandedRequirements = {};
 var checklistHiddenRequirements = {}; // { requirement: true } persisted per folder/set
+var checklistPrimerSeparatorsByGroup = {}; // { requirement: separator }, default ", "
+var checklistPrimerPrecedenceByGroup = {}; // { requirement: { beforeTermLower: { afterTermLower: true } } }
 
 function checklistSort(a, b) {
   return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
@@ -132,6 +134,158 @@ function parseChecklistKeywordTerms(raw) {
 
 function normalizeChecklistTermAffixKey(termText) {
   return normalizeChecklistTerm(termText).toLowerCase();
+}
+
+function normalizeChecklistPrimerSeparator(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .replace(/\r?\n/g, ' ')
+    .slice(0, 40);
+}
+
+function sanitizeChecklistPrimerSeparators(rawMap) {
+  var src = (rawMap && typeof rawMap === 'object' && !Array.isArray(rawMap)) ? rawMap : {};
+  var out = {};
+  Object.keys(src).forEach(function (rawRequirement) {
+    var requirement = normalizeChecklistRequirementKey(rawRequirement);
+    if (!requirement) return;
+    out[requirement] = normalizeChecklistPrimerSeparator(src[rawRequirement]);
+  });
+  return out;
+}
+
+function sanitizeChecklistPrimerPrecedence(rawMap) {
+  var src = (rawMap && typeof rawMap === 'object' && !Array.isArray(rawMap)) ? rawMap : {};
+  var out = {};
+  Object.keys(src).forEach(function (rawRequirement) {
+    var requirement = normalizeChecklistRequirementKey(rawRequirement);
+    var rawBeforeMap = src[rawRequirement];
+    if (!requirement || !rawBeforeMap || typeof rawBeforeMap !== 'object' || Array.isArray(rawBeforeMap)) return;
+    var beforeMap = {};
+    Object.keys(rawBeforeMap).forEach(function (rawBeforeTerm) {
+      var beforeTerm = normalizeChecklistTerm(rawBeforeTerm).toLowerCase();
+      var rawAfterMap = rawBeforeMap[rawBeforeTerm];
+      if (!beforeTerm || !rawAfterMap || typeof rawAfterMap !== 'object' || Array.isArray(rawAfterMap)) return;
+      var afterMap = {};
+      Object.keys(rawAfterMap).forEach(function (rawAfterTerm) {
+        var afterTerm = normalizeChecklistTerm(rawAfterTerm).toLowerCase();
+        if (!afterTerm || afterTerm === beforeTerm || rawAfterMap[rawAfterTerm] !== true) return;
+        afterMap[afterTerm] = true;
+      });
+      if (Object.keys(afterMap).length) beforeMap[beforeTerm] = afterMap;
+    });
+    if (Object.keys(beforeMap).length) out[requirement] = beforeMap;
+  });
+  return out;
+}
+
+function getChecklistPrimerSeparatorForRequirement(requirementLabel) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requirement) return ', ';
+  if (Object.prototype.hasOwnProperty.call(checklistPrimerSeparatorsByGroup, requirement)) {
+    return normalizeChecklistPrimerSeparator(checklistPrimerSeparatorsByGroup[requirement]);
+  }
+  return ', ';
+}
+
+function setChecklistPrimerSeparatorForRequirement(requirementLabel, separator) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requirement) return false;
+  var next = normalizeChecklistPrimerSeparator(separator);
+  var previous = getChecklistPrimerSeparatorForRequirement(requirement);
+  var hadExplicit = Object.prototype.hasOwnProperty.call(checklistPrimerSeparatorsByGroup, requirement);
+  if (hadExplicit && normalizeChecklistPrimerSeparator(checklistPrimerSeparatorsByGroup[requirement]) === next) return false;
+  if (!hadExplicit && previous === next && next === ', ') return false;
+  checklistPrimerSeparatorsByGroup[requirement] = next;
+  saveChecklistToFolderState();
+  refreshCurrentPrimerDerivedUi();
+  return true;
+}
+
+function recordChecklistPrimerPrecedence(requirementLabel, beforeTermText, afterTermText) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  var beforeTerm = normalizeChecklistTerm(beforeTermText).toLowerCase();
+  var afterTerm = normalizeChecklistTerm(afterTermText).toLowerCase();
+  if (!requirement || !beforeTerm || !afterTerm || beforeTerm === afterTerm) return false;
+
+  var groupMap = JSON.parse(JSON.stringify(checklistPrimerPrecedenceByGroup[requirement] || {}));
+  var beforeMap = (groupMap[beforeTerm] && typeof groupMap[beforeTerm] === 'object')
+    ? groupMap[beforeTerm]
+    : {};
+  var reverseMap = (groupMap[afterTerm] && typeof groupMap[afterTerm] === 'object')
+    ? groupMap[afterTerm]
+    : {};
+
+  beforeMap[afterTerm] = true;
+  if (Object.prototype.hasOwnProperty.call(reverseMap, beforeTerm)) {
+    delete reverseMap[beforeTerm];
+    if (Object.keys(reverseMap).length) groupMap[afterTerm] = reverseMap;
+    else delete groupMap[afterTerm];
+  }
+  groupMap[beforeTerm] = beforeMap;
+  checklistPrimerPrecedenceByGroup[requirement] = groupMap;
+  return true;
+}
+
+function sortChecklistPrimerEntriesForRequirement(requirementLabel, entries) {
+  var base = Array.isArray(entries) ? entries.slice() : [];
+  if (base.length < 2) return base;
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  var learned = checklistPrimerPrecedenceByGroup[requirement];
+  if (!learned || typeof learned !== 'object') return base;
+
+  var keyByIndex = base.map(function (entry) {
+    return normalizeChecklistTerm(entry && entry.term).toLowerCase();
+  });
+  var entryByKey = {};
+  var originalIndex = {};
+  keyByIndex.forEach(function (key, index) {
+    if (!key || Object.prototype.hasOwnProperty.call(entryByKey, key)) return;
+    entryByKey[key] = base[index];
+    originalIndex[key] = index;
+  });
+  var keys = Object.keys(entryByKey);
+  if (keys.length < 2) return base;
+
+  var outgoing = {};
+  var indegree = {};
+  keys.forEach(function (key) {
+    outgoing[key] = {};
+    indegree[key] = 0;
+  });
+  Object.keys(learned).forEach(function (beforeKey) {
+    if (!Object.prototype.hasOwnProperty.call(entryByKey, beforeKey)) return;
+    var afterMap = learned[beforeKey];
+    if (!afterMap || typeof afterMap !== 'object') return;
+    Object.keys(afterMap).forEach(function (afterKey) {
+      if (!afterMap[afterKey] || !Object.prototype.hasOwnProperty.call(entryByKey, afterKey) || beforeKey === afterKey) return;
+      if (outgoing[beforeKey][afterKey]) return;
+      outgoing[beforeKey][afterKey] = true;
+      indegree[afterKey] += 1;
+    });
+  });
+
+  var ready = keys.filter(function (key) { return indegree[key] === 0; });
+  ready.sort(function (a, b) { return originalIndex[a] - originalIndex[b]; });
+  var orderedKeys = [];
+  while (ready.length) {
+    var current = ready.shift();
+    orderedKeys.push(current);
+    Object.keys(outgoing[current]).forEach(function (afterKey) {
+      indegree[afterKey] -= 1;
+      if (indegree[afterKey] === 0) {
+        ready.push(afterKey);
+        ready.sort(function (a, b) { return originalIndex[a] - originalIndex[b]; });
+      }
+    });
+  }
+
+  if (orderedKeys.length < keys.length) {
+    keys
+      .filter(function (key) { return orderedKeys.indexOf(key) === -1; })
+      .sort(function (a, b) { return originalIndex[a] - originalIndex[b]; })
+      .forEach(function (key) { orderedKeys.push(key); });
+  }
+  return orderedKeys.map(function (key) { return entryByKey[key]; });
 }
 
 function normalizeChecklistAffixValue(value) {
@@ -677,9 +831,12 @@ function moveChecklistAssignedTagForRequirement(mediaKey, requirementLabel, tagT
   var nextIdx = idx + Number(offset || 0);
   if (idx < 0 || nextIdx < 0 || nextIdx >= tags.length) return false;
   var next = tags.slice();
+  var crossedTerm = next[nextIdx];
   var temp = next[idx];
   next[idx] = next[nextIdx];
   next[nextIdx] = temp;
+  if (nextIdx < idx) recordChecklistPrimerPrecedence(requirement, tagText, crossedTerm);
+  else recordChecklistPrimerPrecedence(requirement, crossedTerm, tagText);
   var mediaMap = JSON.parse(JSON.stringify(getChecklistAssignmentsForMediaKey(key)));
   mediaMap[requirement] = next;
   checklistAssignmentsByMedia[key] = mediaMap;
@@ -957,6 +1114,8 @@ function saveChecklistToFolderState() {
   var snapshot = snapshotFolderStateFromDom();
   snapshot.caption_requirements = checklistItems.slice();
   snapshot.caption_hidden_requirements = getChecklistHiddenRequirements();
+  snapshot.caption_group_primer_separators = JSON.parse(JSON.stringify(checklistPrimerSeparatorsByGroup));
+  snapshot.caption_group_primer_precedence = JSON.parse(JSON.stringify(checklistPrimerPrecedenceByGroup));
   snapshot.caption_requirements_checked = JSON.parse(JSON.stringify(checklistCheckedByMedia));
   snapshot.caption_requirement_keywords = JSON.parse(JSON.stringify(checklistKeywordsByItem));
   snapshot.caption_term_wrappers = JSON.parse(JSON.stringify(checklistTermWrappersByKey));
@@ -978,6 +1137,8 @@ function loadChecklistFromFolderState(folderState) {
     checklistItems = getDefaultRequirementItems().slice();
   }
   checklistHiddenRequirements = sanitizeChecklistHiddenRequirements(folderState.caption_hidden_requirements);
+  checklistPrimerSeparatorsByGroup = sanitizeChecklistPrimerSeparators(folderState.caption_group_primer_separators);
+  checklistPrimerPrecedenceByGroup = sanitizeChecklistPrimerPrecedence(folderState.caption_group_primer_precedence);
   if (folderState.caption_requirements_checked && typeof folderState.caption_requirements_checked === 'object') {
     checklistCheckedByMedia = JSON.parse(JSON.stringify(folderState.caption_requirements_checked));
   } else {

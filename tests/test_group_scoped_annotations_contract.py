@@ -298,6 +298,7 @@ def test_primer_group_separator_and_learned_order_are_persisted_and_applied():
     assert "getChecklistPrimerSeparatorForRequirement(checklistItems[i])" in folder_state
     assert ".join(separator)" in folder_state
     assert 'id="checklist-group-primer-separator"' in html
+    assert "separatorEl.value = getChecklistPrimerSeparatorForRequirement(checklistGroupTermsModalState.requirement)" in modal
     assert "setChecklistPrimerSeparatorForRequirement(checklistGroupTermsModalState.requirement, this.value)" in modal
 
 

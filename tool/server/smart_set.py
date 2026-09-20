@@ -103,13 +103,69 @@ def _parse_filter_query(raw: str) -> dict:
     return out
 
 
+def _effective_requirement_catalog(folder_state: dict) -> dict[str, list[str]]:
+    cfg = app_config.get_config_snapshot()
+    cfg_requirements = cfg.get("requirements") if isinstance(cfg, dict) else {}
+    cfg_items = cfg_requirements.get("items") if isinstance(cfg_requirements, dict) else []
+    cfg_keywords = cfg_requirements.get("keywordsByItem") if isinstance(cfg_requirements, dict) else {}
+
+    folder_items = folder_state.get("caption_requirements")
+    requirements = folder_items if isinstance(folder_items, list) else (cfg_items if isinstance(cfg_items, list) else [])
+    folder_keywords = folder_state.get("caption_requirement_keywords")
+    if not isinstance(folder_keywords, dict):
+        folder_keywords = {}
+    if not isinstance(cfg_keywords, dict):
+        cfg_keywords = {}
+
+    out = {}
+    for raw_group in requirements:
+        group = str(raw_group or "").strip()
+        if not group:
+            continue
+        seen = set()
+        terms = []
+        for source in (folder_keywords.get(group), cfg_keywords.get(group)):
+            values = source if isinstance(source, list) else str(source or "").split(",")
+            for raw_term in values:
+                term = re.sub(r"\s+", " ", str(raw_term or "").strip())
+                key = term.casefold()
+                if not term or key in seen:
+                    continue
+                seen.add(key)
+                terms.append(term)
+        out[group] = terms
+    return out
+
+
+def _legacy_group_tags_for_media(folder_state: dict, media_name: str) -> dict[str, list[str]]:
+    if "caption_group_tags_by_media" in folder_state:
+        return {}
+    raw_tags = folder_state.get("caption_tags_by_media")
+    values = raw_tags.get(media_name) if isinstance(raw_tags, dict) else []
+    if not isinstance(values, list):
+        return {}
+    catalog = _effective_requirement_catalog(folder_state)
+    out = {}
+    for raw_tag in values:
+        term = re.sub(r"\s+", " ", str(raw_tag or "").strip())
+        if not term:
+            continue
+        term_key = term.casefold()
+        matches = []
+        for group, group_terms in catalog.items():
+            if any(str(candidate or "").strip().casefold() == term_key for candidate in group_terms):
+                matches.append(group)
+        if len(matches) != 1:
+            continue
+        out.setdefault(matches[0], []).append(term)
+    return out
+
+
 def _normalize_group_tags_for_media(folder_state: dict, media_name: str) -> dict[str, list[str]]:
     raw_map = folder_state.get("caption_group_tags_by_media")
-    if not isinstance(raw_map, dict):
-        return {}
-    raw_groups = raw_map.get(media_name)
+    raw_groups = raw_map.get(media_name) if isinstance(raw_map, dict) else None
     if not isinstance(raw_groups, dict):
-        return {}
+        return _legacy_group_tags_for_media(folder_state, media_name)
     out = {}
     for raw_group, raw_terms in raw_groups.items():
         group = str(raw_group or "").strip()
@@ -714,11 +770,9 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
             if isinstance(tag_list, list) and tag_list:
                 tags_by_media[dest_name] = [str(tag).strip() for tag in tag_list if str(tag).strip()]
 
-        src_group_tags = src_state.get("caption_group_tags_by_media")
-        if isinstance(src_group_tags, dict):
-            group_map = src_group_tags.get(media_name)
-            if isinstance(group_map, dict) and group_map:
-                group_tags_by_media[dest_name] = json.loads(json.dumps(group_map))
+        group_map = _normalize_group_tags_for_media(src_state, media_name)
+        if group_map:
+            group_tags_by_media[dest_name] = json.loads(json.dumps(group_map))
 
         src_ratings = src_state.get("ratings_by_media")
         if isinstance(src_ratings, dict) and media_name in src_ratings:
@@ -1062,11 +1116,9 @@ def create_set_from_results_response(data: dict):
                 if isinstance(tag_list, list) and tag_list:
                     tags_by_media[dest_media_name] = [str(tag).strip() for tag in tag_list if str(tag).strip()]
 
-            src_group_tags = src_state.get("caption_group_tags_by_media")
-            if isinstance(src_group_tags, dict):
-                group_map = src_group_tags.get(media_name)
-                if isinstance(group_map, dict) and group_map:
-                    group_tags_by_media[dest_media_name] = json.loads(json.dumps(group_map))
+            group_map = _normalize_group_tags_for_media(src_state, media_name)
+            if group_map:
+                group_tags_by_media[dest_media_name] = json.loads(json.dumps(group_map))
 
             src_ratings = src_state.get("ratings_by_media")
             if isinstance(src_ratings, dict) and media_name in src_ratings:

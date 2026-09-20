@@ -341,7 +341,7 @@
 
 .shell-workload-status.is-training,
 .shell-workload-status.is-testing {
-  color: var(--text);
+  color: var(--accent);
 }
 
 .shell-gpu-status strong {

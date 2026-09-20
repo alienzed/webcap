@@ -412,19 +412,12 @@
   function cancelQueuedTest(jobId) {
     var id = String(jobId || '').trim();
     if (!id) return Promise.resolve();
-    return fetch('/fs/training_runner/stop', {
+    return trainingRunnerRequest('/fs/training_runner/stop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jobId: id, cancel: true })
-    }).then(function (response) {
-      return response.json().then(function (payload) {
-        if (!response.ok || !payload || payload.ok === false) {
-          throw new Error(payload && payload.error ? payload.error : 'Could not remove queued Test session.');
-        }
-        return payload;
-      });
     }).then(function () {
-      if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();
+      refreshTrainingRunnerStatus();
       return refreshSessions();
     });
   }
@@ -1132,7 +1125,7 @@
       if (nameInput) nameInput.value = '';
       return refreshSessions();
     }).then(function () {
-      if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();
+      refreshTrainingRunnerStatus();
       pollStatus();
     }).catch(function (err) {
       syncActiveRunControls(currentStatus);
@@ -1162,11 +1155,11 @@
 
   function deleteSession(sessionName) {
     request('test_delete_session', { session: String(sessionName || '') }).then(function (payload) {
-      renderSessions(payload && payload.sessions);
       if (currentSession === String(payload.deleted || '')) {
         currentSession = '';
         renderStatus(payload.latest || { status: 'idle' });
       }
+      return refreshSessions();
     }).catch(showError);
   }
 

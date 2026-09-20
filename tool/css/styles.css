@@ -2006,22 +2006,6 @@ iframe {
   font-size: 12px;
 }
 
-.workspace-surface-training .training-gpu-status {
-  min-height: 16px;
-  color: var(--muted);
-  font-size: 12px;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.workspace-surface-training .training-gpu-status strong {
-  color: var(--text);
-}
-
-.workspace-surface-training .training-gpu-status .is-warning {
-  color: #cc7a3f;
-}
-
 .workspace-surface-training .training-gpu-details {
   margin-top: 2px;
 }

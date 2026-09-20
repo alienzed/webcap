@@ -2610,6 +2610,26 @@ iframe {
   border-bottom: 1px solid var(--border);
   font-size: 12px;
 }
+.test-generations-library-heading-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.test-generations-library-heading-tools > span {
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  text-align: center;
+  font-size: 11px;
+}
+.test-generations-library-heading-tools .review-captions-btn {
+  min-height: 24px;
+  padding: 2px 7px;
+  font-size: 11px;
+}
 .test-generations-library-heading > span {
   min-width: 22px;
   padding: 1px 6px;

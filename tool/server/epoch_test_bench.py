@@ -21,6 +21,7 @@ COMFY_BASE_URL = "http://127.0.0.1:8188"
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "comfyui" / "minimax_h3_test_api.json"
 TEST_RESULTS_DIR = "test-generations"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
+GPU_RESERVATION_OWNER = "test-generations"
 TEST_ASPECT_RATIO_OPTIONS = (
     "1:1 (Square)",
     "2:3 (Portrait Photo)",
@@ -36,6 +37,19 @@ _active_threads = {}
 _active_sessions = {}
 _stop_requests = set()
 _recent_sets_cache = {"expires": 0.0, "items": []}
+_pending_tests = []
+_test_gpu_reserved = False
+_queue_retry_thread = None
+
+
+def _reserve_gpu_for_test_generations():
+    from .training_runner import reserve_gpu_for_external_work
+    return reserve_gpu_for_external_work(GPU_RESERVATION_OWNER)
+
+
+def _release_gpu_for_test_generations():
+    from .training_runner import release_gpu_for_external_work
+    release_gpu_for_external_work(GPU_RESERVATION_OWNER)
 
 
 def _windows_curl_path():
@@ -419,9 +433,7 @@ def remove_candidate(folder_path, file_name, session_name=None):
         or not name.lower().endswith(".safetensors")
     ):
         raise ValueError("A staged .safetensors filename is required.")
-    from .training_runner import queued_test_job_references_candidate
-
-    references = queued_test_job_references_candidate(_relative_set_folder(folder_path), name)
+    references = _queued_test_references_candidate(_relative_set_folder(folder_path), name)
     if references:
         raise RuntimeError("Cannot remove a staged Test candidate referenced by a queued Test session. Remove that queued session first.")
 
@@ -1193,12 +1205,8 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
             _active_threads.pop(folder_key, None)
             _active_sessions.pop(folder_key, None)
             _stop_requests.discard(folder_key)
-
-
-
-def queue_session_status(folder_path, session_name):
-    return _visible_session_status(folder_path, _session_directory(folder_path, session_name))
-
+        if not _advance_test_queue():
+            _ensure_queue_retry()
 
 def _build_queued_request(
     folder_path,
@@ -1244,45 +1252,136 @@ def _build_queued_request(
     }
 
 
-def enqueue(
-    folder_path,
-    prompt,
-    aspect_ratio=None,
-    megapixels=None,
-    duration=None,
-    seed=None,
-    name=None,
-    selected_files=None,
-):
-    request = _build_queued_request(
-        folder_path,
-        prompt,
-        aspect_ratio=aspect_ratio,
-        megapixels=megapixels,
-        duration=duration,
-        seed=seed,
-        name=name,
-        selected_files=selected_files,
-    )
-    from .training_runner import enqueue_test_response
-    payload, status_code = enqueue_test_response(_relative_set_folder(folder_path), request)
-    if status_code != 200 or not payload.get("ok"):
-        raise RuntimeError(str(payload.get("error") or "Could not queue Test Generations."))
-    return {
-        "operation": "test_enqueue",
-        "job": payload.get("job") or {},
-        "queued": bool(payload.get("queued")),
-        "latest": status(folder_path),
-    }
+def _queue_job_payload(job, position=0):
+    payload = {"id": str(job.get("id") or ""), "folder": str(job.get("folder") or ""), "runName": str(job.get("runName") or ""), "status": "queued", "testTotal": int(job.get("testTotal") or 0), "createdAt": float(job.get("createdAt") or 0)}
+    if position:
+        payload["queuePosition"] = int(position)
+    return payload
 
+
+def _prune_dead_test_workers_locked():
+    dead_keys = [key for key, thread in _active_threads.items() if not thread or not thread.is_alive()]
+    for key in dead_keys:
+        _active_threads.pop(key, None)
+        _active_sessions.pop(key, None)
+        _stop_requests.discard(key)
+
+
+def _queued_test_references_candidate(folder, file_name):
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    name = str(file_name or "").strip()
+    with _lock:
+        return any(str(job.get("folder") or "") == folder_text and name in (job.get("request") or {}).get("selectedFiles", []) for job in _pending_tests)
+
+
+def _advance_test_queue():
+    global _test_gpu_reserved
+    while True:
+        release_gpu = False
+        with _lock:
+            _prune_dead_test_workers_locked()
+            if any(thread and thread.is_alive() for thread in _active_threads.values()):
+                return True
+            if not _pending_tests:
+                if _test_gpu_reserved:
+                    _test_gpu_reserved = False
+                    release_gpu = True
+                job = None
+            else:
+                if not _test_gpu_reserved:
+                    if not _reserve_gpu_for_test_generations():
+                        return False
+                    _test_gpu_reserved = True
+                job = _pending_tests.pop(0)
+        if job is None:
+            if release_gpu:
+                _release_gpu_for_test_generations()
+            return False
+        try:
+            folder_path = app_config.safe_join_fs_root(str(job.get("folder") or ""))
+            payload = start_queued(folder_path, job.get("request") or {})
+        except Exception:
+            payload = {"status": "failed"}
+        if str((payload or {}).get("status") or "") in ("starting", "running"):
+            return True
+
+
+def _queue_retry_loop():
+    global _queue_retry_thread
+    try:
+        while True:
+            time.sleep(2)
+            with _lock:
+                _prune_dead_test_workers_locked()
+                if not _pending_tests or any(thread and thread.is_alive() for thread in _active_threads.values()):
+                    return
+            if _advance_test_queue():
+                return
+    finally:
+        with _lock:
+            if _queue_retry_thread is threading.current_thread():
+                _queue_retry_thread = None
+
+
+def _ensure_queue_retry():
+    global _queue_retry_thread
+    with _lock:
+        _prune_dead_test_workers_locked()
+        if not _pending_tests or any(thread and thread.is_alive() for thread in _active_threads.values()) or (_queue_retry_thread and _queue_retry_thread.is_alive()):
+            return
+        _queue_retry_thread = threading.Thread(target=_queue_retry_loop, name="webcap-test-queue", daemon=True)
+        _queue_retry_thread.start()
+
+
+def cancel_queued(folder_path, job_id):
+    folder = _relative_set_folder(folder_path)
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        raise ValueError("Queued Test job ID is required.")
+    removed = None
+    with _lock:
+        for index, job in enumerate(_pending_tests):
+            if str(job.get("id") or "") == job_id and str(job.get("folder") or "") == folder:
+                removed = _pending_tests.pop(index)
+                break
+    if removed is None:
+        raise FileNotFoundError("Queued Test session was not found.")
+    _advance_test_queue()
+    _ensure_queue_retry()
+    return {"operation": "test_queue_cancel", "removed": job_id, "jobs": queued_jobs(folder_path)["jobs"]}
+
+
+def clear_queued(folder_path):
+    folder = _relative_set_folder(folder_path)
+    with _lock:
+        kept = [job for job in _pending_tests if str(job.get("folder") or "") != folder]
+        removed = len(_pending_tests) - len(kept)
+        _pending_tests[:] = kept
+    _advance_test_queue()
+    _ensure_queue_retry()
+    return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path)["jobs"]}
+
+
+def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None, seed=None, name=None, selected_files=None):
+    request = _build_queued_request(folder_path, prompt, aspect_ratio=aspect_ratio, megapixels=megapixels, duration=duration, seed=seed, name=name, selected_files=selected_files)
+    folder = _relative_set_folder(folder_path)
+    job = {"id": secrets.token_hex(6), "folder": folder, "runName": str(request.get("name") or ""), "testTotal": int(request.get("total") or 0), "createdAt": time.time(), "request": request}
+    with _lock:
+        _pending_tests.append(job)
+    started = _advance_test_queue()
+    if not started:
+        _ensure_queue_retry()
+    with _lock:
+        still_queued = any(str(item.get("id") or "") == job["id"] for item in _pending_tests)
+    return {"operation": "test_enqueue", "job": _queue_job_payload(job), "queued": still_queued, "latest": status(folder_path)}
 
 def queued_jobs(folder_path):
-    from .training_runner import queued_test_jobs_for_folder
-    return {
-        "operation": "test_queue",
-        "jobs": queued_test_jobs_for_folder(_relative_set_folder(folder_path)),
-    }
-
+    _advance_test_queue()
+    _ensure_queue_retry()
+    folder = _relative_set_folder(folder_path)
+    with _lock:
+        jobs = [_queue_job_payload(job, position) for position, job in enumerate(_pending_tests, start=1) if str(job.get("folder") or "") == folder]
+    return {"operation": "test_queue", "jobs": jobs}
 
 def start_queued(folder_path, request):
     request = dict(request or {})
@@ -1425,6 +1524,11 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return {"operation": "test_sessions", "sessions": list_sessions(folder_path)}
     if operation == "test_queue":
         return queued_jobs(folder_path)
+    if operation == "test_queue_cancel":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return cancel_queued(folder_path, criteria.get("jobId"))
+    if operation == "test_queue_clear":
+        return clear_queued(folder_path)
     if operation == "test_open_session":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return open_session(folder_path, criteria.get("session"))
@@ -1453,3 +1557,4 @@ def handle_request(folder_path, mode, selection_criteria=None):
             selected_files=criteria.get("selectedFiles"),
         )
     raise ValueError("Unsupported Test Generations operation: " + operation)
+

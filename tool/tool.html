@@ -759,9 +759,9 @@
                         </section>
                         <section id="training-global-context" class="training-global-context" aria-label="Training activity">
                             <div class="training-global-label"><span class="training-workflow-step-number">2</span><span>Training</span></div>
-                            <section class="training-runner-card" aria-label="Execution queue">
+                            <section class="training-runner-card" aria-label="Training queue">
                                 <div class="training-runner-card-header">
-                                    <div class="training-workspace-section-title">Queue</div>
+                                    <div class="training-workspace-section-title">Training Queue</div>
                                     <div id="training-gpu-status" class="training-gpu-status" aria-label="GPU status"></div>
                                 </div>
                                 <div id="training-runner-summary" class="training-runner-summary">No queued or active jobs.</div>
@@ -772,7 +772,7 @@
                                     <button id="training-runner-resume-queue-btn" type="button" class="training-btn hidden">Resume</button>
                                     <button id="training-runner-console-btn" type="button" class="review-captions-btn">Show Run Log</button>
                                 </div>
-                                <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued jobs"></div>
+                                <div id="training-runner-queue" class="training-runner-queue hidden" aria-label="Queued training jobs"></div>
                             </section>
                             <section class="training-history-card" aria-label="Training History">
                                 <div class="training-history-heading">
@@ -905,7 +905,7 @@
                                         <div id="test-generations-files" class="test-generations-staged-list"></div>
                                     </div>
                                     <div class="test-generations-library-panel test-generations-sessions">
-                                        <div class="test-generations-library-heading"><strong>Sessions</strong><span id="test-generations-sessions-count">0</span></div>
+                                        <div class="test-generations-library-heading"><strong>Sessions</strong><div class="test-generations-library-heading-tools"><button id="test-generations-clear-queue-btn" type="button" class="review-captions-btn hidden">Clear queued</button><span id="test-generations-sessions-count">0</span></div></div>
                                         <div id="test-generations-sessions-list" class="test-generations-sessions-list"></div>
                                     </div>
                                     <div class="test-generations-library-panel test-generations-recent-sets">

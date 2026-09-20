@@ -215,10 +215,8 @@ def test_test_identity_is_owned_by_shell_header():
     assert "test-generations-header" not in script
     assert ".test-generations-header" not in css
     assert "test-generations-form-title" in script
-    assert "testOpen ? 'Test'" in shell
-    assert "workspaceContextText = 'Generations'" in shell
+    assert "? 'Test Generations'" in shell
     assert "window.closeTestBenchActivity" in shell
-
 
 def test_test_generations_canonicalizes_session_paths_to_owning_set():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -352,17 +350,28 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
 def test_test_generations_queue_contract():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
     assert "request('test_enqueue'" in script
     assert "request('test_queue')" in script
+    assert "request('test_queue_cancel'" in script
+    assert "request('test_queue_clear')" in script
     assert "var queuedTestJobs = [];" in script
     assert "remove.dataset.queueCancel" in script
     assert "queueCancel.dataset.queueCancel" in script
-    assert "pollTimer = setTimeout(pollStatus, 5000)" in script
+    assert 'id="test-generations-clear-queue-btn"' in html
+    assert "/fs/training_runner/stop" not in script
+    assert "refreshTrainingRunnerStatus();" not in script
     assert "def enqueue(" in backend
     assert "def queued_jobs(" in backend
+    assert "def cancel_queued(" in backend
+    assert "def clear_queued(" in backend
     assert "def start_queued(" in backend
     assert 'operation == "test_enqueue"' in backend
     assert 'operation == "test_queue"' in backend
-    assert "release_gpu=True" not in backend
-    assert "_reserve_gpu_for_test_generations" not in backend
+    assert 'operation == "test_queue_cancel"' in backend
+    assert 'operation == "test_queue_clear"' in backend
+    assert "_pending_tests = []" in backend
+    assert "_reserve_gpu_for_test_generations" in backend
+    assert "enqueue_test_response" not in backend
+

@@ -318,6 +318,8 @@
     var countEl = el('test-generations-sessions-count');
     var host = el('test-generations-sessions-list');
     if (countEl) countEl.textContent = String(items.length + queued.length);
+    var clearBtn = el('test-generations-clear-queue-btn');
+    if (clearBtn) clearBtn.classList.toggle('hidden', !queued.length);
     if (!host) return;
     host.innerHTML = '';
     if (!items.length && !queued.length) {
@@ -412,21 +414,11 @@
   function cancelQueuedTest(jobId) {
     var id = String(jobId || '').trim();
     if (!id) return Promise.resolve();
-    return fetch('/fs/training_runner/stop', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId: id, cancel: true })
-    }).then(function (response) {
-      return response.json().then(function (payload) {
-        if (!response.ok || !payload || payload.ok === false) {
-          throw new Error(payload && payload.error ? payload.error : 'Could not remove queued Test session.');
-        }
-        return payload;
-      });
-    }).then(function () {
-      refreshTrainingRunnerStatus();
-      return refreshSessions();
-    });
+    return request('test_queue_cancel', { jobId: id }).then(function () { return refreshSessions(); });
+  }
+
+  function clearQueuedTests() {
+    return request('test_queue_clear').then(function () { return refreshSessions(); });
   }
 
   function statusText(status) {
@@ -1132,7 +1124,6 @@
       if (nameInput) nameInput.value = '';
       return refreshSessions();
     }).then(function () {
-      refreshTrainingRunnerStatus();
       pollStatus();
     }).catch(function (err) {
       syncActiveRunControls(currentStatus);
@@ -1199,6 +1190,7 @@
     button.onclick = openPane;
     el('test-generations-run-btn').onclick = startRun;
     el('test-generations-stop-btn').onclick = stopRun;
+    el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
     el('test-generations-open-results-btn').onclick = function () {
       openResultsFolder(this.dataset.resultFolder);
     };
@@ -1322,3 +1314,4 @@
   window.testGenerationsRatingChanged = completeRatingReviewIfFinished;
   bindUi();
 })();
+

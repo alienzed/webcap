@@ -951,11 +951,13 @@ def test_queued_request_freezes_prompt_seed_and_selected_files(tmp_path, monkeyp
     assert payload["total"] == 3
 
 
-def test_enqueue_test_delegates_to_shared_queue(tmp_path, monkeypatch):
+
+def test_enqueue_test_uses_local_fifo(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()
     candidate = staged / "epoch01.safetensors"
     candidate.write_bytes(b"weights")
+
     monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
     monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
     monkeypatch.setattr(bench, "_load_template", lambda: {})
@@ -967,26 +969,73 @@ def test_enqueue_test_delegates_to_shared_queue(tmp_path, monkeypatch):
     })
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
+    monkeypatch.setattr(bench, "_advance_test_queue", lambda: False)
+    monkeypatch.setattr(bench, "_ensure_queue_retry", lambda: None)
     monkeypatch.setattr(bench, "status", lambda _folder: {"status": "idle"})
-
-    from tool.server import training_runner
-    seen = {}
-
-    def enqueue_response(folder, request):
-        seen["folder"] = folder
-        seen["request"] = request
-        return {"ok": True, "job": {"id": "job-1", "kind": "test", "status": "queued"}, "queued": True}, 200
-
-    monkeypatch.setattr(training_runner, "enqueue_test_response", enqueue_response)
+    monkeypatch.setattr(bench, "_pending_tests", [])
 
     payload = bench.enqueue(tmp_path, "prompt", name="Named", selected_files=[candidate.name])
+    queued = bench.queued_jobs(tmp_path)["jobs"]
 
     assert payload["operation"] == "test_enqueue"
     assert payload["queued"] is True
-    assert seen["folder"] == "sets/subject"
-    assert seen["request"]["name"] == "Named"
-    assert seen["request"]["selectedFiles"] == [candidate.name]
+    assert len(queued) == 1
+    assert queued[0]["runName"] == "Named"
+    assert queued[0]["testTotal"] == 2
 
+
+def test_run_batch_advances_local_test_fifo(tmp_path, monkeypatch):
+    session = tmp_path / "session"
+    session.mkdir()
+    bench._atomic_write_json(bench._status_path(session), {
+        "status": "running",
+        "results": [],
+        "completed": 0,
+        "failed": 0,
+        "total": 0,
+    })
+    calls = []
+    monkeypatch.setattr(bench, "_advance_test_queue", lambda: calls.append("advance") or True)
+
+    bench._run_batch("folder-key", session, [], "prompt", template={})
+
+    assert calls == ["advance"]
+    assert bench._read_status(session)["status"] == "complete"
+
+
+def test_remove_candidate_refuses_when_local_test_fifo_references_it(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch10.safetensors"
+    candidate.write_bytes(b"weights")
+
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
+    monkeypatch.setattr(bench, "_pending_tests", [{
+        "id": "queued-one",
+        "folder": "sets/subject",
+        "request": {"selectedFiles": [candidate.name]},
+    }])
+
+    with pytest.raises(RuntimeError, match="referenced by a queued Test session"):
+        bench.remove_candidate(tmp_path, candidate.name)
+
+    assert candidate.is_file()
+
+
+def test_clear_queued_tests_keeps_other_sets(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
+    monkeypatch.setattr(bench, "_pending_tests", [
+        {"id": "one", "folder": "sets/subject", "request": {}},
+        {"id": "other", "folder": "sets/other", "request": {}},
+    ])
+    monkeypatch.setattr(bench, "_advance_test_queue", lambda: True)
+    monkeypatch.setattr(bench, "_ensure_queue_retry", lambda: None)
+
+    payload = bench.clear_queued(tmp_path)
+
+    assert payload["removed"] == 1
+    assert [job["id"] for job in bench._pending_tests] == ["other"]
 
 
 def test_queued_candidate_snapshot_rejects_changed_weights(tmp_path):
@@ -1000,23 +1049,3 @@ def test_queued_candidate_snapshot_rejects_changed_weights(tmp_path):
         bench._verify_candidate_file_snapshots([candidate], snapshots)
 
 
-def test_remove_candidate_refuses_when_queued_test_references_it(tmp_path, monkeypatch):
-    staged = tmp_path / "staged"
-    staged.mkdir()
-    candidate = staged / "epoch10.safetensors"
-    candidate.write_bytes(b"weights")
-
-    from tool.server import training_runner
-
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
-    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(
-        training_runner,
-        "queued_test_job_references_candidate",
-        lambda folder, name: folder == "sets/subject" and name == candidate.name,
-    )
-
-    with pytest.raises(RuntimeError, match="referenced by a queued Test session"):
-        bench.remove_candidate(tmp_path, candidate.name)
-
-    assert candidate.is_file()

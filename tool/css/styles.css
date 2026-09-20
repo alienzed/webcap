@@ -2707,7 +2707,6 @@ iframe {
   color: var(--danger, #f87171);
   cursor: pointer;
 }
-.test-generations-session-name input,
 .test-generations-prompt textarea {
   box-sizing: border-box;
   width: 100%;
@@ -2730,6 +2729,14 @@ iframe {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.test-generations-session-name {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.test-generations-session-name input {
+  box-sizing: border-box;
+  width: 100%;
 }
 .test-generations-actions .review-captions-btn,
 .test-generations-actions .training-btn { width: auto; }

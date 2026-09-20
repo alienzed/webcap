@@ -878,10 +878,6 @@
                                     </div>
                                     <span id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</span>
                                 </div>
-                                <label class="training-run-option test-generations-session-name">
-                                    <span>Session name <small>(optional)</small></span>
-                                    <input id="test-generations-session-name" type="text" maxlength="120" placeholder="e.g. Red colour test">
-                                </label>
                                 <label class="training-run-option test-generations-prompt">
                                     <span>Prompt</span>
                                     <textarea id="test-generations-prompt" rows="5"></textarea>
@@ -894,6 +890,9 @@
                                         <label class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>
                                     </div>
                                     <div class="test-generations-actions">
+                                        <label class="test-generations-session-name">
+                                            <input id="test-generations-session-name" type="text" maxlength="120" placeholder="What is this? (optional)" aria-label="Session name (optional)">
+                                        </label>
                                         <button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button>
                                         <button id="test-generations-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
                                         <button id="test-generations-reset-prompt-btn" type="button" class="review-captions-btn">Reset</button>

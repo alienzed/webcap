@@ -272,3 +272,11 @@ def test_shell_groups_helper_disables_legacy_multicolumn_flow():
     assert "column-width: initial;" in block
     assert "overflow-x: hidden !important;" in block
 
+
+
+def test_shell_groups_helper_is_not_captured_by_legacy_wide_desktop_layout():
+    css = _read("tool/css/checklist.css")
+
+    wide_section = css.split("@media (min-width: 1500px) {", 1)[1]
+    assert ".app:not(.shell-revamp) .editor-panel.checklist-visible #caption-checklist-panel.checklist-panel" in wide_section
+    assert "\n  .editor-panel.checklist-visible #caption-checklist-panel.checklist-panel" not in wide_section

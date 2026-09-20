@@ -4,7 +4,6 @@ var trainingWorkspaceState = {
   selectedMode: 'normal',
   runnerJobs: [],
   runnerActiveJobId: '',
-  runnerSelectedJobId: '',
   runnerLogOffsets: {},
   runnerConsoleJobId: '',
   runnerConsoleRequestVersion: 0,

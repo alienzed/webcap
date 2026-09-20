@@ -166,9 +166,9 @@ def _low_disk_may_replace_pause_reason(reason):
 
 
 def _apply_training_disk_protection(state, active_jobs, queued_jobs):
-    """Best-effort Training disk protection; non-Training queue jobs are intentionally ignored."""
+    """Protect active Training and the next queued job without blocking Tests further ahead."""
     active_jobs = [job for job in active_jobs if _is_training_job(job)]
-    queued_jobs = [job for job in queued_jobs if _is_training_job(job)]
+    queued_jobs = [job for job in list(queued_jobs or [])[:1] if _is_training_job(job)]
     if not active_jobs and not queued_jobs:
         return "safe"
     disk = _training_disk_space(_training_disk_target(active_jobs, queued_jobs))

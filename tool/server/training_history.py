@@ -164,23 +164,6 @@ def _read_recent_runs():
     return data
 
 
-def _write_recent_runs(data):
-    payload = {
-        "version": RECENT_RUNS_VERSION,
-        "jobs": list((data or {}).get("jobs") or []),
-    }
-    _write_json_atomic(_recent_runs_path(), payload)
-
-
-def recent_jobs():
-    """Return persisted Recent Runs records for internal storage-reference checks."""
-    with _history_lock:
-        recent = _read_recent_runs()
-        if any(not isinstance(job, dict) for job in recent["jobs"]):
-            raise ValueError("Recent Runs contains an invalid job record; it was left unchanged: " + str(_recent_runs_path()))
-        return [dict(job) for job in recent["jobs"]]
-
-
 def _job_record_fields():
     return (
         "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget",

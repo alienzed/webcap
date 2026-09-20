@@ -559,6 +559,8 @@ function computeRequirementProgressForMediaKey(mediaKey) {
     var requirementLabel = String(requirements[i] || '').trim();
     if (!requirementLabel) continue;
     var terms = getChecklistAssignedTagsForMediaKey(mediaKey, requirementLabel);
+    var configuredTerms = getChecklistKeywordTermsForRequirement(requirementLabel);
+    if (!configuredTerms.length && !terms.length) continue;
     total += 1;
     var hasMatch = terms.length > 0;
     if (hasMatch) {

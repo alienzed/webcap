@@ -30,24 +30,13 @@
         <div id="app-frame" class="app-frame">
             <header id="app-header" class="app-header" aria-label="Application header">
                 <div id="app-header-context" class="app-header-context" aria-live="polite">
-                    <button id="app-header-folder-btn" type="button" class="app-header-folder-btn" title="Go to root folder" aria-label="Go to root folder">
-                        <span id="app-header-folder" class="app-header-folder"></span>
-                    </button>
-                    <label class="app-header-model-control">
+                    <div id="app-header-workspace-identity" class="app-header-workspace-identity">
+                        <span id="app-header-workspace-title" class="app-header-workspace-title"></span>
+                        <span id="app-header-workspace-context" class="app-header-workspace-context"></span>
+                    </div>
+                    <label id="app-header-model-control" class="app-header-model-control">
                         <select id="app-header-model-profile-select" aria-label="Working model"></select>
                     </label>
-                </div>
-                <div id="app-header-workspace-controls" class="app-header-workspace-controls">
-                    <button
-                        id="sidebar-collapse-toggle-btn"
-                        type="button"
-                        class="app-header-sidebar-toggle-btn"
-                        title="Collapse sidebar"
-                        aria-label="Collapse sidebar"
-                        aria-pressed="false"
-                    >&lt;</button>
-                    <span id="app-header-workspace-title" class="app-header-workspace-title"></span>
-                    <span id="app-header-workspace-context" class="app-header-workspace-context"></span>
                 </div>
                 <div id="app-header-global" class="app-header-global">
                     <div id="shell-gpu-status" class="shell-gpu-status hidden" aria-live="polite"></div>
@@ -672,6 +661,15 @@
                     </section>
                 </section>
             </div>
+            <button
+                id="sidebar-collapse-toggle-btn"
+                type="button"
+                class="sidebar-collapse-toggle-btn"
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+                aria-controls="sidebar-panel"
+                aria-pressed="false"
+            >&lt;</button>
             <div class="panel preview-panel">
                 <section id="review-output-surface" class="review-output-surface hidden" data-workspace-root="review" aria-label="Review workspace">
                     <div class="review-output-surface-header"><button id="review-output-back-btn" type="button" class="review-captions-btn">Back</button></div>
@@ -936,7 +934,7 @@
                     </div>
                 </section>
             </section>
-                        <div id="console-panel" aria-hidden="true">
+                        <div id="console-panel" class="hidden" aria-hidden="true">
                 <div class="console-panel-header">
                     <strong class="console-panel-title">Console</strong>
                     <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>

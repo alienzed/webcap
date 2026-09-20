@@ -299,17 +299,23 @@
 
 .shell-gpu-status {
   min-width: 0;
-  max-width: 340px;
+  max-width: 520px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   overflow: hidden;
   color: var(--muted);
   font-size: 11px;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .shell-gpu-status strong {
   color: var(--text);
   font-weight: 600;
+}
+
+.shell-gpu-status .shell-system-divider {
+  color: var(--border);
 }
 
 .shell-gpu-status .is-warning {

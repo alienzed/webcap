@@ -129,6 +129,31 @@ def fs_root():
     return jsonify({"root": str(app_config.FS_ROOT)})
 
 
+@app.route("/fs/system_status", methods=["GET"])
+def fs_system_status():
+    gpu_payload, _gpu_status = training_runner_gpu_status_response()
+    try:
+        usage = shutil.disk_usage(app_config.FS_ROOT)
+        disk = {
+            "available": True,
+            "path": str(app_config.FS_ROOT),
+            "total": int(usage.total),
+            "used": int(usage.used),
+            "free": int(usage.free),
+        }
+    except OSError as exc:
+        disk = {
+            "available": False,
+            "path": str(app_config.FS_ROOT),
+            "error": str(exc),
+        }
+    return jsonify({
+        "ok": True,
+        "gpu": gpu_payload.get("gpu"),
+        "disk": disk,
+    })
+
+
 @app.route("/fs/path_exists", methods=["GET"])
 def fs_path_exists():
     rel_path = request.args.get("path", "")

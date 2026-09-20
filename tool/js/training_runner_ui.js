@@ -811,14 +811,7 @@ function formatTrainingGpuMemory(value) {
 }
 
 function syncShellTrainingGpuStatus() {
-  var host = document.getElementById('shell-gpu-status');
-  if (!host) return;
-  var hasActiveJob = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
-    return job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
-  });
-  var html = hasActiveJob ? buildTrainingGpuStatusHtml() : '';
-  host.innerHTML = html;
-  host.classList.toggle('hidden', !html);
+  if (typeof renderShellSystemStatus === 'function') renderShellSystemStatus();
 }
 
 function buildTrainingGpuStatusHtml() {

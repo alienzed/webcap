@@ -1000,7 +1000,6 @@ def test_queued_candidate_snapshot_rejects_changed_unmanaged_file(tmp_path):
     candidate.write_bytes(b"first")
     snapshots = [bench._queued_candidate_snapshot(candidate)]
 
-    time.sleep(0.001)
     candidate.write_bytes(b"other")
 
     with pytest.raises(RuntimeError, match="changed after it was queued"):

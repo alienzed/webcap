@@ -2626,9 +2626,13 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
 .app.shell-revamp #caption-checklist-panel.group-tools-card #checklist-items {
   flex: 1 1 auto !important;
   min-height: 0;
-  column-count: 1;
+  columns: auto;
+  column-count: initial;
+  column-width: initial;
+  column-gap: normal;
   max-height: none !important;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
   padding-right: 2px;
 }
 

@@ -484,6 +484,20 @@ function commitChecklistGroupDescriptorSnapshotForMediaKey(mediaKey, requirement
   );
 }
 
+function commitChecklistGroupDescriptorSnapshotsForMediaKey(mediaKey) {
+  var changed = false;
+  getChecklistAssignmentEntriesForMediaKey(mediaKey).forEach(function (entry) {
+    if (commitChecklistGroupDescriptorSnapshotForMediaKey(
+      mediaKey,
+      entry.requirement,
+      entry.term
+    )) {
+      changed = true;
+    }
+  });
+  return changed;
+}
+
 function setChecklistTermAffixEntry(store, termText, prefix, suffix, options) {
   var opts = options || {};
   var key = normalizeChecklistTermAffixKey(termText);

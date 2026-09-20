@@ -324,6 +324,15 @@ def test_test_generation_sessions_are_not_training_set_contexts():
     assert "n === 'test-generations'" in blacklist
 
 
+def test_test_generations_can_skip_the_base_rendition_for_one_batch():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "baseInclude.id = 'test-generations-base-include';" in script
+    assert "baseInclude.checked = includeBase;" in script
+    assert "baseInclude.disabled = true;" not in script
+    assert "includeBase: includeBase" in script
+
+
 def test_rendered_test_status_resynchronizes_run_controls():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     render_block = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]

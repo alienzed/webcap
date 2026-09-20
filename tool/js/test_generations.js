@@ -1256,13 +1256,13 @@
   }
 
   function deleteSession(sessionName) {
-    request('test_delete_session', { session: String(sessionName || '') }).then(function (payload) {
+    return request('test_delete_session', { session: String(sessionName || '') }).then(function (payload) {
       renderSessions(payload && payload.sessions);
       if (currentSession === String(payload.deleted || '')) {
         currentSession = '';
         renderStatus(payload.latest || { status: 'idle' });
       }
-    }).catch(showError);
+    });
   }
 
   function removeCandidate(fileName, sessionName) {
@@ -1346,7 +1346,10 @@
       var queueCancel = event.target.closest('[data-queue-cancel]');
       if (queueCancel) {
         queueCancel.disabled = true;
-        cancelQueuedTest(queueCancel.dataset.queueCancel).catch(showError);
+        cancelQueuedTest(queueCancel.dataset.queueCancel).catch(function (err) {
+          queueCancel.disabled = false;
+          showError(err);
+        });
         return;
       }
       var folderOpen = event.target.closest('[data-session-folder-open]');
@@ -1362,7 +1365,10 @@
       var remove = event.target.closest('[data-session-delete]');
       if (remove) {
         remove.disabled = true;
-        deleteSession(remove.dataset.sessionDelete);
+        deleteSession(remove.dataset.sessionDelete).catch(function (err) {
+          remove.disabled = false;
+          showError(err);
+        });
         return;
       }
       var row = event.target.closest('[data-session-name]');

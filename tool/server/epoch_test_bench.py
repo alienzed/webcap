@@ -288,38 +288,6 @@ def _selected_lora_files(test_directory, selected_files=None):
     )
 
 
-def _candidate_file_snapshots(paths):
-    snapshots = []
-    for path in paths:
-        stat = Path(path).stat()
-        snapshots.append({
-            "name": Path(path).name,
-            "size": int(stat.st_size),
-            "mtimeNs": int(stat.st_mtime_ns),
-        })
-    return snapshots
-
-
-def _verify_candidate_file_snapshots(paths, snapshots):
-    if not snapshots:
-        return
-    expected = {
-        str(item.get("name") or ""): item
-        for item in snapshots
-        if isinstance(item, dict) and str(item.get("name") or "").strip()
-    }
-    for path in paths:
-        name = Path(path).name
-        item = expected.get(name)
-        if not item:
-            raise RuntimeError("Queued Test candidate snapshot is missing for " + name + ". Requeue this Test session.")
-        try:
-            stat = Path(path).stat()
-        except FileNotFoundError:
-            continue
-        if int(item.get("size") or -1) != int(stat.st_size) or int(item.get("mtimeNs") or -1) != int(stat.st_mtime_ns):
-            raise RuntimeError("Queued Test candidate changed after enqueue: " + name + ". Requeue this Test session.")
-
 
 def _relative_set_folder(folder_path):
     value = _relative_to_fs_root(_owning_set_directory(folder_path))
@@ -429,16 +397,21 @@ def remove_candidate(folder_path, file_name, session_name=None):
 
     test_directory = _h3_test_directory(folder_path)
     candidate = test_directory / name
-    if not candidate.is_file() or candidate.is_symlink():
-        raise FileNotFoundError("Staged Test candidate does not exist: " + name)
     sidecar = candidate.with_suffix(".webcap.json")
-    if sidecar.exists() and (not sidecar.is_file() or sidecar.is_symlink()):
+
+    if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
+        raise RuntimeError("Staged Test candidate is not a regular file: " + name)
+    if sidecar.is_symlink() or (sidecar.exists() and not sidecar.is_file()):
         raise RuntimeError("Staged Test candidate sidecar is not a regular file: " + sidecar.name)
+
     session_status = _remove_candidate_from_session(folder_path, session_name, name) if session_name else None
-    candidate.unlink()
-    if sidecar.exists():
+
+    if candidate.is_file():
+        candidate.unlink()
+    if sidecar.is_file():
         sidecar.unlink()
-    remaining = _lora_files(test_directory)
+
+    remaining = _lora_files(test_directory) if test_directory.is_dir() else []
     return {
         "operation": "test_remove_candidate",
         "removed": name,
@@ -566,10 +539,16 @@ def _workflow_for_lora(
         prompt_inputs["wildcard_text"] = prompt
         prompt_inputs["populated_text"] = prompt
         prompt_inputs["mode"] = "fixed"
-        lora_inputs = workflow["148"]["inputs"]
-        lora_inputs["lora_name"] = comfy_lora_name
-        lora_inputs["strength_model"] = strength_model
-        lora_inputs["strength_clip"] = strength_clip
+        if comfy_lora_name:
+            lora_inputs = workflow["148"]["inputs"]
+            lora_inputs["lora_name"] = comfy_lora_name
+            lora_inputs["strength_model"] = strength_model
+            lora_inputs["strength_clip"] = strength_clip
+        else:
+            power_inputs = workflow["138"]["inputs"]
+            power_inputs["model"] = ["161", 0]
+            power_inputs["clip"] = ["128", 0]
+            workflow.pop("148", None)
         workflow["115"]["inputs"]["aspect_ratio"] = selected["aspectRatio"]
         workflow["115"]["inputs"]["megapixels"] = selected["megapixels"]
         workflow["133"]["inputs"]["value"] = selected["duration"]
@@ -966,13 +945,20 @@ def _session_result_path(session_directory, file_name):
     if not name or name in (".", "..") or "/" in name or "\\" in name:
         raise ValueError("Test result filename is invalid.")
     path = Path(session_directory) / name
-    if path.exists() and (not path.is_file() or path.is_symlink()):
+    if path.is_symlink() or (path.exists() and not path.is_file()):
         raise RuntimeError("Test result is not a regular file: " + name)
     return path
 
 
 def _remove_candidate_from_session(folder_path, session_name, candidate_name):
     session = _session_directory(folder_path, session_name)
+    folder_key = _folder_key(folder_path)
+    with _lock:
+        thread = _active_threads.get(folder_key)
+        active_session = _active_sessions.get(folder_key)
+        if thread and thread.is_alive() and active_session and Path(active_session).resolve() == session.resolve():
+            raise RuntimeError("Cannot remove results from the active Test Generations session. Stop it first.")
+
     status = _read_status(session) or {}
     results = status.get("results") if isinstance(status.get("results"), list) else []
     failures = status.get("failures") if isinstance(status.get("failures"), list) else []
@@ -993,11 +979,10 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
         if output_name:
             video_path = _session_result_path(session, output_name)
             caption_path = _session_result_path(session, Path(output_name).with_suffix(".txt").name)
-            if not video_path.is_file():
-                raise FileNotFoundError("Test result video does not exist: " + output_name)
-            if not caption_path.is_file():
-                raise FileNotFoundError("Test result caption does not exist: " + caption_path.name)
-            paths.extend([video_path, caption_path])
+            if video_path.is_file():
+                paths.append(video_path)
+            if caption_path.is_file():
+                paths.append(caption_path)
 
     for path in paths:
         path.unlink()
@@ -1099,10 +1084,9 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
         available_comfy_loras = _available_comfy_lora_names() if loras else []
         candidates = []
         if loras:
-            base_file = loras[0]
             candidates.append({
                 "label": "Base",
-                "file": base_file,
+                "file": None,
                 "strengthModel": 0,
                 "strengthClip": 0,
                 "kind": "base",
@@ -1129,11 +1113,13 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
             status["current"] = candidate["label"]
             _atomic_write_json(status_file, status)
             try:
-                comfy_lora_name = _resolve_comfy_name(
-                    lora_file,
-                    available_comfy_loras,
-                    "staged LoRA",
-                )
+                comfy_lora_name = None
+                if candidate["kind"] == "lora":
+                    comfy_lora_name = _resolve_comfy_name(
+                        lora_file,
+                        available_comfy_loras,
+                        "staged LoRA",
+                    )
                 workflow = _workflow_for_lora(
                     template,
                     prompt,
@@ -1239,7 +1225,6 @@ def _build_queued_request(
         "sourcePrompt": prompt,
         "resolvedPrompt": resolved_prompt,
         "selectedFiles": [path.name for path in loras],
-        "selectedFileSnapshots": _candidate_file_snapshots(loras),
         "seed": settings["seed"],
         "aspectRatio": settings["aspectRatio"],
         "megapixels": settings["megapixels"],
@@ -1420,7 +1405,6 @@ def start_queued(folder_path, request):
         loras = _selected_lora_files(test_directory, selected_files=request.get("selectedFiles"))
         if not loras:
             raise ValueError("The H3 Test folder contains no queued .safetensors files.")
-        _verify_candidate_file_snapshots(loras, request.get("selectedFileSnapshots"))
         _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
         template = _resolve_comfy_template_assets(_load_template())
         settings = _normalized_test_settings(

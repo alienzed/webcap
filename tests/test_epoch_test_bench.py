@@ -240,13 +240,15 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
     })
 
     def queue(workflow):
+        if "148" not in workflow:
+            return "prompt-ok"
         item = (
             workflow["148"]["inputs"]["lora_name"],
             workflow["148"]["inputs"]["strength_model"],
             workflow["148"]["inputs"]["strength_clip"],
         )
         queued.append(item)
-        if item[0].endswith("epoch01.safetensors") and item[1] == 0.9:
+        if item[0].endswith("epoch01.safetensors"):
             raise RuntimeError("boom")
         return "prompt-ok"
 
@@ -266,7 +268,6 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
 
     status = bench._read_status(session)
     assert queued == [
-        ("mh3/set/epoch01.safetensors", 0, 0),
         ("mh3/set/epoch01.safetensors", 0.9, 1),
         ("mh3/set/epoch02.safetensors", 0.9, 1),
     ]
@@ -370,6 +371,15 @@ def test_workflow_applies_session_settings_without_mutating_template():
     assert workflow["115"]["inputs"]["megapixels"] == 0.35
     assert workflow["133"]["inputs"]["value"] == 10
     assert workflow["129"]["inputs"]["noise_seed"] == 424242
+
+
+def test_base_workflow_bypasses_candidate_lora_loader():
+    template = bench._load_template()
+    workflow = bench._workflow_for_lora(template, "prompt", None)
+
+    assert "148" not in workflow
+    assert workflow["138"]["inputs"]["model"] == ["161", 0]
+    assert workflow["138"]["inputs"]["clip"] == ["128", 0]
 
 
 def test_new_session_seed_is_javascript_safe():
@@ -499,7 +509,7 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
         template=resolved_template,
     )
 
-    assert seen == ["mh3/linux-model.safetensors"]
+    assert seen == ["mh3/linux-model.safetensors", "mh3/linux-model.safetensors"]
     assert bench._read_status(session)["status"] == "complete"
 
 
@@ -604,6 +614,69 @@ def test_remove_candidate_deletes_only_current_session_result(tmp_path, monkeypa
     assert (older / "epoch10.mp4").is_file()
     assert (older / "epoch10.txt").is_file()
     assert payload["sessionStatus"]["session"] == "session-a"
+    assert payload["sessionStatus"]["results"] == []
+    assert payload["sessionStatus"]["completed"] == 0
+    assert payload["sessionStatus"]["total"] == 0
+
+
+def test_remove_candidate_refuses_active_session_result_mutation(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch10.safetensors"
+    candidate.write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+
+    session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "running",
+        "results": [],
+        "failures": [],
+        "completed": 0,
+        "failed": 0,
+        "total": 2,
+    })
+
+    class ActiveThread:
+        def is_alive(self):
+            return True
+
+    folder_key = str(tmp_path.resolve())
+    monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
+    monkeypatch.setattr(bench, "_active_sessions", {folder_key: session})
+
+    with pytest.raises(RuntimeError, match="active Test Generations session"):
+        bench.remove_candidate(tmp_path, candidate.name, session_name=session.name)
+
+    assert candidate.is_file()
+
+
+def test_remove_candidate_cleans_historical_session_when_result_files_are_already_gone(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch10.safetensors"
+    candidate.write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+
+    session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "total": 1,
+        "completed": 1,
+        "failed": 0,
+        "failures": [],
+        "results": [{
+            "kind": "lora",
+            "sourceLoRA": candidate.name,
+            "candidateFile": candidate.name,
+            "outputVideo": "epoch10.mp4",
+        }],
+    })
+
+    payload = bench.remove_candidate(tmp_path, candidate.name, session_name=session.name)
+
+    assert not candidate.exists()
     assert payload["sessionStatus"]["results"] == []
     assert payload["sessionStatus"]["completed"] == 0
     assert payload["sessionStatus"]["total"] == 0
@@ -873,6 +946,19 @@ def test_move_saved_video_failure_keeps_source(tmp_path):
     assert source_dir.exists()
 
 
+def test_remove_candidate_is_idempotent_when_staged_file_is_already_gone(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    other = staged / "epoch20.safetensors"
+    other.write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+
+    payload = bench.remove_candidate(tmp_path, "epoch10.safetensors")
+
+    assert payload["removed"] == "epoch10.safetensors"
+    assert payload["files"] == [other.name]
+
+
 def test_remove_candidate_allows_active_batch(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()
@@ -1047,6 +1133,7 @@ def test_queued_request_freezes_prompt_seed_and_selected_files(tmp_path, monkeyp
     assert payload["resolvedPrompt"] == "person in studio #12345"
     assert payload["seed"] == 12345
     assert payload["selectedFiles"] == [first.name, second.name]
+    assert "selectedFileSnapshots" not in payload
     assert payload["total"] == 3
 
 
@@ -1219,27 +1306,5 @@ def test_remove_candidate_allows_local_test_fifo_reference(tmp_path, monkeypatch
 
     assert payload["removed"] == candidate.name
     assert not candidate.exists()
-
-
-
-def test_queued_candidate_snapshot_rejects_changed_weights(tmp_path):
-    candidate = tmp_path / "epoch10.safetensors"
-    candidate.write_bytes(b"first")
-    snapshots = bench._candidate_file_snapshots([candidate])
-
-    candidate.write_bytes(b"changed-weights")
-
-    with pytest.raises(RuntimeError, match="changed after enqueue"):
-        bench._verify_candidate_file_snapshots([candidate], snapshots)
-
-
-def test_queued_candidate_snapshot_allows_removed_candidate(tmp_path):
-    candidate = tmp_path / "epoch10.safetensors"
-    candidate.write_bytes(b"first")
-    snapshots = bench._candidate_file_snapshots([candidate])
-
-    candidate.unlink()
-
-    bench._verify_candidate_file_snapshots([candidate], snapshots)
 
 

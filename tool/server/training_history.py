@@ -310,10 +310,7 @@ def _merge_folder_and_legacy_jobs(folder_path):
         job_id = str(legacy.get("id") or "")
         if job_id and job_id in by_id:
             continue
-        try:
-            migrated = _migrate_legacy_job(folder_path, legacy)
-        except (OSError, ValueError):
-            migrated = False
+        migrated = _migrate_legacy_job(folder_path, legacy)
         if migrated:
             record_path = _job_record_path(legacy)
             if record_path and record_path.is_file():
@@ -718,9 +715,10 @@ def all_history_payload(query="", folder=""):
             if source_folder:
                 try:
                     source_path = app_config.safe_join_fs_root(source_folder)
+                except ValueError:
+                    source_path = None
+                if source_path is not None and source_path.is_dir():
                     migrated = _migrate_legacy_job(source_path, legacy)
-                except (OSError, ValueError):
-                    migrated = False
             if migrated:
                 record_path = _job_record_path(legacy)
                 if record_path and record_path.is_file():

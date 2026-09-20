@@ -1080,6 +1080,8 @@ def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path
                 "flags": {"shared.png": "green"},
                 "caption_tags_by_media": {"shared.png": ["dragon", "profile"]},
                 "caption_group_tags_by_media": {"shared.png": {"Pose": ["profile"]}},
+                "caption_group_term_wrappers": {"Pose": {"profile": {"prefix": "", "suffix": "view"}}},
+                "caption_group_term_descriptor_defaults": {"Pose": {"profile": {"prefix": "clear", "suffix": ""}}},
                 "caption_group_term_descriptors_by_media": {
                     "shared.png": {"Pose": {"profile": {"prefix": "", "suffix": "pose"}}}
                 },
@@ -1147,6 +1149,8 @@ def test_smart_set_materialize_copies_media_originals_and_item_metadata(tmp_path
     assert sorted(out_state["caption_tags_by_media"].keys()) == sorted(dest_names)
     assert sorted(out_state["caption_group_tags_by_media"].keys()) == sorted(dest_names)
     assert sorted(out_state["caption_group_term_descriptors_by_media"].keys()) == sorted(dest_names)
+    assert out_state["caption_group_term_wrappers"] == {"Pose": {"profile": {"prefix": "", "suffix": "view"}}}
+    assert out_state["caption_group_term_descriptor_defaults"] == {"Pose": {"profile": {"prefix": "clear", "suffix": ""}}}
     assert sorted(out_state["ratings_by_media"].keys()) == sorted(dest_names)
     assert out_state["version"] == 2
     assert out_state["caption_term_affixes"] == {"floor": {"prefix": "on the", "suffix": ""}}
@@ -1531,11 +1535,16 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
                 "reviewedKeys": ["shared.png"],
                 "flags": {"shared.png": "red"},
                 "caption_tags_by_media": {"shared.png": ["from-b"]},
-                "caption_group_tags_by_media": {"shared.png": {"Lighting": ["rim light"]}},
-                "caption_group_term_descriptors_by_media": {
-                    "shared.png": {"Lighting": {"rim light": {"prefix": "", "suffix": "lighting"}}}
+                "caption_group_tags_by_media": {
+                    "shared.png": {"source": ["from-b"], "Lighting": ["rim light"]}
                 },
-                "caption_requirements_checked": {"shared.png": {"Lighting": True}},
+                "caption_group_term_descriptors_by_media": {
+                    "shared.png": {
+                        "source": {"from-b": {"prefix": "", "suffix": "source"}},
+                        "Lighting": {"rim light": {"prefix": "", "suffix": "lighting"}}
+                    }
+                },
+                "caption_requirements_checked": {"shared.png": {"source": True, "Lighting": True}},
                 "caption_requirements": ["source", "Lighting"],
                 "caption_requirement_keywords": {"source": "FROM-A, from-b", "Lighting": "rim light"},
                 "ratings_by_media": {"shared.png": 4},
@@ -1581,15 +1590,18 @@ def test_create_set_from_results_renames_on_filename_collision(tmp_path, monkeyp
     assert out_state["caption_tags_by_media"] == {"shared.png": ["from-a"], "shared_2.png": ["from-b"]}
     assert out_state["caption_group_tags_by_media"] == {
         "shared.png": {"Pose": ["standing"]},
-        "shared_2.png": {"Lighting": ["rim light"]},
+        "shared_2.png": {"Source": ["from-b"], "Lighting": ["rim light"]},
     }
     assert out_state["caption_group_term_descriptors_by_media"] == {
         "shared.png": {"Pose": {"standing": {"prefix": "", "suffix": "pose"}}},
-        "shared_2.png": {"Lighting": {"rim light": {"prefix": "", "suffix": "lighting"}}},
+        "shared_2.png": {
+            "Source": {"from-b": {"prefix": "", "suffix": "source"}},
+            "Lighting": {"rim light": {"prefix": "", "suffix": "lighting"}},
+        },
     }
     assert out_state["caption_requirements_checked"] == {
         "shared.png": {"Pose": True},
-        "shared_2.png": {"Lighting": True},
+        "shared_2.png": {"Source": True, "Lighting": True},
     }
     assert out_state["caption_requirements"] == ["Source", "Pose", "Lighting"]
     assert out_state["caption_requirement_keywords"] == {

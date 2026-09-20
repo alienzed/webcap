@@ -44,7 +44,10 @@ def get_selection_pose_analyzers():
     _ensure_models_exist()
     if _FACE_LANDMARKER is None:
         face_options = vision.FaceLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=str(SELECTION_FACE_MODEL_PATH)),
+            base_options=BaseOptions(
+                model_asset_path=str(SELECTION_FACE_MODEL_PATH),
+                delegate=BaseOptions.Delegate.CPU,
+            ),
             running_mode=vision.RunningMode.IMAGE,
             num_faces=1,
             min_face_detection_confidence=0.45,
@@ -56,7 +59,10 @@ def get_selection_pose_analyzers():
         _FACE_LANDMARKER = vision.FaceLandmarker.create_from_options(face_options)
     if _POSE_LANDMARKER is None:
         pose_options = vision.PoseLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=str(SELECTION_POSE_MODEL_PATH)),
+            base_options=BaseOptions(
+                model_asset_path=str(SELECTION_POSE_MODEL_PATH),
+                delegate=BaseOptions.Delegate.CPU,
+            ),
             running_mode=vision.RunningMode.IMAGE,
             num_poses=1,
             min_pose_detection_confidence=0.45,

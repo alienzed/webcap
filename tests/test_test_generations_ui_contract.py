@@ -302,8 +302,9 @@ def test_saved_test_history_does_not_require_external_staging_folder():
     assert "except ValueError:" in prepare
     assert "loras = []" in prepare
     assert '"sessions": list_sessions(folder_path)' in prepare
-    start_start = backend.index("def start(folder_path")
+    start_start = backend.index("def start_queued(folder_path")
     assert "_h3_test_directory(folder_path)" in backend[start_start:]
+    assert 'operation == "test_start"' not in backend
 
 def test_test_generations_rate_items_reuses_unrated_single_item_review():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
@@ -363,5 +364,5 @@ def test_test_generations_queue_contract():
     assert "def start_queued(" in backend
     assert 'operation == "test_enqueue"' in backend
     assert 'operation == "test_queue"' in backend
-    assert "release_gpu=True" in backend
-    assert "if release_gpu:" in backend
+    assert "release_gpu=True" not in backend
+    assert "_reserve_gpu_for_test_generations" not in backend

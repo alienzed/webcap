@@ -226,13 +226,7 @@ function mediaKeyHasSavedCaption(mediaKey) {
 }
 
 function checklistMediaHasTag(mediaKey, termText) {
-  var key = String(mediaKey || '').trim();
-  var term = normalizeChecklistTerm(termText);
-  if (!key || !term) return false;
-  var target = term.toLowerCase();
-  return getTagsForMediaKey(key).some(function (tag) {
-    return normalizeChecklistTerm(tag).toLowerCase() === target;
-  });
+  return hasUnscopedTagForMediaKey(mediaKey, termText);
 }
 
 function isChecklistRequirementExpanded(requirementLabel) {
@@ -872,22 +866,15 @@ function restoreDeletedChecklistGroup(operation) {
 }
 
 function requirementKeywordsMatch(requirementLabel, captionText, mediaKey) {
-  var keywords = getChecklistKeywordTermsForRequirement(requirementLabel);
-  if (!keywords) return false;
-
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requirement) return false;
   var captionValue = String(captionText || '');
-  var keywordList = parseChecklistKeywordTerms(keywords);
-  if (!keywordList.length) return false;
-
-  for (var i = 0; i < keywordList.length; i++) {
-    var keyword = keywordList[i];
-    var renderedKeyword = renderChecklistTermWithAffixes(keyword, mediaKey);
-    if (renderedKeyword && renderedKeyword !== keyword && typeof captionContainsPhrase === 'function' && captionContainsPhrase(captionValue, renderedKeyword)) {
-      return true;
-    }
-    if (typeof captionContainsPhrase === 'function' && captionContainsPhrase(captionValue, keyword)) {
-      return true;
-    }
+  var assignedTerms = getChecklistAssignedTagsForMediaKey(mediaKey, requirement);
+  for (var i = 0; i < assignedTerms.length; i++) {
+    var term = assignedTerms[i];
+    var rendered = renderChecklistGroupTermWithAffixes(requirement, term, mediaKey);
+    if (rendered && captionContainsPhrase(captionValue, rendered)) return true;
+    if (captionContainsPhrase(captionValue, term)) return true;
   }
   return false;
 }

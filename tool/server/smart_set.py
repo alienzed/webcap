@@ -315,6 +315,15 @@ def _plural_token_variants(token: str) -> set[str]:
     return {variant for variant in variants if variant}
 
 
+def _caption_contains_phrase(caption_text: str, phrase: str) -> bool:
+    text = str(caption_text or "")
+    value = str(phrase or "").strip()
+    if not value:
+        return False
+    pattern = re.compile(r"(^|[^A-Za-z0-9_])(" + re.escape(value) + r")(?=$|[^A-Za-z0-9_])", re.IGNORECASE)
+    return pattern.search(text) is not None
+
+
 def _caption_contains_tag_with_allowances(caption_text: str, tag_text: str) -> bool:
     caption_tokens = [token for token in _canonicalize_match_text(caption_text).split(" ") if token]
     tag_tokens = [token for token in _canonicalize_match_text(tag_text).split(" ") if token]
@@ -355,7 +364,7 @@ def _match_has_tag_mismatch(match: dict, folder_state: dict | None = None) -> bo
             total += 1
             rendered = _render_scoped_term(folder_state or {}, media_name, group, term)
             if rendered and rendered.casefold() != term.casefold():
-                if rendered.casefold() not in caption_text.casefold():
+                if not _caption_contains_phrase(caption_text, rendered):
                     return True
             elif not _caption_contains_tag_with_allowances(caption_text, term):
                 return True

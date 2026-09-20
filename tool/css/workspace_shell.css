@@ -269,54 +269,6 @@
   stroke-linejoin: round;
 }
 
-.app-header-folder {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.app-header-workspace-controls {
-  justify-content: center;
-}
-
-.app-header-sidebar-toggle-btn {
-  width: 28px;
-  min-width: 28px;
-  min-height: 26px;
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--panel-soft);
-  color: var(--muted);
-  box-shadow: none;
-  cursor: pointer;
-}
-
-.app-header-sidebar-toggle-btn:hover,
-.app-header-sidebar-toggle-btn:focus-visible {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.app-header-workspace-title {
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.app-header-workspace-context {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.app-header-workspace-context:empty {
-  display: none;
-}
-
 .app-header-global {
   justify-content: flex-end;
 }
@@ -871,8 +823,8 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .app-header-folder-btn {
-    max-width: 160px;
+  .app-header-breadcrumb-item {
+    max-width: 140px;
   }
 
   .app-header-context {

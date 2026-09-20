@@ -280,6 +280,59 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
     assert status["results"][0]["outputVideo"] == "base.mp4"
 
 
+def test_base_generation_does_not_depend_on_candidate_lora_inventory(tmp_path, monkeypatch):
+    session = tmp_path / "session"
+    session.mkdir()
+    bench._atomic_write_json(
+        session / "test.json",
+        {
+            "status": "running",
+            "model": "h3",
+            "prompt": "prompt",
+            "total": 2,
+            "completed": 0,
+            "failed": 0,
+            "failures": [],
+            "current": "",
+            "error": "",
+        },
+    )
+    lora = Path("C:/ComfyUI/models/loras/mh3/set/epoch01.safetensors")
+    monkeypatch.setattr(
+        bench,
+        "_available_comfy_lora_names",
+        lambda: (_ for _ in ()).throw(RuntimeError("no candidate LoRAs available")),
+    )
+    monkeypatch.setattr(bench, "_load_template", lambda: {
+        "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
+        "129": {"inputs": {"noise_seed": 123}},
+        "133": {"inputs": {"value": 7}},
+        "138": {"inputs": {"model": ["148", 0], "clip": ["148", 1]}},
+        "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
+        "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
+    })
+    monkeypatch.setattr(bench, "_queue_workflow", lambda _workflow: "prompt-ok")
+    monkeypatch.setattr(
+        bench,
+        "_wait_for_video",
+        lambda _prompt_id: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
+    )
+    monkeypatch.setattr(
+        bench,
+        "_move_saved_video",
+        lambda _video_ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
+    )
+
+    bench._run_batch("folder-key", session, [lora], "prompt")
+
+    status = bench._read_status(session)
+    assert status["status"] == "complete"
+    assert status["completed"] == 1
+    assert status["failed"] == 1
+    assert [result["sourceLoRA"] for result in status["results"]] == ["Base"]
+    assert status["failures"][0]["sourceLoRA"] == lora.name
+
+
 def test_run_batch_records_missing_candidate_and_continues(tmp_path, monkeypatch):
     session = tmp_path / "session"
     session.mkdir()

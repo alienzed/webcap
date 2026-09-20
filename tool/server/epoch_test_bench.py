@@ -1081,7 +1081,6 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
     status_file = _status_path(session_directory)
     try:
         template = copy.deepcopy(template) if template is not None else _load_template()
-        available_comfy_loras = _available_comfy_lora_names() if loras else []
         candidates = []
         if loras:
             candidates.append({
@@ -1117,7 +1116,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 if candidate["kind"] == "lora":
                     comfy_lora_name = _resolve_comfy_name(
                         lora_file,
-                        available_comfy_loras,
+                        _available_comfy_lora_names(),
                         "staged LoRA",
                     )
                 workflow = _workflow_for_lora(

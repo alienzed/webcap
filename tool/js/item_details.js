@@ -201,7 +201,7 @@ function pasteClipboardTagsToMediaKey(mediaKey) {
         return;
       }
       if (assignChecklistTagToMediaKey(key, requirement, term, {
-        consumeUnscoped: true,
+        consumeUnscoped: false,
         skipSave: true,
         skipRefresh: true,
         skipUndo: true
@@ -1343,7 +1343,10 @@ function loadItemTagsFromFolderState(folderState) {
       var tag = normalizeItemTag(raw);
       if (!tag) return;
       var low = tag.toLowerCase();
-      if (seen[low]) return;
+      var migrated = checklistLegacyScopedTermsByMedia
+        && checklistLegacyScopedTermsByMedia[mediaKey]
+        && checklistLegacyScopedTermsByMedia[mediaKey][low];
+      if (migrated || seen[low]) return;
       seen[low] = true;
       clean.push(tag);
     });

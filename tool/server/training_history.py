@@ -14,13 +14,15 @@ import tomllib
 
 from . import config as app_config
 from .training_config_files import output_dir_from_config, training_config_path
-from .training_action import managed_actions_for_folder, read_action
+from .training_action import managed_actions, managed_actions_for_folder, read_action
 from .training_profiles import config_for_id, config_for_stage
 
 
 HISTORY_VERSION = 4
 RECENT_RUNS_FILE_NAME = "recent_runs.json"
 RECENT_RUNS_VERSION = 2
+JOB_RECORD_VERSION = 1
+JOB_RECORD_FILE_NAME = "job.json"
 _history_lock = threading.RLock()
 _EPOCH_PATTERN = re.compile(r"^epoch(\d+)$", re.IGNORECASE)
 _STEP_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
@@ -179,6 +181,137 @@ def recent_jobs():
         return [dict(job) for job in recent["jobs"]]
 
 
+def _job_record_fields():
+    return (
+        "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget",
+        "modelLabel", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary",
+        "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumeActionId",
+        "resumeOutputId", "outputRunPath", "status", "stage", "createdAt", "startedAt", "finishedAt", "updatedAt",
+        "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId",
+        "activeTrainingSeconds", "activeTrainingTimingComplete", "outputRoot", "effectiveOutputDir", "outputSlug",
+        "sequence", "progress", "model", "input", "artifactDir", "artifactSummary",
+    )
+
+
+def _normalized_job_record(folder_path, job):
+    record = {field: job.get(field) for field in _job_record_fields() if field in job}
+    record["folder"] = _folder_key(folder_path)
+    for field in ("error", "completionNote"):
+        if isinstance(record.get(field), str):
+            record[field] = record[field][:1000]
+    if isinstance(record.get("failureExcerpt"), str):
+        record["failureExcerpt"] = record["failureExcerpt"][-8192:]
+    if isinstance(record.get("model"), dict):
+        record["model"] = {
+            "label": str(record["model"].get("label") or "")[:160],
+            "source": str(record["model"].get("source") or "")[:512],
+        }
+    if not isinstance(record.get("runSummary"), dict) or not record.get("runSummary"):
+        record["runSummary"] = run_summary_from_capture(
+            record.get("recordPath") or record.get("inputPath"),
+            record.get("stages"),
+            record.get("capturedItemCount"),
+        )
+    record["artifactSummary"] = dict(record.get("artifactSummary") or {})
+    return record
+
+
+def _job_record_path(job):
+    artifact_dir = str((job or {}).get("artifactDir") or (job or {}).get("artifactPath") or "").strip()
+    if not artifact_dir:
+        return None
+    return Path(artifact_dir) / JOB_RECORD_FILE_NAME
+
+
+def _write_job_record(folder_path, job):
+    record = _normalized_job_record(folder_path, job)
+    path = _job_record_path(record)
+    if path is None:
+        raise ValueError("Training job has no managed artifact directory.")
+    if not path.parent.is_dir() or path.parent.is_symlink():
+        raise FileNotFoundError("Training job artifact directory is unavailable: " + str(path.parent))
+    _write_json_atomic(path, {"version": JOB_RECORD_VERSION, "job": record})
+    return record
+
+
+def _read_job_record(path):
+    record_path = Path(path)
+    try:
+        payload = json.loads(record_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("Training job record is unreadable: " + str(record_path)) from exc
+    if not isinstance(payload, dict) or payload.get("version") != JOB_RECORD_VERSION or not isinstance(payload.get("job"), dict):
+        raise ValueError("Training job record is invalid: " + str(record_path))
+    return dict(payload["job"])
+
+
+def _job_records_for_actions(actions, folder_key=""):
+    jobs = []
+    for action_root, action in actions:
+        action_folder = str(action.get("folder") or "")
+        if folder_key and action_folder != folder_key:
+            continue
+        jobs_root = action_root / "jobs"
+        if not jobs_root.is_dir() or jobs_root.is_symlink():
+            continue
+        for job_dir in jobs_root.iterdir():
+            record_path = job_dir / JOB_RECORD_FILE_NAME
+            if not job_dir.is_dir() or job_dir.is_symlink() or not record_path.is_file() or record_path.is_symlink():
+                continue
+            job = _read_job_record(record_path)
+            if folder_key and str(job.get("folder") or "") != folder_key:
+                continue
+            jobs.append(job)
+    return jobs
+
+
+def _legacy_jobs(folder_key=""):
+    recent = _read_recent_runs()
+    return [
+        dict(job) for job in recent["jobs"]
+        if isinstance(job, dict)
+        and (not folder_key or str(job.get("folder") or "") == folder_key)
+    ]
+
+
+def _migrate_legacy_job(folder_path, job):
+    path = _job_record_path(job)
+    if path is None or not path.parent.is_dir() or path.parent.is_symlink():
+        return False
+    if path.exists():
+        return True
+    _write_job_record(folder_path, job)
+    return True
+
+
+def _merge_folder_and_legacy_jobs(folder_path, actions):
+    folder_key = _folder_key(folder_path)
+    jobs = _job_records_for_actions(actions, folder_key)
+    by_id = {str(job.get("id") or ""): job for job in jobs if str(job.get("id") or "")}
+    for legacy in _legacy_jobs(folder_key):
+        job_id = str(legacy.get("id") or "")
+        if job_id and job_id in by_id:
+            continue
+        try:
+            migrated = _migrate_legacy_job(folder_path, legacy)
+        except (OSError, ValueError):
+            migrated = False
+        if migrated:
+            record_path = _job_record_path(legacy)
+            if record_path and record_path.is_file():
+                record = _read_job_record(record_path)
+                jobs.append(record)
+                if job_id:
+                    by_id[job_id] = record
+                continue
+        jobs.append(legacy)
+    jobs.sort(
+        key=lambda item: float(item.get("finishedAt") or item.get("startedAt") or item.get("createdAt") or 0),
+        reverse=True,
+    )
+    return jobs
+
+
 def _configured_epochs(folder_path, stage):
     try:
         text = (Path(folder_path) / ("config." + stage + ".toml")).read_text(encoding="utf-8")
@@ -296,14 +429,9 @@ def _default_history(folder_path):
 
 def read_history(folder_path):
     folder = Path(folder_path)
-    folder_key = _folder_key(folder)
     with _history_lock:
-        recent = _read_recent_runs()
         result = _default_history(folder)
-        result["jobs"] = [
-            dict(job) for job in recent["jobs"]
-            if isinstance(job, dict) and str(job.get("folder") or "") == folder_key
-        ]
+        result["jobs"] = _merge_folder_and_legacy_jobs(folder, managed_actions_for_folder(folder))
         return result
 
 
@@ -487,50 +615,9 @@ def summarize_history(folder_path):
 
 def record_job(folder_path, job):
     folder = Path(folder_path)
-    folder_key = _folder_key(folder)
-    record_fields = (
-        "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage",
-        "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId", "activeTrainingSeconds", "activeTrainingTimingComplete",
-        "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "progress", "model", "input", "artifactDir", "artifactSummary",
-    )
-    record = {field: job.get(field) for field in record_fields if field in job}
-    record["folder"] = folder_key
-    for field in ("error", "completionNote"):
-        if isinstance(record.get(field), str):
-            record[field] = record[field][:1000]
-    if isinstance(record.get("failureExcerpt"), str):
-        record["failureExcerpt"] = record["failureExcerpt"][-8192:]
-    if isinstance(record.get("model"), dict):
-        record["model"] = {
-            "label": str(record["model"].get("label") or "")[:160],
-            "source": str(record["model"].get("source") or "")[:512],
-        }
-    if not isinstance(record.get("runSummary"), dict) or not record.get("runSummary"):
-        record["runSummary"] = run_summary_from_capture(
-            record.get("recordPath") or record.get("inputPath"),
-            record.get("stages"),
-            record.get("capturedItemCount"),
-        )
-    record["artifactSummary"] = dict(record.get("artifactSummary") or {})
     with _history_lock:
-        recent = _read_recent_runs()
-        existing = recent["jobs"]
-        for index, item in enumerate(existing):
-            if (
-                str(item.get("id") or "") == str(record.get("id") or "")
-                and str(item.get("folder") or "") == folder_key
-            ):
-                existing[index] = record
-                break
-        else:
-            existing.append(record)
-        existing.sort(
-            key=lambda item: float(item.get("finishedAt") or item.get("startedAt") or item.get("createdAt") or 0),
-            reverse=True,
-        )
-        _write_recent_runs(recent)
+        _write_job_record(folder, job)
     return read_history(folder)
-
 
 def history_payload(folder_path):
     history = read_history(folder_path)
@@ -590,17 +677,43 @@ def _history_job_view(job):
 
 
 def all_history_payload(query="", folder=""):
-    """Return persisted history rows; presentation filtering happens in the browser."""
+    """Return Training History projected from managed action/job folders."""
     del query
     folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
     with _history_lock:
-        recent = _read_recent_runs()
+        actions = managed_actions()
+        jobs = _job_records_for_actions(actions, folder_text)
+        known = {str(job.get("id") or "") for job in jobs if str(job.get("id") or "")}
+        for legacy in _legacy_jobs(folder_text):
+            job_id = str(legacy.get("id") or "")
+            if job_id and job_id in known:
+                continue
+            source_folder = str(legacy.get("folder") or "").strip()
+            migrated = False
+            if source_folder:
+                try:
+                    source_path = app_config.safe_join_fs_root(source_folder)
+                    migrated = _migrate_legacy_job(source_path, legacy)
+                except (OSError, ValueError):
+                    migrated = False
+            if migrated:
+                record_path = _job_record_path(legacy)
+                if record_path and record_path.is_file():
+                    record = _read_job_record(record_path)
+                    jobs.append(record)
+                    if job_id:
+                        known.add(job_id)
+                    continue
+            jobs.append(legacy)
         jobs = [
-            _history_job_view(job) for job in recent["jobs"]
-            if isinstance(job, dict)
-            and job.get("status") != "cancelled"
+            _history_job_view(job) for job in jobs
+            if job.get("status") != "cancelled"
             and (not folder_text or str(job.get("folder") or "") == folder_text)
         ]
+        jobs.sort(
+            key=lambda item: float(item.get("finishedAt") or item.get("startedAt") or item.get("createdAt") or 0),
+            reverse=True,
+        )
     return {"version": HISTORY_VERSION, "jobs": jobs}
 
 
@@ -610,45 +723,6 @@ def history_job_output_path(folder_path, job_id):
     if not job or not str(job.get("outputRoot") or "").strip():
         raise ValueError("Training history entry has no effective output directory.")
     return Path(job["outputRoot"])
-
-
-def clear_history(folder_path=None):
-    """Clear indexes only; job bundles and trainer artifacts are deliberately untouched."""
-    folder_key = _folder_key(folder_path) if folder_path else ""
-    with _history_lock:
-        recent = _read_recent_runs()
-        original = recent["jobs"]
-        retained = [
-            job for job in original
-            if folder_key and str(job.get("folder") or "") != folder_key
-        ]
-        cleared = len(original) - len(retained)
-        recent["jobs"] = retained
-        _write_recent_runs(recent)
-        return cleared
-
-
-def clear_history_job(folder_path, job_id):
-    """Remove one history index entry without touching its logs or training artifacts."""
-    folder_key = _folder_key(folder_path)
-    wanted_id = str(job_id or "").strip()
-    if not wanted_id:
-        return False
-    with _history_lock:
-        recent = _read_recent_runs()
-        original = recent["jobs"]
-        retained = [
-            job for job in original
-            if not (
-                str(job.get("id") or "") == wanted_id
-                and str(job.get("folder") or "") == folder_key
-            )
-        ]
-        if len(retained) == len(original):
-            return False
-        recent["jobs"] = retained
-        _write_recent_runs(recent)
-        return True
 
 
 def completed_stages(folder_path, include_discovered_runs=True):

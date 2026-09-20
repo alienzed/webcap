@@ -238,7 +238,7 @@ function syncApplicationShellContext() {
   }
   if (workspaceTitle) {
     workspaceTitle.textContent = testOpen
-      ? 'Test'
+      ? 'Test Generations'
       : (surface === 'training'
         ? 'Training'
         : (surface === 'reviewOutput'
@@ -248,7 +248,7 @@ function syncApplicationShellContext() {
   if (workspaceContext) {
     var workspaceContextText = '';
     if (testOpen) {
-      workspaceContextText = 'Generations';
+      workspaceContextText = '';
     } else if (surface === 'training') {
       var entryKind = getTrainingWorkspaceEntryKind();
       workspaceContextText = entryKind === 'global'

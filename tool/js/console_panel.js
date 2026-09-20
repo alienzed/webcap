@@ -17,8 +17,11 @@ function wireConsolePanelUi() {
 function setConsolePanelVisible(visible) {
   if (!ui.consolePanelEl) return;
   wireConsolePanelUi();
-  ui.consolePanelEl.classList.toggle('hidden', !visible);
-  ui.consolePanelEl.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  var expanded = !!visible;
+  ui.consolePanelEl.classList.toggle('hidden', !expanded);
+  ui.consolePanelEl.setAttribute('aria-hidden', expanded ? 'false' : 'true');
+  var frame = document.getElementById('app-frame');
+  if (frame) frame.classList.toggle('console-open', expanded);
 }
 
 function appendToConsolePanel(msg) {
@@ -48,11 +51,10 @@ function syncConsoleToggleButton() {
   if (!btn) return;
   wireConsolePanelUi();
   var expanded = isConsolePanelVisible();
-  btn.innerHTML = expanded ? '&#x25BC;' : '&#x25B2;';
+  btn.classList.toggle('active', expanded);
   btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
   btn.setAttribute('aria-label', expanded ? 'Hide console' : 'Show console');
-  syncWorkspaceConfigEditorUi();
-  syncTrainingConsoleUi();
+  btn.title = expanded ? 'Hide console' : 'Show console';
 }
 
 function showConsolePanel() {

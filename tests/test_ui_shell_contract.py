@@ -126,8 +126,8 @@ def test_test_workspace_uses_shell_identity_and_prep_exit():
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    assert "testOpen ? 'Test'" in shell
-    assert "workspaceContextText = 'Generations'" in shell
+    assert "testOpen ? 'Test Generations'" in shell
+    assert "workspaceContextText = 'Generations'" not in shell
     assert "window.closeTestBenchActivity()" in shell
 
 
@@ -354,13 +354,22 @@ def test_responsive_shell_compresses_header_without_dropping_permanent_rail():
 
 
 def test_console_visibility_is_class_owned_after_shell_cleanup():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     console = (ROOT / "tool" / "js" / "console_panel.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
-    assert "classList.toggle('hidden', !visible)" in console
+    assert 'id="console-panel" class="hidden" aria-hidden="true"' in html
+    assert "classList.toggle('hidden', !expanded)" in console
+    assert "classList.toggle('console-open', expanded)" in console
     assert "isConsolePanelVisible()" in console
+    assert "btn.innerHTML" not in console
+    assert "btn.classList.toggle('active', expanded)" in console
+    assert "syncWorkspaceConfigEditorUi()" not in console
+    assert "syncTrainingConsoleUi()" not in console
     assert "style.display" not in console
     assert ".app-frame > #console-panel {" in css
+    assert "height: var(--shell-console-height);" in css
+    assert ".app-frame.console-open > .shell-status-toast" in css
     assert "display: flex;" in css
 
 

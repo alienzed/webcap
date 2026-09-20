@@ -1,5 +1,6 @@
 /* Permanent application frame. Keep the existing workspace grid intact inside it. */
 .app-frame {
+  --shell-console-height: min(42%, 360px);
   position: relative;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
@@ -275,6 +276,10 @@
 
 .app-frame.shell-immersive > .shell-status-toast {
   left: 8px;
+}
+
+.app-frame.console-open > .shell-status-toast {
+  bottom: calc(var(--shell-console-height) + 16px);
 }
 
 .app-frame > .app {
@@ -804,7 +809,7 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   bottom: 8px;
   left: 50px;
   width: auto;
-  height: min(42%, 360px);
+  height: var(--shell-console-height);
   margin: 0;
   min-height: 140px;
   max-height: calc(100% - 50px);
@@ -880,8 +885,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 @media (max-width: 720px) {
-  .app-frame > #console-panel {
-    height: min(48%, 320px);
+  .app-frame {
+    --shell-console-height: min(48%, 320px);
   }
 }
 

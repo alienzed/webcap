@@ -229,3 +229,34 @@ def test_incomplete_progress_does_not_render_empty_parentheses():
     )[0]
     assert "missing.push(requirementLabel);" in progress
     assert "terms.join(', ')" not in progress
+
+def test_single_item_group_visibility_is_presentation_only_and_persisted():
+    checklist = _read("tool/js/checklist_state.js")
+    panel = _read("tool/js/checklist_panel.js")
+    workbench = _read("tool/js/group_workbench.js")
+    html = _read("tool/tool.html")
+
+    assert "var checklistHiddenRequirements = {}" in checklist
+    assert "snapshot.caption_hidden_requirements = getChecklistHiddenRequirements();" in checklist
+    assert "sanitizeChecklistHiddenRequirements(folderState.caption_hidden_requirements)" in checklist
+    assert "function setChecklistRequirementHidden(requirementLabel, hidden, options)" in checklist
+    assert "function showAllChecklistRequirements(options)" in checklist
+
+    assert "checklist-group-visibility-btn" in panel
+    assert "setChecklistRequirementHidden(requirementLabel, nextHidden)" in panel
+
+    assert "var useVisibilityFilter = !isGridMode && targetEl.id === 'group-workbench-list';" in workbench
+    assert "if (useVisibilityFilter && isChecklistRequirementHidden(requirementLabel)) continue;" in workbench
+    assert "showAllChecklistRequirements()" in workbench
+    assert 'id="group-workbench-show-all-btn"' in html
+
+
+def test_groups_helper_keeps_label_space_with_management_controls():
+    css = _read("tool/css/checklist.css")
+
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in css
+    assert "#checklist-items .checklist-row-label-text" in css
+    assert "text-overflow: ellipsis;" in css
+    assert "white-space: nowrap;" in css
+    assert "#checklist-items .checklist-group-visibility-btn.is-hidden" in css
+

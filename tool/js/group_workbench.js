@@ -222,15 +222,11 @@ function setChecklistRequirementCheckedForMediaKeys(mediaKeys, requirementLabel,
 }
 
 function toggleGroupWorkbenchTermForItem(mediaKey, requirementLabel, term) {
-  if (!mediaKey || !term) return;
-  if (typeof toggleAnnotateTag === 'function') {
-    toggleAnnotateTag(term, { reviewRequirementLabel: requirementLabel });
-  } else if (typeof hasTagForMediaKey === 'function' && hasTagForMediaKey(mediaKey, term)) {
-    if (typeof removeTagFromCurrentMedia === 'function') removeTagFromCurrentMedia(term);
-    else if (typeof removeTagFromMediaKey === 'function') removeTagFromMediaKey(mediaKey, term);
+  if (!mediaKey || !requirementLabel || !term) return;
+  if (hasChecklistAssignedTagForMediaKey(mediaKey, requirementLabel, term)) {
+    unassignChecklistTagFromMediaKey(mediaKey, requirementLabel, term);
   } else {
-    if (typeof addTagToCurrentMedia === 'function') addTagToCurrentMedia(term, { reviewRequirementLabel: requirementLabel });
-    else if (typeof addTagToMediaKey === 'function') addTagToMediaKey(mediaKey, term, { reviewRequirementLabel: requirementLabel });
+    assignChecklistTagToMediaKey(mediaKey, requirementLabel, term);
   }
 }
 
@@ -241,19 +237,20 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
     if (typeof setStatus === 'function') setStatus('Select Grid thumbnails to tag them.');
     return false;
   }
-  var allHaveTerm = typeof hasTagForMediaKey === 'function' && keys.every(function (key) {
-    return hasTagForMediaKey(key, term);
+  var allHaveTerm = keys.every(function (key) {
+    return hasChecklistAssignedTagForMediaKey(key, requirementLabel, term);
   });
   var changed = 0;
   keys.forEach(function (key) {
-    var ok = false;
-    if (allHaveTerm) {
-      if (typeof removeTagFromMediaKey === 'function') ok = removeTagFromMediaKey(key, term);
-    } else {
-      if (typeof addTagToMediaKey === 'function') ok = addTagToMediaKey(key, term, { reviewRequirementLabel: requirementLabel });
-    }
+    var ok = allHaveTerm
+      ? unassignChecklistTagFromMediaKey(key, requirementLabel, term, { skipSave: true, skipRefresh: true })
+      : assignChecklistTagToMediaKey(key, requirementLabel, term, { skipSave: true, skipRefresh: true });
     if (ok) changed += 1;
   });
+  if (changed) {
+    saveChecklistToFolderState();
+    refreshTagDrivenPanelsForMediaKey((state.currentItem && state.currentItem.key) || '');
+  }
   if (typeof setStatus === 'function') {
     setStatus((allHaveTerm ? 'Removed' : 'Added') + ' "' + term + '" on ' + changed + ' Grid item' + (changed === 1 ? '' : 's') + '.');
   }
@@ -272,12 +269,12 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
   return true;
 }
 
-function getGroupWorkbenchGridUsageState(term, mediaKeys) {
+function getGroupWorkbenchGridUsageState(requirementLabel, term, mediaKeys) {
   var total = Array.isArray(mediaKeys) ? mediaKeys.length : 0;
   if (total <= 0) return 'none';
   var count = 0;
   mediaKeys.forEach(function (key) {
-    if (hasTagForMediaKey(key, term)) count += 1;
+    if (hasChecklistAssignedTagForMediaKey(key, requirementLabel, term)) count += 1;
   });
   if (count <= 0) return 'none';
   var ratio = count / total;
@@ -606,12 +603,12 @@ function renderGroupWorkbench(options) {
     for (var t = 0; t < terms.length; t++) {
       var term = terms[t];
       var activeCount = 0;
-      if (hasActionTarget && typeof hasTagForMediaKey === 'function') {
+      if (hasActionTarget) {
         if (isGridMode) {
           for (var mk = 0; mk < mediaKeys.length; mk++) {
-            if (hasTagForMediaKey(mediaKeys[mk], term)) activeCount += 1;
+            if (hasChecklistAssignedTagForMediaKey(mediaKeys[mk], requirementLabel, term)) activeCount += 1;
           }
-        } else if (hasTagForMediaKey(mediaKey, term)) {
+        } else if (hasChecklistAssignedTagForMediaKey(mediaKey, requirementLabel, term)) {
           activeCount = 1;
         }
       }
@@ -620,12 +617,11 @@ function renderGroupWorkbench(options) {
         : (hasItemTarget && activeCount > 0);
       var isMixed = isGridMode && hasGridTargets && activeCount > 0 && activeCount < mediaKeys.length;
       var appearsInCaption = hasItemTarget && !isGridMode
-        && typeof tagAppearsInCurrentCaption === 'function'
-        && tagAppearsInCurrentCaption(term);
+        && checklistGroupTermAppearsInCurrentCaption(requirementLabel, term, mediaKey);
       var isMismatch = hasItemTarget && !isGridMode && isActive && !appearsInCaption;
       var isMatched = hasItemTarget && !isGridMode && !isActive && appearsInCaption;
-      var renderedTerm = renderChecklistTermWithAffixes(term, mediaKey);
-      var usageState = getGroupWorkbenchGridUsageState(term, contextMediaKeys);
+      var renderedTerm = renderChecklistGroupTermWithAffixes(requirementLabel, term, mediaKey);
+      var usageState = getGroupWorkbenchGridUsageState(requirementLabel, term, contextMediaKeys);
       var termBtn = document.createElement('button');
       termBtn.type = 'button';
       termBtn.className = 'group-workbench-term-btn group-workbench-term-usage-' + usageState;
@@ -659,9 +655,7 @@ function renderGroupWorkbench(options) {
         };
         btn.oncontextmenu = function (event) {
           event.preventDefault();
-          if (typeof openChecklistTermAffixesModal === 'function') {
-            openChecklistTermAffixesModal(termText);
-          }
+          openChecklistTermAffixesModal(label, termText);
         };
       })(termBtn, mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys, opts.getContextMediaKeys);
       termEntries.push({

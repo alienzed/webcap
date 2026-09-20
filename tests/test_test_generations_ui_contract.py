@@ -97,7 +97,16 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "dataRemoveCandidate" not in script
     assert "dataset.removeCandidate" in script
     assert "session: String(currentSession || '')" in script
+    assert "row.dataset.sessionName = name;" in script
+    assert "row.dataset.queueJobId = String(job.id || '');" in script
+    assert "openSession(row.dataset.sessionName);" in script
+    assert "open.dataset.sessionFolderOpen = resultFolder;" in script
+    assert "rate.dataset.sessionRate = resultFolder;" in script
+    assert "openResultsFolder(folderOpen.dataset.sessionFolderOpen);" in script
+    assert "openResultsFolder(rate.dataset.sessionRate, { rateItems: true });" in script
+    assert "open.dataset.sessionOpen" not in script
     assert ".test-generations-session-row" in css
+    assert ".test-generations-session-row:not([data-queue-job-id])" in css
     assert ".test-generations-result-footer" in css
 
 

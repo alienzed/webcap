@@ -2689,6 +2689,12 @@ iframe {
   border: 1px solid transparent;
   border-radius: 5px;
 }
+.test-generations-session-row:not([data-queue-job-id]) {
+  cursor: pointer;
+}
+.test-generations-session-row:not([data-queue-job-id]):hover {
+  background: var(--hover);
+}
 .test-generations-session-row.is-active {
   border-color: var(--accent);
   background: var(--panel);

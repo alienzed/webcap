@@ -379,11 +379,22 @@
 
       var actions = document.createElement('div');
       actions.className = 'test-generations-session-actions';
+      var resultFolder = String(session.resultFolder || '');
+
       var open = document.createElement('button');
       open.type = 'button';
       open.className = 'review-captions-btn';
-      open.dataset.sessionOpen = name;
+      open.dataset.sessionFolderOpen = resultFolder;
       open.textContent = 'Open';
+      open.disabled = !resultFolder;
+
+      var rate = document.createElement('button');
+      rate.type = 'button';
+      rate.className = 'review-captions-btn';
+      rate.dataset.sessionRate = resultFolder;
+      rate.textContent = 'Rate';
+      rate.disabled = !resultFolder || !completed;
+
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'test-generations-remove-candidate';
@@ -392,6 +403,7 @@
       remove.setAttribute('aria-label', 'Delete Test session ' + name);
       remove.textContent = '×';
       actions.appendChild(open);
+      actions.appendChild(rate);
       actions.appendChild(remove);
 
       row.appendChild(copy);
@@ -1230,16 +1242,24 @@
         cancelQueuedTest(queueCancel.dataset.queueCancel).catch(showError);
         return;
       }
-      var open = event.target.closest('[data-session-open]');
-      if (open) {
-        openSession(open.dataset.sessionOpen);
+      var folderOpen = event.target.closest('[data-session-folder-open]');
+      if (folderOpen) {
+        openResultsFolder(folderOpen.dataset.sessionFolderOpen);
+        return;
+      }
+      var rate = event.target.closest('[data-session-rate]');
+      if (rate) {
+        openResultsFolder(rate.dataset.sessionRate, { rateItems: true });
         return;
       }
       var remove = event.target.closest('[data-session-delete]');
       if (remove) {
         remove.disabled = true;
         deleteSession(remove.dataset.sessionDelete);
+        return;
       }
+      var row = event.target.closest('[data-session-name]');
+      if (row) openSession(row.dataset.sessionName);
     };
     el('test-generations-results').onclick = function (event) {
       var remove = event.target.closest('[data-remove-candidate]');

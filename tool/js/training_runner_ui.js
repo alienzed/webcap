@@ -14,8 +14,17 @@ function getTrainingRunnerSelectedJob() {
   return null;
 }
 
+function queueJobKind(job) {
+  return String(job && job.kind || 'training').toLowerCase() === 'test' ? 'test' : 'training';
+}
+
+function isTrainingQueueJob(job) {
+  return queueJobKind(job) === 'training';
+}
+
 function getTrainingRunnerConsoleTargetJob() {
-  return getTrainingRunnerActiveJob();
+  var job = getTrainingRunnerActiveJob();
+  return isTrainingQueueJob(job) ? job : null;
 }
 
 function getTrainingRunnerActiveJob() {
@@ -34,7 +43,7 @@ function syncUtilityTrainingActivity() {
   var activityTrainingBtn = document.getElementById('activity-training-btn');
   if (!activityTrainingBtn) return;
   var running = (trainingWorkspaceState.runnerJobs || []).some(function (job) {
-    return job.status === 'running';
+    return isTrainingQueueJob(job) && job.status === 'running';
   });
   activityTrainingBtn.classList.toggle('training-running', running);
   activityTrainingBtn.title = running ? 'Open Training (training in progress)' : 'Open Training';
@@ -441,6 +450,14 @@ function trainingJobLabel(job) {
   return stageLabel.toLowerCase() === modelLabel.toLowerCase() ? modelLabel : modelLabel + ' · ' + stageLabel;
 }
 
+function queueJobLabel(job) {
+  if (queueJobKind(job) === 'test') {
+    var testName = String(job && job.runName || '').trim();
+    return testName ? 'Test · ' + testName : 'Test Generations';
+  }
+  return trainingJobLabel(job);
+}
+
 function startManagedTraining() {
   if (!state.folder) {
     setStatus('No folder selected for managed training.');
@@ -701,52 +718,65 @@ function buildTrainingQueueHtml(queuedJobs) {
   return '<button type="button" class="training-runner-queue-title" data-training-queue-toggle aria-expanded="' + (!collapsed ? 'true' : 'false') + '">' +
     queueLabel + '<span class="training-section-caret" aria-hidden="true">' + (collapsed ? '&#9656;' : '&#9662;') + '</span></button>' +
     '<div class="training-runner-queue-body' + (collapsed ? ' hidden' : '') + '">' + queuedJobs.map(function (queuedJob, index) {
-      var stage = trainingJobLabel(queuedJob);
-      var plannedSteps = trainingPlannedStepCount(queuedJob);
-      var plannedEpochs = trainingPlannedEpochCount(queuedJob);
-      var resumePoint = queuedJob && queuedJob.resumePoint && typeof queuedJob.resumePoint === 'object' ? queuedJob.resumePoint : {};
-      var resumeEpoch = Number(resumePoint.epoch);
-      var resumeStep = Number(resumePoint.step);
-      var workloadParts = [];
-      if (plannedEpochs) {
-        var remainingEpochs = queuedJob.resumeFromCheckpoint && isFinite(resumeEpoch) && resumeEpoch > 0
-          ? Math.max(0, plannedEpochs - resumeEpoch)
-          : plannedEpochs;
-        workloadParts.push((queuedJob.resumeFromCheckpoint ? remainingEpochs.toLocaleString() + ' epochs remaining' : Math.round(plannedEpochs).toLocaleString() + ' epochs'));
-      }
-      if (plannedSteps) {
-        var remainingSteps = queuedJob.resumeFromCheckpoint && isFinite(resumeStep) && resumeStep > 0
-          ? Math.max(0, plannedSteps - resumeStep)
-          : plannedSteps;
-        workloadParts.push((queuedJob.resumeFromCheckpoint ? '~' + Math.round(remainingSteps).toLocaleString() + ' steps remaining' : '~' + Math.round(plannedSteps).toLocaleString() + ' run steps'));
-      }
-      var workload = workloadParts.length ? '<span class="training-runner-queue-workload">' + escapeHtml(workloadParts.join(' · ')) + '</span>' : '';
-      var status = String(queuedJob.status || 'queued');
-      var error = queuedJob.error ? '<div class="training-runner-queue-resume">' + escapeHtml(queuedJob.error) + '</div>' : '';
+      var kind = queueJobKind(queuedJob);
+      var label = queueJobLabel(queuedJob);
+      var workload = '';
+      var resume = '';
+      var output = '';
+      var captured = '';
       var sourceUnavailable = queuedJob.sourceUnavailable
         ? '<div class="training-runner-queue-resume is-error">' + escapeHtml(queuedJob.sourceUnavailable) + '</div>'
         : '';
-      var resume = queuedJob.resumeFromCheckpoint
-        ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(trainingStageLabel(queuedJob.resumeStage || queuedJob.stages || '')) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>'
-        : '';
-      var outputIdentity = trainingOutputIdentity(queuedJob);
-      var output = outputIdentity ? '<div class="training-runner-queue-resume" title="' + escapeHtml(queuedJob.effectiveOutputDir || queuedJob.outputRoot || '') + '">Output: ' + escapeHtml(outputIdentity) + '</div>' : '';
-      var captured = Number(queuedJob.capturedItemCount || 0) ? '<div class="training-runner-queue-resume">Captured items: ' + escapeHtml(String(queuedJob.capturedItemCount)) + '</div>' : '';
+      if (kind === 'test') {
+        var total = Number(queuedJob.testTotal || 0);
+        workload = total ? '<span class="training-runner-queue-workload">' + total.toLocaleString() + ' renders</span>' : '';
+      } else {
+        var plannedSteps = trainingPlannedStepCount(queuedJob);
+        var plannedEpochs = trainingPlannedEpochCount(queuedJob);
+        var resumePoint = queuedJob && queuedJob.resumePoint && typeof queuedJob.resumePoint === 'object' ? queuedJob.resumePoint : {};
+        var resumeEpoch = Number(resumePoint.epoch);
+        var resumeStep = Number(resumePoint.step);
+        var workloadParts = [];
+        if (plannedEpochs) {
+          var remainingEpochs = queuedJob.resumeFromCheckpoint && isFinite(resumeEpoch) && resumeEpoch > 0
+            ? Math.max(0, plannedEpochs - resumeEpoch)
+            : plannedEpochs;
+          workloadParts.push((queuedJob.resumeFromCheckpoint ? remainingEpochs.toLocaleString() + ' epochs remaining' : Math.round(plannedEpochs).toLocaleString() + ' epochs'));
+        }
+        if (plannedSteps) {
+          var remainingSteps = queuedJob.resumeFromCheckpoint && isFinite(resumeStep) && resumeStep > 0
+            ? Math.max(0, plannedSteps - resumeStep)
+            : plannedSteps;
+          workloadParts.push((queuedJob.resumeFromCheckpoint ? '~' + Math.round(remainingSteps).toLocaleString() + ' steps remaining' : '~' + Math.round(plannedSteps).toLocaleString() + ' run steps'));
+        }
+        workload = workloadParts.length ? '<span class="training-runner-queue-workload">' + escapeHtml(workloadParts.join(' · ')) + '</span>' : '';
+        resume = queuedJob.resumeFromCheckpoint
+          ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(trainingStageLabel(queuedJob.resumeStage || queuedJob.stages || '')) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>' + buildQueuedResumePointHtml(queuedJob)
+          : '';
+        var outputIdentity = trainingOutputIdentity(queuedJob);
+        output = outputIdentity ? '<div class="training-runner-queue-resume" title="' + escapeHtml(queuedJob.effectiveOutputDir || queuedJob.outputRoot || '') + '">Output: ' + escapeHtml(outputIdentity) + '</div>' : '';
+        captured = Number(queuedJob.capturedItemCount || 0) ? '<div class="training-runner-queue-resume">Captured items: ' + escapeHtml(String(queuedJob.capturedItemCount)) + '</div>' : '';
+      }
+      var status = String(queuedJob.status || 'queued');
+      var error = queuedJob.error ? '<div class="training-runner-queue-resume">' + escapeHtml(queuedJob.error) + '</div>' : '';
       var selected = queuedJob.id === trainingWorkspaceState.runnerSelectedJobId;
       var exceptionalStatus = status !== 'queued'
         ? '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>'
         : '';
+      var trainingOnlyActions = kind === 'training'
+        ? (String(queuedJob.outputRunPath || queuedJob.resumeFromCheckpoint || '').trim() ? '<button type="button" class="training-runner-queue-control" data-training-candidates="' + escapeHtml(queuedJob.id) + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
+          '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' +
+          (queuedJob.actionPath ? '<button type="button" class="training-runner-queue-control" data-training-job-action="' + escapeHtml(queuedJob.id) + '" title="Open action folder" aria-label="Open action folder">&#128451;</button>' : '')
+        : '';
       return '<div class="training-runner-queue-item' + (selected ? ' active' : '') + '" data-training-queue-job="' + escapeHtml(queuedJob.id) + '">' +
         '<div class="training-runner-queue-spine" aria-hidden="true"><span>' + (index + 1) + '</span></div>' +
         '<div class="training-runner-queue-copy">' +
-          '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(stage) + '</strong>' + workload + '</div>' +
+          '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(label) + '</strong>' + workload + '</div>' +
           '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
-          resume + buildQueuedResumePointHtml(queuedJob) + output + captured + sourceUnavailable + error +
+          resume + output + captured + sourceUnavailable + error +
         '</div>' +
         '<div class="training-runner-queue-controls">' +
-          (String(queuedJob.outputRunPath || queuedJob.resumeFromCheckpoint || '').trim() ? '<button type="button" class="training-runner-queue-control" data-training-candidates="' + escapeHtml(queuedJob.id) + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
-          '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' +
-          (queuedJob.actionPath ? '<button type="button" class="training-runner-queue-control" data-training-job-action="' + escapeHtml(queuedJob.id) + '" title="Open action folder" aria-label="Open action folder">&#128451;</button>' : '') +
+          trainingOnlyActions +
           '<button type="button" class="training-runner-queue-control" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + '>&#8593;</button>' +
           '<button type="button" class="training-runner-queue-control" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move down" aria-label="Move down"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>&#8595;</button>' +
           '<button type="button" class="training-runner-queue-control training-runner-queue-cancel" data-training-queue-action="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Remove from queue" aria-label="Remove from queue">&#215;</button>' +
@@ -975,6 +1005,39 @@ function renderTrainingRunner() {
   }
   if (!getTrainingRunnerJobById(trainingWorkspaceState.runnerSelectedJobId)) {
     trainingWorkspaceState.runnerSelectedJobId = job.id;
+  }
+  if (queueJobKind(job) === 'test') {
+    var testProgress = job.testProgress && typeof job.testProgress === 'object' ? job.testProgress : {};
+    var testCompleted = Number(testProgress.completed || 0);
+    var testFailed = Number(testProgress.failed || 0);
+    var testTotal = Number(testProgress.total || job.testTotal || 0);
+    var testStatus = String(job.status || 'unknown');
+    var testProgressText = testTotal ? testCompleted + ' / ' + testTotal : '';
+    if (testFailed) testProgressText += (testProgressText ? ' · ' : '') + testFailed + ' failed';
+    if (testProgress.current) testProgressText += (testProgressText ? ' · ' : '') + String(testProgress.current);
+    els.runnerSummary.innerHTML = '<div class="training-runner-active-row">' +
+      '<div class="training-runner-state"><span class="training-runner-status training-runner-status--' + escapeHtml(testStatus) + '">' + escapeHtml(trainingRunnerStatusLabel(testStatus)) + '</span>' +
+      '<span>' + escapeHtml(queueJobLabel(job)) + (testProgressText ? ' · ' + escapeHtml(testProgressText) : '') + '</span></div>' +
+      '<button type="button" class="training-runner-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
+      '</div>' + (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '');
+    els.runnerActions.classList.remove('hidden');
+    if (els.runnerFinishBtn) els.runnerFinishBtn.classList.add('hidden');
+    if (els.runnerPauseBtn) els.runnerPauseBtn.classList.add('hidden');
+    if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.add('hidden');
+    if (els.runnerConsoleBtn) els.runnerConsoleBtn.classList.add('hidden');
+    if (els.runnerCancelBtn) {
+      els.runnerCancelBtn.textContent = 'Stop';
+      els.runnerCancelBtn.title = 'Stop the active Test Generations session.';
+      els.runnerCancelBtn.classList.toggle('hidden', testStatus !== 'starting' && testStatus !== 'running' && testStatus !== 'stopping');
+      els.runnerCancelBtn.disabled = testStatus === 'stopping';
+    }
+    return;
+  }
+  if (els.runnerConsoleBtn) els.runnerConsoleBtn.classList.remove('hidden');
+  if (els.runnerCancelBtn) {
+    els.runnerCancelBtn.textContent = 'Cancel';
+    els.runnerCancelBtn.title = 'Remove this queued job from the queue.';
+    els.runnerCancelBtn.disabled = false;
   }
   var elapsed = formatTrainingRunnerElapsed(job);
   var status = String(job.status || 'unknown');

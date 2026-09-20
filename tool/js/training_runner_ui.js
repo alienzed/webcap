@@ -39,7 +39,7 @@ function syncUtilityTrainingActivity() {
   activityTrainingBtn.classList.toggle('training-running', running);
   activityTrainingBtn.title = running ? 'Open Training (training in progress)' : 'Open Training';
   activityTrainingBtn.setAttribute('aria-label', running ? 'Open Training (training in progress)' : 'Open Training');
-  if (typeof window.renderShellSystemStatus === 'function') window.renderShellSystemStatus();
+  setShellTrainingActive(running);
 }
 
 function isTrainingRunnerConsoleVisible() {

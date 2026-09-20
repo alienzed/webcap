@@ -18,7 +18,7 @@ from .training_profiles import config_for_stage, normalize_mode, profile, profil
 from .training_bundle import materialize_training_bundle
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets
-from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume, run_summary_from_capture
+from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, remove_job_record, resolve_managed_resume, run_summary_from_capture
 from .training_action import actions_root, allocate_action, action_id_for_root, action_paths, fingerprint_files, read_action, update_action
 from .training_preflight import (
     build_launch_preflight as _build_launch_preflight,
@@ -295,7 +295,7 @@ def recover_state_response():
 def _sync_job_history(job):
     if not _is_training_job(job):
         return ""
-    if job.get("historyHidden") or job.get("status") not in HISTORY_STATUSES:
+    if job.get("status") not in HISTORY_STATUSES:
         return ""
     folder = str(job.get("folder") or "").strip()
     if not folder:
@@ -304,26 +304,34 @@ def _sync_job_history(job):
         folder_path = app_config.safe_join_fs_root(folder)
         record_job(folder_path, job)
     except Exception as exc:
-        return "Could not add training outcome to Recent Runs: " + str(exc)
+        return "Could not persist Training History job evidence: " + str(exc)
     return ""
 
 
 def _sync_histories(state):
     errors = []
+    failed_job_ids = set()
     for job in state.get("jobs", []):
         error = _sync_job_history(job)
         if error:
             errors.append(error)
-    return errors
+            job_id = str(job.get("id") or "")
+            if job_id:
+                failed_job_ids.add(job_id)
+    return errors, failed_job_ids
 
 
-def _retire_terminal_jobs(state):
-    """Keep only scheduler work; Recent Runs never gates queue retirement."""
+def _retire_terminal_jobs(state, protected_job_ids=()):
+    """Retire terminal scheduler work only after durable Training evidence exists."""
+    protected = {str(job_id) for job_id in protected_job_ids}
     retained = []
     retired_job_ids = set()
     for job in state.get("jobs", []):
         status = str(job.get("status") or "")
         job_id = str(job.get("id") or "")
+        if job_id in protected:
+            retained.append(job)
+            continue
         if status == "cancelled" or status in HISTORY_STATUSES:
             retired_job_ids.add(job_id)
             continue
@@ -333,10 +341,11 @@ def _retire_terminal_jobs(state):
 
 
 def _persist_reconciled_state(state):
-    history_errors = _sync_histories(state) or []
+    history_errors, failed_history_job_ids = _sync_histories(state)
     for error in history_errors:
         _logger.error(error)
-    retired_job_ids = _retire_terminal_jobs(state)
+        _append_runner_notice(state, error)
+    retired_job_ids = _retire_terminal_jobs(state, failed_history_job_ids)
     if retired_job_ids:
         _write_state(state, retired_job_ids=retired_job_ids)
     else:
@@ -1460,13 +1469,10 @@ def _distributed_socket_hold_reason(log_text):
 
 
 def _remove_stale_terminal_history(job):
-    folder = str(job.get("folder") or "").strip()
-    if not folder:
-        return
     try:
-        clear_history_job(app_config.safe_join_fs_root(folder), job.get("id"))
-    except (OSError, ValueError):
-        _logger.warning("Could not remove stale terminal training history for recovered job %s", job.get("id"))
+        remove_job_record(job)
+    except OSError:
+        _logger.warning("Could not remove stale terminal Training History evidence for recovered job %s", job.get("id"))
 
 
 def _clear_terminal_projection(job):
@@ -2369,23 +2375,6 @@ def status_response():
         }, 200
 
 
-def clear_history_response(folder, job_id):
-    folder_text = str(folder or "").strip()
-    job_id = str(job_id or "").strip()
-    if not folder_text or not job_id:
-        return {"ok": False, "error": "Folder and job ID are required."}, 400
-    with _lock:
-        folder_path = app_config.safe_join_fs_root(folder_text)
-        state = _read_state()
-        job = _find_job(state, job_id)
-        if job and str(job.get("folder") or "") == folder_text:
-            job["historyHidden"] = True
-            job["updatedAt"] = time.time()
-        cleared = clear_history_job(folder_path, job_id)
-        _write_state(state)
-        return {"ok": True, "cleared": cleared}, 200
-
-
 def gpu_status_response():
     return {"ok": True, "gpu": _gpu_snapshot()}, 200
 
@@ -2485,11 +2474,6 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
             job["stage"] = "cancelled"
             job["finishedAt"] = time.time()
             job["updatedAt"] = time.time()
-            job["historyHidden"] = True
-            if kind == "training":
-                folder = str(job.get("folder") or "").strip()
-                if folder:
-                    clear_history_job(app_config.safe_join_fs_root(folder), job.get("id"))
             _write_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
         if kind == "test":

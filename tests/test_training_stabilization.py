@@ -9,7 +9,7 @@ from PIL import Image
 from tool.server import config as app_config
 from tool.server import app as app_module
 from tool.server import run_ops, training_bundle, training_history, training_runner, training_review
-from tool.server.training_action import allocate_action, read_action
+from tool.server.training_action import allocate_action, read_action, relocate_folder_actions, set_root_for_folder
 from tool.server.training_config_files import reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage, profile_for_mode
 from tool.server.training_setup import ensure_training_setup
@@ -437,13 +437,130 @@ def test_pre_layout_queue_state_uses_recorded_paths_without_action_resolution(tm
     assert state["jobs"][0]["status"] == "running"
 
 
-def test_recent_runs_v1_remains_readable_without_layout_migration(tmp_path, monkeypatch):
+def test_recent_runs_v1_migrates_only_when_managed_job_folder_exists(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    action, action_data = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    job_dir = action / "jobs" / "old"
+    job_dir.mkdir()
+    recent = tmp_path / ".webcap_training" / "recent_runs.json"
+    recent.parent.mkdir()
+    recent.write_text(json.dumps({"version": 1, "jobs": [{
+        "id": "old",
+        "folder": "sets/subject",
+        "status": "completed",
+        "stages": "h3",
+        "actionId": action_data["actionId"],
+        "actionPath": str(action),
+        "artifactDir": str(job_dir),
+        "outputRoot": str(action / "output"),
+    }]}), encoding="utf-8")
+
+    history = training_history.read_history(folder)
+
+    assert [job["id"] for job in history["jobs"]] == ["old"]
+    record = json.loads((job_dir / "job.json").read_text(encoding="utf-8"))
+    assert record["version"] == training_history.JOB_RECORD_VERSION
+    assert record["job"]["id"] == "old"
+
+
+def test_legacy_recent_run_without_managed_job_folder_is_not_history(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
     recent = tmp_path / ".webcap_training" / "recent_runs.json"
     recent.parent.mkdir()
-    recent.write_text(json.dumps({"version": 1, "jobs": [{"id": "old", "folder": "sets/subject"}]}), encoding="utf-8")
-    assert training_history.read_history(folder)["jobs"][0]["id"] == "old"
+    recent.write_text(json.dumps({"version": 2, "jobs": [{
+        "id": "ghost",
+        "folder": "sets/subject",
+        "status": "completed",
+        "artifactDir": str(tmp_path / "missing" / "ghost"),
+    }]}), encoding="utf-8")
+
+    assert training_history.read_history(folder)["jobs"] == []
+
+
+
+def test_legacy_recent_run_cannot_migrate_into_another_sets_action(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    other = tmp_path / "sets" / "other"
+    other.mkdir(parents=True)
+    Image.new("RGB", (512, 512), color=(1, 2, 3)).save(other / "one.png")
+    (other / "one.txt").write_text("other", encoding="utf-8")
+    ensure_training_setup(other, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    action, action_data = allocate_action(other, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    job_dir = action / "jobs" / "wrong-set"
+    job_dir.mkdir()
+    recent = tmp_path / ".webcap_training" / "recent_runs.json"
+    recent.parent.mkdir()
+    recent.write_text(json.dumps({"version": 2, "jobs": [{
+        "id": "wrong-set",
+        "folder": "sets/subject",
+        "status": "completed",
+        "stages": "h3",
+        "actionId": action_data["actionId"],
+        "actionPath": str(action),
+        "artifactDir": str(job_dir),
+    }]}), encoding="utf-8")
+
+    assert training_history.read_history(folder)["jobs"] == []
+    assert not (job_dir / "job.json").exists()
+
+def test_training_history_record_is_job_folder_evidence_not_recent_runs_index(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    action, action_data = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    job_dir = action / "jobs" / "job-one"
+    job_dir.mkdir()
+    job = {
+        "id": "job-one",
+        "folder": "sets/subject",
+        "status": "completed",
+        "stages": "h3",
+        "actionId": action_data["actionId"],
+        "actionPath": str(action),
+        "artifactDir": str(job_dir),
+        "outputRoot": str(action / "output"),
+        "createdAt": 1,
+        "startedAt": 2,
+        "finishedAt": 3,
+    }
+
+    training_history.record_job(folder, job)
+
+    assert (job_dir / "job.json").is_file()
+    assert not (tmp_path / ".webcap_training" / "recent_runs.json").exists()
+    assert [item["id"] for item in training_history.read_history(folder)["jobs"]] == ["job-one"]
+    assert [item["id"] for item in training_history.all_history_payload()["jobs"]] == ["job-one"]
+
+
+def test_training_action_history_survives_set_rename_without_moving_output_tree(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    action, action_data = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    job_dir = action / "jobs" / "job-one"
+    job_dir.mkdir()
+    training_history.record_job(folder, {
+        "id": "job-one",
+        "folder": "sets/subject",
+        "status": "completed",
+        "stages": "h3",
+        "actionId": action_data["actionId"],
+        "actionPath": str(action),
+        "artifactDir": str(job_dir),
+        "outputRoot": str(action / "output"),
+    })
+    renamed = folder.with_name("renamed")
+    folder.rename(renamed)
+
+    assert relocate_folder_actions("sets/subject", "sets/renamed") == 1
+    assert action.is_dir()
+    assert set_root_for_folder(renamed) == action.parent
+    assert read_action(action_data["actionId"])[1]["folder"] == "sets/renamed"
+    assert training_history.read_history(renamed)["jobs"][0]["folder"] == "sets/renamed"
 
 
 def test_additive_queue_v4_state_remains_readable(tmp_path, monkeypatch):
@@ -1000,15 +1117,15 @@ def test_finish_after_epoch_does_not_require_a_configured_savepoint(tmp_path, mo
     assert training_runner._read_state()["jobs"][0]["finishAfterEpoch"] == 3
 
 
-def test_missing_history_is_empty_and_invalid_history_is_loud(tmp_path, monkeypatch):
+def test_missing_history_is_empty_and_invalid_legacy_index_does_not_gate_folder_history(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
     assert training_history.read_history(folder)["jobs"] == []
     recent = tmp_path / ".webcap_training" / "recent_runs.json"
     recent.parent.mkdir()
     recent.write_text("{bad", encoding="utf-8")
-    with pytest.raises(ValueError):
-        training_history.read_history(folder)
+
+    assert training_history.read_history(folder)["jobs"] == []
 
 
 def test_training_modules_do_not_apply_permissions_repairs():
@@ -1223,3 +1340,60 @@ def test_queued_test_candidate_reference_query(tmp_path, monkeypatch):
     assert training_runner.queued_test_job_references_candidate("sets/subject", "epoch10.safetensors") is True
     assert training_runner.queued_test_job_references_candidate("sets/subject", "epoch20.safetensors") is False
     assert training_runner.queued_test_job_references_candidate("sets/other", "epoch10.safetensors") is False
+
+
+
+def test_terminal_training_job_waits_for_durable_history_record(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{
+            "id": "terminal",
+            "folder": "sets/subject",
+            "status": "completed",
+            "stages": "h3",
+        }],
+    }
+    monkeypatch.setattr(
+        training_runner,
+        "record_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    training_runner._persist_reconciled_state(state)
+
+    assert [job["id"] for job in state["jobs"]] == ["terminal"]
+    assert "Could not persist Training History job evidence" in state["runnerNotice"]
+
+
+def test_terminal_training_job_retires_after_durable_history_record(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    action, action_data = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    job_dir = action / "jobs" / "terminal"
+    job_dir.mkdir()
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{
+            "id": "terminal",
+            "folder": "sets/subject",
+            "status": "completed",
+            "stages": "h3",
+            "actionId": action_data["actionId"],
+            "actionPath": str(action),
+            "artifactDir": str(job_dir),
+            "outputRoot": str(action / "output"),
+        }],
+    }
+
+    training_runner._persist_reconciled_state(state)
+
+    assert state["jobs"] == []
+    assert (job_dir / "job.json").is_file()

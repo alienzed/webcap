@@ -147,16 +147,29 @@ def rename_response(data):
             old_path.rename(new_path)
             old_rel = str(Path(folder) / old_name).replace("\\", "/").strip("/")
             new_rel = str(Path(folder) / new_name).replace("\\", "/").strip("/")
+            from .training_runner import relocate_folder_jobs
+            from .training_action import relocate_folder_actions
+            warnings = []
+            updated_jobs = 0
+            updated_actions = 0
             try:
-                from .training_runner import relocate_folder_jobs
                 updated_jobs = relocate_folder_jobs(old_rel, new_rel)
             except Exception as queue_error:
-                app_config.debug_print("[fs_rename] Folder renamed but training queue could not be updated:", queue_error)
-                return jsonify({
-                    "ok": True,
-                    "warning": "Folder was renamed, but the training queue could not be updated: " + str(queue_error),
-                })
-            return jsonify({"ok": True, "updatedTrainingJobs": updated_jobs})
+                app_config.debug_print("[fs_rename] Folder renamed but training queue metadata could not be updated:", queue_error)
+                warnings.append("training queue metadata: " + str(queue_error))
+            try:
+                updated_actions = relocate_folder_actions(old_rel, new_rel)
+            except Exception as action_error:
+                app_config.debug_print("[fs_rename] Folder renamed but Training History metadata could not be updated:", action_error)
+                warnings.append("Training History metadata: " + str(action_error))
+            payload = {
+                "ok": True,
+                "updatedTrainingJobs": updated_jobs,
+                "updatedTrainingActions": updated_actions,
+            }
+            if warnings:
+                payload["warning"] = "Folder was renamed, but some Training metadata could not be updated: " + "; ".join(warnings)
+            return jsonify(payload)
         if old_path.is_file():
             originals_path = folder_path / "originals"
             old_orig_media = originals_path / old_name if originals_path.exists() else None

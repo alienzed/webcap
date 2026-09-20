@@ -72,7 +72,19 @@
 }
 
 .app.shell-revamp .group-tools-card .caption-helper-section-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
   margin-bottom: 6px;
+}
+
+.app.shell-revamp .group-tools-card .caption-helper-section-title {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
 }
 
 .app.shell-revamp #caption-checklist-panel.group-tools-card #checklist-items .checklist-row-block {

@@ -480,11 +480,16 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert ".shell-status-bar {" in css
     assert ".shell-gpu-status {" in css
     assert "function getShellWorkloadStatus()" in shell
-    assert "training-running" in shell
-    assert "test-running" in shell
+    assert "var shellWorkloadState =" in shell
+    assert "classList.contains('training-running')" not in shell
+    assert "classList.contains('test-running')" not in shell
+    assert "function setShellTrainingActive(active)" in shell
+    assert "function setShellTestingActive(active)" in shell
     assert "shell-workload-status is-" in shell
-    assert "window.renderShellSystemStatus = renderShellSystemStatus" in shell
-    assert "window.renderShellSystemStatus()" in runner
+    assert "window.setShellTrainingActive = setShellTrainingActive" in shell
+    assert "window.setShellTestingActive = setShellTestingActive" in shell
+    assert "setShellTrainingActive(running);" in runner
+    assert "typeof window.renderShellSystemStatus" not in runner
     assert ".shell-workload-status {" in css
     assert "color: var(--accent);" in css
     assert "font-size: 12px;" in css
@@ -506,8 +511,11 @@ def test_phase_audit_restores_shared_editor_after_training_and_owns_checklist_vi
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     workbench = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
+    checklist_state = (ROOT / "tool" / "js" / "checklist_state.js").read_text(encoding="utf-8")
     assert 'id="caption-checklist-panel" class="checklist-panel workbench-card group-tools-card hidden"' in html
     assert 'style="display:none;"' not in html
+    assert "checklistPanelEl.classList.toggle('hidden', !visible);" in checklist_state
+    assert "checklistPanelEl.style.display" not in checklist_state
     assert "#caption-checklist-panel.group-tools-card.checklist-panel {\n  display: flex;" in workbench
     assert "#caption-checklist-panel.group-tools-card.checklist-panel {\n  display: flex !important;" not in workbench
     assert "ui.appEl.classList.remove('training-config-selected')" in shell

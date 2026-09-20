@@ -186,6 +186,25 @@ function undoLastOperation() {
       }
       return restoredGroup;
     }
+    if (op.type === 'checklist-tag') {
+      if (op.previousValue) {
+        assignChecklistTagToMediaKey(op.mediaKey, op.requirementLabel, op.tagText, {
+          consumeUnscoped: false
+        });
+      } else {
+        unassignChecklistTagFromMediaKey(op.mediaKey, op.requirementLabel, op.tagText);
+        if (op.consumedUnscoped) {
+          addTagToMediaKey(op.mediaKey, op.tagText);
+        }
+      }
+      var scopedStatus = op.previousValue
+        ? ('Undid group tag removal: ' + op.requirementLabel + ' / ' + op.tagText)
+        : ('Undid group tag add: ' + op.requirementLabel + ' / ' + op.tagText);
+      if (!restoreUndoMediaSelection(op.mediaKey, scopedStatus)) {
+        setStatus(scopedStatus);
+      }
+      return true;
+    }
     if (op.type === 'tag') {
       if (op.previousValue) {
         addTagToMediaKey(op.mediaKey, op.tagText);

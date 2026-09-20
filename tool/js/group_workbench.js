@@ -123,6 +123,25 @@ function createGroupWorkbenchActionButton(className, text, title, ariaLabel) {
   return btn;
 }
 
+function syncGroupWorkbenchVisibilityHeader(targetEl, mode) {
+  if (!targetEl || targetEl.id !== 'group-workbench-list') return 0;
+  var workbench = targetEl.closest('.group-workbench');
+  var showAllBtn = document.getElementById('group-workbench-show-all-btn');
+  var hiddenCount = mode === 'item' ? getChecklistHiddenRequirements().length : 0;
+  workbench.classList.toggle('has-hidden-groups', hiddenCount > 0);
+  showAllBtn.classList.toggle('hidden', hiddenCount <= 0);
+  showAllBtn.title = hiddenCount > 0
+    ? 'Show all annotation groups (' + hiddenCount + ' hidden)'
+    : 'All annotation groups visible';
+  showAllBtn.setAttribute('aria-label', showAllBtn.title);
+  showAllBtn.onclick = function () {
+    if (!showAllChecklistRequirements()) return;
+    setStatus('Showing all annotation groups.');
+    renderChecklistPanel({ skipItemDetailRefresh: true });
+  };
+  return hiddenCount;
+}
+
 function bindGroupWorkbenchHeaderButton(btn, handler) {
   if (!btn || typeof handler !== 'function') return;
   btn.onclick = function (event) {
@@ -442,6 +461,8 @@ function renderGroupWorkbench(options) {
     onAfterMutation: opts.onAfterMutation
   };
   var isGridMode = opts.mode === 'grid';
+  var useVisibilityFilter = !isGridMode && targetEl.id === 'group-workbench-list';
+  var hiddenGroupCount = syncGroupWorkbenchVisibilityHeader(targetEl, opts.mode);
   var hasGridTargets = isGridMode && opts.mediaKeys.length > 0;
   var hasItemTarget = !isGridMode && !!opts.currentMediaKey;
   var hasActionTarget = isGridMode ? hasGridTargets : hasItemTarget;
@@ -471,6 +492,7 @@ function renderGroupWorkbench(options) {
 
   for (var i = 0; i < checklistItems.length; i++) {
     var requirementLabel = checklistItems[i];
+    if (useVisibilityFilter && isChecklistRequirementHidden(requirementLabel)) continue;
     var batchState = isGridMode ? getChecklistRequirementBatchState(mediaKeys, requirementLabel) : null;
     var isReviewed = isGridMode
       ? (hasGridTargets && batchState.allReviewed)
@@ -692,7 +714,11 @@ function renderGroupWorkbench(options) {
     groupElements.push(groupEl);
   }
   if (!groupElements.length) {
-    renderGroupWorkbenchEmpty(targetEl, 'No groups with terms configured.');
+    renderGroupWorkbenchEmpty(
+      targetEl,
+      useVisibilityFilter && hiddenGroupCount > 0 ? 'All visible groups are hidden or empty.' : 'No groups with terms configured.'
+    );
+    syncGroupWorkbenchVisibilityHeader(targetEl, opts.mode);
     targetEl.scrollTop = Math.max(0, previousScrollTop);
     return;
   }

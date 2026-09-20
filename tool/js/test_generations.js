@@ -897,6 +897,7 @@
         renderStatus(status);
       }
       if (status && (status.status === 'running' || status.status === 'stopping')) {
+        if (queuedTestJobs.length) refreshSessions().catch(showError);
         pollTimer = setTimeout(pollStatus, 2000);
       } else {
         refreshSessions().then(function () {

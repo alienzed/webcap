@@ -34,7 +34,7 @@ function cacheColorSuggestionsForMediaKey(mediaKey, payload) {
 
 function requestColorSuggestionsForMediaKey(mediaKey) {
   var item = findStateItemByMediaKey(mediaKey);
-  if (!item || !state || !state.folder || !isColorSuggestionImageName(item.fileName)) return;
+  if (!item || !state || !isColorSuggestionImageName(item.fileName)) return;
   if (getCachedColorSuggestionsForMediaKey(mediaKey)) return;
 
   var requestKey = String(state.folder) + '\n' + String(item.fileName || '');

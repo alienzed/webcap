@@ -30,13 +30,11 @@
         <div id="app-frame" class="app-frame">
             <header id="app-header" class="app-header" aria-label="Application header">
                 <div id="app-header-context" class="app-header-context" aria-live="polite">
-                    <button id="app-header-folder-btn" type="button" class="app-header-folder-btn" title="Open current set in Prep" aria-label="Open current set in Prep">
-                        <span id="app-header-folder" class="app-header-folder"></span>
-                    </button>
-                    <span id="app-header-context-separator" class="app-header-context-separator" aria-hidden="true">/</span>
                     <span id="app-header-workspace-title" class="app-header-workspace-title"></span>
+                    <span id="app-header-context-separator" class="app-header-context-separator hidden" aria-hidden="true">›</span>
+                    <nav id="app-header-breadcrumb" class="app-header-breadcrumb" aria-label="Current path"></nav>
                     <span id="app-header-workspace-context" class="app-header-workspace-context"></span>
-                    <label class="app-header-model-control">
+                    <label id="app-header-model-control" class="app-header-model-control hidden">
                         <span class="app-header-model-label">Base Model</span>
                         <select id="app-header-model-profile-select" aria-label="Base Model"></select>
                     </label>

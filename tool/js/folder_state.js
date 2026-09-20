@@ -104,6 +104,38 @@ function sanitizeFolderState(data) {
   var captionTermDescriptorDefaults = sanitizeAffixMap(src.caption_term_descriptor_defaults, false);
   var captionGroupTermWrappers = sanitizeGroupAffixMap(src.caption_group_term_wrappers, false);
   var captionGroupTermDescriptorDefaults = sanitizeGroupAffixMap(src.caption_group_term_descriptor_defaults, false);
+  var captionGroupPrimerSeparators = {};
+  if (src.caption_group_primer_separators && typeof src.caption_group_primer_separators === 'object' && !Array.isArray(src.caption_group_primer_separators)) {
+    Object.keys(src.caption_group_primer_separators).forEach(function (rawGroup) {
+      var group = String(rawGroup || '').trim();
+      if (!group) return;
+      captionGroupPrimerSeparators[group] = String(src.caption_group_primer_separators[rawGroup] === undefined || src.caption_group_primer_separators[rawGroup] === null
+        ? ''
+        : src.caption_group_primer_separators[rawGroup]).replace(/\r?\n/g, ' ').slice(0, 40);
+    });
+  }
+  var captionGroupPrimerPrecedence = {};
+  if (src.caption_group_primer_precedence && typeof src.caption_group_primer_precedence === 'object' && !Array.isArray(src.caption_group_primer_precedence)) {
+    Object.keys(src.caption_group_primer_precedence).forEach(function (rawGroup) {
+      var group = String(rawGroup || '').trim();
+      var rawBeforeMap = src.caption_group_primer_precedence[rawGroup];
+      if (!group || !rawBeforeMap || typeof rawBeforeMap !== 'object' || Array.isArray(rawBeforeMap)) return;
+      var cleanBeforeMap = {};
+      Object.keys(rawBeforeMap).forEach(function (rawBefore) {
+        var before = String(rawBefore || '').trim().toLowerCase();
+        var rawAfterMap = rawBeforeMap[rawBefore];
+        if (!before || !rawAfterMap || typeof rawAfterMap !== 'object' || Array.isArray(rawAfterMap)) return;
+        var cleanAfterMap = {};
+        Object.keys(rawAfterMap).forEach(function (rawAfter) {
+          var after = String(rawAfter || '').trim().toLowerCase();
+          if (!after || after === before || rawAfterMap[rawAfter] !== true) return;
+          cleanAfterMap[after] = true;
+        });
+        if (Object.keys(cleanAfterMap).length) cleanBeforeMap[before] = cleanAfterMap;
+      });
+      if (Object.keys(cleanBeforeMap).length) captionGroupPrimerPrecedence[group] = cleanBeforeMap;
+    });
+  }
   var captionGroupTermDescriptorsByMedia = {};
   if (src.caption_group_term_descriptors_by_media && typeof src.caption_group_term_descriptors_by_media === 'object') {
     Object.keys(src.caption_group_term_descriptors_by_media).forEach(function (mediaKey) {
@@ -150,6 +182,8 @@ function sanitizeFolderState(data) {
     caption_group_term_wrappers: captionGroupTermWrappers,
     caption_group_term_descriptor_defaults: captionGroupTermDescriptorDefaults,
     caption_group_term_descriptors_by_media: captionGroupTermDescriptorsByMedia,
+    caption_group_primer_separators: captionGroupPrimerSeparators,
+    caption_group_primer_precedence: captionGroupPrimerPrecedence,
     caption_set_notes: String(src.caption_set_notes || ''),
     test_generation_prompt: String(src.test_generation_prompt || ''),
     test_generation_settings: {
@@ -328,6 +362,8 @@ function snapshotFolderStateFromDom() {
     caption_group_term_wrappers: (typeof window.checklistTermWrappersByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermWrappersByGroup)) : undefined,
     caption_group_term_descriptor_defaults: (typeof window.checklistTermDescriptorDefaultsByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorDefaultsByGroup)) : undefined,
     caption_group_term_descriptors_by_media: (typeof window.checklistTermDescriptorsByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorsByMedia)) : undefined,
+    caption_group_primer_separators: (typeof window.checklistPrimerSeparatorsByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistPrimerSeparatorsByGroup)) : undefined,
+    caption_group_primer_precedence: (typeof window.checklistPrimerPrecedenceByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistPrimerPrecedenceByGroup)) : undefined,
     caption_set_notes: String(window.captionHelperNotes || ''),
     test_generation_prompt: String(state.testGenerationPrompt || ''),
     test_generation_settings: (state.testGenerationSettings && typeof state.testGenerationSettings === 'object')
@@ -679,10 +715,23 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
   }
 
   if (mediaKey && typeof getChecklistAssignmentEntriesForMediaKey === 'function') {
+    var entriesByRequirement = {};
     getChecklistAssignmentEntriesForMediaKey(mediaKey).forEach(function (entry) {
-      var key = normalizeRequirementPrimerKey(entry.requirement);
-      var value = renderChecklistGroupTermWithAffixes(entry.requirement, entry.term, mediaKey) || entry.term;
-      pushValue(key, value);
+      var requirement = String(entry.requirement || '').trim();
+      if (!requirement) return;
+      if (!entriesByRequirement[requirement]) entriesByRequirement[requirement] = [];
+      entriesByRequirement[requirement].push(entry);
+    });
+    Object.keys(entriesByRequirement).forEach(function (requirement) {
+      var entries = entriesByRequirement[requirement];
+      if (typeof sortChecklistPrimerEntriesForRequirement === 'function') {
+        entries = sortChecklistPrimerEntriesForRequirement(requirement, entries);
+      }
+      entries.forEach(function (entry) {
+        var key = normalizeRequirementPrimerKey(entry.requirement);
+        var value = renderChecklistGroupTermWithAffixes(entry.requirement, entry.term, mediaKey) || entry.term;
+        pushValue(key, value);
+      });
     });
   }
 
@@ -712,7 +761,17 @@ function buildPrimerFromConfig(fileName, mediaKey, config) {
 
   var values = {};
   Object.keys(valuesByKey).forEach(function (key) {
-    values[key] = removeSubsumedPrimerValues(valuesByKey[key]).join(', ');
+    var separator = ', ';
+    if (typeof checklistItems !== 'undefined' && Array.isArray(checklistItems)) {
+      for (var i = 0; i < checklistItems.length; i += 1) {
+        if (normalizeRequirementPrimerKey(checklistItems[i]) !== key) continue;
+        if (typeof getChecklistPrimerSeparatorForRequirement === 'function') {
+          separator = getChecklistPrimerSeparatorForRequirement(checklistItems[i]);
+        }
+        break;
+      }
+    }
+    values[key] = removeSubsumedPrimerValues(valuesByKey[key]).join(separator);
   });
   return renderMultilineTemplate(template, values);
 }

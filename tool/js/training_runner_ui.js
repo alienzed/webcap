@@ -522,18 +522,21 @@ function startManagedTraining() {
 function stopManagedTraining(cancel, pause, finish) {
   var job = getTrainingRunnerSelectedJob();
   if (!job || !job.id) return;
-  var label = cancel ? 'Cancel this queued training job?' : pause
-    ? 'Pause this run? Training will finish its current step, save a resumable checkpoint, then exit. This item will remain first and the queue will wait for Resume.'
-    : finish
-      ? 'Finish this run early? Training will finish its current step, save a resumable checkpoint, then exit. The run will be marked finished early and the queue will continue.'
-      : 'Stop this job and continue to the next queued set?';
+  var isTestJob = queueJobKind(job) === 'test';
+  var label = isTestJob
+    ? 'Stop this Test Generations session and continue to the next queued job?'
+    : cancel ? 'Cancel this queued training job?' : pause
+      ? 'Pause this run? Training will finish its current step, save a resumable checkpoint, then exit. This item will remain first and the queue will wait for Resume.'
+      : finish
+        ? 'Finish this run early? Training will finish its current step, save a resumable checkpoint, then exit. The run will be marked finished early and the queue will continue.'
+        : 'Stop this job and continue to the next queued set?';
   if (!window.confirm(label)) return;
   trainingRunnerRequest('/fs/training_runner/stop', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jobId: job.id, cancel: !!cancel, pause: !!pause, finish: !!finish })
   }).then(function () {
-    setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Pause requested; waiting for the current step and checkpoint save.' : finish ? 'Finish requested; waiting for the current step and checkpoint save.' : 'Stop requested; waiting for the runner result.'));
+    setStatus(isTestJob ? 'Test stop requested.' : cancel ? 'Queued training job cancelled.' : (pause ? 'Pause requested; waiting for the current step and checkpoint save.' : finish ? 'Finish requested; waiting for the current step and checkpoint save.' : 'Stop requested; waiting for the runner result.'));
     refreshTrainingRunnerStatus();
     refreshTrainingHistory(true);
   }).catch(function (err) {
@@ -579,17 +582,17 @@ function scheduleManagedTrainingFinish(jobId) {
 
 
 function cancelQueuedTrainingJob(jobId) {
-  if (!window.confirm('Remove this training job from the queue?')) return;
+  if (!window.confirm('Remove this job from the queue?')) return;
   trainingRunnerRequest('/fs/training_runner/stop', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jobId: jobId, cancel: true })
   }).then(function () {
-    setStatus('Training job removed from the queue.');
+    setStatus('Job removed from the queue.');
     refreshTrainingRunnerStatus();
     refreshTrainingHistory(true);
   }).catch(function (err) {
-    setStatus('Could not cancel queued training job: ' + String(err && err.message ? err.message : err));
+    setStatus('Could not remove queued job: ' + String(err && err.message ? err.message : err));
   });
 }
 
@@ -600,7 +603,7 @@ function reorderManagedTraining(jobId, direction) {
   }).then(function (payload) {
     trainingWorkspaceState.runnerJobs = Array.isArray(payload.jobs) ? payload.jobs : trainingWorkspaceState.runnerJobs;
     renderTrainingRunner();
-  }).catch(function (err) { setStatus('Could not reorder training queue: ' + String(err.message || err)); });
+  }).catch(function (err) { setStatus('Could not reorder queue: ' + String(err.message || err)); });
 }
 
 function resumeManagedTrainingQueue() {

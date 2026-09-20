@@ -456,6 +456,7 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     training = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    test_bench = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
@@ -488,8 +489,11 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "shell-workload-status is-" in shell
     assert "window.setShellTrainingActive = setShellTrainingActive" in shell
     assert "window.setShellTestingActive = setShellTestingActive" in shell
+    assert "window.renderShellSystemStatus" not in shell
     assert "setShellTrainingActive(running);" in runner
+    assert "setShellTestingActive(!!active);" in test_bench
     assert "typeof window.renderShellSystemStatus" not in runner
+    assert "typeof window.renderShellSystemStatus" not in test_bench
     assert ".shell-workload-status {" in css
     assert "color: var(--accent);" in css
     assert "font-size: 12px;" in css

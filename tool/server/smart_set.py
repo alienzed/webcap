@@ -432,22 +432,15 @@ def _requirement_key(label: str) -> str:
 
 
 def _match_has_incomplete_requirements(match: dict, folder_state: dict) -> bool:
-    requirements = folder_state.get("caption_requirements")
-    if not isinstance(requirements, list) or not requirements:
+    catalog = _effective_requirement_catalog(folder_state)
+    if not catalog:
         return False
-    keywords_by_item = folder_state.get("caption_requirement_keywords")
-    if not isinstance(keywords_by_item, dict):
-        keywords_by_item = {}
     media_name = str(match.get("media_name") or "")
     scoped_groups = _normalize_group_tags_for_media(folder_state, media_name)
 
     total = 0
     completed = 0
-    for raw_label in requirements:
-        label = str(raw_label or "").strip()
-        if not label:
-            continue
-        configured_terms = _parse_requirement_terms(str(keywords_by_item.get(label) or ""))
+    for label, configured_terms in catalog.items():
         assigned_terms = scoped_groups.get(label, [])
         if not configured_terms and not assigned_terms:
             continue

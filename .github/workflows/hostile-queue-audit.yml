@@ -18,6 +18,9 @@ jobs:
       - run: cp tool/config.example.json tool/config.json
       - run: python -m py_compile tool/server/training_runner.py tool/server/epoch_test_bench.py
       - run: node --check tool/js/training_runner_ui.js
+      - run: node --check tool/js/training_workspace.js
+      - run: node --check tool/js/training_workspace_state.js
+      - run: node --check tool/js/training_history_ui.js
       - run: node --check tool/js/test_generations.js
       - run: >
           PYTHONPATH=. pytest -q

@@ -363,5 +363,6 @@ def test_test_generations_queue_contract():
     assert "def start_queued(" in backend
     assert 'operation == "test_enqueue"' in backend
     assert 'operation == "test_queue"' in backend
-    assert "release_gpu=True" in backend
-    assert "if release_gpu:" in backend
+    assert "release_gpu=True" not in backend
+    assert "if release_gpu:" not in backend
+    assert 'operation == "test_start"' not in backend

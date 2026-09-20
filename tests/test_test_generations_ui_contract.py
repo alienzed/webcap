@@ -144,6 +144,16 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert ".test-generations-result-footer" in css
 
 
+def test_active_session_row_uses_live_polled_progress():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "function sessionStatusText(session)" in script
+    assert "function syncVisibleSessionProgress(status)" in script
+    assert "meta.textContent = sessionStatusText(session);" in script
+    render_block = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
+    assert "syncVisibleSessionProgress(status || {});" in render_block
+
+
 def test_test_generations_closes_on_training_navigation_and_clears_session_state():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 

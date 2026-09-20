@@ -361,6 +361,27 @@
     syncCandidateMasterSelect(files);
   }
 
+  function sessionStatusText(session) {
+    var completed = Number(session && session.completed || 0);
+    var total = Number(session && session.total || 0);
+    var failed = Number(session && session.failed || 0);
+    return String(session && session.status || '') + ' · ' + completed + ' / ' + total +
+      (failed ? ' · ' + failed + ' failed' : '');
+  }
+
+  function syncVisibleSessionProgress(status) {
+    var sessionName = String(status && status.session || '');
+    var host = el('test-generations-sessions-list');
+    if (!sessionName || !host) return;
+    var rows = host.querySelectorAll('.test-generations-session-row[data-session-name]');
+    Array.prototype.some.call(rows, function (row) {
+      if (String(row.dataset.sessionName || '') !== sessionName) return false;
+      var meta = row.querySelector('.test-generations-session-copy span');
+      if (meta) meta.textContent = sessionStatusText(status);
+      return true;
+    });
+  }
+
   function renderSessions(sessions, queuedJobs) {
     var items = Array.isArray(sessions) ? sessions : [];
     var queued = Array.isArray(queuedJobs) ? queuedJobs : [];
@@ -419,10 +440,7 @@
       var title = document.createElement('strong');
       title.textContent = String(session.name || '').trim() || sessionLabel(name);
       var meta = document.createElement('span');
-      var completed = Number(session.completed || 0);
-      var total = Number(session.total || 0);
-      var failed = Number(session.failed || 0);
-      meta.textContent = String(session.status || '') + ' · ' + completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '');
+      meta.textContent = sessionStatusText(session);
       copy.appendChild(title);
       copy.appendChild(meta);
 
@@ -1365,6 +1383,7 @@
       errorEl.classList.toggle('hidden', !errorEl.textContent);
     }
     renderSessionMeta(status || {});
+    syncVisibleSessionProgress(status || {});
     renderResults(status || {});
   }
 

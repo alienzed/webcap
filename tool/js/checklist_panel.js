@@ -117,6 +117,26 @@ function renderChecklistPanel(options) {
     })(item);
     actions.appendChild(editTermsBtn);
 
+    var visibilityBtn = document.createElement('button');
+    visibilityBtn.type = 'button';
+    visibilityBtn.textContent = '👁';
+    visibilityBtn.className = 'checklist-row-action-btn checklist-group-visibility-btn';
+    var isGroupHidden = isChecklistRequirementHidden(item);
+    visibilityBtn.classList.toggle('is-hidden', isGroupHidden);
+    visibilityBtn.title = isGroupHidden
+      ? 'Show ' + item + ' in Annotation Groups'
+      : 'Hide ' + item + ' from Annotation Groups';
+    visibilityBtn.setAttribute('aria-label', visibilityBtn.title);
+    visibilityBtn.setAttribute('aria-pressed', isGroupHidden ? 'false' : 'true');
+    (function (requirementLabel, nextHidden) {
+      visibilityBtn.onclick = function () {
+        if (!setChecklistRequirementHidden(requirementLabel, nextHidden)) return;
+        setStatus((nextHidden ? 'Hidden from' : 'Shown in') + ' Annotation Groups: ' + requirementLabel);
+        renderChecklistPanel({ skipItemDetailRefresh: true });
+      };
+    })(item, !isGroupHidden);
+    actions.appendChild(visibilityBtn);
+
     var rmBtn = document.createElement('button');
     rmBtn.textContent = '\u00D7';
     rmBtn.title = 'Remove requirement';

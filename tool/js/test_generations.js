@@ -1230,7 +1230,6 @@
       var type = classifyColorTarget(colorItem.target);
       var existing = items.find(function (item) {
         if (item.type !== type) return false;
-        if (type === 'Hair') return true;
         return promptTargetsMatch(item.target, colorItem.target);
       });
       if (existing) {

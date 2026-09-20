@@ -2699,6 +2699,14 @@ iframe {
 }
 .test-generations-staged-copy strong { font-size: 12px; }
 .test-generations-staged-copy span { color: var(--muted); font-size: 10px; }
+.test-generations-base-row {
+  padding-bottom: 5px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+.test-generations-base-row .test-generations-candidate-checkbox {
+  opacity: .7;
+}
 .test-generations-sessions-list {
   display: grid;
   gap: 5px;
@@ -2896,6 +2904,27 @@ iframe {
   font-size: 12px;
 }
 .test-generations-result-card.is-pending { opacity: .72; }
+.test-generations-result-card.is-failed {
+  border-style: dashed;
+}
+.test-generations-failure-placeholder {
+  min-height: 120px;
+}
+.test-generations-failure-footer {
+  display: block;
+}
+.test-generations-failure-copy {
+  min-width: 0;
+}
+.test-generations-result-error {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--danger, #f87171);
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .test-generations-result-footer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

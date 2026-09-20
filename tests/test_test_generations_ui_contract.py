@@ -25,6 +25,10 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert "card.dataset.resultKey = resultKey" in script
     assert "host.insertBefore(card, pending || null)" in script
     assert "pending.querySelector('.test-generations-result-name').textContent" in script
+    assert "var failures = status && Array.isArray(status.failures) ? status.failures : [];" in script
+    assert "placeholder.textContent = 'Generation failed';" in script
+    assert "detail.textContent = String(failure.error || 'Generation failed.');" in script
+    assert "(results.length + failures.length) < total" in script
     assert "host.innerHTML = html" not in script
     assert "Previews appear as each LoRA finishes." in script
     assert "aspectRatio: aspectRatio" in script
@@ -41,11 +45,11 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert 'id="test-generations-files-count"' in html
     assert 'id="test-generations-sessions-count"' in html
     assert "countEl.textContent = String(count)" in script
-    assert "countEl.textContent = String(items.length)" in script
+    assert "countEl.textContent = String(items.length + queued.length)" in script
     assert 'class="test-generations-library"' in html
     assert "<details>" not in html
     body_rule = css.split(".test-generations-body {", 1)[1].split("}", 1)[0]
-    assert "grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);" in body_rule
+    assert "grid-template-columns: minmax(400px, 430px) minmax(0, 1fr);" in body_rule
     assert 'class="test-generations-rail"' in html
     controls_rule = css.split(".test-generations-controls {", 1)[1].split("}", 1)[0]
     assert "display: flex;" in controls_rule
@@ -355,7 +359,12 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert 'id="test-generations-deselect-all-btn"' not in html
     assert "function syncCandidateMasterSelect(files)" in script
     assert "master.indeterminate = selectedCount > 0 && selectedCount < available.length;" in script
-    assert "selectedCandidates = this.checked ? new Set(files) : new Set();" in script
+    assert "baseName.textContent = 'Base';" in script
+    assert "baseDetail.textContent = 'Always included';" in script
+    assert "baseInclude.checked = true;" in script
+    assert "baseInclude.disabled = true;" in script
+    assert "var allSelected = !!files.length && files.every" in script
+    assert "selectedCandidates = allSelected ? new Set() : new Set(files);" in script
     assert 'id="test-generations-reset-prompt-btn"' not in html
     assert "test-generations-reset-prompt-btn" not in script
     assert "name: name" in script

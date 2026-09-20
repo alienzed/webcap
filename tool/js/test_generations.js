@@ -290,8 +290,37 @@
     if (countEl) countEl.textContent = String(count);
     if (!host) return;
     host.innerHTML = '';
+
+    var baseRow = document.createElement('div');
+    baseRow.className = 'test-generations-staged-row test-generations-base-row';
+    baseRow.title = 'Base rendition is always included in every Test run';
+
+    var baseInclude = document.createElement('input');
+    baseInclude.type = 'checkbox';
+    baseInclude.className = 'test-generations-candidate-checkbox';
+    baseInclude.checked = true;
+    baseInclude.disabled = true;
+    baseInclude.title = 'Base is always included';
+    baseInclude.setAttribute('aria-label', 'Base rendition is always included');
+
+    var baseCopy = document.createElement('div');
+    baseCopy.className = 'test-generations-staged-copy';
+    var baseName = document.createElement('strong');
+    baseName.textContent = 'Base';
+    var baseDetail = document.createElement('span');
+    baseDetail.textContent = 'Always included';
+    baseCopy.appendChild(baseName);
+    baseCopy.appendChild(baseDetail);
+
+    baseRow.appendChild(baseInclude);
+    baseRow.appendChild(baseCopy);
+    host.appendChild(baseRow);
+
     if (!files.length) {
-      host.innerHTML = '<div class="test-generations-library-empty">No staged LoRAs.</div>';
+      var emptyCandidates = document.createElement('div');
+      emptyCandidates.className = 'test-generations-library-empty';
+      emptyCandidates.textContent = 'No staged LoRAs.';
+      host.appendChild(emptyCandidates);
       syncCandidateMasterSelect(files);
       return;
     }
@@ -721,6 +750,7 @@
     var host = el('test-generations-results');
     if (!host) return;
     var results = status && Array.isArray(status.results) ? status.results : [];
+    var failures = status && Array.isArray(status.failures) ? status.failures : [];
     var total = Number(status && status.total || (prepared && prepared.count) || 0);
     var resultFolder = String(status && status.resultFolder || '');
     var priorFolder = String(host.dataset.resultFolder || '');
@@ -733,7 +763,9 @@
     var validKeys = results.map(function (result, index) {
       var outputVideo = String(result.outputVideo || '');
       return outputVideo || (String(result.sourceLoRA || 'result') + ':' + index);
-    });
+    }).concat(failures.map(function (failure, index) {
+      return 'failure:' + String(failure.sourceLoRA || 'result') + ':' + index;
+    }));
     Array.prototype.forEach.call(
       host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
       function (card) {
@@ -742,7 +774,7 @@
     );
 
     var empty = host.querySelector('.test-generations-empty');
-    if ((results.length || (status && status.status === 'running')) && empty) empty.remove();
+    if ((results.length || failures.length || (status && status.status === 'running')) && empty) empty.remove();
 
     results.forEach(function (result, index) {
       var outputVideo = String(result.outputVideo || '');
@@ -794,8 +826,44 @@
       host.insertBefore(card, pending || null);
     });
 
+    failures.forEach(function (failure, index) {
+      var failureKey = 'failure:' + String(failure.sourceLoRA || 'result') + ':' + index;
+      var exists = Array.prototype.some.call(
+        host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
+        function (card) { return card.dataset.resultKey === failureKey; }
+      );
+      if (exists) return;
+
+      var card = document.createElement('article');
+      card.className = 'test-generations-result-card is-failed';
+      card.dataset.resultKey = failureKey;
+
+      var placeholder = document.createElement('div');
+      placeholder.className = 'test-generations-preview-placeholder test-generations-failure-placeholder';
+      placeholder.textContent = 'Generation failed';
+      card.appendChild(placeholder);
+
+      var footer = document.createElement('div');
+      footer.className = 'test-generations-result-footer test-generations-failure-footer';
+      var copy = document.createElement('div');
+      copy.className = 'test-generations-failure-copy';
+      var label = document.createElement('div');
+      label.className = 'test-generations-result-name';
+      label.textContent = String(failure.sourceLoRA || 'Result');
+      var detail = document.createElement('div');
+      detail.className = 'test-generations-result-error';
+      detail.textContent = String(failure.error || 'Generation failed.');
+      copy.appendChild(label);
+      copy.appendChild(detail);
+      footer.appendChild(copy);
+      card.appendChild(footer);
+
+      var pending = host.querySelector('.test-generations-result-card.is-pending');
+      host.insertBefore(card, pending || null);
+    });
+
     var pending = host.querySelector('.test-generations-result-card.is-pending');
-    if (status && status.status === 'running' && results.length < total) {
+    if (status && status.status === 'running' && (results.length + failures.length) < total) {
       if (!pending) {
         pending = document.createElement('article');
         pending.className = 'test-generations-result-card is-pending';
@@ -816,7 +884,7 @@
       pending.remove();
     }
 
-    if (!results.length && !(status && status.status === 'running') && !host.querySelector('.test-generations-result-card')) {
+    if (!results.length && !failures.length && !(status && status.status === 'running') && !host.querySelector('.test-generations-result-card')) {
       host.innerHTML = '<div class="test-generations-empty">Generated previews will appear here.</div>';
     }
 
@@ -1251,7 +1319,10 @@
     });
     el('test-generations-master-select').addEventListener('change', function () {
       var files = prepared && Array.isArray(prepared.files) ? prepared.files : [];
-      selectedCandidates = this.checked ? new Set(files) : new Set();
+      var allSelected = !!files.length && files.every(function (fileName) {
+        return selectedCandidates instanceof Set && selectedCandidates.has(String(fileName || ''));
+      });
+      selectedCandidates = allSelected ? new Set() : new Set(files);
       renderStagedFiles(prepared || { files: [], count: 0, candidateScores: {} });
       saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
       syncActiveRunControls(currentStatus);

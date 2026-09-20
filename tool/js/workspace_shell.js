@@ -878,6 +878,5 @@ function clearEditorAndPreview() {
 }
 
 
-window.renderShellSystemStatus = renderShellSystemStatus;
 window.setShellTrainingActive = setShellTrainingActive;
 window.setShellTestingActive = setShellTestingActive;

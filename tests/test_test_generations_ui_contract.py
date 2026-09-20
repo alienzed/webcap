@@ -100,7 +100,11 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "test_delete_session" in script
     assert "dataRemoveCandidate" not in script
     assert "dataset.removeCandidate" in script
-    assert "session: String(currentSession || '')" in script
+    assert "function removeCandidate(fileName, sessionName)" in script
+    assert "session: String(sessionName || '')" in script
+    assert "removeCandidate(button.dataset.fileName, '')" in script
+    assert "removeCandidate(remove.dataset.removeCandidate, currentSession)" in script
+    assert "button.disabled = false;" in script
     assert "row.dataset.sessionName = name;" in script
     assert "row.dataset.queueJobId = String(job.id || '');" in script
     assert "openSession(row.dataset.sessionName);" in script

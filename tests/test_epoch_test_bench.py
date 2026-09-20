@@ -221,10 +221,15 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
         },
     )
     loras = [
-        (Path("C:/ComfyUI/models/loras/mh3/set/epoch01.safetensors"), "mh3/set/epoch01.safetensors"),
-        (Path("C:/ComfyUI/models/loras/mh3/set/epoch02.safetensors"), "mh3/set/epoch02.safetensors"),
+        Path("C:/ComfyUI/models/loras/mh3/set/epoch01.safetensors"),
+        Path("C:/ComfyUI/models/loras/mh3/set/epoch02.safetensors"),
     ]
     queued = []
+    monkeypatch.setattr(
+        bench,
+        "_available_comfy_lora_names",
+        lambda: ["mh3/set/epoch01.safetensors", "mh3/set/epoch02.safetensors"],
+    )
 
     monkeypatch.setattr(bench, "_load_template", lambda: {
         "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
@@ -272,6 +277,55 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
     assert [result["sourceLoRA"] for result in status["results"]] == ["Base", "epoch02.safetensors"]
     assert status["results"][0]["kind"] == "base"
     assert status["results"][0]["outputVideo"] == "base.mp4"
+
+
+def test_run_batch_records_missing_candidate_and_continues(tmp_path, monkeypatch):
+    session = tmp_path / "session"
+    session.mkdir()
+    bench._atomic_write_json(
+        session / "test.json",
+        {
+            "status": "running",
+            "model": "h3",
+            "prompt": "prompt",
+            "total": 3,
+            "completed": 0,
+            "failed": 0,
+            "failures": [],
+            "current": "",
+            "error": "",
+        },
+    )
+    first = Path("C:/ComfyUI/models/loras/mh3/set/epoch01.safetensors")
+    missing = Path("C:/ComfyUI/models/loras/mh3/set/epoch02.safetensors")
+    monkeypatch.setattr(bench, "_available_comfy_lora_names", lambda: ["mh3/set/epoch01.safetensors"])
+    monkeypatch.setattr(bench, "_load_template", lambda: {
+        "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
+        "129": {"inputs": {"noise_seed": 123}},
+        "133": {"inputs": {"value": 7}},
+        "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
+        "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
+    })
+    monkeypatch.setattr(bench, "_queue_workflow", lambda _workflow: "prompt-ok")
+    monkeypatch.setattr(
+        bench,
+        "_wait_for_video",
+        lambda _prompt_id: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
+    )
+    monkeypatch.setattr(
+        bench,
+        "_move_saved_video",
+        lambda _video_ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
+    )
+
+    bench._run_batch("folder-key", session, [first, missing], "prompt")
+
+    status = bench._read_status(session)
+    assert status["status"] == "complete"
+    assert status["completed"] == 2
+    assert status["failed"] == 1
+    assert status["failures"][0]["sourceLoRA"] == missing.name
+    assert [result["sourceLoRA"] for result in status["results"]] == ["Base", first.name]
 
 
 def test_staged_lora_provenance_reads_copy_to_test_sidecar(tmp_path):
@@ -435,10 +489,12 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
         lambda _ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
+    monkeypatch.setattr(bench, "_available_comfy_lora_names", lambda: ["mh3/epoch01.safetensors"])
+
     bench._run_batch(
         "folder-key",
         session,
-        [(lora, "mh3/epoch01.safetensors")],
+        [lora],
         "prompt",
         template=resolved_template,
     )
@@ -614,7 +670,6 @@ def test_prepare_then_start_from_session_folder_reuses_same_staged_loras(tmp_pat
     monkeypatch.setattr(bench, "host_path_for_training_path", lambda value: Path(value))
     monkeypatch.setattr(bench, "_visible_status", lambda _folder: {"status": "idle"})
     monkeypatch.setattr(bench, "_read_json_response", lambda *args, **kwargs: {})
-    monkeypatch.setattr(bench, "_resolve_comfy_loras", lambda loras: [(loras[0], "HH4013/" + loras[0].name)])
     monkeypatch.setattr(bench, "_resolve_comfy_template_assets", lambda template: template)
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_active_threads", {})
@@ -818,8 +873,10 @@ def test_move_saved_video_failure_keeps_source(tmp_path):
     assert source_dir.exists()
 
 
-def test_remove_candidate_refuses_active_batch(tmp_path, monkeypatch):
-    candidate = tmp_path / "epoch10.safetensors"
+def test_remove_candidate_allows_active_batch(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
 
     class ActiveThread:
@@ -827,14 +884,16 @@ def test_remove_candidate_refuses_active_batch(tmp_path, monkeypatch):
             return True
 
     folder_key = str(tmp_path.resolve())
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
     monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
     monkeypatch.setattr(bench, "_active_sessions", {})
     monkeypatch.setattr(bench, "_stop_requests", set())
 
-    with pytest.raises(RuntimeError, match="active Test Generations batch"):
-        bench.remove_candidate(tmp_path, candidate.name)
+    payload = bench.remove_candidate(tmp_path, candidate.name)
 
-    assert candidate.exists()
+    assert payload["removed"] == candidate.name
+    assert not candidate.exists()
+
 
 def test_selected_lora_files_can_focus_next_run(tmp_path):
     for name in ("epoch01.safetensors", "epoch02.safetensors", "epoch03.safetensors"):
@@ -851,8 +910,9 @@ def test_selected_lora_files_can_focus_next_run(tmp_path):
     ]
     with pytest.raises(ValueError, match="Select at least one"):
         bench._selected_lora_files(tmp_path, [])
-    with pytest.raises(FileNotFoundError, match="does not exist"):
-        bench._selected_lora_files(tmp_path, ["epoch99.safetensors"])
+    assert bench._selected_lora_files(tmp_path, ["epoch99.safetensors"]) == [
+        tmp_path / "epoch99.safetensors"
+    ]
 
 
 def test_list_sessions_reports_remaining_unrated_results(tmp_path, monkeypatch):
@@ -1142,24 +1202,23 @@ def test_run_batch_advances_local_test_fifo(tmp_path, monkeypatch):
     assert bench._read_status(session)["status"] == "complete"
 
 
-def test_remove_candidate_refuses_when_local_test_fifo_references_it(tmp_path, monkeypatch):
+def test_remove_candidate_allows_local_test_fifo_reference(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
 
     monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
-    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
     monkeypatch.setattr(bench, "_pending_tests", [{
         "id": "queued-one",
         "folder": "sets/subject",
         "request": {"selectedFiles": [candidate.name]},
     }])
 
-    with pytest.raises(RuntimeError, match="referenced by a queued Test session"):
-        bench.remove_candidate(tmp_path, candidate.name)
+    payload = bench.remove_candidate(tmp_path, candidate.name)
 
-    assert candidate.is_file()
+    assert payload["removed"] == candidate.name
+    assert not candidate.exists()
 
 
 
@@ -1172,5 +1231,15 @@ def test_queued_candidate_snapshot_rejects_changed_weights(tmp_path):
 
     with pytest.raises(RuntimeError, match="changed after enqueue"):
         bench._verify_candidate_file_snapshots([candidate], snapshots)
+
+
+def test_queued_candidate_snapshot_allows_removed_candidate(tmp_path):
+    candidate = tmp_path / "epoch10.safetensors"
+    candidate.write_bytes(b"first")
+    snapshots = bench._candidate_file_snapshots([candidate])
+
+    candidate.unlink()
+
+    bench._verify_candidate_file_snapshots([candidate], snapshots)
 
 

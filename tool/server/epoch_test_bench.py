@@ -257,9 +257,8 @@ def _lora_files(test_directory):
 
 
 def _selected_lora_files(test_directory, selected_files=None):
-    available = _lora_files(test_directory)
     if selected_files is None:
-        return available
+        return _lora_files(test_directory)
     if not isinstance(selected_files, (list, tuple)):
         raise ValueError("Selected Test candidates must be a list of staged filenames.")
 
@@ -283,12 +282,10 @@ def _selected_lora_files(test_directory, selected_files=None):
     if not requested:
         raise ValueError("Select at least one staged LoRA to test.")
 
-    available_by_name = {path.name: path for path in available}
-    missing = [name for name in requested if name not in available_by_name]
-    if missing:
-        raise FileNotFoundError("Selected staged Test candidate does not exist: " + missing[0])
-    requested_set = set(requested)
-    return [path for path in available if path.name in requested_set]
+    return sorted(
+        [Path(test_directory) / name for name in requested],
+        key=lambda path: path.name.lower(),
+    )
 
 
 def _candidate_file_snapshots(paths):
@@ -316,7 +313,10 @@ def _verify_candidate_file_snapshots(paths, snapshots):
         item = expected.get(name)
         if not item:
             raise RuntimeError("Queued Test candidate snapshot is missing for " + name + ". Requeue this Test session.")
-        stat = Path(path).stat()
+        try:
+            stat = Path(path).stat()
+        except FileNotFoundError:
+            continue
         if int(item.get("size") or -1) != int(stat.st_size) or int(item.get("mtimeNs") or -1) != int(stat.st_mtime_ns):
             raise RuntimeError("Queued Test candidate changed after enqueue: " + name + ". Requeue this Test session.")
 
@@ -417,12 +417,6 @@ def activity_snapshot(folder_path=None):
 
 
 def remove_candidate(folder_path, file_name, session_name=None):
-    folder_key = _folder_key(folder_path)
-    with _lock:
-        thread = _active_threads.get(folder_key)
-        if thread and thread.is_alive():
-            raise RuntimeError("Cannot remove Test candidates while this set has an active Test Generations batch. Stop it first.")
-
     name = str(file_name or "").strip()
     if (
         not name
@@ -432,9 +426,6 @@ def remove_candidate(folder_path, file_name, session_name=None):
         or not name.lower().endswith(".safetensors")
     ):
         raise ValueError("A staged .safetensors filename is required.")
-    references = _queued_test_references_candidate(_relative_set_folder(folder_path), name)
-    if references:
-        raise RuntimeError("Cannot remove a staged Test candidate referenced by a queued Test session. Remove that queued session first.")
 
     test_directory = _h3_test_directory(folder_path)
     candidate = test_directory / name
@@ -507,13 +498,6 @@ def _resolve_comfy_name(configured_name, available, label):
 def _available_comfy_lora_names():
     return _available_comfy_names("LoraLoader", "lora_name", "LoRA")
 
-
-def _resolve_comfy_loras(loras):
-    available = _available_comfy_lora_names()
-    return [
-        (path, _resolve_comfy_name(path, available, "staged LoRA"))
-        for path in loras
-    ]
 
 
 def _resolve_comfy_template_assets(template):
@@ -1112,22 +1096,21 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
     status_file = _status_path(session_directory)
     try:
         template = copy.deepcopy(template) if template is not None else _load_template()
+        available_comfy_loras = _available_comfy_lora_names() if loras else []
         candidates = []
         if loras:
-            base_file, base_comfy_name = loras[0]
+            base_file = loras[0]
             candidates.append({
                 "label": "Base",
                 "file": base_file,
-                "comfyName": base_comfy_name,
                 "strengthModel": 0,
                 "strengthClip": 0,
                 "kind": "base",
             })
-        for lora_file, comfy_lora_name in loras:
+        for lora_file in loras:
             candidates.append({
                 "label": lora_file.name,
                 "file": lora_file,
-                "comfyName": comfy_lora_name,
                 "strengthModel": 0.9,
                 "strengthClip": 1,
                 "kind": "lora",
@@ -1146,10 +1129,15 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
             status["current"] = candidate["label"]
             _atomic_write_json(status_file, status)
             try:
+                comfy_lora_name = _resolve_comfy_name(
+                    lora_file,
+                    available_comfy_loras,
+                    "staged LoRA",
+                )
                 workflow = _workflow_for_lora(
                     template,
                     prompt,
-                    candidate["comfyName"],
+                    comfy_lora_name,
                     settings=settings,
                     strength_model=candidate["strengthModel"],
                     strength_clip=candidate["strengthClip"],
@@ -1274,12 +1262,6 @@ def _prune_dead_test_workers_locked():
         _active_sessions.pop(key, None)
         _stop_requests.discard(key)
 
-
-def _queued_test_references_candidate(folder, file_name):
-    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
-    name = str(file_name or "").strip()
-    with _lock:
-        return any(str(job.get("folder") or "") == folder_text and name in (job.get("request") or {}).get("selectedFiles", []) for job in _pending_tests)
 
 
 def _advance_test_queue():
@@ -1440,7 +1422,6 @@ def start_queued(folder_path, request):
             raise ValueError("The H3 Test folder contains no queued .safetensors files.")
         _verify_candidate_file_snapshots(loras, request.get("selectedFileSnapshots"))
         _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
-        resolved_loras = _resolve_comfy_loras(loras)
         template = _resolve_comfy_template_assets(_load_template())
         settings = _normalized_test_settings(
             template,
@@ -1453,12 +1434,12 @@ def start_queued(folder_path, request):
         payload["aspectRatio"] = settings["aspectRatio"]
         payload["megapixels"] = settings["megapixels"]
         payload["duration"] = settings["duration"]
-        payload["total"] = len(resolved_loras) + 1
+        payload["total"] = len(loras) + 1
         payload["status"] = "running"
         _atomic_write_json(_status_path(session_directory), payload)
         thread = threading.Thread(
             target=_run_batch,
-            args=(folder_key, session_directory, resolved_loras, prompt, settings, template),
+            args=(folder_key, session_directory, loras, prompt, settings, template),
             name="webcap-h3-test-generations",
             daemon=True,
         )

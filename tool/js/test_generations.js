@@ -1265,10 +1265,10 @@
     }).catch(showError);
   }
 
-  function removeCandidate(fileName) {
-    request('test_remove_candidate', {
+  function removeCandidate(fileName, sessionName) {
+    return request('test_remove_candidate', {
       fileName: String(fileName || ''),
-      session: String(currentSession || '')
+      session: String(sessionName || '')
     }).then(function (payload) {
       if (prepared) {
         prepared.count = Number(payload.count || 0);
@@ -1282,8 +1282,9 @@
       return request('test_status').then(renderStatus);
     }).then(function () {
       return refreshSessions();
-    }).catch(showError);
+    });
   }
+
 
   function bindUi() {
     var button = el('test-generations-open-btn');
@@ -1331,8 +1332,10 @@
       var button = event.target.closest('[data-file-name]');
       if (!button) return;
       button.disabled = true;
-      selectedCandidates.delete(String(button.dataset.fileName || ''));
-      removeCandidate(button.dataset.fileName);
+      removeCandidate(button.dataset.fileName, '').catch(function (err) {
+        button.disabled = false;
+        showError(err);
+      });
     };
     el('test-generations-recent-sets-list').onclick = function (event) {
       var open = event.target.closest('[data-recent-test-open]');
@@ -1369,7 +1372,10 @@
       var remove = event.target.closest('[data-remove-candidate]');
       if (remove) {
         remove.disabled = true;
-        removeCandidate(remove.dataset.removeCandidate);
+        removeCandidate(remove.dataset.removeCandidate, currentSession).catch(function (err) {
+          remove.disabled = false;
+          showError(err);
+        });
         return;
       }
       if (event.target.closest('.test-generations-video-transport, video, button')) return;
@@ -1382,7 +1388,10 @@
       var remove = event.target.closest('[data-remove-candidate]');
       if (remove) {
         remove.disabled = true;
-        removeCandidate(remove.dataset.removeCandidate);
+        removeCandidate(remove.dataset.removeCandidate, currentSession).catch(function (err) {
+          remove.disabled = false;
+          showError(err);
+        });
         return;
       }
       if (event.target.closest('[data-compare-previous]')) {

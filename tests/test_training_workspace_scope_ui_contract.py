@@ -266,3 +266,14 @@ def test_model_switch_has_no_removed_trained_status_dependency():
     switch_code = workspace[switch_start:switch_end]
     assert "setSelectedTrainingModelProfile(profileId)" in switch_code
     assert "refreshTrainingWorkspace();" in switch_code
+
+
+
+def test_shared_queue_keeps_training_history_training_only():
+    script = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+
+    assert "var priorTrainingJobsById = {};" in script
+    assert "if (isTrainingQueueJob(job)) priorTrainingJobsById[job.id] = job.status;" in script
+    assert "return isTrainingQueueJob(job) &&" in script
+    assert "Object.keys(priorTrainingJobsById)" in script
+    assert "isTrainingQueueJob(job) && active" in script

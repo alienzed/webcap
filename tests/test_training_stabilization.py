@@ -480,6 +480,33 @@ def test_legacy_recent_run_without_managed_job_folder_is_not_history(tmp_path, m
     assert training_history.read_history(folder)["jobs"] == []
 
 
+
+def test_legacy_recent_run_cannot_migrate_into_another_sets_action(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    other = tmp_path / "sets" / "other"
+    other.mkdir(parents=True)
+    Image.new("RGB", (512, 512), color=(1, 2, 3)).save(other / "one.png")
+    (other / "one.txt").write_text("other", encoding="utf-8")
+    ensure_training_setup(other, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    action, action_data = allocate_action(other, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    job_dir = action / "jobs" / "wrong-set"
+    job_dir.mkdir()
+    recent = tmp_path / ".webcap_training" / "recent_runs.json"
+    recent.parent.mkdir()
+    recent.write_text(json.dumps({"version": 2, "jobs": [{
+        "id": "wrong-set",
+        "folder": "sets/subject",
+        "status": "completed",
+        "stages": "h3",
+        "actionId": action_data["actionId"],
+        "actionPath": str(action),
+        "artifactDir": str(job_dir),
+    }]}), encoding="utf-8")
+
+    assert training_history.read_history(folder)["jobs"] == []
+    assert not (job_dir / "job.json").exists()
+
 def test_training_history_record_is_job_folder_evidence_not_recent_runs_index(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)

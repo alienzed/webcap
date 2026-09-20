@@ -1434,6 +1434,25 @@
   margin-bottom: 8px;
 }
 
+#checklist-group-terms-modal .checklist-group-primer-settings {
+  display: grid;
+  grid-template-columns: auto minmax(72px, 120px) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+#checklist-group-terms-modal .checklist-group-primer-settings label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3f454d;
+}
+
+#checklist-group-terms-modal #checklist-group-primer-separator {
+  min-width: 0;
+  font-family: Consolas, monospace;
+}
+
 #checklist-group-terms-modal .checklist-input-row {
   display: flex;
   align-items: center;

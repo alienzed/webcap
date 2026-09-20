@@ -389,12 +389,12 @@ def remove_candidate(folder_path, file_name, session_name=None):
         or not name.lower().endswith(".safetensors")
     ):
         raise ValueError("A staged .safetensors filename is required.")
-    from .training_runner import queued_test_jobs_using_candidate
-    queued_users = queued_test_jobs_using_candidate(_relative_set_folder(folder_path), name)
-    if queued_users:
-        labels = [str(item.get("runName") or item.get("id") or "queued Test") for item in queued_users]
+    from .training_runner import test_jobs_using_candidate
+    dependent_jobs = test_jobs_using_candidate(_relative_set_folder(folder_path), name)
+    if dependent_jobs:
+        labels = [str(item.get("runName") or item.get("id") or "Test session") for item in dependent_jobs]
         raise RuntimeError(
-            "Cannot remove staged Test candidate while it is referenced by queued Test session"
+            "Cannot remove staged Test candidate while it is referenced by queued or active Test session"
             + ("s" if len(labels) != 1 else "")
             + ": " + ", ".join(labels)
         )

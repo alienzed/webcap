@@ -1177,15 +1177,14 @@ def queue_session_status(folder_path, session_name):
 def _queued_candidate_snapshot(path):
     candidate = Path(path)
     stat = candidate.stat()
-    provenance = _staged_lora_provenance(candidate)
     snapshot = {
         "name": candidate.name,
         "size": int(stat.st_size),
+        "mtimeNs": int(stat.st_mtime_ns),
     }
+    provenance = _staged_lora_provenance(candidate)
     if provenance:
         snapshot["provenance"] = provenance
-    else:
-        snapshot["mtimeNs"] = int(stat.st_mtime_ns)
     return snapshot
 
 
@@ -1203,14 +1202,14 @@ def _validate_queued_candidate_snapshots(loras, snapshots):
         if not item:
             raise RuntimeError("Queued Test candidate snapshot is missing: " + path.name)
         current = _queued_candidate_snapshot(path)
-        if int(current.get("size") or -1) != int(item.get("size") or -2):
+        if (
+            int(current.get("size") or -1) != int(item.get("size") or -2)
+            or int(current.get("mtimeNs") or -1) != int(item.get("mtimeNs") or -2)
+        ):
             raise RuntimeError("Queued Test candidate changed after it was queued: " + path.name)
         expected_provenance = item.get("provenance") if isinstance(item.get("provenance"), dict) else {}
-        if expected_provenance:
-            if current.get("provenance") != expected_provenance:
-                raise RuntimeError("Queued Test candidate provenance changed after it was queued: " + path.name)
-        elif int(current.get("mtimeNs") or -1) != int(item.get("mtimeNs") or -2):
-            raise RuntimeError("Queued Test candidate changed after it was queued: " + path.name)
+        if expected_provenance and current.get("provenance") != expected_provenance:
+            raise RuntimeError("Queued Test candidate provenance changed after it was queued: " + path.name)
 
 
 def _build_queued_request(

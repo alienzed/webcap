@@ -1,35 +1,4 @@
 var checklistDragSourceIndex = null;
-var checklistHideReviewed = false;
-
-function isChecklistHideReviewedAvailable() {
-  if (!state.currentItem || !state.currentItem.key) return false;
-  if (workspaceState.surface === 'grid') return false;
-  return true;
-}
-
-function syncChecklistHideReviewedUi() {
-  var btn = document.getElementById('checklist-hide-reviewed-btn');
-  var available = isChecklistHideReviewedAvailable();
-  btn.classList.toggle('hidden', !available);
-  btn.classList.toggle('active', !!checklistHideReviewed);
-  btn.setAttribute('aria-pressed', checklistHideReviewed ? 'true' : 'false');
-  btn.title = checklistHideReviewed
-    ? 'Show reviewed groups for this item'
-    : 'Hide groups already reviewed for this item';
-}
-
-function toggleChecklistHideReviewed() {
-  checklistHideReviewed = !checklistHideReviewed;
-  syncChecklistHideReviewedUi();
-  renderChecklistPanel({ skipItemDetailRefresh: true });
-}
-
-function wireChecklistHideReviewedUi() {
-  var btn = document.getElementById('checklist-hide-reviewed-btn');
-  if (btn.__hideReviewedWired) return;
-  btn.__hideReviewedWired = true;
-  btn.onclick = toggleChecklistHideReviewed;
-}
 
 function closeChecklistRowOverflowMenus() {
   var openMenus = document.querySelectorAll('#checklist-items .checklist-row-overflow[open]');
@@ -87,8 +56,6 @@ function positionChecklistRowOverflowMenu(summaryEl, menuEl) {
 
 function renderChecklistPanel(options) {
   var opts = options || {};
-  wireChecklistHideReviewedUi();
-  syncChecklistHideReviewedUi();
   wireChecklistRowOverflowDismissal();
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   var itemsDiv = document.getElementById('checklist-items');
@@ -138,11 +105,8 @@ function renderChecklistPanel(options) {
   itemsDiv.innerHTML = '';
   var checkedMap = checklistCheckedByMedia[state.currentItem.key] || {};
   var mediaKey = state.currentItem.key;
-  var renderedGroupCount = 0;
   for (var i = 0; i < checklistItems.length; i++) {
     var item = checklistItems[i];
-    if (checklistHideReviewed && !!checkedMap[item]) continue;
-    renderedGroupCount += 1;
     var row = document.createElement('div');
     row.className = 'checklist-row-block';
     row.setAttribute('data-checklist-index', String(i));
@@ -411,12 +375,6 @@ function renderChecklistPanel(options) {
     }
 
     itemsDiv.appendChild(row);
-  }
-  if (checklistHideReviewed && renderedGroupCount === 0) {
-    var reviewedEmpty = document.createElement('div');
-    reviewedEmpty.className = 'checklist-hide-reviewed-empty';
-    reviewedEmpty.textContent = 'No unreviewed groups.';
-    itemsDiv.appendChild(reviewedEmpty);
   }
   if (!opts.skipItemDetailRefresh) {
     renderItemTagsPanel();

@@ -1,3 +1,5 @@
+var groupWorkbenchHideReviewed = false;
+
 function resolveGroupWorkbenchOptions(options) {
   var opts = options || {};
   var mode = opts.mode || 'item';
@@ -127,8 +129,21 @@ function syncGroupWorkbenchVisibilityHeader(targetEl, mode) {
   if (!targetEl || targetEl.id !== 'group-workbench-list') return 0;
   var workbench = targetEl.closest('.group-workbench');
   var showAllBtn = document.getElementById('group-workbench-show-all-btn');
-  var hiddenCount = mode === 'item' ? getChecklistHiddenRequirements().length : 0;
+  var hideReviewedBtn = document.getElementById('group-workbench-hide-reviewed-btn');
+  var isItemMode = mode === 'item';
+  var hiddenCount = isItemMode ? getChecklistHiddenRequirements().length : 0;
+  workbench.classList.toggle('has-item-controls', isItemMode);
   workbench.classList.toggle('has-hidden-groups', hiddenCount > 0);
+  hideReviewedBtn.classList.toggle('hidden', !isItemMode);
+  hideReviewedBtn.classList.toggle('active', groupWorkbenchHideReviewed);
+  hideReviewedBtn.setAttribute('aria-pressed', groupWorkbenchHideReviewed ? 'true' : 'false');
+  hideReviewedBtn.title = groupWorkbenchHideReviewed
+    ? 'Show reviewed annotation groups'
+    : 'Hide groups already reviewed for this item';
+  hideReviewedBtn.onclick = function () {
+    groupWorkbenchHideReviewed = !groupWorkbenchHideReviewed;
+    refreshGroupWorkbenchForCurrentItem();
+  };
   showAllBtn.classList.toggle('hidden', hiddenCount <= 0);
   showAllBtn.title = hiddenCount > 0
     ? 'Show all annotation groups (' + hiddenCount + ' hidden)'
@@ -498,6 +513,7 @@ function renderGroupWorkbench(options) {
       ? (hasGridTargets && batchState.allReviewed)
       : (hasItemTarget && isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel));
     var isReviewedMixed = isGridMode && hasGridTargets && batchState.someReviewed && !batchState.allReviewed;
+    if (useVisibilityFilter && groupWorkbenchHideReviewed && isReviewed) continue;
     var isCaptionMatched = !isGridMode && hasItemTarget && requirementKeywordsMatch(requirementLabel, captionText, mediaKey);
     var terms = getChecklistKeywordTermsForRequirement(requirementLabel)
       .map(normalizeChecklistTerm)
@@ -714,10 +730,10 @@ function renderGroupWorkbench(options) {
     groupElements.push(groupEl);
   }
   if (!groupElements.length) {
-    renderGroupWorkbenchEmpty(
-      targetEl,
-      useVisibilityFilter && hiddenGroupCount > 0 ? 'All visible groups are hidden or empty.' : 'No groups with terms configured.'
-    );
+    var emptyMessage = useVisibilityFilter && groupWorkbenchHideReviewed
+      ? 'No unreviewed groups.'
+      : (useVisibilityFilter && hiddenGroupCount > 0 ? 'All visible groups are hidden or empty.' : 'No groups with terms configured.');
+    renderGroupWorkbenchEmpty(targetEl, emptyMessage);
     syncGroupWorkbenchVisibilityHeader(targetEl, opts.mode);
     targetEl.scrollTop = Math.max(0, previousScrollTop);
     return;

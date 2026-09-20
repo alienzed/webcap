@@ -326,22 +326,10 @@ def test_primer_group_settings_survive_folder_sanitization_and_group_undo():
     assert "checklistPrimerPrecedenceByGroup[requirement]" in restore_block
 
 
-def test_groups_helper_required_controls_fail_loudly_and_popup_dismisses_when_anchor_moves():
+def test_groups_helper_popup_dismisses_when_anchor_moves_and_hide_reviewed_belongs_to_annotation_workbench():
     panel = _read("tool/js/checklist_panel.js")
-
-    hide_available = panel.split("function isChecklistHideReviewedAvailable", 1)[1].split(
-        "function syncChecklistHideReviewedUi", 1
-    )[0]
-    hide_sync = panel.split("function syncChecklistHideReviewedUi", 1)[1].split(
-        "function toggleChecklistHideReviewed", 1
-    )[0]
-    hide_wire = panel.split("function wireChecklistHideReviewedUi", 1)[1].split(
-        "function closeChecklistRowOverflowMenus", 1
-    )[0]
-
-    assert "typeof workspaceState" not in hide_available
-    assert "if (!btn) return;" not in hide_sync
-    assert "if (!btn ||" not in hide_wire
+    workbench = _read("tool/js/group_workbench.js")
+    html = _read("tool/tool.html")
 
     popup_wire = panel.split("function wireChecklistRowOverflowDismissal", 1)[1].split(
         "function clearChecklistDropIndicators", 1
@@ -349,3 +337,10 @@ def test_groups_helper_required_controls_fail_loudly_and_popup_dismisses_when_an
     assert "itemsDiv.addEventListener('scroll', closeChecklistRowOverflowMenus);" in popup_wire
     assert "window.addEventListener('resize', closeChecklistRowOverflowMenus);" in popup_wire
     assert "wireChecklistRowOverflowDismissal();" in panel
+
+    assert 'id="checklist-hide-reviewed-btn"' not in html
+    assert 'id="group-workbench-hide-reviewed-btn"' in html
+    assert "var groupWorkbenchHideReviewed = false;" in workbench
+    assert "if (useVisibilityFilter && groupWorkbenchHideReviewed && isReviewed) continue;" in workbench
+    assert "No unreviewed groups." in workbench
+    assert "checklistHideReviewed" not in panel

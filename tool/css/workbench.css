@@ -1776,12 +1776,40 @@ html[data-theme="dark"] .training-runner-card {
   padding: 0 2px;
 }
 
+.group-workbench.has-item-controls > .group-workbench-header,
 .group-workbench.has-hidden-groups > .group-workbench-header {
   display: flex;
 }
 
-.group-workbench.has-hidden-groups > .group-workbench-header .group-workbench-title {
-  display: none;
+.group-workbench-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.group-workbench-hide-reviewed-btn {
+  min-height: 24px;
+  padding: 2px 7px;
+  border: 1px solid var(--border-soft, var(--border));
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.group-workbench-hide-reviewed-btn:hover,
+.group-workbench-hide-reviewed-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.group-workbench-hide-reviewed-btn.active {
+  border-color: #4f7b61;
+  background: rgba(22, 101, 52, 0.18);
+  color: var(--text);
 }
 
 .group-workbench-title {

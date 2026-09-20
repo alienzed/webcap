@@ -424,7 +424,7 @@
         return payload;
       });
     }).then(function () {
-      if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();
+      refreshTrainingRunnerStatus();
       return refreshSessions();
     });
   }
@@ -1132,7 +1132,7 @@
       if (nameInput) nameInput.value = '';
       return refreshSessions();
     }).then(function () {
-      if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();
+      refreshTrainingRunnerStatus();
       pollStatus();
     }).catch(function (err) {
       syncActiveRunControls(currentStatus);

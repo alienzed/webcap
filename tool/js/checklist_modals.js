@@ -66,6 +66,7 @@ function saveChecklistTermAffixesModal() {
   var wrapperSuffixEl = document.getElementById('checklist-term-wrapper-suffix');
   var descriptorPrefixEl = document.getElementById('checklist-term-descriptor-prefix');
   var descriptorSuffixEl = document.getElementById('checklist-term-descriptor-suffix');
+  var requirement = checklistTermAffixesModalState.requirement;
   var term = checklistTermAffixesModalState.term;
   var mediaKey = checklistTermAffixesModalState.mediaKey;
   var hasTag = !!checklistTermAffixesModalState.hasTagOnCurrentItem;
@@ -76,15 +77,15 @@ function saveChecklistTermAffixesModal() {
   var descriptorSuffix = descriptorSuffixEl ? descriptorSuffixEl.value : '';
   function applyLocalWrapperChanges() {
     if (isPinned) return false;
-    return setChecklistTermWrapper(term, wrapperPrefix, wrapperSuffix);
+    return setChecklistGroupTermWrapper(requirement, term, wrapperPrefix, wrapperSuffix);
   }
   function applyLocalDescriptorChanges() {
     var changed = false;
-    if (setChecklistTermDescriptorDefault(term, descriptorPrefix, descriptorSuffix)) {
+    if (setChecklistGroupTermDescriptorDefault(requirement, term, descriptorPrefix, descriptorSuffix)) {
       changed = true;
     }
     if (hasTag && mediaKey) {
-      if (setChecklistTermDescriptorForMediaKey(mediaKey, term, descriptorPrefix, descriptorSuffix)) {
+      if (setChecklistGroupTermDescriptorForMediaKey(mediaKey, requirement, term, descriptorPrefix, descriptorSuffix)) {
         changed = true;
       }
     }
@@ -110,18 +111,14 @@ function saveChecklistTermAffixesModal() {
     }
     closeChecklistTermAffixesModal();
   }
-  var previousGlobalPrefix = (typeof getChecklistGlobalWrapperPrefix === 'function')
-    ? getChecklistGlobalWrapperPrefix(term)
-    : '';
-  var previousGlobalSuffix = (typeof getChecklistGlobalWrapperSuffix === 'function')
-    ? getChecklistGlobalWrapperSuffix(term)
-    : '';
+  var previousGlobalPrefix = getChecklistGlobalGroupWrapperPrefix(requirement, term);
+  var previousGlobalSuffix = getChecklistGlobalGroupWrapperSuffix(requirement, term);
   var shouldSaveGlobalWrapper = isPinned && (
     normalizeChecklistAffixValue(previousGlobalPrefix) !== normalizeChecklistAffixValue(wrapperPrefix) ||
     normalizeChecklistAffixValue(previousGlobalSuffix) !== normalizeChecklistAffixValue(wrapperSuffix)
   );
   if (shouldSaveGlobalWrapper && typeof saveChecklistGlobalWrapper === 'function') {
-    saveChecklistGlobalWrapper(term, wrapperPrefix, wrapperSuffix, function (ok, result) {
+    saveChecklistGlobalWrapper(requirement, term, wrapperPrefix, wrapperSuffix, function (ok, result) {
       if (!ok) {
         setStatus(String(result || 'Failed to update global wrapper in config.'));
         return;
@@ -146,15 +143,15 @@ function clearChecklistTermAffixesModal() {
   renderChecklistTermAffixesPreview();
 }
 
-function openChecklistTermAffixesModal(termText) {
+function openChecklistTermAffixesModal(requirementLabel, termText) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
   var term = normalizeChecklistTerm(termText);
-  if (!term) return;
+  if (!requirement || !term) return;
   var mediaKey = resolveChecklistTermMediaKey();
-  var hasTag = checklistMediaHasTag(mediaKey, term);
-  var isPinned = typeof isChecklistTermPinnedGloballyAnywhere === 'function'
-    ? isChecklistTermPinnedGloballyAnywhere(term)
-    : false;
+  var hasTag = hasChecklistAssignedTagForMediaKey(mediaKey, requirement, term);
+  var isPinned = isChecklistGroupTermPinnedGlobally(requirement, term);
   checklistTermAffixesModalState = {
+    requirement: requirement,
     term: term,
     mediaKey: mediaKey,
     hasTagOnCurrentItem: hasTag,
@@ -167,14 +164,12 @@ function openChecklistTermAffixesModal(termText) {
   var descriptorSuffixEl = document.getElementById('checklist-term-descriptor-suffix');
   var modal = document.getElementById('checklist-term-affixes-modal');
   var overlay = document.getElementById('modal-overlay');
-  var wrapper = getChecklistTermWrapper(term);
+  var wrapper = getChecklistGroupTermWrapper(requirement, term);
   var descriptor = hasTag
-    ? getChecklistEffectiveTermDescriptor(term, mediaKey)
-    : getChecklistTermDescriptorDefault(term);
-  var globalWrapper = (typeof getChecklistGlobalWrapper === 'function')
-    ? getChecklistGlobalWrapper(term)
-    : { prefix: '', suffix: '' };
-  if (titleEl) titleEl.textContent = 'Edit Term Styling: ' + term;
+    ? getChecklistEffectiveGroupTermDescriptor(requirement, term, mediaKey)
+    : getChecklistGroupTermDescriptorDefault(requirement, term);
+  var globalWrapper = getChecklistGlobalGroupWrapper(requirement, term);
+  if (titleEl) titleEl.textContent = 'Edit Term Styling: ' + requirement + ' / ' + term;
   if (wrapperPrefixEl) wrapperPrefixEl.value = globalWrapper.prefix || wrapper.prefix;
   if (wrapperSuffixEl) wrapperSuffixEl.value = globalWrapper.suffix || wrapper.suffix;
   if (descriptorPrefixEl) descriptorPrefixEl.value = descriptor.prefix;

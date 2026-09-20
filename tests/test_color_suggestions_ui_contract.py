@@ -28,15 +28,16 @@ def test_detecting_colors_does_not_mutate_group_taxonomy():
     assert "addTagToMediaKey" not in request_block
 
 
-def test_unmatched_color_click_adds_group_term_and_item_tag_in_one_folder_state_write():
+def test_unmatched_color_click_adds_group_term_and_scoped_assignment_in_one_folder_state_write():
     feature = (ROOT / "tool" / "js" / "color_suggestions.js").read_text(encoding="utf-8")
     item_details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
 
     assert "setChecklistKeywordTermsForRequirement(requirement, localTerms)" in feature
-    assert "addTagToMediaKey(key, term" in feature
+    assert "assignChecklistTagToMediaKey(key, requirement, term" in feature
     assert "skipSave: true" in feature
     assert "writeCapturedFolderState(capturedSave).then" in feature
     assert "changes were rolled back" in feature
+    assert "checklistAssignmentsByMedia = previousAssignments" in feature
     assert "if (!opts.skipSave)" in item_details
     assert "if (!opts.skipUndo" in item_details
 

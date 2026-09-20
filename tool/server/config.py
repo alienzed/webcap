@@ -314,6 +314,36 @@ def validate_config_payload(payload):
         out["requirements"]["termWrappersByTerm"] = clean_wrappers
         out["requirements"].pop("termWrapperPrefixesByTerm", None)
 
+        group_wrappers = requirements.get("termWrappersByGroup")
+        if group_wrappers is not None and not isinstance(group_wrappers, dict):
+            raise ValueError("Config.requirements.termWrappersByGroup must be an object when provided.")
+        clean_group_wrappers = {}
+        if isinstance(group_wrappers, dict):
+            for raw_group, raw_terms in group_wrappers.items():
+                group_key = str(raw_group or "").strip()
+                if not group_key:
+                    continue
+                if not isinstance(raw_terms, dict):
+                    raise ValueError("Each Config.requirements.termWrappersByGroup group must be an object.")
+                clean_terms = {}
+                for raw_term, raw_wrapper in raw_terms.items():
+                    term_key = _normalize_requirement_term_key(raw_term)
+                    if not term_key:
+                        continue
+                    if not isinstance(raw_wrapper, dict):
+                        raise ValueError("Each Config.requirements.termWrappersByGroup term entry must be an object.")
+                    prefix_value = _normalize_wrapper_affix_value(raw_wrapper.get("prefix"))
+                    suffix_value = _normalize_wrapper_affix_value(raw_wrapper.get("suffix"))
+                    if not prefix_value and not suffix_value:
+                        continue
+                    clean_terms[term_key] = {
+                        "prefix": prefix_value,
+                        "suffix": suffix_value,
+                    }
+                if clean_terms:
+                    clean_group_wrappers[group_key] = clean_terms
+        out["requirements"]["termWrappersByGroup"] = clean_group_wrappers
+
     return out
 
 def load_config_from_disk():

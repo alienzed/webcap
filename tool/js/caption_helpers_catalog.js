@@ -283,8 +283,27 @@ function toggleCaptionTagAtCursor(text) {
   insertCaptionPhraseAtCursor(rendered || tag, { separator: ', ' });
 }
 
+function toggleCaptionGroupTagAtCursor(requirementLabel, text) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  var tag = String(text || '').trim();
+  if (!requirement || !tag || !ui || !ui.editorEl) return;
+  var mediaKey = state && state.currentItem ? state.currentItem.key : '';
+  var rendered = renderChecklistGroupTermWithAffixes(requirement, tag, mediaKey) || tag;
+  var value = ui.editorEl.value || '';
+  if (rendered && captionContainsPhrase(value, rendered)) {
+    removeCaptionPhraseFromCaption(rendered);
+    return;
+  }
+  if (tag && captionContainsPhrase(value, tag)) {
+    removeCaptionPhraseFromCaption(tag);
+    return;
+  }
+  insertCaptionPhraseAtCursor(rendered, { separator: ', ' });
+}
+
 window.ensureCaptionHelperPhraseInCatalog = ensureCaptionHelperPhraseInCatalog;
 window.mergeCaptionHelperPhrasesFromTagsMap = mergeCaptionHelperPhrasesFromTagsMap;
 window.getCaptionHelperCatalogTerms = getCaptionHelperCatalogTerms;
 window.toggleCaptionPhraseAtCursor = toggleCaptionPhraseAtCursor;
 window.toggleCaptionTagAtCursor = toggleCaptionTagAtCursor;
+window.toggleCaptionGroupTagAtCursor = toggleCaptionGroupTagAtCursor;

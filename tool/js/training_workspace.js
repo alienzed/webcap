@@ -735,11 +735,6 @@ function wireTrainingWorkspace() {
       }
       return;
     }
-    var row = event.target.closest('[data-training-queue-job]');
-    if (row) {
-      trainingWorkspaceState.runnerSelectedJobId = row.getAttribute('data-training-queue-job');
-      renderTrainingRunner();
-    }
   };
   historyList.onclick = function (event) {
     var detailsButton = event.target.closest('[data-training-history-details]');

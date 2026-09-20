@@ -11,6 +11,15 @@ var shellNavigationState = {
   immersive: false
 };
 
+var shellSystemStatusState = {
+  pending: false,
+  timer: 0,
+  gpu: null,
+  disk: null,
+  error: ''
+};
+var SHELL_SYSTEM_STATUS_INTERVAL_MS = 30000;
+
 var initialShellLocationRoute = null;
 var initialShellLocationRestored = false;
 var WORKBENCH_RAIL_SESSION_KEY = 'webcap.workbenchRailCollapsedByView';
@@ -214,6 +223,97 @@ function deriveShellNavigationState() {
   return shellNavigationState;
 }
 
+function formatShellGpuMemory(value) {
+  var mib = Number(value);
+  if (!isFinite(mib) || mib < 0) return '';
+  return (mib / 1024).toFixed(1) + ' GiB';
+}
+
+function formatShellDiskSpace(value) {
+  var bytes = Number(value);
+  if (!isFinite(bytes) || bytes < 0) return '';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(bytes >= 100 * 1024 * 1024 * 1024 ? 0 : 1) + ' GiB';
+}
+
+function renderShellSystemStatus() {
+  var host = document.getElementById('shell-gpu-status');
+  if (!host) return;
+
+  var parts = [];
+  var gpu = shellSystemStatusState.gpu;
+  if (gpu && gpu.available) {
+    var gpus = Array.isArray(gpu.gpus) ? gpu.gpus : [];
+    if (gpus.length) {
+      var primary = gpus[0];
+      var utilization = Number(primary.utilization);
+      var memoryUsed = formatShellGpuMemory(primary.memoryUsed);
+      var memoryTotal = formatShellGpuMemory(primary.memoryTotal);
+      var gpuSummary = 'GPU' +
+        (isFinite(utilization) ? ' ' + Math.round(utilization) + '%' : '') +
+        (memoryUsed && memoryTotal ? ' · VRAM ' + memoryUsed + ' / ' + memoryTotal : '');
+      parts.push('<strong title="Live GPU utilization and VRAM use.">' + escapeHtml(gpuSummary) + '</strong>');
+    }
+  } else if (gpu && !gpu.available) {
+    parts.push('<span class="is-warning" title="' + escapeHtml(gpu.error || 'GPU status unavailable.') + '">GPU unavailable</span>');
+  }
+
+  var disk = shellSystemStatusState.disk;
+  if (disk && disk.available) {
+    var freeText = formatShellDiskSpace(disk.free);
+    var totalText = formatShellDiskSpace(disk.total);
+    var free = Number(disk.free);
+    var total = Number(disk.total);
+    var low = isFinite(free) && isFinite(total) && total > 0 && (free / total) < 0.10;
+    var diskTitle = 'Free space on ' + String(disk.path || 'WebCap filesystem') +
+      (totalText ? ' · ' + totalText + ' total' : '');
+    parts.push('<span class="shell-system-disk' + (low ? ' is-warning' : '') + '" title="' + escapeHtml(diskTitle) + '"><strong>Disk</strong> ' + escapeHtml(freeText || '—') + ' free</span>');
+  } else if (disk && !disk.available) {
+    parts.push('<span class="is-warning" title="' + escapeHtml(disk.error || 'Disk status unavailable.') + '">Disk unavailable</span>');
+  }
+
+  host.innerHTML = parts.join('<span class="shell-system-divider" aria-hidden="true">·</span>');
+  host.classList.toggle('hidden', !parts.length);
+}
+
+function scheduleShellSystemStatusRefresh() {
+  if (shellSystemStatusState.timer) clearTimeout(shellSystemStatusState.timer);
+  shellSystemStatusState.timer = setTimeout(refreshShellSystemStatus, SHELL_SYSTEM_STATUS_INTERVAL_MS);
+}
+
+function refreshShellSystemStatus() {
+  if (shellSystemStatusState.pending) return;
+  shellSystemStatusState.pending = true;
+  fetch('/fs/system_status')
+    .then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || !payload.ok) {
+          throw new Error((payload && payload.error) || 'System status unavailable.');
+        }
+        return payload;
+      });
+    })
+    .then(function (payload) {
+      shellSystemStatusState.gpu = payload.gpu || null;
+      shellSystemStatusState.disk = payload.disk || null;
+      shellSystemStatusState.error = '';
+      renderShellSystemStatus();
+    })
+    .catch(function (err) {
+      shellSystemStatusState.error = String(err && err.message ? err.message : err);
+      if (!shellSystemStatusState.gpu && !shellSystemStatusState.disk) {
+        var host = document.getElementById('shell-gpu-status');
+        if (host) {
+          host.innerHTML = '<span class="is-warning" title="' + escapeHtml(shellSystemStatusState.error) + '">System status unavailable</span>';
+          host.classList.remove('hidden');
+        }
+      }
+    })
+    .then(function () {
+      shellSystemStatusState.pending = false;
+      scheduleShellSystemStatusRefresh();
+    });
+}
+
 function syncApplicationShellContext() {
   var navigation = deriveShellNavigationState();
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
@@ -259,11 +359,15 @@ function syncApplicationShellContext() {
     folderEl.textContent = folderLabel;
     folderEl.title = folder || folderLabel;
   }
-  if (folderBtn) folderBtn.classList.toggle('hidden', !contextUsesFolder);
+  if (folderBtn) {
+    folderBtn.classList.toggle('hidden', !contextUsesFolder);
+    folderBtn.title = contextUsesFolder ? 'Open ' + folderLabel + ' in Prep' : '';
+    folderBtn.setAttribute('aria-label', contextUsesFolder ? 'Open ' + folderLabel + ' in Prep' : 'Current set');
+  }
   if (workspaceContext) {
     workspaceContext.textContent = contextUsesFolder ? '' : contextText;
   }
-  if (contextSeparator) contextSeparator.classList.toggle('hidden', !contextText);
+  if (contextSeparator) contextSeparator.classList.toggle('hidden', !contextUsesFolder);
 
   if (sidebarToggle) {
     var sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');
@@ -502,6 +606,8 @@ function initializeWorkspaceShell() {
   appEl.__workspaceShellInitialized = true;
   appEl.classList.add('shell-revamp');
   syncWorkspaceSurfaceUi();
+  renderShellSystemStatus();
+  refreshShellSystemStatus();
 }
 
 function isApplicationOverlayOpen() {
@@ -515,6 +621,11 @@ function isApplicationOverlayOpen() {
 }
 
 function wireWorkspaceHeaderUi() {
+  var headerFolderBtn = document.getElementById('app-header-folder-btn');
+  if (headerFolderBtn && !headerFolderBtn.__workspaceWired) {
+    headerFolderBtn.__workspaceWired = true;
+    headerFolderBtn.onclick = openPrepActivity;
+  }
   var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
   if (reviewOutputBtn && !reviewOutputBtn.__workspaceWired) {
     reviewOutputBtn.__workspaceWired = true;

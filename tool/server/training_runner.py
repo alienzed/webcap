@@ -2103,7 +2103,7 @@ def enqueue_test_response(folder, test_request):
         }, 200
 
 
-def queued_test_jobs_using_candidate(folder, file_name):
+def test_jobs_using_candidate(folder, file_name):
     folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
     name = str(file_name or "").strip()
     if not folder_text or not name:
@@ -2112,7 +2112,7 @@ def queued_test_jobs_using_candidate(folder, file_name):
         state = _read_state_readonly()
         matches = []
         for job in state.get("jobs", []):
-            if job.get("status") != "queued" or _job_kind(job) != "test":
+            if job.get("status") not in QUEUE_STATUSES | ACTIVE_STATUSES or _job_kind(job) != "test":
                 continue
             if str(job.get("folder") or "") != folder_text:
                 continue

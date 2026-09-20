@@ -717,6 +717,8 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
     caption_term_wrappers = None
     caption_term_descriptor_defaults = None
     caption_term_descriptors_by_media = {}
+    caption_group_term_wrappers = None
+    caption_group_term_descriptor_defaults = None
     caption_group_term_descriptors_by_media = {}
     created_items = []
     originals_copied = 0
@@ -797,6 +799,14 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
             src_descriptor_defaults = src_state.get("caption_term_descriptor_defaults")
             if isinstance(src_descriptor_defaults, dict):
                 caption_term_descriptor_defaults = json.loads(json.dumps(src_descriptor_defaults))
+        if caption_group_term_wrappers is None:
+            src_group_wrappers = src_state.get("caption_group_term_wrappers")
+            if isinstance(src_group_wrappers, dict):
+                caption_group_term_wrappers = json.loads(json.dumps(src_group_wrappers))
+        if caption_group_term_descriptor_defaults is None:
+            src_group_defaults = src_state.get("caption_group_term_descriptor_defaults")
+            if isinstance(src_group_defaults, dict):
+                caption_group_term_descriptor_defaults = json.loads(json.dumps(src_group_defaults))
 
         src_descriptors_by_media = src_state.get("caption_term_descriptors_by_media")
         if isinstance(src_descriptors_by_media, dict):
@@ -830,6 +840,10 @@ def _materialize_set(root: Path, dest_dir: Path, matches: list[dict]) -> dict:
         dest_state["caption_term_descriptor_defaults"] = caption_term_descriptor_defaults
     if isinstance(caption_term_descriptors_by_media, dict) and caption_term_descriptors_by_media:
         dest_state["caption_term_descriptors_by_media"] = caption_term_descriptors_by_media
+    if isinstance(caption_group_term_wrappers, dict):
+        dest_state["caption_group_term_wrappers"] = caption_group_term_wrappers
+    if isinstance(caption_group_term_descriptor_defaults, dict):
+        dest_state["caption_group_term_descriptor_defaults"] = caption_group_term_descriptor_defaults
     if caption_group_term_descriptors_by_media:
         dest_state["caption_group_term_descriptors_by_media"] = caption_group_term_descriptors_by_media
     dest_state_path = dest_dir / ".webcap_state.json"
@@ -996,6 +1010,39 @@ def _merge_requirement_keywords(existing: dict[str, str], raw_keywords) -> dict[
     return existing
 
 
+def _canonicalize_group_map(raw_map, requirement_labels: list[str]):
+    if not isinstance(raw_map, dict):
+        return {}
+    canonical = {
+        str(label or "").strip().casefold(): str(label or "").strip()
+        for label in requirement_labels
+        if str(label or "").strip()
+    }
+    out = {}
+    for raw_group, raw_value in raw_map.items():
+        group = str(raw_group or "").strip()
+        if not group:
+            continue
+        dest_group = canonical.get(group.casefold(), group)
+        value = json.loads(json.dumps(raw_value))
+        if dest_group not in out:
+            out[dest_group] = value
+            continue
+        current = out[dest_group]
+        if isinstance(current, dict) and isinstance(value, dict):
+            current.update(value)
+        elif isinstance(current, list) and isinstance(value, list):
+            seen = {str(item or "").casefold() for item in current}
+            for item in value:
+                key = str(item or "").casefold()
+                if key not in seen:
+                    seen.add(key)
+                    current.append(item)
+        elif isinstance(current, bool) and isinstance(value, bool):
+            out[dest_group] = current or value
+    return out
+
+
 def create_set_from_results_response(data: dict):
     payload = data or {}
     try:
@@ -1118,9 +1165,12 @@ def create_set_from_results_response(data: dict):
                 if isinstance(tag_list, list) and tag_list:
                     tags_by_media[dest_media_name] = [str(tag).strip() for tag in tag_list if str(tag).strip()]
 
-            group_map = _normalize_group_tags_for_media(src_state, media_name)
+            group_map = _canonicalize_group_map(
+                _normalize_group_tags_for_media(src_state, media_name),
+                caption_requirements,
+            )
             if group_map:
-                group_tags_by_media[dest_media_name] = json.loads(json.dumps(group_map))
+                group_tags_by_media[dest_media_name] = group_map
 
             src_ratings = src_state.get("ratings_by_media")
             if isinstance(src_ratings, dict) and media_name in src_ratings:
@@ -1130,7 +1180,10 @@ def create_set_from_results_response(data: dict):
             if isinstance(src_requirements_checked, dict):
                 media_checked_map = src_requirements_checked.get(media_name)
                 if isinstance(media_checked_map, dict):
-                    caption_requirements_checked[dest_media_name] = json.loads(json.dumps(media_checked_map))
+                    caption_requirements_checked[dest_media_name] = _canonicalize_group_map(
+                        media_checked_map,
+                        caption_requirements,
+                    )
 
             src_descriptors_by_media = src_state.get("caption_term_descriptors_by_media")
             if isinstance(src_descriptors_by_media, dict):
@@ -1142,7 +1195,10 @@ def create_set_from_results_response(data: dict):
             if isinstance(src_group_descriptors, dict):
                 media_group_descriptors = src_group_descriptors.get(media_name)
                 if isinstance(media_group_descriptors, dict) and media_group_descriptors:
-                    caption_group_term_descriptors_by_media[dest_media_name] = json.loads(json.dumps(media_group_descriptors))
+                    caption_group_term_descriptors_by_media[dest_media_name] = _canonicalize_group_map(
+                        media_group_descriptors,
+                        caption_requirements,
+                    )
 
             source_meta = src_media_metadata.get(media_name)
             if isinstance(source_meta, dict):

@@ -301,10 +301,10 @@ def relocate_folder_actions(old_folder, new_folder):
                     continue
                 try:
                     payload = json.loads(record_path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError):
-                    continue
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise ValueError("Training History job record is unreadable during set rename: " + str(record_path)) from exc
                 if not isinstance(payload, dict) or not isinstance(payload.get("job"), dict):
-                    continue
+                    raise ValueError("Training History job record is invalid during set rename: " + str(record_path))
                 payload["job"]["folder"] = _replace_folder_prefix(payload["job"].get("folder"), old, new)
                 _atomic_write(record_path, payload)
         changed += 1

@@ -223,7 +223,11 @@ function refreshTrainingRunnerStatus() {
       trainingWorkspaceState.runnerStatusError = '';
       trainingWorkspaceState.runnerRecoveryAvailable = false;
       var priorJobsById = {};
-      (trainingWorkspaceState.runnerJobs || []).forEach(function (job) { priorJobsById[job.id] = job.status; });
+      var priorTrainingJobsById = {};
+      (trainingWorkspaceState.runnerJobs || []).forEach(function (job) {
+        priorJobsById[job.id] = job.status;
+        if (isTrainingQueueJob(job)) priorTrainingJobsById[job.id] = job.status;
+      });
       trainingWorkspaceState.runnerJobs = Array.isArray(payload.jobs) ? payload.jobs : [];
       trainingWorkspaceState.runnerActiveJobId = String(payload.activeJobId || '');
       trainingWorkspaceState.runnerQueuePaused = !!payload.queuePaused;
@@ -231,19 +235,20 @@ function refreshTrainingRunnerStatus() {
       trainingWorkspaceState.runnerNotice = String(payload.runnerNotice || '');
       renderTrainingRunner();
       var terminalOutcome = trainingWorkspaceState.runnerJobs.some(function (job) {
-        return (job.status === 'completed' || job.status === 'finished_early' || job.status === 'failed' || job.status === 'stopped' || job.status === 'cancelled') &&
+        return isTrainingQueueJob(job) &&
+          (job.status === 'completed' || job.status === 'finished_early' || job.status === 'failed' || job.status === 'stopped' || job.status === 'cancelled') &&
           priorJobsById[job.id] !== job.status;
       });
       var currentJobsById = {};
       trainingWorkspaceState.runnerJobs.forEach(function (job) { currentJobsById[job.id] = true; });
-      var retiredOutcome = Object.keys(priorJobsById).some(function (jobId) {
-        var prior = priorJobsById[jobId];
+      var retiredOutcome = Object.keys(priorTrainingJobsById).some(function (jobId) {
+        var prior = priorTrainingJobsById[jobId];
         return !currentJobsById[jobId] && prior !== 'queued';
       });
       var recoveredOutcome = trainingWorkspaceState.runnerJobs.some(function (job) {
         var prior = priorJobsById[job.id];
         var active = job.status === 'starting' || job.status === 'running' || job.status === 'stopping';
-        return active && (prior === 'interrupted' || prior === 'failed' || prior === 'stopped');
+        return isTrainingQueueJob(job) && active && (prior === 'interrupted' || prior === 'failed' || prior === 'stopped');
       });
       if (terminalOutcome || retiredOutcome || recoveredOutcome) {
         trainingWorkspaceState.historyCollapsed = false;

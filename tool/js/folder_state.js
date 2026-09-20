@@ -15,6 +15,11 @@ function sanitizeFolderState(data) {
     : {};
   var testGenerationMegapixels = Number(testGenerationSettings.megapixels);
   var testGenerationDuration = Number(testGenerationSettings.duration);
+  var testGenerationSelectedFiles = Array.isArray(testGenerationSettings.selectedFiles)
+    ? Array.from(new Set(testGenerationSettings.selectedFiles
+        .map(function (fileName) { return String(fileName || '').trim(); })
+        .filter(Boolean)))
+    : null;
   var reviewRulesValue = Array.isArray(stats.reviewRules)
     ? JSON.parse(JSON.stringify(stats.reviewRules))
     : (typeof stats.reviewRules === 'string' ? String(stats.reviewRules) : []);
@@ -115,7 +120,8 @@ function sanitizeFolderState(data) {
     test_generation_settings: {
       aspectRatio: String(testGenerationSettings.aspectRatio || ''),
       megapixels: isFinite(testGenerationMegapixels) && testGenerationMegapixels > 0 ? testGenerationMegapixels : null,
-      duration: isFinite(testGenerationDuration) && testGenerationDuration > 0 ? testGenerationDuration : null
+      duration: isFinite(testGenerationDuration) && testGenerationDuration > 0 ? testGenerationDuration : null,
+      selectedFiles: testGenerationSelectedFiles
     },
     annotate_strip_visible: !!src.annotate_strip_visible,
     caption_helper_panel_collapsed: !!src.caption_helper_panel_collapsed,

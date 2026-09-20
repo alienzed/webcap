@@ -51,7 +51,8 @@
     return {
       aspectRatio: String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim(),
       megapixels: Number(el('test-generations-megapixels') && el('test-generations-megapixels').value || 0),
-      duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0)
+      duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0),
+      selectedFiles: selectedCandidateFiles()
     };
   }
 
@@ -258,7 +259,15 @@
     var scores = payload && payload.candidateScores && typeof payload.candidateScores === 'object'
       ? payload.candidateScores
       : {};
-    if (!(selectedCandidates instanceof Set)) selectedCandidates = new Set(files);
+    if (!(selectedCandidates instanceof Set)) {
+      var savedSelection = state
+        && String(state.folder || '') === String(launchFolder || '')
+        && state.testGenerationSettings
+        && Array.isArray(state.testGenerationSettings.selectedFiles)
+          ? state.testGenerationSettings.selectedFiles
+          : null;
+      selectedCandidates = new Set(savedSelection === null ? files : savedSelection);
+    }
     Array.from(selectedCandidates).forEach(function (fileName) {
       if (files.indexOf(fileName) === -1) selectedCandidates.delete(fileName);
     });
@@ -1222,8 +1231,22 @@
       var fileName = String(checkbox.dataset.candidateSelect || '');
       if (checkbox.checked) selectedCandidates.add(fileName);
       else selectedCandidates.delete(fileName);
+      saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
       syncActiveRunControls(currentStatus);
     });
+    el('test-generations-select-all-btn').onclick = function () {
+      var files = prepared && Array.isArray(prepared.files) ? prepared.files : [];
+      selectedCandidates = new Set(files);
+      renderStagedFiles(prepared || { files: [], count: 0, candidateScores: {} });
+      saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
+      syncActiveRunControls(currentStatus);
+    };
+    el('test-generations-deselect-all-btn').onclick = function () {
+      selectedCandidates = new Set();
+      renderStagedFiles(prepared || { files: [], count: 0, candidateScores: {} });
+      saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
+      syncActiveRunControls(currentStatus);
+    };
     el('test-generations-files').onclick = function (event) {
       var button = event.target.closest('[data-file-name]');
       if (!button) return;

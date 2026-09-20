@@ -347,6 +347,13 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "var selectedCandidates = null;" in script
     assert "dataset.candidateSelect" in script
     assert "selectedFiles: selectedFiles" in script
+    assert "selectedFiles: selectedCandidateFiles()" in script
+    assert "Array.isArray(state.testGenerationSettings.selectedFiles)" in script
+    assert "selectedCandidates = new Set(savedSelection === null ? files : savedSelection);" in script
+    assert 'id="test-generations-select-all-btn"' in html
+    assert 'id="test-generations-deselect-all-btn"' in html
+    assert "selectedCandidates = new Set(files);" in script
+    assert "selectedCandidates = new Set();" in script
     assert "name: name" in script
     assert "candidateScores" in script
     assert "function openResultsFolder(folder)" in script

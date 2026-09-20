@@ -277,26 +277,7 @@ function getChecklistTermDescriptorDefault(termText) {
   };
 }
 
-function getChecklistTermDescriptorForMediaKey(mediaKey, termText) {
-  var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
-  var key = normalizeChecklistTermAffixKey(termText);
-  if (!resolvedMediaKey || !key) return null;
-  var mediaMap = checklistTermDescriptorsByMedia[resolvedMediaKey];
-  if (!mediaMap || typeof mediaMap !== 'object') return null;
-  var entry = mediaMap[key];
-  if (!entry || typeof entry !== 'object') return null;
-  return {
-    prefix: normalizeChecklistAffixValue(entry.prefix),
-    suffix: normalizeChecklistAffixValue(entry.suffix),
-  };
-}
-
 function getChecklistEffectiveTermDescriptor(termText, mediaKey) {
-  var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
-  if (resolvedMediaKey && mediaKeyHasSavedCaption(resolvedMediaKey)) {
-    var mediaDescriptor = getChecklistTermDescriptorForMediaKey(resolvedMediaKey, termText);
-    if (mediaDescriptor) return mediaDescriptor;
-  }
   return getChecklistTermDescriptorDefault(termText);
 }
 
@@ -529,48 +510,6 @@ function setChecklistTermWrapper(termText, prefix, suffix) {
 
 function setChecklistTermDescriptorDefault(termText, prefix, suffix) {
   return setChecklistTermAffixEntry(checklistTermDescriptorDefaultsByKey, termText, prefix, suffix);
-}
-
-function setChecklistTermDescriptorForMediaKey(mediaKey, termText, prefix, suffix) {
-  var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
-  var key = normalizeChecklistTermAffixKey(termText);
-  if (!resolvedMediaKey || !key) return false;
-  var mediaMap = checklistTermDescriptorsByMedia[resolvedMediaKey];
-  if (!mediaMap || typeof mediaMap !== 'object') {
-    mediaMap = {};
-    checklistTermDescriptorsByMedia[resolvedMediaKey] = mediaMap;
-  }
-  var changed = setChecklistTermAffixEntry(mediaMap, termText, prefix, suffix, { allowEmpty: true });
-  if (!Object.keys(mediaMap).length) {
-    delete checklistTermDescriptorsByMedia[resolvedMediaKey];
-  }
-  return changed;
-}
-
-function commitChecklistDescriptorSnapshotForMediaKey(mediaKey, termText, sourceDescriptor) {
-  var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
-  var term = normalizeChecklistTerm(termText);
-  if (!resolvedMediaKey || !term) return false;
-  var descriptor = sourceDescriptor || getChecklistTermDescriptorDefault(term);
-  return setChecklistTermDescriptorForMediaKey(
-    resolvedMediaKey,
-    term,
-    descriptor && typeof descriptor === 'object' ? descriptor.prefix : '',
-    descriptor && typeof descriptor === 'object' ? descriptor.suffix : ''
-  );
-}
-
-function commitChecklistDescriptorSnapshotsForMediaKey(mediaKey, termList) {
-  var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
-  var terms = Array.isArray(termList) ? termList : [];
-  if (!resolvedMediaKey || !terms.length) return false;
-  var changed = false;
-  terms.forEach(function (termText) {
-    if (commitChecklistDescriptorSnapshotForMediaKey(resolvedMediaKey, termText)) {
-      changed = true;
-    }
-  });
-  return changed;
 }
 
 function clearChecklistDescriptorSnapshotsForMediaKey(mediaKey) {

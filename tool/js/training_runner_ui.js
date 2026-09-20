@@ -216,7 +216,7 @@ function refreshTrainingRunnerStatus() {
       if (!payload.ok) {
         var stateError = !!payload.stateError;
         trainingWorkspaceState.runnerRecoveryAvailable = stateError && !!payload.recoveryAvailable;
-        trainingWorkspaceState.runnerStatusError = 'Training queue status unavailable: ' + String(payload.error || 'Unknown queue error.');
+        trainingWorkspaceState.runnerStatusError = 'Queue status unavailable: ' + String(payload.error || 'Unknown queue error.');
         renderTrainingRunner();
         return;
       }
@@ -276,7 +276,7 @@ function refreshTrainingRunnerStatus() {
     })
     .catch(function (err) {
       trainingWorkspaceState.runnerRecoveryAvailable = false;
-      trainingWorkspaceState.runnerStatusError = 'Training queue status unavailable: ' + String(err && err.message ? err.message : err);
+      trainingWorkspaceState.runnerStatusError = 'Queue status unavailable: ' + String(err && err.message ? err.message : err);
       renderTrainingRunner();
       setStatus(trainingWorkspaceState.runnerStatusError);
       if (window.console && console.error) console.error('[Training runner] Status refresh failed:', err);
@@ -297,11 +297,11 @@ function recoverManagedTrainingQueue() {
       trainingWorkspaceState.runnerQueuePauseReason = '';
       trainingWorkspaceState.runnerStatusError = '';
       trainingWorkspaceState.runnerRecoveryAvailable = false;
-      setStatus('Training queue recovered. The damaged state was archived.');
+      setStatus('Queue recovered. The damaged state was archived.');
       refreshTrainingRunnerStatus();
     })
     .catch(function (err) {
-      setStatus('Could not recover training queue: ' + String(err && err.message ? err.message : err));
+      setStatus('Could not recover queue: ' + String(err && err.message ? err.message : err));
     });
 }
 
@@ -611,10 +611,10 @@ function resumeManagedTrainingQueue() {
     .then(function (payload) {
       var activeId = String(payload.activeJobId || '');
       var active = (payload.jobs || []).filter(function (job) { return String(job.id || '') === activeId; })[0];
-      setStatus(active && !active.resumeFromCheckpoint ? 'No saved checkpoint found; starting a new run.' : 'Training queue resumed.');
+      setStatus(active && isTrainingQueueJob(active) && !active.resumeFromCheckpoint ? 'No saved checkpoint found; starting a new run.' : 'Queue resumed.');
       refreshTrainingRunnerStatus();
     })
-    .catch(function (err) { setStatus('Could not resume training queue: ' + String(err.message || err)); });
+    .catch(function (err) { setStatus('Could not resume queue: ' + String(err.message || err)); });
 }
 
 
@@ -994,7 +994,7 @@ function renderTrainingRunner() {
   if (!job) {
     var noJobMessage = trainingWorkspaceState.runnerQueuePaused
       ? trainingQueueHoldLabel()
-      : queuedCount ? 'No active training job.' : 'No managed training jobs.';
+      : queuedCount ? 'No active queue job.' : 'No queued or active jobs.';
     els.runnerSummary.innerHTML = '<div>' + escapeHtml(noJobMessage) + '</div>' +
       (trainingWorkspaceState.runnerNotice
         ? '<div class="training-runner-detail is-warning">' + escapeHtml(trainingWorkspaceState.runnerNotice) + '</div>'

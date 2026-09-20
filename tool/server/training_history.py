@@ -284,6 +284,19 @@ def _migrate_legacy_job(folder_path, job):
     path = _job_record_path(job)
     if path is None or not path.parent.is_dir() or path.parent.is_symlink():
         return False
+    action_id = str((job or {}).get("actionId") or "").strip()
+    if not action_id:
+        return False
+    try:
+        action_root, action = read_action(action_id)
+    except ValueError:
+        return False
+    try:
+        recorded_action_root = path.parent.parent.parent.resolve()
+    except OSError:
+        return False
+    if action_root.resolve() != recorded_action_root or str(action.get("folder") or "") != _folder_key(folder_path):
+        return False
     if path.exists():
         return True
     _write_job_record(folder_path, job)

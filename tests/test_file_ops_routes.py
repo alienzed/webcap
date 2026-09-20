@@ -1338,7 +1338,7 @@ def test_superset_search_uses_scoped_tags_for_search_incomplete_and_mismatch(tmp
 
 
 
-def test_smart_set_legacy_scope_inference_is_conservative(monkeypatch):
+def test_smart_set_does_not_infer_group_scope_for_legacy_flat_tags(monkeypatch):
     monkeypatch.setattr(smart_set_module.app_config, "get_config_snapshot", lambda: {"requirements": {}})
     state = {
         "caption_requirements": ["Hair", "Background"],
@@ -1351,10 +1351,9 @@ def test_smart_set_legacy_scope_inference_is_conservative(monkeypatch):
         },
     }
 
-    scoped = smart_set_module._normalize_group_tags_for_media(state, "one.png")
-
-    assert scoped == {"Hair": ["black"]}
+    assert smart_set_module._normalize_group_tags_for_media(state, "one.png") == {}
     assert smart_set_module._combined_tags_for_media(state, "one.png") == ["black", "brown", "outdoors"]
+
 
 def test_superset_search_preserves_alias_for_source_resolved_outside_root(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"

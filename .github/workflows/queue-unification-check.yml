@@ -16,4 +16,12 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt pytest
       - run: cp tool/config.example.json tool/config.json
-      - run: PYTHONPATH=. pytest -q tests/test_epoch_test_bench.py tests/test_test_generations_ui_contract.py tests/test_training_stabilization.py tests/test_training_workspace_scope_ui_contract.py
+      - run: python -m py_compile tool/server/training_runner.py tool/server/epoch_test_bench.py
+      - run: node --check tool/js/training_runner_ui.js
+      - run: node --check tool/js/test_generations.js
+      - run: >
+          PYTHONPATH=. pytest -q
+          tests/test_epoch_test_bench.py
+          tests/test_test_generations_ui_contract.py
+          tests/test_training_stabilization.py
+          -k "queued_request_freezes_prompt_seed_and_selected_files or enqueue_test_delegates_to_shared_queue or test_generations_queue_contract or shared_queue_defaults_legacy_jobs_to_training or shared_queue_dispatches_test_and_training_in_order or shared_queue_test_jobs_do_not_enter_training_history or shared_queue_test_jobs_do_not_create_training_folder_badges or queued_test_positions_follow_the_unified_queue or external_gpu_reservation_blocks_training_queue_launch or external_gpu_reservation_respects_training_queue_policy"

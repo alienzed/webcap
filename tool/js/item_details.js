@@ -1364,6 +1364,8 @@ function renderItemTagsPanel() {
   updateTagClipboardUi();
   var key = state.currentItem.key;
   var tags = getTagsForMediaKey(key).slice();
+  var unscopedTags = getUnscopedTagsForMediaKey(key);
+  var assignmentEntries = getChecklistAssignmentEntriesForMediaKey(key);
   var row = getMetadataForMedia(state.currentItem.fileName);
   var suggestedTags = (typeof getSelectionPoseSuggestedTags === 'function')
     ? getSelectionPoseSuggestedTags(row, tags)
@@ -1387,17 +1389,44 @@ function renderItemTagsPanel() {
     return !selectedTagKeys[frequentKey] && !suggestedTagKeys[frequentKey];
   }).slice(0, 10);
 
-  if (tags.length) {
-    tags.sort(function (a, b) {
-      var aText = String(a || '');
-      var bText = String(b || '');
-      var aPresent = tagAppearsInCurrentCaption(aText);
-      var bPresent = tagAppearsInCurrentCaption(bText);
-      if (aPresent !== bPresent) return aPresent ? 1 : -1;
-      return aText.toLowerCase().localeCompare(bText.toLowerCase());
+  if (assignmentEntries.length || unscopedTags.length) {
+    assignmentEntries.forEach(function (entry) {
+      var rowEl = document.createElement('div');
+      rowEl.className = 'row-inline';
+
+      var tagBtn = document.createElement('button');
+      tagBtn.type = 'button';
+      tagBtn.className = 'phrase-copy-item-btn';
+      var inCaption = checklistGroupTermAppearsInCurrentCaption(entry.requirement, entry.term, key);
+      tagBtn.classList.add(inCaption ? 'item-tag-pill-present' : 'item-tag-pill-missing');
+      tagBtn.textContent = entry.term + ' · ' + entry.requirement;
+      tagBtn.title = inCaption
+        ? 'Remove ' + entry.requirement + ' / ' + entry.term + ' from caption'
+        : 'Insert ' + entry.requirement + ' / ' + entry.term + ' at cursor';
+      tagBtn.onclick = function () {
+        toggleCaptionGroupTagAtCursor(entry.requirement, entry.term);
+        renderItemTagsPanel();
+      };
+      tagBtn.oncontextmenu = function (event) {
+        event.preventDefault();
+        openChecklistTermAffixesModal(entry.requirement, entry.term);
+      };
+
+      var rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'stats-phrase-mini-btn';
+      rmBtn.textContent = 'x';
+      rmBtn.title = 'Remove assignment from ' + entry.requirement;
+      rmBtn.onclick = function () {
+        unassignChecklistTagFromMediaKey(key, entry.requirement, entry.term);
+      };
+
+      rowEl.appendChild(tagBtn);
+      rowEl.appendChild(rmBtn);
+      listEl.appendChild(rowEl);
     });
 
-    tags.forEach(function (tag) {
+    unscopedTags.forEach(function (tag) {
       var rowEl = document.createElement('div');
       rowEl.className = 'row-inline';
 
@@ -1406,10 +1435,10 @@ function renderItemTagsPanel() {
       tagBtn.className = 'phrase-copy-item-btn';
       var inCaption = tagAppearsInCurrentCaption(tag);
       tagBtn.classList.add(inCaption ? 'item-tag-pill-present' : 'item-tag-pill-missing');
-      tagBtn.textContent = tag;
-      tagBtn.title = inCaption ? 'Remove from caption' : 'Insert at cursor';
+      tagBtn.textContent = tag + ' · unscoped';
+      tagBtn.title = inCaption ? 'Remove unscoped tag from caption' : 'Insert unscoped tag at cursor';
       tagBtn.onclick = function () {
-        toggleCaptionTagAtCursor(tag);        
+        toggleCaptionTagAtCursor(tag);
         renderItemTagsPanel();
       };
 
@@ -1417,9 +1446,9 @@ function renderItemTagsPanel() {
       rmBtn.type = 'button';
       rmBtn.className = 'stats-phrase-mini-btn';
       rmBtn.textContent = 'x';
+      rmBtn.title = 'Remove unscoped tag';
       rmBtn.onclick = function () {
         removeTagFromMediaKey(key, tag);
-        renderAnnotateStrip();        
       };
 
       rowEl.appendChild(tagBtn);

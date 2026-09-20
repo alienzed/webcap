@@ -378,12 +378,16 @@ function renderChecklistGroupTermsModalResults(query) {
 function renderChecklistGroupTermsModal() {
   var titleEl = document.getElementById('checklist-group-terms-modal-title');
   var inputEl = document.getElementById('checklist-group-terms-input');
+  var separatorEl = document.getElementById('checklist-group-primer-separator');
   if (!checklistGroupTermsModalState) return;
   if (titleEl) {
     titleEl.textContent = 'Edit Terms: ' + checklistGroupTermsModalState.requirement;
   }
   if (inputEl) {
     inputEl.value = '';
+  }
+  if (separatorEl) {
+    separatorEl.value = getChecklistPrimerSeparatorForRequirement(checklistGroupTermsModalState.requirement);
   }
   renderChecklistGroupTermsModalItems();
   renderChecklistGroupTermsModalResults('');

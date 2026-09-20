@@ -1174,7 +1174,7 @@ def test_shared_queue_advances_from_completed_test_to_training(tmp_path, monkeyp
 
 
 
-def test_queued_test_candidate_lookup_is_scoped_to_folder_and_queue_state(tmp_path, monkeypatch):
+def test_test_candidate_dependency_lookup_is_scoped_to_folder_and_active_state(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     _set(tmp_path)
     training_runner._write_state({
@@ -1208,9 +1208,12 @@ def test_queued_test_candidate_lookup_is_scoped_to_folder_and_queue_state(tmp_pa
         ],
     })
 
-    matches = training_runner.queued_test_jobs_using_candidate("sets/subject", "epoch01.safetensors")
+    matches = training_runner.test_jobs_using_candidate("sets/subject", "epoch01.safetensors")
 
-    assert matches == [{"id": "match", "runName": "Portrait check"}]
+    assert matches == [
+        {"id": "match", "runName": "Portrait check"},
+        {"id": "already-running", "runName": ""},
+    ]
 
 
 def test_external_gpu_reservation_fossil_is_removed():

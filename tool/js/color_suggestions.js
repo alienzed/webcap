@@ -97,6 +97,7 @@ function applyColorSuggestionToRequirement(requirementLabel, mediaKey, termText)
   var previousKeywords = JSON.parse(JSON.stringify(checklistKeywordsByItem || {}));
   var previousTags = JSON.parse(JSON.stringify(captionItemTagsByMedia || {}));
   var previousChecked = JSON.parse(JSON.stringify(checklistCheckedByMedia || {}));
+  var previousDescriptors = JSON.parse(JSON.stringify(checklistTermDescriptorsByMedia || {}));
   var previousReviewed = new Set(state.reviewedSet || []);
   var previousPhrases = captionHelperPhrases.slice();
 
@@ -121,6 +122,7 @@ function applyColorSuggestionToRequirement(requirementLabel, mediaKey, termText)
     checklistKeywordsByItem = previousKeywords;
     captionItemTagsByMedia = previousTags;
     checklistCheckedByMedia = previousChecked;
+    checklistTermDescriptorsByMedia = previousDescriptors;
     state.reviewedSet = previousReviewed;
     captionHelperPhrases = previousPhrases;
     refreshAfterColorSuggestion(key);
@@ -132,6 +134,7 @@ function applyColorSuggestionToRequirement(requirementLabel, mediaKey, termText)
       checklistKeywordsByItem = previousKeywords;
       captionItemTagsByMedia = previousTags;
       checklistCheckedByMedia = previousChecked;
+      checklistTermDescriptorsByMedia = previousDescriptors;
       state.reviewedSet = previousReviewed;
       captionHelperPhrases = previousPhrases;
       refreshAfterColorSuggestion(key);

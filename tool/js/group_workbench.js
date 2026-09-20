@@ -691,6 +691,9 @@ function renderGroupWorkbench(options) {
     groupEl.classList.toggle('has-mixed-term', groupHasMixedTerm);
     groupEl.classList.toggle('has-mismatch-term', groupHasMismatchTerm);
     groupEl.appendChild(termListEl);
+    if (!isGridMode && hasItemTarget && isColorSuggestionRequirement(requirementLabel)) {
+      renderColorSuggestionsForGroup(groupEl, requirementLabel, mediaKey, terms);
+    }
 
     groupElements.push(groupEl);
   }

@@ -1833,11 +1833,6 @@ iframe {
   font-size: 12px;
 }
 
-.workspace-surface-training .training-runner-queue-item.active {
-  background: color-mix(in srgb, var(--panel-soft) 82%, var(--accent));
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-
 .workspace-surface-training .training-runner-card {
   display: grid;
   gap: 9px;

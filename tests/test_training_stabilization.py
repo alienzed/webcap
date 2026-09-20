@@ -927,6 +927,24 @@ def test_low_disk_pause_failure_holds_queue_without_changing_the_active_job(tmp_
     assert "runner is not ready" in state["queuePauseReason"]
 
 
+def test_future_training_does_not_pause_tests_ahead_of_it(tmp_path, monkeypatch):
+    state = {"queuePaused": False, "queuePauseReason": "", "jobs": []}
+    queued = [
+        {"id": "test-first", "kind": "test", "status": "queued", "folder": "sets/subject"},
+        {"id": "train-second", "status": "queued", "folder": "sets/subject", "outputRoot": str(tmp_path / "output")},
+    ]
+    monkeypatch.setattr(
+        training_runner,
+        "_training_disk_space",
+        lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1},
+    )
+
+    result = training_runner._apply_training_disk_protection(state, [], queued)
+
+    assert result == "safe"
+    assert state["queuePaused"] is False
+
+
 def test_low_disk_reason_precedence_and_no_auto_resume(tmp_path, monkeypatch):
     monkeypatch.setattr(training_runner, "_training_disk_space", lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1})
     queued = [{"id": "queued", "status": "queued", "outputRoot": str(tmp_path / "output")}]

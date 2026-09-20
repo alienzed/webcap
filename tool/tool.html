@@ -30,11 +30,11 @@
         <div id="app-frame" class="app-frame">
             <header id="app-header" class="app-header" aria-label="Application header">
                 <div id="app-header-context" class="app-header-context" aria-live="polite">
-                    <span id="app-header-workspace-title" class="app-header-workspace-title"></span>
-                    <span id="app-header-context-separator" class="app-header-context-separator" aria-hidden="true">&middot;</span>
-                    <button id="app-header-folder-btn" type="button" class="app-header-folder-btn" title="Go to root folder" aria-label="Go to root folder">
+                    <button id="app-header-folder-btn" type="button" class="app-header-folder-btn" title="Open current set in Prep" aria-label="Open current set in Prep">
                         <span id="app-header-folder" class="app-header-folder"></span>
                     </button>
+                    <span id="app-header-context-separator" class="app-header-context-separator" aria-hidden="true">/</span>
+                    <span id="app-header-workspace-title" class="app-header-workspace-title"></span>
                     <span id="app-header-workspace-context" class="app-header-workspace-context"></span>
                     <label class="app-header-model-control">
                         <select id="app-header-model-profile-select" aria-label="Working model"></select>
@@ -47,8 +47,10 @@
             <nav id="activity-rail" class="activity-rail" aria-label="Activities">
                 <button id="activity-prep-btn" type="button" class="activity-rail-btn active" title="Prep" aria-label="Prep" aria-pressed="true" aria-current="page" aria-controls="prep-workspace-root">
                     <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M3 10.5L12 3l9 7.5"></path>
-                        <path d="M6.5 9.5V20h11V9.5"></path>
+                        <rect x="6" y="4" width="14" height="14" rx="1.5"></rect>
+                        <path d="M4 7v13h13"></path>
+                        <circle cx="10" cy="9" r="1"></circle>
+                        <path d="m8 15 3-3 2.5 2.5 2-2L20 17"></path>
                     </svg>
                 </button>
                 <button id="activity-training-btn" type="button" class="activity-rail-btn" title="Training" aria-label="Training" aria-pressed="false" aria-controls="training-navigator">

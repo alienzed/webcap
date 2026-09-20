@@ -137,35 +137,11 @@ def _effective_requirement_catalog(folder_state: dict) -> dict[str, list[str]]:
     return out
 
 
-def _legacy_group_tags_for_media(folder_state: dict, media_name: str) -> dict[str, list[str]]:
-    if "caption_group_tags_by_media" in folder_state:
-        return {}
-    raw_tags = folder_state.get("caption_tags_by_media")
-    values = raw_tags.get(media_name) if isinstance(raw_tags, dict) else []
-    if not isinstance(values, list):
-        return {}
-    catalog = _effective_requirement_catalog(folder_state)
-    out = {}
-    for raw_tag in values:
-        term = re.sub(r"\s+", " ", str(raw_tag or "").strip())
-        if not term:
-            continue
-        term_key = term.casefold()
-        matches = []
-        for group, group_terms in catalog.items():
-            if any(str(candidate or "").strip().casefold() == term_key for candidate in group_terms):
-                matches.append(group)
-        if len(matches) != 1:
-            continue
-        out.setdefault(matches[0], []).append(term)
-    return out
-
-
 def _normalize_group_tags_for_media(folder_state: dict, media_name: str) -> dict[str, list[str]]:
     raw_map = folder_state.get("caption_group_tags_by_media")
     raw_groups = raw_map.get(media_name) if isinstance(raw_map, dict) else None
     if not isinstance(raw_groups, dict):
-        return _legacy_group_tags_for_media(folder_state, media_name)
+        return {}
     out = {}
     for raw_group, raw_terms in raw_groups.items():
         group = str(raw_group or "").strip()

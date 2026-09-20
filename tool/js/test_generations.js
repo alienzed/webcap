@@ -393,7 +393,8 @@
       rate.className = 'review-captions-btn';
       rate.dataset.sessionRate = resultFolder;
       rate.textContent = 'Rate';
-      rate.disabled = !resultFolder || !completed;
+      var unrated = Number(session.unrated || 0);
+      rate.classList.toggle('hidden', !resultFolder || unrated <= 0);
 
       var remove = document.createElement('button');
       remove.type = 'button';

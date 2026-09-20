@@ -102,6 +102,8 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "openSession(row.dataset.sessionName);" in script
     assert "open.dataset.sessionFolderOpen = resultFolder;" in script
     assert "rate.dataset.sessionRate = resultFolder;" in script
+    assert "var unrated = Number(session.unrated || 0);" in script
+    assert "rate.classList.toggle('hidden', !resultFolder || unrated <= 0);" in script
     assert "openResultsFolder(folderOpen.dataset.sessionFolderOpen);" in script
     assert "openResultsFolder(rate.dataset.sessionRate, { rateItems: true });" in script
     assert "open.dataset.sessionOpen" not in script

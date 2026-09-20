@@ -933,6 +933,15 @@ def list_sessions(folder_path):
         payload = _visible_session_status(folder_path, session)
         if not payload:
             continue
+        results = payload.get("results") if isinstance(payload.get("results"), list) else []
+        ratings = _session_rating_map(session)
+        unrated = sum(
+            1
+            for result in results
+            if isinstance(result, dict)
+            and str(result.get("outputVideo") or "").strip()
+            and str(result.get("outputVideo") or "").strip() not in ratings
+        )
         sessions.append({
             "session": session.name,
             "name": str(payload.get("name") or ""),
@@ -940,6 +949,7 @@ def list_sessions(folder_path):
             "completed": int(payload.get("completed") or 0),
             "failed": int(payload.get("failed") or 0),
             "total": int(payload.get("total") or 0),
+            "unrated": unrated,
             "resultFolder": str(payload.get("resultFolder") or ""),
         })
     return sessions

@@ -1017,47 +1017,6 @@ def test_training_modules_do_not_apply_permissions_repairs():
         assert "normalize_path_permissions" not in (root / name).read_text(encoding="utf-8")
 
 
-def test_external_gpu_reservation_blocks_training_queue_launch(monkeypatch):
-    state = {
-        "version": 3,
-        "activeJobId": "",
-        "queuePaused": False,
-        "queuePauseReason": "",
-        "jobs": [{"id": "queued", "status": "queued", "folder": "sets/subject"}],
-    }
-    monkeypatch.setattr(training_runner, "_external_gpu_owner", "test-generations")
-    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("reserved GPU must not launch training"))
-
-    training_runner._launch_next_queued_job(state)
-
-    assert state["activeJobId"] == ""
-    assert state["jobs"][0]["status"] == "queued"
-
-
-def test_external_gpu_reservation_respects_training_queue_policy(tmp_path, monkeypatch):
-    _configure_root(monkeypatch, tmp_path)
-    monkeypatch.setattr(training_runner, "_external_gpu_owner", "")
-    training_runner._write_state({
-        "version": 3,
-        "activeJobId": "",
-        "queuePaused": False,
-        "queuePauseReason": "",
-        "jobs": [{"id": "queued", "status": "queued"}],
-    })
-
-    assert training_runner.reserve_gpu_for_external_work("test-generations") is False
-
-    state = training_runner._read_state()
-    state["queuePaused"] = True
-    training_runner._write_state(state)
-    assert training_runner.reserve_gpu_for_external_work("test-generations") is True
-    assert training_runner.reserve_gpu_for_external_work("another-owner") is False
-    training_runner.release_gpu_for_external_work("test-generations")
-    assert training_runner.reserve_gpu_for_external_work("another-owner") is True
-    training_runner.release_gpu_for_external_work("another-owner")
-
-
-
 def test_shared_queue_defaults_legacy_jobs_to_training():
     assert training_runner._job_kind({}) == "training"
     assert training_runner._job_kind({"kind": "training"}) == "training"
@@ -1079,7 +1038,6 @@ def test_shared_queue_dispatches_test_and_training_in_order(tmp_path, monkeypatc
 
     monkeypatch.setattr(training_runner, "_launch_job", launch_training)
     monkeypatch.setattr(training_runner, "_launch_test_job", launch_test)
-    monkeypatch.setattr(training_runner, "_external_gpu_owner", "")
 
     state = {
         "version": 3,
@@ -1163,7 +1121,6 @@ def test_shared_queue_advances_from_completed_test_to_training(tmp_path, monkeyp
     launched = []
 
     monkeypatch.setattr(training_runner, "_startup_reconciled", True)
-    monkeypatch.setattr(training_runner, "_external_gpu_owner", "")
     monkeypatch.setattr(training_runner, "_apply_training_disk_protection", lambda *_args, **_kwargs: "safe")
 
     def refresh_test(job):
@@ -1196,3 +1153,73 @@ def test_shared_queue_advances_from_completed_test_to_training(tmp_path, monkeyp
     assert state["activeJobId"] == "train-next"
     assert state["jobs"][0]["status"] == "completed"
     assert state["jobs"][1]["status"] == "running"
+
+
+
+def test_low_disk_does_not_block_test_ahead_of_training(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    launched = []
+
+    monkeypatch.setattr(training_runner, "_startup_reconciled", True)
+    monkeypatch.setattr(
+        training_runner,
+        "_training_disk_space",
+        lambda _path: {"state": "low", "freeBytes": training_runner._LOW_DISK_THRESHOLD_BYTES - 1},
+    )
+
+    def launch_test(job, _folder):
+        launched.append(job["id"])
+        job["status"] = "running"
+        job["stage"] = "test"
+
+    monkeypatch.setattr(training_runner, "_launch_test_job", launch_test)
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda *_args, **_kwargs: pytest.fail("later Training job must not launch before the Test job"),
+    )
+
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [
+            {"id": "test-first", "kind": "test", "status": "queued", "folder": "sets/subject"},
+            {
+                "id": "train-second",
+                "status": "queued",
+                "folder": "sets/subject",
+                "outputRoot": str(tmp_path / "output"),
+            },
+        ],
+    }
+
+    training_runner._refresh_state(state)
+
+    assert launched == ["test-first"]
+    assert state["activeJobId"] == "test-first"
+    assert state["queuePaused"] is False
+    assert state["jobs"][1]["status"] == "queued"
+
+
+def test_queued_test_candidate_reference_query(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [{
+            "id": "test-one",
+            "kind": "test",
+            "status": "queued",
+            "folder": "sets/subject",
+            "testRequest": {"selectedFiles": ["epoch10.safetensors"]},
+        }],
+    })
+
+    assert training_runner.queued_test_job_references_candidate("sets/subject", "epoch10.safetensors") is True
+    assert training_runner.queued_test_job_references_candidate("sets/subject", "epoch20.safetensors") is False
+    assert training_runner.queued_test_job_references_candidate("sets/other", "epoch10.safetensors") is False

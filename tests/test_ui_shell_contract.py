@@ -26,7 +26,7 @@ def test_global_shell_controls_are_owned_by_permanent_shell():
     assert 'class="activity-rail-spacer"' in html
     assert 'id="shell-settings-btn"' in html
     assert 'id="shell-help-btn"' in html
-    assert 'id="status" class="status shell-status-toast"' in html
+    assert 'id="status" class="status shell-status-bar"' in html
     assert 'id="status-text"' in html
     assert 'id="console-panel"' in html
 
@@ -36,9 +36,10 @@ def test_shell_geometry_is_outside_the_existing_workspace_grid():
 
     assert ".app-frame {" in css
     assert 'grid-template-columns: 42px minmax(0, 1fr);' in css
-    assert 'grid-template-rows: 34px minmax(0, 1fr);' in css
+    assert 'grid-template-rows: 34px minmax(0, 1fr) var(--shell-status-height);' in css
     assert '"header header"' in css
     assert '"rail workspace"' in css
+    assert '"rail status"' in css
     assert ".app-frame > .app {" in css
 
     # Existing workspace layout still owns its internal three-column structure.
@@ -376,7 +377,10 @@ def test_console_visibility_is_class_owned_after_shell_cleanup():
     assert "style.display" not in console
     assert ".app-frame > #console-panel {" in css
     assert "height: var(--shell-console-height);" in css
-    assert ".app-frame.console-open > .shell-status-toast" in css
+    assert "bottom: calc(var(--shell-status-height) + 8px);" in css
+    assert ".shell-status-bar {" in css
+    assert "grid-area: status;" in css
+    assert ".app-frame.console-open > .shell-status-toast" not in css
     assert "display: flex;" in css
 
 
@@ -439,7 +443,7 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
     assert 'class="app-header-brand"' not in html
-    assert 'id="status" class="status shell-status-toast"' in html
+    assert 'id="status" class="status shell-status-bar"' in html
     assert 'id="console-toggle-btn"' in html
     assert html.index('id="console-toggle-btn"') > html.index('id="activity-rail"')
     assert 'id="shell-gpu-status"' in html
@@ -451,7 +455,7 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "function syncTrainingEntryChrome()" in training
     assert "function syncShellTrainingGpuStatus()" in runner
     assert "if (trainingWorkspaceState.runnerStatusPending) return;" in runner
-    assert ".shell-status-toast {" in css
+    assert ".shell-status-bar {" in css
     assert ".shell-gpu-status {" in css
 
 

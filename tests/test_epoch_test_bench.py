@@ -825,6 +825,31 @@ def test_prepare_then_start_from_session_folder_reuses_same_staged_loras(tmp_pat
 
 
 
+def test_recent_test_sets_exposes_set_level_summary_only(tmp_path, monkeypatch):
+    set_folder = tmp_path / "HH4013"
+    session = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1300-h3"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "completed": 7,
+        "failed": 1,
+        "total": 8,
+    })
+
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
+
+    recent = bench.recent_test_sets()
+
+    assert len(recent) == 1
+    assert recent[0]["folder"] == "HH4013"
+    assert recent[0]["sessionCount"] == 1
+    assert "status" not in recent[0]
+    assert "completed" not in recent[0]
+    assert "failed" not in recent[0]
+    assert "total" not in recent[0]
+
+
 def test_activity_snapshot_exposes_current_set_and_active_run(tmp_path, monkeypatch):
     set_folder = tmp_path / "HH4013"
     staged = tmp_path / "staged"

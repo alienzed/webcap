@@ -90,6 +90,28 @@ def test_test_generations_uses_explicit_workspace_root():
     assert "grid-area: workspace;" in shell_css
 
 
+def test_recent_test_sets_are_workspace_history_not_current_set_details():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    rail_start = html.index('<aside class="test-generations-rail">')
+    rail_end = html.index('</aside>', rail_start)
+    drawer = html.index('id="test-generations-recent-drawer"')
+    recent_list = html.index('id="test-generations-recent-sets-list"')
+    render_block = script.split("function renderRecentTestSets(items)", 1)[1].split("function syncActivityButton(payload)", 1)[0]
+
+    assert rail_start < rail_end < drawer < recent_list
+    assert '<details id="test-generations-recent-drawer"' in html
+    assert "sessionCount" in render_block
+    assert "item.completed" not in render_block
+    assert "item.total" not in render_block
+    assert "item.failed" not in render_block
+    assert "item.status" not in render_block
+    assert ".test-generations-recent-drawer" in css
+    assert "grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));" in css
+
+
 def test_test_generation_sessions_and_candidate_removal_contract():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

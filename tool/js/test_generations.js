@@ -115,11 +115,8 @@
       var title = document.createElement('strong');
       title.textContent = recentSetLabel(folder);
       var meta = document.createElement('span');
-      var completed = Number(item.completed || 0);
-      var total = Number(item.total || 0);
-      var failed = Number(item.failed || 0);
-      meta.textContent = Number(item.sessionCount || 0) + ' session' + (Number(item.sessionCount || 0) === 1 ? '' : 's') +
-        ' · ' + String(item.status || '') + ' · ' + completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '');
+      var sessionCount = Number(item.sessionCount || 0);
+      meta.textContent = sessionCount + ' session' + (sessionCount === 1 ? '' : 's');
       copy.appendChild(title);
       copy.appendChild(meta);
 

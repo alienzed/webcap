@@ -3016,19 +3016,56 @@ iframe {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.test-generations-recent-sets {
-  margin-top: 2px;
-  padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+.test-generations-recent-drawer {
+  flex: 0 0 auto;
+  min-width: 0;
+  border-top: 1px solid var(--border);
+  background: var(--panel-soft);
 }
-.test-generations-recent-sets > .test-generations-library-heading {
+.test-generations-recent-drawer-summary {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  cursor: pointer;
+  list-style: none;
   color: var(--muted);
   font-size: 11px;
+  user-select: none;
+}
+.test-generations-recent-drawer-summary::-webkit-details-marker { display: none; }
+.test-generations-recent-drawer-summary::before {
+  content: '▴';
+  width: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+.test-generations-recent-drawer[open] > .test-generations-recent-drawer-summary::before {
+  content: '▾';
+}
+.test-generations-recent-drawer-summary strong {
+  color: var(--text);
+  font-size: 11px;
+}
+.test-generations-recent-drawer-summary > span {
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  text-align: center;
+  font-size: 10px;
 }
 .test-generations-recent-sets-list {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 4px 8px;
+  max-height: 150px;
+  min-width: 0;
+  padding: 6px 8px 8px;
+  overflow: auto;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 .test-generations-recent-set-row {
   display: grid;
@@ -3036,12 +3073,13 @@ iframe {
   align-items: center;
   gap: 7px;
   min-width: 0;
-  padding: 5px 2px;
-  border: 0;
+  padding: 5px 6px;
+  border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
 }
 .test-generations-recent-set-row:hover {
+  border-color: var(--border);
   background: var(--hover);
 }
 .test-generations-recent-set-copy {

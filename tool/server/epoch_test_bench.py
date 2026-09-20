@@ -346,10 +346,6 @@ def recent_test_sets(limit=8):
             "folder": _relative_set_folder(set_folder),
             "sessionCount": len(sessions),
             "latestSession": latest_name,
-            "status": str(latest.get("status") or ""),
-            "completed": int(latest.get("completed") or 0),
-            "failed": int(latest.get("failed") or 0),
-            "total": int(latest.get("total") or 0),
             "modified": modified,
         })
 

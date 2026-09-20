@@ -236,7 +236,6 @@ function showFocusedAnnotationSurface() {
   if (els.itemNav) els.itemNav.classList.remove('hidden');
   focusedAnnotationState.open = true;
   setWorkspaceSurface('focus', { sidebarHidden: true });
-  setWorkspaceWorkflowMode('annotate');
   renderPreviewHeaderMeta();
   return true;
 }

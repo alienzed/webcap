@@ -970,8 +970,7 @@ def test_enqueue_test_queues_behind_active_test(tmp_path, monkeypatch):
     })
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(bench, "_advance_test_queue", lambda: True)
-    monkeypatch.setattr(bench, "status", lambda _folder: {"status": "running"})
+    monkeypatch.setattr(bench, "_advance_test_queue", lambda: None)
     monkeypatch.setattr(bench, "_active_threads", {"sets/subject": type("Live", (), {"is_alive": lambda self: True})()})
     monkeypatch.setattr(bench, "_pending_tests", [])
 
@@ -998,7 +997,7 @@ def test_first_test_does_not_wait_for_training_queue(tmp_path, monkeypatch):
     })
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(bench, "_advance_test_queue", lambda: False)
+    monkeypatch.setattr(bench, "_advance_test_queue", lambda: None)
     monkeypatch.setattr(bench, "_active_threads", {})
     monkeypatch.setattr(bench, "_pending_tests", [])
 
@@ -1030,15 +1029,46 @@ def test_first_test_start_failure_reports_real_error(tmp_path, monkeypatch):
 
     def fail_start():
         bench._pending_tests.clear()
-        return False
+        return {"status": "failed", "error": "ComfyUI offline"}
 
     monkeypatch.setattr(bench, "_advance_test_queue", fail_start)
-    monkeypatch.setattr(bench, "status", lambda _folder: {"status": "failed", "error": "ComfyUI offline"})
 
     with pytest.raises(RuntimeError, match="ComfyUI offline"):
         bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
 
     assert bench._pending_tests == []
+
+
+def test_first_test_returns_direct_start_payload_without_latest_status_lookup(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch01.safetensors"
+    candidate.write_bytes(b"weights")
+
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
+    monkeypatch.setattr(bench, "_load_template", lambda: {})
+    monkeypatch.setattr(bench, "_normalized_test_settings", lambda *_args, **_kwargs: {
+        "seed": 77,
+        "aspectRatio": "1:1 (Square)",
+        "megapixels": 0.2,
+        "duration": 5,
+    })
+    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
+    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
+    monkeypatch.setattr(bench, "_active_threads", {})
+    monkeypatch.setattr(bench, "_pending_tests", [])
+    monkeypatch.setattr(bench, "_advance_test_queue", lambda: {
+        "status": "running",
+        "session": "2026-09-20_0100-h3",
+        "resultFolder": "sets/subject/test-generations/2026-09-20_0100-h3",
+    })
+    monkeypatch.setattr(bench, "status", lambda _folder: (_ for _ in ()).throw(AssertionError("enqueue should not call status()")))
+
+    payload = bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
+
+    assert payload["queued"] is False
+    assert payload["latest"]["session"] == "2026-09-20_0100-h3"
 
 
 def test_clear_queued_tests_keeps_other_sets(tmp_path, monkeypatch):

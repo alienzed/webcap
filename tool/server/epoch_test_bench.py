@@ -1274,12 +1274,13 @@ def _queued_test_references_candidate(folder, file_name):
 
 def _advance_test_queue():
     global _test_gpu_reserved
+    last_payload = None
     while True:
         release_gpu = False
         with _lock:
             _prune_dead_test_workers_locked()
             if any(thread and thread.is_alive() for thread in _active_threads.values()):
-                return True
+                return None
             if not _pending_tests:
                 if _test_gpu_reserved:
                     _test_gpu_reserved = False
@@ -1288,23 +1289,21 @@ def _advance_test_queue():
             else:
                 if not _test_gpu_reserved:
                     if not _reserve_gpu_for_test_generations():
-                        return False
+                        return None
                     _test_gpu_reserved = True
                 job = _pending_tests.pop(0)
         if job is None:
             if release_gpu:
                 _release_gpu_for_test_generations()
-            return False
+            return last_payload
         try:
             folder_path = app_config.safe_join_fs_root(str(job.get("folder") or ""))
             payload = start_queued(folder_path, job.get("request") or {})
-        except Exception:
-            payload = {"status": "failed"}
+        except Exception as exc:
+            payload = {"status": "failed", "error": str(exc)}
+        last_payload = payload
         if str((payload or {}).get("status") or "") in ("starting", "running"):
-            return True
-
-
-
+            return payload
 
 def cancel_queued(folder_path, job_id):
     folder = _relative_set_folder(folder_path)
@@ -1353,23 +1352,27 @@ def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=No
         _prune_dead_test_workers_locked()
         had_active_test = any(thread and thread.is_alive() for thread in _active_threads.values())
         _pending_tests.append(job)
-    started = _advance_test_queue()
+
+    advance_payload = _advance_test_queue()
+
     with _lock:
         still_queued = any(str(item.get("id") or "") == job["id"] for item in _pending_tests)
-    if not started and not had_active_test:
+
+    if not had_active_test:
         if still_queued:
             with _lock:
                 _pending_tests[:] = [item for item in _pending_tests if str(item.get("id") or "") != job["id"]]
             raise RuntimeError("Pause Training before starting Test Generations.")
-        latest = status(folder_path)
-        if str((latest or {}).get("status") or "") == "failed":
-            raise RuntimeError(str((latest or {}).get("error") or "Test Generations could not start."))
-        raise RuntimeError("Test Generations did not start.")
+        if isinstance(advance_payload, dict) and str(advance_payload.get("status") or "") == "failed":
+            raise RuntimeError(str(advance_payload.get("error") or "Test Generations could not start."))
+        if not isinstance(advance_payload, dict) or str(advance_payload.get("status") or "") not in ("starting", "running"):
+            raise RuntimeError("Test Generations did not start.")
+
     return {
         "operation": "test_enqueue",
         "job": _queue_job_payload(job),
         "queued": still_queued,
-        "latest": status(folder_path),
+        "latest": None if still_queued else advance_payload,
     }
 
 def queued_jobs(folder_path):

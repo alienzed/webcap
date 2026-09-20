@@ -106,7 +106,6 @@ ui = {
   statusEl: document.getElementById('status-text'),
   upBtn: document.getElementById('up-one-directory-btn'),
   refreshBtn: document.getElementById('refresh-btn'),
-  shellFolderBtn: document.getElementById('app-header-folder-btn'),
   shellSettingsBtn: document.getElementById('shell-settings-btn'),
   shellHelpBtn: document.getElementById('shell-help-btn'),
   themeToggleBtn: document.getElementById('app-settings-theme-btn'),

@@ -2515,7 +2515,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column {
   overflow: visible;
 }
 
-.app.shell-revamp #caption-checklist-panel.group-tools-card.checklist-panel:not(.hidden) {
+.app.shell-revamp #caption-checklist-panel.group-tools-card.checklist-panel {
   display: flex !important;
   flex: 0 0 auto;
   flex-direction: column;

@@ -1299,6 +1299,9 @@ def queued_jobs(folder_path):
 
 def start_queued(folder_path, request):
     request = dict(request or {})
+    set_folder = _owning_set_directory(folder_path)
+    if not set_folder.is_dir():
+        raise FileNotFoundError("Queued Test set folder is unavailable: " + str(set_folder))
     prompt = str(request.get("resolvedPrompt") or "").strip()
     source_prompt = str(request.get("sourcePrompt") or prompt).strip()
     if not prompt:

@@ -1019,7 +1019,7 @@ def test_remove_candidate_refuses_when_queued_test_references_it(tmp_path, monke
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
     monkeypatch.setattr(
         training_runner,
-        "queued_test_jobs_using_candidate",
+        "test_jobs_using_candidate",
         lambda folder, name: [{"id": "job-1", "runName": "Portrait check"}],
     )
 

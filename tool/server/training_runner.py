@@ -2125,6 +2125,20 @@ def queued_test_jobs_for_folder(folder):
         return result
 
 
+def queued_test_job_references_candidate(folder, file_name):
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    name = str(file_name or "").strip()
+    with _lock:
+        state = _read_state_readonly()
+        return any(
+            job.get("status") == "queued"
+            and _job_kind(job) == "test"
+            and str(job.get("folder") or "") == folder_text
+            and name in (job.get("testRequest") or {}).get("selectedFiles", [])
+            for job in state.get("jobs", [])
+        )
+
+
 def start_response(
     folder,
     queue=False,

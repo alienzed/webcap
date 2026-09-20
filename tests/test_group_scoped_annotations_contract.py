@@ -122,3 +122,77 @@ def test_config_sanitizer_preserves_group_scoped_wrappers():
         "Hair": {"brown": {"prefix": "dark", "suffix": "hair"}},
         "Background": {"brown": {"prefix": "warm", "suffix": ""}},
     }
+
+
+def test_scoped_caption_match_requires_scoped_rendered_evidence():
+    checklist = _read("tool/js/checklist_state.js")
+
+    helper = checklist.split("function checklistGroupTermAppearsInCaptionText", 1)[1].split(
+        "function checklistGroupTermAppearsInCurrentCaption", 1
+    )[0]
+    assert "renderChecklistGroupTermWithAffixes(requirementLabel, term, key)" in helper
+    assert "if (rendered && rendered.toLowerCase() !== term.toLowerCase())" in helper
+    rendered_branch = helper.split("if (rendered && rendered.toLowerCase() !== term.toLowerCase())", 1)[1]
+    assert "return captionContainsPhrase(text, rendered);" in rendered_branch
+    assert "return captionContainsTagWithAllowances(text, term);" in rendered_branch
+
+    requirement = checklist.split("function requirementKeywordsMatch", 1)[1].split(
+        "function getChecklistSelectedTagsForRequirementForMediaKey", 1
+    )[0]
+    assert "checklistGroupTermAppearsInCaptionText(requirement, assignedTerms[i], mediaKey, captionText)" in requirement
+    assert "captionContainsPhrase(captionValue, term)" not in requirement
+
+
+def test_group_workbench_passes_media_key_to_scoped_caption_matching():
+    workbench = _read("tool/js/group_workbench.js")
+
+    assert "requirementKeywordsMatch(requirementLabel, captionText, mediaKey)" in workbench
+
+
+def test_full_item_copy_paste_preserves_unscoped_and_scoped_identity():
+    details = _read("tool/js/item_details.js")
+
+    paste = details.split("function pasteClipboardTagsToMediaKey", 1)[1].split(
+        "function pasteClipboardTagsToCurrentItem", 1
+    )[0]
+    assert "mergeTagsIntoMediaKey(key, clipboard.unscoped || [])" in paste
+    assert "consumeUnscoped: false" in paste
+    assert "consumeUnscoped: true" not in paste
+
+
+def test_focused_quick_picks_do_not_hide_terms_selected_in_other_groups():
+    focus = _read("tool/js/focused_annotation.js")
+
+    quick_picks = focus.split("function buildFocusedAnnotationQuickPickEntries", 1)[1].split(
+        "function buildFocusedAnnotationSetUsageEntries", 1
+    )[0]
+    assert "getChecklistAssignedTagsForMediaKey(mediaKey, requirementLabel)" in quick_picks
+    assert "getSelectionPoseSuggestedTags(metadataRow, currentGroupTags)" in quick_picks
+    assert "currentGroupTags.forEach(function (tag)" in quick_picks
+
+
+def test_orphaned_global_wrapper_editor_keeps_global_ownership():
+    modal = _read("tool/js/checklist_modals.js")
+
+    assert "wrapperStoredGlobally" in modal
+    assert "var isGlobal = !!checklistTermAffixesModalState.wrapperStoredGlobally;" in modal
+    assert "if (isGlobal) return false;" in modal
+    assert "var shouldSaveGlobalWrapper = isGlobal && (" in modal
+
+
+def test_legacy_flat_tags_only_migrate_when_group_scope_is_unambiguous():
+    checklist = _read("tool/js/checklist_state.js")
+    details = _read("tool/js/item_details.js")
+
+    migrate = checklist.split("function migrateLegacyChecklistAssignments", 1)[1].split(
+        "function loadChecklistFromFolderState", 1
+    )[0]
+    assert "Object.prototype.hasOwnProperty.call(folderState, 'caption_group_tags_by_media')" in migrate
+    assert "if (requirements.length !== 1) return;" in migrate
+    assert "checklistLegacyScopedTermsByMedia" in migrate
+    assert "migrateLegacyChecklistAssignments(folderState);" in checklist
+
+    load_tags = details.split("function loadItemTagsFromFolderState", 1)[1].split(
+        "function renderItemTagsPanel", 1
+    )[0]
+    assert "checklistLegacyScopedTermsByMedia[mediaKey][low]" in load_tags

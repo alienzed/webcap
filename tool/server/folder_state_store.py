@@ -20,6 +20,7 @@ def reject_wholesale_state_map_clear(previous_state, next_state):
     protected_maps = (
         "ratings_by_media",
         "caption_tags_by_media",
+        "caption_group_tags_by_media",
         "flags",
     )
     for field in protected_maps:

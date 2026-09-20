@@ -6,6 +6,7 @@ var checklistCheckedByMedia = {}; // { mediaKey: { item: true/false, ... } }
 var debouncedChecklistSave = debounceCreate(400); // Debounce saves for checkbox changes
 var checklistKeywordsByItem = {}; // { requirement: "keyword1, keyword2, ..." }
 var checklistSessionHiddenTermsByRequirement = {}; // { requirement: { termLower: true } } session-only
+var checklistLegacyScopedTermsByMedia = {}; // Session-only v1 interpretation: { mediaKey: { termLower: requirement } }
 var checklistAssignmentsByMedia = {}; // { mediaKey: { requirement: ["term", ...] } }
 var checklistTermWrappersByKey = {}; // Legacy unscoped wrapper map.
 var checklistTermDescriptorDefaultsByKey = {}; // Legacy unscoped descriptor defaults.
@@ -395,10 +396,20 @@ function renderChecklistGroupTermWithAffixes(requirementLabel, termText, mediaKe
   );
 }
 
-function checklistGroupTermAppearsInCurrentCaption(requirementLabel, termText, mediaKey) {
+function checklistGroupTermAppearsInCaptionText(requirementLabel, termText, mediaKey, captionText) {
   var key = resolveChecklistTermMediaKey(mediaKey);
   var term = normalizeChecklistTerm(termText);
   if (!term) return false;
+  var rendered = renderChecklistGroupTermWithAffixes(requirementLabel, term, key);
+  var text = String(captionText || '');
+  if (rendered && rendered.toLowerCase() !== term.toLowerCase()) {
+    return captionContainsPhrase(text, rendered);
+  }
+  return captionContainsTagWithAllowances(text, term);
+}
+
+function checklistGroupTermAppearsInCurrentCaption(requirementLabel, termText, mediaKey) {
+  var key = resolveChecklistTermMediaKey(mediaKey);
   var captionText = '';
   if (state && state.currentItem && state.currentItem.key === key && ui && ui.editorEl) {
     captionText = String(ui.editorEl.value || '');
@@ -410,11 +421,7 @@ function checklistGroupTermAppearsInCurrentCaption(requirementLabel, termText, m
       }
     }
   }
-  var rendered = renderChecklistGroupTermWithAffixes(requirementLabel, term, key);
-  if (rendered && rendered.toLowerCase() !== term.toLowerCase()) {
-    return captionContainsPhrase(captionText, rendered);
-  }
-  return captionContainsTagWithAllowances(captionText, term);
+  return checklistGroupTermAppearsInCaptionText(requirementLabel, termText, key, captionText);
 }
 
 function setChecklistGroupTermAffixEntry(store, requirementLabel, termText, prefix, suffix, options) {
@@ -821,13 +828,11 @@ function restoreDeletedChecklistGroup(operation) {
 function requirementKeywordsMatch(requirementLabel, captionText, mediaKey) {
   var requirement = normalizeChecklistRequirementKey(requirementLabel);
   if (!requirement) return false;
-  var captionValue = String(captionText || '');
   var assignedTerms = getChecklistAssignedTagsForMediaKey(mediaKey, requirement);
   for (var i = 0; i < assignedTerms.length; i++) {
-    var term = assignedTerms[i];
-    var rendered = renderChecklistGroupTermWithAffixes(requirement, term, mediaKey);
-    if (rendered && captionContainsPhrase(captionValue, rendered)) return true;
-    if (captionContainsPhrase(captionValue, term)) return true;
+    if (checklistGroupTermAppearsInCaptionText(requirement, assignedTerms[i], mediaKey, captionText)) {
+      return true;
+    }
   }
   return false;
 }
@@ -911,9 +916,73 @@ function saveChecklistToFolderState() {
   writeFolderStateFile(state.folder, snapshot);
 }
 
+function migrateLegacyChecklistAssignments(folderState) {
+  checklistLegacyScopedTermsByMedia = {};
+  if (!folderState || Object.prototype.hasOwnProperty.call(folderState, 'caption_group_tags_by_media')) {
+    return false;
+  }
+  var rawTagsByMedia = (folderState.caption_tags_by_media && typeof folderState.caption_tags_by_media === 'object')
+    ? folderState.caption_tags_by_media
+    : {};
+  var legacyDescriptors = sanitizeChecklistTermDescriptorsByMedia(folderState.caption_term_descriptors_by_media);
+  var changed = false;
+
+  Object.keys(rawTagsByMedia).forEach(function (rawMediaKey) {
+    var mediaKey = String(rawMediaKey || '').trim();
+    if (!mediaKey) return;
+    var terms = Array.isArray(rawTagsByMedia[rawMediaKey]) ? rawTagsByMedia[rawMediaKey] : [];
+    terms.forEach(function (rawTerm) {
+      var term = normalizeChecklistTerm(rawTerm);
+      if (!term) return;
+      var requirements = getChecklistRequirementsForTag(term);
+      if (requirements.length !== 1) return;
+
+      var requirement = requirements[0];
+      var mediaMap = JSON.parse(JSON.stringify(getChecklistAssignmentsForMediaKey(mediaKey)));
+      var assigned = normalizeChecklistAssignedTerms(mediaMap[requirement]);
+      var termKey = term.toLowerCase();
+      if (!assigned.some(function (value) { return normalizeChecklistTerm(value).toLowerCase() === termKey; })) {
+        assigned.push(term);
+        mediaMap[requirement] = assigned;
+        checklistAssignmentsByMedia[mediaKey] = mediaMap;
+        changed = true;
+      }
+
+      if (!checklistLegacyScopedTermsByMedia[mediaKey]) checklistLegacyScopedTermsByMedia[mediaKey] = {};
+      checklistLegacyScopedTermsByMedia[mediaKey][termKey] = requirement;
+
+      var existingGroupWrapper = getChecklistGroupTermWrapper(requirement, term);
+      var legacyWrapper = getChecklistTermWrapper(term);
+      if (!existingGroupWrapper.prefix && !existingGroupWrapper.suffix && (legacyWrapper.prefix || legacyWrapper.suffix)) {
+        setChecklistGroupTermWrapper(requirement, term, legacyWrapper.prefix, legacyWrapper.suffix);
+      }
+
+      var existingGroupDefault = getChecklistGroupTermDescriptorDefault(requirement, term);
+      var legacyDefault = getChecklistTermDescriptorDefault(term);
+      if (!existingGroupDefault.prefix && !existingGroupDefault.suffix && (legacyDefault.prefix || legacyDefault.suffix)) {
+        setChecklistGroupTermDescriptorDefault(requirement, term, legacyDefault.prefix, legacyDefault.suffix);
+      }
+
+      var legacyMediaMap = legacyDescriptors[mediaKey];
+      var legacyMediaDescriptor = legacyMediaMap && legacyMediaMap[termKey];
+      if (legacyMediaDescriptor && !getChecklistGroupTermDescriptorForMediaKey(mediaKey, requirement, term)) {
+        setChecklistGroupTermDescriptorForMediaKey(
+          mediaKey,
+          requirement,
+          term,
+          legacyMediaDescriptor.prefix,
+          legacyMediaDescriptor.suffix
+        );
+      }
+    });
+  });
+  return changed;
+}
+
 function loadChecklistFromFolderState(folderState) {
   checklistExpandedRequirements = {};
   checklistSessionHiddenTermsByRequirement = {};
+  checklistLegacyScopedTermsByMedia = {};
   if (folderState.caption_requirements && Object.prototype.toString.call(folderState.caption_requirements) === '[object Array]') {
     checklistItems = folderState.caption_requirements.slice();
   } else {
@@ -938,6 +1007,7 @@ function loadChecklistFromFolderState(folderState) {
   checklistTermDescriptorDefaultsByGroup = sanitizeChecklistGroupTermAffixesMap(folderState.caption_group_term_descriptor_defaults, false);
   checklistTermDescriptorsByMedia = sanitizeChecklistGroupTermDescriptorsByMedia(folderState.caption_group_term_descriptors_by_media);
   syncChecklistLegacyAffixesMirror();
+  migrateLegacyChecklistAssignments(folderState);
 
   syncReviewedFromChecklistAll();
   renderChecklistPanel();

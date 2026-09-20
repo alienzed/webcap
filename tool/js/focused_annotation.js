@@ -484,7 +484,7 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
   var terms = getFocusedAnnotationTermsForRequirement(requirementLabel);
   var termLookup = {};
   var entriesByKey = {};
-  var currentTags = getTagsForMediaKey(mediaKey);
+  var currentGroupTags = getChecklistAssignedTagsForMediaKey(mediaKey, requirementLabel);
   terms.forEach(function (term) {
     var normalized = normalizeChecklistTerm(term).toLowerCase();
     if (!normalized || termLookup[normalized]) return;
@@ -522,7 +522,7 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
 
   var mediaItem = findFocusedAnnotationMediaItemByKey(mediaKey);
   var metadataRow = mediaItem ? (mediaItem.metadata || getMetadataForMedia(mediaItem.fileName)) : null;
-  var selectionPoseSuggestions = getSelectionPoseSuggestedTags(metadataRow, currentTags);
+  var selectionPoseSuggestions = getSelectionPoseSuggestedTags(metadataRow, currentGroupTags);
   selectionPoseSuggestions.forEach(function (suggestedTag) {
     var resolvedTerm = resolveFocusedAnnotationSuggestedTerm(suggestedTag, terms);
     if (!resolvedTerm) return;
@@ -537,7 +537,7 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
     }).slice(0, 6) : [];
     if (qaCurrentTags.length >= 2 && neighbors.length >= 2) {
       var currentLookup = {};
-      qaCurrentTags.forEach(function (tag) {
+      currentGroupTags.forEach(function (tag) {
         currentLookup[String(tag || '').toLowerCase()] = true;
       });
       var counts = {};

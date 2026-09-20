@@ -38,9 +38,9 @@ function updateChecklistTermAffixesWrapperUi() {
   var wrapperPrefixEl = document.getElementById('checklist-term-wrapper-prefix');
   var wrapperSuffixEl = document.getElementById('checklist-term-wrapper-suffix');
   if (!checklistTermAffixesModalState) return;
-  var isPinned = !!checklistTermAffixesModalState.isPinnedGlobally;
-  var tooltip = isPinned
-    ? 'Saved here and synced to global config for this pinned term.'
+  var isGlobal = !!checklistTermAffixesModalState.wrapperStoredGlobally;
+  var tooltip = isGlobal
+    ? 'Saved in global config for this group term.'
     : 'Saved in this folder. Pin the term globally to make wrapper text reusable across fresh sets.';
   if (wrapperPrefixEl) {
     wrapperPrefixEl.disabled = false;
@@ -70,13 +70,13 @@ function saveChecklistTermAffixesModal() {
   var term = checklistTermAffixesModalState.term;
   var mediaKey = checklistTermAffixesModalState.mediaKey;
   var hasTag = !!checklistTermAffixesModalState.hasTagOnCurrentItem;
-  var isPinned = !!checklistTermAffixesModalState.isPinnedGlobally;
+  var isGlobal = !!checklistTermAffixesModalState.wrapperStoredGlobally;
   var wrapperPrefix = wrapperPrefixEl ? wrapperPrefixEl.value : '';
   var wrapperSuffix = wrapperSuffixEl ? wrapperSuffixEl.value : '';
   var descriptorPrefix = descriptorPrefixEl ? descriptorPrefixEl.value : '';
   var descriptorSuffix = descriptorSuffixEl ? descriptorSuffixEl.value : '';
   function applyLocalWrapperChanges() {
-    if (isPinned) return false;
+    if (isGlobal) return false;
     return setChecklistGroupTermWrapper(requirement, term, wrapperPrefix, wrapperSuffix);
   }
   function applyLocalDescriptorChanges() {
@@ -113,7 +113,7 @@ function saveChecklistTermAffixesModal() {
   }
   var previousGlobalPrefix = getChecklistGlobalGroupWrapperPrefix(requirement, term);
   var previousGlobalSuffix = getChecklistGlobalGroupWrapperSuffix(requirement, term);
-  var shouldSaveGlobalWrapper = isPinned && (
+  var shouldSaveGlobalWrapper = isGlobal && (
     normalizeChecklistAffixValue(previousGlobalPrefix) !== normalizeChecklistAffixValue(wrapperPrefix) ||
     normalizeChecklistAffixValue(previousGlobalSuffix) !== normalizeChecklistAffixValue(wrapperSuffix)
   );
@@ -150,12 +150,15 @@ function openChecklistTermAffixesModal(requirementLabel, termText) {
   var mediaKey = resolveChecklistTermMediaKey();
   var hasTag = hasChecklistAssignedTagForMediaKey(mediaKey, requirement, term);
   var isPinned = isChecklistGroupTermPinnedGlobally(requirement, term);
+  var globalWrapper = getChecklistGlobalGroupWrapper(requirement, term);
+  var wrapperStoredGlobally = !!(isPinned || globalWrapper.prefix || globalWrapper.suffix);
   checklistTermAffixesModalState = {
     requirement: requirement,
     term: term,
     mediaKey: mediaKey,
     hasTagOnCurrentItem: hasTag,
-    isPinnedGlobally: isPinned
+    isPinnedGlobally: isPinned,
+    wrapperStoredGlobally: wrapperStoredGlobally
   };
   var titleEl = document.getElementById('checklist-term-affixes-modal-title');
   var wrapperPrefixEl = document.getElementById('checklist-term-wrapper-prefix');
@@ -168,7 +171,6 @@ function openChecklistTermAffixesModal(requirementLabel, termText) {
   var descriptor = hasTag
     ? getChecklistEffectiveGroupTermDescriptor(requirement, term, mediaKey)
     : getChecklistGroupTermDescriptorDefault(requirement, term);
-  var globalWrapper = getChecklistGlobalGroupWrapper(requirement, term);
   if (titleEl) titleEl.textContent = 'Edit Term Styling: ' + requirement + ' / ' + term;
   if (wrapperPrefixEl) wrapperPrefixEl.value = globalWrapper.prefix || wrapper.prefix;
   if (wrapperSuffixEl) wrapperSuffixEl.value = globalWrapper.suffix || wrapper.suffix;

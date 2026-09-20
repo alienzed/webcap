@@ -476,7 +476,7 @@ function renderGroupWorkbench(options) {
       ? (hasGridTargets && batchState.allReviewed)
       : (hasItemTarget && isChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel));
     var isReviewedMixed = isGridMode && hasGridTargets && batchState.someReviewed && !batchState.allReviewed;
-    var isCaptionMatched = !isGridMode && hasItemTarget && requirementKeywordsMatch(requirementLabel, captionText);
+    var isCaptionMatched = !isGridMode && hasItemTarget && requirementKeywordsMatch(requirementLabel, captionText, mediaKey);
     var terms = getChecklistKeywordTermsForRequirement(requirementLabel)
       .map(normalizeChecklistTerm)
       .filter(function (term, idx, arr) {

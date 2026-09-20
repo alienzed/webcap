@@ -15,8 +15,7 @@ function getTrainingRunnerSelectedJob() {
 }
 
 function getTrainingRunnerConsoleTargetJob() {
-  var job = getTrainingRunnerActiveJob();
-  return job || null;
+  return getTrainingRunnerActiveJob();
 }
 
 function getTrainingRunnerActiveJob() {
@@ -208,16 +207,14 @@ function refreshTrainingRunnerStatus() {
       if (!payload.ok) {
         var stateError = !!payload.stateError;
         trainingWorkspaceState.runnerRecoveryAvailable = stateError && !!payload.recoveryAvailable;
-        trainingWorkspaceState.runnerStatusError = 'Queue status unavailable: ' + String(payload.error || 'Unknown queue error.');
+        trainingWorkspaceState.runnerStatusError = 'Training queue status unavailable: ' + String(payload.error || 'Unknown queue error.');
         renderTrainingRunner();
         return;
       }
       trainingWorkspaceState.runnerStatusError = '';
       trainingWorkspaceState.runnerRecoveryAvailable = false;
       var priorJobsById = {};
-      (trainingWorkspaceState.runnerJobs || []).forEach(function (job) {
-        priorJobsById[job.id] = job.status;
-      });
+      (trainingWorkspaceState.runnerJobs || []).forEach(function (job) { priorJobsById[job.id] = job.status; });
       trainingWorkspaceState.runnerJobs = Array.isArray(payload.jobs) ? payload.jobs : [];
       trainingWorkspaceState.runnerActiveJobId = String(payload.activeJobId || '');
       trainingWorkspaceState.runnerQueuePaused = !!payload.queuePaused;
@@ -270,7 +267,7 @@ function refreshTrainingRunnerStatus() {
     })
     .catch(function (err) {
       trainingWorkspaceState.runnerRecoveryAvailable = false;
-      trainingWorkspaceState.runnerStatusError = 'Queue status unavailable: ' + String(err && err.message ? err.message : err);
+      trainingWorkspaceState.runnerStatusError = 'Training queue status unavailable: ' + String(err && err.message ? err.message : err);
       renderTrainingRunner();
       setStatus(trainingWorkspaceState.runnerStatusError);
       if (window.console && console.error) console.error('[Training runner] Status refresh failed:', err);
@@ -593,12 +590,11 @@ function resumeManagedTrainingQueue() {
     .then(function (payload) {
       var activeId = String(payload.activeJobId || '');
       var active = (payload.jobs || []).filter(function (job) { return String(job.id || '') === activeId; })[0];
-      setStatus(active && !active.resumeFromCheckpoint ? 'No saved checkpoint found; starting a new run.' : 'Queue resumed.');
+      setStatus(active && !active.resumeFromCheckpoint ? 'No saved checkpoint found; starting a new run.' : 'Training queue resumed.');
       refreshTrainingRunnerStatus();
     })
-    .catch(function (err) { setStatus('Could not resume queue: ' + String(err.message || err)); });
+    .catch(function (err) { setStatus('Could not resume training queue: ' + String(err.message || err)); });
 }
-
 
 function getTrainingRunnerJobById(jobId) {
   var jobs = trainingWorkspaceState.runnerJobs || [];
@@ -963,7 +959,7 @@ function renderTrainingRunner() {
   if (!job) {
     var noJobMessage = trainingWorkspaceState.runnerQueuePaused
       ? trainingQueueHoldLabel()
-      : queuedCount ? 'No active queue job.' : 'No queued or active jobs.';
+      : queuedCount ? 'No active training job.' : 'No managed training jobs.';
     els.runnerSummary.innerHTML = '<div>' + escapeHtml(noJobMessage) + '</div>' +
       (trainingWorkspaceState.runnerNotice
         ? '<div class="training-runner-detail is-warning">' + escapeHtml(trainingWorkspaceState.runnerNotice) + '</div>'
@@ -977,21 +973,6 @@ function renderTrainingRunner() {
   }
   if (!getTrainingRunnerJobById(trainingWorkspaceState.runnerSelectedJobId)) {
     trainingWorkspaceState.runnerSelectedJobId = job.id;
-  }
-  if (els.runnerConsoleBtn) els.runnerConsoleBtn.classList.add('hidden');
-    if (els.runnerCancelBtn) {
-      els.runnerCancelBtn.textContent = 'Stop';
-      els.runnerCancelBtn.title = 'Stop the active Test Generations session.';
-      els.runnerCancelBtn.classList.toggle('hidden', testStatus !== 'starting' && testStatus !== 'running' && testStatus !== 'stopping');
-      els.runnerCancelBtn.disabled = testStatus === 'stopping';
-    }
-    return;
-  }
-  if (els.runnerConsoleBtn) els.runnerConsoleBtn.classList.remove('hidden');
-  if (els.runnerCancelBtn) {
-    els.runnerCancelBtn.textContent = 'Cancel';
-    els.runnerCancelBtn.title = 'Remove this queued job from the queue.';
-    els.runnerCancelBtn.disabled = false;
   }
   var elapsed = formatTrainingRunnerElapsed(job);
   var status = String(job.status || 'unknown');

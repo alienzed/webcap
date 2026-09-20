@@ -162,6 +162,13 @@ def test_focus_modal_suppression_uses_central_overlay_state_not_feature_inventor
     assert "function isApplicationOverlayOpen()" in shell
 
 
+def test_focus_does_not_depend_on_retired_workflow_mode_state():
+    focus = _read("tool/js/focused_annotation.js")
+
+    assert "setWorkspaceSurface('focus', { sidebarHidden: true });" in focus
+    assert "setWorkspaceWorkflowMode" not in focus
+
+
 def test_focus_requires_a_valid_group_before_opening():
     focus = (ROOT / "tool" / "js" / "focused_annotation.js").read_text(encoding="utf-8")
 

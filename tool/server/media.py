@@ -9,9 +9,12 @@ import traceback
 from pathlib import Path
 
 from flask import jsonify
+from PIL import Image, ImageOps
 
 from . import config as app_config
 from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
+from .file_ops import _rename_media_key_in_folder_state
+from .folder_state_store import folder_state_exists, read_folder_state, write_folder_state_atomic
 from .color_suggestions import COLOR_SUGGESTIONS_VERSION, analyze_image_color_suggestions, is_color_suggestion_image
 from .face_focus import FACE_FOCUS_VERSION, analyze_image_face_focus, get_face_focus_detector, is_face_focus_image
 from .originals import MEDIA_ALL_EXTS, ensure_original_by_hash, ensure_originals_folder, is_transient_media_name, restore_original_media, restore_original_media_video_only
@@ -180,6 +183,114 @@ def media_convert_fps_response(data):
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         app_config.debug_print("[media_convert_fps] ERROR:", exc)
+        app_config.debug_traceback()
+        return jsonify({"error": str(exc)}), 400
+
+
+def _convert_webp_to_png(folder_path, file_name):
+    folder_path = Path(folder_path).resolve()
+    source_path = folder_path / file_name
+    if source_path.suffix.lower() != ".webp":
+        raise RuntimeError("PNG conversion is only available for WebP images")
+    if not source_path.exists() or not source_path.is_file():
+        raise FileNotFoundError("Media file not found")
+
+    target_name = source_path.stem + ".png"
+    target_path = folder_path / target_name
+    if target_path.exists():
+        raise FileExistsError("Target PNG already exists: " + target_name)
+
+    originals_dir = ensure_originals_folder(folder_path)
+    if originals_dir is None:
+        raise RuntimeError("Cannot convert media in this folder")
+    target_original_path = originals_dir / target_name
+    if target_original_path.exists() or target_original_path.is_symlink():
+        raise FileExistsError("Target PNG already exists in originals: " + target_name)
+
+    state_path = folder_path / ".webcap_state.json"
+    renamed_folder_state = None
+    if folder_state_exists(state_path):
+        folder_state = read_folder_state(state_path, missing_ok=False)
+        renamed_folder_state = _rename_media_key_in_folder_state(folder_state, file_name, target_name)
+
+    ensure_original_by_hash(source_path, originals_dir)
+
+    fd, tmp_name = tempfile.mkstemp(
+        prefix="." + source_path.stem + ".convert-",
+        suffix=".png",
+        dir=str(folder_path),
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    target_original_created = False
+    target_installed = False
+    try:
+        with Image.open(source_path) as image:
+            if bool(getattr(image, "is_animated", False)) and int(getattr(image, "n_frames", 1) or 1) > 1:
+                raise RuntimeError("Animated WebP conversion is not supported")
+            icc_profile = image.info.get("icc_profile")
+            converted = ImageOps.exif_transpose(image)
+            converted.load()
+            source_size = converted.size
+            save_kwargs = {}
+            if icc_profile:
+                save_kwargs["icc_profile"] = icc_profile
+            converted.save(tmp_path, format="PNG", **save_kwargs)
+
+        with Image.open(tmp_path) as check:
+            check.load()
+            if check.size != source_size:
+                raise RuntimeError("Converted PNG dimensions changed unexpectedly")
+
+        shutil.copy2(tmp_path, target_original_path)
+        normalize_path_permissions(target_original_path)
+        target_original_created = True
+
+        os.replace(tmp_path, target_path)
+        normalize_path_permissions(target_path)
+        target_installed = True
+        source_path.unlink()
+
+        if renamed_folder_state is not None:
+            write_folder_state_atomic(state_path, renamed_folder_state)
+
+        return {"fileName": target_name}
+    except Exception:
+        if target_original_created and not target_installed:
+            try:
+                target_original_path.unlink()
+            except OSError:
+                pass
+        raise
+    finally:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+
+
+def media_convert_webp_png_response(data):
+    data = data or {}
+    folder = str(data.get("folder") or "").strip()
+    file_name = _safe_media_file_name(data.get("fileName") or data.get("media"))
+    if not folder:
+        return jsonify({"error": "Missing folder"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        if not folder_path.exists() or not folder_path.is_dir():
+            return jsonify({"error": "Source folder does not exist"}), 404
+        result = _convert_webp_to_png(folder_path, file_name)
+        update_media_metadata(folder_path)
+        return jsonify({"ok": True, **result})
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except FileExistsError as exc:
+        return jsonify({"error": str(exc)}), 409
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        app_config.debug_print("[media_convert_webp_png] ERROR:", exc)
         app_config.debug_traceback()
         return jsonify({"error": str(exc)}), 400
 

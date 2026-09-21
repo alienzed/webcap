@@ -19,3 +19,14 @@ def test_video_context_actions_include_fps_conversion():
 
     assert convert_action > video_block_start
     assert "/media/convert_fps" in script[convert_action:]
+
+
+def test_webp_context_action_exposes_png_conversion_without_menu_grouping():
+    root = Path(__file__).parents[1]
+    script = (root / "tool" / "js" / "media_context_actions.js").read_text(encoding="utf-8")
+
+    assert "if (ext === 'webp')" in script
+    assert "label: 'Convert to PNG'" in script
+    assert "runConvertWebpToPng(mediaItem);" in script
+    assert "'/media/convert_webp_png'" in script
+    assert "children:" not in script

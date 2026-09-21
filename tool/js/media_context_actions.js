@@ -100,6 +100,41 @@ function runRemoveBackground(mediaItem) {
     });
 }
 
+function runConvertWebpToPng(mediaItem) {
+  if (!mediaItem || !mediaItem.fileName) return;
+  var oldFileName = mediaItem.fileName;
+  var newFileName = oldFileName.replace(/\.webp$/i, '.png');
+  if (!confirm('Convert this WebP to lossless PNG?\n\nThe original WebP will remain preserved in originals.')) return;
+  setStatus('Converting WebP to PNG...');
+  fetch('/media/convert_webp_png', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder: state.folder || '',
+      fileName: oldFileName
+    })
+  })
+    .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
+    .then(function (res) {
+      if (res.status === 200 && res.data && res.data.ok) {
+        var convertedFileName = res.data.fileName || newFileName;
+        if (state.focusSet && Array.isArray(state.focusSet.keys)) {
+          state.focusSet.keys = state.focusSet.keys.map(function (key) {
+            return key === mediaItem.key ? convertedFileName : key;
+          });
+        }
+        state.pendingSelectFileName = convertedFileName;
+        setStatus('Converted to PNG: ' + convertedFileName);
+        refreshCurrentDirectory();
+      } else {
+        setStatus((res.data && res.data.error) ? res.data.error : 'PNG conversion failed');
+      }
+    })
+    .catch(function (err) {
+      setStatus('PNG conversion failed: ' + (err && err.message ? err.message : err));
+    });
+}
+
 function runBlurBackground(mediaItem) {
   if (!mediaItem || !mediaItem.fileName) return;
   if (!confirm('Blur background?\n\nThis will overwrite the image file.\n\nThe subject stays sharp while the original background is softened with a fixed blur.')) return;
@@ -521,6 +556,14 @@ function buildMediaContextMenuActions(mediaItem, key) {
         runImageTransform(mediaItem, 'flip_horizontal', 'Flipping image horizontal');
       }
     });
+    if (ext === 'webp') {
+      actions.push({
+        label: 'Convert to PNG',
+        run: function () {
+          runConvertWebpToPng(mediaItem);
+        }
+      });
+    }
   } else if (defaceAction) {
     actions.push(defaceAction);
     actions.push(defaceOptionsAction);

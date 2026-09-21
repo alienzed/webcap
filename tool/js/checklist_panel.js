@@ -192,13 +192,6 @@ function renderChecklistPanel(options) {
     label.appendChild(dragHandle);
     summaryRow.appendChild(label);
 
-    var captionText = (ui && ui.editorEl && typeof ui.editorEl.value === 'string')
-      ? ui.editorEl.value
-      : (state.currentItem.caption || '');
-    if (requirementKeywordsMatch(item, captionText, mediaKey)) {
-      summaryRow.classList.add('checklist-item-matched');
-    }
-
     var actions = document.createElement('div');
     actions.className = 'checklist-row-actions';
 

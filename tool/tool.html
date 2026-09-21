@@ -1320,17 +1320,6 @@
                 <button class="modal-close-btn" data-close-modal="checklist-group-terms-modal" title="Close">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="checklist-group-primer-settings">
-                    <label for="checklist-group-primer-separator">Primer separator</label>
-                    <input
-                        id="checklist-group-primer-separator"
-                        type="text"
-                        class="form-control"
-                        maxlength="40"
-                        aria-label="Primer separator for this group"
-                    >
-                    <span class="small">Used between multiple selected terms. Leave blank to concatenate them.</span>
-                </div>
                 <div class="checklist-input-row term-input-row">
                     <input
                         id="checklist-group-terms-input"
@@ -1342,6 +1331,17 @@
                     <div id="checklist-group-terms-results" class="caption-term-results hidden"></div>
                 </div>
                 <div id="checklist-group-terms-items"></div>
+                <div class="checklist-group-primer-settings">
+                    <label for="checklist-group-primer-separator">Primer separator</label>
+                    <input
+                        id="checklist-group-primer-separator"
+                        type="text"
+                        class="form-control"
+                        maxlength="40"
+                        aria-label="Primer separator for this group"
+                    >
+                    <span class="small">Used between multiple selected terms. Leave blank to concatenate them.</span>
+                </div>
                 <div class="small">Changes apply immediately. Vocabulary is stored alphabetically; manual selected-term reordering teaches persistent primer order.</div>
             </div>
             <div class="modal-footer">

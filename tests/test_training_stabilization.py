@@ -9,7 +9,7 @@ from PIL import Image
 from tool.server import config as app_config
 from tool.server import app as app_module
 from tool.server import run_ops, training_bundle, training_history, training_runner, training_review
-from tool.server.training_action import allocate_action, read_action
+from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
 from tool.server.training_config_files import reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage, profile_for_mode
 from tool.server.training_setup import ensure_training_setup
@@ -487,6 +487,20 @@ def test_training_history_clear_removes_metadata_only(tmp_path, monkeypatch):
     assert training_history.clear_history_job(folder, "job-one") is True
     assert training_history.read_history(folder)["jobs"] == []
     assert output.is_dir()
+
+
+def test_set_action_relocation_ignores_retired_job_history_files(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    action, action_data = allocate_action(
+        folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",)
+    )
+    stale_job_dir = action / "jobs" / "stale"
+    stale_job_dir.mkdir()
+    (stale_job_dir / "job.json").write_text("{bad", encoding="utf-8")
+
+    assert relocate_folder_actions("sets/subject", "sets/renamed") == 1
+    assert read_action(action_data["actionId"])[1]["folder"] == "sets/renamed"
 
 
 def test_additive_queue_v4_state_remains_readable(tmp_path, monkeypatch):

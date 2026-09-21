@@ -293,20 +293,6 @@ def relocate_folder_actions(old_folder, new_folder):
             continue
         data["folder"] = next_folder
         _atomic_write(_manifest_path(action_root), data)
-        jobs_root = action_root / "jobs"
-        if jobs_root.is_dir():
-            for job_dir in jobs_root.iterdir():
-                record_path = job_dir / "job.json"
-                if not job_dir.is_dir() or job_dir.is_symlink() or not record_path.is_file() or record_path.is_symlink():
-                    continue
-                try:
-                    payload = json.loads(record_path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError) as exc:
-                    raise ValueError("Training History job record is unreadable during set rename: " + str(record_path)) from exc
-                if not isinstance(payload, dict) or not isinstance(payload.get("job"), dict):
-                    raise ValueError("Training History job record is invalid during set rename: " + str(record_path))
-                payload["job"]["folder"] = _replace_folder_prefix(payload["job"].get("folder"), old, new)
-                _atomic_write(record_path, payload)
         changed += 1
     return changed
 

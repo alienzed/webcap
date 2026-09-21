@@ -23,6 +23,7 @@ def test_training_history_keeps_metadata_index_and_clear_controls():
 
     assert 'Training History' in html
     assert 'training-history-clear-btn' in html
+    assert '>Clear All History</button>' in html
     assert 'data-training-history-clear' in script
     assert 'function clearTrainingHistory()' in script
     assert 'clearTrainingHistoryJob(clearId)' in workspace

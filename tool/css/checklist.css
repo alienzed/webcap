@@ -556,17 +556,17 @@
 
 #checklist-items .checklist-group-visibility-btn {
   font-size: 11px;
-  opacity: 0.48;
+  opacity: 1;
   transition: opacity 120ms ease;
 }
 
 #checklist-items .checklist-row-summary:hover .checklist-group-visibility-btn,
 #checklist-items .checklist-group-visibility-btn:focus-visible {
-  opacity: 0.82;
+  opacity: 1;
 }
 
 #checklist-items .checklist-group-visibility-btn.is-hidden {
-  opacity: 1;
+  opacity: 0.35;
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;
 }

@@ -316,6 +316,64 @@ function renderReviewWorkspaceMetadata(folder, scopedFileNames) {
   renderMediaMetadataPanel(folder, document, scopedFileNames, false, false, 'review-media-metadata-panel');
 }
 
+function reportBalanceWheelColor(index) {
+  var colors = ['#60a5fa', '#f59e0b', '#34d399', '#f472b6', '#a78bfa', '#f87171', '#22d3ee', '#c084fc'];
+  return colors[index % colors.length];
+}
+
+function reportBalanceWheelPoint(cx, cy, radius, angle) {
+  var radians = (angle - 90) * Math.PI / 180;
+  return { x: cx + radius * Math.cos(radians), y: cy + radius * Math.sin(radians) };
+}
+
+function reportBalanceWheelArc(cx, cy, radius, startAngle, endAngle) {
+  var start = reportBalanceWheelPoint(cx, cy, radius, endAngle);
+  var end = reportBalanceWheelPoint(cx, cy, radius, startAngle);
+  return 'M ' + start.x + ' ' + start.y + ' A ' + radius + ' ' + radius + ' 0 ' +
+    (endAngle - startAngle <= 180 ? '0' : '1') + ' 0 ' + end.x + ' ' + end.y;
+}
+
+function renderReportBalanceWheel(report) {
+  var rows = report && Array.isArray(report.phraseSummary) ? report.phraseSummary : [];
+  var visibleRows = rows.filter(function (row) { return Number(row.matchCount || 0) > 0; });
+  if (!rows.length) return '';
+  var totalMatches = visibleRows.reduce(function (sum, row) { return sum + Number(row.matchCount || 0); }, 0);
+  var totalItems = Number(report.total || 0);
+  var parts = [
+    '<div class="card report-balance-wheel-card">',
+    '<h3>Balance Distribution</h3>',
+    '<div class="report-balance-wheel-wrap">'
+  ];
+  if (!totalMatches) {
+    parts.push('<div class="report-balance-wheel-empty">No configured balance phrases occur in the visible set.</div>');
+  } else {
+    var angle = 0;
+    var radius = 112;
+    var strokeWidth = 56;
+    parts.push('<svg class="report-balance-wheel-svg" viewBox="0 0 320 320" role="img" aria-label="Balance phrase distribution">');
+    parts.push('<circle class="report-balance-wheel-bg" cx="160" cy="160" r="' + radius + '"></circle>');
+    visibleRows.forEach(function (row, index) {
+      var sweep = Number(row.matchCount || 0) / totalMatches * 360;
+      var start = angle;
+      var end = Math.min(359.999, angle + sweep);
+      angle += sweep;
+      var tooltip = String(row.phrase || '') + ': ' + row.matchCount + '/' + totalItems + ' items (' +
+        Number(row.matchPercent || 0) + '%); caption ' + Number(row.captionCount || 0) +
+        ', tag ' + Number(row.tagCount || 0);
+      parts.push('<path class="report-balance-wheel-slice" d="' +
+        reportBalanceWheelArc(160, 160, radius, start, end) + '" stroke="' +
+        reportBalanceWheelColor(index) + '" stroke-width="' + strokeWidth +
+        '" fill="none"><title>' + escapeHtml(tooltip) + '</title></path>');
+    });
+    parts.push('<text class="report-balance-wheel-total" x="160" y="154" text-anchor="middle">' + totalItems + '</text>');
+    parts.push('<text class="report-balance-wheel-label" x="160" y="177" text-anchor="middle">visible items</text>');
+    parts.push('</svg>');
+    parts.push('<div class="report-balance-wheel-help">Hover a slice for phrase coverage.</div>');
+  }
+  parts.push('</div></div>');
+  return parts.join('');
+}
+
 function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
   function encodeFocus(files) {
     var names = (files || []).map(function (name) { return String(name || ''); }).filter(Boolean);
@@ -448,7 +506,7 @@ function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
     '<link rel="stylesheet" href="/static/css/report.css">' +
     '</head><body>' +
     '<div class="report-preview">' +
-    '<div class="row config-row">' +
+    '<div class="row config-row' + (report.phraseSummary && report.phraseSummary.length ? ' has-balance-wheel' : '') + '">' +
     '<div class="card"><h3>Review Set</h3>' +
     '<div class="summary-row"><span>Visible items</span><strong>' + report.total + '</strong></div>' +
     '<div class="summary-row"><span>Images</span><strong>' + (scope.images || 0) + '</strong></div>' +
@@ -457,6 +515,7 @@ function renderReviewSetPreview(report, reviewedFileNames, scopeSummary) {
     '<div class="summary-row"><span>Missing captions</span><strong>' + report.missingCaption + '</strong></div>' +
     '<div class="summary-row"><span>Required phrase</span><strong>' + escapeHtml(requiredLabel) + '</strong></div>' +
     '<div class="summary-row"><span>Required hits</span><strong>' + report.requiredHits + ' (' + report.requiredPercent + '%)</strong></div></div>' +
+    renderReportBalanceWheel(report) +
     '</div>' +
     (requirementsCards ? '<div class="row">' + requirementsCards + '</div>' : '') +
     (findingsCards ? '<div class="row">' + findingsCards + '</div>' : '') +

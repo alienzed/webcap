@@ -48,6 +48,73 @@ body {
   grid-template-columns: 1fr 1fr;
 }
 
+.report-preview .config-row:not(.has-balance-wheel) > .card {
+  grid-column: 1 / -1;
+}
+
+.report-preview .report-balance-wheel-card {
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+.report-preview .report-balance-wheel-wrap {
+  flex: 1 1 auto;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.report-preview .report-balance-wheel-svg {
+  width: 320px;
+  min-width: 300px;
+  height: 320px;
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 8px 18px rgba(15, 23, 42, 0.18));
+}
+
+.report-preview .report-balance-wheel-bg {
+  fill: none;
+  stroke: #e2e8f0;
+  stroke-width: 56;
+}
+
+.report-preview .report-balance-wheel-slice {
+  cursor: help;
+  opacity: 0.88;
+  transition: opacity 120ms ease, stroke-width 120ms ease;
+}
+
+.report-preview .report-balance-wheel-slice:hover {
+  opacity: 1;
+  stroke-width: 64;
+}
+
+.report-preview .report-balance-wheel-total {
+  fill: #111827;
+  font-size: 38px;
+  font-weight: 750;
+}
+
+.report-preview .report-balance-wheel-label {
+  fill: #64748b;
+  font-size: 13px;
+}
+
+.report-preview .report-balance-wheel-help,
+.report-preview .report-balance-wheel-empty {
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
+.report-preview .report-balance-wheel-empty {
+  max-width: 260px;
+}
+
 .report-preview .config-panel {
   background: #fff;
   border: 1px solid #d6d8dc;
@@ -162,6 +229,21 @@ html[data-theme="dark"] .report-preview .summary-row {
   border-bottom-color: #334155;
 }
 
+html[data-theme="dark"] .report-preview .report-balance-wheel-bg {
+  stroke: #1e293b;
+}
+
+html[data-theme="dark"] .report-preview .report-balance-wheel-total {
+  fill: #f8fafc;
+}
+
+html[data-theme="dark"] .report-preview .report-balance-wheel-label,
+html[data-theme="dark"] .report-preview .report-balance-wheel-help,
+html[data-theme="dark"] .report-preview .report-balance-wheel-empty {
+  color: #94a3b8;
+  fill: #94a3b8;
+}
+
 html[data-theme="dark"] .report-preview .small {
   color: #94a3b8;
 }
@@ -176,4 +258,17 @@ html[data-theme="dark"] .report-preview .fail-link:hover,
 html[data-theme="dark"] .report-preview .token-link:hover,
 html[data-theme="dark"] .report-preview .balance-phrase-link:hover {
   color: #bfdbfe;
+}
+
+
+@media (max-width: 720px) {
+  .report-preview .row.config-row {
+    grid-template-columns: 1fr;
+  }
+
+  .report-preview .report-balance-wheel-svg {
+    width: min(100%, 320px);
+    min-width: 0;
+    height: auto;
+  }
 }

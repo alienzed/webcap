@@ -202,11 +202,18 @@ def test_single_item_preview_context_stays_with_the_preview_surface():
 def test_focus_uses_shell_identity_but_keeps_local_cleanup_exit():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    focus = (ROOT / "tool" / "js" / "focused_annotation.js").read_text(encoding="utf-8")
+    grid = (ROOT / "tool" / "js" / "media_grid_state.js").read_text(encoding="utf-8")
 
     assert "surface === 'focus'" in shell
     assert "? 'Focus' : 'Prep'" in shell
     assert "sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');" in shell
     assert "stopFocusedAnnotation();" in shell
+    assert "function mediaGridLeaveForWorkspaceTransition()" in grid
+    assert "mediaGridHideSurfaceShell();" in grid
+    assert "mediaGridResetSessionState();" in grid
+    assert "mediaGridLeaveForWorkspaceTransition();" in focus
+    assert focus.index("mediaGridLeaveForWorkspaceTransition();") < focus.index("setWorkspaceSurface('focus'")
     assert 'id="focused-annotation-close-btn"' in html
 
 
@@ -596,3 +603,22 @@ def test_single_item_preview_actions_keep_their_runtime_contract():
     assert "getPreviewPrimaryActionPlan" in media
     assert "wirePreviewActionControls()" in main
     assert "updatePreviewActionControls()" in main
+
+def test_caption_report_owns_a_large_inspectable_balance_wheel():
+    preview = (ROOT / "tool" / "js" / "preview_pane.js").read_text(encoding="utf-8")
+    stats = (ROOT / "tool" / "js" / "stats.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "report.css").read_text(encoding="utf-8")
+
+    assert "phraseMatchCounts" in stats
+    assert "matchCount: matchCount" in stats
+    assert "matchPercent: matchPercent" in stats
+    assert "function renderReportBalanceWheel(report)" in preview
+    assert 'class="card report-balance-wheel-card"' in preview
+    assert 'class="report-balance-wheel-svg"' in preview
+    assert "<title>" in preview
+    assert "Hover a slice for phrase coverage." in preview
+    assert "renderReportBalanceWheel(report)" in preview
+    assert "width: 320px" in css
+    assert "min-width: 300px" in css
+    assert ".report-balance-wheel-slice:hover" in css
+

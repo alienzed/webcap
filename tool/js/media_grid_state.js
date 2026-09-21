@@ -120,6 +120,14 @@ function mediaGridCloseActivePresentation() {
   return true;
 }
 
+function mediaGridLeaveForWorkspaceTransition() {
+  if (!mediaGridState.open) return false;
+  closeMediaGridViewer();
+  mediaGridHideSurfaceShell();
+  mediaGridResetSessionState();
+  return true;
+}
+
 function mediaGridSetStatus(text) {
   mediaGridState.status = String(text || '');
   var surfaceEls = mediaGridGetSurfaceEls();

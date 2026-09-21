@@ -109,10 +109,10 @@
 
 .app.shell-revamp .review-output-column {
   min-height: 0;
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  background: rgba(255, 255, 255, 0.72);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -574,7 +574,7 @@
   height: auto;
   min-height: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--panel-soft);
 }
 
@@ -2429,8 +2429,7 @@ html[data-theme="dark"] .app.shell-revamp .review-output-column-subtitle {
 }
 
 html[data-theme="dark"] .app.shell-revamp .review-output-column {
-  border-color: rgba(148, 163, 184, 0.2);
-  background: rgba(15, 23, 42, 0.52);
+  background: transparent;
 }
 
 @media (max-width: 1180px) {

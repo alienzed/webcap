@@ -208,7 +208,9 @@ def test_test_bench_activity_rail_and_live_session_contract():
     controls_block = script.split("function syncActiveRunControls(status)", 1)[1].split("function renderStatus(status)", 1)[0]
     assert "runBtn.disabled = active" not in controls_block
     assert "runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;" in controls_block
-    assert "stopBtn.classList.toggle('hidden', !active)" in controls_block
+    assert "test-generations-stop-btn" not in script
+    assert "dataset.sessionStop = name;" in script
+    assert "stopRun(stop);" in script
     assert ".disabled = !!disabled" not in controls_block
 
     assert "if (!currentSession || currentSession === activeSession)" in script

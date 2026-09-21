@@ -471,11 +471,19 @@
       rate.classList.toggle('hidden', !resultFolder || unrated <= 0);
 
       var remove = document.createElement('button');
+      var active = session.status === 'running' || session.status === 'stopping';
       remove.type = 'button';
       remove.className = 'test-generations-remove-candidate';
-      remove.dataset.sessionDelete = name;
-      remove.title = 'Delete this Test session';
-      remove.setAttribute('aria-label', 'Delete Test session ' + name);
+      if (active) {
+        remove.dataset.sessionStop = name;
+        remove.title = session.status === 'stopping' ? 'Stopping this Test session' : 'Stop this Test session';
+        remove.setAttribute('aria-label', remove.title);
+        remove.disabled = session.status === 'stopping';
+      } else {
+        remove.dataset.sessionDelete = name;
+        remove.title = 'Delete this Test session';
+        remove.setAttribute('aria-label', 'Delete Test session ' + name);
+      }
       remove.textContent = '×';
       actions.appendChild(open);
       actions.appendChild(rate);
@@ -914,21 +922,13 @@
   }
 
   function syncActiveRunControls(status) {
-    var running = !!(status && status.status === 'running');
-    var stopping = !!(status && status.status === 'stopping');
-    var active = running || stopping;
     var runBtn = el('test-generations-run-btn');
-    var stopBtn = el('test-generations-stop-btn');
     if (runBtn) {
       var supported = isTestModelSupported();
       runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;
       runBtn.title = supported
         ? 'Queue this frozen Test batch.'
         : 'New Test runs currently require MiniMax H3 as the working model.';
-    }
-    if (stopBtn) {
-      stopBtn.classList.toggle('hidden', !active);
-      stopBtn.disabled = stopping;
     }
   }
 
@@ -1641,8 +1641,7 @@
     });
   }
 
-  function stopRun() {
-    var stopBtn = el('test-generations-stop-btn');
+  function stopRun(stopBtn) {
     if (stopBtn) stopBtn.disabled = true;
     request('test_stop').then(function (status) {
       syncActiveRunControls(status);
@@ -1700,7 +1699,6 @@
 
     button.onclick = openPane;
     el('test-generations-run-btn').onclick = startRun;
-    el('test-generations-stop-btn').onclick = stopRun;
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
     el('test-generations-open-results-btn').onclick = function () {
       openResultsFolder(this.dataset.resultFolder);
@@ -1766,6 +1764,11 @@
       var rate = event.target.closest('[data-session-rate]');
       if (rate) {
         openResultsFolder(rate.dataset.sessionRate, { rateItems: true });
+        return;
+      }
+      var stop = event.target.closest('[data-session-stop]');
+      if (stop) {
+        stopRun(stop);
         return;
       }
       var remove = event.target.closest('[data-session-delete]');

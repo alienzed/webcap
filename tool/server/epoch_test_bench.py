@@ -1166,10 +1166,15 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
         _atomic_write_json(status_file, status)
     finally:
         with _lock:
+            stopped = folder_key in _stop_requests
             _active_threads.pop(folder_key, None)
             _active_sessions.pop(folder_key, None)
             _stop_requests.discard(folder_key)
-        _advance_test_queue()
+        try:
+            if stopped:
+                shutil.rmtree(session_directory)
+        finally:
+            _advance_test_queue()
 
 def _build_queued_request(
     folder_path,

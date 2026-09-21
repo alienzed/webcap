@@ -626,6 +626,26 @@ def test_stop_marks_active_session_stopping_and_interrupts_comfy(tmp_path, monke
     assert interrupted == [True]
 
 
+def test_stopped_batch_deletes_its_session_after_the_worker_exits(tmp_path, monkeypatch):
+    session = tmp_path / "session"
+    session.mkdir()
+    bench._atomic_write_json(session / "test.json", {"status": "stopping", "completed": 0, "total": 1})
+    folder_key = str(tmp_path.resolve())
+    advanced = []
+
+    monkeypatch.setattr(bench, "_active_threads", {folder_key: object()})
+    monkeypatch.setattr(bench, "_active_sessions", {folder_key: session})
+    monkeypatch.setattr(bench, "_stop_requests", {folder_key})
+    monkeypatch.setattr(bench, "_advance_test_queue", lambda: advanced.append(True))
+
+    bench._run_batch(folder_key, session, [], "prompt", template={})
+
+    assert not session.exists()
+    assert folder_key not in bench._active_threads
+    assert folder_key not in bench._active_sessions
+    assert advanced == [True]
+
+
 def test_remove_candidate_deletes_only_current_session_result(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()
@@ -1394,4 +1414,3 @@ def test_remove_candidate_allows_local_test_fifo_reference(tmp_path, monkeypatch
 
     assert payload["removed"] == candidate.name
     assert not candidate.exists()
-

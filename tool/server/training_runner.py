@@ -18,15 +18,13 @@ from .training_profiles import config_for_stage, normalize_mode, profile, profil
 from .training_bundle import materialize_training_bundle
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets
-from .training_history import completed_stages, discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, remove_job_record, resolve_managed_resume, run_summary_from_capture
+from .training_history import discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, remove_job_record, resolve_managed_resume, run_summary_from_capture
 from .training_action import actions_root, allocate_action, action_id_for_root, action_paths, fingerprint_files, read_action, update_action
 from .training_preflight import (
     build_launch_preflight as _build_launch_preflight,
     gpu_snapshot as _gpu_snapshot,
     make_check as _make_check,
-    needs_partial_annotation_caption_review as _needs_partial_annotation_caption_review,
     preflight_payload as _preflight_payload,
-    prepared_dataset_is_ready as _prepared_dataset_is_ready,
     resolve_folder as _resolve_folder,
 )
 from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
@@ -2133,71 +2131,6 @@ def start_response(
             _launch_next_queued_job(state)
         _write_state(state)
         return {"ok": True, "job": _public_job(job), "jobs": [_public_job(job)], "queued": job.get("status") == "queued"}, 200
-
-
-def folder_statuses_for_folders(folder_paths):
-    """Return the small training-status payload used by the folder backlog view."""
-    with _lock:
-        try:
-            state = _read_state()
-        except TrainingStateError:
-            _logger.exception("Training queue state is unavailable; omitting folder training badges.")
-            return {}
-        jobs = list(state.get("jobs", []))
-    queue_position = 0
-    queued_by_folder = {}
-    for job in jobs:
-        if job.get("status") in QUEUE_STATUSES:
-            queue_position += 1
-            queued_by_folder.setdefault(str(job.get("folder") or ""), {"position": queue_position, "status": job.get("status")})
-    result = {}
-    for folder_path in folder_paths:
-        path = Path(folder_path)
-        try:
-            folder = str(path.relative_to(app_config.FS_ROOT)).replace("\\", "/")
-        except ValueError:
-            continue
-        matching = [job for job in jobs if str(job.get("folder") or "") == folder]
-        active = next((job for job in matching if job.get("status") in ACTIVE_STATUSES), None)
-        if active:
-            result[path] = {"status": "training", "label": "Training", "jobId": active.get("id"), "stage": active.get("stages")}
-        elif folder in queued_by_folder:
-            queued = queued_by_folder[folder]
-            result[path] = {"status": "queued", "label": "Queued #" + str(queued["position"]), "queuePosition": queued["position"]}
-        else:
-            try:
-                # Folder navigation must not recursively scan potentially huge
-                # trainer output trees just to render a status badge.
-                required_stages, completed = completed_stages(path, include_discovered_runs=False)
-            except Exception:
-                _logger.exception("Could not determine training status for folder: %s", path)
-                result[path] = {"status": "error", "label": "Training status unavailable"}
-                continue
-            if required_stages and len(completed) == len(required_stages):
-                result[path] = {"status": "trained", "label": "Trained"}
-            elif completed:
-                result[path] = {"status": "partial", "label": "Partially trained"}
-            elif any(
-                all((path / name).is_file() for name in (
-                    [item["file"] for item in setup["configs"]] + list(setup["datasetFiles"])
-                ))
-                for profile_item in training_profiles()
-                for setup in profile_item["setups"].values()
-            ) or (
-                all((path / name).is_file() for name in ("config.hi.toml", "config.lo.toml", "dataset.hi.toml", "dataset.lo.toml"))
-                and _prepared_dataset_is_ready(path)
-            ):
-                needs_review, partial_count, touched_count = _needs_partial_annotation_caption_review(path)
-                if needs_review:
-                    result[path] = {
-                        "status": "caption-review",
-                        "label": "Caption review needed (" + str(partial_count) + " of " + str(touched_count) + ")",
-                    }
-                else:
-                    result[path] = {"status": "ready", "label": "Ready to train"}
-            else:
-                result[path] = {"status": "never", "label": ""}
-    return result
 
 
 def status_response():

@@ -1,16 +1,27 @@
 # App Settings
 
-Last reviewed against code: 2026-08-15
+Last reviewed against code: 2026-09-21
 
 The app settings modal is the global configuration surface for values stored in `tool/config.json`.
 
 ## Current sections
 
-- `Paths`: workspace, models, Diffusion Pipe, WSL, Conda, and activation paths.
-- `Caption Editor`: app-wide default caption template.
-- `Training Models`: models available for new training setup and Train actions.
-- `Analysis & Appearance`: optional analyzers, theme, and debug mode.
-- `Advanced JSON`: raw on-disk configuration.
+- **General → Library**: filesystem root.
+- **General → Caption Editor**: app-wide default caption template.
+- **General → Analysis & Appearance**: optional Face Focus / MediaPipe analysis plus browser-scoped theme.
+- **Training → Training Runtime**: models root, Diffusion Pipe/WSL runtime, Conda or activation script, and repeat-reference epochs.
+- **Training → Copy to Test**: per-stage LoRA destination roots plus an optional one-folder subfolder.
+- **Training → Training Models**: profiles available for new training runs.
+- **Training → H3 calibration**: hardware-bound MiniMax H3 bucket calibration.
+- **Advanced**: diagnostics, H3 troubleshooting options, and raw JSON editing.
+
+## Repeat planning
+
+`training.repeat_reference_epochs` defaults to 90. WebCap uses it only when solving generated dataset repeat counts. Changing a run's **Epochs** field does not cause repeats to be recalculated around that run length; Epochs changes the captured run configuration and its estimated total work.
+
+## Copy to Test
+
+`training.test_copy_roots` stores independent destination roots for H3, Krea2, Wan2.1, Wan2.2 High, and Wan2.2 Low. `training.test_copy_subfolder` is optional and must be a single directory name. These values control where saved candidate LoRAs are staged for testing; they do not move or rewrite the original training output.
 
 ## Training model visibility
 

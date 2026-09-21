@@ -231,9 +231,11 @@
 }
 
 .activity-rail-btn.active {
-  border-color: var(--border);
+  border-color: transparent;
+  border-radius: 0;
   background: var(--panel-soft);
   color: var(--text);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .activity-rail-btn.hidden {
@@ -406,6 +408,8 @@
   grid-area: sidebar;
   min-width: 0;
   overflow: hidden;
+  border-top: 0;
+  border-radius: 0;
   padding: 0;
   box-shadow: none;
 }
@@ -420,6 +424,8 @@
   min-height: 0;
   overflow: hidden;
   position: relative;
+  border-top: 0;
+  border-radius: 0;
   box-shadow: none;
   padding:0;
 }
@@ -428,6 +434,8 @@
   grid-area: workbench;
   min-width: 0;
   min-height: 0;
+  border-top: 0;
+  border-radius: 0;
   box-shadow: none;
 }
 

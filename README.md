@@ -12,15 +12,15 @@ WebCap is built with Flask plus plain browser JavaScript. There is no database o
 | --- | --- | --- |
 | **Browse and curate media** | Open local set folders; filter the visible scope; switch between a selected-item workflow and **Media Grid**; keep ratings, flags, tags, and review state with each item. | Choose a folder in the sidebar, use the filter bar or **Advanced filters**, then select an item or open **Media Grid**. |
 | **Captions and annotation** | Edit `<media>.txt` sidecars with requirement/vocabulary groups, tags, caption templates, mappings, and set notes. The annotation helpers include tag copy/paste. | Select an item in Annotation and use the caption editor plus the **Groups** and **Tags** panels. Use **Focus Annotate** on the selected item, or press `F`, for repeated group-first annotation across the current scope. |
-| **Review Set and dataset QA** | Inspect the current visible scope with a caption sheet, coverage, required-phrase, balance, and rule checks, metadata, and **Prune Candidates**. Review findings can narrow the working scope. | Open **Review** from the sidebar. Use **Caption Report**, **Prune Candidates**, and the **Focus set** control to investigate a finding. |
-| **Focus Sets and cross-folder sets** | A Focus Set temporarily narrows the visible media for curation, review, or training. **SuperSet Search** searches a folder and its subfolders, then materializes matches into a new set. | Choose a **Focus set** from the sidebar or grid. For a cross-folder result set, open **Advanced filters**, enable **SuperSet Search**, click **Search**, then choose **Create Set**. |
-| **Media editing** | Crop images; clip videos, inspect decoded frames, and export a selected frame; rotate, flip, blur/remove backgrounds, deface, duplicate, prune, reset, and restore. **Convert FPS** is explicit and overwrites the selected video after confirmation. | Select a media item and use its preview/context actions; use **Clip** for the video clip and frame workflow. Expected reversible operations preserve source material under `originals/`. |
-| **Training setup and capture** | Configure Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, or MiniMax H3 using persistent config/dataset TOMLs. **Training Review** summarizes the bucket plan and **Adjust buckets** edits supported targets. Train captures the current visible media, latest captions, saved TOMLs, and plan into a run-owned bundle. | Use the permanent **Training** activity rail entry, choose the working model in the application header, inspect the TOMLs under **Advanced configuration**, then use **Adjust buckets** or **Train**. |
-| **Training runs and checkpoints** | Use the managed queue or generate a manual WSL command; inspect progress, checkpoint ETA, GPU status, logs, and history. Resume compatible checkpoints or start a fresh run from a saved LoRA/initializer. | In Training, use the run setup and queue controls; select **Resume checkpoint** or **Fine-tune from saved LoRA** under **Starting point** when applicable. |
-| **LoRA candidate analysis** | Review a recorded run's TensorBoard loss curves and suggested completed checkpoint epochs without changing run files. **Multiscale Loss Basins** is the primary detector; **Score Scalars · legacy baseline** is available for comparison. | In a run row with recorded output, choose the chart action labeled **Analyze LoRA candidates** to open **LoRA Candidates**. |
+| **Review Set and dataset QA** | Inspect the current visible scope with a caption sheet, metadata, **Caption Report**, an inspectable balance wheel, **Prune Candidates**, and duplicate detection. Review findings can narrow the working scope. | Open **Review** from the sidebar. Use **Caption Report**, **Prune Candidates**, **Duplicates**, and **Focus set** to investigate a finding. |
+| **Focus Sets and cross-folder sets** | A Focus Set temporarily narrows visible media for curation, review, or training. Built-in groups include media type, aspect ratio, image-resolution bands, scene complexity, prune candidates, and optional analysis-derived selections. **SuperSet Search** searches a folder and its subfolders, then materializes matches into a new set. | Choose a **Focus set** from the sidebar or grid. For a cross-folder result set, open **Advanced filters**, enable **SuperSet Search**, click **Search**, then choose **Create Set**. |
+| **Media editing** | Crop images; clip videos, inspect decoded frames, and export a selected frame; rotate, flip, blur/remove backgrounds, deface, duplicate, prune, reset, and restore. **Convert FPS** is explicit, and WebP images can be converted losslessly to PNG while preserving the original. | Select a media item and use its preview/context actions; use **Clip** for the video clip and frame workflow. Expected reversible operations preserve source material under `originals/`. |
+| **Training setup and capture** | Configure Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, or MiniMax H3. **Run setup** exposes learning rate, rank, epochs, and dropout as normal run controls; overrides are captured into the run without rewriting the set-owned TOML. **Training Review** summarizes the bucket plan and **Adjust buckets** edits supported targets. | Open **Training**, choose the Base Model, set the run parameters, review/adjust buckets, and use **Advanced configuration** only when raw TOML editing is needed. |
+| **Training runs and checkpoints** | Use the managed Training Queue or generate a manual WSL command; inspect progress, next-checkpoint ETA, logs, output, and **Training History**. Resume compatible checkpoints or start a fresh run from a saved LoRA/initializer. Training History is a lightweight metadata index rather than a filesystem-derived catalog. | In Training, use **Run setup** and **Training Queue**; select **Resume checkpoint** or **Fine-tune from saved LoRA** under **Starting point** when applicable. |
+| **LoRA candidate analysis** | Review a recorded run's TensorBoard loss curves and suggested completed checkpoint epochs without changing run files. **Multiscale Loss Basins** is the primary detector; **Score Scalars · legacy baseline** remains available. Saved candidates can be copied to the configured Test root and removed again later. | In a run row with recorded output, choose **Analyze LoRA candidates**, then use the candidate actions to stage or remove Test copies. |
 | **H3 calibration** | Test MiniMax H3 video bucket shapes on the configured training hardware and retain conclusive results. Verified safe ceilings affect only newly generated or reset H3 datasets; existing TOMLs and captured runs are left unchanged. | Open **App Settings** → **Training** → **H3 calibration**, choose an eligible source from the current folder, and select **Run calibration**. See [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md). |
-| **Test Bench** | Compare staged MiniMax H3 LoRA checkpoints against frozen generation settings, revisit saved Test sessions, and switch between Grid and Compare views. | Choose MiniMax H3 as the working model, stage checkpoints from Training, then open **Test** from the permanent activity rail. |
-| **App settings** | Configure the filesystem root, default caption template, optional local analysis, appearance, training runtime, enabled training models, diagnostics, and advanced JSON. | Open **App Settings** from the permanent activity rail. Use the **General**, **Training**, and **Advanced** tabs. |
+| **Test Bench** | Compare staged MiniMax H3 LoRAs against a shared prompt/settings baseline. Queue multiple Test sessions, include or exclude the base model, use wildcard prompts, revisit named/saved sessions and Recent Test Sets, switch between Grid and two-item Compare, open result folders, and rate generated items. | Choose MiniMax H3 as the Base Model, stage checkpoints from Training, then open **Test** from the permanent activity rail. |
+| **App settings** | Configure the filesystem root, default caption template, optional local analysis, appearance, training runtime, repeat-reference epochs, Copy-to-Test roots, enabled training models, diagnostics, and advanced JSON. | Open **App Settings** from the permanent activity rail. Use the **General**, **Training**, and **Advanced** tabs. |
 
 ## Supported training profiles
 
@@ -46,7 +46,7 @@ See [`docs/training_profiles.md`](docs/training_profiles.md) and [`docs/train.md
 WebCap uses a permanent application shell:
 
 - the left activity rail switches major activities such as Prep, Training, and Test and also owns Console, Settings, Help, and immersive-mode access;
-- the top header shows current folder/set context, the single editable working-model selector, workspace identity, and background GPU activity when Training is active;
+- the top header shows current folder/set context, the single editable **Base Model** selector where relevant, workspace identity, and persistent workload/system status: **Idle / Training / Testing**, GPU utilization/VRAM, and free disk space;
 - transient application status appears as a floating bottom-left shell message;
 - the multiline application console is a separate shell surface and is not the same thing as a Training run log.
 
@@ -74,6 +74,10 @@ Managed Diffusion Pipe training is designed around the configured WSL training e
 GPU training requirements are otherwise owned by Diffusion Pipe/the selected model environment rather than installed by WebCap.
 
 H3 calibration additionally requires working NVIDIA telemetry (`nvidia-smi`) in the training environment.
+
+### MiniMax H3 Test Bench
+
+The current Test Bench expects a reachable local ComfyUI API using the shipped MiniMax H3 workflow template. On the current Windows/WSL topology WebCap can bridge to Windows ComfyUI through `curl.exe`; the Test Bench otherwise uses the local ComfyUI HTTP API directly.
 
 ## Install
 
@@ -109,6 +113,8 @@ Start from [`tool/config.example.json`](tool/config.example.json). The important
 - `training.wsl_distribution` — optional explicit WSL distribution.
 - `training.conda_executable` / `training.conda_environment` — optional Conda runtime pair.
 - `training.activate_script` — alternative activation script when Conda is not configured.
+- `training.repeat_reference_epochs` — fixed epoch count used when solving generated dataset repeats; default `90` and intentionally independent of a run's selected Epochs value.
+- `training.test_copy_roots` / `training.test_copy_subfolder` — per-model destination roots and optional subfolder for staging LoRAs into the Test Bench.
 - `training.enabled_profiles` — models offered for new training runs; at least one must remain enabled.
 - `analysis.enableFaceAnalysis` — optional Face Focus metadata.
 - `analysis.enableMediaPipeAnalysis` — optional selection-pose metadata/suggestions.
@@ -136,11 +142,11 @@ http://127.0.0.1:4200/
 2. Filter/focus the visible media to the working subset.
 3. Curate media and build captions with requirements, tags, and mappings.
 4. Use Review Set / QA to tighten coverage and consistency.
-5. Open Training and choose the model profile/run.
-6. Inspect or edit the profile's persistent TOMLs.
-7. Reset the dataset TOML only when you deliberately want it recalculated from the current visible media.
+5. Open Training and choose the Base Model/run.
+6. Set learning rate, rank, epochs, and dropout in **Run setup**; use **Advanced configuration** for lower-level TOML editing.
+7. Review the generated bucket plan and use **Adjust buckets** when needed. Reset a dataset TOML only when you deliberately want it recalculated from the current visible media.
 8. Train/queue the visible selection, or generate a manual WSL command.
-9. Inspect run progress/logs/history and resume a discovered checkpoint when needed.
+9. Inspect queue progress, checkpoint ETA, logs, Training History, candidates, and Resume options as needed.
 
 The important rule is simple: **what is visible when Train is requested is what gets captured for that run.**
 
@@ -160,9 +166,9 @@ jobs/      runner, log, PID, action, and result evidence
 output/    Diffusion Pipe trainer runs
 ```
 
-Only app-owned runtime paths are rewritten in the captured TOMLs. User-authored training settings remain part of the launch evidence.
+Only app-owned runtime paths are rewritten automatically in captured TOMLs. The normal Run Setup controls for learning rate, rank, epochs, and dropout are applied to the captured config only; they do not rewrite the persistent set TOML. The persistent TOMLs therefore remain the editable baseline for future runs.
 
-The persistent TOMLs in the source set remain the editable interface for future runs.
+Generated dataset repeats are solved independently from the selected run Epochs value. `training.repeat_reference_epochs` (default `90`) supplies the fixed planning horizon used to choose repeat counts; the run's actual Epochs value is still used for progress/step estimates.
 
 ## Resume and initialization
 
@@ -172,7 +178,7 @@ WebCap distinguishes three starting points for a new managed run:
 - **Resume** — choose a current-set managed checkpoint or enter an explicit custom checkpoint directory.
 - **Initializer** — start a new run using saved LoRA weights or an explicit initializer file/folder.
 
-Managed Resume stays in its logical run but captures the current set again. Custom Resume reads the explicit external checkpoint and writes its new capture, job, and output beneath a newly allocated logical run. H3 Resume runs the current capture's cache phase before training.
+Managed Resume stays in its logical run but captures the current set again. Custom Resume reads the explicit external checkpoint and writes its new capture, job, and output beneath a newly allocated logical run. H3 Resume runs the current capture's cache phase before training. When Resume is used, the selected Run Setup learning rate is also written as `force_constant_lr` in the captured config so Diffusion Pipe does not silently continue with the checkpoint's prior scheduler value.
 
 ## File/state model
 
@@ -185,7 +191,6 @@ media_metadata.json    cached metadata/analysis
 originals/             reversible mutation backing store
 config.*.toml          persistent training configs
 dataset.*.toml         persistent generated/editable datasets
-.webcap_training.json  set-local training output metadata
 ```
 
 Global training state lives beneath:
@@ -194,7 +199,7 @@ Global training state lives beneath:
 <filesystem.root>/.webcap_training/
 ```
 
-This includes queue/history/runtime support files and H3 probe artifacts. These are operational files, not a database.
+This includes `queue.json`, lightweight `recent_runs.json` Training History metadata, runtime support files, and H3 probe artifacts. Training History rows are created only from recorded history metadata; existing output/log paths merely enrich known rows with availability and actions. These are operational files, not a database.
 
 ## Safety and behavior
 
@@ -247,6 +252,8 @@ Current operational references include:
 - [`docs/training_profiles.md`](docs/training_profiles.md) — supported model profiles and persistent files.
 - [`docs/training_review.md`](docs/training_review.md) — training review/bucket controls.
 - [`docs/dataset_config.md`](docs/dataset_config.md) — generated dataset behavior.
+- [`docs/repeat_targeting.md`](docs/repeat_targeting.md) — fixed-reference repeat planning versus actual run epochs.
+- [`docs/app_settings.md`](docs/app_settings.md) — current Settings surface and persistence behavior.
 - [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md) — H3 calibration and calibrated ceilings.
 
 When a planning document conflicts with current code/current-behavior docs, current code wins.

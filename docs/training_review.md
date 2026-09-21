@@ -5,9 +5,14 @@ does not maintain a second training plan in `.webcap_state.json`, produce an
 immutable review record, or decide whether a run is recoverable. The canonical
 config and dataset TOMLs remain the only editable training authority.
 
-The normal Run Setup keeps only a bucket-plan summary and **Adjust buckets**.
-Raw config settings—learning rate, target steps, rank, dropout, and the TOML
-Reset controls—remain under **Advanced configuration**.
+The normal **Run setup** exposes learning rate, rank, epochs, and dropout as
+first-class run parameters populated from the current model template. Changing
+them creates a run-specific override for the next capture; it does not rewrite
+the persistent set-owned config TOML. **Reset** on the Run setup parameter card
+restores the current template-derived values.
+
+Training Review itself remains focused on the dataset/bucket plan. Raw TOML
+editing and per-file TOML Reset controls remain under **Advanced configuration**.
 
 ## Bucket editor
 
@@ -56,7 +61,16 @@ targets.
 ## Launch interaction
 
 Train flushes raw editor edits and recomputes Review from the current TOMLs
-immediately before it captures the action. It does not consume a Review
-fingerprint, an immutable plan, or a hidden `reviewIntent`. Capture and queue
-semantics, Resume, Init LoRA discovery, and the clean training-machine reset
-procedure are documented in [training_stabilization.md](training_stabilization.md).
+immediately before it captures the action. The normal Run setup overrides for
+learning rate, rank, epochs, and dropout are then applied to the captured config
+only. Resume additionally writes the selected learning rate as
+`force_constant_lr`.
+
+Repeat calculation is independent of the selected run Epochs value. Generated
+dataset repeats use the configured `training.repeat_reference_epochs` planning
+horizon (90 by default), while the actual run epochs remain part of the
+captured config and progress estimate.
+
+Review does not consume a hidden `reviewIntent` or maintain a second bucket
+authority. Capture and queue semantics, Resume, and Init LoRA discovery are
+documented in [train.md](train.md).

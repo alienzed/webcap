@@ -495,6 +495,7 @@ function compute(items, options) {
   var requiredMissing = [];
   var phraseCounts = {};
   var phraseTagCounts = {};
+  var phraseMatchCounts = {};
   var ruleFailures = [];
   var tokenCounts = {};
   var captionRows = [];
@@ -503,6 +504,7 @@ function compute(items, options) {
   phrases.forEach(function (p) {
     phraseCounts[p] = 0;
     phraseTagCounts[p] = 0;
+    phraseMatchCounts[p] = 0;
   });
 
   items.forEach(function (item) {
@@ -539,9 +541,10 @@ function compute(items, options) {
     phrases.forEach(function (p) {
       var phraseNorm = normalizeBalancePhrase(p).toLowerCase();
       if (!phraseNorm) return;
-      if (normalizedTags.indexOf(phraseNorm) !== -1) {
-        phraseTagCounts[p] += 1;
-      }
+      var captionMatch = captionNorm.indexOf(normalize(p)) !== -1;
+      var tagMatch = normalizedTags.indexOf(phraseNorm) !== -1;
+      if (tagMatch) phraseTagCounts[p] += 1;
+      if (captionMatch || tagMatch) phraseMatchCounts[p] += 1;
     });
 
     reviewRules.forEach(function (rule) {
@@ -609,6 +612,8 @@ function compute(items, options) {
     var tagCount = phraseTagCounts[p] || 0;
     var captionPercent = total ? Math.round((captionCount / total) * 1000) / 10 : 0;
     var tagPercent = total ? Math.round((tagCount / total) * 1000) / 10 : 0;
+    var matchCount = phraseMatchCounts[p] || 0;
+    var matchPercent = total ? Math.round((matchCount / total) * 1000) / 10 : 0;
     return {
       phrase: p,
       count: captionCount,
@@ -616,7 +621,9 @@ function compute(items, options) {
       captionCount: captionCount,
       tagCount: tagCount,
       captionPercent: captionPercent,
-      tagPercent: tagPercent
+      tagPercent: tagPercent,
+      matchCount: matchCount,
+      matchPercent: matchPercent
     };
   });
 

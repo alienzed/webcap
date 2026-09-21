@@ -10,7 +10,7 @@ gradient_accumulation_steps = 1
 gradient_clipping = 1.0
 warmup_steps = 100
 
-checkpoint_every_n_epochs = 5
+checkpoint_every_n_epochs = 10
 activation_checkpointing = true
 partition_method = "parameters"
 save_dtype = "bfloat16"

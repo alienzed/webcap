@@ -54,6 +54,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.training.conda_environment) out.training.conda_environment = '';
   if (!out.training.activate_script) out.training.activate_script = '';
   if (typeof out.training.h3_split_cache_phase !== 'boolean') out.training.h3_split_cache_phase = false;
+  if (!Number.isInteger(out.training.repeat_reference_epochs) || out.training.repeat_reference_epochs <= 0) out.training.repeat_reference_epochs = 90;
   if (!out.training.test_copy_roots || typeof out.training.test_copy_roots !== 'object') out.training.test_copy_roots = {};
   appSettingsTestCopyRoots.forEach(function (root) {
     out.training.test_copy_roots[root.stage] = String(out.training.test_copy_roots[root.stage] || '');
@@ -107,6 +108,7 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsTrainingCondaEnvironmentEl) ui.appSettingsTrainingCondaEnvironmentEl.value = c.training.conda_environment || '';
   if (ui.appSettingsTrainingActivateScriptEl) ui.appSettingsTrainingActivateScriptEl.value = c.training.activate_script || '';
   if (ui.appSettingsTrainingH3SplitCachePhaseEl) ui.appSettingsTrainingH3SplitCachePhaseEl.checked = !!c.training.h3_split_cache_phase;
+  if (ui.appSettingsTrainingRepeatReferenceEpochsEl) ui.appSettingsTrainingRepeatReferenceEpochsEl.value = c.training.repeat_reference_epochs;
   appSettingsTestCopyRoots.forEach(function (root) {
     var el = ui[root.uiKey];
     if (el) el.value = c.training.test_copy_roots[root.stage] || '';
@@ -134,6 +136,8 @@ function collectAppSettingsFormConfig() {
   base.training.conda_environment = ui.appSettingsTrainingCondaEnvironmentEl ? ui.appSettingsTrainingCondaEnvironmentEl.value : '';
   base.training.activate_script = ui.appSettingsTrainingActivateScriptEl ? ui.appSettingsTrainingActivateScriptEl.value : '';
   base.training.h3_split_cache_phase = !!(ui.appSettingsTrainingH3SplitCachePhaseEl && ui.appSettingsTrainingH3SplitCachePhaseEl.checked);
+  var repeatReferenceEpochs = ui.appSettingsTrainingRepeatReferenceEpochsEl ? Number(ui.appSettingsTrainingRepeatReferenceEpochsEl.value) : 90;
+  base.training.repeat_reference_epochs = Number.isInteger(repeatReferenceEpochs) && repeatReferenceEpochs > 0 ? repeatReferenceEpochs : 90;
   base.training.test_copy_roots = {};
   appSettingsTestCopyRoots.forEach(function (root) {
     var el = ui[root.uiKey];

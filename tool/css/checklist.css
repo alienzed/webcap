@@ -1544,10 +1544,6 @@
   border-color: #9aa9bc;
 }
 
-/* Requirement keyword match highlight */
-.checklist-item-matched {
-  background-color: #dcfce7;
-}
 html[data-theme="dark"] #caption-checklist-panel button:not(.group-workbench-action-btn):not(.group-workbench-term-btn) {
   background: #1a2230;
   border-color: var(--border);
@@ -1753,10 +1749,6 @@ html[data-theme="dark"] .annotate-strip-group-title-reviewed {
 
 html[data-theme="dark"] .annotate-strip-group-title-incomplete {
   color: #fca5a5;
-}
-
-html[data-theme="dark"] .checklist-item-matched {
-  background-color: rgba(22, 101, 52, 0.34);
 }
 
 html[data-theme="dark"] #checklist-items .checklist-row-reviewed {

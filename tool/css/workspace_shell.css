@@ -206,20 +206,20 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
-  padding: 6px 4px;
+  gap: 2px;
+  padding: 5px 3px;
   border-right: 1px solid var(--border);
   background: var(--panel);
 }
 
 .activity-rail-btn {
-  width: 34px;
-  height: 34px;
+  width: 100%;
+  height: 38px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -232,10 +232,9 @@
 
 .activity-rail-btn.active {
   border-color: transparent;
-  border-radius: 0;
-  background: var(--panel-soft);
+  background: color-mix(in srgb, var(--panel-soft) 88%, var(--accent));
   color: var(--text);
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: none;
 }
 
 .activity-rail-btn.hidden {
@@ -263,8 +262,8 @@
 }
 
 .activity-rail-icon {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -380,7 +379,7 @@
   z-index: 8;
   top: auto;
   bottom: 8px;
-  left: calc(var(--sidebar-width) +18px);
+  left: 8px;
   width: 24px;
   min-width: 24px;
   height: 28px;
@@ -399,10 +398,6 @@
   color: var(--text);
 }
 
-.app.shell-revamp.left-rail-collapsed .sidebar-edge-toggle-btn,
-.app.shell-revamp.sidebar-hidden .sidebar-edge-toggle-btn {
-  left: 8px;
-}
 
 .app.shell-revamp .sidebar-panel {
   grid-area: sidebar;
@@ -789,9 +784,6 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     grid-column: 2;
   }
 
-  .app.shell-revamp:not(.left-rail-collapsed):not(.sidebar-hidden) .sidebar-edge-toggle-btn {
-    left: calc(260px - 32px);
-  }
 
   .app-header-model-control select {
     max-width: 145px;
@@ -854,10 +846,6 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     grid-column: 2;
   }
 
-  .app.shell-revamp:not(.left-rail-collapsed):not(.sidebar-hidden) .sidebar-edge-toggle-btn {
-    left: auto;
-    right: 8px;
-  }
 
   .app.shell-revamp,
   .app.shell-revamp.left-rail-collapsed,

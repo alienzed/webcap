@@ -52,7 +52,7 @@
                         <path d="m8 15 3-3 2.5 2.5 2-2L20 17"></path>
                     </svg>
                 </button>
-                <button id="activity-training-btn" type="button" class="activity-rail-btn" title="Training" aria-label="Training" aria-pressed="false" aria-controls="training-navigator">
+                <button id="activity-training-btn" type="button" class="activity-rail-btn" title="Training Queue &amp; History" aria-label="Training Queue and History" aria-pressed="false" aria-controls="training-navigator">
                     <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M4 19V11"></path>
                         <path d="M10 19V7"></path>
@@ -354,7 +354,7 @@
                     </div>
                     <div class="stats-panel sidebar-drawer-zone">
                         <details id="sidebar-set-actions-drawer" class="sidebar-drawer sidebar-set-actions-drawer" open>
-                            <summary class="sidebar-drawer-summary">Set Workspace</summary>
+                            <summary class="sidebar-drawer-summary">Set Actions</summary>
                             <div class="sidebar-drawer-body">
                                 <button id="create-set-from-results-btn" type="button" class="review-captions-btn sidebar-create-set-btn hidden" title="Create a new set with the current filter results">
                                     <span class="btn-glyph" aria-hidden="true">&#8627;</span>
@@ -425,12 +425,12 @@
                                 <div id="training-editor-empty" class="training-editor-empty hidden">
                                     <div class="training-overview-header">
                                         <div class="training-overview-title-row">
-                                            <div class="training-overview-title">Training Items</div>
+                                            <div class="training-overview-title">Included Items</div>
                                             <button id="training-item-overview-toggle-btn" type="button" class="training-overview-toggle" aria-expanded="true" title="Collapse training items" aria-label="Collapse training items">&#9660;</button>
                                         </div>
-                                        <div id="training-item-overview-summary" class="training-overview-summary">Visible media selected for the next training run appears here.</div>
+                                        <div id="training-item-overview-summary" class="training-overview-summary">All currently visible media is included in the next training run.</div>
                                     </div>
-                                    <div id="training-item-overview" class="training-item-overview" aria-label="Visible training items"></div>
+                                    <div id="training-item-overview" class="training-item-overview" aria-label="Included training items"></div>
                                 </div>
                                 <div id="training-config-empty" class="training-editor-empty hidden">Choose a configuration file in Step 2.</div>
                                 <div id="training-runner-output-view" class="training-runner-output-view hidden">
@@ -473,7 +473,7 @@
                                     class="caption-helper-tab-btn active"
                                     data-caption-helper-tab="requirements"
                                     type="button"
-                                >Groups</button>
+                                >Manage Groups</button>
                                 <button
                                     id="caption-helper-tab-tags-btn"
                                     class="caption-helper-tab-btn"
@@ -506,7 +506,7 @@
                             </div>
                             <div id="caption-helper-tab-requirements" class="caption-helper-tab-pane">
                                 <div class="caption-helper-section-title-row">
-                                    <div class="caption-helper-section-title">Groups</div>
+                                    <div class="caption-helper-section-title">Manage Groups</div>
                                     <div class="caption-helper-section-controls">
                                         <div id="workbench-annotation-actions" class="workbench-annotation-actions hidden" aria-label="Annotation view controls">
                                             <button
@@ -762,7 +762,7 @@
                                                 <span>Starting point</span>
                                                 <select id="training-run-starting-point-select">
                                                     <option value="fresh">Fresh</option>
-                                                    <option value="resume">Resume checkpoint</option>
+                                                    <option value="resume">Resume from checkpoint</option>
                                                     <option value="initializer">Fine-tune from saved LoRA</option>
                                                 </select>
                                             </label>

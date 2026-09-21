@@ -734,6 +734,53 @@ def copy_candidate_epoch_to_test_response(folder, job_id, epoch):
         return {"ok": False, "error": str(exc)}, 400
 
 
+
+def remove_candidate_epoch_from_test(folder, job_id, epoch):
+    """Remove test-folder copies for one saved LoRA without touching the source epoch."""
+    _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    source = _candidate_safetensors_path(folder, job_id, epoch)
+    destination_directory = _candidate_test_directory_for_run(run, create_missing=False)
+    destinations = [
+        destination_directory / _candidate_test_file_name(run, epoch),
+        destination_directory / source.name,
+    ]
+    removable = []
+    seen = set()
+    for destination in destinations:
+        key = str(destination)
+        if key in seen:
+            continue
+        seen.add(key)
+        if destination.is_file() and not destination.is_symlink():
+            removable.append(destination)
+    if not removable:
+        raise LookupError("Epoch is not present in the configured Test folder.")
+
+    removed = []
+    for destination in removable:
+        destination.unlink()
+        sidecar = _candidate_test_sidecar_path(destination)
+        if sidecar.is_file() and not sidecar.is_symlink():
+            sidecar.unlink()
+        removed.append(str(destination))
+    return {
+        "removed": removed,
+        "sourceFileName": source.name,
+        "epoch": int(epoch),
+        "stage": str(run.get("stages") or "").strip().lower(),
+    }
+
+
+def remove_candidate_epoch_from_test_response(folder, job_id, epoch):
+    try:
+        return {"ok": True, **remove_candidate_epoch_from_test(folder, job_id, epoch)}, 200
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    except (RuntimeError, ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
 def candidate_analysis_response(folder, job_id, algorithm="v5"):
     """Analyze one recorded run without accepting a client filesystem path."""
     if algorithm not in _candidate_algorithms:

@@ -737,3 +737,29 @@ def test_read_epochs_from_training_config_handles_non_utf8_bytes(tmp_path):
     config_path = tmp_path / "config.hi.toml"
     config_path.write_bytes(b"\xff\xfe\nepochs = 42\n")
     assert read_epochs_from_training_config(config_path, fallback=80) == 42
+
+
+def test_h3_repeat_planning_uses_fixed_reference_epochs(tmp_path, monkeypatch):
+    set_folder = tmp_path / "set"
+    _write_h3_video_manifest(set_folder, 136, include_image=True)
+    monkeypatch.setattr(dataset_config_module.app_config, "config", {"training": {"repeat_reference_epochs": 90}})
+
+    config_path = set_folder / "config.h3.toml"
+    config_path.write_text("epochs = 30\n", encoding="utf-8")
+    generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
+    first_text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    first_repeats = [line.strip() for line in first_text.splitlines() if line.strip().startswith("num_repeats =")]
+    first_plan = json.loads((set_folder / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))["stages"]["h3"]
+
+    config_path.write_text("epochs = 150\n", encoding="utf-8")
+    generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
+    second_text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    second_repeats = [line.strip() for line in second_text.splitlines() if line.strip().startswith("num_repeats =")]
+    second_plan = json.loads((set_folder / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))["stages"]["h3"]
+
+    assert first_repeats == second_repeats
+    assert first_plan["repeatReferenceEpochs"] == 90
+    assert second_plan["repeatReferenceEpochs"] == 90
+    assert first_plan["epochs"] == 30
+    assert second_plan["epochs"] == 150
+    assert second_plan["estimatedSteps"] == first_plan["estimatedSteps"] * 5

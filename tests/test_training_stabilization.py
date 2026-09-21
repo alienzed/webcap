@@ -9,7 +9,7 @@ from PIL import Image
 from tool.server import config as app_config
 from tool.server import app as app_module
 from tool.server import run_ops, training_bundle, training_history, training_runner, training_review
-from tool.server.training_action import allocate_action, read_action, relocate_folder_actions, set_root_for_folder
+from tool.server.training_action import allocate_action, read_action
 from tool.server.training_config_files import reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage, profile_for_mode
 from tool.server.training_setup import ensure_training_setup
@@ -1063,7 +1063,7 @@ def test_finish_after_epoch_does_not_require_a_configured_savepoint(tmp_path, mo
     assert training_runner._read_state()["jobs"][0]["finishAfterEpoch"] == 3
 
 
-def test_missing_history_is_empty_and_invalid_legacy_index_does_not_gate_folder_history(tmp_path, monkeypatch):
+def test_missing_history_is_empty_and_invalid_history_is_loud(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
     assert training_history.read_history(folder)["jobs"] == []
@@ -1071,7 +1071,8 @@ def test_missing_history_is_empty_and_invalid_legacy_index_does_not_gate_folder_
     recent.parent.mkdir()
     recent.write_text("{bad", encoding="utf-8")
 
-    assert training_history.read_history(folder)["jobs"] == []
+    with pytest.raises(ValueError):
+        training_history.read_history(folder)
 
 
 def test_training_modules_do_not_apply_permissions_repairs():

@@ -768,6 +768,41 @@ function renderPreviewHtml(isImage, src, titleText) {
   } catch (_keyBindErr) {}
 }
 
+function liveFolderTrainingStatus(folderName) {
+  var childFolder = (state.folder ? state.folder + '/' : '') + String(folderName || '');
+  var jobs = Array.isArray(trainingWorkspaceState.runnerJobs) ? trainingWorkspaceState.runnerJobs : [];
+  var queuedPosition = 0;
+  var queuedMatch = null;
+  var activeMatch = null;
+  jobs.forEach(function (job) {
+    var status = String(job && job.status || '');
+    var folder = String(job && job.folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    if (status === 'queued') {
+      queuedPosition += 1;
+      if (!queuedMatch && folder === childFolder) queuedMatch = { position: queuedPosition };
+    }
+    if (!activeMatch && folder === childFolder && ['starting', 'running', 'stopping'].indexOf(status) !== -1) {
+      activeMatch = job;
+    }
+  });
+  if (activeMatch) return { status: 'training', label: 'Training' };
+  if (queuedMatch) return { status: 'queued', label: 'Queued #' + queuedMatch.position };
+  return null;
+}
+
+function refreshFolderQueueStatusBadges() {
+  var rows = ui.mediaListEl.querySelectorAll('.media-item[data-type="folder"]');
+  Array.prototype.forEach.call(rows, function (row) {
+    var host = row.querySelector('.folder-training-indicator');
+    if (!host) throw new Error('Folder row is missing its training-status host.');
+    var status = liveFolderTrainingStatus(row.getAttribute('data-key') || '');
+    host.innerHTML = status
+      ? '<span class="training-folder-status training-folder-status--' + escapeHtml(status.status) + '">' + escapeHtml(status.label) + '</span>'
+      : '';
+  });
+}
+
+
 async function renderFileList() {
   debugLog('[renderFileList] Rendering file list.');
   var renderSeq = ++state.listRenderSeq;
@@ -839,23 +874,15 @@ async function renderFileList() {
       colorDot = '<span class="flag-dot flag-dot--' + flagColor + '" style="margin-left:8px;"></span>';
     }
     var label = '🗀 ' + folderItem.name;
-    var trainingStatus = folderItem.trainingStatus
-      ? String(folderItem.trainingStatus.status || 'never')
-      : '';
-    var trainingLabel = folderItem.trainingStatus
-      ? String(folderItem.trainingStatus.label || trainingStatus)
-      : '';
-    var trainingBadge = trainingStatus && trainingStatus !== 'never'
-      ? '<span class="training-folder-status training-folder-status--' + escapeHtml(trainingStatus) + '">' + escapeHtml(trainingLabel) + '</span>'
-      : '';
     var row = document.createElement('div');
     row.className = 'media-item folder-item';
     row.setAttribute('data-type', 'folder');
     row.setAttribute('data-key', folderItem.name);
-    row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%"><span>' + label + '</span><span>' + trainingBadge + colorDot + '</span></div>';
+    row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;width:100%"><span>' + label + '</span><span><span class="folder-training-indicator"></span>' + colorDot + '</span></div>';
     ui.mediaListEl.appendChild(row);
     matchCount++;
   }
+  refreshFolderQueueStatusBadges();
 
   // Render media items
   mediaItems.forEach(function (mediaItem) {

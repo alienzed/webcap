@@ -356,9 +356,12 @@ function trainingCandidatesPinnedActionsHtml(epoch, data) {
   var inTestFolder = artifact.inTestFolder === true;
   var testFolderStatus = data.testFolderStatus || {};
   var unavailable = testFolderStatus.state === 'unknown' ? '<div class="training-candidates-copy-status">Test folder unavailable: ' + escapeHtml(String(testFolderStatus.error || 'Unknown error')) + '</div>' : '';
+  var testAction = inTestFolder ? 'remove' : 'copy';
+  var testLabel = inTestFolder ? 'Remove from Test Folder' : 'Copy to Test Folder';
+  var testTitle = inTestFolder ? 'Removes only the test-folder copy; the saved epoch remains.' : 'Copies this saved epoch into the configured test folder.';
   return '<div class="training-candidates-pinned-actions">' +
     '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapedEpoch + '">Open Epoch Folder</button>' +
-    '<button type="button" class="review-captions-btn training-candidates-copy-test" data-training-candidate-copy-test="' + escapedEpoch + '"' + (inTestFolder ? ' disabled aria-disabled="true"' : '') + '>' + (inTestFolder ? 'In Test Folder' : 'Copy to Test') + '</button>' +
+    '<button type="button" class="review-captions-btn training-candidates-test-toggle is-' + testAction + '" data-training-candidate-test-epoch="' + escapedEpoch + '" data-training-candidate-test-action="' + testAction + '" title="' + testTitle + '">' + testLabel + '</button>' +
     '<button type="button" class="review-captions-btn training-candidates-open-test" data-training-candidate-open-test>Open Test Folder</button>' +
     '</div><div class="training-candidates-copy-status" data-training-candidate-copy-status aria-live="polite"></div>' + unavailable;
 }
@@ -464,33 +467,36 @@ function wireTrainingCandidatesChart() {
       });
       return;
     }
-    var copyButton = event.target.closest ? event.target.closest('.training-candidates-copy-test') : null;
-    if (copyButton) {
+    var testButton = event.target.closest ? event.target.closest('.training-candidates-test-toggle') : null;
+    if (testButton) {
       event.stopPropagation();
-      if (copyButton.disabled) return;
-      var copyEpoch = copyButton.getAttribute('data-training-candidate-copy-test');
-      var copyFolder = String(trainingWorkspaceState.candidateFolder || '');
-      var copyJobId = String(trainingWorkspaceState.candidateJobId || '');
-      if (!copyFolder || !copyJobId) throw new Error('Candidate analysis has no selected training run.');
-      copyButton.disabled = true;
-      copyButton.textContent = 'Copying…';
-      trainingRunnerRequest('/fs/training_candidates/copy_to_test', {
+      if (testButton.disabled) return;
+      var testEpoch = testButton.getAttribute('data-training-candidate-test-epoch');
+      var testAction = testButton.getAttribute('data-training-candidate-test-action');
+      var testFolder = String(trainingWorkspaceState.candidateFolder || '');
+      var testJobId = String(trainingWorkspaceState.candidateJobId || '');
+      if (!testFolder || !testJobId) throw new Error('Candidate analysis has no selected training run.');
+      if (testAction !== 'copy' && testAction !== 'remove') throw new Error('Unknown test-folder action.');
+      var originalLabel = testButton.textContent;
+      testButton.disabled = true;
+      testButton.textContent = testAction === 'remove' ? 'Removing…' : 'Copying…';
+      trainingRunnerRequest('/fs/training_candidates/' + (testAction === 'remove' ? 'remove_from_test' : 'copy_to_test'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: copyFolder, jobId: copyJobId, epoch: copyEpoch })
+        body: JSON.stringify({ folder: testFolder, jobId: testJobId, epoch: testEpoch })
       }).then(function () {
-        if (String(trainingWorkspaceState.candidateFolder || '') !== copyFolder || String(trainingWorkspaceState.candidateJobId || '') !== copyJobId) return;
+        if (String(trainingWorkspaceState.candidateFolder || '') !== testFolder || String(trainingWorkspaceState.candidateJobId || '') !== testJobId) return;
         var artifacts = (((trainingWorkspaceState.candidatePayload || {}).analysis || {}).savedArtifacts || []);
         artifacts.forEach(function (artifact) {
-          if (Number(artifact.epoch) === Number(copyEpoch) && artifact.status === 'available') artifact.inTestFolder = true;
+          if (Number(artifact.epoch) === Number(testEpoch) && artifact.status === 'available') artifact.inTestFolder = testAction === 'copy';
         });
         renderTrainingCandidates();
       }).catch(function (err) {
-        if (!wrap.contains(popover) || Number(trainingWorkspaceState.candidatePinnedEpoch) !== Number(copyEpoch)) return;
-        copyButton.disabled = false;
-        copyButton.textContent = 'Copy to Test';
+        if (!wrap.contains(popover) || Number(trainingWorkspaceState.candidatePinnedEpoch) !== Number(testEpoch)) return;
+        testButton.disabled = false;
+        testButton.textContent = originalLabel;
         var status = popover.querySelector('[data-training-candidate-copy-status]');
         if (status) status.textContent = String(err.message || err);
-        positionPinned(trainingCandidatesEpochPlotPoint(copyEpoch, data));
+        positionPinned(trainingCandidatesEpochPlotPoint(testEpoch, data));
       });
       return;
     }

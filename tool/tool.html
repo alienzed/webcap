@@ -1160,6 +1160,10 @@
                                     <span class="app-settings-field-label">Venv Activate Script</span>
                                     <input id="app-settings-training-activate-script" type="text" placeholder="/home/user/diffusion-pipe/.venv/bin/activate">
                                 </label>
+                                <label class="app-settings-field" title="Used to calculate dataset repeats. Actual run epochs do not affect repeat planning.">
+                                    <span class="app-settings-field-label">Repeat reference epochs</span>
+                                    <input id="app-settings-training-repeat-reference-epochs" type="number" min="1" step="1" value="90">
+                                </label>
                             </div>
                         </section>
                         <section class="app-settings-section">

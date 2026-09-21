@@ -6,15 +6,16 @@ The runner's ownership and recovery rules are defined in [training_runner_contra
 
 ## Workflow
 
-1. Open **Training** from the permanent activity rail and select the working model in the application header. The model choice is remembered per set.
-2. Inspect or edit the setup's config and dataset TOMLs. Selecting the setup creates only missing files.
-3. Use **Reset** only when intentionally restoring one training config or recalculating one dataset TOML from the visible media.
-4. Filter or focus the media grid to the exact items to train.
-5. Choose the run option and select **Train this set**, or generate a manual command.
+1. Open **Training** from the permanent activity rail and select the **Base Model** in the application header. The model choice is remembered per set.
+2. Set the normal run parameters in **Run setup**: learning rate, rank, epochs, and dropout. These start from the current model template.
+3. Review the generated bucket plan and use **Adjust buckets** when the managed dataset needs a different supported target.
+4. Use **Advanced configuration** for raw config/dataset TOML edits. Selecting the setup creates only missing files; **Reset** is the explicit way to restore one training config or regenerate one dataset TOML from the visible media.
+5. Filter or focus the media grid to the exact items to train.
+6. Choose Fresh, Resume, or Fine-tune from saved LoRA and select **Train**, or generate a manual command.
 
 ## Workspace layout
 
-Training keeps its numbered setup, queue, GPU status, and recent runs in the center workspace. While a managed run is active, the permanent shell also mirrors background Training activity and the current GPU snapshot so leaving Training does not make the active job visually disappear. The right-side artifact area has explicit **Items**, **Config**, and **Run Log** tabs:
+Training keeps Run setup, the Training Queue, Training History, and run artifacts in the center workspace. The permanent shell keeps workload state, GPU utilization/VRAM, and free disk space visible across activities so leaving Training does not hide system state. The right-side artifact area has explicit **Items**, **Config**, and **Run Log** tabs:
 
 - Items is the default set-level view. Its tiles open the selected media back in Annotation.
 - Config opens the existing editable TOML surface, with compact file tabs for the setup's detected TOMLs. Switching files or away saves through the normal save path.
@@ -22,18 +23,21 @@ Training keeps its numbered setup, queue, GPU status, and recent runs in the cen
 
 The compact chevron in Items only collapses the tile overview; it does not alter the visible-media selection that will be captured.
 
-Train saves the open TOML before capture. It then creates a run-owned bundle containing the visible media, latest captions, exact saved TOMLs, and training plan. Capture materializes source media byte-for-byte; it does not currently normalize video FPS. The job enters the queue only after the bundle is complete. The proposed advanced, per-run model-native FPS option is documented in [training_profiles.md](training_profiles.md).
+Train saves any open TOML before capture. It then creates a run-owned bundle containing the visible media, latest captions, saved TOMLs, training plan, and the Run setup overrides selected for that action. Capture materializes source media byte-for-byte; it does not currently normalize video FPS. The job enters the queue only after the bundle is complete. The proposed advanced, per-run model-native FPS option is documented in [training_profiles.md](training_profiles.md).
 
-Wan2.2 `HI -> LO` creates two jobs sharing one captured bundle. Every separate Train action creates a separate bundle.
+Wan2.2 High and Low are independent run choices. Every separate Train action creates its own captured action evidence.
 
 ## Queue and run controls
 
-- `Train this set` starts when the runner is idle or adds the job behind active work.
-- `Pause` interrupts the active job, keeps it first, and holds the queue until `Resume`.
-- `Finish` intentionally ends the active job and allows queue processing to continue.
+- **Train** starts when the runner is idle or adds the job behind active work.
+- **Pause** interrupts the active job, keeps it first, and holds the queue until **Resume**.
+- **Finish** intentionally ends the active job and allows queue processing to continue.
 - Canceling a queued item removes that item only; it does not delete its captured bundle.
-- Jobs expose captured files, output folders, logs, history, GPU status, diagnostics, and checkpoint resume. Recent Runs keeps compact rows and offers an expandable facts view for timing, progress, dataset, and output details.
-- Managed Resume discovers only version-2 logical runs beneath the current set root and captures the current set again. Custom Resume is an explicit checkpoint directory; it creates a new logical run and never writes beside that source. H3 Resume includes the current capture's cache phase.
+- Jobs expose captured files, output folders, logs, progress, next-checkpoint ETA, diagnostics, and checkpoint Resume.
+- **Training History** is a lightweight metadata index in `.webcap_training/recent_runs.json`. Only recorded history rows appear; filesystem artifacts enrich those known rows with availability/actions but do not invent history.
+- Managed Resume discovers compatible current-set logical runs; Custom Resume accepts an explicit checkpoint directory and creates a new logical run without writing beside the source. H3 Resume includes the current capture's cache phase.
+- Resume applies the selected Run setup learning rate as `force_constant_lr` in the captured config so the chosen LR is effective after checkpoint restore.
+- Test Generations has its own FIFO/session flow and GPU reservation. Test jobs are not Training Queue jobs and do not appear in Training History.
 
 ## Manual command handoff
 
@@ -49,6 +53,8 @@ Relevant `tool/config.json` fields include:
 - `training.wsl_distribution`: optional explicit WSL distribution.
 - `training.conda_executable` and `training.conda_environment`: optional managed Conda runtime pair.
 - `training.activate_script`: optional activation script when Conda is not configured.
+- `training.repeat_reference_epochs`: fixed planning epoch count used when solving generated dataset repeats; default 90.
+- `training.test_copy_roots` and `training.test_copy_subfolder`: destinations used when staging saved candidate LoRAs into the Test Bench.
 - `training.enabled_profiles`: models shown when creating new training runs. At least one profile must remain enabled.
 
 Disabling a profile only hides it from new-run setup. Existing TOMLs, captured bundles, history, and Resume behavior remain untouched.
@@ -57,9 +63,10 @@ Disabling a profile only hides it from new-run setup. Existing TOMLs, captured b
 
 - `.webcap_training/queue.json` contains ordered scheduler work and live fields.
 - `.webcap_training/recent_runs.json` is the lightweight Training History metadata index and never gates scheduling.
-- Per-set `.webcap_training.json` stores set-local output-group metadata.
 - Queue and Training History metadata are convenience state. History rows remain useful even when their recorded output/log paths are later unavailable; existing files are checked only to enrich actions and availability. New action-owned captures, jobs, logs, and output live under `output/runs/<global-sequence>-<set-slug>--<hash>/<logical-run>/`.
 
-The persistent set TOMLs remain the editable configuration interface. Only app-owned runtime paths are rewritten in captured copies.
+The persistent set TOMLs remain the editable baseline. Learning rate, rank, epochs, and dropout selected in Run setup are written only into the captured config for that action; app-owned runtime paths are rewritten there as well.
+
+Generated dataset repeats are intentionally decoupled from the run's selected Epochs value. Repeat counts are solved against `training.repeat_reference_epochs` (90 by default); the actual run epochs still drive the captured config and estimated total work.
 
 For successful managed runs, WebCap records cumulative active training time: runner process time including startup, compilation, caching, checkpoints, and shutdown, while excluding queued and paused time. Explicit Resume inherits its parent run's total. Older history calculates a total lazily from complete timestamped log lineage when possible; incomplete legacy lineage intentionally has no displayed total.

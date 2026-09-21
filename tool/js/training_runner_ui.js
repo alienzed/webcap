@@ -222,6 +222,7 @@ function refreshTrainingRunnerStatus() {
       trainingWorkspaceState.runnerQueuePauseReason = String(payload.queuePauseReason || '');
       trainingWorkspaceState.runnerNotice = String(payload.runnerNotice || '');
       renderTrainingRunner();
+      refreshFolderQueueStatusBadges();
       var terminalOutcome = trainingWorkspaceState.runnerJobs.some(function (job) {
         return (job.status === 'completed' || job.status === 'finished_early' || job.status === 'failed' || job.status === 'stopped' || job.status === 'cancelled') &&
           priorJobsById[job.id] !== job.status;

@@ -15,20 +15,19 @@ def test_training_history_promotes_recorded_epoch_and_step_progress():
     assert 'progress["lr"] = learning_rate_matches[-1].strip()' in progress
 
 
-def test_training_history_has_no_index_only_clear_or_remove_controls():
+def test_training_history_keeps_metadata_index_and_clear_controls():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
     workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
     assert 'Training History' in html
-    assert 'Recent Runs' not in html
-    assert 'training-history-clear-btn' not in html
-    assert 'data-training-history-clear' not in script
-    assert 'clearTrainingHistory' not in script
-    assert 'data-training-history-clear' not in workspace
-    assert '/fs/training_history/clear' not in app
-    assert '/fs/training_history/job/clear' not in app
+    assert 'training-history-clear-btn' in html
+    assert 'data-training-history-clear' in script
+    assert 'function clearTrainingHistory()' in script
+    assert 'clearTrainingHistoryJob(clearId)' in workspace
+    assert '/fs/training_history/clear' in app
+    assert '/fs/training_history/job/clear' in app
 
 
 def test_training_history_offers_curve_analysis_for_an_available_resume_run():
@@ -76,6 +75,19 @@ def test_training_history_shows_captured_run_settings_and_short_unnamed_identity
 
 
 
+def test_metadata_backed_training_history_contract():
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
+
+    assert 'RECENT_RUNS_FILE_NAME = "recent_runs.json"' in history
+    assert "def _write_recent_runs(" in history
+    record = history[history.index("def record_job("):history.index("def history_payload(")]
+    assert "_write_recent_runs(recent)" in record
+    assert "def _managed_job_record_paths(" not in history
+    assert "def _job_records(" not in history
+    assert "record_job(folder_path, job)" in runner
+    assert "clear_history_job" in runner
+    assert "historyHidden" in runner
 def test_folder_backed_training_history_contract():
     history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
     runner = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")

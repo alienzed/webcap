@@ -118,6 +118,8 @@ def test_only_the_surface_grid_and_viewer_remain():
     assert "mediaGridBuildFilterControls" not in filters
     assert "media-grid-left-rail" not in css
     assert "media-grid-modal" not in css
+    assert ".app.shell-revamp.workspace-surface-grid .preview-shell > :not(#media-grid-surface)" in css
+    assert ".app.shell-revamp.workspace-view-grid .preview-shell > :not(#media-grid-surface)" not in css
 
 
 def test_grid_initializes_after_all_classic_scripts_are_loaded():

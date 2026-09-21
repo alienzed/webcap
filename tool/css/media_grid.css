@@ -502,11 +502,11 @@ body.media-grid-viewer-open {
 }
 
 /* Shell/grid host integration */
-.app.shell-revamp.workspace-view-grid #media-grid-surface {
+.app.shell-revamp.workspace-surface-grid #media-grid-surface {
   padding-top: 0;
 }
 
-.app.shell-revamp.workspace-view-grid .preview-shell > :not(#media-grid-surface) {
+.app.shell-revamp.workspace-surface-grid .preview-shell > :not(#media-grid-surface) {
   opacity: 0;
   pointer-events: none;
 }

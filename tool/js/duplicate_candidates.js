@@ -241,6 +241,8 @@ function renderDuplicateCandidatesReport() {
     group.items.forEach(function (item) {
       var media = document.createElement('div');
       media.className = 'duplicate-candidate-media';
+      media.title = 'Open ' + item.file + ' in media list';
+      media.onclick = function () { selectByFileName(item.file); };
       media.appendChild(duplicateCandidatePreview(item));
       var name = document.createElement('strong');
       name.className = 'duplicate-candidate-file';
@@ -259,7 +261,8 @@ function renderDuplicateCandidatesReport() {
       prune.type = 'button';
       prune.className = 'review-captions-btn duplicate-candidate-prune';
       prune.textContent = 'Prune';
-      prune.onclick = function () {
+      prune.onclick = function (event) {
+        event.stopPropagation();
         pruneMedia({ key: item.file, fileName: item.file }, { selectReplacement: false }).catch(function (err) {
           setStatus(String(err && err.message ? err.message : err));
         });

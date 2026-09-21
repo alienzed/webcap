@@ -430,7 +430,6 @@ function resetTrainingRunSetupForFolder(folder) {
   trainingWorkspaceState.reviewInitializers = [];
   trainingWorkspaceState.reviewInitializerExportId = '';
   trainingWorkspaceState.reviewInitializerCustomPath = '';
-  trainingWorkspaceState.reviewForceConstantLr = '';
   trainingWorkspaceState.runConfigDraft = null;
   trainingWorkspaceState.runConfigStage = '';
   trainingWorkspaceState.runConfigTemplateSignature = '';

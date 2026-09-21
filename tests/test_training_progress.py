@@ -185,6 +185,30 @@ def test_runner_progress_targets_the_end_of_the_current_checkpoint_epoch(tmp_pat
     assert job["progress"]["nextCheckpointEpoch"] == 5
     assert job["progress"]["checkpointEtaSeconds"] == 200
 
+
+def test_checkpoint_eta_falls_back_to_live_epoch_progress_without_planned_steps(tmp_path):
+    h3_path = tmp_path / "config.h3.toml"
+    h3_path.write_text("epochs = 100\ncheckpoint_every_n_epochs = 5\n", encoding="utf-8")
+    job = {
+        "stage": "h3",
+        "stages": "h3",
+        "snapshot": {"h3": str(h3_path)},
+    }
+
+    training_progress.sync_job_progress(
+        job,
+        "\n".join([
+            "Started new epoch: 52",
+            "[INFO] [Rank 0] step=5198, skipped=0, iter time (s): 2.0",
+            "[INFO] [Rank 0] step=5199, skipped=0, iter time (s): 2.0",
+            "[INFO] [Rank 0] step=5200, skipped=0, iter time (s): 2.0",
+        ]),
+    )
+
+    assert job["progress"]["nextCheckpointEpoch"] == 55
+    assert job["progress"]["checkpointEtaSeconds"] == 800
+
+
 def test_completed_job_flags_a_result_far_below_the_step_estimate_without_epoch_progress():
     job = {
         "status": "completed",

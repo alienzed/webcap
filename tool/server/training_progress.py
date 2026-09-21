@@ -146,8 +146,11 @@ def sync_job_progress(job, log_text):
         if next_checkpoint_epoch <= current_epochs:
             progress["checkpointEveryNEpochs"] = checkpoint_every_epochs
             progress["nextCheckpointEpoch"] = next_checkpoint_epoch
-            if planned_steps > 0 and seconds_per_step is not None:
-                checkpoint_steps = max(0.0, (next_checkpoint_epoch - float(epoch) + 1) * planned_steps / float(current_epochs))
+            checkpoint_stage_steps = float(planned_steps)
+            if checkpoint_stage_steps <= 0 and step is not None and stage_fraction > 0:
+                checkpoint_stage_steps = float(step) / stage_fraction
+            if checkpoint_stage_steps > 0 and seconds_per_step is not None:
+                checkpoint_steps = max(0.0, (next_checkpoint_epoch - float(epoch) + 1) * checkpoint_stage_steps / float(current_epochs))
                 progress["checkpointEtaSeconds"] = round(checkpoint_steps * seconds_per_step)
     job["progress"] = progress
 

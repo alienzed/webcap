@@ -10,6 +10,7 @@
     "conda_environment": "training-env",
     "activate_script": "",
     "h3_split_cache_phase": false,
+    "repeat_reference_epochs": 90,
     "test_copy_roots": {
       "h3": "",
       "krea2": "",

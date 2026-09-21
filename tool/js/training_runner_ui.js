@@ -635,7 +635,12 @@ function buildQueuedResumePointHtml(job) {
   var point = job && job.resumePoint && typeof job.resumePoint === 'object' ? job.resumePoint : {};
   if (!job || !job.resumeFromCheckpoint) return '';
   if (job.resumePointError) return '<div class="training-runner-queue-resume is-error">Could not inspect resume progress: ' + escapeHtml(job.resumePointError) + '</div>';
-  if (!Object.keys(point).length) return '';
+  if (!Object.keys(point).length) {
+    var resumePath = String(job.resumeFromCheckpoint || '');
+    var resumeParts = resumePath.replace(/\\/g, '/').split('/').filter(Boolean);
+    var resumeLabel = resumeParts.length ? resumeParts[resumeParts.length - 1] : 'Checkpoint';
+    return '<div class="training-runner-queue-resume-point" title="' + escapeHtml(resumePath) + '"><span><strong>Resume:</strong> ' + escapeHtml(resumeLabel) + '</span></div>';
+  }
   var step = Number(point.step);
   var epoch = Number(point.epoch);
   var expectedEpochs = Number(point.expectedEpochs);
@@ -697,7 +702,7 @@ function buildTrainingQueueHtml(queuedJobs) {
         ? '<div class="training-runner-queue-resume is-error">' + escapeHtml(queuedJob.sourceUnavailable) + '</div>'
         : '';
       var outputIdentity = trainingOutputIdentity(queuedJob);
-      var output = outputIdentity ? '<div class="training-runner-queue-resume" title="' + escapeHtml(queuedJob.effectiveOutputDir || queuedJob.outputRoot || '') + '"><strong>Run output:</strong> ' + escapeHtml(outputIdentity) + '</div>' : '';
+      var output = outputIdentity ? '<div class="training-runner-queue-resume" title="' + escapeHtml(queuedJob.outputRunPath || queuedJob.effectiveOutputDir || queuedJob.outputRoot || '') + '"><strong>Run output:</strong> ' + escapeHtml(outputIdentity) + '</div>' : '';
       var captured = Number(queuedJob.capturedItemCount || 0) ? '<div class="training-runner-queue-resume"><strong>Captured:</strong> ' + escapeHtml(String(queuedJob.capturedItemCount)) + ' items</div>' : '';
       var selected = queuedJob.id === trainingWorkspaceState.runnerSelectedJobId;
       var exceptionalStatus = status !== 'queued'

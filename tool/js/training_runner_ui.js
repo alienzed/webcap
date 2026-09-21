@@ -354,17 +354,26 @@ function getManagedTrainingOptions() {
     initializerExportId: initializer ? String(initializer.exportId || '') : '',
     initializerStage: usingInitializer ? String(trainingWorkspaceState.reviewInitializerStage || (initializer && initializer.stage) || stages) : '',
     initializerCustomPath: usingInitializer ? initializerCustomPath : '',
-    forceConstantLr: usingInitializer ? String(trainingWorkspaceState.reviewForceConstantLr || '') : ''
+    forceConstantLr: '',
+    trainingSettings: Object.assign({}, trainingWorkspaceState.runConfigDraft || {})
   };
 }
 
 function setManagedTrainingStages(stages) {
+  var previousStage = String(trainingWorkspaceState.runStages || '');
   if (stages !== 'hi' && stages !== 'lo' && stages !== 'krea2' && stages !== 'wan21' && stages !== 'h3') stages = 'h3';
   var selectedProfile = getSelectedTrainingModelProfile();
   if (selectedProfile && !getTrainingProfileRunForStage(selectedProfile, stages)) {
     stages = String(selectedProfile.runs[0].stages[0] || 'h3');
   }
   trainingWorkspaceState.runStages = stages;
+  if (previousStage && previousStage !== stages) {
+    trainingWorkspaceState.runConfigDraft = null;
+    trainingWorkspaceState.runConfigStage = '';
+    trainingWorkspaceState.runConfigTemplateSignature = '';
+    trainingWorkspaceState.runConfigDirty = false;
+    trainingWorkspaceState.runConfigError = '';
+  }
   var buttons = document.querySelectorAll('[data-training-stage]');
   buttons.forEach(function (button) {
     var active = button.getAttribute('data-training-stage') === stages;
@@ -451,7 +460,8 @@ function startManagedTraining() {
             initializerExportId: options.initializerExportId,
             initializerStage: options.initializerStage,
             initializerCustomPath: options.initializerCustomPath,
-            forceConstantLr: options.forceConstantLr
+            forceConstantLr: options.forceConstantLr,
+            trainingSettings: options.trainingSettings
         })
       });
     })

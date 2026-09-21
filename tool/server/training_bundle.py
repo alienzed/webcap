@@ -13,7 +13,7 @@ from .dataset_prep import (
     resolve_prepared_caption_text,
     write_prepared_caption,
 )
-from .training_config_files import apply_captured_initializer, with_dataset_path, with_output_dir
+from .training_config_files import apply_captured_initializer, apply_review_config_settings, with_dataset_path, with_output_dir
 from .training_profiles import config_for_stage, normalize_mode, profile_for_mode
 from .training_runtime import to_wsl_path
 from .training_review import validate_managed_review_stage
@@ -455,6 +455,7 @@ def materialize_training_bundle(
     review=None,
     initializer=None,
     capture_root=None,
+    config_settings=None,
 ):
     folder = Path(folder_path)
     action = Path(action_root)
@@ -549,6 +550,9 @@ def materialize_training_bundle(
         config_text = source_config.read_text(encoding="utf-8")
         config_text = with_dataset_path(config_text, dataset_wsl)
         config_text = with_output_dir(config_text, output_dir)
+        stage_config_settings = config_settings.get(stage) if isinstance(config_settings, dict) else None
+        if isinstance(stage_config_settings, dict):
+            config_text = apply_review_config_settings(config_text, stage_config_settings)
         if captured_initializer and str(initializer.get("stage") or "") == stage:
             config_text = apply_captured_initializer(
                 config_text,

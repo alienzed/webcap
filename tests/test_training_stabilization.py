@@ -10,7 +10,7 @@ from tool.server import config as app_config
 from tool.server import app as app_module
 from tool.server import run_ops, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
-from tool.server.training_config_files import reset_training_config_file
+from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage, profile_for_mode
 from tool.server.training_setup import ensure_training_setup
 
@@ -1167,3 +1167,103 @@ def test_terminal_training_job_retires_even_if_history_write_fails(tmp_path, mon
     training_runner._persist_reconciled_state(state)
 
     assert state["jobs"] == []
+
+
+def test_training_run_settings_are_bounded_and_dropout_zero_is_omitted():
+    source = """epochs = 100
+[adapter]
+rank = 32
+dropout = 0.04
+[optimizer]
+lr = 8e-5
+"""
+    updated = apply_review_config_settings(source, {
+        "optimizerLr": "9e-5",
+        "adapterRank": "16",
+        "epochs": "120",
+        "adapterDropout": "0",
+    })
+    parsed = tomllib.loads(updated)
+    assert parsed["epochs"] == 120
+    assert parsed["adapter"]["rank"] == 16
+    assert "dropout" not in parsed["adapter"]
+    assert parsed["optimizer"]["lr"] == pytest.approx(9e-5)
+
+    invalid = (
+        ({"optimizerLr": "9e-4"}, "Learning rate"),
+        ({"adapterRank": "64"}, "LoRA rank"),
+        ({"epochs": "1000"}, "Epochs"),
+        ({"adapterDropout": "0.005"}, "LoRA dropout"),
+        ({"adapterDropout": "0.21"}, "LoRA dropout"),
+    )
+    for settings, message in invalid:
+        with pytest.raises(ValueError, match=message):
+            apply_review_config_settings(source, settings)
+
+
+def test_training_bundle_applies_run_settings_without_mutating_set_config(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    source_before = (folder / "config.h3.toml").read_text(encoding="utf-8")
+    action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+
+    bundle = training_bundle.materialize_training_bundle(
+        folder,
+        action,
+        MINIMAX_H3_PROFILE_ID,
+        "normal",
+        "h3",
+        ["one.png"],
+        output_dirs={"h3": str(action / "output" / "minimax-h3")},
+        config_settings={"h3": {
+            "optimizerLr": "9e-5",
+            "adapterRank": "16",
+            "epochs": "125",
+            "adapterDropout": "0",
+        }},
+    )
+
+    captured = tomllib.loads(Path(bundle["artifacts"]["h3Config"]).read_text(encoding="utf-8"))
+    assert captured["epochs"] == 125
+    assert captured["optimizer"]["lr"] == pytest.approx(9e-5)
+    assert captured["adapter"]["rank"] == 16
+    assert "dropout" not in captured["adapter"]
+    assert (folder / "config.h3.toml").read_text(encoding="utf-8") == source_before
+
+
+def test_checkpoint_resume_forces_selected_learning_rate(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    resumed_run = tmp_path / "external-output" / "resume-run"
+    (resumed_run / "global_step1").mkdir(parents=True)
+    (resumed_run / "latest").write_text("global_step1\n", encoding="utf-8")
+    (resumed_run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    training_runner._write_state({"version": 3, "activeJobId": "", "jobs": [], "queuePaused": True, "queuePauseReason": "test"})
+
+    payload, status = training_runner.start_response(
+        "sets/subject",
+        queue=True,
+        stages="h3",
+        profile_id=MINIMAX_H3_PROFILE_ID,
+        run_id="train",
+        selected_media=["one.png"],
+        resume_from_checkpoint=str(resumed_run),
+        config_settings={
+            "optimizerLr": "9e-5",
+            "adapterRank": "32",
+            "epochs": "100",
+            "adapterDropout": "0.04",
+        },
+    )
+
+    assert status == 200 and payload["ok"] is True
+    job = training_runner._read_state()["jobs"][0]
+    captured = tomllib.loads(Path(job["bundleArtifacts"]["h3Config"]).read_text(encoding="utf-8"))
+    assert captured["optimizer"]["lr"] == pytest.approx(9e-5)
+    assert captured["force_constant_lr"] == pytest.approx(9e-5)
+    assert job["trainingSettings"]["forceConstantLr"] == "9e-5"

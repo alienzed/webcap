@@ -291,6 +291,7 @@ def _config_settings(path):
     return {
         "optimizerLr": optimizer.get("lr"),
         "adapterRank": adapter.get("rank"),
+        "epochs": parsed.get("epochs"),
         "adapterDropout": adapter.get("dropout", ""),
         "forceConstantLr": parsed.get("force_constant_lr", ""),
     }

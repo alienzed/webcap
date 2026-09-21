@@ -32,6 +32,7 @@ def train_run_response(
     initializer_stage="",
     initializer_custom_path="",
     force_constant_lr=None,
+    config_settings=None,
 ):
     if not folder:
         return Response("[ERROR] Missing folder argument\n", status=400, mimetype="text/plain")
@@ -48,6 +49,7 @@ def train_run_response(
         selected_mode = normalize_mode(mode)
         stages = selected_run["stages"][0]
         stage_names = (stages,)
+        requested_config_settings = dict(config_settings) if isinstance(config_settings, dict) else {}
         if bool(resume_action_id) != bool(resume_output_id):
             return Response("[ERROR] A managed resume requires both an action and output selection.\n", status=400, mimetype="text/plain")
         if resume_from_checkpoint and resume_output_id:
@@ -80,7 +82,14 @@ def train_run_response(
                 return Response("[ERROR] Saved LoRA initialization needs an action, export, and target stage.\n", status=400, mimetype="text/plain")
             initializer["stage"] = initializer_stage
             settings = (((review or {}).get("review") or {}).get("stages", {}).get(initializer_stage, {}).get("settings") or {})
-            initializer["forceConstantLr"] = force_constant_lr if force_constant_lr not in (None, "") else settings.get("optimizerLr")
+            initializer["forceConstantLr"] = (
+                force_constant_lr
+                if force_constant_lr not in (None, "")
+                else requested_config_settings.get("optimizerLr", settings.get("optimizerLr"))
+            )
+        effective_config_settings = dict(requested_config_settings)
+        if (resume_from_checkpoint or initializer) and effective_config_settings.get("optimizerLr") not in (None, ""):
+            effective_config_settings["forceConstantLr"] = effective_config_settings["optimizerLr"]
         if managed_action_root is not None:
             action_root, action = managed_action_root, managed_action
         else:
@@ -105,6 +114,7 @@ def train_run_response(
             distribution=runtime_settings["wslDistribution"],
             review=review if not review.get("customDataset") else None,
             initializer=initializer,
+            config_settings={stages: effective_config_settings},
         )
         def mark_manual(data):
             data["launchType"] = "manual"

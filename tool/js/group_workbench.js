@@ -139,6 +139,7 @@ function syncGroupWorkbenchVisibilityHeader(targetEl, mode) {
   hideReviewedBtn.title = groupWorkbenchHideReviewed
     ? 'Show reviewed annotation groups'
     : 'Hide groups already reviewed for this item';
+  hideReviewedBtn.setAttribute('aria-label', hideReviewedBtn.title);
   hideReviewedBtn.onclick = function () {
     groupWorkbenchHideReviewed = !groupWorkbenchHideReviewed;
     refreshGroupWorkbenchForCurrentItem();

@@ -75,7 +75,7 @@ def test_focus_set_catalog_groups_images_by_actual_short_side_resolution():
     assert "Math.min(dimensions.width, dimensions.height)" in script
     assert "isFocusSetImageItem(item)" in script
     assert "focusSetItemMatchesResolutionPreset(item, preset)" in script
-    assert "['Selection', 'Aspect Ratio', 'Resolution']" in script
+    assert "['Selection', 'Media Type', 'Aspect Ratio', 'Resolution', 'Scene Complexity']" in script
 
 
 def test_resolution_focus_sets_reuse_existing_folder_metadata_without_new_analysis():

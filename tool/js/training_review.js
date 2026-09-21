@@ -83,13 +83,11 @@ function renderTrainingStartingPointControls(payload) {
         var weight = item.weights && item.weights.length === 1 ? ' · ' + item.weights[0].name : '';
         return '<option value="' + escapeHtml(item.exportId) + '"' + (item.exportId === trainingWorkspaceState.reviewInitializerExportId ? ' selected' : '') + '>' + escapeHtml(item.runName + ' · ' + item.stage.toUpperCase() + ' · epoch' + item.epoch + weight) + '</option>';
       }).join('') + '</select></label>' : '') +
-      '<label class="training-run-option">LoRA file or folder<input type="text" data-review-initializer-custom-path value="' + escapeHtml(String(trainingWorkspaceState.reviewInitializerCustomPath || '')) + '" placeholder="Path to a .safetensors file or its folder"></label>' +
-      '<label class="training-run-option">Constant LR<input type="number" min="0" step="any" data-review-constant-lr value="' + escapeHtml(String(trainingWorkspaceState.reviewForceConstantLr || '')) + '"></label>';
+      '<label class="training-run-option">LoRA file or folder<input type="text" data-review-initializer-custom-path value="' + escapeHtml(String(trainingWorkspaceState.reviewInitializerCustomPath || '')) + '" placeholder="Path to a .safetensors file or its folder"></label>';
     var stageSelect = initializerFields.querySelector('[data-review-initializer-stage]');
     if (stageSelect) stageSelect.onchange = function () {
       trainingWorkspaceState.reviewInitializerStage = stageSelect.value;
       trainingWorkspaceState.reviewInitializerExportId = '';
-      trainingWorkspaceState.reviewForceConstantLr = String(((stages[stageSelect.value] || {}).settings || {}).optimizerLr || '');
       fetchTrainingReviewInitializers().then(function () { renderTrainingStartingPointControls(trainingWorkspaceState.review); renderTrainingReview(); });
     };
     var exportSelect = initializerFields.querySelector('[data-review-initializer-export]');
@@ -105,12 +103,6 @@ function renderTrainingStartingPointControls(payload) {
       if (customPath.value.trim()) trainingWorkspaceState.reviewInitializerExportId = '';
       renderTrainingReview();
     };
-    var constantLr = initializerFields.querySelector('[data-review-constant-lr]');
-    if (constantLr) constantLr.onchange = function () {
-      trainingWorkspaceState.reviewForceConstantLr = constantLr.value;
-      renderTrainingStartingPointControls(trainingWorkspaceState.review);
-      renderTrainingReview();
-    };
   } else {
     initializerFields.innerHTML = '';
   }
@@ -124,8 +116,6 @@ function renderTrainingStartingPointControls(payload) {
     if (select.value !== 'resume' && customResume) customResume.value = '';
     syncManagedTrainingResumeUi();
     if (select.value === 'initializer') {
-      var stage = reviewInitializerStage();
-      trainingWorkspaceState.reviewForceConstantLr = String(((stages[stage] || {}).settings || {}).optimizerLr || '');
       refreshTrainingReview().then(fetchTrainingReviewInitializers).then(function () { renderTrainingStartingPointControls(trainingWorkspaceState.review); renderTrainingReview(); });
     } else if (select.value === 'fresh') {
       refreshTrainingReview();
@@ -134,6 +124,104 @@ function renderTrainingStartingPointControls(payload) {
       renderTrainingReview();
     }
   };
+}
+
+function trainingRunTemplateSettings(payload) {
+  var stage = String(trainingWorkspaceState.runStages || '');
+  var stageReview = payload && payload.review && payload.review.stages && payload.review.stages[stage] || {};
+  var settings = stageReview.settings && typeof stageReview.settings === 'object' ? stageReview.settings : {};
+  return {
+    optimizerLr: settings.optimizerLr == null ? '' : String(settings.optimizerLr),
+    adapterRank: settings.adapterRank == null ? '' : String(settings.adapterRank),
+    epochs: settings.epochs == null ? (stageReview.epochs == null ? '' : String(stageReview.epochs)) : String(settings.epochs),
+    adapterDropout: settings.adapterDropout == null || settings.adapterDropout === '' ? '0' : String(settings.adapterDropout)
+  };
+}
+
+function validateTrainingRunSettings(settings) {
+  var data = settings && typeof settings === 'object' ? settings : {};
+  var lrText = String(data.optimizerLr == null ? '' : data.optimizerLr).trim();
+  var lr = Number(lrText);
+  if (!lrText || !Number.isFinite(lr) || lr < 1e-5 || lr > 2e-4) return 'Learning rate must be between 1e-5 and 2e-4.';
+  var rank = Number(data.adapterRank);
+  if (rank !== 16 && rank !== 32) return 'Rank must be 16 or 32.';
+  var epochsText = String(data.epochs == null ? '' : data.epochs).trim();
+  var epochs = Number(epochsText);
+  if (!/^[0-9]{1,3}$/.test(epochsText) || !Number.isInteger(epochs) || epochs < 1 || epochs > 999) return 'Epochs must be a whole number from 1 to 999.';
+  var dropoutText = String(data.adapterDropout == null ? '' : data.adapterDropout).trim();
+  var dropout = Number(dropoutText);
+  if (!dropoutText || !Number.isFinite(dropout) || dropout < 0 || dropout > 0.2 || (dropout > 0 && dropout < 0.01)) {
+    return 'Dropout must be 0, or between 0.01 and 0.2.';
+  }
+  return '';
+}
+
+function updateTrainingRunParameterState() {
+  var panel = document.getElementById('training-run-parameters');
+  var note = document.getElementById('training-run-parameters-note');
+  var error = document.getElementById('training-run-parameters-error');
+  var message = validateTrainingRunSettings(trainingWorkspaceState.runConfigDraft);
+  trainingWorkspaceState.runConfigError = message;
+  if (panel) panel.classList.toggle('is-dirty', !!trainingWorkspaceState.runConfigDirty);
+  if (note) {
+    var startPoint = String(trainingWorkspaceState.reviewStartingPoint || 'fresh');
+    var sourceLabel = trainingWorkspaceState.runConfigDirty ? 'Run-specific overrides' : 'Template defaults for this model';
+    note.textContent = startPoint === 'resume' ? sourceLabel + ' · LR forced on resume' : sourceLabel;
+  }
+  if (error) {
+    error.textContent = message;
+    error.classList.toggle('hidden', !message);
+  }
+  if (trainingWorkspaceState.review) reviewTrainButtonState(trainingWorkspaceState.review);
+}
+
+function renderTrainingRunParameters(payload) {
+  var panel = document.getElementById('training-run-parameters');
+  var lrInput = document.getElementById('training-run-lr-input');
+  var rankSelect = document.getElementById('training-run-rank-select');
+  var epochsInput = document.getElementById('training-run-epochs-input');
+  var dropoutInput = document.getElementById('training-run-dropout-input');
+  var resetButton = document.getElementById('training-run-parameters-reset');
+  if (!panel || !lrInput || !rankSelect || !epochsInput || !dropoutInput || !resetButton) return;
+
+  var stage = String(trainingWorkspaceState.runStages || '');
+  var defaults = trainingRunTemplateSettings(payload);
+  var signature = stage + ':' + JSON.stringify(defaults);
+  if (!trainingWorkspaceState.runConfigDraft || trainingWorkspaceState.runConfigStage !== stage ||
+      (!trainingWorkspaceState.runConfigDirty && trainingWorkspaceState.runConfigTemplateSignature !== signature)) {
+    trainingWorkspaceState.runConfigDraft = Object.assign({}, defaults);
+    trainingWorkspaceState.runConfigStage = stage;
+    trainingWorkspaceState.runConfigTemplateSignature = signature;
+    trainingWorkspaceState.runConfigDirty = false;
+  }
+
+  var draft = trainingWorkspaceState.runConfigDraft;
+  lrInput.value = String(draft.optimizerLr == null ? '' : draft.optimizerLr);
+  rankSelect.value = String(draft.adapterRank == null ? '' : draft.adapterRank);
+  epochsInput.value = String(draft.epochs == null ? '' : draft.epochs);
+  dropoutInput.value = String(draft.adapterDropout == null ? '' : draft.adapterDropout);
+
+  function bindDraft(input, key) {
+    input.oninput = function () {
+      trainingWorkspaceState.runConfigDraft[key] = input.value;
+      trainingWorkspaceState.runConfigDirty = true;
+      updateTrainingRunParameterState();
+    };
+    input.onchange = input.oninput;
+  }
+  bindDraft(lrInput, 'optimizerLr');
+  bindDraft(rankSelect, 'adapterRank');
+  bindDraft(epochsInput, 'epochs');
+  bindDraft(dropoutInput, 'adapterDropout');
+
+  resetButton.onclick = function () {
+    trainingWorkspaceState.runConfigDraft = Object.assign({}, defaults);
+    trainingWorkspaceState.runConfigStage = stage;
+    trainingWorkspaceState.runConfigTemplateSignature = signature;
+    trainingWorkspaceState.runConfigDirty = false;
+    renderTrainingRunParameters(payload);
+  };
+  updateTrainingRunParameterState();
 }
 
 function formatReviewAspect(ar) {
@@ -1031,7 +1119,7 @@ function reviewTrainButtonState(payload) {
   var checkpoint = document.getElementById('training-run-checkpoint-select');
   var manualResume = document.getElementById('training-run-resume-input');
   var startPoint = trainingWorkspaceState.reviewStartingPoint || 'fresh';
-  button.disabled = !!trainingWorkspaceState.reviewSavePending || !payload.ok || (startPoint === 'initializer' && !trainingWorkspaceState.reviewInitializerExportId && !String(trainingWorkspaceState.reviewInitializerCustomPath || '').trim()) || (startPoint === 'resume' && !(checkpoint && checkpoint.value) && !(manualResume && manualResume.value.trim()));
+  button.disabled = !!trainingWorkspaceState.reviewSavePending || !!trainingWorkspaceState.runConfigError || !payload.ok || (startPoint === 'initializer' && !trainingWorkspaceState.reviewInitializerExportId && !String(trainingWorkspaceState.reviewInitializerCustomPath || '').trim()) || (startPoint === 'resume' && !(checkpoint && checkpoint.value) && !(manualResume && manualResume.value.trim()));
 }
 
 function renderTrainingReview() {
@@ -1047,6 +1135,7 @@ function renderTrainingReview() {
     return;
   }
   renderTrainingStartingPointControls(canonicalPayload);
+  renderTrainingRunParameters(canonicalPayload);
   els.review.innerHTML = trainingReviewSummaryHtml(canonicalPayload);
   els.review.querySelector('[data-open-training-review]').onclick = openTrainingReviewModal;
   var resetBuckets = els.review.querySelector('[data-review-reset-buckets]');

@@ -271,8 +271,44 @@ def rewrite_toml_assignment(text, key, value=None, section=""):
     return text[:end] + ("" if text[:end].endswith("\n") else "\n") + insertion + text[end:]
 
 
+def _training_lr(value, label="Learning rate"):
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(label + " must be between 1e-5 and 2e-4.") from exc
+    if not math.isfinite(number) or number < 1e-5 or number > 2e-4:
+        raise ValueError(label + " must be between 1e-5 and 2e-4.")
+    return format(number, ".12g")
+
+
+def _training_choice_int(value, label, allowed):
+    if isinstance(value, bool):
+        raise ValueError(label + " must be " + " or ".join(str(item) for item in allowed) + ".")
+    try:
+        number = int(value)
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(label + " must be " + " or ".join(str(item) for item in allowed) + ".") from exc
+    if not math.isfinite(numeric) or numeric != number or number not in allowed:
+        raise ValueError(label + " must be " + " or ".join(str(item) for item in allowed) + ".")
+    return str(number)
+
+
+def _training_epochs(value):
+    if isinstance(value, bool):
+        raise ValueError("Epochs must be a whole number from 1 to 999.")
+    try:
+        number = int(value)
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Epochs must be a whole number from 1 to 999.") from exc
+    if not math.isfinite(numeric) or numeric != number or number < 1 or number > 999:
+        raise ValueError("Epochs must be a whole number from 1 to 999.")
+    return str(number)
+
+
 def apply_review_config_settings(config_text, settings):
-    """Apply the small, user-facing Training Review config surface.
+    """Apply the bounded user-facing run settings to one captured config.
 
     Values are deliberately limited to known scalar keys. This is not a TOML
     editor and never accepts a raw fragment or a caller-selected table path.
@@ -280,32 +316,38 @@ def apply_review_config_settings(config_text, settings):
     source = str(config_text or "")
     data = settings if isinstance(settings, dict) else {}
     if "optimizerLr" in data:
-        source = rewrite_toml_assignment(source, "lr", _toml_number(data["optimizerLr"], "Optimizer LR"), "optimizer")
+        source = rewrite_toml_assignment(source, "lr", _training_lr(data["optimizerLr"]), "optimizer")
     if "adapterRank" in data:
-        source = rewrite_toml_assignment(source, "rank", _toml_positive_int(data["adapterRank"], "LoRA rank"), "adapter")
+        source = rewrite_toml_assignment(
+            source, "rank", _training_choice_int(data["adapterRank"], "LoRA rank", (16, 32)), "adapter"
+        )
+    if "epochs" in data:
+        source = rewrite_toml_assignment(source, "epochs", _training_epochs(data["epochs"]))
     if "adapterDropout" in data:
         raw_dropout = data["adapterDropout"]
-        if raw_dropout in (None, ""):
-            source = rewrite_toml_assignment(source, "dropout", None, "adapter")
-        else:
-            try:
-                dropout = float(raw_dropout)
-            except (TypeError, ValueError) as exc:
-                raise ValueError("LoRA dropout must be a number from 0 to 1.") from exc
-            if not math.isfinite(dropout) or dropout < 0 or dropout > 1:
-                raise ValueError("LoRA dropout must be a number from 0 to 1.")
-            source = rewrite_toml_assignment(source, "dropout", format(dropout, ".12g"), "adapter")
+        try:
+            dropout = float(raw_dropout)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("LoRA dropout must be 0, or between 0.01 and 0.2.") from exc
+        if not math.isfinite(dropout) or dropout < 0 or dropout > 0.2 or (dropout > 0 and dropout < 0.01):
+            raise ValueError("LoRA dropout must be 0, or between 0.01 and 0.2.")
+        source = rewrite_toml_assignment(
+            source,
+            "dropout",
+            None if dropout == 0 else format(dropout, ".12g"),
+            "adapter",
+        )
     if "forceConstantLr" in data:
         raw_constant = data["forceConstantLr"]
         source = rewrite_toml_assignment(
             source,
             "force_constant_lr",
-            None if raw_constant in (None, "", False) else _toml_number(raw_constant, "Constant LR"),
+            None if raw_constant in (None, "", False) else _training_lr(raw_constant, "Constant LR"),
         )
     try:
         tomllib.loads(source)
     except tomllib.TOMLDecodeError as exc:
-        raise ValueError("Training Review produced invalid TOML: " + str(exc)) from exc
+        raise ValueError("Training run settings produced invalid TOML: " + str(exc)) from exc
     return source
 
 

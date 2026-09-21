@@ -542,6 +542,7 @@ def train_run_route():
         total_media_count=data.get("total_media_count"),
         initializer_action_id=data.get("initializerActionId") or "", initializer_export_id=data.get("initializerExportId") or "",
         initializer_stage=data.get("initializerStage") or "", initializer_custom_path=data.get("initializerCustomPath") or "", force_constant_lr=data.get("forceConstantLr"),
+        config_settings=data.get("trainingSettings"),
     )
 
 
@@ -591,6 +592,7 @@ def training_runner_start_route():
         initializer_stage=data.get("initializerStage") or "",
         initializer_custom_path=data.get("initializerCustomPath") or "",
         force_constant_lr=data.get("forceConstantLr"),
+        config_settings=data.get("trainingSettings"),
         reuse_capture_action_id=data.get("reuseCaptureActionId") or "",
         reuse_capture_path=data.get("reuseCapturePath") or "",
     )

@@ -79,6 +79,11 @@ function syncWorkingModelProfileSelect(folder) {
 
 function setSelectedTrainingModelProfile(profileId) {
   setWorkingModelProfileId(profileId, state.folder);
+  trainingWorkspaceState.runConfigDraft = null;
+  trainingWorkspaceState.runConfigStage = '';
+  trainingWorkspaceState.runConfigTemplateSignature = '';
+  trainingWorkspaceState.runConfigDirty = false;
+  trainingWorkspaceState.runConfigError = '';
   setManagedTrainingStages(trainingWorkspaceState.runStages);
 }
 
@@ -426,6 +431,11 @@ function resetTrainingRunSetupForFolder(folder) {
   trainingWorkspaceState.reviewInitializerExportId = '';
   trainingWorkspaceState.reviewInitializerCustomPath = '';
   trainingWorkspaceState.reviewForceConstantLr = '';
+  trainingWorkspaceState.runConfigDraft = null;
+  trainingWorkspaceState.runConfigStage = '';
+  trainingWorkspaceState.runConfigTemplateSignature = '';
+  trainingWorkspaceState.runConfigDirty = false;
+  trainingWorkspaceState.runConfigError = '';
   trainingWorkspaceState.reviewMediaView = 'images';
   trainingWorkspaceState.reviewAspect = '';
   trainingWorkspaceState.review = null;

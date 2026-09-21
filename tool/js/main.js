@@ -152,7 +152,8 @@ function runTrainCommandPreviewForCurrentFolder(options) {
         initializerExportId: options && options.initializerExportId ? options.initializerExportId : '',
         initializerStage: options && options.initializerStage ? options.initializerStage : '',
         initializerCustomPath: options && options.initializerCustomPath ? options.initializerCustomPath : '',
-        forceConstantLr: options && options.forceConstantLr ? options.forceConstantLr : ''
+        forceConstantLr: options && options.forceConstantLr ? options.forceConstantLr : '',
+        trainingSettings: options && options.trainingSettings ? options.trainingSettings : {}
       });
     })
     .then(function (outputText) {

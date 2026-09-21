@@ -1734,7 +1734,7 @@ def start_observer():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
+    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -2003,11 +2003,13 @@ def start_response(
     force_constant_lr=None,
     reuse_capture_action_id="",
     reuse_capture_path="",
+    config_settings=None,
 ):
     try:
         selected_profile, selected_run = profile_run(profile_id, run_id)
         selected_mode = normalize_mode(mode)
         stages = _normalize_training_stages(selected_run["stages"][0])
+        requested_config_settings = dict(config_settings) if isinstance(config_settings, dict) else {}
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint or resume_output_id, resume_stage)
         _, folder_path = _resolve_folder(folder)
         initial_disk = _training_disk_space(actions_root())
@@ -2042,7 +2044,11 @@ def start_response(
             else:
                 initializer = resolve_saved_initializer(folder_path, selected_profile["id"], initializer_stage, initializer_action_id, initializer_export_id)
             initializer["stage"] = initializer_stage
-            initializer["forceConstantLr"] = force_constant_lr
+            initializer["forceConstantLr"] = (
+                force_constant_lr
+                if force_constant_lr not in (None, "")
+                else requested_config_settings.get("optimizerLr")
+            )
         resume_path = str(resume_from_checkpoint or "").strip()
         if bool(resume_action_id) != bool(resume_output_id):
             raise ValueError("A managed resume requires both an action and output selection.")
@@ -2064,6 +2070,12 @@ def start_response(
                 key: validated_resume.get(key)
                 for key in ("checkpointAvailable", "checkpointTag", "epoch", "step", "expectedEpochs", "completed")
             }
+        effective_config_settings = dict(requested_config_settings)
+        if (resume_path or initializer) and effective_config_settings.get("optimizerLr") not in (None, ""):
+            # diffusion-pipe restores scheduler state on resume unless
+            # force_constant_lr is present. Keep the user-selected LR effective
+            # for checkpoint resumes and LoRA continuation alike.
+            effective_config_settings["forceConstantLr"] = effective_config_settings["optimizerLr"]
         if reuse_capture:
             action_root, action = read_action(str(reuse_capture_action_id).strip())
             bundle = _bundle_from_recorded_capture(
@@ -2086,6 +2098,7 @@ def start_response(
                 total_media_count=total_media_count, output_dirs={stages: output_dir},
                 distribution=distribution, review=review if not review.get("customDataset") else None,
                 initializer=initializer,
+                config_settings={stages: effective_config_settings},
             )
     except Exception as exc:
         return {"ok": False, "error": "Could not create the training capture: " + str(exc)}, 400
@@ -2101,6 +2114,7 @@ def start_response(
             action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, 0,
         )
         job["resumePoint"] = resume_point
+        job["trainingSettings"] = dict(effective_config_settings)
         def record_capture(data):
             if not reuse_capture:
                 try:

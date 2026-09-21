@@ -8,7 +8,11 @@ var FOCUS_SET_PRESETS = [
   { key: 'aspect_43', label: '4:3', group: 'Aspect Ratio', aspectBucket: '4:3' },
   { key: 'aspect_34', label: '3:4', group: 'Aspect Ratio', aspectBucket: '3:4' },
   { key: 'aspect_169', label: '16:9', group: 'Aspect Ratio', aspectBucket: '16:9' },
-  { key: 'aspect_916', label: '9:16', group: 'Aspect Ratio', aspectBucket: '9:16' }
+  { key: 'aspect_916', label: '9:16', group: 'Aspect Ratio', aspectBucket: '9:16' },
+  { key: 'resolution_768_plus', label: '768+', group: 'Resolution', minShortSide: 768 },
+  { key: 'resolution_512_767', label: '512–767', group: 'Resolution', minShortSide: 512, maxShortSide: 767 },
+  { key: 'resolution_384_511', label: '384–511', group: 'Resolution', minShortSide: 384, maxShortSide: 511 },
+  { key: 'resolution_below_384', label: 'Below 384', group: 'Resolution', maxShortSide: 383 }
 ];
 
 function getFocusSetAnalysisConfig() {
@@ -64,12 +68,47 @@ function getFocusSetSuggestedLookup(rows, fileNames) {
   return lookup;
 }
 
+function getFocusSetResolutionDimensions(value) {
+  var match = String(value || '').match(/^(\d+)\s*[x×]\s*(\d+)$/i);
+  if (!match) return null;
+  var width = Number(match[1]);
+  var height = Number(match[2]);
+  if (!isFinite(width) || !isFinite(height) || width <= 0 || height <= 0) return null;
+  return { width: width, height: height };
+}
+
+function isFocusSetImageItem(item) {
+  return !!(item && /\.(jpe?g|png|gif|webp|bmp)$/i.test(String(item.fileName || '')));
+}
+
+function getFocusSetImageShortSide(item) {
+  if (!isFocusSetImageItem(item)) return null;
+  var metadata = item.metadata || getMetadataForMedia(item.fileName);
+  var dimensions = getFocusSetResolutionDimensions(metadata && metadata.resolution);
+  return dimensions ? Math.min(dimensions.width, dimensions.height) : null;
+}
+
+function isFocusSetResolutionPreset(preset) {
+  return !!preset && (
+    typeof preset.minShortSide === 'number' ||
+    typeof preset.maxShortSide === 'number'
+  );
+}
+
+function focusSetItemMatchesResolutionPreset(item, preset) {
+  var shortSide = getFocusSetImageShortSide(item);
+  if (shortSide === null || !isFocusSetResolutionPreset(preset)) return false;
+  if (typeof preset.minShortSide === 'number' && shortSide < preset.minShortSide) return false;
+  if (typeof preset.maxShortSide === 'number' && shortSide > preset.maxShortSide) return false;
+  return true;
+}
+
 function getFocusSetPreset(presetKey) {
   return FOCUS_SET_PRESETS.find(function (preset) { return preset.key === presetKey; }) || null;
 }
 
 function isFocusSetPresetAvailable(preset) {
-  if (!preset || preset.aspectBucket) return true;
+  if (!preset || preset.aspectBucket || isFocusSetResolutionPreset(preset)) return true;
   if (preset.source === 'prune') return state.pruneCandidatesStatus === 'ready';
   var config = getFocusSetAnalysisConfig();
   return config.face && config.pose && state.focusSetMetadataStatus === 'ready';
@@ -95,6 +134,12 @@ function getFocusSetPresetFiles() {
       result[preset.key] = scopeItems.filter(function (item) {
         var metadata = item && (item.metadata || getMetadataForMedia(item.fileName));
         return mapAspectRatioToBucket(metadata && metadata.aspect) === preset.aspectBucket;
+      }).map(function (item) { return item.fileName; });
+      return;
+    }
+    if (isFocusSetResolutionPreset(preset)) {
+      result[preset.key] = scopeItems.filter(function (item) {
+        return focusSetItemMatchesResolutionPreset(item, preset);
       }).map(function (item) { return item.fileName; });
       return;
     }
@@ -137,7 +182,7 @@ function activateFocusSetPreset(key) {
 
 function buildFocusSetPresetOptions(filesByPreset, activeKey) {
   var html = '<option value="all"' + (activeKey === 'all' ? ' selected' : '') + '>All \u00b7 ' + (filesByPreset.all || []).length + '</option>';
-  ['Selection', 'Aspect Ratio'].forEach(function (group) {
+  ['Selection', 'Aspect Ratio', 'Resolution'].forEach(function (group) {
     var options = FOCUS_SET_PRESETS.filter(function (preset) { return preset.group === group; });
     if (!options.length) return;
     html += '<optgroup label="' + group + '">';

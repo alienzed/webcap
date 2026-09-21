@@ -647,7 +647,7 @@ function buildQueuedResumePointHtml(job) {
   if (epoch > 0) parts.push('epoch ' + Math.round(epoch).toLocaleString() + (expectedEpochs > 0 ? ' / ' + Math.round(expectedEpochs).toLocaleString() : ''));
   if (step > 0) parts.push('step ' + Math.round(step).toLocaleString());
   var fallbackLabel = point.checkpointAvailable ? 'Checkpoint found' : 'No valid latest checkpoint marker found';
-  return '<div class="training-runner-queue-resume-point"><span>' + escapeHtml(parts.join(' · ') || fallbackLabel) + '</span>' +
+  return '<div class="training-runner-queue-resume-point" title="' + escapeHtml(job.resumeFromCheckpoint || '') + '"><span><strong>Resume:</strong> ' + escapeHtml(parts.join(' · ') || fallbackLabel) + '</span>' +
     (percent ? '<div class="training-runner-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(percent) + '"><span style="width:' + percent.toFixed(1) + '%"></span></div>' : '') + '</div>';
 }
 
@@ -696,12 +696,9 @@ function buildTrainingQueueHtml(queuedJobs) {
       var sourceUnavailable = queuedJob.sourceUnavailable
         ? '<div class="training-runner-queue-resume is-error">' + escapeHtml(queuedJob.sourceUnavailable) + '</div>'
         : '';
-      var resume = queuedJob.resumeFromCheckpoint
-        ? '<div class="training-runner-queue-resume">Resume ' + escapeHtml(trainingStageLabel(queuedJob.resumeStage || queuedJob.stages || '')) + ': ' + escapeHtml(queuedJob.resumeFromCheckpoint) + '</div>'
-        : '';
       var outputIdentity = trainingOutputIdentity(queuedJob);
-      var output = outputIdentity ? '<div class="training-runner-queue-resume" title="' + escapeHtml(queuedJob.effectiveOutputDir || queuedJob.outputRoot || '') + '">Output: ' + escapeHtml(outputIdentity) + '</div>' : '';
-      var captured = Number(queuedJob.capturedItemCount || 0) ? '<div class="training-runner-queue-resume">Captured items: ' + escapeHtml(String(queuedJob.capturedItemCount)) + '</div>' : '';
+      var output = outputIdentity ? '<div class="training-runner-queue-resume" title="' + escapeHtml(queuedJob.effectiveOutputDir || queuedJob.outputRoot || '') + '"><strong>Run output:</strong> ' + escapeHtml(outputIdentity) + '</div>' : '';
+      var captured = Number(queuedJob.capturedItemCount || 0) ? '<div class="training-runner-queue-resume"><strong>Captured:</strong> ' + escapeHtml(String(queuedJob.capturedItemCount)) + ' items</div>' : '';
       var selected = queuedJob.id === trainingWorkspaceState.runnerSelectedJobId;
       var exceptionalStatus = status !== 'queued'
         ? '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>'
@@ -711,15 +708,20 @@ function buildTrainingQueueHtml(queuedJobs) {
         '<div class="training-runner-queue-copy">' +
           '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(stage) + '</strong>' + workload + '</div>' +
           '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
-          resume + buildQueuedResumePointHtml(queuedJob) + output + captured + sourceUnavailable + error +
+          buildQueuedResumePointHtml(queuedJob) + output + captured + sourceUnavailable + error +
         '</div>' +
         '<div class="training-runner-queue-controls">' +
           (String(queuedJob.outputRunPath || queuedJob.resumeFromCheckpoint || '').trim() ? '<button type="button" class="training-runner-queue-control" data-training-candidates="' + escapeHtml(queuedJob.id) + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
-          '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open effective output folder" aria-label="Open effective output folder">&#128193;</button>' +
-          (queuedJob.actionPath ? '<button type="button" class="training-runner-queue-control" data-training-job-action="' + escapeHtml(queuedJob.id) + '" title="Open action folder" aria-label="Open action folder">&#128451;</button>' : '') +
-          '<button type="button" class="training-runner-queue-control" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move up" aria-label="Move up"' + (index === 0 ? ' disabled' : '') + '>&#8593;</button>' +
-          '<button type="button" class="training-runner-queue-control" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move down" aria-label="Move down"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>&#8595;</button>' +
-          '<button type="button" class="training-runner-queue-control training-runner-queue-cancel" data-training-queue-action="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Remove from queue" aria-label="Remove from queue">&#215;</button>' +
+          '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open run output folder" aria-label="Open run output folder">&#128193;</button>' +
+          '<details class="training-runner-queue-more">' +
+            '<summary class="training-runner-queue-control" title="More queue actions" aria-label="More queue actions">&#8943;</summary>' +
+            '<div class="training-runner-queue-menu">' +
+              (queuedJob.actionPath ? '<button type="button" data-training-job-action="' + escapeHtml(queuedJob.id) + '">Open action folder</button>' : '') +
+              '<button type="button" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
+              '<button type="button" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>Move later</button>' +
+              '<button type="button" class="training-runner-queue-cancel" data-training-queue-action="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Remove from queue</button>' +
+            '</div>' +
+          '</details>' +
         '</div>' +
       '</div>';
     }).join('') + '</div>';

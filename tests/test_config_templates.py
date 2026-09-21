@@ -205,3 +205,13 @@ def test_regenerating_training_configs_preserves_the_configured_output_dir(tmp_p
 
     assert training_config_files_module.output_dir_from_config(folder, "hi") == original
     assert training_config_files_module.output_dir_from_config(folder, "lo") == original
+
+
+def test_training_repeat_reference_epochs_defaults_to_90():
+    normalized = config_module.validate_config_payload({"filesystem": {"root": "C:/training", "models": ""}, "training": {}})
+    assert normalized["training"]["repeat_reference_epochs"] == 90
+
+
+def test_training_repeat_reference_epochs_must_be_positive_integer():
+    with pytest.raises(ValueError, match="repeat_reference_epochs"):
+        config_module.validate_config_payload({"filesystem": {"root": "C:/training", "models": ""}, "training": {"repeat_reference_epochs": 0}})

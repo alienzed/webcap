@@ -88,17 +88,3 @@ def test_metadata_backed_training_history_contract():
     assert "record_job(folder_path, job)" in runner
     assert "clear_history_job" in runner
     assert "historyHidden" in runner
-def test_folder_backed_training_history_contract():
-    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
-    runner = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
-
-    assert 'JOB_RECORD_FILE_NAME = "job.json"' in history
-    assert "def _write_job_record(" in history
-    assert "def _managed_job_record_paths(" in history
-    assert "def _job_records(" in history
-    assert "managed_actions_for_folder(folder)" in history
-    assert "managed_actions()" not in history
-    assert "_write_recent_runs(recent)" not in history[history.index("def record_job("):history.index("def history_payload(")]
-    assert "record_job(folder_path, job)" in runner
-    assert "clear_history_job" not in runner
-    assert "historyHidden" not in runner

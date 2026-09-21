@@ -18,6 +18,8 @@ Canonical templates live in `tool/templates/`:
 
 Selecting a profile creates only its missing set-owned config and dataset TOMLs. Placeholder substitution resolves the training root, models root, and set path. Existing TOMLs are preserved.
 
+The normal Training **Run setup** exposes learning rate, rank, epochs, and dropout as per-run controls populated from the current template. Those values are applied to the captured run config and do not rewrite the set-owned TOML. Use the raw config editor for settings outside that common surface or when intentionally changing the persistent baseline.
+
 The per-file **Reset** action is the explicit way to restore its training template. Dataset Reset recalculates only the selected dataset TOML from the currently visible media.
 
 Train saves the open TOML, then captures the selected setup TOMLs and currently visible media in a run-owned bundle. Dataset TOML content is calculated by `tool/server/dataset_config.py`, not copied from static templates. See [training_profiles.md](training_profiles.md) for the files each profile uses.

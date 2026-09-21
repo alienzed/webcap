@@ -1,6 +1,6 @@
 # WebCap Docs Map
 
-Last reviewed against code: 2026-09-19
+Last reviewed against code: 2026-09-21
 
 This folder mixes three different kinds of documents:
 
@@ -21,8 +21,10 @@ Start here when you need to know what the app does today:
 - `docs/filtered_selection_set.md` - visible-media training capture behavior
 - `docs/train.md` - run capture, managed queue, Resume, and manual-handoff behavior
 - `docs/training_profiles.md` - supported models, persistent files, media requirements, and output roots
-- `docs/training_review.md` - reviewed bucket plans, effective settings, and immutable launch evidence
+- `docs/training_review.md` - bucket review plus the relationship between Run setup overrides and persistent TOMLs
 - `docs/dataset_config.md` - generated dataset roles, direct-folder capture, and saved-TOML behavior
+- `docs/repeat_targeting.md` - fixed-reference repeat calculation and its separation from run epochs
+- `docs/app_settings.md` - current Settings tabs, runtime paths, Copy-to-Test roots, and repeat-reference setting
 - `docs/image_bucketing.md` - single-bucket image selection and audit behavior
 - `docs/src_videos_semantics.md` - current `src_videos` rules
 - `docs/phrase_copy.md` - helper panel, annotate strip, and tag copy/paste
@@ -55,7 +57,6 @@ These are useful product notes, not authoritative implementation references:
 - `docs/ui_shell_refactor_plan.md` - completed phased migration record for the permanent activity rail/header shell
 - `docs/qa_panel.md`
 - `docs/generate_config_mode.md` - current model/stage dataset configuration
-- `docs/repeat_targeting.md` - dataset repeat calculation
 - `docs/video_clip.md`
 - `docs/vram_bucket_calibration.md` - implemented H3 shape calibration, persistent result reuse, Training Settings controls, and calibrated bucket margins
 - `docs/stable_set_training_layout_plan.md` - approved set-root/logical-run layout and Resume implementation record
@@ -79,6 +80,6 @@ These are intentionally retained for context:
 
 ## Notes From This Audit
 
-- Training references describe model visibility, mode-owned TOMLs, visible-media capture, immutable run bundles, managed Resume reuse, and current output conventions.
+- Training references describe model visibility, visible-media capture, per-run LR/rank/epochs/dropout overrides, fixed-reference repeat planning, logical-run ownership, lightweight Training History, and current Resume/Test boundaries.
 
 When a doc conflicts with code and does not explicitly say it is planning-only, prefer `README.md`, `docs/spec.md`, and the code.

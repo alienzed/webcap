@@ -144,6 +144,7 @@ ui = {
   appSettingsTrainingCondaEnvironmentEl: document.getElementById('app-settings-training-conda-environment'),
   appSettingsTrainingActivateScriptEl: document.getElementById('app-settings-training-activate-script'),
   appSettingsTrainingH3SplitCachePhaseEl: document.getElementById('app-settings-training-h3-split-cache-phase'),
+  appSettingsTrainingRepeatReferenceEpochsEl: document.getElementById('app-settings-training-repeat-reference-epochs'),
   appSettingsTrainingTestCopyH3RootEl: document.getElementById('app-settings-training-test-copy-h3-root'),
   appSettingsTrainingTestCopyKrea2RootEl: document.getElementById('app-settings-training-test-copy-krea2-root'),
   appSettingsTrainingTestCopyWan21RootEl: document.getElementById('app-settings-training-test-copy-wan21-root'),

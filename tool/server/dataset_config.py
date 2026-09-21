@@ -51,6 +51,7 @@ H3_VIDEO_ABSOLUTE_CEILINGS = {
     "169": (1344, 768), "916": (768, 1344),
 }
 REPEAT_TARGET_STEPS = {"hi": 5000, "lo": 20000}
+DEFAULT_REPEAT_REFERENCE_EPOCHS = 90
 TRAINING_PLAN_FILE_NAME = "training_plan.json"
 VIDEO_TEMPORAL_REPEAT_WEIGHT = 1.0
 VIDEO_BALANCED_REPEAT_WEIGHT = 1.0
@@ -67,6 +68,15 @@ VIDEO_ROLE_TABLE = {
 
 def repeat_targets():
     return int(REPEAT_TARGET_STEPS["hi"]), int(REPEAT_TARGET_STEPS["lo"])
+
+
+def repeat_reference_epochs():
+    runtime_config = app_config.config if isinstance(app_config.config, dict) else {}
+    training = runtime_config.get("training") if isinstance(runtime_config.get("training"), dict) else {}
+    value = training.get("repeat_reference_epochs", DEFAULT_REPEAT_REFERENCE_EPOCHS)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError("training.repeat_reference_epochs must be a positive integer.")
+    return value
 
 
 _EPOCHS_PATTERN = re.compile(rb"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
@@ -273,8 +283,9 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
     lo_config_path = config_paths.get(lo_stage, folder / (config_for_stage(profile_id, lo_stage)["file"] if profile_id else LO_CONFIG_NAME))
     hi_epochs = read_epochs_from_training_config(hi_config_path, default_hi_epochs)
     lo_epochs = read_epochs_from_training_config(lo_config_path, default_lo_epochs)
-    hi_scalar, hi_base = solve_repeat_scalar(hi_entries, hi_target_steps, hi_epochs)
-    lo_scalar, lo_base = solve_repeat_scalar(lo_run_entries, lo_target_steps, lo_epochs)
+    reference_epochs = repeat_reference_epochs()
+    hi_scalar, hi_base = solve_repeat_scalar(hi_entries, hi_target_steps, reference_epochs)
+    lo_scalar, lo_base = solve_repeat_scalar(lo_run_entries, lo_target_steps, reference_epochs)
     hi_repeats = build_repeats(hi_entries, hi_scalar)
     lo_repeats = build_repeats(lo_run_entries, lo_scalar)
     hi_est = estimate_steps(hi_entries, hi_repeats, hi_epochs)
@@ -284,20 +295,20 @@ def build_dataset_config_artifacts(folder_path: Path, manifest, dataset_root: Pa
     lo_image_exposures = estimate_kind_exposures(lo_run_entries, lo_repeats, lo_epochs, "image")
     lo_video_exposures = estimate_kind_exposures(lo_run_entries, lo_repeats, lo_epochs, "video")
     training_stages = {
-        "hi": {"epochs": hi_epochs, "targetSteps": hi_target_steps, "estimatedSteps": hi_est, "estimatedImageExposures": hi_image_exposures, "estimatedVideoExposures": hi_video_exposures, "datasetEntries": training_plan_entries(hi_entries, hi_repeats)},
-        "lo": {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est, "estimatedImageExposures": lo_image_exposures, "estimatedVideoExposures": lo_video_exposures, "datasetEntries": training_plan_entries(lo_run_entries, lo_repeats)},
+        "hi": {"epochs": hi_epochs, "repeatReferenceEpochs": reference_epochs, "targetSteps": hi_target_steps, "estimatedSteps": hi_est, "estimatedImageExposures": hi_image_exposures, "estimatedVideoExposures": hi_video_exposures, "datasetEntries": training_plan_entries(hi_entries, hi_repeats)},
+        "lo": {"epochs": lo_epochs, "repeatReferenceEpochs": reference_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est, "estimatedImageExposures": lo_image_exposures, "estimatedVideoExposures": lo_video_exposures, "datasetEntries": training_plan_entries(lo_run_entries, lo_repeats)},
     }
     if single_stage:
         training_stages = {
-            single_stage_name: {"epochs": lo_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est, "estimatedImageExposures": lo_image_exposures, "estimatedVideoExposures": lo_video_exposures, "datasetEntries": training_plan_entries(lo_run_entries, lo_repeats)},
+            single_stage_name: {"epochs": lo_epochs, "repeatReferenceEpochs": reference_epochs, "targetSteps": lo_target_steps, "estimatedSteps": lo_est, "estimatedImageExposures": lo_image_exposures, "estimatedVideoExposures": lo_video_exposures, "datasetEntries": training_plan_entries(lo_run_entries, lo_repeats)},
         }
     training_plan = {
         "version": 2,
         "profileId": str(profile_id or "wan22_t2v"),
         "stages": training_stages,
     }
-    lines.append(f"[INFO] Repeat targeting HI: target={hi_target_steps}, epochs={hi_epochs}, base={hi_base:.2f}, scalar={hi_scalar}, est_steps={hi_est}")
-    lines.append(f"[INFO] Repeat targeting LO: target={lo_target_steps}, epochs={lo_epochs}, base={lo_base:.2f}, scalar={lo_scalar}, est_steps={lo_est}")
+    lines.append(f"[INFO] Repeat targeting HI: target={hi_target_steps}, reference_epochs={reference_epochs}, run_epochs={hi_epochs}, base={hi_base:.2f}, scalar={hi_scalar}, est_steps={hi_est}")
+    lines.append(f"[INFO] Repeat targeting LO: target={lo_target_steps}, reference_epochs={reference_epochs}, run_epochs={lo_epochs}, base={lo_base:.2f}, scalar={lo_scalar}, est_steps={lo_est}")
     if image_only_set:
         lines.append("[INFO] Image-only set detected: repeats solved from target steps.")
 

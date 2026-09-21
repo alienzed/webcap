@@ -590,6 +590,7 @@ function wireTrainingWorkspace() {
   var historyShowAllBtn = document.getElementById('training-history-show-all-btn');
   var historySearch = document.getElementById('training-history-search');
   var historyScope = document.getElementById('training-history-scope');
+  var historyClearBtn = document.getElementById('training-history-clear-btn');
   itemOverviewToggleBtn.onclick = function () {
     trainingWorkspaceState.itemOverviewHidden = !trainingWorkspaceState.itemOverviewHidden;
     renderTrainingItemOverview(null);
@@ -758,7 +759,7 @@ function wireTrainingWorkspace() {
       return;
     }
     var historyMoreMenu = event.target.closest('.training-history-more');
-    if (historyMoreMenu && event.target.closest('[data-training-history-output], [data-training-history-action]')) {
+    if (historyMoreMenu && event.target.closest('[data-training-history-output], [data-training-history-action], [data-training-history-clear]')) {
       historyMoreMenu.removeAttribute('open');
     }
     var logId = event.target.getAttribute('data-training-history-log');
@@ -766,6 +767,7 @@ function wireTrainingWorkspace() {
     var outputJobId = event.target.getAttribute('data-training-history-output');
     var runJobId = event.target.getAttribute('data-training-history-run');
     var actionJobId = event.target.getAttribute('data-training-history-action');
+    var clearId = event.target.getAttribute('data-training-history-clear');
     if (candidateId) {
       openTrainingCandidates(getTrainingRunnerJobById(candidateId));
       return;
@@ -783,6 +785,10 @@ function wireTrainingWorkspace() {
     if (actionJobId) {
       var actionJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === actionJobId; })[0];
       openTrainingJobAction(actionJobId, actionJob && actionJob.folder);
+      return;
+    }
+    if (clearId) {
+      clearTrainingHistoryJob(clearId);
       return;
     }
     if (logId) {
@@ -811,6 +817,7 @@ function wireTrainingWorkspace() {
     renderTrainingHistory();
   };
   if (historySearch) historySearch.oninput = renderTrainingHistory;
+  if (historyClearBtn) historyClearBtn.onclick = clearTrainingHistory;
 }
 
 function syncTrainingConsoleUi() {

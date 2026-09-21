@@ -449,11 +449,12 @@ def test_run_setup_uses_compact_parameter_rail_and_resume_canvas():
     assert '<span>Custom checkpoint directory</span>' in html
     assert 'training-run-review-row' in html
 
-    assert 'grid-template-columns: 168px minmax(0, 1fr);' in styles
+    assert '.training-run-parameter-rail' in styles
     assert '.training-run-review-row > .training-review' in styles
-    assert 'border-left: 2px solid' in styles
-    assert 'grid-template-columns: 70px minmax(0, 1fr);' in styles
+    assert '#training-run-resume-fields.hidden' in styles
+    assert '.training-run-primary-row' in styles
 
     assert 'function formatTrainingRunLearningRate' in script
     assert "noteParts.push('LR forced on resume')" in script
     assert "note.classList.toggle('hidden', !noteParts.length)" in script
+    assert "classList.toggle('is-dirty'" not in script

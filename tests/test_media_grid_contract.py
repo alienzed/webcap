@@ -27,6 +27,40 @@ def test_focus_set_catalog_keeps_aspect_ratios_independent_of_analysis():
     assert "<optgroup label=\"' + group + '\">" in script
 
 
+def test_focus_set_catalog_groups_images_by_actual_short_side_resolution():
+    script = _read("tool/js/focus_sets.js")
+
+    for key, label, minimum, maximum in (
+        ("resolution_768_plus", "768+", "768", None),
+        ("resolution_512_767", "512–767", "512", "767"),
+        ("resolution_384_511", "384–511", "384", "511"),
+        ("resolution_below_384", "Below 384", None, "383"),
+    ):
+        assert f"key: '{key}'" in script
+        assert f"label: '{label}'" in script
+        if minimum is not None:
+            assert f"minShortSide: {minimum}" in script
+        if maximum is not None:
+            assert f"maxShortSide: {maximum}" in script
+
+    assert "group: 'Resolution'" in script
+    assert "Math.min(dimensions.width, dimensions.height)" in script
+    assert "isFocusSetImageItem(item)" in script
+    assert "focusSetItemMatchesResolutionPreset(item, preset)" in script
+    assert "['Selection', 'Aspect Ratio', 'Resolution']" in script
+
+
+def test_resolution_focus_sets_reuse_existing_folder_metadata_without_new_analysis():
+    script = _read("tool/js/focus_sets.js")
+    details = _read("tool/js/item_details.js")
+
+    assert "var metadata = item.metadata || getMetadataForMedia(item.fileName);" in script
+    assert "metadata && metadata.resolution" in script
+    assert "'/fs/media_metadata?folder='" in details
+    assert "item.metadata = row;" in details
+    assert "webcap:media-metadata-updated" in details
+
+
 def test_surface_grid_and_sidebar_use_the_shared_grouped_selector():
     html = _read("tool/tool.html")
     script = _read("tool/js/focus_sets.js")

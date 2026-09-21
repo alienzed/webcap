@@ -228,7 +228,7 @@ function renderTrainingHistory() {
       '<div class="training-history-actions">' +
        (job.logAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show run log" aria-label="Show run log">&#128196;</button>' : '') +
        (job.candidateRunAvailable ? '<button type="button" class="training-history-action" data-training-history-candidates="' + escapeHtml(job.id || '') + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
-       (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Resume this run" aria-label="Resume this run">&#8635;</button>' : '') +
+       (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Continue captured run" aria-label="Continue captured run">&#8635;</button>' : '') +
        '<details class="training-history-more"><summary class="training-history-action" title="More run actions" aria-label="More run actions">&#8230;</summary><div class="training-history-more-menu">' +
          (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">&#128193; Open output</button>' : '') +
          (job.actionAvailable !== false && job.actionPath ? '<button type="button" data-training-history-action="' + escapeHtml(job.id || '') + '">&#128451; Open action folder</button>' : '') +
@@ -299,7 +299,7 @@ function resumeTrainingHistoryJob(jobId) {
     throw new Error('This historical run no longer has a resumable checkpoint.');
   }
   if (!job.actionId || !job.inputPath) {
-    throw new Error('This Training History run has no recorded capture. Resume it from Run Setup if you want to create a new capture.');
+    throw new Error('This Training History run has no recorded capture. Use Resume from checkpoint in Run Setup if you want to create a new capture.');
   }
   trainingRunnerRequest('/fs/training_runner/start', {
     method: 'POST',
@@ -319,11 +319,11 @@ function resumeTrainingHistoryJob(jobId) {
   }).then(function (payload) {
     trainingWorkspaceState.runnerSelectedJobId = payload.job.id;
     trainingWorkspaceState.runnerLogOffsets[payload.job.id] = 0;
-    setStatus(payload.queued ? 'Resume job queued.' : 'Resume job started.');
+    setStatus(payload.queued ? 'Captured run queued to continue.' : 'Captured run continuing.');
     refreshTrainingRunnerStatus();
     refreshTrainingHistory();
   }).catch(function (err) {
-    setStatus('Could not queue resume: ' + String(err && err.message ? err.message : err));
+    setStatus('Could not continue captured run: ' + String(err && err.message ? err.message : err));
   });
 }
 

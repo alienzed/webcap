@@ -348,6 +348,37 @@ def test_copy_candidate_to_configured_stage_root_uses_recorded_stages(tmp_path, 
     assert source.read_bytes() == b"test weights"
 
 
+
+def test_remove_candidate_from_test_deletes_copy_and_sidecar_but_preserves_saved_epoch(tmp_path, monkeypatch):
+    source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
+    copied = training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
+    destination = Path(copied["destination"])
+    sidecar = destination.with_suffix(".webcap.json")
+    assert destination.is_file()
+    assert sidecar.is_file()
+
+    response = app_module.app.test_client().post(
+        "/fs/training_candidates/remove_from_test",
+        json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["removed"] == [str(destination)]
+    assert not destination.exists()
+    assert not sidecar.exists()
+    assert source.read_bytes() == b"test weights"
+    assert destination_root.exists()
+
+    missing = app_module.app.test_client().post(
+        "/fs/training_candidates/remove_from_test",
+        json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12},
+    )
+    assert missing.status_code == 404
+    invalid = app_module.app.test_client().post(
+        "/fs/training_candidates/remove_from_test",
+        json={"folder": "sets/subject", "jobId": "job-1", "epoch": 12, "path": str(source)},
+    )
+    assert invalid.status_code == 400
+
 def test_copy_candidate_reuses_set_directory_and_refuses_filename_collision(tmp_path, monkeypatch):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
     destination = destination_root / "az" / "subject" / "baseline-03__epoch12.safetensors"

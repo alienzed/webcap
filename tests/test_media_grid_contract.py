@@ -23,7 +23,7 @@ def test_focus_set_catalog_keeps_aspect_ratios_independent_of_analysis():
 
     assert "group: 'Aspect Ratio'" in script
     assert "mapAspectRatioToBucket(metadata && metadata.aspect) === preset.aspectBucket" in script
-    assert "if (!preset || preset.aspectBucket) return true;" in script
+    assert "if (!preset || preset.aspectBucket || isFocusSetResolutionPreset(preset)) return true;" in script
     assert "<optgroup label=\"' + group + '\">" in script
 
 

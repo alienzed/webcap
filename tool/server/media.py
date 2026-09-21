@@ -256,7 +256,17 @@ def _convert_webp_to_png(folder_path, file_name):
 
         return {"fileName": target_name}
     except Exception:
-        if target_original_created and not target_installed:
+        if target_installed:
+            try:
+                if target_path.exists():
+                    target_path.unlink()
+                original_source = originals_dir / file_name
+                if original_source.exists() and not source_path.exists():
+                    shutil.copy2(original_source, source_path)
+                    normalize_path_permissions(source_path)
+            except OSError:
+                pass
+        if target_original_created:
             try:
                 target_original_path.unlink()
             except OSError:

@@ -131,8 +131,10 @@ def test_training_scope_source_contracts_remain_explicit():
     assert "training-sidebar-collapse-toggle-btn" not in workspace
     assert "trainingWorkspaceState.launchedJobId = payload.job.id;" in runner
     assert "function renderTrainingLaunchStatus()" in runner
-    assert "button.textContent = active ? trainingRunnerStatusLabel(status) : 'Train';" in runner
-    assert "['queued', 'starting', 'running', 'stopping']" in runner
+    launch = runner[runner.index("function renderTrainingLaunchStatus()"):runner.index("function renderTrainingRunner()")]
+    assert "button.textContent = 'Train';" in launch
+    assert "trainingRunnerStatusLabel(status)" not in launch
+    assert "button.disabled = true;" not in launch
     source_navigation = workspace[workspace.index('function openTrainingWorkspaceFolder('):workspace.index('function switchTrainingSetup(')]
     assert "workspaceState.sidebarHidden = false;" in source_navigation
     assert source_navigation.index("renderTrainingItemOverview(null, 'Loading training set...')") < source_navigation.index('refreshCurrentDirectory();')
@@ -228,8 +230,10 @@ def test_run_setup_train_action_is_compact_and_queue_status_lives_in_training():
     button_rule = css.split(".app.shell-revamp .training-run-setup-actions .training-launch-btn {", 1)[1].split("}", 1)[0]
     assert "min-width: 110px;" in button_rule
     assert "min-height: 34px;" in button_rule
-    assert "button.textContent = active ? trainingRunnerStatusLabel(status) : 'Train';" in runner
-    assert "Position " not in runner[runner.index("function renderTrainingLaunchStatus()"):runner.index("function renderTrainingRunner()")]
+    launch = runner[runner.index("function renderTrainingLaunchStatus()"):runner.index("function renderTrainingRunner()")]
+    assert "button.textContent = 'Train';" in launch
+    assert "Position " not in launch
+    assert "button.disabled = true;" not in launch
 
 
 
@@ -237,8 +241,9 @@ def test_training_runner_render_does_not_require_run_setup_review():
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
 
     launch = runner[runner.index("function renderTrainingLaunchStatus()"):runner.index("function renderTrainingRunner()")]
-    assert "else if (trainingWorkspaceState.review)" in launch
+    assert "if (trainingWorkspaceState.review)" in launch
     assert "reviewTrainButtonState(trainingWorkspaceState.review);" in launch
+    assert "trainingRunnerStatusLabel(status)" not in launch
     assert "if (trainButton) reviewTrainButtonState(trainingWorkspaceState.review);" not in runner
 
 

@@ -834,19 +834,11 @@ function renderTrainingLaunchStatus() {
   var els = getTrainingWorkspaceEls();
   var button = els.queueJobBtn;
   if (!button) return;
-  var isCurrentSet = trainingWorkspaceState.entryMode === 'set'
-    && trainingWorkspaceState.launchedJobId
-    && trainingWorkspaceState.launchedJobFolder === state.folder;
-  var job = isCurrentSet
-    ? (getTrainingRunnerJobById(trainingWorkspaceState.launchedJobId) || trainingWorkspaceState.launchedJob)
-    : null;
-  var status = String(job && job.status || '');
-  var active = ['queued', 'starting', 'running', 'stopping'].indexOf(status) !== -1;
 
-  button.textContent = active ? trainingRunnerStatusLabel(status) : 'Train';
-  if (active) {
-    button.disabled = true;
-  } else if (trainingWorkspaceState.review) {
+  // Queue state belongs in the Training activity/queue UI. Keep this action
+  // available so the current setup can be adjusted and queued again.
+  button.textContent = 'Train';
+  if (trainingWorkspaceState.review) {
     reviewTrainButtonState(trainingWorkspaceState.review);
   }
 }

@@ -743,7 +743,7 @@
                                             </select>
                                             <div id="training-run-checkpoint-path" class="training-run-checkpoint-path"></div>
                                         </label>
-                                        <label class="training-run-option training-run-custom-checkpoint"><span>Or custom checkpoint directory</span><input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/mnt/w/training/output/runs/{run}"></label>
+                                        <label class="training-run-option training-run-custom-checkpoint"><span>Or custom checkpoint directory</span><input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/path/to/training/output/{run}"></label>
                                         <label id="training-run-resume-stage-option" class="training-run-option training-run-resume-stage-option">
                                             <span>Apply resume to</span>
                                             <select id="training-run-resume-stage-select">
@@ -1143,7 +1143,7 @@
                                 </label>
                                 <label class="app-settings-field">
                                     <span class="app-settings-field-label">Diffusion Pipe WSL</span>
-                                    <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/home/user/diffusion-pipe">
+                                    <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/path/to/diffusion-pipe">
                                 </label>
                                 <label class="app-settings-field">
                                     <span class="app-settings-field-label">WSL Distribution</span>
@@ -1151,7 +1151,7 @@
                                 </label>
                                 <label class="app-settings-field">
                                     <span class="app-settings-field-label">Conda Executable</span>
-                                    <input id="app-settings-training-conda-executable" type="text" placeholder="/home/user/miniconda3/bin/conda">
+                                    <input id="app-settings-training-conda-executable" type="text" placeholder="/path/to/conda/bin/conda">
                                 </label>
                                 <label class="app-settings-field">
                                     <span class="app-settings-field-label">Conda Environment</span>
@@ -1159,7 +1159,7 @@
                                 </label>
                                 <label class="app-settings-field">
                                     <span class="app-settings-field-label">Venv Activate Script</span>
-                                    <input id="app-settings-training-activate-script" type="text" placeholder="/home/user/diffusion-pipe/.venv/bin/activate">
+                                    <input id="app-settings-training-activate-script" type="text" placeholder="/path/to/diffusion-pipe/.venv/bin/activate">
                                 </label>
                                 <label class="app-settings-field" title="Used to calculate dataset repeats. Actual run epochs do not affect repeat planning.">
                                     <span class="app-settings-field-label">Repeat reference epochs</span>
@@ -1173,13 +1173,13 @@
                                 <div class="app-settings-section-copy">Destination roots used when copying a saved candidate LoRA for testing.</div>
                             </div>
                             <div class="app-settings-form-grid">
-                                <label class="app-settings-field"><span class="app-settings-field-label">H3 Root</span><input id="app-settings-training-test-copy-h3-root" type="text" placeholder="/mnt/w/models/Lora"></label>
-                                <label class="app-settings-field"><span class="app-settings-field-label">Krea 2 Root</span><input id="app-settings-training-test-copy-krea2-root" type="text" placeholder="/mnt/w/models/Lora"></label>
-                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.1 Root</span><input id="app-settings-training-test-copy-wan21-root" type="text" placeholder="/mnt/w/models/Lora"></label>
-                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 High Root</span><input id="app-settings-training-test-copy-hi-root" type="text" placeholder="/mnt/w/models/Lora"></label>
-                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 Low Root</span><input id="app-settings-training-test-copy-lo-root" type="text" placeholder="/mnt/w/models/Lora"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">H3 Root</span><input id="app-settings-training-test-copy-h3-root" type="text" placeholder="/path/to/models/Lora"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Krea 2 Root</span><input id="app-settings-training-test-copy-krea2-root" type="text" placeholder="/path/to/models/Lora"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.1 Root</span><input id="app-settings-training-test-copy-wan21-root" type="text" placeholder="/path/to/models/Lora"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 High Root</span><input id="app-settings-training-test-copy-hi-root" type="text" placeholder="/path/to/models/Lora"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 Low Root</span><input id="app-settings-training-test-copy-lo-root" type="text" placeholder="/path/to/models/Lora"></label>
                                 <label class="app-settings-field"><span class="app-settings-field-label">Optional Subfolder</span><input id="app-settings-training-test-copy-subfolder" type="text" placeholder="az"></label>
-                                <p class="app-settings-help app-settings-field-wide">Example: <code>/mnt/w/models/Lora/az/my-set/adapter_model_epoch12.safetensors</code>. The optional subfolder is one folder name only.</p>
+                                <p class="app-settings-help app-settings-field-wide">Example: <code>/path/to/models/Lora/az/my-set/adapter_model_epoch12.safetensors</code>. The optional subfolder is one folder name only.</p>
                             </div>
                         </section>
                         <section class="app-settings-section">

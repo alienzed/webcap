@@ -603,3 +603,22 @@ def test_single_item_preview_actions_keep_their_runtime_contract():
     assert "getPreviewPrimaryActionPlan" in media
     assert "wirePreviewActionControls()" in main
     assert "updatePreviewActionControls()" in main
+
+def test_caption_report_owns_a_large_inspectable_balance_wheel():
+    preview = (ROOT / "tool" / "js" / "preview_pane.js").read_text(encoding="utf-8")
+    stats = (ROOT / "tool" / "js" / "stats.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "report.css").read_text(encoding="utf-8")
+
+    assert "phraseMatchCounts" in stats
+    assert "matchCount: matchCount" in stats
+    assert "matchPercent: matchPercent" in stats
+    assert "function renderReportBalanceWheel(report)" in preview
+    assert 'class="card report-balance-wheel-card"' in preview
+    assert 'class="report-balance-wheel-svg"' in preview
+    assert "<title>" in preview
+    assert "Hover a slice for phrase coverage." in preview
+    assert "renderReportBalanceWheel(report)" in preview
+    assert "width: 320px" in css
+    assert "min-width: 300px" in css
+    assert ".report-balance-wheel-slice:hover" in css
+

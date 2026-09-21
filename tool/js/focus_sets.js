@@ -4,6 +4,11 @@ var FOCUS_SET_PRESETS = [
   { key: 'close', label: 'Close', group: 'Selection', source: 'analysis' },
   { key: 'medium', label: 'Medium', group: 'Selection', source: 'analysis' },
   { key: 'unknown', label: 'Unknown', group: 'Selection', source: 'analysis' },
+  { key: 'media_images', label: 'Images', group: 'Media Type', mediaType: 'image' },
+  { key: 'media_videos', label: 'Videos', group: 'Media Type', mediaType: 'video' },
+  { key: 'scene_simple', label: 'Simple', group: 'Scene Complexity', sceneBucket: 'simple' },
+  { key: 'scene_moderate', label: 'Moderate', group: 'Scene Complexity', sceneBucket: 'moderate' },
+  { key: 'scene_busy', label: 'Busy', group: 'Scene Complexity', sceneBucket: 'busy' },
   { key: 'aspect_square', label: '1:1', group: 'Aspect Ratio', aspectBucket: 'square' },
   { key: 'aspect_43', label: '4:3', group: 'Aspect Ratio', aspectBucket: '4:3' },
   { key: 'aspect_34', label: '3:4', group: 'Aspect Ratio', aspectBucket: '3:4' },
@@ -81,6 +86,23 @@ function isFocusSetImageItem(item) {
   return !!(item && /\.(jpe?g|png|gif|webp|bmp)$/i.test(String(item.fileName || '')));
 }
 
+function isFocusSetVideoItem(item) {
+  return !!(item && /\.(mp4|webm|mov|mkv|avi|m4v|ogg|wmv|mpg|mpeg)$/i.test(String(item.fileName || '')));
+}
+
+function focusSetItemMatchesMediaType(item, mediaType) {
+  if (mediaType === 'image') return isFocusSetImageItem(item);
+  if (mediaType === 'video') return isFocusSetVideoItem(item);
+  throw new Error('Unknown Focus Set media type: ' + mediaType);
+}
+
+function focusSetItemMatchesSceneBucket(item, sceneBucket) {
+  if (!isFocusSetImageItem(item)) return false;
+  var metadata = item.metadata || getMetadataForMedia(item.fileName);
+  var complexity = getSceneComplexityFromMetadata(metadata);
+  return !!complexity && normalizeSceneComplexityBucket(complexity.bucket) === sceneBucket;
+}
+
 function getFocusSetImageShortSide(item) {
   if (!isFocusSetImageItem(item)) return null;
   var metadata = item.metadata || getMetadataForMedia(item.fileName);
@@ -108,7 +130,7 @@ function getFocusSetPreset(presetKey) {
 }
 
 function isFocusSetPresetAvailable(preset) {
-  if (!preset || preset.aspectBucket || isFocusSetResolutionPreset(preset)) return true;
+  if (!preset || preset.aspectBucket || preset.mediaType || preset.sceneBucket || isFocusSetResolutionPreset(preset)) return true;
   if (preset.source === 'prune') return state.pruneCandidatesStatus === 'ready';
   var config = getFocusSetAnalysisConfig();
   return config.face && config.pose && state.focusSetMetadataStatus === 'ready';
@@ -130,6 +152,18 @@ function getFocusSetPresetFiles() {
   var suggestedLookup = getFocusSetSuggestedLookup(rows, analyzedFileNames);
   var result = { all: fileNames };
   FOCUS_SET_PRESETS.forEach(function (preset) {
+    if (preset.mediaType) {
+      result[preset.key] = scopeItems.filter(function (item) {
+        return focusSetItemMatchesMediaType(item, preset.mediaType);
+      }).map(function (item) { return item.fileName; });
+      return;
+    }
+    if (preset.sceneBucket) {
+      result[preset.key] = scopeItems.filter(function (item) {
+        return focusSetItemMatchesSceneBucket(item, preset.sceneBucket);
+      }).map(function (item) { return item.fileName; });
+      return;
+    }
     if (preset.aspectBucket) {
       result[preset.key] = scopeItems.filter(function (item) {
         var metadata = item && (item.metadata || getMetadataForMedia(item.fileName));
@@ -182,7 +216,7 @@ function activateFocusSetPreset(key) {
 
 function buildFocusSetPresetOptions(filesByPreset, activeKey) {
   var html = '<option value="all"' + (activeKey === 'all' ? ' selected' : '') + '>All \u00b7 ' + (filesByPreset.all || []).length + '</option>';
-  ['Selection', 'Aspect Ratio', 'Resolution'].forEach(function (group) {
+  ['Selection', 'Media Type', 'Aspect Ratio', 'Resolution', 'Scene Complexity'].forEach(function (group) {
     var options = FOCUS_SET_PRESETS.filter(function (preset) { return preset.group === group; });
     if (!options.length) return;
     html += '<optgroup label="' + group + '">';

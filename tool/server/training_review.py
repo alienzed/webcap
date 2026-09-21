@@ -19,6 +19,7 @@ from .dataset_config import (
     generate_image_candidates,
     render_dataset_entry,
     render_dataset_toml,
+    repeat_reference_epochs,
     solve_repeat_scalar,
     training_plan_entries,
     video_bucket_ladder,
@@ -354,6 +355,7 @@ def _build_review_plan(folder, profile_id, setup, manifest, profile_plan):
 
     stages = {}
     all_excluded = []
+    reference_epochs = repeat_reference_epochs()
     role_lookup = {item["id"]: item for item in profile_plan.get("videoRoles", [])}
     for config in setup["configs"]:
         stage = config["id"]
@@ -427,10 +429,10 @@ def _build_review_plan(folder, profile_id, setup, manifest, profile_plan):
             epochs = int(tomllib.loads(config_path.read_text(encoding="utf-8")).get("epochs") or 1)
         except (OSError, UnicodeError, tomllib.TOMLDecodeError):
             epochs = 1
-        scalar, _base = solve_repeat_scalar(entries, target, epochs)
+        scalar, _base = solve_repeat_scalar(entries, target, reference_epochs)
         repeats = build_repeats(entries, scalar)
         stages[stage] = {
-            "epochs": epochs, "targetSteps": target, "estimatedSteps": estimate_steps(entries, repeats, epochs),
+            "epochs": epochs, "repeatReferenceEpochs": reference_epochs, "targetSteps": target, "estimatedSteps": estimate_steps(entries, repeats, epochs),
             "estimatedImageExposures": estimate_kind_exposures(entries, repeats, epochs, "image"),
             "estimatedVideoExposures": estimate_kind_exposures(entries, repeats, epochs, "video"),
             "datasetEntries": training_plan_entries(entries, repeats), "settings": settings,

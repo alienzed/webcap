@@ -16,8 +16,8 @@ from .video_clip_ops import clip_video_response, get_clip_job_status
 from .video_frame_ops import extract_video_frame_response, inspect_video_frame_response
 from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
-from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, start_observer as start_training_runner_observer
-from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, discovered_run_output_path, history_job_output_path
+from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, clear_history_response as training_runner_clear_history_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, start_observer as start_training_runner_observer
+from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .prune_candidates import prune_candidates_response
 from .duplicate_candidates import duplicate_candidates_response
@@ -701,6 +701,28 @@ def training_history_all_route():
         return jsonify({"ok": True, "history": training_all_history_payload(request.args.get("q", ""), request.args.get("folder", ""))})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/fs/training_history/clear", methods=["POST"])
+def training_history_clear_route():
+    data = request.get_json(silent=True) or {}
+    folder = str(data.get("folder") or "").strip()
+    try:
+        cleared = clear_training_history(safe_join_fs_root(folder) if folder else None)
+        return jsonify({"ok": True, "cleared": cleared})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/fs/training_history/job/clear", methods=["POST"])
+def training_history_job_clear_route():
+    data = request.get_json(silent=True) or {}
+    folder = str(data.get("folder") or "").strip()
+    job_id = str(data.get("jobId") or "").strip()
+    if not folder or not job_id:
+        return jsonify({"ok": False, "error": "Folder and job ID are required."}), 400
+    payload, status = training_runner_clear_history_response(folder, job_id)
+    return jsonify(payload), status
 
 
 @app.route("/fs/training_history/job/metrics", methods=["GET"])

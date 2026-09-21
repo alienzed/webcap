@@ -145,7 +145,7 @@ function buildTrainingReadinessHtml() {
   var selectedCount = getVisibleMediaSelectionForTraining().length;
   var totalCount = Array.isArray(state.items) ? state.items.length : selectedCount;
   return '<div class="training-readiness-state"><strong>' + selectedCount + ' visible media item' + (selectedCount === 1 ? '' : 's') +
-    '</strong><span>Train captures this visible selection and the saved TOMLs. ' + selectedCount + ' of ' + totalCount + ' media items are currently visible.</span></div>';
+    '</strong><span>Train captures all currently visible media and the saved TOMLs. ' + selectedCount + ' of ' + totalCount + ' media items are included.</span></div>';
 }
 
 function trainingConfigFilesAreReady(configFiles) {

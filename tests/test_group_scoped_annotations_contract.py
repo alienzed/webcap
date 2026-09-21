@@ -340,7 +340,7 @@ def test_groups_helper_popup_dismisses_when_anchor_moves_and_hide_reviewed_belon
 
     assert 'id="checklist-hide-reviewed-btn"' not in html
     assert 'id="group-workbench-hide-reviewed-btn"' in html
-    assert html.index('id="group-workbench-hide-reviewed-btn"') < html.index('id="prep-workspace-root"')
+    assert html.index('id="group-workbench"') < html.index('id="group-workbench-hide-reviewed-btn"') < html.index('id="group-workbench-list"')
     assert 'class="group-workbench-header"' not in html
     assert "var groupWorkbenchHideReviewed = false;" in workbench
     assert "if (useVisibilityFilter && groupWorkbenchHideReviewed && isReviewed) continue;" in workbench

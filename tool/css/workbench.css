@@ -1224,121 +1224,59 @@
 .app.shell-revamp .training-run-layout .training-run-setup-fields {
   grid-area: options;
   display: grid;
-  grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1.15fr);
-  gap: 12px;
-  align-items: start;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
 }
 
-.app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 5px;
+.app.shell-revamp .training-run-parameter-rail {
   min-width: 0;
-}
-
-.app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.2;
-}
-
-.app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > input,
-.app.shell-revamp .training-run-layout .training-run-setup-fields > .training-run-option > select {
-  width: 100%;
-  min-height: 34px;
-}
-
-.app.shell-revamp .training-run-name-option {
-  grid-column: 1;
-}
-
-.app.shell-revamp .training-run-starting-point-option {
-  grid-column: 2;
-}
-
-.app.shell-revamp .training-run-layout #training-run-stage-option,
-.app.shell-revamp .training-run-layout #training-run-resume-fields,
-.app.shell-revamp .training-run-layout #training-run-initializer-fields {
-  grid-column: 1 / -1;
-}
-
-.app.shell-revamp .training-run-layout #training-run-stage-option {
-  grid-template-columns: 150px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-}
-
-.app.shell-revamp .training-run-layout #training-run-stage-option > .training-run-stage-buttons {
-  grid-column: 2;
-}
-
-.app.shell-revamp .training-run-parameters {
-  grid-column: 1 / -1;
-  display: grid;
-  gap: 9px;
-  padding: 10px 12px 11px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--panel-soft) 70%, transparent);
-}
-
-.app.shell-revamp .training-run-parameters.is-dirty {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
-  background: color-mix(in srgb, var(--accent) 4%, var(--panel-soft));
+  padding-right: 16px;
+  border-right: 1px solid var(--border);
 }
 
 .app.shell-revamp .training-run-parameters-heading {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.app.shell-revamp .training-run-parameters-heading > div {
-  display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 8px;
-  min-width: 0;
+  margin-bottom: 9px;
 }
 
 .app.shell-revamp .training-run-parameters-heading strong {
   color: var(--text);
-  font-size: 12px;
-  line-height: 1.2;
-}
-
-.app.shell-revamp .training-run-parameters-heading span {
-  color: var(--muted);
   font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.035em;
   line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .app.shell-revamp .training-run-parameters-reset {
   width: auto;
-  min-height: 26px;
-  padding: 3px 8px;
-  border-color: transparent;
+  min-height: 0;
+  padding: 0;
+  border: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .app.shell-revamp .training-run-parameters-reset:hover {
-  border-color: var(--border);
-  background: rgba(148, 163, 184, 0.10);
+  background: transparent;
   color: var(--text);
 }
 
 .app.shell-revamp .training-run-parameters-grid {
   display: grid;
-  grid-template-columns: minmax(150px, 1.35fr) repeat(3, minmax(100px, 0.75fr));
-  gap: 9px;
+  gap: 6px;
 }
 
 .app.shell-revamp .training-run-parameter {
   display: grid;
-  gap: 4px;
+  grid-template-columns: 70px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -1346,58 +1284,96 @@
   color: var(--muted);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.02em;
   line-height: 1.2;
-  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .app.shell-revamp .training-run-parameter > input,
 .app.shell-revamp .training-run-parameter > select {
   width: 100%;
   min-width: 0;
-  min-height: 32px;
+  min-height: 29px;
+  height: 29px;
+  padding-inline: 7px;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .app.shell-revamp #training-run-lr-input {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+.app.shell-revamp .training-run-parameters-note {
+  margin-top: 8px;
+  color: #d6ad67;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
 .app.shell-revamp .training-run-parameters-error {
-  margin-top: -2px;
+  margin-top: 8px;
   color: #ef4444;
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.25;
 }
 
-.app.shell-revamp .training-run-review-row {
-  grid-column: 1 / -1;
+.app.shell-revamp .training-run-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: stretch;
-  gap: 10px;
+  gap: 11px;
   min-width: 0;
+  align-content: start;
+}
+
+.app.shell-revamp .training-run-primary-row {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.9fr) minmax(260px, 1.1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.app.shell-revamp .training-run-main .training-run-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+  min-width: 0;
+}
+
+.app.shell-revamp .training-run-main .training-run-option > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.app.shell-revamp .training-run-main .training-run-option > input,
+.app.shell-revamp .training-run-main .training-run-option > select {
+  width: 100%;
+  min-height: 34px;
+}
+
+.app.shell-revamp .training-run-main #training-run-stage-option {
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.app.shell-revamp .training-run-main #training-run-stage-option > .training-run-stage-buttons {
+  grid-column: 2;
 }
 
 .app.shell-revamp .training-run-layout #training-run-resume-fields,
 .app.shell-revamp .training-run-layout #training-run-initializer-fields {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.4fr);
+  gap: 12px;
+  padding-left: 12px;
+  border-left: 2px solid color-mix(in srgb, var(--border) 72%, var(--muted));
 }
 
-.app.shell-revamp .training-run-setup-actions {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 0;
-}
-
-.app.shell-revamp .training-run-setup-actions .training-launch-btn {
-  width: auto;
-  min-width: 110px;
-  min-height: 34px;
-  padding-inline: 18px;
+.app.shell-revamp .training-run-layout #training-run-resume-fields.hidden,
+.app.shell-revamp .training-run-layout #training-run-initializer-fields.hidden {
+  display: none;
 }
 
 .app.shell-revamp .training-run-layout .training-run-custom-checkpoint {
@@ -1405,8 +1381,58 @@
   align-self: auto;
 }
 
+.app.shell-revamp .training-run-review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 36px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.app.shell-revamp .training-run-review-row > .training-review {
+  grid-column: auto;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.app.shell-revamp .training-run-review-row .training-review-summary-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 8px;
+}
+
+.app.shell-revamp .training-run-review-row .training-review-summary-copy strong,
+.app.shell-revamp .training-run-review-row .training-review-summary-copy span {
+  white-space: nowrap;
+}
+
+.app.shell-revamp .training-run-review-row .training-review-summary-actions {
+  gap: 8px;
+}
+
+.app.shell-revamp .training-run-setup-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.app.shell-revamp .training-run-setup-actions .training-launch-btn {
+  width: auto;
+  min-width: 104px;
+  min-height: 34px;
+  padding-inline: 18px;
+}
+
 .app.shell-revamp .training-launch-btn {
-  min-width: 150px;
+  min-width: 104px;
   min-height: 34px;
   border-color: var(--accent-dark);
   background: var(--accent);
@@ -1517,36 +1543,39 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .app.shell-revamp .training-run-name-option,
-  .app.shell-revamp .training-run-starting-point-option,
-  .app.shell-revamp .training-run-layout #training-run-stage-option,
-  .app.shell-revamp .training-run-layout #training-run-resume-fields,
-  .app.shell-revamp .training-run-layout #training-run-initializer-fields,
-  .app.shell-revamp .training-run-parameters,
-  .app.shell-revamp .training-run-review-row {
-    grid-column: 1;
-  }
-
-  .app.shell-revamp .training-run-layout #training-run-stage-option {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 5px;
-  }
-
-  .app.shell-revamp .training-run-layout #training-run-stage-option > .training-run-stage-buttons {
-    grid-column: 1;
+  .app.shell-revamp .training-run-parameter-rail {
+    padding-right: 0;
+    padding-bottom: 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
   }
 
   .app.shell-revamp .training-run-parameters-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .app.shell-revamp .training-run-review-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
+  .app.shell-revamp .training-run-primary-row,
   .app.shell-revamp .training-run-layout #training-run-resume-fields,
   .app.shell-revamp .training-run-layout #training-run-initializer-fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app.shell-revamp .training-run-main #training-run-stage-option {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .app.shell-revamp .training-run-main #training-run-stage-option > .training-run-stage-buttons {
+    grid-column: 1;
+  }
+
+  .app.shell-revamp .training-run-review-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .app.shell-revamp .training-run-setup-actions {
+    justify-content: flex-end;
   }
 
   .app.shell-revamp .training-run-setup-actions .training-launch-btn {

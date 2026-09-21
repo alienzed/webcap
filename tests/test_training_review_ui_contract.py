@@ -435,3 +435,25 @@ if (!html.includes('<img src="/caption/media?folder=set%20folder&media=still.jpg
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_run_setup_uses_compact_parameter_rail_and_resume_canvas():
+    root = Path(__file__).parents[1]
+    html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
+    styles = (root / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+
+    assert 'training-run-parameter-rail' in html
+    assert 'training-run-main' in html
+    assert 'training-run-primary-row' in html
+    assert '<span>Custom checkpoint directory</span>' in html
+    assert 'training-run-review-row' in html
+
+    assert 'grid-template-columns: 168px minmax(0, 1fr);' in styles
+    assert '.training-run-review-row > .training-review' in styles
+    assert 'border-left: 2px solid' in styles
+    assert 'grid-template-columns: 70px minmax(0, 1fr);' in styles
+
+    assert 'function formatTrainingRunLearningRate' in script
+    assert "noteParts.push('LR forced on resume')" in script
+    assert "note.classList.toggle('hidden', !noteParts.length)" in script

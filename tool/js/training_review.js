@@ -126,12 +126,20 @@ function renderTrainingStartingPointControls(payload) {
   };
 }
 
+function formatTrainingRunLearningRate(value) {
+  if (value == null || value === '') return '';
+  var text = String(value).trim();
+  var number = Number(text);
+  if (!Number.isFinite(number) || number === 0 || Math.abs(number) >= 0.001) return text;
+  return number.toExponential().replace(/\.0+e/, 'e').replace(/(\.\d*?)0+e/, '$1e').replace('e+', 'e');
+}
+
 function trainingRunTemplateSettings(payload) {
   var stage = String(trainingWorkspaceState.runStages || '');
   var stageReview = payload && payload.review && payload.review.stages && payload.review.stages[stage] || {};
   var settings = stageReview.settings && typeof stageReview.settings === 'object' ? stageReview.settings : {};
   return {
-    optimizerLr: settings.optimizerLr == null ? '' : String(settings.optimizerLr),
+    optimizerLr: formatTrainingRunLearningRate(settings.optimizerLr),
     adapterRank: settings.adapterRank == null ? '' : String(settings.adapterRank),
     epochs: settings.epochs == null ? (stageReview.epochs == null ? '' : String(stageReview.epochs)) : String(settings.epochs),
     adapterDropout: settings.adapterDropout == null || settings.adapterDropout === '' ? '0' : String(settings.adapterDropout)
@@ -165,8 +173,11 @@ function updateTrainingRunParameterState() {
   if (panel) panel.classList.toggle('is-dirty', !!trainingWorkspaceState.runConfigDirty);
   if (note) {
     var startPoint = String(trainingWorkspaceState.reviewStartingPoint || 'fresh');
-    var sourceLabel = trainingWorkspaceState.runConfigDirty ? 'Run-specific overrides' : 'Template defaults for this model';
-    note.textContent = startPoint === 'resume' ? sourceLabel + ' · LR forced on resume' : sourceLabel;
+    var noteParts = [];
+    if (trainingWorkspaceState.runConfigDirty) noteParts.push('Run-specific overrides');
+    if (startPoint === 'resume') noteParts.push('LR forced on resume');
+    note.textContent = noteParts.join(' · ');
+    note.classList.toggle('hidden', !noteParts.length);
   }
   if (error) {
     error.textContent = message;

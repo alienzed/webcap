@@ -47,7 +47,6 @@ var trainingWorkspaceState = {
   reviewInitializers: [],
   reviewInitializerExportId: '',
   reviewInitializerCustomPath: '',
-  reviewForceConstantLr: '',
   runConfigDraft: null,
   runConfigStage: '',
   runConfigTemplateSignature: '',

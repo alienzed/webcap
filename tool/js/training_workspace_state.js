@@ -127,6 +127,7 @@ function getTrainingWorkspaceEls() {
     historyScope: document.getElementById('training-history-scope'),
     historyShowAllBtn: document.getElementById('training-history-show-all-btn'),
     historySearch: document.getElementById('training-history-search'),
+    historyClearBtn: document.getElementById('training-history-clear-btn'),
     checkpointSelect: document.getElementById('training-run-checkpoint-select')
   };
 }

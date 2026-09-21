@@ -377,7 +377,7 @@
   z-index: 8;
   top: auto;
   bottom: 8px;
-  left: calc(var(--sidebar-width) - 32px);
+  left: calc(var(--sidebar-width) +18px);
   width: 24px;
   min-width: 24px;
   height: 28px;

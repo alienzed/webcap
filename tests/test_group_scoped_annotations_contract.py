@@ -270,6 +270,16 @@ def test_groups_helper_keeps_label_space_with_management_controls():
     assert "white-space: nowrap;" in css
     assert "#checklist-items .checklist-group-visibility-btn.is-hidden" in css
 
+    visible_block = css.split(
+        "#checklist-items .checklist-group-visibility-btn {", 1
+    )[1].split("}", 1)[0]
+    hidden_block = css.split(
+        "#checklist-items .checklist-group-visibility-btn.is-hidden {", 1
+    )[1].split("}", 1)[0]
+    assert "opacity: 1;" in visible_block
+    assert "opacity: 0.35;" in hidden_block
+    assert "text-decoration: line-through;" in hidden_block
+
 
 def test_shell_groups_helper_disables_legacy_multicolumn_flow():
     css = _read("tool/css/workbench.css")

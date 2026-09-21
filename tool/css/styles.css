@@ -3197,7 +3197,13 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
 .training-candidates-legend i.in-test-folder { width: 9px; height: 9px; margin: 0 3px; background: var(--accent); border-radius: 50%; }
 .training-candidates-legend i.basin { height: 10px; background: rgba(94, 177, 137, .3); }
 .training-candidates-no-candidates { color: var(--muted-text, #a3adba); font-size: 12px; }
-.training-candidates-open-epoch, .training-candidates-copy-test, .training-candidates-open-test { width: auto; min-height: 30px; padding: 5px 8px; font-size: 13px; white-space: nowrap; }
+.training-candidates-open-epoch, .training-candidates-test-toggle, .training-candidates-open-test { width: auto; min-height: 30px; padding: 5px 9px; font-size: 13px; white-space: nowrap; }
+.training-candidates-open-epoch, .training-candidates-open-test { border-color: rgba(163, 173, 186, .45); background: transparent; color: var(--text, #e5e7eb); }
+.training-candidates-test-toggle { font-weight: 650; }
+.training-candidates-test-toggle.is-copy { border-color: #c58a16; background: #c58a16; color: #111827; }
+.training-candidates-test-toggle.is-copy:hover:not(:disabled) { border-color: #dda22c; background: #dda22c; }
+.training-candidates-test-toggle.is-remove { border-color: rgba(220, 94, 94, .75); background: rgba(137, 43, 43, .24); color: #ffb4b4; }
+.training-candidates-test-toggle.is-remove:hover:not(:disabled) { border-color: #dc5e5e; background: rgba(174, 49, 49, .42); color: #ffd0d0; }
 .training-candidates-empty { padding: 26px 16px; color: var(--muted-text, #a3adba); text-align: center; }
 .training-candidates-empty.is-error { color: #c75a5a; }
 @container (max-width: 1600px) {

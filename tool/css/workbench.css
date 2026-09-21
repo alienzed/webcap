@@ -1543,36 +1543,39 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .app.shell-revamp .training-run-name-option,
-  .app.shell-revamp .training-run-starting-point-option,
-  .app.shell-revamp .training-run-layout #training-run-stage-option,
-  .app.shell-revamp .training-run-layout #training-run-resume-fields,
-  .app.shell-revamp .training-run-layout #training-run-initializer-fields,
-  .app.shell-revamp .training-run-parameters,
-  .app.shell-revamp .training-run-review-row {
-    grid-column: 1;
-  }
-
-  .app.shell-revamp .training-run-layout #training-run-stage-option {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 5px;
-  }
-
-  .app.shell-revamp .training-run-layout #training-run-stage-option > .training-run-stage-buttons {
-    grid-column: 1;
+  .app.shell-revamp .training-run-parameter-rail {
+    padding-right: 0;
+    padding-bottom: 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
   }
 
   .app.shell-revamp .training-run-parameters-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .app.shell-revamp .training-run-review-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
+  .app.shell-revamp .training-run-primary-row,
   .app.shell-revamp .training-run-layout #training-run-resume-fields,
   .app.shell-revamp .training-run-layout #training-run-initializer-fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app.shell-revamp .training-run-main #training-run-stage-option {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .app.shell-revamp .training-run-main #training-run-stage-option > .training-run-stage-buttons {
+    grid-column: 1;
+  }
+
+  .app.shell-revamp .training-run-review-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .app.shell-revamp .training-run-setup-actions {
+    justify-content: flex-end;
   }
 
   .app.shell-revamp .training-run-setup-actions .training-launch-btn {

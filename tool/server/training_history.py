@@ -471,20 +471,6 @@ def resume_point_from_directory(folder_path, stage, run_path):
     }
 
 
-def summarize_history(folder_path):
-    history = read_history(folder_path)
-    jobs = history.get("jobs") or []
-    latest = max(
-        jobs,
-        key=lambda job: float(job.get("updatedAt") or job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0),
-        default=None,
-    )
-    return {
-        "status": str((latest or {}).get("status") or "never"),
-        "updatedAt": (latest or {}).get("updatedAt") or (latest or {}).get("finishedAt") or (latest or {}).get("createdAt") or 0,
-    }
-
-
 def record_job(folder_path, job):
     folder = Path(folder_path)
     folder_key = _folder_key(folder)
@@ -651,20 +637,3 @@ def clear_history_job(folder_path, job_id):
         return True
 
 
-def completed_stages(folder_path, include_discovered_runs=True):
-    """Return completed stages, optionally avoiding an expensive output-tree scan."""
-    folder = Path(folder_path)
-    stages = [stage for stage in ("hi", "lo", "krea2", "wan21", "h3") if (folder / ("config." + stage + ".toml")).is_file()]
-    history = read_history(folder)
-    completed = set()
-    for job in history.get("jobs") or []:
-        if job.get("status") not in ("completed", "finished_early"):
-            continue
-        stage = str(job.get("stages") or "")
-        if stage in stages:
-            completed.add(stage)
-    if include_discovered_runs:
-        for stage in stages:
-            if any(run.get("completed") for run in discover_runs(folder, stage)):
-                completed.add(stage)
-    return stages, completed

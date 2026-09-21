@@ -211,6 +211,10 @@ def validate_config_payload(payload):
     if not isinstance(h3_split_cache_phase, bool):
         raise ValueError("Config.training.h3_split_cache_phase must be true or false.")
     normalized_training["h3_split_cache_phase"] = h3_split_cache_phase
+    repeat_reference_epochs = training.get("repeat_reference_epochs", 90)
+    if isinstance(repeat_reference_epochs, bool) or not isinstance(repeat_reference_epochs, int) or repeat_reference_epochs <= 0:
+        raise ValueError("Config.training.repeat_reference_epochs must be a positive integer.")
+    normalized_training["repeat_reference_epochs"] = repeat_reference_epochs
     test_copy_roots = training.get("test_copy_roots", {})
     if not isinstance(test_copy_roots, dict):
         raise ValueError("Config.training.test_copy_roots must be an object.")

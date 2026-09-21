@@ -195,6 +195,7 @@
 }
 
 .app-header-global {
+  grid-column: 4;
   justify-content: flex-end;
 }
 
@@ -443,7 +444,7 @@
   box-sizing: border-box;
   z-index: 2;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   max-width: none;
@@ -990,180 +991,22 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 
-/* Current-item controls live in the permanent header to preserve workspace height. */
-.app-header > .preview-header {
-  position: relative;
-  inset: auto;
-  z-index: 2;
-  width: auto;
+.workbench-annotation-actions {
   min-width: 0;
-  max-width: 820px;
-  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin: 0;
-  padding: 0 0 0 8px;
-  border: 0;
-  border-left: 1px solid var(--border);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.app-header > .preview-header.hidden,
-.app-header > .preview-header.shell-context-hidden {
-  display: none !important;
-}
-
-.app-header > .preview-header .preview-header-position {
-  flex: 0 0 auto;
-  min-width: 0;
-  padding: 3px 7px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel-soft);
-  color: var(--text);
-  box-shadow: none;
-  font-size: 10px;
-}
-
-.app-header > .preview-header .preview-header-meta {
-  min-width: 0;
-  max-width: 300px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  padding-left: 8px;
-  border-left: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.app-header > .preview-header .preview-header-meta.hidden,
-.app-header > .preview-header #focused-annotation-item-nav.hidden,
-.app-header > .preview-header .preview-workflow-actions.hidden,
-.app-header > .preview-header .preview-actions.hidden,
-.app-header > .preview-header .preview-action-rating.hidden {
-  display: none !important;
-}
-
-.app-header > .preview-header .preview-header-meta-resolution {
-  color: var(--text);
-  font-weight: 700;
-}
-
-.app-header > .preview-header .preview-header-meta-separator {
-  margin: 0 4px;
-  color: var(--muted);
-}
-
-.app-header > .preview-header .preview-header-copy,
-.app-header > .preview-header .preview-header-actions,
-.app-header > .preview-header .preview-workflow-actions,
-.app-header > .preview-header .preview-actions {
-  position: static;
-  inset: auto;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  justify-content: flex-end;
-  gap: 5px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.app-header > .preview-header .preview-header-copy {
-  gap: 6px;
-}
-
-.app-header > .preview-header .preview-actions:hover,
-.app-header > .preview-header .preview-actions:focus-within {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.app-header > .preview-header .preview-action-rating {
-  display: inline-flex;
-  align-items: center;
-  margin: 0;
-  padding-right: 7px;
-  border-right: 1px solid var(--border);
-}
-
-.app-header > .preview-header .preview-header-stars {
-  gap: 2px;
-}
-
-.app-header > .preview-header .preview-header-star {
-  min-width: 13px;
-  padding: 0;
-  font-size: 13px;
-}
-
-.app-header > .preview-header .preview-action-btn {
-  min-height: 24px;
-  padding: 3px 7px;
-  font-size: 11px;
-}
-
-.app-header > .preview-header .preview-workflow-actions .review-captions-btn {
-  width: 24px;
-  min-width: 24px;
-  min-height: 24px;
-  margin: 0;
-  padding: 2px 0;
-  justify-content: center;
-  border-left-width: 1px;
-  border-radius: 5px;
-  box-shadow: none;
-}
-
-.app-header > .preview-header .preview-header-btn-label {
-  display: none;
-}
-
-.app-header > .preview-header .focused-annotation-axis-nav {
-  gap: 3px;
-}
-
-.app-header > .preview-header .focused-annotation-nav-btn {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  font-size: 13px !important;
-}
-
-.app-header-annotation-actions {
-  min-width: 0;
-  display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  padding-left: 8px;
-  border-left: 1px solid var(--border);
+  padding: 0 0 6px;
 }
 
-.app-header-annotation-actions.hidden,
-.app-header-annotation-actions.shell-context-hidden {
+.workbench-annotation-actions.hidden,
+.workbench-annotation-actions.shell-context-hidden {
   display: none !important;
 }
 
-.app-header-annotation-actions .group-workbench-hide-reviewed-btn,
-.app-header-annotation-actions .group-workbench-show-all-btn {
+.workbench-annotation-actions .group-workbench-hide-reviewed-btn,
+.workbench-annotation-actions .group-workbench-show-all-btn {
   min-height: 24px;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -1174,25 +1017,25 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   cursor: pointer;
 }
 
-.app-header-annotation-actions .group-workbench-hide-reviewed-btn {
+.workbench-annotation-actions .group-workbench-hide-reviewed-btn {
   padding: 3px 7px;
 }
 
-.app-header-annotation-actions .group-workbench-show-all-btn {
+.workbench-annotation-actions .group-workbench-show-all-btn {
   width: 24px;
   min-width: 24px;
   padding: 0;
 }
 
-.app-header-annotation-actions .group-workbench-hide-reviewed-btn:hover,
-.app-header-annotation-actions .group-workbench-hide-reviewed-btn:focus-visible,
-.app-header-annotation-actions .group-workbench-show-all-btn:hover,
-.app-header-annotation-actions .group-workbench-show-all-btn:focus-visible {
+.workbench-annotation-actions .group-workbench-hide-reviewed-btn:hover,
+.workbench-annotation-actions .group-workbench-hide-reviewed-btn:focus-visible,
+.workbench-annotation-actions .group-workbench-show-all-btn:hover,
+.workbench-annotation-actions .group-workbench-show-all-btn:focus-visible {
   border-color: var(--accent);
   color: var(--text);
 }
 
-.app-header-annotation-actions .group-workbench-hide-reviewed-btn.active {
+.workbench-annotation-actions .group-workbench-hide-reviewed-btn.active {
   border-color: #4f7b61;
   background: rgba(22, 101, 52, 0.18);
   color: var(--text);

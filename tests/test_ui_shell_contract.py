@@ -174,25 +174,27 @@ def test_grid_identity_and_prep_exit_are_owned_by_shell_without_removing_local_b
     assert 'id="media-grid-surface-close-btn"' in html
 
 
-def test_single_item_preview_context_is_hosted_by_permanent_header():
+def test_single_item_preview_context_stays_with_the_preview_surface():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     item_details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
     header_start = html.index('id="app-header"')
+    header_end = html.index('</header>', header_start)
     preview_start = html.index('id="preview-header"')
     prep_root = html.index('id="prep-workspace-root"')
     preview_shell = html.index('id="preview-shell"')
 
-    assert header_start < preview_start < prep_root < preview_shell
+    assert header_start < prep_root < preview_shell < preview_start
+    assert preview_start > header_end
     assert html.count('id="preview-header"') == 1
     assert 'id="preview-header-position"' in html
     assert 'id="preview-header-meta"' in html
     assert 'id="preview-action-rating"' in html
     assert 'id="preview-mutation-indicator"' in html
     assert 'id="preview-open-focused-btn"' in html
-    assert ".app-header > .preview-header {" in css
+    assert ".app.shell-revamp .preview-header {" in css
     assert "previewHeader.classList.toggle('shell-context-hidden', !previewContextRelevant);" in shell
     assert "if (!focusOpen && currentIndex >= 0 && visibleMedia.length > 0)" in item_details
 

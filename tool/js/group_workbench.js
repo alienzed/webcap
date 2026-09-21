@@ -129,7 +129,7 @@ function syncGroupWorkbenchVisibilityHeader(targetEl, mode) {
   if (!targetEl || targetEl.id !== 'group-workbench-list') return 0;
   var showAllBtn = document.getElementById('group-workbench-show-all-btn');
   var hideReviewedBtn = document.getElementById('group-workbench-hide-reviewed-btn');
-  var headerActions = document.getElementById('app-header-annotation-actions');
+  var headerActions = document.getElementById('workbench-annotation-actions');
   var isItemMode = mode === 'item';
   var hiddenCount = isItemMode ? getChecklistHiddenRequirements().length : 0;
   headerActions.classList.toggle('hidden', !isItemMode);

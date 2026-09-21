@@ -411,7 +411,7 @@ function syncApplicationShellContext() {
   var modelControl = document.getElementById('app-header-model-control');
   var modelSelect = document.getElementById('app-header-model-profile-select');
   var previewHeader = document.getElementById('preview-header');
-  var annotationHeaderActions = document.getElementById('app-header-annotation-actions');
+  var annotationActions = document.getElementById('workbench-annotation-actions');
   var sidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
   var testOpen = navigation.activity === 'test';
   var contextText = '';
@@ -446,7 +446,7 @@ function syncApplicationShellContext() {
 
   var previewContextRelevant = !testOpen && (surface === 'default' || surface === 'focus');
   previewHeader.classList.toggle('shell-context-hidden', !previewContextRelevant);
-  annotationHeaderActions.classList.toggle('shell-context-hidden', testOpen || surface !== 'default');
+  annotationActions.classList.toggle('shell-context-hidden', testOpen || surface !== 'default');
 
   var modelRelevant = navigation.activity === 'training' || navigation.activity === 'test';
   if (modelControl) modelControl.classList.toggle('hidden', !modelRelevant);

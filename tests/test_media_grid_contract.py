@@ -23,8 +23,36 @@ def test_focus_set_catalog_keeps_aspect_ratios_independent_of_analysis():
 
     assert "group: 'Aspect Ratio'" in script
     assert "mapAspectRatioToBucket(metadata && metadata.aspect) === preset.aspectBucket" in script
-    assert "if (!preset || preset.aspectBucket || isFocusSetResolutionPreset(preset)) return true;" in script
+    assert "preset.aspectBucket || preset.mediaType || preset.sceneBucket || isFocusSetResolutionPreset(preset)" in script
     assert "<optgroup label=\"' + group + '\">" in script
+
+
+def test_focus_set_catalog_includes_deterministic_media_type_sets():
+    script = _read("tool/js/focus_sets.js")
+
+    assert "key: 'media_images', label: 'Images', group: 'Media Type', mediaType: 'image'" in script
+    assert "key: 'media_videos', label: 'Videos', group: 'Media Type', mediaType: 'video'" in script
+    assert "function focusSetItemMatchesMediaType(item, mediaType)" in script
+    assert "isFocusSetImageItem(item)" in script
+    assert "isFocusSetVideoItem(item)" in script
+
+
+def test_focus_set_catalog_reuses_scene_complexity_metadata():
+    script = _read("tool/js/focus_sets.js")
+
+    for key, label, bucket in (
+        ("scene_simple", "Simple", "simple"),
+        ("scene_moderate", "Moderate", "moderate"),
+        ("scene_busy", "Busy", "busy"),
+    ):
+        assert f"key: '{key}'" in script
+        assert f"label: '{label}'" in script
+        assert f"sceneBucket: '{bucket}'" in script
+
+    assert "function focusSetItemMatchesSceneBucket(item, sceneBucket)" in script
+    assert "getSceneComplexityFromMetadata(metadata)" in script
+    assert "normalizeSceneComplexityBucket(complexity.bucket) === sceneBucket" in script
+    assert "['Selection', 'Media Type', 'Aspect Ratio', 'Resolution', 'Scene Complexity']" in script
 
 
 def test_focus_set_catalog_groups_images_by_actual_short_side_resolution():

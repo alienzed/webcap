@@ -251,6 +251,16 @@ def test_single_item_group_visibility_is_presentation_only_and_persisted():
     assert 'id="group-workbench-show-all-btn"' in html
 
 
+def test_groups_helper_review_color_uses_only_per_item_review_state():
+    panel = _read("tool/js/checklist_panel.js")
+    css = _read("tool/css/checklist.css")
+
+    assert "if (!!checkedMap[item]) summaryRow.classList.add('checklist-row-reviewed');" in panel
+    assert "summaryRow.classList.add('checklist-item-matched')" not in panel
+    assert ".checklist-item-matched" not in css
+    assert "#checklist-items .checklist-row-reviewed" in css
+
+
 def test_groups_helper_keeps_label_space_with_management_controls():
     css = _read("tool/css/checklist.css")
 

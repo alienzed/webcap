@@ -47,6 +47,15 @@ No further persistence implementation is planned unless verification exposes a r
 - Moving or splitting `.webcap_state.json`.
 - Broader permission-repair changes. The current automatic full-training-root `chmod -R` is too broad to expand, but it is not a direct deletion/truncation path for set state.
 
+## Public Usability / Distribution
+
+Longer-term direction for making WebCap practical outside the current development/training-machine setup. These are product/distribution goals, not an implementation plan yet.
+
+- **Manage external tool checkouts instead of assuming hand-built environments.** Investigate a supported way for WebCap to obtain, configure, update, and start external projects it depends on or integrates with, including Diffusion Pipe, TensorBoard, and ComfyUI. Requiring every external environment to be manually perfected should not be the long-term installation model.
+- **Keep WSL on Windows as a supported deployment pattern, not the only architecture.** Paths, runtime settings, launchers, and filesystem boundaries should be explicit enough for Windows + WSL, native Linux, and other viable local layouts to bridge correctly without baking one machine topology into training behavior.
+- **Expand environment diagnostics toward assisted setup.** The existing environment test should eventually be able to identify missing Python/runtime dependencies and, where safe and explicit, install supported versions into the configured training environment/venv. Dependency repair must remain visible and deliberate rather than silently mutating environments.
+- **Document and link the remaining external prerequisites.** Where WebCap cannot or should not automate a requirement, provide direct links and concise setup guidance that bridge the gap between what WebCap provides and what the user must obtain/configure. The existing Hugging Face model links are the pattern to extend.
+
 ## Backlog (Do Not Implement Yet)
 - Before revisiting storage management, inspect the removed `docs/training_artifact_cleanup.md` in commit `40dbd16` and its action-directory layout. Do not reinvent it or introduce automatic deletion without a new, explicit retention/recovery design.
 - Optional model-native video FPS normalization during training capture/materialization: an advanced, default-off per-run option that converts only isolated capture media to Wan 16 fps or MiniMax H3 24 fps while preserving duration and audio. Keep reusable set-folder media model-neutral; see `training_profiles.md`.

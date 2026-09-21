@@ -13,24 +13,32 @@ Krea2 excludes video. Dataset roles are explicit: Wan uses 37f temporal plus 13f
 
 ## Launch output identity
 
-Persistent set TOML remains editable and uses the neutral template output path. A launch reserves a global three-character base-36 group under:
+Persistent set TOMLs remain editable baselines. Managed output is grouped by a stable numbered set root and then by logical run:
 
 ```text
-<filesystem.root>/output/runs/<prefix>-<set-name>/
+<filesystem.root>/output/runs/<global-sequence>-<set-slug>--<set-path-hash>/<sequence>-<model>--<optional-name>/
 ```
 
-For example, `001-Estel`. Stage output slugs are `wan22-hi`, `wan22-lo`, `krea2-raw`, `wan21-t2v`, and `minimax-h3`. Each selected run creates its own launch group.
+Each logical run owns:
 
-Managed and manual launches create one visible action directory. Its `input/` holds captured media, captions, manifest, and cache; its `record/` holds immutable inspected TOMLs and the plan. Only runtime paths are rewritten in copied TOMLs; user-authored dimensions, frame counts, and unmarked direct stanzas remain authoritative and receive visible warnings when unsafe.
+```text
+captures/  captured media, captions, manifest, TOMLs, plan, and cache
+jobs/      runner scripts, logs, PID/action/result evidence
+output/    Diffusion Pipe trainer runs
+```
+
+Managed Resume stays in the selected logical run; a fresh or custom-Resume action allocates a new one. Only app-owned runtime paths and explicit Run setup overrides are rewritten in captured config copies. Persistent set TOMLs remain unchanged unless the user edits or explicitly resets them.
 
 ## Dataset calculation and progress
 
 Selecting a profile creates missing TOMLs. Dataset creation and Reset calculate from the current visible media without copying it. Train captures the visible media and captions once into the bundle.
 
+Run setup exposes learning rate, rank, epochs, and dropout as per-run values populated from the model template. These settings are applied to the captured config only. Resume also writes the selected LR as `force_constant_lr`.
+
 - Wan2.2 writes separate HI and LO datasets. Krea2, Wan2.1, and H3 each write one dataset.
 - Current capture materializes source media byte-for-byte. It does not normalize video FPS.
 - Generated stanzas carry one exact bucket. Direct image and temporal stanzas use captured AR folders; only marked detail video stanzas become `media/video_detail/...` subsets.
-- Current bucket policy and repeat targeting use configured epochs and actual role membership.
+- Current bucket policy uses actual role membership. Generated repeat counts use the fixed `training.repeat_reference_epochs` planning horizon (90 by default), while the run's actual epochs are used for estimated total work.
 - H3 envelope probing remains experimental tooling and does not alter the active profile’s role table. Saved safe shapes replace the conservative ceiling for the exact matching frame/aspect entry, expanding or contracting newly generated/reset H3 video datasets within the app-owned model/probe envelope. Missing entries remain conservative.
 
 ## Future: optional model-native video FPS normalization

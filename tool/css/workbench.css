@@ -959,16 +959,21 @@
 
 .app.shell-revamp.workspace-surface-training .training-runner-queue-resume-point {
   display: grid;
+  width: 100%;
   gap: 4px;
-  max-width: 520px;
   color: var(--muted);
   font-size: 12px;
 }
 
+.app.shell-revamp.workspace-surface-training .training-runner-queue-resume-point strong,
+.app.shell-revamp.workspace-surface-training .training-runner-queue-resume strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .app.shell-revamp.workspace-surface-training .training-runner-queue-resume-point .training-runner-progress-track {
   width: 100%;
-  max-width: 320px;
-  height: 5px;
+  height: 6px;
 }
 
 .app.shell-revamp.workspace-surface-training .training-failure-details {
@@ -994,7 +999,64 @@
 .app.shell-revamp.workspace-surface-training .training-runner-queue-controls {
   grid-area: controls;
   align-self: center;
+  align-items: center;
   margin-top: 0;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-more {
+  position: relative;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-more:not([open]) .training-runner-queue-menu {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-menu {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 170px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-menu button {
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-menu button:hover:not(:disabled) {
+  background: var(--panel-soft);
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-menu button:disabled {
+  opacity: 0.42;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-menu .training-runner-queue-cancel {
+  color: #d36a6a;
 }
 
 .app.shell-revamp .training-runner-actions {

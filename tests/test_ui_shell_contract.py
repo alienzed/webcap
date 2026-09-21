@@ -202,11 +202,18 @@ def test_single_item_preview_context_stays_with_the_preview_surface():
 def test_focus_uses_shell_identity_but_keeps_local_cleanup_exit():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    focus = (ROOT / "tool" / "js" / "focused_annotation.js").read_text(encoding="utf-8")
+    grid = (ROOT / "tool" / "js" / "media_grid_state.js").read_text(encoding="utf-8")
 
     assert "surface === 'focus'" in shell
     assert "? 'Focus' : 'Prep'" in shell
     assert "sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');" in shell
     assert "stopFocusedAnnotation();" in shell
+    assert "function mediaGridLeaveForWorkspaceTransition()" in grid
+    assert "mediaGridHideSurfaceShell();" in grid
+    assert "mediaGridResetSessionState();" in grid
+    assert "mediaGridLeaveForWorkspaceTransition();" in focus
+    assert focus.index("mediaGridLeaveForWorkspaceTransition();") < focus.index("setWorkspaceSurface('focus'")
     assert 'id="focused-annotation-close-btn"' in html
 
 

@@ -714,33 +714,9 @@
                                     </div>
                                 </div>
                                 <div class="training-run-setup-fields">
-                                    <label class="training-run-option training-run-name-option">
-                                        <span>Run name <em>(optional)</em></span>
-                                        <input id="training-run-name-input" type="text" maxlength="80" placeholder="e.g. clothing baseline">
-                                    </label>
-                                    <div id="training-run-stage-option" class="training-run-option">
-                                        <span>Model stage</span>
-                                        <div id="training-run-stage-buttons" class="training-run-stage-buttons" role="group" aria-label="Training run option">
-                                            <button type="button" class="training-run-stage-btn" data-training-stage="hi" aria-pressed="false">Wan2.2 High</button>
-                                            <button type="button" class="training-run-stage-btn" data-training-stage="lo" aria-pressed="false">Wan2.2 Low</button>
-                                            <button type="button" class="training-run-stage-btn" data-training-stage="krea2" aria-pressed="false">Krea2 Raw</button>
-                                            <button type="button" class="training-run-stage-btn" data-training-stage="wan21" aria-pressed="false">Wan2.1 T2V</button>
-                                        </div>
-                                    </div>
-                                    <label class="training-run-option training-run-starting-point-option">
-                                        <span>Starting point</span>
-                                        <select id="training-run-starting-point-select">
-                                            <option value="fresh">Fresh</option>
-                                            <option value="resume">Resume checkpoint</option>
-                                            <option value="initializer">Fine-tune from saved LoRA</option>
-                                        </select>
-                                    </label>
-                                    <section id="training-run-parameters" class="training-run-parameters" aria-label="Training parameters">
+                                    <section id="training-run-parameters" class="training-run-parameters training-run-parameter-rail" aria-label="Training parameters">
                                         <div class="training-run-parameters-heading">
-                                            <div>
-                                                <strong>Training parameters</strong>
-                                                <span id="training-run-parameters-note">Template defaults for this model</span>
-                                            </div>
+                                            <strong>Training</strong>
                                             <button id="training-run-parameters-reset" type="button" class="training-run-parameters-reset" title="Restore the current model template values">Reset</button>
                                         </div>
                                         <div class="training-run-parameters-grid">
@@ -764,30 +740,56 @@
                                                 <input id="training-run-dropout-input" type="number" min="0" max="0.2" step="0.01" inputmode="decimal" aria-describedby="training-run-parameters-error">
                                             </label>
                                         </div>
+                                        <div id="training-run-parameters-note" class="training-run-parameters-note hidden"></div>
                                         <div id="training-run-parameters-error" class="training-run-parameters-error hidden" role="status"></div>
                                     </section>
-                                    <div id="training-run-resume-fields" class="training-run-dependent-fields hidden">
-                                        <label class="training-run-option training-run-resume-option">
-                                            <span>Checkpoint</span>
-                                            <select id="training-run-checkpoint-select">
-                                                <option value="">Choose a checkpoint…</option>
-                                            </select>
-                                            <div id="training-run-checkpoint-path" class="training-run-checkpoint-path"></div>
-                                        </label>
-                                        <label class="training-run-option training-run-custom-checkpoint"><span>Or custom checkpoint directory</span><input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/path/to/training/output/{run}"></label>
-                                        <label id="training-run-resume-stage-option" class="training-run-option training-run-resume-stage-option">
-                                            <span>Apply resume to</span>
-                                            <select id="training-run-resume-stage-select">
-                                                <option value="lo">LO</option>
-                                                <option value="hi">HI</option>
-                                            </select>
-                                        </label>
-                                    </div>
-                                    <div id="training-run-initializer-fields" class="training-run-dependent-fields hidden"></div>
-                                    <div class="training-run-review-row">
-                                        <section id="training-review" class="training-review" aria-live="polite">Preparing training review...</section>
-                                        <div class="training-run-setup-actions">
-                                            <button id="training-queue-job-btn" type="button" class="training-btn training-launch-btn" title="Start this reviewed set when the runner is idle, or add it behind active work.">Train</button>
+                                    <div class="training-run-main">
+                                        <div id="training-run-stage-option" class="training-run-option">
+                                            <span>Model stage</span>
+                                            <div id="training-run-stage-buttons" class="training-run-stage-buttons" role="group" aria-label="Training run option">
+                                                <button type="button" class="training-run-stage-btn" data-training-stage="hi" aria-pressed="false">Wan2.2 High</button>
+                                                <button type="button" class="training-run-stage-btn" data-training-stage="lo" aria-pressed="false">Wan2.2 Low</button>
+                                                <button type="button" class="training-run-stage-btn" data-training-stage="krea2" aria-pressed="false">Krea2 Raw</button>
+                                                <button type="button" class="training-run-stage-btn" data-training-stage="wan21" aria-pressed="false">Wan2.1 T2V</button>
+                                            </div>
+                                        </div>
+                                        <div class="training-run-primary-row">
+                                            <label class="training-run-option training-run-name-option">
+                                                <span>Run name <em>(optional)</em></span>
+                                                <input id="training-run-name-input" type="text" maxlength="80" placeholder="e.g. clothing baseline">
+                                            </label>
+                                            <label class="training-run-option training-run-starting-point-option">
+                                                <span>Starting point</span>
+                                                <select id="training-run-starting-point-select">
+                                                    <option value="fresh">Fresh</option>
+                                                    <option value="resume">Resume checkpoint</option>
+                                                    <option value="initializer">Fine-tune from saved LoRA</option>
+                                                </select>
+                                            </label>
+                                        </div>
+                                        <div id="training-run-resume-fields" class="training-run-dependent-fields hidden">
+                                            <label class="training-run-option training-run-resume-option">
+                                                <span>Checkpoint</span>
+                                                <select id="training-run-checkpoint-select">
+                                                    <option value="">Choose a checkpoint…</option>
+                                                </select>
+                                                <div id="training-run-checkpoint-path" class="training-run-checkpoint-path"></div>
+                                            </label>
+                                            <label class="training-run-option training-run-custom-checkpoint"><span>Custom checkpoint directory</span><input id="training-run-resume-input" type="text" spellcheck="false" placeholder="/path/to/training/output/{run}"></label>
+                                            <label id="training-run-resume-stage-option" class="training-run-option training-run-resume-stage-option">
+                                                <span>Apply resume to</span>
+                                                <select id="training-run-resume-stage-select">
+                                                    <option value="lo">LO</option>
+                                                    <option value="hi">HI</option>
+                                                </select>
+                                            </label>
+                                        </div>
+                                        <div id="training-run-initializer-fields" class="training-run-dependent-fields hidden"></div>
+                                        <div class="training-run-review-row">
+                                            <section id="training-review" class="training-review" aria-live="polite">Preparing training review...</section>
+                                            <div class="training-run-setup-actions">
+                                                <button id="training-queue-job-btn" type="button" class="training-btn training-launch-btn" title="Start this reviewed set when the runner is idle, or add it behind active work.">Train</button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

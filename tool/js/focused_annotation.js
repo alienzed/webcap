@@ -229,6 +229,9 @@ function showFocusedAnnotationSurface() {
     setStatus('Focused annotation could not open because no annotation group is selected.');
     return false;
   }
+  if (typeof mediaGridLeaveForWorkspaceTransition === 'function') {
+    mediaGridLeaveForWorkspaceTransition();
+  }
   var els = getFocusedAnnotationEls();
   if (els.normalGroupsCard) els.normalGroupsCard.classList.add('hidden');
   if (els.workbench) els.workbench.classList.remove('hidden');

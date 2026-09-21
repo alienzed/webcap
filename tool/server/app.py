@@ -16,7 +16,7 @@ from .video_clip_ops import clip_video_response, get_clip_job_status
 from .video_frame_ops import extract_video_frame_response, inspect_video_frame_response
 from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
-from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, folder_statuses_for_folders as training_runner_folder_statuses, start_observer as start_training_runner_observer
+from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, start_observer as start_training_runner_observer
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, discovered_run_output_path, history_job_output_path
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .prune_candidates import prune_candidates_response
@@ -1016,15 +1016,11 @@ def _build_fs_describe_payload(dir_path):
                 caption_payload["error"] = caption_errors[-1]["error"]
             captions[meta["name"]] = caption_payload
 
-    folder_paths = [dir_path / entry["name"] for entry in entries if entry["type"] == "dir"]
-    training_statuses = training_runner_folder_statuses(folder_paths)
-    folders = []
-    for entry in entries:
-        if entry["type"] != "dir" or entry["name"].lower() in ("originals", "auto_dataset"):
-            continue
-        folder_meta = dict(entry)
-        folder_meta["trainingStatus"] = training_statuses.get(dir_path / entry["name"], {"status": "never", "label": ""})
-        folders.append(folder_meta)
+    folders = [
+        dict(entry)
+        for entry in entries
+        if entry["type"] == "dir" and entry["name"].lower() not in ("originals", "auto_dataset")
+    ]
 
     return {
         "folders": folders,

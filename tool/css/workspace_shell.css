@@ -989,11 +989,11 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .workbench-annotation-actions {
   min-width: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 4px;
-  padding: 0 0 6px;
+  padding: 0;
 }
 
 .workbench-annotation-actions.hidden,
@@ -1003,24 +1003,33 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .workbench-annotation-actions .group-workbench-hide-reviewed-btn,
 .workbench-annotation-actions .group-workbench-show-all-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
   min-height: 24px;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--panel-soft);
   color: var(--muted);
-  font-size: 11px;
   line-height: 1;
   cursor: pointer;
 }
 
-.workbench-annotation-actions .group-workbench-hide-reviewed-btn {
-  padding: 3px 7px;
+.workbench-annotation-actions svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.workbench-annotation-actions .group-workbench-show-all-btn {
-  width: 24px;
-  min-width: 24px;
-  padding: 0;
+.workbench-annotation-actions .group-workbench-reviewed-slash {
+  display: none;
 }
 
 .workbench-annotation-actions .group-workbench-hide-reviewed-btn:hover,
@@ -1035,4 +1044,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   border-color: #4f7b61;
   background: rgba(22, 101, 52, 0.18);
   color: var(--text);
+}
+
+.workbench-annotation-actions .group-workbench-hide-reviewed-btn.active .group-workbench-reviewed-slash {
+  display: block;
 }

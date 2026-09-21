@@ -373,23 +373,6 @@
                     <div class="workbench-main-stack">
                         <div class="workbench-card groups-card">
                             <section id="group-workbench" class="group-workbench" aria-label="Annotation groups">
-                                <div id="workbench-annotation-actions" class="workbench-annotation-actions hidden" aria-label="Annotation view controls">
-                                    <button
-                                        id="group-workbench-hide-reviewed-btn"
-                                        type="button"
-                                        class="group-workbench-hide-reviewed-btn"
-                                        title="Hide groups already reviewed for this item"
-                                        aria-label="Hide reviewed groups"
-                                        aria-pressed="false"
-                                    >Hide reviewed</button>
-                                    <button
-                                        id="group-workbench-show-all-btn"
-                                        type="button"
-                                        class="group-workbench-show-all-btn hidden"
-                                        title="Show all annotation groups"
-                                        aria-label="Show all annotation groups"
-                                    >&#128065;</button>
-                                </div>
                                 <div id="group-workbench-list" class="group-workbench-list"></div>
                             </section>
                         </div>
@@ -525,6 +508,35 @@
                                 <div class="caption-helper-section-title-row">
                                     <div class="caption-helper-section-title">Groups</div>
                                     <div class="caption-helper-section-controls">
+                                        <div id="workbench-annotation-actions" class="workbench-annotation-actions hidden" aria-label="Annotation view controls">
+                                            <button
+                                                id="group-workbench-show-all-btn"
+                                                type="button"
+                                                class="group-workbench-show-all-btn hidden"
+                                                title="Show all annotation groups"
+                                                aria-label="Show all annotation groups"
+                                            >
+                                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path d="M2.5 12s3.5-5 8.5-5 8.5 5 8.5 5-3.5 5-8.5 5-8.5-5-8.5-5z"></path>
+                                                    <circle cx="11" cy="12" r="2.25"></circle>
+                                                    <path d="M19 4v5M16.5 6.5h5"></path>
+                                                </svg>
+                                            </button>
+                                            <button
+                                                id="group-workbench-hide-reviewed-btn"
+                                                type="button"
+                                                class="group-workbench-hide-reviewed-btn"
+                                                title="Hide groups already reviewed for this item"
+                                                aria-label="Hide reviewed groups"
+                                                aria-pressed="false"
+                                            >
+                                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path d="M2.5 12s3.75-5 9.5-5 9.5 5 9.5 5-3.75 5-9.5 5-9.5-5-9.5-5z"></path>
+                                                    <path d="m9 12 2 2 4-4"></path>
+                                                    <path class="group-workbench-reviewed-slash" d="M4 4l16 16"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
                                         <button
                                             id="checklist-settings-btn"
                                             type="button"

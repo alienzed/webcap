@@ -131,7 +131,7 @@ function formatTrainingRunLearningRate(value) {
   var text = String(value).trim();
   var number = Number(text);
   if (!Number.isFinite(number) || number === 0 || Math.abs(number) >= 0.001) return text;
-  return number.toExponential().replace(/\.0+e/, 'e').replace(/(\.\d*?)0+e/, '$1e').replace('e+', 'e');
+  return number.toExponential();
 }
 
 function trainingRunTemplateSettings(payload) {
@@ -165,12 +165,10 @@ function validateTrainingRunSettings(settings) {
 }
 
 function updateTrainingRunParameterState() {
-  var panel = document.getElementById('training-run-parameters');
   var note = document.getElementById('training-run-parameters-note');
   var error = document.getElementById('training-run-parameters-error');
   var message = validateTrainingRunSettings(trainingWorkspaceState.runConfigDraft);
   trainingWorkspaceState.runConfigError = message;
-  if (panel) panel.classList.toggle('is-dirty', !!trainingWorkspaceState.runConfigDirty);
   if (note) {
     var startPoint = String(trainingWorkspaceState.reviewStartingPoint || 'fresh');
     var noteParts = [];

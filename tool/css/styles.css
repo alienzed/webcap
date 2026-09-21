@@ -3732,37 +3732,12 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
   text-transform: capitalize;
 }
 
-.training-folder-status--running,
 .training-folder-status--training {
   border-color: var(--accent);
   color: var(--accent);
 }
 
 .training-folder-status--queued {
-  border-color: #cc7a3f;
-  color: #cc7a3f;
-}
-
-.training-folder-status--ready {
-  border-color: #4d8cc7;
-  color: #4d8cc7;
-}
-
-.training-folder-status--completed,
-.training-folder-status--trained {
-  border-color: #4f9d69;
-  background: #4f9d69;
-  color: #ffffff;
-}
-
-.training-folder-status--partial {
-  border-color: #7d8fa6;
-  color: #7d8fa6;
-}
-
-.training-folder-status--failed,
-.training-folder-status--stopped,
-.training-folder-status--caption-review {
   border-color: #cc7a3f;
   color: #cc7a3f;
 }

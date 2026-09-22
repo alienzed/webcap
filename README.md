@@ -20,7 +20,7 @@ WebCap is built with Flask plus plain browser JavaScript. There is no database o
 | **LoRA candidate analysis** | Review a recorded run's TensorBoard loss curves and suggested completed checkpoint epochs without changing run files. **Multiscale Loss Basins** is the primary detector; **Score Scalars · legacy baseline** remains available. Saved candidates can be copied to the configured Test root and removed again later. | In a run row with recorded output, choose **Analyze LoRA candidates**, then use the candidate actions to stage or remove Test copies. |
 | **H3 calibration** | Test MiniMax H3 video bucket shapes on the configured training hardware and retain conclusive results. Verified safe ceilings affect only newly generated or reset H3 datasets; existing TOMLs and captured runs are left unchanged. | Open **App Settings** → **Training** → **H3 calibration**, choose an eligible source from the current folder, and select **Run calibration**. See [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md). |
 | **Test Bench** | Compare staged MiniMax H3 LoRAs against a shared prompt/settings baseline. Queue multiple Test sessions, include or exclude the base model, use wildcard prompts, revisit named/saved sessions and Recent Test Sets, switch between Grid and two-item Compare, open result folders, and rate generated items. | Choose MiniMax H3 as the Base Model, stage checkpoints from Training, then open **Test** from the permanent activity rail. |
-| **App settings** | Configure the filesystem root, default caption template, optional local analysis, appearance, training runtime, repeat-reference epochs, Copy-to-Test roots, enabled training models, diagnostics, and advanced JSON. | Open **App Settings** from the permanent activity rail. Use the **General**, **Training**, and **Advanced** tabs. |
+| **App settings** | Configure the filesystem root, default caption template, optional local analysis, appearance, training runtime, Storyboard Director runtime, repeat-reference epochs, Copy-to-Test roots, enabled training models, diagnostics, and advanced JSON. | Open **App Settings** from the permanent activity rail. Use the **General**, **Training**, **Storyboard**, and **Advanced** tabs. |
 
 ## Supported training profiles
 
@@ -116,6 +116,8 @@ Start from [`tool/config.example.json`](tool/config.example.json). The important
 - `training.repeat_reference_epochs` — fixed epoch count used when solving generated dataset repeats; default `90` and intentionally independent of a run's selected Epochs value.
 - `training.test_copy_roots` / `training.test_copy_subfolder` — per-model destination roots and optional subfolder for staging LoRAs into the Test Bench.
 - `training.enabled_profiles` — models offered for new training runs; at least one must remain enabled.
+- `storyboard.director.llama_server` — optional explicit llama.cpp `llama-server` executable path; configure this in **App Settings → Storyboard** when it is not on `PATH`.
+- `storyboard.director.port` / `context_size` / `max_tokens` — local Director runtime limits; defaults are `8189`, `8192`, and `4096`.
 - `analysis.enableFaceAnalysis` — optional Face Focus metadata.
 - `analysis.enableMediaPipeAnalysis` — optional selection-pose metadata/suggestions.
 - `primer.template` — default caption template.

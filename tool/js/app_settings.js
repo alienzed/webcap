@@ -15,7 +15,7 @@ var appSettingsTestCopyRoots = [
 ];
 
 function setAppSettingsTab(tabName, focusTab) {
-  var next = ['general', 'training', 'advanced'].indexOf(tabName) !== -1 ? tabName : 'general';
+  var next = ['general', 'training', 'storyboard', 'advanced'].indexOf(tabName) !== -1 ? tabName : 'general';
   appSettingsActiveTab = next;
   var selectedButton = null;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
@@ -44,6 +44,8 @@ function normalizeAppConfigShape(cfg) {
   if (!out.filesystem || typeof out.filesystem !== 'object') out.filesystem = {};
   if (!out.training || typeof out.training !== 'object') out.training = {};
   if (!out.primer || typeof out.primer !== 'object') out.primer = {};
+  if (!out.storyboard || typeof out.storyboard !== 'object') out.storyboard = {};
+  if (!out.storyboard.director || typeof out.storyboard.director !== 'object') out.storyboard.director = {};
   if (!out.requirements || typeof out.requirements !== 'object') out.requirements = {};
   if (typeof out.debug !== 'boolean') out.debug = !!out.debug;
   if (!out.filesystem.root) out.filesystem.root = '';
@@ -69,6 +71,10 @@ function normalizeAppConfigShape(cfg) {
       return String(profileId || '').trim().toLowerCase();
     });
   }
+  if (typeof out.storyboard.director.llama_server !== 'string') out.storyboard.director.llama_server = '';
+  if (!Number.isInteger(out.storyboard.director.port)) out.storyboard.director.port = 8189;
+  if (!Number.isInteger(out.storyboard.director.context_size)) out.storyboard.director.context_size = 8192;
+  if (!Number.isInteger(out.storyboard.director.max_tokens)) out.storyboard.director.max_tokens = 4096;
   if (typeof out.primer.template !== 'string') out.primer.template = '';
   if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};
   if (typeof out.analysis.enableFaceAnalysis !== 'boolean') out.analysis.enableFaceAnalysis = false;
@@ -118,6 +124,10 @@ function fillAppSettingsForm(cfg) {
     var el = ui[profile.uiKey];
     if (el) el.checked = c.training.enabled_profiles.indexOf(profile.id) !== -1;
   });
+  if (ui.appSettingsStoryboardLlamaServerEl) ui.appSettingsStoryboardLlamaServerEl.value = c.storyboard.director.llama_server || '';
+  if (ui.appSettingsStoryboardPortEl) ui.appSettingsStoryboardPortEl.value = c.storyboard.director.port;
+  if (ui.appSettingsStoryboardContextSizeEl) ui.appSettingsStoryboardContextSizeEl.value = c.storyboard.director.context_size;
+  if (ui.appSettingsStoryboardMaxTokensEl) ui.appSettingsStoryboardMaxTokensEl.value = c.storyboard.director.max_tokens;
   if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
   if (ui.appSettingsDebugEl) ui.appSettingsDebugEl.checked = !!c.debug;
   if (ui.appSettingsEnableFaceAnalysisEl) ui.appSettingsEnableFaceAnalysisEl.checked = !!c.analysis.enableFaceAnalysis;
@@ -148,6 +158,10 @@ function collectAppSettingsFormConfig() {
     var el = ui[profile.uiKey];
     return !!(el && el.checked);
   }).map(function (profile) { return profile.id; });
+  base.storyboard.director.llama_server = ui.appSettingsStoryboardLlamaServerEl ? ui.appSettingsStoryboardLlamaServerEl.value : '';
+  base.storyboard.director.port = Number(ui.appSettingsStoryboardPortEl ? ui.appSettingsStoryboardPortEl.value : 8189);
+  base.storyboard.director.context_size = Number(ui.appSettingsStoryboardContextSizeEl ? ui.appSettingsStoryboardContextSizeEl.value : 8192);
+  base.storyboard.director.max_tokens = Number(ui.appSettingsStoryboardMaxTokensEl ? ui.appSettingsStoryboardMaxTokensEl.value : 4096);
   base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';
   base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);
   base.analysis.enableMediaPipeAnalysis = !!(ui.appSettingsEnableMediaPipeAnalysisEl && ui.appSettingsEnableMediaPipeAnalysisEl.checked);
@@ -457,7 +471,7 @@ function wireAppSettingsUi() {
       setAppSettingsTab(button.getAttribute('data-app-settings-tab'), false);
     };
     button.onkeydown = function (event) {
-      var tabs = ['general', 'training', 'advanced'];
+      var tabs = ['general', 'training', 'storyboard', 'advanced'];
       var current = tabs.indexOf(button.getAttribute('data-app-settings-tab'));
       var next = current;
       if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;
@@ -502,6 +516,10 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingProfileKrea2El,
     ui.appSettingsTrainingProfileWan21El,
     ui.appSettingsTrainingProfileH3El,
+    ui.appSettingsStoryboardLlamaServerEl,
+    ui.appSettingsStoryboardPortEl,
+    ui.appSettingsStoryboardContextSizeEl,
+    ui.appSettingsStoryboardMaxTokensEl,
     ui.appSettingsPrimerTemplateEl,
     ui.appSettingsEnableFaceAnalysisEl,
     ui.appSettingsEnableMediaPipeAnalysisEl,

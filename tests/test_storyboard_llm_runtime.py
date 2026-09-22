@@ -173,8 +173,20 @@ def test_run_contract_requires_prompt(monkeypatch):
         storyboard_llm_runtime.run_contract("model", {"prompt": ""})
 
 
-def test_ensure_server_accepts_compatible_existing_router(monkeypatch):
+def test_ensure_server_accepts_compatible_existing_router(tmp_path, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "_process", None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_server_settings_signature", None)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "llama_server": "",
+            "models_dir": tmp_path / "text_encoders",
+            "port": 8189,
+            "context_size": 8192,
+            "max_tokens": 4096,
+        },
+    )
     monkeypatch.setattr(storyboard_llm_runtime, "_health_ok", lambda: True)
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -189,3 +201,62 @@ def test_ensure_server_accepts_compatible_existing_router(monkeypatch):
     )
 
     storyboard_llm_runtime._ensure_server()
+
+
+def test_owned_router_restarts_when_runtime_settings_change(tmp_path, monkeypatch):
+    calls = []
+    health = iter([False, True])
+
+    class FakeProcess:
+        def poll(self):
+            return None
+
+    storyboard_llm_runtime._process = FakeProcess()
+    storyboard_llm_runtime._log_handle = None
+    storyboard_llm_runtime._server_settings_signature = ("old", "/old/models", 8189, 4096)
+
+    settings = {
+        "llama_server": "/new/llama-server",
+        "models_dir": tmp_path / "text_encoders",
+        "port": 8189,
+        "context_size": 8192,
+        "max_tokens": 4096,
+    }
+
+    def fake_stop():
+        calls.append("stop")
+        storyboard_llm_runtime._process = None
+        storyboard_llm_runtime._server_settings_signature = None
+        if storyboard_llm_runtime._log_handle is not None:
+            storyboard_llm_runtime._log_handle.close()
+            storyboard_llm_runtime._log_handle = None
+
+    def fake_popen(command, **_kwargs):
+        calls.append(command)
+        return FakeProcess()
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: settings)
+    monkeypatch.setattr(storyboard_llm_runtime, "_resolve_executable", lambda: "/new/llama-server")
+    monkeypatch.setattr(storyboard_llm_runtime, "_runtime_dir", lambda: tmp_path)
+    monkeypatch.setattr(storyboard_llm_runtime, "_health_ok", lambda: next(health))
+    monkeypatch.setattr(storyboard_llm_runtime, "_stop_server_locked", fake_stop)
+    monkeypatch.setattr(storyboard_llm_runtime.subprocess, "Popen", fake_popen)
+
+    try:
+        storyboard_llm_runtime._ensure_server()
+        assert calls[0] == "stop"
+        assert calls[1][0] == "/new/llama-server"
+        assert "--ctx-size" in calls[1]
+        assert "8192" in calls[1]
+        assert storyboard_llm_runtime._server_settings_signature == (
+            "/new/llama-server",
+            str(tmp_path / "text_encoders"),
+            8189,
+            8192,
+        )
+    finally:
+        if storyboard_llm_runtime._log_handle is not None:
+            storyboard_llm_runtime._log_handle.close()
+        storyboard_llm_runtime._log_handle = None
+        storyboard_llm_runtime._process = None
+        storyboard_llm_runtime._server_settings_signature = None

@@ -22,6 +22,7 @@ COMFY_BASE_URL = "http://127.0.0.1:8188"
 
 _process = None
 _log_handle = None
+_server_settings_signature = None
 _process_lock = threading.RLock()
 _request_lock = threading.Lock()
 
@@ -86,7 +87,7 @@ def _resolve_executable():
     if not discovered:
         raise FileNotFoundError(
             "llama-server was not found. Install a recent CUDA-enabled llama.cpp build "
-            "or set storyboard.director.llama_server in tool/config.json."
+            "or configure App Settings > Storyboard > llama-server executable."
         )
     return discovered
 
@@ -148,9 +149,10 @@ def _log_tail():
 
 
 def _stop_server_locked():
-    global _process, _log_handle
+    global _process, _log_handle, _server_settings_signature
     process = _process
     _process = None
+    _server_settings_signature = None
     if process is not None and process.poll() is None:
         process.terminate()
         try:
@@ -170,13 +172,24 @@ def stop_server():
         _stop_server_locked()
 
 
-def _ensure_server():
-    global _process, _log_handle
-    with _process_lock:
-        if _process is not None and _process.poll() is None and _health_ok():
-            return
+def _server_signature(settings):
+    return (
+        str(settings["llama_server"]),
+        str(settings["models_dir"]),
+        int(settings["port"]),
+        int(settings["context_size"]),
+    )
 
-        if _process is not None:
+
+def _ensure_server():
+    global _process, _log_handle, _server_settings_signature
+    with _process_lock:
+        settings = _director_config()
+        desired_signature = _server_signature(settings)
+
+        if _process is not None and _process.poll() is None:
+            if _server_settings_signature == desired_signature and _health_ok():
+                return
             _stop_server_locked()
 
         if _health_ok():
@@ -188,7 +201,6 @@ def _ensure_server():
                 ) from exc
             return
 
-        settings = _director_config()
         models_dir = settings["models_dir"]
         models_dir.mkdir(parents=True, exist_ok=True)
         executable = _resolve_executable()
@@ -215,6 +227,7 @@ def _ensure_server():
                 stdin=subprocess.DEVNULL,
                 close_fds=True,
             )
+            _server_settings_signature = desired_signature
         except OSError:
             _stop_server_locked()
             raise

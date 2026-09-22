@@ -103,3 +103,36 @@ def test_storyboard_document_records_file_based_guardrails():
     assert "Storyboard is additive, not invasive." in doc
     assert "WebCap owns meaning; providers own execution" in doc
     assert "Phase 1 - Manual-first functional Storyboard" in doc
+
+
+def test_storyboard_save_barrier_waits_for_inflight_autosaves():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "storySavePromise: null" in storyboard
+    assert "sceneSavePromises: {}" in storyboard
+    assert "var previous = storyState.storySavePromise;" in storyboard
+    assert "var previous = storyState.sceneSavePromises[sceneId];" in storyboard
+    assert "return Promise.all(pending).then(function () {" in storyboard
+    assert "saveStoryNow().catch(reportError);" in storyboard
+    assert "saveSceneNow(sceneId).catch(reportError);" in storyboard
+
+def test_storyboard_director_configuration_is_first_class_app_setting():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
+    constants = (ROOT / "tool" / "js" / "constants.js").read_text(encoding="utf-8")
+    runtime = (ROOT / "tool" / "server" / "storyboard_llm_runtime.py").read_text(encoding="utf-8")
+
+    assert 'data-app-settings-tab="storyboard"' in html
+    assert 'data-app-settings-panel="storyboard"' in html
+    assert 'id="app-settings-storyboard-llama-server"' in html
+    assert 'id="app-settings-storyboard-port"' in html
+    assert 'id="app-settings-storyboard-context-size"' in html
+    assert 'id="app-settings-storyboard-max-tokens"' in html
+    assert "~/llama.cpp/build/bin/llama-server" in html
+
+    assert "['general', 'training', 'storyboard', 'advanced']" in settings
+    assert "out.storyboard.director.llama_server" in settings
+    assert "base.storyboard.director.llama_server" in settings
+    assert "appSettingsStoryboardLlamaServerEl" in constants
+    assert "App Settings > Storyboard > llama-server executable" in runtime
+

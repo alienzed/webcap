@@ -6,6 +6,10 @@
     story: null,
     saveTimer: 0,
     sceneTimers: {},
+    storySavePromise: null,
+    storySaveError: null,
+    sceneSavePromises: {},
+    sceneSaveErrors: {},
     generationJobs: {},
     sequenceExport: null,
     generationCapabilities: {
@@ -642,15 +646,28 @@
   function saveStoryNow() {
     if (!storyState.story) return Promise.resolve();
     setSaveState('Saving...');
-    return request({
-      operation: 'update_story',
-      storyId: storyState.story.id,
-      story: storyPayloadFromUi()
+    var storyId = storyState.story.id;
+    var storyPayload = storyPayloadFromUi();
+    var previous = storyState.storySavePromise;
+    var promise = (previous ? previous.catch(function () {}) : Promise.resolve()).then(function () {
+      return request({
+        operation: 'update_story',
+        storyId: storyId,
+        story: storyPayload
+      });
     }).then(function (payload) {
       storyState.story = payload.story;
+      if (storyState.storySavePromise === promise) storyState.storySaveError = null;
       setSaveState('Saved');
       return refreshLibrary();
-    }).catch(reportError);
+    }).catch(function (err) {
+      if (storyState.storySavePromise === promise) storyState.storySaveError = err;
+      throw err;
+    }).finally(function () {
+      if (storyState.storySavePromise === promise) storyState.storySavePromise = null;
+    });
+    storyState.storySavePromise = promise;
+    return promise;
   }
 
   function scheduleStorySave() {
@@ -658,7 +675,7 @@
     setSaveState('Unsaved changes');
     storyState.saveTimer = setTimeout(function () {
       storyState.saveTimer = 0;
-      saveStoryNow();
+      saveStoryNow().catch(reportError);
     }, 450);
   }
 
@@ -698,16 +715,29 @@
   function saveSceneNow(sceneId) {
     if (!storyState.story) return Promise.resolve();
     setSaveState('Saving...');
-    return request({
-      operation: 'update_scene',
-      storyId: storyState.story.id,
-      sceneId: sceneId,
-      scene: scenePayloadFromUi(sceneId)
+    var storyId = storyState.story.id;
+    var scenePayload = scenePayloadFromUi(sceneId);
+    var previous = storyState.sceneSavePromises[sceneId];
+    var promise = (previous ? previous.catch(function () {}) : Promise.resolve()).then(function () {
+      return request({
+        operation: 'update_scene',
+        storyId: storyId,
+        sceneId: sceneId,
+        scene: scenePayload
+      });
     }).then(function (payload) {
       storyState.story = payload.story;
+      if (storyState.sceneSavePromises[sceneId] === promise) delete storyState.sceneSaveErrors[sceneId];
       setSaveState('Saved');
       return refreshLibrary();
-    }).catch(reportError);
+    }).catch(function (err) {
+      if (storyState.sceneSavePromises[sceneId] === promise) storyState.sceneSaveErrors[sceneId] = err;
+      throw err;
+    }).finally(function () {
+      if (storyState.sceneSavePromises[sceneId] === promise) delete storyState.sceneSavePromises[sceneId];
+    });
+    storyState.sceneSavePromises[sceneId] = promise;
+    return promise;
   }
 
   function scheduleSceneSave(sceneId) {
@@ -715,23 +745,33 @@
     setSaveState('Unsaved changes');
     storyState.sceneTimers[sceneId] = setTimeout(function () {
       delete storyState.sceneTimers[sceneId];
-      saveSceneNow(sceneId);
+      saveSceneNow(sceneId).catch(reportError);
     }, 450);
   }
 
   function flushPendingSaves() {
-    var chain = Promise.resolve();
     if (storyState.saveTimer) {
       clearTimeout(storyState.saveTimer);
       storyState.saveTimer = 0;
-      chain = chain.then(saveStoryNow);
+      saveStoryNow();
     }
     Object.keys(storyState.sceneTimers).forEach(function (sceneId) {
       clearTimeout(storyState.sceneTimers[sceneId]);
       delete storyState.sceneTimers[sceneId];
-      chain = chain.then(function () { return saveSceneNow(sceneId); });
+      saveSceneNow(sceneId);
     });
-    return chain;
+
+    var pending = [];
+    if (storyState.storySavePromise) pending.push(storyState.storySavePromise);
+    Object.keys(storyState.sceneSavePromises).forEach(function (sceneId) {
+      pending.push(storyState.sceneSavePromises[sceneId]);
+    });
+
+    return Promise.all(pending).then(function () {
+      if (storyState.storySaveError) throw storyState.storySaveError;
+      var failedSceneIds = Object.keys(storyState.sceneSaveErrors);
+      if (failedSceneIds.length) throw storyState.sceneSaveErrors[failedSceneIds[0]];
+    });
   }
 
   function addScene() {

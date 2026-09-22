@@ -1177,13 +1177,14 @@
                 <div class="app-settings-header">
                     <div class="app-settings-title-wrap">
                         <strong>App Settings</strong>
-                        <div class="app-settings-subtitle">General, training, and advanced configuration.</div>
+                        <div class="app-settings-subtitle">General, training, Storyboard, and advanced configuration.</div>
                     </div>
                     <button id="app-settings-close-btn" type="button" title="Close" aria-label="Close app settings">x</button>
                 </div>
                 <div class="app-settings-tabs" role="tablist" aria-label="App settings sections">
                     <button id="app-settings-tab-general" type="button" class="app-settings-tab active" data-app-settings-tab="general" role="tab" aria-selected="true" aria-controls="app-settings-panel-general">General</button>
                     <button id="app-settings-tab-training" type="button" class="app-settings-tab" data-app-settings-tab="training" role="tab" aria-selected="false" aria-controls="app-settings-panel-training" tabindex="-1">Training</button>
+                    <button id="app-settings-tab-storyboard" type="button" class="app-settings-tab" data-app-settings-tab="storyboard" role="tab" aria-selected="false" aria-controls="app-settings-panel-storyboard" tabindex="-1">Storyboard</button>
                     <button id="app-settings-tab-advanced" type="button" class="app-settings-tab" data-app-settings-tab="advanced" role="tab" aria-selected="false" aria-controls="app-settings-panel-advanced" tabindex="-1">Advanced</button>
                 </div>
                 <div class="app-settings-tab-panels">
@@ -1333,6 +1334,35 @@
                                 <summary>Calibration Results</summary>
                                 <div id="h3-calibration-results"><p class="app-settings-help">No saved calibration results.</p></div>
                             </details>
+                        </section>
+                    </div>
+                    <div id="app-settings-panel-storyboard" class="app-settings-panel hidden" data-app-settings-panel="storyboard" role="tabpanel" aria-labelledby="app-settings-tab-storyboard">
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Storyboard Director</div>
+                                <div class="app-settings-section-copy">Configure the local llama.cpp server used to write and refine Storyboard prompts.</div>
+                            </div>
+                            <label class="app-settings-field app-settings-field-wide">
+                                <span class="app-settings-field-label">llama-server executable</span>
+                                <input id="app-settings-storyboard-llama-server" type="text" placeholder="~/llama.cpp/build/bin/llama-server">
+                                <span class="app-settings-note">Use the path visible to WebCap. If llama.cpp was built under <code>~/llama.cpp</code>, the usual output is <code>~/llama.cpp/build/bin/llama-server</code>.</span>
+                            </label>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-field">
+                                    <span class="app-settings-field-label">Port</span>
+                                    <input id="app-settings-storyboard-port" type="number" min="1" max="65535" step="1" value="8189">
+                                </label>
+                                <label class="app-settings-field">
+                                    <span class="app-settings-field-label">Context size</span>
+                                    <input id="app-settings-storyboard-context-size" type="number" min="1024" step="1" value="8192">
+                                </label>
+                                <label class="app-settings-field">
+                                    <span class="app-settings-field-label">Max output tokens</span>
+                                    <input id="app-settings-storyboard-max-tokens" type="number" min="1" step="1" value="4096">
+                                </label>
+                            </div>
+                            <p class="app-settings-help">Director GGUFs are discovered from <code>&lt;Models Root&gt;/text_encoders</code>. Models Root remains a shared setting on the Training tab; model selection stays in Storyboard.</p>
+                            <p class="app-settings-help">Use <strong>Save + Reboot</strong> after changing Director runtime settings.</p>
                         </section>
                     </div>
                     <div id="app-settings-panel-advanced" class="app-settings-panel hidden" data-app-settings-panel="advanced" role="tabpanel" aria-labelledby="app-settings-tab-advanced">

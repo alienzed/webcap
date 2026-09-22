@@ -23,6 +23,15 @@ def test_base_model_selector_stays_available_and_reprepares_test_workspace():
     assert "Testing unavailable for selected Base Model." in script
 
 
+def test_test_seed_uses_shared_32_bit_range():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-seed" type="number" min="0" max="4294967295"' in html
+    assert "var values = new Uint32Array(1);" in script
+    assert "return values[0];" in script
+
+
 def test_test_generations_uses_training_pane_and_core_controls():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

@@ -210,6 +210,32 @@ function scheduleTrainingCandidatesAutoRefresh() {
   }, 60000);
 }
 
+function trainingCandidatesTestProfileId() {
+  var jobId = String(trainingWorkspaceState.candidateJobId || '');
+  var job = getTrainingRunnerJobById(jobId);
+  if (!job) return '';
+
+  var profiles = Array.isArray(trainingWorkspaceState.profiles) ? trainingWorkspaceState.profiles : [];
+  var directProfileId = String(job.profileId || '').trim();
+  var direct = profiles.filter(function (profile) {
+    return profile && String(profile.id || '') === directProfileId &&
+      profile.test && profile.test.enabled === true;
+  })[0];
+  if (direct) return String(direct.id || '');
+
+  var stage = String(job.stages || '').trim().toLowerCase();
+  var matches = profiles.filter(function (profile) {
+    return profile && profile.test && profile.test.enabled === true &&
+      String(profile.test.stagingKey || '').trim().toLowerCase() === stage;
+  });
+  return matches.length === 1 ? String(matches[0].id || '') : '';
+}
+
+function trainingCandidatesTestGenerationsButtonHtml() {
+  if (!trainingCandidatesTestProfileId()) return '';
+  return '<button type="button" class="review-captions-btn training-candidates-open-generations" data-training-candidates-open-generations title="Open Test Generations for this set and model">Test Generations <span aria-hidden="true">→</span></button>';
+}
+
 function trainingCandidatesSvg(data) {
   var geometry = trainingCandidatesChartGeometry();
   var viewWidth = geometry.width, viewHeight = geometry.height;
@@ -311,11 +337,13 @@ function trainingCandidatesSvg(data) {
       (analysis.length ? '<polyline class="training-candidates-analysis" points="' + polyline(analysis) + '"></polyline>' : '') +
       '<rect class="training-candidates-hover-layer" x="' + plotLeft + '" y="' + plotTop + '" width="' + (plotRight - plotLeft) + '" height="' + plotHeight + '"></rect><line class="training-candidates-hover-guide hidden" x1="0" y1="' + plotTop + '" x2="0" y2="' + plotBottom + '"></line><circle class="training-candidates-hover-point hidden" cx="0" cy="0" r="4"></circle>' + savedMarkers + candidateMarkers + '</g>' + candidateLabels +
       '<text class="training-candidates-axis-label" x="' + plotLeft + '" y="' + (plotBottom + 24) + '">step ' + escapeHtml(String(minStep)) + ' · epoch ' + escapeHtml(String(minStepPoint.epoch)) + '</text><text class="training-candidates-axis-label" x="' + plotRight + '" y="' + (plotBottom + 24) + '" text-anchor="end">step ' + escapeHtml(String(maxStep)) + ' · epoch ' + escapeHtml(String(maxStepPoint.epoch)) + '</text>' +
-    '</svg><div class="training-candidates-tooltip hidden"></div><div class="training-candidates-pinned-popover hidden"></div><div class="training-candidates-legend">' +
+    '</svg><div class="training-candidates-tooltip hidden"></div><div class="training-candidates-pinned-popover hidden"></div><div class="training-candidates-chart-footer"><div class="training-candidates-legend">' +
       '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showRawStep"' + (display.showRawStep ? ' checked' : '') + '><i class="step"></i>Raw step loss</label>' +
       '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showSmoothedStep"' + (display.showSmoothedStep ? ' checked' : '') + '><i class="step-smoothed"></i>Smoothed step loss</label>' +
       '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showEpochLoss"' + (display.showEpochLoss ? ' checked' : '') + '><i class="raw"></i>Epoch loss</label>' +
-      '<span><i class="suggested"></i>Suggested epoch</span><span><i class="saved"></i>Saved LoRA</span><span><i class="in-test-folder"></i>In Test Folder</span><span><i class="basin"></i>Candidate region</span></div>' + (candidates.length ? '' : '<div class="training-candidates-no-candidates">No candidate regions identified by this algorithm.</div>') + '</div>';
+      '<span><i class="suggested"></i>Suggested epoch</span><span><i class="saved"></i>Saved LoRA</span><span><i class="in-test-folder"></i>In Test Folder</span><span><i class="basin"></i>Candidate region</span></div>' +
+      trainingCandidatesTestGenerationsButtonHtml() + '</div>' +
+      (candidates.length ? '' : '<div class="training-candidates-no-candidates">No candidate regions identified by this algorithm.</div>') + '</div>';
 }
 
 function trainingCandidatesTooltipHtml(stepPoint, data) {
@@ -343,6 +371,60 @@ function trainingCandidatesTooltipHtml(stepPoint, data) {
   return lines.map(function (line) { return '<div>' + line + '</div>'; }).join('');
 }
 
+function trainingCandidatesPinnedDetailsHtml(stepPoint, data) {
+  var epoch = Number(stepPoint.epoch);
+  var smoothed = data.smoothedStepPoints.filter(function (point) { return Number(point.step) === Number(stepPoint.step); })[0];
+  var raw = data.points.filter(function (point) { return Number(point.epoch) === epoch; })[0];
+  var robust = trainingCandidatesPointForStep(stepPoint.step, data.analysis);
+  var saved = data.savedArtifacts.filter(function (artifact) { return Number(artifact.epoch) === epoch; })[0];
+  var region = data.regions.filter(function (item) {
+    return Number(stepPoint.step) >= Number(item.startStep) && Number(stepPoint.step) <= Number(item.endStep);
+  })[0];
+  var representative = data.candidates.some(function (candidate) { return Number(candidate.epoch) === epoch; });
+
+  var badges = [];
+  if (representative) badges.push('<span>Representative</span>');
+  if (saved && saved.inTestFolder) badges.push('<span class="is-test">In Test Folder</span>');
+
+  var primaryLoss = raw ? Number(raw.loss) : (robust ? Number(robust.loss) : Number(stepPoint.loss));
+  var metrics = ['Step ' + Number(stepPoint.loss).toFixed(4)];
+  if (smoothed) metrics.push('Smoothed ' + Number(smoothed.loss).toFixed(4));
+  if (robust) metrics.push('Robust ' + Number(robust.loss).toFixed(4));
+
+  var html = '<div class="training-candidates-pinned-header"><strong>Epoch ' +
+    escapeHtml(String(epoch)) + ' · Step ' + escapeHtml(String(stepPoint.step)) +
+    '</strong><div class="training-candidates-pinned-badges">' + badges.join('') + '</div></div>' +
+    '<div class="training-candidates-pinned-loss">Epoch loss <strong>' + escapeHtml(primaryLoss.toFixed(4)) + '</strong></div>' +
+    '<div class="training-candidates-pinned-metrics">' + escapeHtml(metrics.join(' · ')) + '</div>';
+
+  if (region) {
+    html += '<div class="training-candidates-pinned-region"><strong>Region ' +
+      escapeHtml(String(region.startEpoch) + '–' + String(region.endEpoch)) +
+      '</strong><span>' + escapeHtml(String(region.label || 'Stable region')) + '</span></div>';
+  }
+
+  if (saved) {
+    var savedLabel = saved.status === 'available' ? String(saved.fileName || '') : 'ambiguous exports';
+    html += '<div class="training-candidates-pinned-saved"><span>Saved</span><strong title="' +
+      escapeHtml(savedLabel) + '">' + escapeHtml(savedLabel) + '</strong></div>';
+  } else {
+    html += '<div class="training-candidates-pinned-saved is-muted"><span>Saved</span><strong>No</strong></div>';
+  }
+
+  if (region) {
+    var savedCount = Array.isArray(region.savedEpochs) ? region.savedEpochs.length : 0;
+    html += '<div class="training-candidates-pinned-coverage">' + savedCount + ' saved epoch' +
+      (savedCount === 1 ? '' : 's') + ' in region</div>';
+  }
+
+  var testFolderStatus = data.testFolderStatus || {};
+  if (testFolderStatus.state === 'unknown') {
+    html += '<div class="training-candidates-copy-status">Test folder unavailable: ' +
+      escapeHtml(String(testFolderStatus.error || 'Unknown error')) + '</div>';
+  }
+  return html;
+}
+
 function trainingCandidatesAvailableArtifact(epoch, data) {
   return (data.savedArtifacts || []).filter(function (artifact) {
     return Number(artifact.epoch) === Number(epoch) && artifact.status === 'available';
@@ -354,16 +436,13 @@ function trainingCandidatesPinnedActionsHtml(epoch, data) {
   if (!artifact) return '';
   var escapedEpoch = escapeHtml(String(epoch));
   var inTestFolder = artifact.inTestFolder === true;
-  var testFolderStatus = data.testFolderStatus || {};
-  var unavailable = testFolderStatus.state === 'unknown' ? '<div class="training-candidates-copy-status">Test folder unavailable: ' + escapeHtml(String(testFolderStatus.error || 'Unknown error')) + '</div>' : '';
   var testAction = inTestFolder ? 'remove' : 'copy';
-  var testLabel = inTestFolder ? 'Remove from Test Folder' : 'Copy to Test Folder';
-  var testTitle = inTestFolder ? 'Removes only the test-folder copy; the saved epoch remains.' : 'Copies this saved epoch into the configured test folder.';
+  var testLabel = inTestFolder ? 'Remove from Test' : 'Copy to Test';
+  var testTitle = inTestFolder ? 'Removes only the staged test copy; the saved epoch remains.' : 'Copies this saved epoch into the configured Test staging folder.';
   return '<div class="training-candidates-pinned-actions">' +
     '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapedEpoch + '">Open Epoch Folder</button>' +
     '<button type="button" class="review-captions-btn training-candidates-test-toggle is-' + testAction + '" data-training-candidate-test-epoch="' + escapedEpoch + '" data-training-candidate-test-action="' + testAction + '" title="' + testTitle + '">' + testLabel + '</button>' +
-    '<button type="button" class="review-captions-btn training-candidates-open-test" data-training-candidate-open-test>Open Test Folder</button>' +
-    '</div><div class="training-candidates-copy-status" data-training-candidate-copy-status aria-live="polite"></div>' + unavailable;
+    '</div><div class="training-candidates-copy-status" data-training-candidate-copy-status aria-live="polite"></div>';
 }
 
 function wireTrainingCandidatesChart() {
@@ -415,7 +494,7 @@ function wireTrainingCandidatesChart() {
     if (!positionPoint) return;
     trainingWorkspaceState.candidatePinnedEpoch = Number(epoch);
     hide();
-    popover.innerHTML = trainingCandidatesTooltipHtml(stepPoint || positionPoint, data) + trainingCandidatesPinnedActionsHtml(epoch, data);
+    popover.innerHTML = trainingCandidatesPinnedDetailsHtml(stepPoint || positionPoint, data) + trainingCandidatesPinnedActionsHtml(epoch, data);
     popover.classList.remove('hidden');
     positionPinned(positionPoint);
   }
@@ -447,24 +526,15 @@ function wireTrainingCandidatesChart() {
     tooltip.style.top = Math.max(bounds.top + 4, Math.min(bounds.bottom - tooltip.offsetHeight - 4, tooltipTop)) + 'px';
   });
   wrap.addEventListener('click', function (event) {
-    var openTestButton = event.target.closest ? event.target.closest('.training-candidates-open-test') : null;
-    if (openTestButton) {
+    var openGenerations = event.target.closest ? event.target.closest('[data-training-candidates-open-generations]') : null;
+    if (openGenerations) {
       event.stopPropagation();
       var testFolder = String(trainingWorkspaceState.candidateFolder || '');
-      var testJobId = String(trainingWorkspaceState.candidateJobId || '');
-      if (!testFolder || !testJobId) throw new Error('Candidate analysis has no selected training run.');
-      trainingRunnerRequest('/fs/training_candidates/open_test', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: testFolder, jobId: testJobId })
-      }).then(function () {
-        var status = popover.querySelector('[data-training-candidate-copy-status]');
-        if (status) status.textContent = 'Opened configured test folder.';
-        positionPinned(trainingCandidatesEpochPlotPoint(trainingWorkspaceState.candidatePinnedEpoch, data));
-      }).catch(function (err) {
-        var status = popover.querySelector('[data-training-candidate-copy-status]');
-        if (status) status.textContent = String(err.message || err);
-        positionPinned(trainingCandidatesEpochPlotPoint(trainingWorkspaceState.candidatePinnedEpoch, data));
-      });
+      var profileId = trainingCandidatesTestProfileId();
+      if (!testFolder || !profileId) throw new Error('Candidate analysis has no supported Test Generations context.');
+      setWorkingModelProfileId(profileId, testFolder);
+      closeTrainingCandidates();
+      window.openTestBenchForFolder(testFolder);
       return;
     }
     var testButton = event.target.closest ? event.target.closest('.training-candidates-test-toggle') : null;

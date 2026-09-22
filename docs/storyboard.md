@@ -208,6 +208,7 @@ Storyboard keeps its LLM instructions in versioned repo documents rather than re
 - `docs/mmh3-prompt-template.txt` — concise base-mode skeleton copied from the current official MiniMax H3 output contract; it is not a competing WebCap-specific format.
 - `docs/storyboard-director-context.txt` — compact copy/paste director context for immediate manual testing with ComfyUI `Generate Text`.
 - `docs/storyboard-scene-plan.schema.json` — strict JSON contract for whole-Story -> ordered Scene planning; WebCap validates before creating canonical Scenes.
+- `docs/storyboard-plan-audit.schema.json` — advisory semantic-audit contract used after deterministic plan validation and before an optional single repair pass.
 
 WebCap should eventually assemble provider requests from these stable instructions plus current Story/Scene context. The provider is not the authoritative session store.
 
@@ -233,6 +234,9 @@ Early authoring operations should be explicit functions rather than a general ag
 - optionally return structured JSON
 
 Manual prompt fields remain fully usable without an LLM. Storyboard generation always consumes those stored manual fields; future LLM assistance may propose edits to them but must never become a prerequisite for generation.
+
+
+Storyboard should expose a compatible local **Director model** selector rather than hard-coding one model. The selection is runtime preference, not Story meaning. Initially one selected model may handle planning, audit, prompt writing, and revision; cross-model audit can remain an explicit later option.
 
 ### ComfyUI
 
@@ -363,12 +367,15 @@ Goal: make authoring faster without changing the canonical Story model.
 
 Candidates:
 
-- Story concept -> proposed Scene list
+- Story concept -> complete proposed Scene plan in one structured pass
+- deterministic validation against `docs/storyboard-scene-plan.schema.json`
+- one semantic audit using `docs/storyboard-plan-audit.schema.json`
+- one bounded repair pass when the audit finds material problems
+- Director model selector, with optional cross-model audit later
 - Scene summary -> full H3-ready prompt
 - correction/revision loop
 - continuity review
-- lightweight conversational panel if it proves useful
-- structured Story-planning output validated against `docs/storyboard-scene-plan.schema.json` before applying changes
+- lightweight conversational panel only if it proves useful
 
 Manual editing remains available at all times. AI output proposes or edits the same Scene objects the user can edit directly.
 

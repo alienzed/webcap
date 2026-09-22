@@ -71,6 +71,40 @@ def test_storyboard_route_is_independent_of_current_set(tmp_path, monkeypatch):
     assert selected.status_code == 200
     assert selected.get_json()["story"]["scenes"][scene["id"]]["selectedTakeId"] == take["id"]
 
+    take_removed = client.post("/fs/storyboard", json={
+        "operation": "remove_take",
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+        "takeId": take["id"],
+    })
+    assert take_removed.status_code == 200
+    assert take["id"] in take_removed.get_json()["story"]["scenes"][scene["id"]]["removedTakes"]
+
+    take_restored = client.post("/fs/storyboard", json={
+        "operation": "restore_take",
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+        "takeId": take["id"],
+    })
+    assert take_restored.status_code == 200
+
+    second_added = client.post("/fs/storyboard", json={
+        "operation": "add_scene",
+        "storyId": story["id"],
+        "scene": {"title": "Second"},
+    })
+    second = second_added.get_json()["scene"]
+    reference = client.post("/fs/storyboard", json={
+        "operation": "set_scene_reference_from_take",
+        "storyId": story["id"],
+        "sceneId": second["id"],
+        "role": "first_frame",
+        "sourceSceneId": scene["id"],
+        "sourceTakeId": take["id"],
+        "frame": "last",
+    })
+    assert reference.status_code == 400  # fake mp4 bytes cannot be frame-extracted
+
     removed = client.post("/fs/storyboard", json={
         "operation": "delete_scene",
         "storyId": story["id"],

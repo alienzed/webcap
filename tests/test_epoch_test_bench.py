@@ -784,6 +784,33 @@ def test_prepare_exposes_supported_test_aspect_ratios(tmp_path, monkeypatch):
     assert payload["defaults"]["aspectRatio"] == "4:3 (Standard)"
 
 
+def test_prepare_survives_optional_setting_choice_failure(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    (staged / "epoch01.safetensors").write_bytes(b"weights")
+    model = bench.get_test_model("krea2_raw")
+
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None: {"status": "idle"})
+    monkeypatch.setattr(
+        model,
+        "setting_options",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("ComfyUI did not expose dimensions choices.")
+        ),
+    )
+
+    payload = bench.prepare(tmp_path, model_id="krea2_raw")
+
+    assert payload["modelId"] == "krea2_raw"
+    assert payload["defaults"]["dimensions"] == model.template_settings(model.load_template())["dimensions"]
+    assert payload["settingOptions"] == {}
+    assert payload["warnings"] == [
+        "Could not load optional Test setting choices from ComfyUI: "
+        "ComfyUI did not expose dimensions choices."
+    ]
+
+
 def test_normalized_test_settings_rejects_unknown_aspect_ratio():
     with pytest.raises(ValueError, match="Unsupported Test Generations aspect ratio"):
         bench._normalized_test_settings(bench._load_template(), aspect_ratio="5:4 (Unsupported)")

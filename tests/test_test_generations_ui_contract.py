@@ -127,6 +127,10 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "function removeCurrentSessionCandidate(button)" in script
     assert "window.confirm(" in script
     assert "This deletes the staged LoRA and its result from the current session. Other sessions are unchanged." in script
+    removal_block = script.split("function removeCurrentSessionCandidate(button)", 1)[1].split("function bindUi()", 1)[0]
+    assert removal_block.index("if (!confirmed) return;") < removal_block.index("button.disabled = true;")
+    assert removal_block.index("button.disabled = true;") < removal_block.index("removeCandidate(candidateFile, currentSession)")
+    assert "button.disabled = false;" in removal_block
     assert "removeCurrentSessionCandidate(remove);" in script
     assert "button.disabled = true;" in script
     assert "button.disabled = false;" in script
@@ -274,6 +278,7 @@ def test_test_result_footer_identity_timing_and_remove_contract():
     assert "Run ' + String(runSequence).padStart(2, '0')" in script
     assert "Epoch ' + String(epoch).trim()" in script
     assert "sourceFile.match(/^(.*)__epoch(\\d+)\\.safetensors$/i)" in script
+    assert "(?:run[-_]?)?(\\d+)$" in script
     assert "primary: 'Base', secondary: ''" in script
     assert "function formatCandidateElapsed(milliseconds)" in script
     assert "if (!isFinite(value) || value < 0) return '';" in script

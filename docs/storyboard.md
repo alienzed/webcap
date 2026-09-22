@@ -403,7 +403,7 @@ Current runtime slice:
 - WebCap-managed llama.cpp router process on loopback;
 - local GGUF discovery through the existing configured WebCap Model Root (`text_encoders`);
 - Storyboard-level Director model selector;
-- `expand_concept` turns a terse Story seed into a richer persistent overview without creating Scenes;
+- `expand_concept` turns a terse Story seed into a richer persistent overview without creating Scenes; the previous concept is kept as one-step recoverable text;
 - `develop_story` turns the saved concept/style into a complete structured Scene sequence and writes the initial H3-ready prompt for every Scene in the same whole-Story pass;
 - deterministic validation against `docs/storyboard-scene-plan.schema.json` plus app-level validation before any Scene replacement is written;
 - replanning requires explicit confirmation and moves old active Scenes into recoverable `removedScenes` without deleting their Take media;

@@ -68,7 +68,7 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "/fs/storyboard/generation/capabilities" in storyboard
     assert "/fs/storyboard/generation" in storyboard
     assert "Generation prompt" in storyboard
-    assert "Summary / intent" in storyboard
+    assert "Scene intent" in storyboard
     assert "Entry state" in storyboard
     assert "Exit state" in storyboard
     assert "Notes" in storyboard
@@ -162,4 +162,19 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
     assert 'id="storyboard-expand-concept-btn"' in html
     assert "function expandConcept()" in storyboard
     assert "operation: 'expand_concept'" in storyboard
-    assert "return saveStoryNow();" in storyboard
+    assert "storyState.story = payload.story;" in storyboard
+    assert "previousConcept" in storyboard
+
+
+def test_storyboard_director_actions_share_one_busy_state_and_concept_restore():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-restore-concept-btn"' in html
+    assert "busy: false" in storyboard
+    assert "function setDirectorBusy(busy)" in storyboard
+    assert "if (!storyState.story || storyState.director.busy) return;" in storyboard
+    assert "setDirectorBusy(true);" in storyboard
+    assert "setDirectorBusy(false);" in storyboard
+    assert "function restorePreviousConcept()" in storyboard
+    assert "operation: 'restore_previous_concept'" in storyboard

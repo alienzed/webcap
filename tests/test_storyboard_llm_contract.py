@@ -185,3 +185,12 @@ def test_expand_concept_is_creative_but_not_scene_planning():
     assert "Develop the narrative arc" in prompt
     assert "do not break the Story into Scenes yet" in prompt
     assert "do not write MiniMax H3 prompts" in prompt
+
+
+def test_develop_story_h3_rules_do_not_conflict_with_structured_creative_task():
+    request = storyboard_llm_contract.build_request(_story(), "", "develop_story")
+    prompt = request["prompt"]
+
+    assert "current Director task explicitly permits inventing it" in prompt
+    assert "structured whole-Story tasks" in prompt
+    assert "Return only the final H3 model-facing prompt." not in prompt

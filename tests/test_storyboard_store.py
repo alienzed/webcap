@@ -343,3 +343,78 @@ def test_apply_developed_plan_rejects_single_scene_or_out_of_range_duration(stor
     }
     with pytest.raises(ValueError, match="between 4 and 15"):
         storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_scene, dict(bad_scene)]})
+
+
+def test_concept_expansion_preserves_one_previous_version(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story", "concept": "One sentence."})
+
+    expanded = storyboard_store.apply_concept_expansion(
+        story["id"],
+        "A richer concept with characters, conflict, and an ending.",
+    )
+
+    assert expanded["concept"].startswith("A richer concept")
+    assert expanded["previousConcept"] == "One sentence."
+
+    restored = storyboard_store.restore_previous_concept(story["id"])
+    assert restored["concept"] == "One sentence."
+    assert restored["previousConcept"] is None
+
+
+def test_restore_scene_clears_replanning_removal_metadata(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Old Scene"})
+    plan = {
+        "scenes": [
+            {
+                "title": "New One",
+                "summary": "First.",
+                "entryState": "Start one.",
+                "exitState": "End one.",
+                "prompt": "Prompt one.",
+                "suggestedDurationSeconds": 6,
+                "continuity": {"continuesPreviousScene": False, "carryForward": []},
+            },
+            {
+                "title": "New Two",
+                "summary": "Second.",
+                "entryState": "Start two.",
+                "exitState": "End two.",
+                "prompt": "Prompt two.",
+                "suggestedDurationSeconds": 6,
+                "continuity": {"continuesPreviousScene": True, "carryForward": []},
+            },
+        ]
+    }
+    developed = storyboard_store.apply_developed_plan(story["id"], plan)
+    assert developed["removedScenes"][scene["id"]]["removedReason"] == "replaced_by_develop_story"
+
+    restored = storyboard_store.restore_scene(story["id"], scene["id"])
+    assert "removedReason" not in restored["scenes"][scene["id"]]
+
+
+def test_developed_plan_rejects_schema_shape_drift(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    base_scene = {
+        "title": "Scene",
+        "summary": "Summary.",
+        "entryState": "Start.",
+        "exitState": "End.",
+        "prompt": "Prompt.",
+        "suggestedDurationSeconds": 6,
+        "continuity": {"continuesPreviousScene": False, "carryForward": []},
+    }
+
+    bad_top = {"scenes": [dict(base_scene), dict(base_scene)], "extra": True}
+    with pytest.raises(ValueError, match="unsupported fields"):
+        storyboard_store.apply_developed_plan(story["id"], bad_top)
+
+    bad_scene = dict(base_scene)
+    bad_scene["extra"] = "nope"
+    with pytest.raises(ValueError, match="missing or unsupported fields"):
+        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_scene, dict(base_scene)]})
+
+    bad_type = dict(base_scene)
+    bad_type["title"] = 42
+    with pytest.raises(ValueError, match="invalid title"):
+        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_type, dict(base_scene)]})

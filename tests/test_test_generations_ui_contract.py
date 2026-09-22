@@ -208,9 +208,11 @@ def test_test_bench_activity_rail_and_live_session_contract():
     controls_block = script.split("function syncActiveRunControls(status)", 1)[1].split("function renderStatus(status)", 1)[0]
     assert "runBtn.disabled = active" not in controls_block
     assert "runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;" in controls_block
-    assert "test-generations-stop-btn" not in script
-    assert "dataset.sessionStop = name;" in script
-    assert "stopRun(stop);" in script
+    assert 'id="test-generations-stop-btn"' in html
+    assert "function syncActiveTestCard(status)" in script
+    assert "el('test-generations-stop-btn').onclick = function () { stopRun(this); };" in script
+    assert "dataset.sessionStop = name;" not in script
+    assert "data-session-stop" not in script
     assert ".disabled = !!disabled" not in controls_block
 
     assert "if (!currentSession || currentSession === activeSession)" in script
@@ -218,6 +220,26 @@ def test_test_bench_activity_rail_and_live_session_contract():
     assert "saveTestBenchState(prompt);" in script
     assert "if (nextSeed) nextSeed.value = String(randomSeed());" in script
 
+
+
+def test_active_test_card_is_separate_from_selected_session_results():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-active"' in html
+    assert 'id="test-generations-active-progress"' in html
+    assert 'id="test-generations-active-current"' in html
+    assert 'id="test-generations-active-meta"' in html
+    assert "syncActiveTestCard(status);" in script
+    poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
+    assert "syncActiveTestCard(status);" in poll
+    render = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
+    assert "syncActiveTestCard" not in render
+    assert "statusEl.textContent = live ? '' : statusText(status);" in render
+    assert ".test-generations-active {" in css
+    assert ".test-generations-stop-btn {" in css
+    assert "min-height: 160px;" in css
 
 
 def test_live_test_status_surfaces_comfy_job_progress_and_errors_to_console():

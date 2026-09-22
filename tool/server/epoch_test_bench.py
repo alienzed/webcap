@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import logging
 import os
@@ -1299,6 +1300,19 @@ def _run_batch(
             _stop_requests.discard(folder_key)
         _advance_test_queue()
 
+def _workflow_evidence(model, template):
+    canonical = json.dumps(
+        template,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return {
+        "workflowFile": model.TEMPLATE_PATH.name,
+        "workflowSha256": hashlib.sha256(canonical).hexdigest(),
+    }
+
+
 def _build_queued_request(
     folder_path,
     prompt,
@@ -1348,8 +1362,10 @@ def _build_queued_request(
         "selectedFiles": [path.name for path in loras],
         "includeBase": include_base,
         "settings": dict(normalized_settings),
+        "workflow": copy.deepcopy(template),
         "total": len(loras) + (1 if include_base else 0),
     }
+    request.update(_workflow_evidence(model, template))
     request.update(normalized_settings)
     return request
 
@@ -1531,6 +1547,16 @@ def start_queued(folder_path, request):
     requested_settings = request.get("settings") if isinstance(request.get("settings"), dict) else {
         key: request.get(key) for key in model.settings
     }
+    frozen_template = request.get("workflow")
+    if not isinstance(frozen_template, dict):
+        raise ValueError("Queued Test Generations job has no frozen workflow.")
+    workflow_evidence = _workflow_evidence(model, frozen_template)
+    expected_workflow_file = str(request.get("workflowFile") or "")
+    expected_workflow_sha256 = str(request.get("workflowSha256") or "")
+    if expected_workflow_file and expected_workflow_file != workflow_evidence["workflowFile"]:
+        raise ValueError("Queued Test Generations workflow identity does not match the selected model.")
+    if expected_workflow_sha256 and expected_workflow_sha256 != workflow_evidence["workflowSha256"]:
+        raise ValueError("Queued Test Generations workflow fingerprint is invalid.")
 
     with _lock:
         _prune_dead_test_workers_locked()
@@ -1559,6 +1585,8 @@ def start_queued(folder_path, request):
             "comfyStatus": "",
             "comfyLastContactAt": None,
             "settings": dict(requested_settings),
+            "workflowFile": workflow_evidence["workflowFile"],
+            "workflowSha256": workflow_evidence["workflowSha256"],
             "includeBase": include_base,
             "results": [],
             "resultFolder": _relative_to_fs_root(session_directory),
@@ -1568,7 +1596,7 @@ def start_queued(folder_path, request):
 
     try:
         _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
-        template = model.resolve_assets(model.load_template(), _available_comfy_names, _resolve_comfy_name)
+        template = model.resolve_assets(copy.deepcopy(frozen_template), _available_comfy_names, _resolve_comfy_name)
         normalized_settings = model.normalize_settings(template, _new_session_seed, requested_settings)
         payload["settings"] = dict(normalized_settings)
         payload.update(normalized_settings)

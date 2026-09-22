@@ -36,6 +36,7 @@ def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs
         "seed": 4242,
         "seedMode": "random",
         "references": [],
+        "loras": [],
     }
 
 
@@ -141,6 +142,8 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
     assert take["seed"] == 77
     assert take["aspectRatio"] == "16:9 (Widescreen)"
     assert take["megapixels"] == 0.3
+    assert take["references"] == []
+    assert take["loras"] == []
     assert take["workflowProfile"] == "minimax_h3_storyboard_v1"
     assert take["providerJobId"] == "comfy-123"
     media_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]

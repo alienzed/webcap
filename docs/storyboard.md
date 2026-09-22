@@ -400,3 +400,17 @@ While implementing Phase 1:
 - keep destructive Scene/Story actions explicit and reversible; Phase 1 Scene removal is retained in `story.json` and can be restored
 
 The architecture should leave obvious seams for later provider integration, but Phase 1 should solve only the real manual authoring workflow.
+
+
+## Current LLM contract slice
+
+Before wiring a local model runtime, Storyboard has a pure request-assembly boundary in `tool/server/storyboard_llm_contract.py`.
+
+The intentionally small first operations are:
+
+- `write_prompt`: Story style + current Scene + only a useful previous exit-state handoff + the concise H3 output contract. It does not include the full Story concept, unrelated Scenes, Takes, or conversational history.
+- `refine_prompt`: the same local Scene context plus the existing prompt and one explicit correction. The contract asks for the smallest coherent revision rather than a creative rewrite.
+
+This module does not call ComfyUI, Qwen, Ollama, or any other provider. It exists so context assembly and leakage boundaries can be tested independently from model quality/runtime behavior.
+
+Entry and exit state are manual first-class Scene fields. An LLM may later propose them, but Storyboard does not need an LLM to create or edit them.

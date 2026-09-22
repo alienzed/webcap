@@ -788,8 +788,9 @@
     return /\.(?:png|jpe?g|webp|gif|bmp|avif)$/.test(fileName) ? 'image' : (fileName ? 'video' : '');
   }
 
-  function buildResultRating(result) {
+  function buildResultRating(result, sessionName) {
     var mediaFile = resultMediaFile(result);
+    var owningSession = String(sessionName || '').trim();
     if (!mediaFile) return null;
 
     var currentRating = Math.max(0, Math.min(5, Number(result && result.rating || 0)));
@@ -803,6 +804,7 @@
       star.className = 'test-generations-result-star' + (value <= currentRating ? ' active' : '');
       star.dataset.testRating = String(value);
       star.dataset.mediaFile = mediaFile;
+      star.dataset.testSession = owningSession;
       star.title = 'Rate ' + value + ' star' + (value === 1 ? '' : 's');
       star.setAttribute('aria-label', star.title);
       star.textContent = value <= currentRating ? '★' : '☆';
@@ -831,7 +833,12 @@
   function rateCurrentSessionResult(button) {
     var rating = Number(button && button.dataset.testRating || 0);
     var mediaFile = String(button && button.dataset.mediaFile || '').trim();
-    if (!currentSession || !mediaFile || rating < 1 || rating > 5) return;
+    var sessionName = String(button && button.dataset.testSession || '').trim();
+    if (!mediaFile || rating < 1 || rating > 5) return;
+    if (!sessionName) {
+      showError(new Error('Test result has no owning session.'));
+      return;
+    }
 
     var row = button.closest('.test-generations-result-rating');
     if (row) {
@@ -841,7 +848,7 @@
     }
 
     request('test_rate_result', {
-      session: currentSession,
+      session: sessionName,
       mediaFile: mediaFile,
       rating: rating
     }).then(function (payload) {
@@ -903,7 +910,7 @@
     }
 
     if (!opts.failed) {
-      var rating = buildResultRating(result);
+      var rating = buildResultRating(result, opts.session);
       if (rating) copy.appendChild(rating);
     }
 
@@ -1110,7 +1117,7 @@
       var preview = appendTestPreview(item, resultFolder, result, { muted: true });
       if (preview && preview.tagName === 'VIDEO') videos.push(preview);
 
-      item.appendChild(buildResultFooter(result));
+      item.appendChild(buildResultFooter(result, { session: String(status && status.session || '') }));
       stage.appendChild(item);
     });
 
@@ -1196,7 +1203,7 @@
         card.appendChild(placeholder);
       }
 
-      card.appendChild(buildResultFooter(result));
+      card.appendChild(buildResultFooter(result, { session: String(status && status.session || '') }));
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);

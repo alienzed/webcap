@@ -31,7 +31,7 @@ from .training_review import discover_saved_initializers, prepare_training_revie
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
-from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
+from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_concept_expansion as storyboard_apply_concept_expansion, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_previous_concept as storyboard_restore_previous_concept, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_generation import generation_capabilities as storyboard_generation_capabilities, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
@@ -446,6 +446,9 @@ def storyboard_route():
         if operation == "restore_scene":
             story = storyboard_restore_scene(story_id, str(data.get("sceneId") or "").strip())
             return jsonify({"ok": True, "story": story})
+        if operation == "restore_previous_concept":
+            story = storyboard_restore_previous_concept(story_id)
+            return jsonify({"ok": True, "story": story})
         if operation == "rate_take":
             story, take = storyboard_rate_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip(), data.get("rating"))
             return jsonify({"ok": True, "story": story, "take": take})
@@ -541,6 +544,10 @@ def storyboard_director_route():
         instruction = str(data.get("instruction") or "").strip()
 
         story = storyboard_load_story(story_id)
+        replace_existing = bool(data.get("replaceExisting"))
+        if operation == "develop_story" and story.get("sceneOrder") and not replace_existing:
+            raise ValueError("Story already has Scenes. Confirm replacement before developing it again.")
+
         contract = storyboard_build_llm_request(
             story,
             scene_id,
@@ -548,6 +555,31 @@ def storyboard_director_route():
             instruction=instruction,
         )
         result = storyboard_run_llm_contract(model_id, contract)
+        if operation == "expand_concept":
+            expanded_story = storyboard_apply_concept_expansion(story_id, result.get("text"))
+            return jsonify({
+                "ok": True,
+                "story": expanded_story,
+                "result": expanded_story["concept"],
+                "model": result["model"],
+                "usage": result.get("usage"),
+                "timings": result.get("timings"),
+            })
+        if operation == "develop_story":
+            developed_story = storyboard_apply_developed_plan(
+                story_id,
+                result.get("data"),
+                model_id=result["model"],
+            )
+            return jsonify({
+                "ok": True,
+                "story": developed_story,
+                "sceneCount": len(developed_story.get("sceneOrder") or []),
+                "model": result["model"],
+                "usage": result.get("usage"),
+                "timings": result.get("timings"),
+            })
+
         return jsonify({
             "ok": True,
             "result": result["text"],

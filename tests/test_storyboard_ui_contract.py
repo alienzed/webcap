@@ -72,6 +72,10 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "Entry state" in storyboard
     assert "Exit state" in storyboard
     assert "Notes" in storyboard
+    assert "Continuity &amp; notes" in storyboard
+    assert "storyboard-scene-disclosure" in storyboard
+    assert "seedMode: randomSeed ? 'random' : 'fixed'" in storyboard
+    assert 'data-scene-field="seedMode"' not in storyboard
     assert "Selected sequence" in storyboard
     assert "Export Sequence" in storyboard
     assert "/fs/storyboard/assembly" in storyboard
@@ -136,3 +140,26 @@ def test_storyboard_director_configuration_is_first_class_app_setting():
     assert "appSettingsStoryboardLlamaServerEl" in constants
     assert "App Settings > Storyboard > llama-server executable" in runtime
 
+
+
+def test_storyboard_can_develop_concept_directly_into_scenes():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-develop-btn"' in html
+    assert 'id="storyboard-develop-status"' in html
+    assert "function developStory()" in storyboard
+    assert "operation: 'develop_story'" in storyboard
+    assert "replaceExisting: hasScenes" in storyboard
+    assert "Existing Scenes and Takes will remain recoverable" in storyboard
+    assert "Develop Again" in storyboard
+
+
+def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-expand-concept-btn"' in html
+    assert "function expandConcept()" in storyboard
+    assert "operation: 'expand_concept'" in storyboard
+    assert "return saveStoryNow();" in storyboard

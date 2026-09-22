@@ -146,3 +146,42 @@ def test_runtime_request_uses_compact_h3_context_not_full_guidance():
     assert "MINIMAX H3 STORYBOARD WRITING RULES" in prompt
     assert "Full-reference / Ref2VA" not in prompt
     assert "Official source of truth" not in prompt
+
+
+def test_develop_story_uses_full_concept_and_structured_scene_plan():
+    story = _story()
+    request = storyboard_llm_contract.build_request(story, "", "develop_story")
+    prompt = request["prompt"]
+
+    assert request["operation"] == "develop_story"
+    assert request["output"] == "json"
+    assert request["response_schema"]["properties"]["scenes"]["minItems"] == 2
+    assert "A long concept that should not be sent for a local prompt-writing operation." in prompt
+    assert "Rain-soaked neo-noir horror" in prompt
+    assert "complete model-facing H3 prompt for every Scene now" in prompt
+    assert "at least two Scenes" in prompt
+    assert "between 4 and 15 seconds" in prompt
+    assert "invent natural dialogue" in prompt
+    assert "EXISTING SECOND PROMPT" not in prompt
+
+
+def test_develop_story_requires_concept():
+    story = _story()
+    story["concept"] = ""
+    with pytest.raises(ValueError, match="concept / overview"):
+        storyboard_llm_contract.build_request(story, "", "develop_story")
+
+
+def test_expand_concept_is_creative_but_not_scene_planning():
+    story = _story()
+    story["concept"] = "Rise and fall of a New York gangster."
+
+    request = storyboard_llm_contract.build_request(story, "", "expand_concept")
+    prompt = request["prompt"]
+
+    assert request["operation"] == "expand_concept"
+    assert request["output"] == "text"
+    assert "Rise and fall of a New York gangster." in prompt
+    assert "Develop the narrative arc" in prompt
+    assert "do not break the Story into Scenes yet" in prompt
+    assert "do not write MiniMax H3 prompts" in prompt

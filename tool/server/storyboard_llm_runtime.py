@@ -451,7 +451,10 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
             if response_schema is not None:
                 payload["response_format"] = {
                     "type": "json_schema",
-                    "schema": response_schema,
+                    "json_schema": {
+                        "name": "storyboard_response",
+                        "schema": response_schema,
+                    },
                 }
 
             response = _http_json(
@@ -501,7 +504,20 @@ def run_contract(model_id, contract):
     prompt = str(contract.get("prompt") or "").strip()
     if not prompt:
         raise ValueError("Storyboard Director contract prompt is empty.")
-    return chat(model_id, [{"role": "user", "content": prompt}])
+    result = chat(
+        model_id,
+        [{"role": "user", "content": prompt}],
+        response_schema=contract.get("response_schema"),
+    )
+    if contract.get("output") == "json":
+        try:
+            data = json.loads(result["text"])
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("llama.cpp returned invalid structured Director JSON.") from exc
+        if not isinstance(data, dict):
+            raise RuntimeError("Storyboard Director structured output must be a JSON object.")
+        result["data"] = data
+    return result
 
 
 atexit.register(stop_server)

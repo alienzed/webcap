@@ -398,29 +398,31 @@ Remaining provider-facing work:
 
 Goal: make authoring faster without changing the canonical Story model.
 
-Current first runtime slice:
+Current runtime slice:
 
 - WebCap-managed llama.cpp router process on loopback;
 - local GGUF discovery through the existing configured WebCap Model Root (`text_encoders`);
 - Storyboard-level Director model selector;
-- existing `write_prompt` and `refine_prompt` contracts executed through llama.cpp;
+- `expand_concept` turns a terse Story seed into a richer persistent overview without creating Scenes;
+- `develop_story` turns the saved concept/style into a complete structured Scene sequence and writes the initial H3-ready prompt for every Scene in the same whole-Story pass;
+- deterministic validation against `docs/storyboard-scene-plan.schema.json` plus app-level validation before any Scene replacement is written;
+- replanning requires explicit confirmation and moves old active Scenes into recoverable `removedScenes` without deleting their Take media;
+- the accepted development plan/model are persisted in Story metadata for provenance;
+- existing `write_prompt` and `refine_prompt` Scene-local contracts remain available;
 - thinking disabled for these bounded authoring calls;
 - one Director inference at a time;
 - shared WebCap GPU reservation with explicit model unload after each request;
 - idle ComfyUI model release before Director loading;
-- no conversational memory yet; WebCap's stored Story/Scene state remains the complete durable context.
+- no conversational memory; WebCap's stored Story/Scene state remains the complete durable context.
 
-Next candidates:
+Next candidates after real usage:
 
-- Story concept -> complete proposed Scene plan in one structured pass
-- deterministic validation against `docs/storyboard-scene-plan.schema.json`
-- one semantic audit using `docs/storyboard-plan-audit.schema.json`
-- one bounded repair pass when the audit finds material problems
-- Director model selector, with optional cross-model audit later
-- Scene summary -> full H3-ready prompt
-- correction/revision loop
-- continuity review
-- lightweight conversational panel only if it proves useful
+- Story-aware Scene enhancement/rewrite with compact whole-Story context;
+- AI-assisted split/insert/merge operations for evolving creative structure;
+- one semantic audit using `docs/storyboard-plan-audit.schema.json` and at most one bounded repair pass if quality warrants the extra inference;
+- continuity review;
+- branching/version UX only if actual production use proves simple recoverable replacement is insufficient;
+- lightweight conversational UI only if explicit bounded actions stop being enough.
 
 Manual editing remains available at all times. AI output proposes or edits the same Scene objects the user can edit directly.
 
@@ -469,14 +471,16 @@ The architecture should leave obvious seams for later provider integration, but 
 
 Storyboard keeps request meaning separate from execution. `tool/server/storyboard_llm_contract.py` remains the pure request-assembly boundary, while `tool/server/storyboard_llm_runtime.py` owns the llama.cpp process/model lifecycle and HTTP transport.
 
-The intentionally small first operations are:
+The current operations are deliberately explicit rather than chat-like:
 
-- `write_prompt`: Story style + current Scene + only a useful previous exit-state handoff + the concise H3 output contract. It does not include the full Story concept, unrelated Scenes, Takes, or conversational history.
+- `expand_concept`: Story title + current concept + style; returns richer concept prose and does not create Scenes.
+- `develop_story`: Story concept + style + concise H3 rules; returns schema-constrained JSON containing the complete ordered Scene structure and initial H3 prompt for every Scene.
+- `write_prompt`: Story style + current Scene + only a useful previous exit-state handoff + the concise H3 output contract.
 - `refine_prompt`: the same local Scene context plus the existing prompt and one explicit correction. The contract asks for the smallest coherent revision rather than a creative rewrite.
 
 The contract module does not call a provider. The llama.cpp runtime consumes its returned prompt, so context assembly and leakage boundaries stay testable independently from model quality/runtime behavior.
 
-Entry and exit state are manual first-class Scene fields. An LLM may later propose them, but Storyboard does not need an LLM to create or edit them.
+Entry and exit state remain manual first-class Scene fields. Whole-Story development now proposes them initially, while the user can still edit them directly at any time.
 
 
 ## Director runtime setup

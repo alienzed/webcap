@@ -1,10 +1,12 @@
+import json
 from pathlib import Path
 
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
 DIRECTOR_CONTEXT_PATH = DOCS_ROOT / "storyboard-director-context.txt"
 H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
-VALID_OPERATIONS = {"write_prompt", "refine_prompt"}
+SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
+VALID_OPERATIONS = {"expand_concept", "develop_story", "write_prompt", "refine_prompt"}
 
 
 def _read_text(path, label):
@@ -16,6 +18,16 @@ def _read_text(path, label):
 
 def _clean(value):
     return str(value or "").strip()
+
+
+def _read_json(path, label):
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Could not read " + label + ".") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(label + " must contain a JSON object.")
+    return payload
 
 
 def _reference_roles(scene):
@@ -119,6 +131,67 @@ def build_request(story, scene_id, operation, instruction=""):
     if operation not in VALID_OPERATIONS:
         raise ValueError("Unsupported Storyboard LLM operation.")
 
+    director_context = _read_text(DIRECTOR_CONTEXT_PATH, "Storyboard director context")
+    h3_runtime_context = _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context")
+
+    if operation == "expand_concept":
+        concept = _clean(story.get("concept"))
+        if not concept:
+            raise ValueError("Story concept / overview is required to expand a Story.")
+        blocks = [
+            "[DIRECTOR CONTEXT]\n" + director_context,
+        ]
+        title = _clean(story.get("title"))
+        if title:
+            blocks.append("[STORY TITLE]\n" + title)
+        blocks.append("[CURRENT CONCEPT]\n" + concept)
+        style = _clean(story.get("style"))
+        if style:
+            blocks.append("[STORY STYLE]\n" + style)
+        blocks.append(
+            "[CURRENT TASK]\nExpand this Story concept into a richer creative overview that can drive later Scene planning. "
+            "Develop the narrative arc, important characters, setting, conflict, progression, and ending direction when "
+            "the seed supports them. Be creatively useful and fill in sensible connective material rather than asking "
+            "questions. Preserve explicit facts from the original concept and supplied style. Do not break the Story into "
+            "Scenes yet and do not write MiniMax H3 prompts. Return only the expanded Story concept as polished prose."
+        )
+        return {
+            "operation": operation,
+            "output": "text",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+        }
+
+    if operation == "develop_story":
+        concept = _clean(story.get("concept"))
+        if not concept:
+            raise ValueError("Story concept / overview is required to develop a Story.")
+        blocks = [
+            "[DIRECTOR CONTEXT]\n" + director_context,
+        ]
+        title = _clean(story.get("title"))
+        if title:
+            blocks.append("[STORY TITLE]\n" + title)
+        blocks.append("[STORY CONCEPT]\n" + concept)
+        style = _clean(story.get("style"))
+        if style:
+            blocks.append("[STORY STYLE]\n" + style)
+        blocks.append("[H3 WRITING RULES]\n" + h3_runtime_context)
+        blocks.append(
+            "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
+            "Choose the number of Scenes and each duration yourself from the creative material; use at least two Scenes, "
+            "and keep every Scene between 4 and 15 seconds. Preserve a coherent narrative progression and explicit "
+            "entry/exit continuity. Write a complete model-facing H3 prompt for every Scene now, not a placeholder. "
+            "Be creatively useful: invent natural dialogue, performance details, camera behavior, sound, and music when "
+            "they improve the Story, while preserving supplied facts. Each Scene prompt must be independently generatable "
+            "and follow the supplied H3 base prompt rules. Return only JSON matching the supplied schema."
+        )
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+            "response_schema": _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema"),
+        }
+
     scene_id = _clean(scene_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     scene = scenes.get(scene_id)
@@ -128,8 +201,6 @@ def build_request(story, scene_id, operation, instruction=""):
     style = _clean(story.get("style"))
     scene_context = _scene_context(scene)
     previous_handoff = _previous_handoff(story, scene_id)
-    director_context = _read_text(DIRECTOR_CONTEXT_PATH, "Storyboard director context")
-    h3_runtime_context = _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context")
     h3_mode, h3_output = _h3_output_contract(scene)
 
     blocks = [

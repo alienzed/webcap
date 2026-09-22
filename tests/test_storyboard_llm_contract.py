@@ -170,3 +170,18 @@ def test_develop_story_requires_concept():
     story["concept"] = ""
     with pytest.raises(ValueError, match="concept / overview"):
         storyboard_llm_contract.build_request(story, "", "develop_story")
+
+
+def test_expand_concept_is_creative_but_not_scene_planning():
+    story = _story()
+    story["concept"] = "Rise and fall of a New York gangster."
+
+    request = storyboard_llm_contract.build_request(story, "", "expand_concept")
+    prompt = request["prompt"]
+
+    assert request["operation"] == "expand_concept"
+    assert request["output"] == "text"
+    assert "Rise and fall of a New York gangster." in prompt
+    assert "Develop the narrative arc" in prompt
+    assert "do not break the Story into Scenes yet" in prompt
+    assert "do not write MiniMax H3 prompts" in prompt

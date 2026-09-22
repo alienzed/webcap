@@ -390,7 +390,10 @@
 .storyboard-take { min-width: 0; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-soft); }
 .storyboard-take.selected { outline: 2px solid var(--accent, var(--border)); outline-offset: -2px; }
 .storyboard-take-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 6px; margin-top: 7px; }
-.storyboard-take-footer strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.storyboard-take-identity { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.storyboard-take-identity strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.storyboard-take-identity span { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.storyboard-take-identity input { min-width: 0; width: 100%; border: 1px solid var(--border); border-radius: 4px; background: var(--input-bg, var(--panel)); color: var(--text); padding: 4px 5px; font: inherit; font-size: 10px; }
 .storyboard-take-footer select { min-width: 88px; }
 
 
@@ -588,6 +591,19 @@
 }
 
 .storyboard-lora-header strong {
+  font-size: 11px;
+}
+
+.storyboard-lora-filter {
+  min-width: 0;
+  flex: 1 1 140px;
+  max-width: 240px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg, var(--panel));
+  color: var(--text);
+  padding: 5px 7px;
+  font: inherit;
   font-size: 11px;
 }
 

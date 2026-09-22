@@ -220,6 +220,19 @@ def test_test_bench_activity_rail_and_live_session_contract():
 
 
 
+def test_live_test_status_surfaces_comfy_job_progress_and_errors_to_console():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "function formatElapsedMs(milliseconds)" in script
+    assert "function liveStatusDetails(status)" in script
+    assert "Comfy ' + comfyStatus" in script
+    assert "Job ' + jobId.slice(0, 8)" in script
+    assert "candidateStartedAt || status.startedAt" in script
+    assert "comfyLastContactAt" in script
+    assert "liveStatusDetails(status)" in script
+    assert "console.error('[Test Generations]', err);" in script
+
+
 def test_compare_polling_preserves_video_elements_and_refreshes_navigation_only():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]

@@ -293,6 +293,49 @@ def test_test_result_footer_identity_timing_and_remove_contract():
     assert ".test-generations-result-remove" in css
 
 
+def test_test_result_stars_are_shared_by_grid_and_compare():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+
+    assert "function buildResultRating(result)" in script
+    assert "function rateCurrentSessionResult(button)" in script
+    assert "function syncResultRatingButtons(outputVideo, rating)" in script
+    assert "request('test_rate_result'" in script
+    assert "session: currentSession" in script
+    assert "outputVideo: outputVideo" in script
+    assert "rating: rating" in script
+    assert "star.textContent = value <= currentRating ? '★' : '☆';" in script
+    assert "if (!opts.failed)" in script
+    assert "var rating = buildResultRating(result);" in script
+
+    footer_block = script.split("function buildResultFooter(result, options)", 1)[1].split("function formatTestVideoTime", 1)[0]
+    assert "copy.appendChild(rating);" in footer_block
+
+    grid_handler = script.split("el('test-generations-results').onclick", 1)[1].split("el('test-generations-compare').onclick", 1)[0]
+    compare_handler = script.split("el('test-generations-compare').onclick", 1)[1].split("el('test-generations-prompt').addEventListener", 1)[0]
+    assert "rateCurrentSessionResult(rating);" in grid_handler
+    assert "rateCurrentSessionResult(rating);" in compare_handler
+
+    assert ".test-generations-result-rating" in css
+    assert ".test-generations-result-star" in css
+    assert 'if operation == "test_rate_result":' in backend
+    assert "write_folder_state_atomic(state_path, folder_state)" in backend
+
+
+def test_test_rating_refresh_preserves_preview_dom():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    sync_block = script.split("function syncResultRatingButtons(outputVideo, rating)", 1)[1].split("function rateCurrentSessionResult(button)", 1)[0]
+    assert "document.querySelectorAll" in sync_block
+    assert "star.classList.toggle('active', active);" in sync_block
+    assert "star.textContent = active ? '★' : '☆';" in sync_block
+
+    rate_block = script.split("function rateCurrentSessionResult(button)", 1)[1].split("function buildResultFooter", 1)[0]
+    assert "syncResultRatingButtons(outputVideo, payload && payload.rating);" in rate_block
+    assert "renderStatus(payload.sessionStatus);" in rate_block
+
+
 def test_result_card_transport_remains_always_visible_without_toggle():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 

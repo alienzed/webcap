@@ -177,10 +177,13 @@ def _ensure_server():
             _stop_server_locked()
 
         if _health_ok():
-            raise RuntimeError(
-                "The Storyboard Director port is already occupied by a llama.cpp server "
-                "that WebCap did not start. Change storyboard.director.port or stop that server."
-            )
+            try:
+                _normalize_models(_http_json("/models", timeout=5))
+            except Exception as exc:
+                raise RuntimeError(
+                    "The Storyboard Director port is already occupied by an incompatible service."
+                ) from exc
+            return
 
         settings = _director_config()
         models_dir = settings["models_dir"]
@@ -260,10 +263,15 @@ def list_models(reload=False):
 
 
 def status():
+    settings = _director_config()
     try:
-        settings = _director_config()
-        executable = _resolve_executable()
         models = list_models(reload=True)
+        executable = ""
+        try:
+            executable = _resolve_executable()
+        except FileNotFoundError:
+            if _process is not None:
+                raise
         return {
             "available": True,
             "serverRunning": True,
@@ -272,7 +280,6 @@ def status():
             "models": models,
         }
     except Exception as exc:
-        settings = _director_config()
         return {
             "available": False,
             "serverRunning": False,

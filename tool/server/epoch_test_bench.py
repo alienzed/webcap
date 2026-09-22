@@ -1136,6 +1136,10 @@ def _mark_stopped(session_directory):
         return status
 
 
+def _candidate_elapsed_ms(started_at):
+    return max(0, int(round((time.monotonic() - started_at) * 1000)))
+
+
 def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None, include_base=True):
     status_file = _status_path(session_directory)
     try:
@@ -1163,6 +1167,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 _mark_stopped(session_directory)
                 return
 
+            candidate_started_at = time.monotonic()
             lora_file = candidate["file"]
             output_prefix = _candidate_output_prefix(session_directory, candidate_index, candidate)
             video_path = None
@@ -1220,6 +1225,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                         "outputVideo": video_path.name,
                         "prompt": prompt,
                         "seed": _workflow_seed(workflow),
+                        "elapsedMs": _candidate_elapsed_ms(candidate_started_at),
                     }
                     if candidate["kind"] == "lora":
                         result["candidateFile"] = lora_file.name
@@ -1243,7 +1249,11 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 with _status_lock:
                     status = _read_status(session_directory) or {}
                     failures = status.get("failures") if isinstance(status.get("failures"), list) else []
-                    failures.append({"sourceLoRA": candidate["label"], "error": str(exc)})
+                    failures.append({
+                        "sourceLoRA": candidate["label"],
+                        "error": str(exc),
+                        "elapsedMs": _candidate_elapsed_ms(candidate_started_at),
+                    })
                     status["failures"] = failures
                     status["failed"] = int(status.get("failed") or 0) + 1
                     status["current"] = ""

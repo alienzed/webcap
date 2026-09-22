@@ -271,7 +271,6 @@ def validate_config_payload(payload):
         raise ValueError("Config.storyboard.director must be an object when provided.")
     normalized_director = {
         "llama_server": str(director.get("llama_server") or "").strip(),
-        "models_dir": str(director.get("models_dir") or "").strip(),
     }
     for key, default, minimum, maximum in (
         ("port", 8189, 1, 65535),

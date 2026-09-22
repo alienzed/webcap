@@ -25,7 +25,7 @@ Reference rules:
 - Do not contradict an exact frame anchor.
 
 Dialogue:
-- Add dialogue only when explicitly supplied/requested.
+- Add dialogue only when explicitly supplied/requested, or when the current Director task explicitly permits inventing it.
 - Preserve supplied dialogue verbatim.
 - Use H3 dialogue tags only when dialogue exists.
 
@@ -36,4 +36,4 @@ Sound:
 
 Prefer concrete positive visual description over negative constraint lists.
 
-Return only the final H3 model-facing prompt.
+When writing one Scene prompt directly, return only the final H3 model-facing prompt. In structured whole-Story tasks, apply these rules independently inside each Scene prompt field.

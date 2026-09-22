@@ -498,7 +498,8 @@ def _update_live_comfy_status(session_directory, **fields):
         return status
 
 
-def _wait_for_video(
+def _wait_for_output(
+    model,
     prompt_id,
     timeout=GENERATION_TIMEOUT_SECONDS,
     session_directory=None,
@@ -550,12 +551,30 @@ def _wait_for_video(
         if job_status == "cancelled":
             raise RuntimeError("ComfyUI cancelled this Test generation.")
         if job_status == "completed":
-            video_ref = _find_video_ref(job.get("outputs") or {})
-            if video_ref:
-                return video_ref
-            raise RuntimeError("ComfyUI completed the workflow without returning an MP4 output.")
+            output_ref = model.find_output_ref(job.get("outputs") or {})
+            if output_ref:
+                return output_ref
+            raise RuntimeError(
+                "ComfyUI completed the workflow without returning a "
+                + str(model.MEDIA_KIND or "media")
+                + " output."
+            )
         raise RuntimeError("ComfyUI returned unknown Test job status: " + (job_status or "empty") + ".")
 
+
+def _wait_for_video(
+    prompt_id,
+    timeout=GENERATION_TIMEOUT_SECONDS,
+    session_directory=None,
+    folder_key=None,
+):
+    return _wait_for_output(
+        h3_test_model,
+        prompt_id,
+        timeout=timeout,
+        session_directory=session_directory,
+        folder_key=folder_key,
+    )
 
 def _comfy_saved_output_path(video_ref):
     if str(video_ref.get("type") or "") != "output":
@@ -616,34 +635,37 @@ def _cleanup_owned_comfy_directory(directory, filename_prefix):
             break
 
 
-def _download_video(video_ref):
+def _download_output(output_ref):
     query = urllib.parse.urlencode({
-        "filename": video_ref["filename"],
-        "subfolder": video_ref.get("subfolder") or "",
-        "type": video_ref.get("type") or "output",
+        "filename": output_ref["filename"],
+        "subfolder": output_ref.get("subfolder") or "",
+        "type": output_ref.get("type") or "output",
     })
     return _read_bytes(COMFY_BASE_URL + "/view?" + query)
 
 
-def _move_saved_video(video_ref, destination, filename_prefix=None):
-    if str(video_ref.get("type") or "") != "output":
+def _download_video(video_ref):
+    return _download_output(video_ref)
+
+def _move_saved_output(output_ref, destination, filename_prefix=None):
+    if str(output_ref.get("type") or "") != "output":
         raise RuntimeError("ComfyUI Test output was not saved to the output directory.")
     target = Path(destination)
     if target.exists():
         raise FileExistsError("Test result already exists: " + str(target))
 
-    raw_path = str(video_ref.get("fullpath") or "").strip()
+    raw_path = str(output_ref.get("fullpath") or "").strip()
     if not raw_path:
-        target.write_bytes(_download_video(video_ref))
+        target.write_bytes(_download_output(output_ref))
         if not target.is_file():
-            raise RuntimeError("Saved ComfyUI Test video was not copied into the Test session.")
+            raise RuntimeError("Saved ComfyUI Test output was not copied into the Test session.")
         return target
 
-    source = _comfy_saved_output_path(video_ref)
+    source = _comfy_saved_output_path(output_ref)
     source_directory = source.parent
     shutil.move(str(source), str(target))
     if not target.is_file():
-        raise RuntimeError("Saved ComfyUI Test video was not moved into the Test session.")
+        raise RuntimeError("Saved ComfyUI Test output was not moved into the Test session.")
     if filename_prefix:
         try:
             _cleanup_owned_comfy_directory(source_directory, filename_prefix)
@@ -651,6 +673,9 @@ def _move_saved_video(video_ref, destination, filename_prefix=None):
             app_config.debug_print("[test-generations] Could not clean owned ComfyUI output directory:", exc)
     return target
 
+
+def _move_saved_video(video_ref, destination, filename_prefix=None):
+    return _move_saved_output(video_ref, destination, filename_prefix=filename_prefix)
 
 def _atomic_write_json(path, payload):
     tmp = path.with_name("." + path.name + "." + str(os.getpid()) + ".tmp")
@@ -1093,27 +1118,25 @@ def _candidate_elapsed_ms(started_at):
     return max(0, int(round((time.monotonic() - started_at) * 1000)))
 
 
-def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None, include_base=True):
+def _run_batch(
+    folder_key,
+    session_directory,
+    loras,
+    prompt,
+    settings=None,
+    template=None,
+    include_base=True,
+    model=None,
+):
+    selected_model = model or h3_test_model
     status_file = _status_path(session_directory)
     try:
-        template = copy.deepcopy(template) if template is not None else _load_template()
+        template = copy.deepcopy(template) if template is not None else selected_model.load_template()
         candidates = []
         if include_base:
-            candidates.append({
-                "label": "Base",
-                "file": None,
-                "strengthModel": 0,
-                "strengthClip": 0,
-                "kind": "base",
-            })
+            candidates.append({"label": "Base", "file": None, "kind": "base"})
         for lora_file in loras:
-            candidates.append({
-                "label": lora_file.name,
-                "file": lora_file,
-                "strengthModel": 0.9,
-                "strengthClip": 1,
-                "kind": "lora",
-            })
+            candidates.append({"label": lora_file.name, "file": lora_file, "kind": "lora"})
 
         for candidate_index, candidate in enumerate(candidates, start=1):
             if _stop_requested(folder_key):
@@ -1123,7 +1146,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
             candidate_started_at = time.monotonic()
             lora_file = candidate["file"]
             output_prefix = _candidate_output_prefix(session_directory, candidate_index, candidate)
-            video_path = None
+            media_path = None
             caption_path = None
             with _status_lock:
                 status = _read_status(session_directory) or {}
@@ -1138,16 +1161,14 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 if candidate["kind"] == "lora":
                     comfy_lora_name = _resolve_comfy_name(
                         lora_file,
-                        _available_comfy_lora_names(),
+                        selected_model.available_lora_names(_available_comfy_names),
                         "staged LoRA",
                     )
-                workflow = _workflow_for_lora(
+                workflow = selected_model.build_workflow(
                     template,
                     prompt,
                     comfy_lora_name,
                     settings=settings,
-                    strength_model=candidate["strengthModel"],
-                    strength_clip=candidate["strengthClip"],
                     filename_prefix=output_prefix,
                 )
                 prompt_id = _queue_workflow(workflow)
@@ -1157,17 +1178,22 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                     comfyStatus="pending",
                     comfyLastContactAt=int(time.time() * 1000),
                 )
-                video_ref = _wait_for_video(
+                output_ref = _wait_for_output(
+                    selected_model,
                     prompt_id,
                     session_directory=session_directory,
                     folder_key=folder_key,
                 )
-                video_path, caption_path = _result_paths(
+                output_extension = Path(str(output_ref.get("filename") or "")).suffix
+                if not output_extension:
+                    raise RuntimeError("ComfyUI Test output has no file extension.")
+                media_path, caption_path = _result_paths(
                     session_directory,
                     lora_file,
                     stem_override="base" if candidate["kind"] == "base" else None,
+                    extension=output_extension,
                 )
-                _move_saved_video(video_ref, video_path, filename_prefix=output_prefix)
+                _move_saved_output(output_ref, media_path, filename_prefix=output_prefix)
                 caption_path.write_text(prompt, encoding="utf-8")
                 with _status_lock:
                     status = _read_status(session_directory) or {}
@@ -1175,10 +1201,10 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                     result = {
                         "kind": candidate["kind"],
                         "sourceLoRA": candidate["label"],
-                        "mediaFile": video_path.name,
-                        "mediaKind": "video",
+                        "mediaFile": media_path.name,
+                        "mediaKind": selected_model.MEDIA_KIND,
                         "prompt": prompt,
-                        "seed": _workflow_seed(workflow),
+                        "seed": selected_model.workflow_seed(workflow),
                         "elapsedMs": _candidate_elapsed_ms(candidate_started_at),
                     }
                     if candidate["kind"] == "lora":
@@ -1193,7 +1219,7 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                     status["comfyStatus"] = "completed"
                     _atomic_write_json(status_file, status)
             except Exception as exc:
-                for owned_path in (caption_path, video_path):
+                for owned_path in (caption_path, media_path):
                     if owned_path and Path(owned_path).is_file():
                         Path(owned_path).unlink()
                 if _stop_requested(folder_key):
@@ -1203,11 +1229,14 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 with _status_lock:
                     status = _read_status(session_directory) or {}
                     failures = status.get("failures") if isinstance(status.get("failures"), list) else []
-                    failures.append({
+                    failure = {
                         "sourceLoRA": candidate["label"],
                         "error": str(exc),
                         "elapsedMs": _candidate_elapsed_ms(candidate_started_at),
-                    })
+                    }
+                    if candidate["kind"] == "lora":
+                        failure["candidateFile"] = lora_file.name
+                    failures.append(failure)
                     status["failures"] = failures
                     status["failed"] = int(status.get("failed") or 0) + 1
                     status["current"] = ""

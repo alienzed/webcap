@@ -35,6 +35,7 @@ def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs
         "duration": 8.0,
         "seed": 4242,
         "seedMode": "random",
+        "references": [],
     }
 
 
@@ -66,7 +67,12 @@ def test_build_workflow_changes_only_storyboard_generation_inputs(monkeypatch):
         "seedMode": "fixed",
     }
 
-    workflow = storyboard_generation._build_workflow(template, settings, "webcap-storyboard/story/scene/job/render")
+    workflow = storyboard_generation._build_workflow(
+        template,
+        settings,
+        "webcap-storyboard/story/scene/job/render",
+        uploaded_references={"first_frame": "webcap-storyboard/story/job/first.png"},
+    )
 
     assert template == original
     assert workflow["146"]["inputs"]["wildcard_text"] == "Manual prompt."
@@ -80,6 +86,9 @@ def test_build_workflow_changes_only_storyboard_generation_inputs(monkeypatch):
     assert "148" not in workflow
     assert workflow["138"]["inputs"]["model"] == ["161", 0]
     assert workflow["138"]["inputs"]["clip"] == ["128", 0]
+    assert workflow["190"]["class_type"] == "LoadImage"
+    assert workflow["190"]["inputs"]["image"].endswith("/first.png")
+    assert workflow["131"]["inputs"]["first_frame"] == ["190", 0]
 
 
 def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboard_fs, monkeypatch):
@@ -110,7 +119,8 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
     storyboard_generation._active_job_id = job_id
 
     monkeypatch.setattr(storyboard_generation, "_load_template", lambda: {})
-    monkeypatch.setattr(storyboard_generation, "_build_workflow", lambda _template, _settings, _prefix: {"workflow": True})
+    monkeypatch.setattr(storyboard_generation, "_upload_scene_references", lambda _story_id, _job_id, _refs: {})
+    monkeypatch.setattr(storyboard_generation, "_build_workflow", lambda _template, _settings, _prefix, uploaded_references=None: {"workflow": True})
     monkeypatch.setattr(storyboard_generation, "_queue_workflow", lambda _workflow: "comfy-123")
     monkeypatch.setattr(storyboard_generation, "_wait_for_output", lambda _prompt_id, _job_id: {
         "filename": "render.mp4",
@@ -136,3 +146,14 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
     media_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]
     assert media_path.read_bytes() == b"generated-video"
     assert storyboard_generation.generation_status(job_id)["status"] == "completed"
+
+
+def test_guide_frame_reference_fails_visibly_before_generation(tmp_path):
+    image = tmp_path / "guide.png"
+    image.write_bytes(b"image")
+    with pytest.raises(RuntimeError, match="Guide-frame references"):
+        storyboard_generation._upload_scene_references(
+            "story-1",
+            "job-1",
+            [{"role": "guide_frame", "mediaPath": "references/guide.png"}],
+        )

@@ -176,19 +176,34 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "open.dataset.sessionOpen" not in script
     assert ".test-generations-session-row" in css
     assert ".test-generations-session-row:not([data-queue-job-id])" in css
+    assert ".test-generations-session-group" in css
+    assert ".test-generations-session-progress" in css
     assert ".test-generations-result-footer" in css
 
 
 
-def test_session_list_orders_active_then_queue_then_history():
+def test_session_list_groups_running_queue_then_completed():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     block = script.split("function renderSessions(sessions, queuedJobs)", 1)[1].split("function refreshSessions()", 1)[0]
 
-    assert "activeItems.forEach(appendSessionRow);" in block
-    assert "queued.forEach(function (job)" in block
-    assert "historyItems.forEach(appendSessionRow);" in block
-    assert block.index("activeItems.forEach(appendSessionRow);") < block.index("queued.forEach(function (job)")
-    assert block.index("queued.forEach(function (job)") < block.index("historyItems.forEach(appendSessionRow);")
+    assert "appendGroup('Running', activeItems.length, 'is-running')" in block
+    assert "appendGroup('Queued', queued.length, 'is-queued')" in block
+    assert "appendGroup('Completed', historyItems.length, 'is-history')" in block
+    assert block.index("appendGroup('Running'") < block.index("appendGroup('Queued'")
+    assert block.index("appendGroup('Queued'") < block.index("appendGroup('Completed'")
+
+
+def test_running_session_progress_uses_processed_over_total_and_updates_live():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    render_block = script.split("function renderSessions(sessions, queuedJobs)", 1)[1].split("function refreshSessions()", 1)[0]
+    sync_block = script.split("function syncVisibleSessionProgress(status)", 1)[1].split("function renderSessions", 1)[0]
+
+    assert "var processed = Math.max(0, completed + failed);" in render_block
+    assert "processed / total * 100" in render_block
+    assert "progress.className = 'test-generations-session-progress';" in render_block
+    assert "progress.setAttribute('role', 'progressbar');" in render_block
+    assert "var processed = Math.max(0, completed + failed);" in sync_block
+    assert "fill.style.width = percent.toFixed(1) + '%';" in sync_block
 
 
 def test_active_session_row_surfaces_live_elapsed_time():
@@ -722,7 +737,7 @@ def test_test_generations_rail_has_clear_working_history_navigation_hierarchy():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
     assert 'class="test-generations-library-panel test-generations-staged-panel"' in html
-    assert 'class="test-generations-library-section test-generations-sessions"' in html
+    assert 'class="test-generations-library-panel test-generations-sessions"' in html
     assert 'class="test-generations-library-section test-generations-recent-sets"' in html
     assert "grid-template-columns: minmax(400px, 430px) minmax(0, 1fr);" in css
     assert ".test-generations-library-section > .test-generations-library-heading" in css

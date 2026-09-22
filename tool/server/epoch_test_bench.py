@@ -1645,7 +1645,14 @@ def prepare(folder_path, model_id=None):
         loras = []
     defaults = model.template_settings(template)
     defaults["seed"] = _new_session_seed()
-    setting_options = model.setting_options(template, _available_comfy_names)
+    setting_options = {}
+    prepare_warnings = []
+    try:
+        setting_options = model.setting_options(template, _available_comfy_names)
+    except (ConnectionError, RuntimeError) as exc:
+        prepare_warnings.append(
+            "Could not load optional Test setting choices from ComfyUI: " + str(exc)
+        )
     return {
         "operation": "test_prepare",
         "modelId": model.PROFILE_ID,
@@ -1653,6 +1660,7 @@ def prepare(folder_path, model_id=None):
         "mediaKind": model.MEDIA_KIND,
         "settings": list(model.settings),
         "settingOptions": setting_options,
+        "warnings": prepare_warnings,
         "defaultPrompt": model.default_prompt(template),
         "defaults": defaults,
         "aspectRatioOptions": list(getattr(model, "ASPECT_RATIO_OPTIONS", ())),

@@ -46,11 +46,11 @@ def test_storyboard_route_is_independent_of_current_set(tmp_path, monkeypatch):
     uploaded = client.post("/fs/storyboard/take_upload", data={
         "storyId": story["id"],
         "sceneId": scene["id"],
-        "file": (BytesIO(b"fake-video"), "take.mp4"),
+        "file": (BytesIO(b"fake-image"), "take.png"),
     }, content_type="multipart/form-data")
     assert uploaded.status_code == 200
     take = uploaded.get_json()["take"]
-    assert take["sourceFilename"] == "take.mp4"
+    assert take["sourceFilename"] == "take.png"
 
     rated = client.post("/fs/storyboard", json={
         "operation": "rate_take",
@@ -103,7 +103,9 @@ def test_storyboard_route_is_independent_of_current_set(tmp_path, monkeypatch):
         "sourceTakeId": take["id"],
         "frame": "last",
     })
-    assert reference.status_code == 400  # fake mp4 bytes cannot be frame-extracted
+    assert reference.status_code == 200
+    assert reference.get_json()["reference"]["role"] == "first_frame"
+    assert reference.get_json()["reference"]["mediaPath"] == take["mediaPath"]
 
     removed = client.post("/fs/storyboard", json={
         "operation": "delete_scene",

@@ -2902,52 +2902,6 @@ iframe {
 .test-generations-actions .review-captions-btn,
 .test-generations-actions .training-btn { width: auto; }
 
-.test-generations-active {
-  display: grid;
-  gap: 7px;
-  padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel-soft);
-}
-.test-generations-active-heading,
-.test-generations-active-body {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.test-generations-active-copy {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  align-items: baseline;
-  gap: 8px;
-}
-.test-generations-active-heading strong {
-  font-size: 12px;
-}
-.test-generations-active-heading span,
-.test-generations-active-meta {
-  color: var(--muted);
-  font-size: 11px;
-}
-.test-generations-active-current {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.test-generations-active-meta {
-  min-width: 0;
-  flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .test-generations-stop-btn {
   flex: 0 0 auto;
   min-height: 26px;

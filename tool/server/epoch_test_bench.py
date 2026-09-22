@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import config as app_config
-from .folder_state_store import read_folder_state, write_folder_state_atomic
+from .folder_state_store import read_folder_state
 from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import test_copy_path
 
@@ -30,7 +30,6 @@ GPU_RESERVATION_OWNER = "test-generations"
 TEST_ASPECT_RATIO_OPTIONS = tuple(getattr(get_test_model(), "ASPECT_RATIO_OPTIONS", ()))
 _lock = threading.Lock()
 _status_lock = threading.Lock()
-_rating_lock = threading.Lock()
 _dispatch_lock = threading.Lock()
 _active_threads = {}
 _active_sessions = {}
@@ -965,56 +964,12 @@ def delete_session(folder_path, session_name):
     }
 
 
-def rate_result(folder_path, session_name, media_file, rating):
-    session = _session_directory(folder_path, session_name)
-    output_name = str(media_file or "").strip()
-    if not output_name:
-        raise ValueError("Test result filename is required.")
-
-    payload = _read_status(session) or {}
-    results = payload.get("results") if isinstance(payload.get("results"), list) else []
-    if not any(
-        isinstance(result, dict)
-        and _result_media_file(result) == output_name
-        for result in results
-    ):
-        raise ValueError("Test result does not exist in this session: " + output_name)
-
-    try:
-        normalized_rating = int(round(float(rating)))
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Test result rating must be between 0 and 5.") from exc
-    if normalized_rating < 0 or normalized_rating > 5:
-        raise ValueError("Test result rating must be between 0 and 5.")
-
-    state_path = session / ".webcap_state.json"
-    with _rating_lock:
-        folder_state = read_folder_state(state_path)
-        ratings = folder_state.get("ratings_by_media")
-        if not isinstance(ratings, dict):
-            ratings = {}
-        else:
-            ratings = dict(ratings)
-
-        if normalized_rating == 0:
-            ratings.pop(output_name, None)
-        else:
-            ratings[output_name] = normalized_rating
-        folder_state["ratings_by_media"] = ratings
-        write_folder_state_atomic(state_path, folder_state)
-
+def rating_summary(folder_path, model_id=None):
     return {
-        "operation": "test_rate_result",
-        "mediaFile": output_name,
-        "rating": normalized_rating,
-        "sessionStatus": _with_session_ratings(session, _visible_session_status(folder_path, session)),
-        "candidateScores": _candidate_rating_scores(
-            folder_path,
-            str(payload.get("modelId") or payload.get("model") or get_test_model().PROFILE_ID),
-        ),
+        "operation": "test_rating_summary",
+        "candidateScores": _candidate_rating_scores(folder_path, model_id),
         "sessions": list_sessions(folder_path),
     }
-
 
 def _session_result_path(session_directory, file_name):
     name = str(file_name or "").strip()
@@ -1719,14 +1674,9 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_delete_session":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return delete_session(folder_path, criteria.get("session"))
-    if operation == "test_rate_result":
+    if operation == "test_rating_summary":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return rate_result(
-            folder_path,
-            criteria.get("session"),
-            criteria.get("mediaFile") or criteria.get("outputVideo"),
-            criteria.get("rating"),
-        )
+        return rating_summary(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_stop":
         return stop(folder_path)
     if operation == "test_remove_candidate":

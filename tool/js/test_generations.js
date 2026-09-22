@@ -1446,7 +1446,8 @@
     syncSessionSelection();
     var statusEl = el('test-generations-status');
     var errorEl = el('test-generations-error');
-    if (statusEl) statusEl.textContent = statusText(status);
+    var live = status && (status.status === 'running' || status.status === 'stopping');
+    if (statusEl) statusEl.textContent = live ? '' : statusText(status);
     if (errorEl) {
       errorEl.textContent = showSessionError && status && status.error ? String(status.error) : '';
       errorEl.classList.toggle('hidden', !errorEl.textContent);

@@ -2497,6 +2497,11 @@ iframe {
   flex-direction: column;
   padding: 12px;
 }
+.test-generations-next-run {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
 .test-generations-form-title {
   display: flex;
   align-items: center;
@@ -2830,7 +2835,7 @@ iframe {
   width: 100%;
 }
 .test-generations-prompt textarea {
-  min-height: 220px;
+  min-height: 160px;
   resize: vertical;
 }
 .test-generations-settings-grid {
@@ -2858,6 +2863,56 @@ iframe {
 }
 .test-generations-actions .review-captions-btn,
 .test-generations-actions .training-btn { width: auto; }
+
+.test-generations-active {
+  display: grid;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+.test-generations-active-heading,
+.test-generations-active-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.test-generations-active-heading strong {
+  font-size: 12px;
+}
+.test-generations-active-heading span,
+.test-generations-active-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+.test-generations-active-current {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-generations-active-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-generations-stop-btn {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 3px 9px;
+  border-color: color-mix(in srgb, var(--danger, #f87171) 55%, var(--border));
+  color: var(--danger, #f87171);
+}
+.test-generations-stop-btn:hover,
+.test-generations-stop-btn:focus-visible {
+  border-color: var(--danger, #f87171);
+  color: var(--danger, #f87171);
+}
 .test-generations-results-section {
   position: relative;
   display: flex;

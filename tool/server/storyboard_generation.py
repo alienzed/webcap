@@ -250,12 +250,27 @@ def _scene_settings(scene):
 
     return {
         "prompt": prompt,
+        "sourcePrompt": prompt,
+        "wildcardsEnabled": bool(scene.get("wildcardsEnabled")),
         "aspectRatio": aspect_ratio,
         "megapixels": megapixels,
         "duration": duration,
         "seed": seed,
         "seedMode": seed_mode,
     }
+
+
+def _resolve_wildcard_prompt(prompt, seed):
+    response = _read_json_response(
+        COMFY_BASE_URL + "/impact/wildcards",
+        method="POST",
+        payload={"text": str(prompt or ""), "seed": int(seed)},
+        timeout=10,
+    )
+    resolved = str(response.get("text") or "").strip() if isinstance(response, dict) else ""
+    if not resolved:
+        raise RuntimeError("Impact Pack did not return a resolved Storyboard prompt.")
+    return resolved
 
 
 def _build_workflow(template, settings, filename_prefix):
@@ -393,6 +408,9 @@ def _run_generation(job_id, story_id, scene_id, settings):
     global _active_job_id
     try:
         filename_prefix = "webcap-storyboard/" + story_id + "/" + scene_id + "/" + job_id + "/render"
+        if settings.get("wildcardsEnabled"):
+            settings = dict(settings)
+            settings["prompt"] = _resolve_wildcard_prompt(settings["prompt"], settings["seed"])
         workflow = _build_workflow(_load_template(), settings, filename_prefix)
         prompt_id = _queue_workflow(workflow)
         _update_job(job_id, comfyJobId=prompt_id, comfyStatus="pending")
@@ -411,6 +429,8 @@ def _run_generation(job_id, story_id, scene_id, settings):
             take["id"],
             {
                 "prompt": settings["prompt"],
+                "sourcePrompt": settings["sourcePrompt"],
+                "wildcardsEnabled": settings["wildcardsEnabled"],
                 "durationSeconds": settings["duration"],
                 "seed": settings["seed"],
                 "seedMode": settings["seedMode"],

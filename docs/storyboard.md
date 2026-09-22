@@ -419,14 +419,25 @@ Manual editing remains available at all times. AI output proposes or edits the s
 
 ### Phase 6 - Assembly and production polish
 
-Candidates:
+The first intentionally small assembly slice is now implemented:
 
-- selected-Take sequence playback
-- concatenate/export final sequence
-- transition/gap handling if genuinely needed
-- Story search/filter/tag views
-- richer completion/progress summaries
-- reusable Story/Scene templates
+- the existing per-Scene `selectedTakeId` values are the edit decision;
+- selected video Takes are frozen in Scene order when export starts;
+- Storyboard validates that their media streams match closely enough for a safe lossless splice;
+- ffmpeg's concat demuxer joins them with stream copy rather than silently resizing/re-encoding;
+- the result is written predictably to `exports/selected-sequence.mp4`;
+- `exports/selected-sequence.json` records exactly which Scene/Take selections produced that export;
+- the finished sequence is playable directly in the Selected sequence panel;
+- if the user changes Take selection afterward, the previous export is visibly treated as stale rather than presented as current.
+
+Deliberately not implemented yet:
+
+- automatic normalization/re-encode for incompatible Takes;
+- transitions, gaps, trims, overlays, or a timeline editor;
+- alternate export profiles;
+- Story search/filter/tag views;
+- richer completion/progress summaries;
+- reusable Story/Scene templates.
 
 Do not turn WebCap into a general nonlinear video editor.
 

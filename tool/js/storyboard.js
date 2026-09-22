@@ -681,12 +681,11 @@
         var job = payload.job;
         storyState.generationJobs[sceneId] = job;
         if (job.status === 'running') {
-          renderScenes();
           pollGeneration(storyId, sceneId, jobId);
           return;
         }
         if (job.status === 'failed') {
-          renderScenes();
+          if (storyState.story && storyState.story.id === storyId) renderScenes();
           throw new Error(job.error || 'Storyboard generation failed.');
         }
         if (job.status === 'completed') {

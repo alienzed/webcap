@@ -5,7 +5,8 @@
     stories: [],
     story: null,
     saveTimer: 0,
-    sceneTimers: {}
+    sceneTimers: {},
+    generationJobs: {}
   };
 
   function el(id) {
@@ -179,6 +180,18 @@
       var previousScene = previousSceneId ? scenes[previousSceneId] || {} : {};
       var previousSelectedTakeId = previousScene.selectedTakeId || '';
       var firstFrameReference = referenceForRole(scene, 'first_frame');
+      var generationJob = storyState.generationJobs[sceneId] || null;
+      var generationRunning = generationJob && generationJob.status === 'running';
+      var generationStatus = '';
+      if (generationJob) {
+        if (generationJob.status === 'running') {
+          generationStatus = 'ComfyUI · ' + escapeHtml(generationJob.comfyStatus || 'starting');
+        } else if (generationJob.status === 'failed') {
+          generationStatus = 'Failed · ' + escapeHtml(generationJob.error || 'Generation failed');
+        } else if (generationJob.status === 'completed') {
+          generationStatus = 'Completed';
+        }
+      }
       var referencesHtml = (Array.isArray(scene.references) ? scene.references : []).map(function (reference) {
         if (!reference || !reference.role) return '';
         return '<span class="storyboard-reference-chip">' +
@@ -237,6 +250,14 @@
               '<label class="storyboard-field"><span>Duration (s)</span><input type="number" min="0.1" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
               '<label class="storyboard-field"><span>Seed mode</span><select data-scene-field="seedMode"><option value="random"' + (seedMode === 'random' ? ' selected' : '') + '>Random</option><option value="fixed"' + (seedMode === 'fixed' ? ' selected' : '') + '>Fixed</option></select></label>' +
             '</div>' +
+            '<div class="storyboard-scene-meta-row">' +
+              '<label class="storyboard-field"><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
+                ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
+                  return '<option value="' + escapeHtml(value) + '"' + (sceneValue(scene, 'aspectRatio', '4:3 (Standard)') === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
+                }).join('') +
+              '</select></label>' +
+              '<label class="storyboard-field"><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneValue(scene, 'megapixels', 0.2)) + '"></label>' +
+            '</div>' +
             '<label class="storyboard-field"><span>Seed</span><input type="number" min="0" step="1" data-scene-field="seed" value="' + escapeHtml(seed) + '" placeholder="Set when fixed"></label>' +
             '<label class="storyboard-inline-check"><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
             '<div class="storyboard-reference-panel">' +
@@ -252,7 +273,12 @@
                 '<button type="button" class="review-captions-btn" data-reference-apply>Assign</button>' +
               '</div>' +
             '</div>' +
-            '<div class="storyboard-planned"><strong>Next integration</strong><br>Direct ComfyUI generation from this Scene.</div>' +
+            '<div class="storyboard-generate-panel">' +
+              '<button type="button" class="training-btn training-launch-btn storyboard-generate-btn" data-scene-generate' + (generationRunning ? ' disabled' : '') + '>' +
+                (generationRunning ? 'Generating…' : 'Generate Take') +
+              '</button>' +
+              '<span class="storyboard-generation-status">' + generationStatus + '</span>' +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<div class="storyboard-takes">' +
@@ -391,6 +417,8 @@
       prompt: field('prompt').value,
       notes: field('notes').value,
       durationSeconds: field('durationSeconds').value,
+      aspectRatio: field('aspectRatio').value,
+      megapixels: field('megapixels').value,
       seedMode: field('seedMode').value,
       seed: seedNode.value === '' ? null : seedNode.value,
       wildcardsEnabled: field('wildcardsEnabled').checked
@@ -442,7 +470,7 @@
     flushPendingSaves().then(function () { return request({
       operation: 'add_scene',
       storyId: storyState.story.id,
-      scene: { title: 'New Scene', durationSeconds: 6, seedMode: 'random' }
+      scene: { title: 'New Scene', durationSeconds: 6, aspectRatio: '4:3 (Standard)', megapixels: 0.2, seedMode: 'random' }
     }); }).then(function (payload) {
       storyState.story = payload.story;
       renderStory();
@@ -632,6 +660,63 @@
     }).catch(reportError);
   }
 
+  function generationRequest(payload, query) {
+    var url = '/fs/storyboard/generation' + (query ? '?' + query : '');
+    var options = payload
+      ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+      : {};
+    return fetch(url, options).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body || !body.ok) {
+          throw new Error((body && body.error) || 'Storyboard generation request failed.');
+        }
+        return body;
+      });
+    });
+  }
+
+  function pollGeneration(sceneId, jobId) {
+    window.setTimeout(function () {
+      generationRequest(null, 'job=' + encodeURIComponent(jobId)).then(function (payload) {
+        var job = payload.job;
+        storyState.generationJobs[sceneId] = job;
+        if (job.status === 'running') {
+          renderScenes();
+          pollGeneration(sceneId, jobId);
+          return;
+        }
+        if (job.status === 'failed') {
+          renderScenes();
+          throw new Error(job.error || 'Storyboard generation failed.');
+        }
+        if (job.status === 'completed') {
+          return request(null, 'story=' + encodeURIComponent(storyState.story.id)).then(function (storyPayload) {
+            storyState.story = storyPayload.story;
+            renderStory();
+            setSaveState('Saved');
+          });
+        }
+        throw new Error('Storyboard generation returned unknown status: ' + String(job.status || 'empty'));
+      }).catch(reportError);
+    }, 2000);
+  }
+
+  function generateScene(sceneId) {
+    if (!storyState.story) return;
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () {
+      return generationRequest({
+        storyId: storyState.story.id,
+        sceneId: sceneId
+      });
+    }).then(function (payload) {
+      storyState.generationJobs[sceneId] = payload.job;
+      renderScenes();
+      setSaveState('Saved');
+      pollGeneration(sceneId, payload.job.jobId);
+    }).catch(reportError);
+  }
+
   function handleSceneInput(event) {
     var field = event.target.closest('[data-scene-field]');
     if (!field) return;
@@ -720,6 +805,13 @@
       handleSceneInput(event);
     });
     el('storyboard-scenes-list').addEventListener('click', function (event) {
+      var generate = event.target.closest('[data-scene-generate]');
+      if (generate) {
+        var generateSceneRoot = generate.closest('.storyboard-scene[data-scene-id]');
+        if (!generateSceneRoot) throw new Error('Generation Scene is missing.');
+        generateScene(generateSceneRoot.dataset.sceneId);
+        return;
+      }
       var takeAction = event.target.closest('[data-take-action]');
       if (takeAction) {
         var takeScene = takeAction.closest('.storyboard-scene[data-scene-id]');

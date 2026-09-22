@@ -78,7 +78,7 @@ Storyboard owns the canonical Story, Scene, Take, revision, rating, selection, a
 External/local providers perform work:
 
 ```text
-Storyboard -> LLM adapter (native ComfyUI TextGenerate first; Ollama remains an optional fallback)
+Storyboard -> llama.cpp Director runtime (text planning / prompt authoring)
 Storyboard -> ComfyUI (image/video generation)
 ```
 
@@ -216,7 +216,21 @@ WebCap should eventually assemble provider requests from these stable instructio
 
 ### LLM authoring
 
-Native ComfyUI TextGenerate is the preferred first runtime so Storyboard does not require a second local service. The initial model direction is Qwen3.5 with a low-refusal/Heretic variant. WebCap should keep a thin LLM request boundary so an Ollama adapter can replace or complement ComfyUI later without changing Story or Scene data.
+The first Storyboard Director runtime is now **llama.cpp**, managed by WebCap as a local subprocess. ComfyUI remains dedicated to H3 image/video inference.
+
+The runtime uses llama.cpp's router mode rather than one hard-coded model process:
+
+- WebCap starts `llama-server` locally on loopback only;
+- `--models-dir` points at a dedicated Director GGUF folder;
+- the Storyboard Director selector is populated from llama.cpp's model list;
+- `--models-max 1` keeps at most one Director model resident;
+- WebCap explicitly loads the selected model for a Director request and unloads it afterward;
+- the router process itself remains lightweight and does not own GPU memory while no model is loaded;
+- the selected Director model is a runtime preference stored by the browser, not Story data.
+
+This deliberately conservative first slice unloads the Director after every request. That keeps WebCap's existing GPU reservation gate authoritative and prevents a resident LLM from colliding with Training, Test Generations, or H3 generation. If repeated model loading becomes a meaningful workflow cost, a later phase may keep the Director warm while Storyboard owns the GPU, but correctness comes first.
+
+Before loading a Director model, WebCap asks idle ComfyUI to unload cached models/free memory. Director inference and H3 generation therefore still incur the same fundamental large-model swap imposed by the 32 GB GPU; llama.cpp merely makes the handoff explicit across two specialized runtimes.
 
 LLM context stays deliberately small:
 
@@ -236,7 +250,7 @@ Early authoring operations should be explicit functions rather than a general ag
 Manual prompt fields remain fully usable without an LLM. Storyboard generation always consumes those stored manual fields; future LLM assistance may propose edits to them but must never become a prerequisite for generation.
 
 
-Storyboard should expose a compatible local **Director model** selector rather than hard-coding one model. The selection is runtime preference, not Story meaning. Initially one selected model may handle planning, audit, prompt writing, and revision; cross-model audit can remain an explicit later option.
+Storyboard exposes a local **Director model** selector populated from GGUFs that the configured llama.cpp router can see. The selection is runtime preference, not Story meaning. Initially one selected model handles planning, audit, prompt writing, and revision; cross-model audit can remain an explicit later option.
 
 ### ComfyUI
 
@@ -377,7 +391,19 @@ Remaining provider-facing work:
 
 Goal: make authoring faster without changing the canonical Story model.
 
-Candidates:
+Current first runtime slice:
+
+- WebCap-managed llama.cpp router process on loopback;
+- local GGUF discovery through a configurable Director model folder;
+- Storyboard-level Director model selector;
+- existing `write_prompt` and `refine_prompt` contracts executed through llama.cpp;
+- thinking disabled for these bounded authoring calls;
+- one Director inference at a time;
+- shared WebCap GPU reservation with explicit model unload after each request;
+- idle ComfyUI model release before Director loading;
+- no conversational memory yet; WebCap's stored Story/Scene state remains the complete durable context.
+
+Next candidates:
 
 - Story concept -> complete proposed Scene plan in one structured pass
 - deterministic validation against `docs/storyboard-scene-plan.schema.json`
@@ -423,13 +449,53 @@ The architecture should leave obvious seams for later provider integration, but 
 
 ## Current LLM contract slice
 
-Before wiring a local model runtime, Storyboard has a pure request-assembly boundary in `tool/server/storyboard_llm_contract.py`.
+Storyboard keeps request meaning separate from execution. `tool/server/storyboard_llm_contract.py` remains the pure request-assembly boundary, while `tool/server/storyboard_llm_runtime.py` owns the llama.cpp process/model lifecycle and HTTP transport.
 
 The intentionally small first operations are:
 
 - `write_prompt`: Story style + current Scene + only a useful previous exit-state handoff + the concise H3 output contract. It does not include the full Story concept, unrelated Scenes, Takes, or conversational history.
 - `refine_prompt`: the same local Scene context plus the existing prompt and one explicit correction. The contract asks for the smallest coherent revision rather than a creative rewrite.
 
-This module does not call ComfyUI, Qwen, Ollama, or any other provider. It exists so context assembly and leakage boundaries can be tested independently from model quality/runtime behavior.
+The contract module does not call a provider. The llama.cpp runtime consumes its returned prompt, so context assembly and leakage boundaries stay testable independently from model quality/runtime behavior.
 
 Entry and exit state are manual first-class Scene fields. An LLM may later propose them, but Storyboard does not need an LLM to create or edit them.
+
+
+## Director runtime setup
+
+Storyboard expects a recent CUDA-enabled llama.cpp build because the model-router API is relatively new and current Qwen GGUF support continues to evolve.
+
+Minimal configuration lives under `storyboard.director` in `tool/config.json`:
+
+```json
+{
+  "storyboard": {
+    "director": {
+      "llama_server": "/absolute/path/to/llama-server",
+      "models_dir": "/absolute/path/to/director-models",
+      "port": 8189,
+      "context_size": 8192,
+      "max_tokens": 4096
+    }
+  }
+}
+```
+
+`llama_server` may be left empty when `llama-server` is already on WebCap's PATH. `models_dir` may also be left empty; WebCap then uses `<filesystem.models>/director` when a models root exists, otherwise `<filesystem.root>/models/director`.
+
+Put local `.gguf` Director models in that folder. WebCap does not automatically download multi-gigabyte models. The first implementation intentionally requires an explicit local model file so downloads remain visible and user-controlled.
+
+On the WSL training machine, prefer running a Linux CUDA build of llama.cpp inside the same WSL environment as WebCap. A Windows `llama-server.exe` can introduce path-translation problems for model files even though WSL can launch Windows executables.
+
+Current runtime assumptions:
+
+- NVIDIA/CUDA inference with all model layers requested on GPU;
+- 8K default context, configurable;
+- one model loaded at a time;
+- no model autoload;
+- Jinja chat templates enabled;
+- prompt caching enabled inside a loaded model process;
+- thinking/reasoning disabled for current Storyboard authoring calls;
+- the model is unloaded after each call, so its transient KV cache is not durable memory.
+
+The important operational dependency beyond model disk space is therefore a **recent CUDA-capable llama.cpp binary**. No Python llama.cpp binding, Ollama daemon, database, or ComfyUI text workflow is required.

@@ -120,6 +120,33 @@ def _normalize_tags(value):
     return result
 
 
+def _normalize_loras(value):
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Scene LoRAs must be a list.")
+    result = []
+    seen = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("Each Scene LoRA must be an object.")
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen:
+            raise ValueError("Scene LoRAs must not contain duplicates.")
+        try:
+            strength = float(item.get("strength", 1.0))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Scene LoRA strength must be numeric.") from exc
+        if not (-100.0 < strength < 100.0):
+            raise ValueError("Scene LoRA strength is outside a reasonable range.")
+        seen.add(key)
+        result.append({"name": name, "strength": strength})
+    return result
+
+
 def _normalize_scene(scene_id, value, existing=None):
     if not isinstance(value, dict):
         raise ValueError("Scene data must be an object.")
@@ -169,7 +196,7 @@ def _normalize_scene(scene_id, value, existing=None):
         "seed": seed,
         "seedMode": seed_mode,
         "wildcardsEnabled": bool(value.get("wildcardsEnabled", current.get("wildcardsEnabled", False))),
-        "loras": list(current.get("loras") or []),
+        "loras": _normalize_loras(value.get("loras", current.get("loras", []))),
         "references": list(current.get("references") or []),
         "notes": str(value.get("notes", current.get("notes", "")) or ""),
         "takes": dict(current.get("takes") or {}) if isinstance(current.get("takes"), dict) else {},
@@ -326,8 +353,8 @@ def duplicate_scene(story_id, scene_id):
         "wildcardsEnabled": bool(current.get("wildcardsEnabled")),
         "notes": current.get("notes") or "",
     }
+    copied["loras"] = copy.deepcopy(current.get("loras") or [])
     scene = _normalize_scene(new_id, copied)
-    scene["loras"] = list(current.get("loras") or [])
     scene["references"] = list(current.get("references") or [])
 
     story["scenes"][new_id] = scene

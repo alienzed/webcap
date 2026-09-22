@@ -1,4 +1,5 @@
 import json
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -16,11 +17,13 @@ def test_story_create_list_and_reload(storyboard_fs):
     story = storyboard_store.create_story({
         "title": "Storm Hotel",
         "concept": "Arrival during a storm.",
+        "style": "Rain-soaked neo-noir horror.",
         "tags": ["storm", "hotel", "Storm"],
         "pinned": True,
     })
 
     assert story["title"] == "Storm Hotel"
+    assert story["style"] == "Rain-soaked neo-noir horror."
     assert story["tags"] == ["storm", "hotel"]
     assert story["status"] == "active"
 
@@ -60,6 +63,7 @@ def test_story_scene_lifecycle(storyboard_fs):
     story, duplicate = storyboard_store.duplicate_scene(story["id"], first["id"])
     assert story["sceneOrder"][1] == duplicate["id"]
     assert duplicate["prompt"] == updated["prompt"]
+    assert duplicate["takes"] == {}
     assert duplicate["takeOrder"] == []
 
     reordered = storyboard_store.reorder_scenes(
@@ -102,3 +106,36 @@ def test_story_json_is_human_readable(storyboard_fs):
     text = path.read_text(encoding="utf-8")
     assert "\n  \"title\": \"Readable\"" in text
     assert json.loads(text)["title"] == "Readable"
+
+
+def test_take_upload_freezes_scene_provenance_and_can_be_rated_and_selected(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story", "style": "1980s exercise-video horror."})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Studio",
+        "prompt": "A woman enters an empty aerobics studio.",
+        "durationSeconds": 8,
+        "seedMode": "fixed",
+        "seed": 123,
+        "wildcardsEnabled": True,
+    })
+
+    story, take = storyboard_store.add_take_upload(
+        story["id"],
+        scene["id"],
+        "render.mp4",
+        BytesIO(b"not-a-real-video"),
+    )
+
+    take_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]
+    assert take_path.read_bytes() == b"not-a-real-video"
+    assert take["sourceFilename"] == "render.mp4"
+    assert take["prompt"] == "A woman enters an empty aerobics studio."
+    assert take["durationSeconds"] == 8
+    assert take["seed"] == 123
+    assert take["wildcardsEnabled"] is True
+    assert story["scenes"][scene["id"]]["takeOrder"] == [take["id"]]
+
+    story, rated = storyboard_store.rate_take(story["id"], scene["id"], take["id"], 4)
+    assert rated["rating"] == 4
+    story = storyboard_store.select_take(story["id"], scene["id"], take["id"])
+    assert story["scenes"][scene["id"]]["selectedTakeId"] == take["id"]

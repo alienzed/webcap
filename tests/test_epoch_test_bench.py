@@ -1142,6 +1142,7 @@ def test_start_queued_skips_selected_loras_removed_after_enqueue(tmp_path, monke
         "aspectRatio": "2:3",
         "megapixels": 0.2,
         "duration": 7,
+        "workflow": copy.deepcopy(template),
         "total": 2,
     }
     removed.unlink()
@@ -1561,6 +1562,9 @@ def test_queued_request_freezes_prompt_seed_and_selected_files(tmp_path, monkeyp
     assert payload["selectedFiles"] == [first.name, second.name]
     assert payload["includeBase"] is True
     assert "selectedFileSnapshots" not in payload
+    assert payload["workflow"] == {"template": True}
+    assert payload["workflowFile"] == bench.get_test_model().TEMPLATE_PATH.name
+    assert len(payload["workflowSha256"]) == 64
     assert payload["total"] == 3
 
     without_base = bench._build_queued_request(
@@ -1573,6 +1577,69 @@ def test_queued_request_freezes_prompt_seed_and_selected_files(tmp_path, monkeyp
     assert without_base["total"] == 2
 
 
+
+
+def test_queued_request_freezes_workflow_snapshot_for_later_start(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch01.safetensors"
+    candidate.write_bytes(b"weights")
+    original_template = {
+        "115": {"inputs": {"aspect_ratio": "1:1 (Square)", "megapixels": 0.2}},
+        "129": {"inputs": {"noise_seed": 77}},
+        "133": {"inputs": {"value": 5}},
+        "138": {"inputs": {"model": ["148", 0], "clip": ["148", 1]}},
+        "146": {"inputs": {"wildcard_text": "original", "populated_text": "original", "mode": "fixed"}},
+        "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
+    }
+    model = patch_default_test_model(
+        monkeypatch,
+        template=original_template,
+        settings={
+            "seed": 77,
+            "aspectRatio": "1:1 (Square)",
+            "megapixels": 0.2,
+            "duration": 5,
+        },
+    )
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
+    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
+    request = bench._build_queued_request(tmp_path, "prompt", selected_files=[candidate.name])
+
+    changed_template = copy.deepcopy(original_template)
+    changed_template["146"]["inputs"]["wildcard_text"] = "changed after enqueue"
+    monkeypatch.setattr(model, "load_template", lambda: changed_template)
+    monkeypatch.setattr(model, "resolve_assets", lambda template, *_args: template)
+    monkeypatch.setattr(bench, "_read_json_response", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(bench, "_active_threads", {})
+    monkeypatch.setattr(bench, "_active_sessions", {})
+    monkeypatch.setattr(bench, "_stop_requests", set())
+
+    class FakeThread:
+        def __init__(self, target=None, args=(), **_kwargs):
+            self.args = args
+            self.started = False
+
+        def is_alive(self):
+            return self.started
+
+        def start(self):
+            self.started = True
+
+    threads = []
+    monkeypatch.setattr(
+        bench.threading,
+        "Thread",
+        lambda *args, **kwargs: threads.append(FakeThread(*args, **kwargs)) or threads[-1],
+    )
+
+    started = bench.start_queued(tmp_path, request)
+
+    frozen_template = threads[0].args[5]
+    assert frozen_template["146"]["inputs"]["wildcard_text"] == "original"
+    assert started["workflowFile"] == model.TEMPLATE_PATH.name
+    assert started["workflowSha256"] == request["workflowSha256"]
 
 
 def test_concurrent_enqueue_state_after_dispatch_uses_live_worker_not_stale_snapshot(tmp_path, monkeypatch):

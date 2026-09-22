@@ -5,13 +5,8 @@
   "description": "Structured output contract for planning an ordered Story into independently generatable Scenes. WebCap assigns canonical Scene IDs after validation.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["storySummary", "scenes"],
+  "required": ["scenes"],
   "properties": {
-    "storySummary": {
-      "type": "string",
-      "minLength": 1,
-      "description": "A short restatement of the intended Story arc. This is planning context, not a replacement for the canonical Story concept."
-    },
     "scenes": {
       "type": "array",
       "minItems": 1,
@@ -20,11 +15,14 @@
         "additionalProperties": false,
         "required": ["title", "summary", "entryState", "exitState", "suggestedDurationSeconds", "continuity"],
         "properties": {
-          "title": {"type": "string", "minLength": 1},
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
           "summary": {
             "type": "string",
             "minLength": 1,
-            "description": "Concrete visible/audible intent for this one generation unit."
+            "description": "Concrete visible/audible intent for this one generation unit. Detailed cinematography belongs to the later prompt-writing pass unless essential to Story intent."
           },
           "entryState": {
             "type": "string",
@@ -44,15 +42,19 @@
           "continuity": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["continuesPreviousScene", "notes"],
+            "required": ["continuesPreviousScene", "carryForward"],
             "properties": {
               "continuesPreviousScene": {
                 "type": "boolean",
-                "description": "True when this Scene should directly inherit the previous Scene's exit state rather than acting as a continuity reset."
+                "description": "True when this Scene directly inherits the previous Scene's exit state rather than acting as a continuity reset."
               },
-              "notes": {
-                "type": "string",
-                "description": "Only continuity facts that materially affect this Scene. Empty string when none are needed."
+              "carryForward": {
+                "type": "array",
+                "description": "Changed state established by this Scene that must remain true in later Scenes until superseded. Do not repeat static Story bible facts here.",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
               }
             }
           }

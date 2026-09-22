@@ -67,7 +67,7 @@ This applies especially to:
 - recurring vehicles or other major objects;
 - persistent weather, time of day, lighting, and color treatment.
 
-For example, if a character has no identity LoRA or usable visual reference, do not reduce later prompts to "the woman" or "she." Re-establish the important identity cues: approximate age, build, hair, clothing, distinctive features, and anything else needed to keep the character visually stable.
+For example, if a character has no identity LoRA or usable visual reference, do not reduce later prompts to "the woman" or "she." Re-establish the important identity cues: ethnicity/heritage when known or visually established, skin tone, facial structure, eye and hair traits, approximate age, build, clothing, distinctive features, and anything else needed to keep the character visually stable. If the Story advances the same person through childhood, adulthood, and old age, age that same identity rather than allowing unrelated-looking people to replace one another.
 
 Likewise, if a room is recurring without a reference image, restate the major spatial and furnishing anchors rather than merely saying "the same hotel lobby." A later generation cannot be assumed to know what "the same" looked like.
 
@@ -236,7 +236,7 @@ Planner rules:
 - when `continuesPreviousScene` is true, the next Scene's `entryState` must be physically compatible with the previous Scene's `exitState`; do not hide unexplained movement between them;
 - keep each Scene summary focused on narrative/physical intent;
 - also write the complete H3-ready prompt for each Scene in the same pass so character, narrative, dialogue, sound, and visual decisions can be made with whole-Story context;
-- do not repeat the entire character/location visual bible in every Scene; WebCap already owns persistent Story context;
+- do not assume persistent Story context reaches the video model: when a recurring character lacks strong identity conditioning, repeat the compact visual identity cues needed for that Scene to reconstruct the same person;
 - use `continuity.carryForward` only for changed state that must remain true beyond the current Scene, such as an object being left behind or carried forward;
 - flag an intent that is too dense rather than hiding the problem.
 

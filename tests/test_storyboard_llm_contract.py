@@ -194,3 +194,18 @@ def test_develop_story_h3_rules_do_not_conflict_with_structured_creative_task():
     assert "current Director task explicitly permits inventing it" in prompt
     assert "structured whole-Story tasks" in prompt
     assert "Return only the final H3 model-facing prompt." not in prompt
+
+
+def test_develop_story_requires_stable_recurring_character_identity():
+    story = _story()
+    story["concept"] = (
+        "A baby is born, grows up, goes to school, falls in love, marries, grows old, "
+        "and ends in a grave marked Well that was fast."
+    )
+
+    prompt = storyboard_llm_contract.build_request(story, "", "develop_story")["prompt"]
+
+    assert "Establish recurring characters as stable people" in prompt
+    assert "age the same person" in prompt
+    assert "ethnicity/heritage" in prompt
+    assert "repeat enough concrete character identity detail" in prompt

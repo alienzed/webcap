@@ -192,3 +192,29 @@ def test_storyboard_take_generation_uses_global_console_and_recovers_button_on_f
     assert "throw new Error(job.error || 'Storyboard generation failed.');" in storyboard
     assert "data-generation-status" not in storyboard
     assert ".storyboard-generation-status" not in css
+
+
+def test_storyboard_take_generation_ui_supports_scene_queue_state():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "job.status === 'queued'" in storyboard
+    assert "Take generation queued" in storyboard
+    assert "Queued…" in storyboard
+    assert "job.status === 'queued' || job.status === 'running'" in storyboard
+
+
+def test_storyboard_takes_can_be_named_and_loras_filtered():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+
+    assert "data-take-label" in storyboard
+    assert "function labelTake(sceneId, takeId, label)" in storyboard
+    assert "operation: 'label_take'" in storyboard
+    assert 'if operation == "label_take":' in app
+    assert "def label_take(" in store
+    assert "takeMetaLabel(take)" in storyboard
+    assert "data-scene-lora-filter" in storyboard
+    assert "function loraOptions(selectedName, filterText)" in storyboard
+    assert ".storyboard-lora-filter" in css

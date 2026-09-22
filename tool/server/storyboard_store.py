@@ -621,6 +621,7 @@ def add_take_upload(story_id, scene_id, filename, stream):
         "references": copy.deepcopy(scene.get("references") or []),
         "workflowProfile": None,
         "providerJobId": None,
+        "label": "",
         "rating": None,
     }
     takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
@@ -824,6 +825,22 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
         if key in provenance:
             take[key] = copy.deepcopy(provenance[key])
     take["generated"] = True
+    scene["takes"][resolved_take_id] = take
+    scene["updatedAt"] = _utc_now()
+    story["updatedAt"] = scene["updatedAt"]
+    _write_json_atomic(_story_path(story_id), story)
+    return story, take
+
+
+@_serialized_mutation
+def label_take(story_id, scene_id, take_id, label):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    resolved_take_id, take = _take_for_scene(scene, take_id)
+    normalized = str(label or "").strip()
+    if len(normalized) > 120:
+        raise ValueError("Take label must be 120 characters or fewer.")
+    take["label"] = normalized
     scene["takes"][resolved_take_id] = take
     scene["updatedAt"] = _utc_now()
     story["updatedAt"] = scene["updatedAt"]

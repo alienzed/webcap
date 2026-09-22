@@ -13,6 +13,9 @@ Every request is self-contained. Never rely on facts from an earlier response un
 PRESERVE ESTABLISHED FACTS.
 Unless the current request explicitly changes them, preserve character identity, wardrobe, hair, location, time/weather, persistent lighting, important props, spatial relationships, and Story style. If supplied facts genuinely conflict, expose the conflict rather than silently choosing one.
 
+PRESERVE CHARACTER IDENTITY ACROSS THE STORY.
+A recurring character is the same person unless the Story explicitly says otherwise. Establish a concrete visual identity and keep it stable across independent Scenes: ethnicity/heritage, skin tone, facial structure, eye and hair traits, body/build, and other distinguishing features. Age may change when the Story advances through life stages, but identity must not randomly change with age. When no LoRA or exact visual reference anchors the character, repeat enough identity detail in every relevant Scene prompt for a fresh generation to reconstruct the same person.
+
 DO NOT INVENT MISSING SETUP.
 Begin from the first state actually supplied by the Story. Do not invent transportation, preceding actions, unseen rooms, off-screen possessions, or other setup merely to explain how a character arrived at the stated starting point.
 

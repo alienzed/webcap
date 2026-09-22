@@ -493,25 +493,48 @@
     return value == null ? fallback : value;
   }
 
-  function loraOptions(selectedName) {
+  function loraOptions(selectedName, filterText) {
     var names = (storyState.generationCapabilities.loras || []).slice();
+    var filter = String(filterText || '').trim().toLowerCase();
+    if (filter) {
+      names = names.filter(function (name) {
+        return String(name || '').toLowerCase().indexOf(filter) !== -1;
+      });
+    }
     if (selectedName && names.indexOf(selectedName) < 0) names.unshift(selectedName);
-    if (!names.length) return '<option value="">No selectable LoRAs</option>';
+    if (!names.length) return '<option value="">No matching LoRAs</option>';
     return names.map(function (name) {
       return '<option value="' + escapeHtml(name) + '"' + (name === selectedName ? ' selected' : '') + '>' +
         escapeHtml(name) + '</option>';
     }).join('');
   }
 
-  function loraRowHtml(lora) {
+  function loraRowHtml(lora, filterText) {
     lora = lora || {};
     var name = String(lora.name || '');
     var strength = lora.strength == null ? 1 : lora.strength;
     return '<div class="storyboard-lora-row" data-scene-lora-row>' +
-      '<select data-scene-lora-name>' + loraOptions(name) + '</select>' +
+      '<select data-scene-lora-name>' + loraOptions(name, filterText) + '</select>' +
       '<input type="number" step="0.05" data-scene-lora-strength value="' + escapeHtml(strength) + '" aria-label="LoRA strength">' +
       '<button type="button" class="review-captions-btn" data-scene-lora-remove title="Remove LoRA">×</button>' +
     '</div>';
+  }
+
+  function takeMetaLabel(take) {
+    var parts = [take && take.generated ? 'Generated' : 'Imported'];
+    var createdAt = take && take.createdAt ? new Date(take.createdAt) : null;
+    if (createdAt && !Number.isNaN(createdAt.getTime())) {
+      parts.push(createdAt.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      }));
+    }
+    if (take && take.generated && take.seed !== undefined && take.seed !== null && take.seed !== '') {
+      parts.push('Seed ' + String(take.seed));
+    }
+    return parts.join(' · ');
   }
 
   function activeTakeOptions(story, selectedTakeId) {
@@ -563,7 +586,9 @@
       var previousScene = previousSceneId ? scenes[previousSceneId] || {} : {};
       var previousSelectedTakeId = previousScene.selectedTakeId || '';
       var generationJob = storyState.generationJobs[sceneId] || null;
+      var generationQueued = generationJob && generationJob.status === 'queued';
       var generationRunning = generationJob && generationJob.status === 'running';
+      var generationBusy = generationQueued || generationRunning;
       var sceneLoras = Array.isArray(scene.loras) ? scene.loras : [];
       var loraRowsHtml = sceneLoras.map(loraRowHtml).join('');
       var advancedSummaryParts = [];
@@ -605,7 +630,11 @@
         return '<article class="storyboard-take' + (selected ? ' selected' : '') + '" data-take-id="' + escapeHtml(takeId) + '">' +
           '<div class="storyboard-take-media">' + takePreviewHtml(story.id, sceneId, take) + '</div>' +
           '<div class="storyboard-take-footer">' +
-            '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
+            '<div class="storyboard-take-identity" title="' + escapeHtml(take.sourceFilename || '') + '">' +
+              '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
+              '<span>' + escapeHtml(takeMetaLabel(take)) + '</span>' +
+              '<input type="text" maxlength="120" data-take-label="' + escapeHtml(takeId) + '" value="' + escapeHtml(take.label || '') + '" placeholder="Label this Take…" aria-label="Take label">' +
+            '</div>' +
             '<select data-take-rating="' + escapeHtml(takeId) + '" aria-label="Take rating">' + ratingOptions + '</select>' +
             '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
             '<button type="button" class="review-captions-btn" data-take-action="remove" data-take-id="' + escapeHtml(takeId) + '">Remove</button>' +
@@ -653,8 +682,8 @@
             '<div class="storyboard-scene-quick">' +
               '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
               '<div class="storyboard-generate-panel">' +
-                '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Generate a new Take from the current saved Scene."' + (generationRunning ? ' disabled' : '') + '>' +
-                  (generationRunning ? 'Generating…' : 'Generate Take') +
+                '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Generate a new Take from the current saved Scene."' + (generationBusy ? ' disabled' : '') + '>' +
+                  (generationQueued ? 'Queued…' : (generationRunning ? 'Generating…' : 'Generate Take')) +
                 '</button>' +
               '</div>' +
             '</div>' +
@@ -672,7 +701,7 @@
                 '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
                 '<label class="storyboard-inline-check" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
                 '<div class="storyboard-lora-panel">' +
-                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add a Scene-specific LoRA override."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
+                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><input type="search" class="storyboard-lora-filter" data-scene-lora-filter placeholder="Filter LoRAs…" aria-label="Filter available LoRAs"><button type="button" class="review-captions-btn" data-scene-lora-add title="Add a Scene-specific LoRA override."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
                   '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>' +
                   '<span class="storyboard-reference-empty">' + escapeHtml(loraStatus) + '</span>' +
                 '</div>' +
@@ -1040,6 +1069,21 @@
     }).catch(reportError);
   }
 
+  function labelTake(sceneId, takeId, label) {
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () { return request({
+      operation: 'label_take',
+      storyId: storyState.story.id,
+      sceneId: sceneId,
+      takeId: takeId,
+      label: String(label || '').trim()
+    }); }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
   function rateTake(sceneId, takeId, rating) {
     setSaveState('Saving...');
     flushPendingSaves().then(function () { return request({
@@ -1162,9 +1206,11 @@
     if (!root) return;
     var button = root.querySelector('[data-scene-generate]');
     if (!button) return;
+    var queued = !!(job && job.status === 'queued');
     var running = !!(job && job.status === 'running');
-    button.disabled = running;
-    button.textContent = running ? 'Generating…' : 'Generate Take';
+    button.disabled = queued || running;
+    if (queued) button.textContent = 'Queued…';
+    else button.textContent = running ? 'Generating…' : 'Generate Take';
   }
 
   function reportGenerationStatus(sceneId, job, previousJob) {
@@ -1174,7 +1220,13 @@
       ? String(previousJob.status || '') + '|' + String(previousJob.comfyStatus || '')
       : '';
     if (currentKey === previousKey) return;
-    if (job.status === 'running') {
+    if (job.status === 'queued') {
+      var queuePosition = Number(job.queuePosition || 0);
+      reportConsoleInfo(
+        generationConsoleLabel(sceneId),
+        'Take generation queued' + (queuePosition ? ' · #' + queuePosition : '') + '.'
+      );
+    } else if (job.status === 'running') {
       reportConsoleInfo(generationConsoleLabel(sceneId), 'ComfyUI · ' + String(job.comfyStatus || 'starting'));
     } else if (job.status === 'completed') {
       reportConsoleInfo(generationConsoleLabel(sceneId), 'Take generation completed.');
@@ -1189,7 +1241,7 @@
         storyState.generationJobs[sceneId] = job;
         syncGenerationButton(sceneId, job);
         reportGenerationStatus(sceneId, job, previousJob);
-        if (job.status === 'running') {
+        if (job.status === 'queued' || job.status === 'running') {
           pollGeneration(storyId, sceneId, jobId);
           return;
         }
@@ -1317,6 +1369,17 @@
     });
 
     el('storyboard-scenes-list').addEventListener('input', function (event) {
+      var loraFilter = event.target.closest('[data-scene-lora-filter]');
+      if (loraFilter) {
+        var filterScene = loraFilter.closest('.storyboard-scene[data-scene-id]');
+        if (!filterScene) throw new Error('LoRA filter Scene is missing.');
+        Array.prototype.forEach.call(filterScene.querySelectorAll('[data-scene-lora-name]'), function (select) {
+          var selected = select.value;
+          select.innerHTML = loraOptions(selected, loraFilter.value);
+          select.value = selected;
+        });
+        return;
+      }
       var loraRow = event.target.closest('[data-scene-lora-row]');
       if (loraRow) {
         var loraScene = loraRow.closest('.storyboard-scene[data-scene-id]');
@@ -1341,6 +1404,13 @@
         uploadTake(uploadScene.dataset.sceneId, upload.files && upload.files[0]);
         return;
       }
+      var takeLabel = event.target.closest('[data-take-label]');
+      if (takeLabel) {
+        var labelScene = takeLabel.closest('.storyboard-scene[data-scene-id]');
+        if (!labelScene) throw new Error('Take label Scene is missing.');
+        labelTake(labelScene.dataset.sceneId, takeLabel.dataset.takeLabel, takeLabel.value);
+        return;
+      }
       var rating = event.target.closest('[data-take-rating]');
       if (rating) {
         var ratingScene = rating.closest('.storyboard-scene[data-scene-id]');
@@ -1357,7 +1427,8 @@
         if (!addLoraScene) throw new Error('LoRA Scene is missing.');
         var list = addLoraScene.querySelector('[data-scene-lora-list]');
         if (!list) throw new Error('LoRA list is missing.');
-        list.insertAdjacentHTML('beforeend', loraRowHtml({}));
+        var filter = addLoraScene.querySelector('[data-scene-lora-filter]');
+        list.insertAdjacentHTML('beforeend', loraRowHtml({}, filter ? filter.value : ''));
         scheduleSceneSave(addLoraScene.dataset.sceneId);
         return;
       }

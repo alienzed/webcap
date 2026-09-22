@@ -418,3 +418,16 @@ def test_developed_plan_rejects_schema_shape_drift(storyboard_fs):
     bad_type["title"] = 42
     with pytest.raises(ValueError, match="invalid title"):
         storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_type, dict(base_scene)]})
+
+
+def test_take_label_is_editable_and_persists(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene", "prompt": "Prompt"})
+    import io
+    story, take = storyboard_store.add_take_upload(story["id"], scene["id"], "take.mp4", io.BytesIO(b"video"))
+
+    story, take = storyboard_store.label_take(story["id"], scene["id"], take["id"], "Best expression")
+
+    assert take["label"] == "Best expression"
+    loaded = storyboard_store.load_story(story["id"])
+    assert loaded["scenes"][scene["id"]]["takes"][take["id"]]["label"] == "Best expression"

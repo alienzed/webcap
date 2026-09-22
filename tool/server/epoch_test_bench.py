@@ -17,24 +17,16 @@ from pathlib import Path
 
 from . import config as app_config
 from .folder_state_store import read_folder_state, write_folder_state_atomic
+from .test_models import h3 as h3_test_model
 from .training_test_paths import test_copy_path
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
-TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "comfyui" / "minimax_h3_test_api.json"
+TEMPLATE_PATH = h3_test_model.TEMPLATE_PATH
 TEST_RESULTS_DIR = "test-generations"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
 COMFY_JOB_MISSING_GRACE_SECONDS = 10
 GPU_RESERVATION_OWNER = "test-generations"
-TEST_ASPECT_RATIO_OPTIONS = (
-    "1:1 (Square)",
-    "2:3 (Portrait Photo)",
-    "3:2 (Photo)",
-    "3:4 (Portrait Standard)",
-    "4:3 (Standard)",
-    "9:16 (Portrait Widescreen)",
-    "16:9 (Widescreen)",
-    "21:9 (Ultrawide)",
-)
+TEST_ASPECT_RATIO_OPTIONS = h3_test_model.ASPECT_RATIO_OPTIONS
 _lock = threading.Lock()
 _status_lock = threading.Lock()
 _rating_lock = threading.Lock()
@@ -165,59 +157,23 @@ def _cancel_comfy_job(prompt_id):
 
 
 def _load_template():
-    try:
-        workflow = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Could not read the MiniMax H3 Test Bench workflow template.") from exc
-    if not isinstance(workflow, dict):
-        raise ValueError("MiniMax H3 Test Bench workflow template must be a JSON object.")
-    return workflow
-
+    return h3_test_model.load_template()
 
 def _default_prompt(workflow=None):
-    selected = workflow or _load_template()
-    inputs = ((selected.get("146") or {}).get("inputs") or {})
-    prompt = str(inputs.get("wildcard_text") or inputs.get("populated_text") or "").strip()
-    if not prompt:
-        raise ValueError("MiniMax H3 Test Bench workflow has no default prompt in node 146.")
-    return prompt
-
+    return h3_test_model.default_prompt(workflow or _load_template())
 
 def _template_test_settings(workflow=None):
-    selected = workflow or _load_template()
-    resolution = ((selected.get("115") or {}).get("inputs") or {})
-    duration = ((selected.get("133") or {}).get("inputs") or {})
-    return {
-        "aspectRatio": str(resolution.get("aspect_ratio") or "").strip(),
-        "megapixels": float(resolution.get("megapixels") or 0),
-        "duration": float(duration.get("value") or 0),
-    }
-
+    return h3_test_model.template_settings(workflow or _load_template())
 
 def _normalized_test_settings(template, aspect_ratio=None, megapixels=None, duration=None, seed=None):
-    defaults = _template_test_settings(template)
-    selected_aspect = str(aspect_ratio or defaults["aspectRatio"]).strip()
-    if selected_aspect not in TEST_ASPECT_RATIO_OPTIONS:
-        raise ValueError("Unsupported Test Generations aspect ratio: " + selected_aspect)
-    try:
-        selected_megapixels = float(defaults["megapixels"] if megapixels is None else megapixels)
-        selected_duration = float(defaults["duration"] if duration is None else duration)
-        selected_seed = _new_session_seed() if seed is None or str(seed).strip() == "" else int(seed)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Test resolution, duration, and seed must be numeric.") from exc
-    if selected_megapixels <= 0:
-        raise ValueError("Test resolution must be greater than zero megapixels.")
-    if selected_duration <= 0:
-        raise ValueError("Test duration must be greater than zero seconds.")
-    if selected_seed < 0 or selected_seed >= 2 ** 63:
-        raise ValueError("Test seed must be between 0 and 9223372036854775807.")
-    return {
-        "aspectRatio": selected_aspect,
-        "megapixels": selected_megapixels,
-        "duration": selected_duration,
-        "seed": selected_seed,
-    }
-
+    return h3_test_model.normalize_settings(
+        template,
+        _new_session_seed,
+        aspect_ratio=aspect_ratio,
+        megapixels=megapixels,
+        duration=duration,
+        seed=seed,
+    )
 
 def _owning_set_directory(folder_path):
     path = Path(folder_path).resolve()
@@ -453,42 +409,10 @@ def _resolve_comfy_name(configured_name, available, label):
 
 
 def _available_comfy_lora_names():
-    return _available_comfy_names("LoraLoader", "lora_name", "LoRA")
-
-
+    return h3_test_model.available_lora_names(_available_comfy_names)
 
 def _resolve_comfy_template_assets(template):
-    workflow = copy.deepcopy(template)
-    specs = (
-        ("127", "UNETLoader", "unet_name", "diffusion model"),
-        ("128", "CLIPLoader", "clip_name", "CLIP model"),
-        ("119", "VAELoader", "vae_name", "video VAE"),
-        ("120", "VAELoader", "vae_name", "audio VAE"),
-    )
-    available_cache = {}
-    try:
-        for node_id, node_type, input_name, label in specs:
-            inputs = workflow[node_id]["inputs"]
-            configured = inputs[input_name]
-            cache_key = (node_type, input_name)
-            if cache_key not in available_cache:
-                available_cache[cache_key] = _available_comfy_names(node_type, input_name, label)
-            inputs[input_name] = _resolve_comfy_name(configured, available_cache[cache_key], label)
-
-        power_inputs = workflow["138"]["inputs"]
-        enabled_power_loras = [
-            value
-            for value in power_inputs.values()
-            if isinstance(value, dict) and value.get("on") is True and str(value.get("lora") or "").strip()
-        ]
-        if enabled_power_loras:
-            available_loras = _available_comfy_lora_names()
-            for entry in enabled_power_loras:
-                entry["lora"] = _resolve_comfy_name(entry["lora"], available_loras, "LoRA")
-    except (KeyError, TypeError) as exc:
-        raise ValueError("MiniMax H3 Test Bench workflow is missing required model inputs.") from exc
-    return workflow
-
+    return h3_test_model.resolve_assets(template, _available_comfy_names, _resolve_comfy_name)
 
 def _resolve_wildcard_prompt(prompt, seed):
     response = _read_json_response(
@@ -512,59 +436,18 @@ def _workflow_for_lora(
     strength_clip=1,
     filename_prefix=None,
 ):
-    workflow = copy.deepcopy(template)
-    if settings is None:
-        selected = _template_test_settings(template)
-        selected["seed"] = _workflow_seed(template)
-    else:
-        selected = settings
-    try:
-        prompt_inputs = workflow["146"]["inputs"]
-        prompt_inputs["wildcard_text"] = prompt
-        prompt_inputs["populated_text"] = prompt
-        prompt_inputs["mode"] = "fixed"
-        if comfy_lora_name:
-            lora_inputs = workflow["148"]["inputs"]
-            lora_inputs["lora_name"] = comfy_lora_name
-            lora_inputs["strength_model"] = strength_model
-            lora_inputs["strength_clip"] = strength_clip
-        else:
-            power_inputs = workflow["138"]["inputs"]
-            power_inputs["model"] = ["161", 0]
-            power_inputs["clip"] = ["128", 0]
-            workflow.pop("148", None)
-        workflow["115"]["inputs"]["aspect_ratio"] = selected["aspectRatio"]
-        workflow["115"]["inputs"]["megapixels"] = selected["megapixels"]
-        workflow["133"]["inputs"]["value"] = selected["duration"]
-        workflow["129"]["inputs"]["noise_seed"] = selected["seed"]
-        if filename_prefix:
-            workflow["141"]["inputs"]["filename_prefix"] = str(filename_prefix)
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError("MiniMax H3 Test Bench workflow is missing required test inputs.") from exc
-    return workflow
-
+    return h3_test_model.build_workflow(
+        template,
+        prompt,
+        comfy_lora_name,
+        settings=settings,
+        strength_model=strength_model,
+        strength_clip=strength_clip,
+        filename_prefix=filename_prefix,
+    )
 
 def _find_video_ref(value):
-    if isinstance(value, dict):
-        filename = str(value.get("filename") or "")
-        if filename.lower().endswith(".mp4"):
-            return {
-                "filename": filename,
-                "subfolder": str(value.get("subfolder") or ""),
-                "type": str(value.get("type") or "output"),
-                "fullpath": str(value.get("fullpath") or ""),
-            }
-        for child in value.values():
-            found = _find_video_ref(child)
-            if found:
-                return found
-    elif isinstance(value, list):
-        for child in value:
-            found = _find_video_ref(child)
-            if found:
-                return found
-    return None
-
+    return h3_test_model.find_output_ref(value)
 
 def _queue_workflow(workflow):
     prompt_id = str(uuid.uuid4())
@@ -1164,13 +1047,7 @@ def _staged_lora_provenance(lora_file):
 
 
 def _workflow_seed(workflow):
-    inputs = ((workflow.get("129") or {}).get("inputs") or {}) if isinstance(workflow, dict) else {}
-    seed = inputs.get("noise_seed")
-    try:
-        return int(seed)
-    except (TypeError, ValueError):
-        return None
-
+    return h3_test_model.workflow_seed(workflow)
 
 def _new_session_seed():
     return secrets.randbelow(2 ** 53)

@@ -30,7 +30,7 @@ from .epoch_test_bench import (
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
-from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, write_folder_state_atomic
+from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -69,6 +69,20 @@ def _request_bool_arg(name):
     if value is None:
         return False
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+@app.route("/fs/folder_state/rating", methods=["POST"])
+def folder_state_rating():
+    data = request.get_json(silent=True) or {}
+    rel_path = str(data.get("folder") or "").strip()
+    media_key = str(data.get("mediaKey") or "").strip()
+    try:
+        folder_path = _resolve_folder(rel_path)
+        rating = set_media_rating(folder_path / ".webcap_state.json", media_key, data.get("rating"))
+        return jsonify({"ok": True, "mediaKey": media_key, "rating": rating})
+    except Exception as e:
+        app.logger.exception("MEDIA RATING SAVE FAILED for %r/%r: %s", rel_path, media_key, e)
+        return jsonify({"error": str(e)}), 400
+
 
 @app.route("/fs/folder_state/save", methods=["POST"])
 def folder_state_save():

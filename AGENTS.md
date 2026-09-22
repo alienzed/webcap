@@ -81,6 +81,9 @@ Fail loudly when required wiring or invariants are broken. Functionality is all 
 - Do not add fallbacks that are not completely valid alternatives; anything that does not produce intended outcomes should be a big loud error.
 - Critical invariant failures should break execution.
 - Errors should be visible in the browser console or server logs.
+- Operational failures from backend requests, external tools, workers, queues, or long-running operations must also reach WebCap's global Console when that surface is available. Local error cards, inline status, or toasts may add context but do not replace the shared diagnostic log.
+- Preserve useful underlying error detail in the global Console. Do not reduce a detailed backend or external-tool failure to a generic UI message.
+- Routine validation caused directly by incomplete user input does not need to pollute the global Console.
 - Visible failure is always the correct signal. Never add guards that intercept, reinterpret, or conceal failures from the requested operation.
 
 Silent failure is worse than a visible breakage in this project. “Fail loudly” means expose failures from required wiring or the requested operation; it does not authorize adding new checks that prevent that operation.

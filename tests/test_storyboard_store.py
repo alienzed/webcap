@@ -251,3 +251,30 @@ def test_restore_multiple_takes_preserves_original_order(storyboard_fs):
     story = storyboard_store.restore_take(story["id"], scene["id"], third["id"])
 
     assert story["scenes"][scene["id"]]["takeOrder"] == [first["id"], second["id"], third["id"], fourth["id"]]
+
+
+def test_scene_loras_are_persisted_ordered_and_duplicated(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Scene",
+        "loras": [
+            {"name": "characters/alice.safetensors", "strength": 0.8},
+            {"name": "styles/noir.safetensors", "strength": 0.55},
+        ],
+    })
+
+    assert scene["loras"] == [
+        {"name": "characters/alice.safetensors", "strength": 0.8},
+        {"name": "styles/noir.safetensors", "strength": 0.55},
+    ]
+
+    story, duplicate = storyboard_store.duplicate_scene(story["id"], scene["id"])
+    assert duplicate["loras"] == scene["loras"]
+
+    with pytest.raises(ValueError, match="duplicates"):
+        storyboard_store.update_scene(story["id"], scene["id"], {
+            "loras": [
+                {"name": "same.safetensors", "strength": 1},
+                {"name": "same.safetensors", "strength": 0.5},
+            ],
+        })

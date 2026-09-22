@@ -137,6 +137,29 @@
     return value == null ? fallback : value;
   }
 
+  function activeTakeOptions(story, selectedTakeId) {
+    var options = '<option value="">Choose a Take</option>';
+    (story.sceneOrder || []).forEach(function (sourceSceneId, sceneIndex) {
+      var sourceScene = (story.scenes || {})[sourceSceneId] || {};
+      (sourceScene.takeOrder || []).forEach(function (takeId, takeIndex) {
+        if (!sourceScene.takes || !sourceScene.takes[takeId]) return;
+        options += '<option value="' + escapeHtml(sourceSceneId + '|' + takeId) + '"' +
+          (takeId === selectedTakeId ? ' selected' : '') + '>Scene ' +
+          String(sceneIndex + 1).padStart(2, '0') + ' · Take ' + String(takeIndex + 1).padStart(2, '0') +
+          '</option>';
+      });
+    });
+    return options;
+  }
+
+  function referenceForRole(scene, role) {
+    var references = Array.isArray(scene && scene.references) ? scene.references : [];
+    for (var i = 0; i < references.length; i += 1) {
+      if (references[i] && references[i].role === role) return references[i];
+    }
+    return null;
+  }
+
   function renderScenes() {
     var host = el('storyboard-scenes-list');
     if (!host || !storyState.story) return;
@@ -150,7 +173,29 @@
       var seedMode = sceneValue(scene, 'seedMode', 'random');
       var seed = sceneValue(scene, 'seed', '');
       var takes = scene.takes && typeof scene.takes === 'object' ? scene.takes : {};
+      var removedTakes = scene.removedTakes && typeof scene.removedTakes === 'object' ? scene.removedTakes : {};
       var takeOrder = Array.isArray(scene.takeOrder) ? scene.takeOrder : [];
+      var previousSceneId = index > 0 ? order[index - 1] : '';
+      var previousScene = previousSceneId ? scenes[previousSceneId] || {} : {};
+      var previousSelectedTakeId = previousScene.selectedTakeId || '';
+      var firstFrameReference = referenceForRole(scene, 'first_frame');
+      var referencesHtml = (Array.isArray(scene.references) ? scene.references : []).map(function (reference) {
+        if (!reference || !reference.role) return '';
+        return '<span class="storyboard-reference-chip">' +
+          escapeHtml(reference.role.replace(/_/g, ' ')) + ' · ' +
+          escapeHtml(reference.frame || 'source') +
+          '<button type="button" data-reference-clear="' + escapeHtml(reference.role) + '" title="Clear reference" aria-label="Clear reference">×</button>' +
+        '</span>';
+      }).join('');
+      var removedTakeIds = Object.keys(removedTakes);
+      var removedTakesHtml = removedTakeIds.length
+        ? '<div class="storyboard-removed-takes"><span>Removed Takes</span>' +
+          removedTakeIds.map(function (takeId) {
+            var take = removedTakes[takeId] || {};
+            return '<button type="button" class="review-captions-btn" data-take-action="restore" data-take-id="' +
+              escapeHtml(takeId) + '">Restore ' + escapeHtml(take.sourceFilename || takeId) + '</button>';
+          }).join('') + '</div>'
+        : '';
       var takesHtml = takeOrder.map(function (takeId, takeIndex) {
         var take = takes[takeId];
         if (!take) return '';
@@ -166,6 +211,7 @@
             '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
             '<select data-take-rating="' + escapeHtml(takeId) + '" aria-label="Take rating">' + ratingOptions + '</select>' +
             '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
+            '<button type="button" class="review-captions-btn" data-take-action="remove" data-take-id="' + escapeHtml(takeId) + '">Remove</button>' +
           '</div>' +
         '</article>';
       }).join('');
@@ -193,7 +239,20 @@
             '</div>' +
             '<label class="storyboard-field"><span>Seed</span><input type="number" min="0" step="1" data-scene-field="seed" value="' + escapeHtml(seed) + '" placeholder="Set when fixed"></label>' +
             '<label class="storyboard-inline-check"><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
-            '<div class="storyboard-planned"><strong>Next integrations</strong><br>LoRA chain · image/reference inputs · direct ComfyUI generation.</div>' +
+            '<div class="storyboard-reference-panel">' +
+              '<strong>References</strong>' +
+              (referencesHtml ? '<div class="storyboard-reference-chips">' + referencesHtml + '</div>' : '<span class="storyboard-reference-empty">No references assigned.</span>') +
+              (previousSelectedTakeId
+                ? '<button type="button" class="review-captions-btn storyboard-reference-quick" data-reference-previous>Previous selected Take → first frame</button>'
+                : (index > 0 ? '<span class="storyboard-reference-empty">Select a Take in the previous Scene for quick continuity.</span>' : '')) +
+              '<div class="storyboard-reference-editor">' +
+                '<select data-reference-role><option value="first_frame">First frame</option><option value="last_frame">Last frame</option><option value="guide_frame">Guide frame</option></select>' +
+                '<select data-reference-source>' + activeTakeOptions(story, firstFrameReference && firstFrameReference.sourceTakeId) + '</select>' +
+                '<select data-reference-frame><option value="last">Last frame</option><option value="first">First frame</option></select>' +
+                '<button type="button" class="review-captions-btn" data-reference-apply>Assign</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="storyboard-planned"><strong>Next integration</strong><br>Direct ComfyUI generation from this Scene.</div>' +
           '</div>' +
         '</div>' +
         '<div class="storyboard-takes">' +
@@ -201,6 +260,7 @@
             '<label class="review-captions-btn storyboard-take-upload-btn">Add Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
           '</div>' +
           '<div class="storyboard-takes-grid">' + (takesHtml || '<div class="storyboard-takes-empty">No Takes yet.</div>') + '</div>' +
+          removedTakesHtml +
         '</div>' +
       '</section>';
     }).join('');
@@ -509,6 +569,69 @@
     }).catch(reportError);
   }
 
+  function removeTake(sceneId, takeId) {
+    var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
+    var take = scene && scene.takes ? scene.takes[takeId] : null;
+    var label = take && take.sourceFilename ? take.sourceFilename : 'this Take';
+    if (!window.confirm('Remove "' + label + '"? Its media and metadata will remain recoverable.')) return;
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () { return request({
+      operation: 'remove_take',
+      storyId: storyState.story.id,
+      sceneId: sceneId,
+      takeId: takeId
+    }); }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
+  function restoreTake(sceneId, takeId) {
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () { return request({
+      operation: 'restore_take',
+      storyId: storyState.story.id,
+      sceneId: sceneId,
+      takeId: takeId
+    }); }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
+  function setSceneReference(sceneId, role, sourceSceneId, sourceTakeId, frame) {
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () { return request({
+      operation: 'set_scene_reference_from_take',
+      storyId: storyState.story.id,
+      sceneId: sceneId,
+      role: role,
+      sourceSceneId: sourceSceneId,
+      sourceTakeId: sourceTakeId,
+      frame: frame
+    }); }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
+  function clearSceneReference(sceneId, role) {
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () { return request({
+      operation: 'clear_scene_reference',
+      storyId: storyState.story.id,
+      sceneId: sceneId,
+      role: role
+    }); }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
   function handleSceneInput(event) {
     var field = event.target.closest('[data-scene-field]');
     if (!field) return;
@@ -597,11 +720,48 @@
       handleSceneInput(event);
     });
     el('storyboard-scenes-list').addEventListener('click', function (event) {
-      var takeAction = event.target.closest('[data-take-action="select"]');
+      var takeAction = event.target.closest('[data-take-action]');
       if (takeAction) {
         var takeScene = takeAction.closest('.storyboard-scene[data-scene-id]');
-        if (!takeScene) throw new Error('Take selection Scene is missing.');
-        selectTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
+        if (!takeScene) throw new Error('Take action Scene is missing.');
+        if (takeAction.dataset.takeAction === 'select') selectTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
+        else if (takeAction.dataset.takeAction === 'remove') removeTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
+        else if (takeAction.dataset.takeAction === 'restore') restoreTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
+        return;
+      }
+      var referenceClear = event.target.closest('[data-reference-clear]');
+      if (referenceClear) {
+        var clearScene = referenceClear.closest('.storyboard-scene[data-scene-id]');
+        if (!clearScene) throw new Error('Reference Scene is missing.');
+        clearSceneReference(clearScene.dataset.sceneId, referenceClear.dataset.referenceClear);
+        return;
+      }
+      var previousReference = event.target.closest('[data-reference-previous]');
+      if (previousReference) {
+        var targetScene = previousReference.closest('.storyboard-scene[data-scene-id]');
+        if (!targetScene) throw new Error('Reference Scene is missing.');
+        var order = storyState.story.sceneOrder || [];
+        var targetIndex = order.indexOf(targetScene.dataset.sceneId);
+        if (targetIndex <= 0) throw new Error('Previous Scene is missing.');
+        var sourceSceneId = order[targetIndex - 1];
+        var sourceScene = storyState.story.scenes[sourceSceneId];
+        if (!sourceScene || !sourceScene.selectedTakeId) throw new Error('Previous Scene has no selected Take.');
+        setSceneReference(targetScene.dataset.sceneId, 'first_frame', sourceSceneId, sourceScene.selectedTakeId, 'last');
+        return;
+      }
+      var referenceApply = event.target.closest('[data-reference-apply]');
+      if (referenceApply) {
+        var referenceScene = referenceApply.closest('.storyboard-scene[data-scene-id]');
+        if (!referenceScene) throw new Error('Reference Scene is missing.');
+        var role = referenceScene.querySelector('[data-reference-role]').value;
+        var sourceValue = referenceScene.querySelector('[data-reference-source]').value;
+        var frame = referenceScene.querySelector('[data-reference-frame]').value;
+        if (!sourceValue || sourceValue.indexOf('|') < 0) {
+          window.alert('Choose a Take to assign as a reference.');
+          return;
+        }
+        var sourceParts = sourceValue.split('|');
+        setSceneReference(referenceScene.dataset.sceneId, role, sourceParts[0], sourceParts[1], frame);
         return;
       }
       var restore = event.target.closest('[data-restore-scene]');

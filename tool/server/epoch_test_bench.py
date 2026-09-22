@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import config as app_config
 from .folder_state_store import read_folder_state, write_folder_state_atomic
-from .test_models import get_test_model
+from .test_models import get_test_model, supported_profile_ids
 from .test_models import h3 as h3_test_model
 from .training_test_paths import test_copy_path
 
@@ -246,15 +246,17 @@ def _relative_set_folder(folder_path):
 def test_presence(folder_path):
     set_folder = _owning_set_directory(folder_path)
     staged_count = 0
-    try:
-        test_directory = _h3_test_directory(set_folder)
-        if test_directory.is_dir():
-            staged_count = len([
-                path for path in test_directory.iterdir()
-                if path.is_file() and path.suffix.lower() == ".safetensors"
-            ])
-    except ValueError:
-        staged_count = 0
+    for profile_id in supported_profile_ids():
+        model = get_test_model(profile_id)
+        try:
+            test_directory = _test_directory(set_folder, model)
+            if test_directory.is_dir():
+                staged_count += len([
+                    path for path in test_directory.iterdir()
+                    if path.is_file() and path.suffix.lower() == ".safetensors"
+                ])
+        except (OSError, ValueError):
+            continue
     sessions = list_sessions(set_folder)
     return {
         "folder": _relative_set_folder(set_folder),
@@ -262,7 +264,6 @@ def test_presence(folder_path):
         "sessionCount": len(sessions),
         "hasTestData": bool(staged_count or sessions),
     }
-
 
 def recent_test_sets(limit=8):
     now = time.monotonic()
@@ -329,7 +330,7 @@ def activity_snapshot(folder_path=None):
     return {"active": active, "current": current, "recent": recent_test_sets()}
 
 
-def remove_candidate(folder_path, file_name, session_name=None):
+def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
     name = str(file_name or "").strip()
     if (
         not name
@@ -340,7 +341,18 @@ def remove_candidate(folder_path, file_name, session_name=None):
     ):
         raise ValueError("A staged .safetensors filename is required.")
 
-    test_directory = _h3_test_directory(folder_path)
+    resolved_model_id = str(model_id or "").strip()
+    if session_name:
+        session = _session_directory(folder_path, session_name)
+        session_status = _read_status(session) or {}
+        resolved_model_id = str(
+            session_status.get("modelId")
+            or session_status.get("model")
+            or resolved_model_id
+            or h3_test_model.PROFILE_ID
+        )
+    model = get_test_model(resolved_model_id or h3_test_model.PROFILE_ID)
+    test_directory = _test_directory(folder_path, model)
     candidate = test_directory / name
     sidecar = candidate.with_suffix(".webcap.json")
 
@@ -364,7 +376,6 @@ def remove_candidate(folder_path, file_name, session_name=None):
         "files": [path.name for path in remaining],
         "sessionStatus": session_status,
     }
-
 
 def _normalize_lora_name(value):
     return "/".join(segment for segment in re.split(r"[\\/]+", str(value or "")) if segment).casefold()
@@ -899,6 +910,7 @@ def list_sessions(folder_path):
         sessions.append({
             "session": session.name,
             "name": str(payload.get("name") or ""),
+            "modelId": str(payload.get("modelId") or payload.get("model") or ""),
             "status": str(payload.get("status") or ""),
             "completed": int(payload.get("completed") or 0),
             "failed": int(payload.get("failed") or 0),
@@ -1548,6 +1560,19 @@ def start_queued(folder_path, request):
         _atomic_write_json(_status_path(session_directory), payload)
         return payload
 
+def supported_models():
+    return {
+        "operation": "test_models",
+        "models": [
+            {
+                "id": profile_id,
+                "mediaKind": get_test_model(profile_id).MEDIA_KIND,
+            }
+            for profile_id in supported_profile_ids()
+        ],
+    }
+
+
 def prepare(folder_path, model_id=None):
     model = get_test_model(model_id or h3_test_model.PROFILE_ID)
     template = model.load_template()
@@ -1636,6 +1661,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             folder_path,
             criteria.get("fileName"),
             session_name=criteria.get("session"),
+            model_id=criteria.get("modelId"),
         )
     if operation == "test_enqueue":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}

@@ -5,15 +5,25 @@
   "description": "Structured output contract for planning an ordered Story into independently generatable Scenes. WebCap assigns canonical Scene IDs after validation.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["scenes"],
+  "required": [
+    "scenes"
+  ],
   "properties": {
     "scenes": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 2,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["title", "summary", "entryState", "exitState", "suggestedDurationSeconds", "continuity"],
+        "required": [
+          "title",
+          "summary",
+          "entryState",
+          "exitState",
+          "prompt",
+          "suggestedDurationSeconds",
+          "continuity"
+        ],
         "properties": {
           "title": {
             "type": "string",
@@ -37,12 +47,17 @@
           "suggestedDurationSeconds": {
             "type": "number",
             "exclusiveMinimum": 0,
-            "description": "Suggested clip duration. Runtime generation-profile limits are validated separately by WebCap."
+            "description": "Suggested MiniMax H3 clip duration in seconds for the current Storyboard workflow.",
+            "minimum": 4,
+            "maximum": 15
           },
           "continuity": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["continuesPreviousScene", "carryForward"],
+            "required": [
+              "continuesPreviousScene",
+              "carryForward"
+            ],
             "properties": {
               "continuesPreviousScene": {
                 "type": "boolean",
@@ -57,6 +72,11 @@
                 }
               }
             }
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Complete MiniMax H3 model-facing prompt for this Scene, including useful visual, camera, performance, dialogue, sound, and music detail where appropriate."
           }
         }
       }

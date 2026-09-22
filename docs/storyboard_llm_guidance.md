@@ -320,7 +320,8 @@ Input normally includes:
 
 Rules:
 
-- follow `docs/mmh3-prompt-guidelines.md`;
+- follow the current FL2VA-family/base guidance in `docs/mmh3-prompt-guidelines.md`;
+- use only the base T2VA/I2VA/FL2VA/L2VA prompt vocabulary for the current Storyboard runtime; do not include Ref2VA's six-section format unless a future Ref2VA operation explicitly requests it;
 - preserve the Scene's narrative intent;
 - use observable audiovisual description rather than abstract plot summary;
 - fit action and camera changes into the duration;

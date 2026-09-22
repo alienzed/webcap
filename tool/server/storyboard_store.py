@@ -1,12 +1,15 @@
+import copy
 import json
 import os
 import re
+import shutil
 import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config as app_config
+from .originals import MEDIA_ALL_EXTS
 
 
 STORYBOARD_VERSION = 1
@@ -126,6 +129,7 @@ def _normalize_scene(scene_id, value, existing=None):
         "loras": list(current.get("loras") or []),
         "references": list(current.get("references") or []),
         "notes": str(value.get("notes", current.get("notes", "")) or ""),
+        "takes": dict(current.get("takes") or {}) if isinstance(current.get("takes"), dict) else {},
         "takeOrder": list(current.get("takeOrder") or []),
         "selectedTakeId": current.get("selectedTakeId"),
         "createdAt": current.get("createdAt") or now,
@@ -154,6 +158,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "id": resolved_id,
         "title": str(payload.get("title", current.get("title", "")) or "").strip(),
         "concept": str(payload.get("concept", current.get("concept", "")) or ""),
+        "style": str(payload.get("style", current.get("style", "")) or ""),
         "tags": _normalize_tags(payload.get("tags", current.get("tags", []))),
         "status": status,
         "pinned": bool(payload.get("pinned", current.get("pinned", False))),
@@ -334,5 +339,119 @@ def restore_scene(story_id, scene_id):
     story["removedScenes"] = removed
     story["sceneOrder"].append(scene_id)
     story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story
+
+
+def _scene_for_story(story, scene_id):
+    scene_id = str(scene_id or "").strip()
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    scene = scenes.get(scene_id)
+    if not isinstance(scene, dict):
+        raise FileNotFoundError("Scene does not exist.")
+    return scene_id, scene
+
+
+def add_take_upload(story_id, scene_id, filename, stream):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    source_name = str(filename or "").strip()
+    safe_name = Path(source_name).name
+    if not source_name or safe_name != source_name:
+        raise ValueError("Invalid Take filename.")
+    suffix = Path(safe_name).suffix.lower()
+    if suffix not in MEDIA_ALL_EXTS:
+        raise ValueError("Take must be a supported image or video file.")
+
+    take_id = _new_id("take")
+    take_dir = _story_dir(story_id) / "takes" / scene_id
+    take_dir.mkdir(parents=True, exist_ok=True)
+    stored_name = take_id + suffix
+    destination = take_dir / stored_name
+    fd, tmp_name = tempfile.mkstemp(prefix=stored_name + ".", suffix=".tmp", dir=str(take_dir))
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            shutil.copyfileobj(stream, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, destination)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+
+    now = _utc_now()
+    take = {
+        "id": take_id,
+        "sceneId": scene_id,
+        "createdAt": now,
+        "mediaPath": "takes/" + scene_id + "/" + stored_name,
+        "sourceFilename": safe_name,
+        "prompt": str(scene.get("prompt") or ""),
+        "durationSeconds": scene.get("durationSeconds", 6),
+        "seed": scene.get("seed"),
+        "seedMode": scene.get("seedMode", "random"),
+        "wildcardsEnabled": bool(scene.get("wildcardsEnabled")),
+        "loras": copy.deepcopy(scene.get("loras") or []),
+        "references": copy.deepcopy(scene.get("references") or []),
+        "workflowProfile": None,
+        "providerJobId": None,
+        "rating": None,
+    }
+    takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
+    take_order = list(scene.get("takeOrder") or [])
+    takes[take_id] = take
+    take_order.append(take_id)
+    scene["takes"] = takes
+    scene["takeOrder"] = take_order
+    scene["updatedAt"] = now
+    story["scenes"][scene_id] = scene
+    story["updatedAt"] = now
+    try:
+        _write_json_atomic(_story_path(story_id), story)
+    except Exception:
+        try:
+            destination.unlink()
+        except OSError:
+            pass
+        raise
+    return story, take
+
+
+def rate_take(story_id, scene_id, take_id, rating):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
+    take = takes.get(str(take_id or "").strip())
+    if not isinstance(take, dict):
+        raise FileNotFoundError("Take does not exist.")
+    if rating in ("", None):
+        normalized = None
+    else:
+        try:
+            normalized = int(rating)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Take rating must be 1 through 5.") from exc
+        if normalized < 1 or normalized > 5:
+            raise ValueError("Take rating must be 1 through 5.")
+    take["rating"] = normalized
+    scene["updatedAt"] = _utc_now()
+    story["updatedAt"] = scene["updatedAt"]
+    _write_json_atomic(_story_path(story_id), story)
+    return story, take
+
+
+def select_take(story_id, scene_id, take_id):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    resolved_take_id = str(take_id or "").strip()
+    if resolved_take_id:
+        takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
+        if not isinstance(takes.get(resolved_take_id), dict):
+            raise FileNotFoundError("Take does not exist.")
+        scene["selectedTakeId"] = resolved_take_id
+    else:
+        scene["selectedTakeId"] = None
+    scene["updatedAt"] = _utc_now()
+    story["updatedAt"] = scene["updatedAt"]
     _write_json_atomic(_story_path(story_id), story)
     return story

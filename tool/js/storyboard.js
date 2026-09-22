@@ -493,25 +493,48 @@
     return value == null ? fallback : value;
   }
 
-  function loraOptions(selectedName) {
+  function loraOptions(selectedName, filterText) {
     var names = (storyState.generationCapabilities.loras || []).slice();
+    var filter = String(filterText || '').trim().toLowerCase();
+    if (filter) {
+      names = names.filter(function (name) {
+        return String(name || '').toLowerCase().indexOf(filter) !== -1;
+      });
+    }
     if (selectedName && names.indexOf(selectedName) < 0) names.unshift(selectedName);
-    if (!names.length) return '<option value="">No selectable LoRAs</option>';
+    if (!names.length) return '<option value="">No matching LoRAs</option>';
     return names.map(function (name) {
       return '<option value="' + escapeHtml(name) + '"' + (name === selectedName ? ' selected' : '') + '>' +
         escapeHtml(name) + '</option>';
     }).join('');
   }
 
-  function loraRowHtml(lora) {
+  function loraRowHtml(lora, filterText) {
     lora = lora || {};
     var name = String(lora.name || '');
     var strength = lora.strength == null ? 1 : lora.strength;
     return '<div class="storyboard-lora-row" data-scene-lora-row>' +
-      '<select data-scene-lora-name>' + loraOptions(name) + '</select>' +
+      '<select data-scene-lora-name>' + loraOptions(name, filterText) + '</select>' +
       '<input type="number" step="0.05" data-scene-lora-strength value="' + escapeHtml(strength) + '" aria-label="LoRA strength">' +
       '<button type="button" class="review-captions-btn" data-scene-lora-remove title="Remove LoRA">×</button>' +
     '</div>';
+  }
+
+  function takeMetaLabel(take) {
+    var parts = [take && take.generated ? 'Generated' : 'Imported'];
+    var createdAt = take && take.createdAt ? new Date(take.createdAt) : null;
+    if (createdAt && !Number.isNaN(createdAt.getTime())) {
+      parts.push(createdAt.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      }));
+    }
+    if (take && take.generated && take.seed !== undefined && take.seed !== null && take.seed !== '') {
+      parts.push('Seed ' + String(take.seed));
+    }
+    return parts.join(' · ');
   }
 
   function activeTakeOptions(story, selectedTakeId) {
@@ -607,7 +630,10 @@
         return '<article class="storyboard-take' + (selected ? ' selected' : '') + '" data-take-id="' + escapeHtml(takeId) + '">' +
           '<div class="storyboard-take-media">' + takePreviewHtml(story.id, sceneId, take) + '</div>' +
           '<div class="storyboard-take-footer">' +
-            '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
+            '<div class="storyboard-take-identity" title="' + escapeHtml(take.sourceFilename || '') + '">' +
+              '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
+              '<span>' + escapeHtml(takeMetaLabel(take)) + '</span>' +
+            '</div>' +
             '<select data-take-rating="' + escapeHtml(takeId) + '" aria-label="Take rating">' + ratingOptions + '</select>' +
             '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
             '<button type="button" class="review-captions-btn" data-take-action="remove" data-take-id="' + escapeHtml(takeId) + '">Remove</button>' +
@@ -674,7 +700,7 @@
                 '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
                 '<label class="storyboard-inline-check" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
                 '<div class="storyboard-lora-panel">' +
-                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add a Scene-specific LoRA override."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
+                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><input type="search" class="storyboard-lora-filter" data-scene-lora-filter placeholder="Filter LoRAs…" aria-label="Filter available LoRAs"><button type="button" class="review-captions-btn" data-scene-lora-add title="Add a Scene-specific LoRA override."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
                   '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>' +
                   '<span class="storyboard-reference-empty">' + escapeHtml(loraStatus) + '</span>' +
                 '</div>' +
@@ -1327,6 +1353,17 @@
     });
 
     el('storyboard-scenes-list').addEventListener('input', function (event) {
+      var loraFilter = event.target.closest('[data-scene-lora-filter]');
+      if (loraFilter) {
+        var filterScene = loraFilter.closest('.storyboard-scene[data-scene-id]');
+        if (!filterScene) throw new Error('LoRA filter Scene is missing.');
+        Array.prototype.forEach.call(filterScene.querySelectorAll('[data-scene-lora-name]'), function (select) {
+          var selected = select.value;
+          select.innerHTML = loraOptions(selected, loraFilter.value);
+          select.value = selected;
+        });
+        return;
+      }
       var loraRow = event.target.closest('[data-scene-lora-row]');
       if (loraRow) {
         var loraScene = loraRow.closest('.storyboard-scene[data-scene-id]');
@@ -1367,7 +1404,8 @@
         if (!addLoraScene) throw new Error('LoRA Scene is missing.');
         var list = addLoraScene.querySelector('[data-scene-lora-list]');
         if (!list) throw new Error('LoRA list is missing.');
-        list.insertAdjacentHTML('beforeend', loraRowHtml({}));
+        var filter = addLoraScene.querySelector('[data-scene-lora-filter]');
+        list.insertAdjacentHTML('beforeend', loraRowHtml({}, filter ? filter.value : ''));
         scheduleSceneSave(addLoraScene.dataset.sceneId);
         return;
       }

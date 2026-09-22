@@ -120,12 +120,22 @@ def _normalize_scene(scene_id, value, existing=None):
     if duration <= 0:
         raise ValueError("Scene duration must be greater than zero.")
 
+    megapixels = value.get("megapixels", current.get("megapixels", 0.2))
+    try:
+        megapixels = float(megapixels)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Scene megapixels must be a number.") from exc
+    if megapixels <= 0:
+        raise ValueError("Scene megapixels must be greater than zero.")
+
     return {
         "id": scene_id,
         "title": str(value.get("title", current.get("title", "")) or "").strip(),
         "summary": str(value.get("summary", current.get("summary", "")) or "").strip(),
         "prompt": str(value.get("prompt", current.get("prompt", "")) or ""),
         "durationSeconds": duration,
+        "aspectRatio": str(value.get("aspectRatio", current.get("aspectRatio", "4:3 (Standard)")) or "4:3 (Standard)").strip(),
+        "megapixels": megapixels,
         "seed": seed,
         "seedMode": seed_mode,
         "wildcardsEnabled": bool(value.get("wildcardsEnabled", current.get("wildcardsEnabled", False))),
@@ -561,6 +571,33 @@ def clear_scene_reference(story_id, scene_id, role):
     story["updatedAt"] = scene["updatedAt"]
     _write_json_atomic(_story_path(story_id), story)
     return story
+
+
+def finalize_generated_take(story_id, scene_id, take_id, provenance):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    resolved_take_id, take = _take_for_scene(scene, take_id)
+    if not isinstance(provenance, dict):
+        raise ValueError("Generated Take provenance must be an object.")
+
+    for key in (
+        "prompt",
+        "durationSeconds",
+        "seed",
+        "seedMode",
+        "aspectRatio",
+        "megapixels",
+        "workflowProfile",
+        "providerJobId",
+    ):
+        if key in provenance:
+            take[key] = copy.deepcopy(provenance[key])
+    take["generated"] = True
+    scene["takes"][resolved_take_id] = take
+    scene["updatedAt"] = _utc_now()
+    story["updatedAt"] = scene["updatedAt"]
+    _write_json_atomic(_story_path(story_id), story)
+    return story, take
 
 
 def rate_take(story_id, scene_id, take_id, rating):

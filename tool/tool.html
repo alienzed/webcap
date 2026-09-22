@@ -1061,8 +1061,11 @@
                             <label class="storyboard-field storyboard-concept-field"><span>Concept / overview</span><textarea id="storyboard-story-concept" rows="4" placeholder="High-level grounded overview of the Story."></textarea></label>
                             <label class="storyboard-field storyboard-style-field"><span>Style / atmosphere</span><textarea id="storyboard-story-style" rows="3" placeholder="Overall look and feel: genre, era, lighting, camera language, texture..."></textarea></label>
                             <div class="storyboard-develop-row">
-                                <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn">Develop Story</button>
-                                <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite">Turn the concept into a complete Scene plan with prompts.</span>
+                                <div class="storyboard-develop-actions">
+                                    <button id="storyboard-expand-concept-btn" type="button" class="review-captions-btn">Expand Concept</button>
+                                    <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn">Develop Story</button>
+                                </div>
+                                <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite">Expand a rough idea or develop it directly into complete Scenes.</span>
                             </div>
                             <label class="storyboard-field storyboard-tags-field"><span>Tags</span><input id="storyboard-story-tags" type="text" placeholder="horror, hotel, storm"></label>
                         </div>

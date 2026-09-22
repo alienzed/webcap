@@ -156,14 +156,29 @@ The default runtime request should be reconstructible from disk.
 
 For an LLM-assisted operation, WebCap should assemble only the context needed for that operation.
 
-Conceptually:
+The default request should stay smaller than the conceptual maximum. Start with:
+
+```text
+[DIRECTOR CONTEXT]
+stable preservation/memory/duration rules
+
+[STORY STYLE]
+persistent atmosphere / visual language
+
+[CURRENT TASK]
+the one thing being requested
+```
+
+Add the current Scene when the operation acts on a Scene. Add Story concept, nearby Scenes, references, or model-specific guidance only when they materially affect that operation. A Story Planner normally needs concept but not H3 syntax; an H3 Prompt Writer needs H3 guidance but not the full Story; a local revision normally needs the existing Scene/prompt and the requested correction, not a transcript.
+
+Conceptually, the largest ordinary request may look like:
 
 ```text
 [STABLE DIRECTOR CONTEXT]
 What Storyboard is, preservation rules, duration discipline.
 
-[MODEL-SPECIFIC GUIDANCE]
-For example, the MiniMax H3 prompt-writing rules when producing an H3 prompt.
+[MODEL-SPECIFIC GUIDANCE, ONLY WHEN NEEDED]
+For example, the MiniMax H3 prompt-writing rules only when producing or reviewing an H3 prompt.
 
 [STORY CONTEXT]
 Title, concept, persistent style, and only the continuity facts relevant to this request.
@@ -181,7 +196,7 @@ Exactly one operation: plan, assess fit/splitting, write, revise, enrich, or rev
 What shape to return and whether explanatory prose is allowed.
 ```
 
-Do not send the entire Story, all Takes, or a long chat transcript by default. Context should be deliberate, inspectable, and small enough that the model can distinguish instructions from background information.
+Do not send the entire Story, all Takes, the H3 guide, or a long chat transcript by default. Context should be deliberate, inspectable, and small enough that the model can distinguish instructions from background information. Prefer `style + current task` until a concrete operation proves it needs more.
 
 ## Task modes
 

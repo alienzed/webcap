@@ -4021,6 +4021,21 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
 .flag-dot--blue   { background: #2196f3; }
 
 
+#console-toggle-btn.has-attention::after {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  top: 3px;
+  right: 3px;
+}
+
+#console-toggle-btn {
+  position: relative;
+}
+
 /* Console Panel Styles */
 #console-panel {
   background: #181c20;

@@ -646,10 +646,15 @@
   function saveStoryNow() {
     if (!storyState.story) return Promise.resolve();
     setSaveState('Saving...');
-    var promise = request({
-      operation: 'update_story',
-      storyId: storyState.story.id,
-      story: storyPayloadFromUi()
+    var storyId = storyState.story.id;
+    var storyPayload = storyPayloadFromUi();
+    var previous = storyState.storySavePromise;
+    var promise = (previous ? previous.catch(function () {}) : Promise.resolve()).then(function () {
+      return request({
+        operation: 'update_story',
+        storyId: storyId,
+        story: storyPayload
+      });
     }).then(function (payload) {
       storyState.story = payload.story;
       if (storyState.storySavePromise === promise) storyState.storySaveError = null;
@@ -710,11 +715,16 @@
   function saveSceneNow(sceneId) {
     if (!storyState.story) return Promise.resolve();
     setSaveState('Saving...');
-    var promise = request({
-      operation: 'update_scene',
-      storyId: storyState.story.id,
-      sceneId: sceneId,
-      scene: scenePayloadFromUi(sceneId)
+    var storyId = storyState.story.id;
+    var scenePayload = scenePayloadFromUi(sceneId);
+    var previous = storyState.sceneSavePromises[sceneId];
+    var promise = (previous ? previous.catch(function () {}) : Promise.resolve()).then(function () {
+      return request({
+        operation: 'update_scene',
+        storyId: storyId,
+        sceneId: sceneId,
+        scene: scenePayload
+      });
     }).then(function (payload) {
       storyState.story = payload.story;
       if (storyState.sceneSavePromises[sceneId] === promise) delete storyState.sceneSaveErrors[sceneId];

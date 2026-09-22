@@ -581,19 +581,19 @@ def _wait_for_video(
     folder_key=None,
 ):
     return _wait_for_output(
-        h3_test_model,
+        get_test_model(),
         prompt_id,
         timeout=timeout,
         session_directory=session_directory,
         folder_key=folder_key,
     )
 
-def _comfy_saved_output_path(video_ref):
-    if str(video_ref.get("type") or "") != "output":
+def _comfy_saved_output_path(output_ref):
+    if str(output_ref.get("type") or "") != "output":
         raise RuntimeError("ComfyUI Test output was not saved to the output directory.")
-    raw_path = str(video_ref.get("fullpath") or "").strip()
+    raw_path = str(output_ref.get("fullpath") or "").strip()
     if not raw_path:
-        raise RuntimeError("ComfyUI did not expose the saved Test video path.")
+        raise RuntimeError("ComfyUI did not expose the saved Test output path.")
     path = Path(raw_path)
     if path.is_file():
         return path
@@ -607,14 +607,13 @@ def _comfy_saved_output_path(video_ref):
                 check=False,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise RuntimeError("Could not resolve the saved ComfyUI video path.") from exc
+            raise RuntimeError("Could not resolve the saved ComfyUI output path.") from exc
         converted_path = (converted.stdout or "").strip()
         if converted.returncode == 0 and converted_path:
             path = Path(converted_path)
     if not path.is_file():
-        raise FileNotFoundError("Saved ComfyUI Test video does not exist: " + raw_path)
+        raise FileNotFoundError("Saved ComfyUI Test output does not exist: " + raw_path)
     return path
-
 
 def _safe_output_component(value):
     text = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "")).strip("._-")
@@ -815,15 +814,20 @@ def _with_session_ratings(session_directory, payload):
     return visible
 
 
-def _candidate_rating_scores(folder_path):
+def _candidate_rating_scores(folder_path, model_id=None):
     root = _session_root(folder_path)
     if not root.is_dir():
         return {}
+    selected_model_id = str(model_id or "").strip()
+    default_model_id = get_test_model().PROFILE_ID
     totals = {}
     for session in root.iterdir():
         if not session.is_dir() or not (session / "test.json").is_file():
             continue
         payload = _read_status(session) or {}
+        session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
+        if selected_model_id and session_model_id != selected_model_id:
+            continue
         results = payload.get("results") if isinstance(payload.get("results"), list) else []
         ratings = _session_rating_map(session)
         for result in results:
@@ -845,7 +849,6 @@ def _candidate_rating_scores(folder_path):
         for name, values in totals.items()
         if values["count"]
     }
-
 
 def _mark_session_interrupted(session_directory, message):
     status = _read_status(session_directory) or {}
@@ -913,6 +916,8 @@ def list_sessions(folder_path):
             "name": str(payload.get("name") or ""),
             "modelId": str(payload.get("modelId") or payload.get("model") or ""),
             "status": str(payload.get("status") or ""),
+            "startedAt": int(payload.get("startedAt") or 0),
+            "candidateStartedAt": int(payload.get("candidateStartedAt") or 0),
             "completed": int(payload.get("completed") or 0),
             "failed": int(payload.get("failed") or 0),
             "total": int(payload.get("total") or 0),
@@ -987,7 +992,10 @@ def rate_result(folder_path, session_name, media_file, rating):
         "mediaFile": output_name,
         "rating": normalized_rating,
         "sessionStatus": _with_session_ratings(session, _visible_session_status(folder_path, session)),
-        "candidateScores": _candidate_rating_scores(folder_path),
+        "candidateScores": _candidate_rating_scores(
+            folder_path,
+            str(payload.get("modelId") or payload.get("model") or get_test_model().PROFILE_ID),
+        ),
         "sessions": list_sessions(folder_path),
     }
 
@@ -1601,7 +1609,7 @@ def prepare(folder_path, model_id=None):
         "aspectRatioOptions": list(getattr(model, "ASPECT_RATIO_OPTIONS", ())),
         "count": len(loras),
         "files": [path.name for path in loras],
-        "candidateScores": _candidate_rating_scores(folder_path),
+        "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID),
         "sessions": list_sessions(folder_path),
         "latest": status(folder_path),
     }

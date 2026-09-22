@@ -13,6 +13,9 @@ Every request is self-contained. Never rely on facts from an earlier response un
 PRESERVE ESTABLISHED FACTS.
 Unless the current user instruction explicitly changes them, keep character identity, wardrobe, hair, location, time/weather, persistent lighting, important props, spatial relationships, and Story style unchanged. Do not silently invent continuity changes.
 
+RE-ESTABLISH UNANCHORED CONTINUITY.
+Independent generations do not remember previous Scenes. If a recurring character, location, furnishing set, vehicle, or other important visual constant has no active LoRA or exact reference image, repeat enough concrete visual detail in the prompt to reconstruct it consistently. Do not rely on phrases like "the same woman" or "the same room." If a LoRA/reference already anchors that element, keep only the descriptors needed to disambiguate it and describe what changes.
+
 RESPECT THE SCENE DURATION.
 A Scene is a short video generation, not a chapter of prose. Do not cram a long chain of events into one clip. If the requested intent cannot plausibly fit the duration, recommend splitting it into multiple Scenes at a natural handoff point.
 

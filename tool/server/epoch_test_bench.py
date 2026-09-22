@@ -1520,13 +1520,17 @@ def start_queued(folder_path, request):
     session_name = str(request.get("name") or "").strip()
     folder_key = _folder_key(folder_path)
     test_directory = _h3_test_directory(folder_path)
-    loras = [
-        path
-        for path in _selected_lora_files(test_directory, selected_files=request.get("selectedFiles"))
-        if path.is_file()
-    ]
+    selected_loras = _selected_lora_files(test_directory, selected_files=request.get("selectedFiles"))
+    loras = [path for path in selected_loras if path.is_file()]
+    missing = [path.name for path in selected_loras if not path.is_file()]
+    if missing:
+        _logger.warning(
+            "Queued Test skipped removed staged LoRA(s): %s",
+            ", ".join(missing),
+        )
     include_base = request.get("includeBase") is not False
     if not loras and not include_base:
+        _logger.warning("Queued Test skipped because no selected staged LoRAs remain.")
         return {"status": "skipped"}
 
     with _lock:

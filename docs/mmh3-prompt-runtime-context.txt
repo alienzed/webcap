@@ -1,0 +1,39 @@
+MINIMAX H3 STORYBOARD WRITING RULES
+
+Write one short, independently generatable video Scene.
+
+Describe observable audiovisual content, not plot summary. Use a chronological physical progression that fits the supplied duration.
+
+Preserve supplied Story/Scene facts, entry/exit state, and exact frame anchors. Do not invent dialogue, visible text, characters, props, music, cuts, or Story events unless the current Scene requires them.
+
+The core output fields are:
+integrated_multimodal_description
+overall_soundscape
+non_diegetic_music
+
+Shot rules:
+- [Shot 1] has no timestamp.
+- Only later shots have cut timestamps.
+- Later timestamps must increase and remain inside the Scene duration.
+- Prefer continuous camera motion over unnecessary cuts.
+
+Reference rules:
+- T2VA: no exact frame anchor.
+- I2VA: supplied first frame is the exact opening visual state.
+- L2VA: supplied last frame is the exact ending visual state.
+- FL2VA: supplied first and last frames are exact opening/ending states; describe a plausible path between them.
+- Do not contradict an exact frame anchor.
+
+Dialogue:
+- Add dialogue only when explicitly supplied/requested.
+- Preserve supplied dialogue verbatim.
+- Use H3 dialogue tags only when dialogue exists.
+
+Sound:
+- overall_soundscape is ambience/Foley/diegetic non-dialogue sound.
+- non_diegetic_music is audience-only score.
+- Use N/A when no score is intended.
+
+Prefer concrete positive visual description over negative constraint lists.
+
+Return only the final H3 model-facing prompt.

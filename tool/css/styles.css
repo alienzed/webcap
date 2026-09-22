@@ -2991,24 +2991,50 @@ iframe {
   color: var(--text);
 }
 .test-generations-results-heading {
-  display: flex;
+  display: grid;
   flex: 0 0 auto;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 16px;
   margin-bottom: 10px;
 }
 .test-generations-results-heading span { color: var(--muted); font-size: 12px; }
-.test-generations-view-toggle {
+.test-generations-view-tabs {
   display: flex;
+  align-self: stretch;
+  justify-self: center;
+  align-items: end;
+  gap: 16px;
+}
+.test-generations-view-tab {
+  min-width: 72px;
+  padding: 5px 6px 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.test-generations-view-tab:hover,
+.test-generations-view-tab:focus-visible {
+  background: transparent;
+  color: var(--text);
+}
+.test-generations-view-tab.active {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+.test-generations-results-actions {
+  display: flex;
+  justify-self: end;
   align-items: center;
-  gap: 6px;
 }
-.test-generations-view-toggle .review-captions-btn {
+.test-generations-results-actions .review-captions-btn {
   width: auto;
-}
-.test-generations-view-toggle .review-captions-btn.active {
-  border-color: var(--accent);
 }
 .test-generations-results {
   display: grid;

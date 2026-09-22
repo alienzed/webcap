@@ -17,6 +17,8 @@ def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs
     monkeypatch.setattr(storyboard_generation.secrets, "randbelow", lambda _limit: 4242)
     scene = {
         "prompt": "A quiet hallway.",
+        "entryState": "The hall is empty.",
+        "exitState": "A door at the far end opens.",
         "durationSeconds": 8,
         "aspectRatio": "16:9 (Widescreen)",
         "megapixels": 0.4,
@@ -29,6 +31,8 @@ def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs
     assert settings == {
         "prompt": "A quiet hallway.",
         "sourcePrompt": "A quiet hallway.",
+        "entryState": "The hall is empty.",
+        "exitState": "A door at the far end opens.",
         "wildcardsEnabled": False,
         "aspectRatio": "16:9 (Widescreen)",
         "megapixels": 0.4,
@@ -97,6 +101,8 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
     story, scene = storyboard_store.add_scene(story["id"], {
         "title": "Scene",
         "prompt": "A woman enters an empty studio.",
+        "entryState": "The studio is empty and dark.",
+        "exitState": "She stands just inside the doorway.",
         "durationSeconds": 6,
         "aspectRatio": "16:9 (Widescreen)",
         "megapixels": 0.3,
@@ -138,6 +144,8 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
     take = current["takes"][current["takeOrder"][0]]
     assert take["generated"] is True
     assert take["prompt"] == "A woman enters an empty studio."
+    assert take["entryState"] == "The studio is empty and dark."
+    assert take["exitState"] == "She stands just inside the doorway."
     assert take["durationSeconds"] == 6.0
     assert take["seed"] == 77
     assert take["aspectRatio"] == "16:9 (Widescreen)"

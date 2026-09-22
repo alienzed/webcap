@@ -563,7 +563,9 @@
       var previousScene = previousSceneId ? scenes[previousSceneId] || {} : {};
       var previousSelectedTakeId = previousScene.selectedTakeId || '';
       var generationJob = storyState.generationJobs[sceneId] || null;
+      var generationQueued = generationJob && generationJob.status === 'queued';
       var generationRunning = generationJob && generationJob.status === 'running';
+      var generationBusy = generationQueued || generationRunning;
       var sceneLoras = Array.isArray(scene.loras) ? scene.loras : [];
       var loraRowsHtml = sceneLoras.map(loraRowHtml).join('');
       var advancedSummaryParts = [];
@@ -653,8 +655,8 @@
             '<div class="storyboard-scene-quick">' +
               '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
               '<div class="storyboard-generate-panel">' +
-                '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Generate a new Take from the current saved Scene."' + (generationRunning ? ' disabled' : '') + '>' +
-                  (generationRunning ? 'Generating…' : 'Generate Take') +
+                '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Generate a new Take from the current saved Scene."' + (generationBusy ? ' disabled' : '') + '>' +
+                  (generationQueued ? 'Queued…' : (generationRunning ? 'Generating…' : 'Generate Take')) +
                 '</button>' +
               '</div>' +
             '</div>' +
@@ -1162,9 +1164,11 @@
     if (!root) return;
     var button = root.querySelector('[data-scene-generate]');
     if (!button) return;
+    var queued = !!(job && job.status === 'queued');
     var running = !!(job && job.status === 'running');
-    button.disabled = running;
-    button.textContent = running ? 'Generating…' : 'Generate Take';
+    button.disabled = queued || running;
+    if (queued) button.textContent = 'Queued…';
+    else button.textContent = running ? 'Generating…' : 'Generate Take';
   }
 
   function reportGenerationStatus(sceneId, job, previousJob) {
@@ -1174,7 +1178,13 @@
       ? String(previousJob.status || '') + '|' + String(previousJob.comfyStatus || '')
       : '';
     if (currentKey === previousKey) return;
-    if (job.status === 'running') {
+    if (job.status === 'queued') {
+      var queuePosition = Number(job.queuePosition || 0);
+      reportConsoleInfo(
+        generationConsoleLabel(sceneId),
+        'Take generation queued' + (queuePosition ? ' · #' + queuePosition : '') + '.'
+      );
+    } else if (job.status === 'running') {
       reportConsoleInfo(generationConsoleLabel(sceneId), 'ComfyUI · ' + String(job.comfyStatus || 'starting'));
     } else if (job.status === 'completed') {
       reportConsoleInfo(generationConsoleLabel(sceneId), 'Take generation completed.');
@@ -1189,7 +1199,7 @@
         storyState.generationJobs[sceneId] = job;
         syncGenerationButton(sceneId, job);
         reportGenerationStatus(sceneId, job, previousJob);
-        if (job.status === 'running') {
+        if (job.status === 'queued' || job.status === 'running') {
           pollGeneration(storyId, sceneId, jobId);
           return;
         }

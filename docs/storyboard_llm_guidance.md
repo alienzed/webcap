@@ -198,22 +198,26 @@ What shape to return and whether explanatory prose is allowed.
 
 Do not send the entire Story, all Takes, the H3 guide, or a long chat transcript by default. Context should be deliberate, inspectable, and small enough that the model can distinguish instructions from background information. Prefer `style + current task` until a concrete operation proves it needs more.
 
-## First integration slice
+## Current usable Director slice
 
-The first runtime integration should expose only two Scene-local operations:
+The Director now supports a simple creative ladder without becoming a chatbot:
 
-- `write_prompt`: create an H3 model-facing prompt from the stored manual Scene intent.
-- `refine_prompt`: revise the existing stored prompt from one explicit human correction.
+- `expand_concept`: turn a rough Story seed into a richer persistent Story overview without creating Scenes yet.
+- `develop_story`: turn the saved Story concept/style into a complete ordered set of canonical Scenes in one structured pass, including Scene count, duration, entry/exit state, continuity metadata, and the full H3-ready prompt for every Scene.
+- `write_prompt`: create or replace one H3 model-facing prompt from the stored Scene intent.
+- `refine_prompt`: revise an existing prompt from one explicit human correction.
 
-Do not add chat history, autonomous Story mutation, automatic Scene creation, or continuity-review loops to the first runtime integration. Those remain later operations after the local model proves useful.
+`develop_story` applies the complete validated result directly rather than requiring a separate accept/import ceremony. If active Scenes already exist, the UI requires explicit confirmation before replacement; those old Scenes and their Takes remain recoverable rather than being deleted.
 
-The pure request builder in `tool/server/storyboard_llm_contract.py` defines this boundary before any provider transport is attached.
+The current slice deliberately does not add branching/version graphs, open-ended chat history, autonomous recursive repair loops, or AI split/merge/insert operations. Those should follow observed creative workflow needs.
+
+The pure request builder in `tool/server/storyboard_llm_contract.py` remains the provider-neutral boundary before llama.cpp transport.
 
 ## Task modes
 
 ### 1. Story Planner
 
-Purpose: turn a Story concept into a candidate sequence of Scenes.
+Purpose: turn a Story concept into a complete, directly usable sequence of independently generatable Scenes.
 
 Input normally includes:
 
@@ -230,8 +234,8 @@ Planner rules:
 - begin from the first Story state actually supplied; do not invent transportation, preceding actions, unseen rooms, or other setup to explain an arrival;
 - use natural scene boundaries where continuity can reset safely;
 - when `continuesPreviousScene` is true, the next Scene's `entryState` must be physically compatible with the previous Scene's `exitState`; do not hide unexplained movement between them;
-- avoid specifying low-level H3 syntax unless asked;
-- keep each Scene summary focused on narrative/physical intent rather than detailed shot design; camera choices belong to the later H3-writing pass unless a camera behavior is itself essential to the Story intent;
+- keep each Scene summary focused on narrative/physical intent;
+- also write the complete H3-ready prompt for each Scene in the same pass so character, narrative, dialogue, sound, and visual decisions can be made with whole-Story context;
 - do not repeat the entire character/location visual bible in every Scene; WebCap already owns persistent Story context;
 - use `continuity.carryForward` only for changed state that must remain true beyond the current Scene, such as an object being left behind or carried forward;
 - flag an intent that is too dense rather than hiding the problem.
@@ -240,19 +244,22 @@ The canonical structured-output contract is `docs/storyboard-scene-plan.schema.j
 
 A planning call should return JSON only, matching that schema. WebCap assigns canonical Scene IDs after validation; the LLM should not invent IDs.
 
-The contract deliberately keeps planning separate from final H3 prompt writing. It captures:
+The current contract intentionally combines Story planning and initial H3 prompt writing in one whole-Story pass. It captures:
 
 - ordered Scene title and visible intent;
 - entry and exit state;
 - suggested duration;
 - whether continuity directly carries from the previous Scene;
-- changed state that must carry forward into later Scenes.
+- changed state that must carry forward into later Scenes;
+- a complete H3-ready prompt for each Scene.
+
+This is intentional: the Director can make dialogue, performance, sound, and visual choices while it still has the complete Story arc in context. The prompts remain ordinary editable Scene fields after creation.
 
 The canonical Story concept/style remain WebCap-owned input. The planner does not return another paraphrased Story summary or duplicate the persistent visual bible, because those copies create drift without adding durable state.
 
 When continuing an existing Story, use the previous Scene's exit state to establish the next Scene's entry state where continuity actually carries across. Do not force a handoff across an intentional reset, relocation, or time jump.
 
-WebCap should parse and validate the complete response before applying any proposed Scenes. Do not partially import a malformed result. If JSON is syntactically or structurally invalid, one explicit repair pass may be attempted using the same schema and the invalid response as input; if repair still fails, expose the failure and leave Story state unchanged.
+WebCap parses and validates the complete response before applying any Scenes. Do not partially import a malformed result. The current implementation applies one schema-constrained result directly after deterministic validation; semantic audit/repair remains a later enhancement after real usage justifies the extra inference.
 
 
 ## Model selection
@@ -273,17 +280,17 @@ Cross-model workflows are an optional quality tool, not the default. A future us
 
 LLM self-review is useful but is not a deterministic validator.
 
-For whole-Story planning, prefer this bounded pipeline:
+For whole-Story planning, the current usable pipeline is intentionally smaller:
 
 ```text
 Story context
-    -> planner
-    -> JSON/schema validation
-    -> semantic audit
-    -> one repair pass when needed
-    -> JSON/schema validation again
-    -> human preview/import
+    -> planner + initial H3 prompts
+    -> schema-constrained JSON
+    -> deterministic WebCap validation
+    -> direct canonical Scene creation
 ```
+
+A later quality pass may add semantic audit and one bounded repair before application, but that is not required for the first usable creative workflow.
 
 The mechanical and semantic responsibilities stay separate:
 

@@ -72,6 +72,10 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "Entry state" in storyboard
     assert "Exit state" in storyboard
     assert "Notes" in storyboard
+    assert "Continuity &amp; notes" in storyboard
+    assert "storyboard-scene-disclosure" in storyboard
+    assert "seedMode: randomSeed ? 'random' : 'fixed'" in storyboard
+    assert 'data-scene-field="seedMode"' not in storyboard
     assert "Selected sequence" in storyboard
     assert "Export Sequence" in storyboard
     assert "/fs/storyboard/assembly" in storyboard

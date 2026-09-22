@@ -160,6 +160,8 @@ def _normalize_scene(scene_id, value, existing=None):
         "id": scene_id,
         "title": str(value.get("title", current.get("title", "")) or "").strip(),
         "summary": str(value.get("summary", current.get("summary", "")) or "").strip(),
+        "entryState": str(value.get("entryState", current.get("entryState", "")) or "").strip(),
+        "exitState": str(value.get("exitState", current.get("exitState", "")) or "").strip(),
         "prompt": str(value.get("prompt", current.get("prompt", "")) or ""),
         "durationSeconds": duration,
         "aspectRatio": str(value.get("aspectRatio", current.get("aspectRatio", "4:3 (Standard)")) or "4:3 (Standard)").strip(),
@@ -313,6 +315,8 @@ def duplicate_scene(story_id, scene_id):
     copied = {
         "title": (str(current.get("title") or "").strip() + " Copy").strip(),
         "summary": current.get("summary") or "",
+        "entryState": current.get("entryState") or "",
+        "exitState": current.get("exitState") or "",
         "prompt": current.get("prompt") or "",
         "durationSeconds": current.get("durationSeconds", 6),
         "aspectRatio": current.get("aspectRatio", "4:3 (Standard)"),
@@ -441,6 +445,8 @@ def add_take_upload(story_id, scene_id, filename, stream):
         "mediaPath": "takes/" + scene_id + "/" + stored_name,
         "sourceFilename": safe_name,
         "prompt": str(scene.get("prompt") or ""),
+        "entryState": str(scene.get("entryState") or ""),
+        "exitState": str(scene.get("exitState") or ""),
         "durationSeconds": scene.get("durationSeconds", 6),
         "seed": scene.get("seed"),
         "seedMode": scene.get("seedMode", "random"),
@@ -635,6 +641,8 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
 
     for key in (
         "prompt",
+        "entryState",
+        "exitState",
         "sourcePrompt",
         "wildcardsEnabled",
         "durationSeconds",

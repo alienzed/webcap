@@ -127,7 +127,7 @@ def _read_json_response(url, method="GET", payload=None, timeout=10):
                 body = response.read()
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace").strip()
-            raise RuntimeError("ComfyUI request failed: " + (detail or str(exc))) from exc
+            raise RuntimeError("ComfyUI request failed (" + str(exc.code) + "): " + (detail or str(exc))) from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise RuntimeError("Could not connect to ComfyUI at " + COMFY_BASE_URL + ".") from exc
     try:

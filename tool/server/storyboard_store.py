@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS
+from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
 
 
 STORYBOARD_VERSION = 1
@@ -17,6 +18,8 @@ STORYBOARD_DIRNAME = "storyboards"
 STORY_FILE = "story.json"
 VALID_STATUSES = {"active", "complete", "archived"}
 VALID_SEED_MODES = {"random", "fixed"}
+VALID_REFERENCE_ROLES = {"first_frame", "last_frame", "guide_frame"}
+VALID_REFERENCE_FRAMES = {"first", "last"}
 
 
 def _utc_now():
@@ -130,6 +133,7 @@ def _normalize_scene(scene_id, value, existing=None):
         "references": list(current.get("references") or []),
         "notes": str(value.get("notes", current.get("notes", "")) or ""),
         "takes": dict(current.get("takes") or {}) if isinstance(current.get("takes"), dict) else {},
+        "removedTakes": dict(current.get("removedTakes") or {}) if isinstance(current.get("removedTakes"), dict) else {},
         "takeOrder": list(current.get("takeOrder") or []),
         "selectedTakeId": current.get("selectedTakeId"),
         "createdAt": current.get("createdAt") or now,
@@ -415,6 +419,148 @@ def add_take_upload(story_id, scene_id, filename, stream):
             pass
         raise
     return story, take
+
+
+def remove_take(story_id, scene_id, take_id):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
+    resolved_take_id = str(take_id or "").strip()
+    take = takes.get(resolved_take_id)
+    if not isinstance(take, dict):
+        raise FileNotFoundError("Take does not exist.")
+
+    removed_take = dict(take)
+    removed_take["removedAt"] = _utc_now()
+    removed = scene.get("removedTakes") if isinstance(scene.get("removedTakes"), dict) else {}
+    removed[resolved_take_id] = removed_take
+    del takes[resolved_take_id]
+    scene["takes"] = takes
+    scene["removedTakes"] = removed
+    scene["takeOrder"] = [value for value in scene.get("takeOrder") or [] if value != resolved_take_id]
+    if scene.get("selectedTakeId") == resolved_take_id:
+        scene["selectedTakeId"] = None
+    scene["updatedAt"] = _utc_now()
+    story["updatedAt"] = scene["updatedAt"]
+    _write_json_atomic(_story_path(story_id), story)
+    return story
+
+
+def restore_take(story_id, scene_id, take_id):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    removed = scene.get("removedTakes") if isinstance(scene.get("removedTakes"), dict) else {}
+    resolved_take_id = str(take_id or "").strip()
+    take = removed.get(resolved_take_id)
+    if not isinstance(take, dict):
+        raise FileNotFoundError("Removed Take does not exist.")
+
+    restored = dict(take)
+    restored.pop("removedAt", None)
+    takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
+    takes[resolved_take_id] = restored
+    del removed[resolved_take_id]
+    scene["takes"] = takes
+    scene["removedTakes"] = removed
+    scene["takeOrder"] = list(scene.get("takeOrder") or []) + [resolved_take_id]
+    scene["updatedAt"] = _utc_now()
+    story["updatedAt"] = scene["updatedAt"]
+    _write_json_atomic(_story_path(story_id), story)
+    return story
+
+
+def _take_for_scene(scene, take_id):
+    resolved_take_id = str(take_id or "").strip()
+    takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
+    take = takes.get(resolved_take_id)
+    if not isinstance(take, dict):
+        raise FileNotFoundError("Take does not exist.")
+    return resolved_take_id, take
+
+
+def _resolved_story_media_path(story_id, media_path):
+    raw = str(media_path or "").strip()
+    relative = Path(raw)
+    if not raw or relative.is_absolute() or ".." in relative.parts:
+        raise RuntimeError("Storyboard media path is invalid.")
+    root = _story_dir(story_id).resolve()
+    resolved = (root / relative).resolve()
+    if resolved != root and root not in resolved.parents:
+        raise RuntimeError("Storyboard media path escapes its Story folder.")
+    if not resolved.is_file():
+        raise FileNotFoundError("Storyboard media file does not exist.")
+    return resolved
+
+
+def _reference_media_for_take(story_id, source_scene_id, take, frame):
+    frame = str(frame or "").strip().lower()
+    if frame not in VALID_REFERENCE_FRAMES:
+        raise ValueError("Reference frame must be first or last.")
+    source_path = _resolved_story_media_path(story_id, take.get("mediaPath"))
+    if source_path.suffix.lower() not in VIDEO_EXTS:
+        return str(take.get("mediaPath") or "").replace("\\", "/")
+
+    reference_dir = _story_dir(story_id) / "references" / source_scene_id
+    reference_dir.mkdir(parents=True, exist_ok=True)
+    filename = str(take.get("id") or "") + "-" + frame + ".png"
+    output_path = reference_dir / filename
+    if not output_path.exists():
+        png = extract_boundary_frame_png(source_path, frame)
+        fd, tmp_name = tempfile.mkstemp(prefix=filename + ".", suffix=".tmp", dir=str(reference_dir))
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(png)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_name, output_path)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+    return ("references/" + source_scene_id + "/" + filename).replace("\\", "/")
+
+
+def set_scene_reference_from_take(story_id, scene_id, role, source_scene_id, source_take_id, frame):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    source_scene_id, source_scene = _scene_for_story(story, source_scene_id)
+    source_take_id, take = _take_for_scene(source_scene, source_take_id)
+
+    role = str(role or "").strip().lower()
+    if role not in VALID_REFERENCE_ROLES:
+        raise ValueError("Unsupported Storyboard reference role.")
+    frame = str(frame or "").strip().lower()
+    media_path = _reference_media_for_take(story_id, source_scene_id, take, frame)
+    reference = {
+        "role": role,
+        "source": "take",
+        "sourceSceneId": source_scene_id,
+        "sourceTakeId": source_take_id,
+        "frame": frame,
+        "mediaPath": media_path,
+    }
+    references = [item for item in scene.get("references") or [] if isinstance(item, dict) and item.get("role") != role]
+    references.append(reference)
+    scene["references"] = references
+    scene["updatedAt"] = _utc_now()
+    story["updatedAt"] = scene["updatedAt"]
+    _write_json_atomic(_story_path(story_id), story)
+    return story, reference
+
+
+def clear_scene_reference(story_id, scene_id, role):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    role = str(role or "").strip().lower()
+    if role not in VALID_REFERENCE_ROLES:
+        raise ValueError("Unsupported Storyboard reference role.")
+    scene["references"] = [
+        item for item in scene.get("references") or []
+        if not isinstance(item, dict) or item.get("role") != role
+    ]
+    scene["updatedAt"] = _utc_now()
+    story["updatedAt"] = scene["updatedAt"]
+    _write_json_atomic(_story_path(story_id), story)
+    return story
 
 
 def rate_take(story_id, scene_id, take_id, rating):

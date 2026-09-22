@@ -847,7 +847,13 @@
     }).then(function (payload) {
       syncResultRatingButtons(mediaFile, payload && payload.rating);
       if (payload && payload.sessionStatus) renderStatus(payload.sessionStatus);
-      if (prepared && payload && payload.candidateScores) {
+      if (
+        prepared &&
+        payload &&
+        payload.candidateScores &&
+        payload.sessionStatus &&
+        String(payload.sessionStatus.modelId || payload.sessionStatus.model || '') === String(prepared.modelId || '')
+      ) {
         prepared.candidateScores = payload.candidateScores;
         renderStagedFiles(prepared);
       }
@@ -2038,7 +2044,7 @@
       session: String(sessionName || ''),
       modelId: getWorkingModelProfileId()
     }).then(function (payload) {
-      if (prepared) {
+      if (prepared && String(payload.modelId || '') === String(prepared.modelId || '')) {
         prepared.count = Number(payload.count || 0);
         prepared.files = Array.isArray(payload.files) ? payload.files.slice() : [];
         renderStagedFiles(prepared);

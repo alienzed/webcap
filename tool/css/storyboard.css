@@ -158,9 +158,33 @@
 }
 
 .storyboard-concept-field,
+.storyboard-style-field,
 .storyboard-tags-field {
   grid-column: 1 / -1;
 }
+
+.storyboard-sequence-preview {
+  margin-bottom: 18px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.storyboard-sequence-header { margin-bottom: 8px; }
+.storyboard-sequence-header strong,
+.storyboard-sequence-header span { display: block; }
+.storyboard-sequence-header span,
+.storyboard-takes-header span,
+.storyboard-takes-empty { margin-top: 2px; color: var(--muted); font-size: 11px; }
+.storyboard-sequence-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.storyboard-sequence-card { flex: 0 0 220px; min-width: 0; }
+.storyboard-sequence-label { margin-bottom: 5px; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.storyboard-sequence-media,
+.storyboard-take-media { aspect-ratio: 16 / 9; overflow: hidden; border-radius: 5px; background: var(--panel-soft); }
+.storyboard-sequence-media img,
+.storyboard-sequence-media video,
+.storyboard-take-media img,
+.storyboard-take-media video { width: 100%; height: 100%; display: block; object-fit: contain; }
 
 .storyboard-scenes-heading {
   display: flex;
@@ -295,3 +319,16 @@
   border-radius: 5px;
   color: var(--muted);
 }
+
+
+.storyboard-takes { padding: 10px; border-top: 1px solid var(--border); }
+.storyboard-takes-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.storyboard-takes-header strong,
+.storyboard-takes-header span { display: block; }
+.storyboard-take-upload-btn { cursor: pointer; }
+.storyboard-takes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.storyboard-take { min-width: 0; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-soft); }
+.storyboard-take.selected { outline: 2px solid var(--accent, var(--border)); outline-offset: -2px; }
+.storyboard-take-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px; margin-top: 7px; }
+.storyboard-take-footer strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.storyboard-take-footer select { min-width: 88px; }

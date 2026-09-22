@@ -39,6 +39,8 @@ Then one blank line and the three base fields.
 
 Notes:
 
+- This is the current Storyboard runtime contract because Storyboard uses the FL2VA task-family checkpoint and ComfyUI `MiniMaxH3ImageToVideo`.
+- The same base-family contract covers Storyboard's text-only, first-frame-only, first+last-frame, and last-frame-only cases.
 - `[Shot 1]` has no timestamp.
 - Later shots use strictly increasing cut times inside the requested duration.
 - `S.SS` is the effective duration formatted to exactly two decimal places.

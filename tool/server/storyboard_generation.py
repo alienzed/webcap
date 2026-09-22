@@ -377,6 +377,8 @@ def _scene_settings(scene):
 
     return {
         "prompt": prompt,
+        "entryState": str(scene.get("entryState") or ""),
+        "exitState": str(scene.get("exitState") or ""),
         "sourcePrompt": prompt,
         "wildcardsEnabled": bool(scene.get("wildcardsEnabled")),
         "aspectRatio": aspect_ratio,
@@ -571,6 +573,8 @@ def _run_generation(job_id, story_id, scene_id, settings):
             take["id"],
             {
                 "prompt": settings["prompt"],
+                "entryState": settings["entryState"],
+                "exitState": settings["exitState"],
                 "sourcePrompt": settings["sourcePrompt"],
                 "wildcardsEnabled": settings["wildcardsEnabled"],
                 "durationSeconds": settings["duration"],

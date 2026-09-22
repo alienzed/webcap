@@ -1904,7 +1904,17 @@
     }
     if (megapixels) megapixels.value = String(savedSettings.megapixels || defaults.megapixels || '');
     if (duration) duration.value = String(savedSettings.duration || defaults.duration || '');
-    if (dimensions) dimensions.value = String(savedSettings.dimensions || defaults.dimensions || '');
+    if (dimensions) {
+      var dimensionOptions = payload.settingOptions && Array.isArray(payload.settingOptions.dimensions)
+        ? payload.settingOptions.dimensions.slice()
+        : [];
+      var selectedDimensions = String(savedSettings.dimensions || defaults.dimensions || '');
+      if (selectedDimensions && dimensionOptions.indexOf(selectedDimensions) < 0) dimensionOptions.unshift(selectedDimensions);
+      dimensions.innerHTML = dimensionOptions.map(function (value) {
+        return '<option value="' + escapeHtml(value) + '">' + escapeHtml(String(value).trim()) + '</option>';
+      }).join('');
+      dimensions.value = selectedDimensions;
+    }
     if (seed) seed.value = String(defaults.seed || '');
     if (prompt) {
       prompt.value = saved.prompt.trim() ? saved.prompt : String(payload.defaultPrompt || '');

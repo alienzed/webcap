@@ -8,7 +8,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from . import config as app_config
 
@@ -32,13 +32,16 @@ def _director_config():
     director = storyboard.get("director")
     director = director if isinstance(director, dict) else {}
 
-    models_dir = str(director.get("models_dir") or "").strip()
-    if not models_dir:
-        models_root = str(app_config.config.get("filesystem", {}).get("models") or "").strip()
-        if models_root:
-            models_dir = str(Path(models_root) / "director")
-        else:
-            models_dir = str(Path(app_config.FS_ROOT) / "models" / "director")
+    models_root = str(app_config.config.get("filesystem", {}).get("models") or "").strip()
+    if not models_root:
+        raise ValueError("WebCap Model Root is required for Storyboard Director model discovery.")
+    if models_root.startswith("/"):
+        models_dir = Path(models_root) / "text_encoders"
+    else:
+        from .training_runtime import to_wsl_path
+        distribution = str(app_config.config.get("training", {}).get("wsl_distribution") or "").strip()
+        windows_models_dir = str(PureWindowsPath(models_root) / "text_encoders")
+        models_dir = Path(to_wsl_path(windows_models_dir, distribution=distribution))
 
     executable = str(director.get("llama_server") or "").strip()
     port = int(director.get("port") or DEFAULT_PORT)
@@ -54,7 +57,7 @@ def _director_config():
 
     return {
         "llama_server": executable,
-        "models_dir": Path(models_dir).expanduser(),
+        "models_dir": models_dir.expanduser(),
         "port": port,
         "context_size": context_size,
         "max_tokens": max_tokens,

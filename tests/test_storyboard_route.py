@@ -163,3 +163,32 @@ def test_storyboard_generation_route_starts_and_reads_job(monkeypatch):
     status = client.get("/fs/storyboard/generation", query_string={"job": "job-1"})
     assert status.status_code == 200
     assert status.get_json()["job"]["takeId"] == "take-1"
+
+
+def test_storyboard_assembly_route_starts_and_reads_job(monkeypatch):
+    monkeypatch.setattr(app_module, "storyboard_start_assembly", lambda story_id: {
+        "jobId": "assembly-1",
+        "storyId": story_id,
+        "status": "running",
+        "selection": [{"sceneId": "scene-1", "takeId": "take-1"}],
+    })
+    monkeypatch.setattr(app_module, "storyboard_assembly_status", lambda job_id: {
+        "jobId": job_id,
+        "storyId": "story-1",
+        "status": "completed",
+        "selection": [{"sceneId": "scene-1", "takeId": "take-1"}],
+        "output": {
+            "folder": "output/storyboards/story-1/exports",
+            "media": "selected-sequence.mp4",
+            "itemCount": 1,
+        },
+    })
+    client = app_module.app.test_client()
+
+    started = client.post("/fs/storyboard/assembly", json={"storyId": "story-1"})
+    assert started.status_code == 200
+    assert started.get_json()["job"]["status"] == "running"
+
+    status = client.get("/fs/storyboard/assembly", query_string={"job": "assembly-1"})
+    assert status.status_code == 200
+    assert status.get_json()["job"]["output"]["media"] == "selected-sequence.mp4"

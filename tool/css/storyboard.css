@@ -458,3 +458,16 @@
   font-size: 11px;
   overflow-wrap: anywhere;
 }
+
+
+.storyboard-scene-handoff-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 980px) {
+  .storyboard-scene-handoff-row {
+    grid-template-columns: 1fr;
+  }
+}

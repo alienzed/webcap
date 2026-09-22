@@ -259,6 +259,34 @@ def validate_config_payload(payload):
     elif "training" in out:
         out["training"] = {}
 
+    storyboard = out.get("storyboard")
+    if storyboard is None:
+        storyboard = {}
+    if not isinstance(storyboard, dict):
+        raise ValueError("Config.storyboard must be an object when provided.")
+    director = storyboard.get("director")
+    if director is None:
+        director = {}
+    if not isinstance(director, dict):
+        raise ValueError("Config.storyboard.director must be an object when provided.")
+    normalized_director = {
+        "llama_server": str(director.get("llama_server") or "").strip(),
+        "models_dir": str(director.get("models_dir") or "").strip(),
+    }
+    for key, default, minimum, maximum in (
+        ("port", 8189, 1, 65535),
+        ("context_size", 8192, 1024, 1048576),
+        ("max_tokens", 4096, 1, 262144),
+    ):
+        value = director.get(key, default)
+        if isinstance(value, bool) or not isinstance(value, int) or value < minimum or value > maximum:
+            raise ValueError(
+                "Config.storyboard.director." + key + " must be an integer between "
+                + str(minimum) + " and " + str(maximum) + "."
+            )
+        normalized_director[key] = value
+    out["storyboard"] = {"director": normalized_director}
+
     analysis = out.get("analysis")
     if analysis is None:
         analysis = {}

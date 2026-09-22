@@ -324,12 +324,12 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
     monkeypatch.setattr(bench, "_queue_workflow", queue)
     monkeypatch.setattr(
         bench,
-        "_wait_for_video",
+        "_wait_for_output",
         lambda _model, _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
     )
     monkeypatch.setattr(
         bench,
-        "_move_saved_video",
+        "_move_saved_output",
         lambda _video_ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
@@ -392,7 +392,7 @@ def test_run_batch_persists_elapsed_ms_for_success_and_failure(tmp_path, monkeyp
     monkeypatch.setattr(bench, "_queue_workflow", queue)
     monkeypatch.setattr(
         bench,
-        "_wait_for_video",
+        "_wait_for_output",
         lambda _model, _prompt_id, **_kwargs: {
             "filename": "base.mp4",
             "type": "output",
@@ -401,7 +401,7 @@ def test_run_batch_persists_elapsed_ms_for_success_and_failure(tmp_path, monkeyp
     )
     monkeypatch.setattr(
         bench,
-        "_move_saved_video",
+        "_move_saved_output",
         lambda _ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
@@ -450,12 +450,12 @@ def test_base_generation_does_not_depend_on_candidate_lora_inventory(tmp_path, m
     monkeypatch.setattr(bench, "_queue_workflow", lambda _workflow: "prompt-ok")
     monkeypatch.setattr(
         bench,
-        "_wait_for_video",
+        "_wait_for_output",
         lambda _model, _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
     )
     monkeypatch.setattr(
         bench,
-        "_move_saved_video",
+        "_move_saved_output",
         lambda _video_ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
@@ -493,22 +493,22 @@ def test_run_batch_records_missing_candidate_and_continues(tmp_path, monkeypatch
         "available_lora_names",
         lambda _available_names: ["mh3/set/epoch01.safetensors"],
     )
-    monkeypatch.setattr(bench, "_load_template", lambda: {
+    template = {
         "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
         "129": {"inputs": {"noise_seed": 123}},
         "133": {"inputs": {"value": 7}},
         "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
         "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
-    })
+    }
     monkeypatch.setattr(bench, "_queue_workflow", lambda _workflow: "prompt-ok")
     monkeypatch.setattr(
         bench,
-        "_wait_for_video",
+        "_wait_for_output",
         lambda _model, _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
     )
     monkeypatch.setattr(
         bench,
-        "_move_saved_video",
+        "_move_saved_output",
         lambda _video_ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
@@ -605,9 +605,11 @@ def test_run_batch_marks_failed_when_template_load_fails(tmp_path, monkeypatch):
         session / "test.json",
         {"status": "running", "completed": 0, "total": 1, "current": "", "error": ""},
     )
-    monkeypatch.setattr(bench, "_load_template", lambda: (_ for _ in ()).throw(RuntimeError("template boom")))
+    class FailingModel:
+        def load_template(self):
+            raise RuntimeError("template boom")
 
-    bench._run_batch("folder-key", session, [], "prompt")
+    bench._run_batch("folder-key", session, [], "prompt", model=FailingModel())
 
     status = bench._read_status(session)
     assert status["status"] == "failed"
@@ -679,16 +681,17 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
         "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
     }
     seen = []
-    monkeypatch.setattr(bench.get_test_model(), "load_template", lambda: pytest.fail("worker must use the resolved template from start"))
+    model = bench.get_test_model()
+    monkeypatch.setattr(model, "load_template", lambda: pytest.fail("worker must use the resolved template from start"))
     monkeypatch.setattr(bench, "_queue_workflow", lambda workflow: seen.append(workflow["127"]["inputs"]["unet_name"]) or "prompt-id")
     monkeypatch.setattr(
         bench,
-        "_wait_for_video",
+        "_wait_for_output",
         lambda _model, _prompt_id, **_kwargs: {"filename": "x.mp4", "subfolder": "webcap-tests", "type": "output", "fullpath": "C:/ComfyUI/output/webcap-tests/x.mp4"},
     )
     monkeypatch.setattr(
         bench,
-        "_move_saved_video",
+        "_move_saved_output",
         lambda _ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
@@ -704,6 +707,7 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
         [lora],
         "prompt",
         template=resolved_template,
+        model=model,
     )
 
     assert seen == ["mh3/linux-model.safetensors", "mh3/linux-model.safetensors"]

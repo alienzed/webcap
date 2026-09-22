@@ -213,3 +213,34 @@ def test_restore_take_returns_to_original_order(storyboard_fs):
     story = storyboard_store.restore_take(story["id"], scene["id"], second["id"])
 
     assert story["scenes"][scene["id"]]["takeOrder"] == [first["id"], second["id"], third["id"]]
+
+
+def test_restore_multiple_scenes_preserves_original_order(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, first = storyboard_store.add_scene(story["id"], {"title": "First"})
+    story, second = storyboard_store.add_scene(story["id"], {"title": "Second"})
+    story, third = storyboard_store.add_scene(story["id"], {"title": "Third"})
+    story, fourth = storyboard_store.add_scene(story["id"], {"title": "Fourth"})
+
+    story = storyboard_store.delete_scene(story["id"], second["id"])
+    story = storyboard_store.delete_scene(story["id"], third["id"])
+    story = storyboard_store.restore_scene(story["id"], second["id"])
+    story = storyboard_store.restore_scene(story["id"], third["id"])
+
+    assert story["sceneOrder"] == [first["id"], second["id"], third["id"], fourth["id"]]
+
+
+def test_restore_multiple_takes_preserves_original_order(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+    story, first = storyboard_store.add_take_upload(story["id"], scene["id"], "first.png", BytesIO(b"1"))
+    story, second = storyboard_store.add_take_upload(story["id"], scene["id"], "second.png", BytesIO(b"2"))
+    story, third = storyboard_store.add_take_upload(story["id"], scene["id"], "third.png", BytesIO(b"3"))
+    story, fourth = storyboard_store.add_take_upload(story["id"], scene["id"], "fourth.png", BytesIO(b"4"))
+
+    story = storyboard_store.remove_take(story["id"], scene["id"], second["id"])
+    story = storyboard_store.remove_take(story["id"], scene["id"], third["id"])
+    story = storyboard_store.restore_take(story["id"], scene["id"], second["id"])
+    story = storyboard_store.restore_take(story["id"], scene["id"], third["id"])
+
+    assert story["scenes"][scene["id"]]["takeOrder"] == [first["id"], second["id"], third["id"], fourth["id"]]

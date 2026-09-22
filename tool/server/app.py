@@ -31,7 +31,7 @@ from .training_review import discover_saved_initializers, prepare_training_revie
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
-from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, rate_take as storyboard_rate_take, reorder_scenes as storyboard_reorder_scenes, restore_scene as storyboard_restore_scene, select_take as storyboard_select_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
+from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -447,6 +447,25 @@ def storyboard_route():
             return jsonify({"ok": True, "story": story, "take": take})
         if operation == "select_take":
             story = storyboard_select_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip())
+            return jsonify({"ok": True, "story": story})
+        if operation == "remove_take":
+            story = storyboard_remove_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip())
+            return jsonify({"ok": True, "story": story})
+        if operation == "restore_take":
+            story = storyboard_restore_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip())
+            return jsonify({"ok": True, "story": story})
+        if operation == "set_scene_reference_from_take":
+            story, reference = storyboard_set_scene_reference_from_take(
+                story_id,
+                str(data.get("sceneId") or "").strip(),
+                str(data.get("role") or "").strip(),
+                str(data.get("sourceSceneId") or "").strip(),
+                str(data.get("sourceTakeId") or "").strip(),
+                str(data.get("frame") or "").strip(),
+            )
+            return jsonify({"ok": True, "story": story, "reference": reference})
+        if operation == "clear_scene_reference":
+            story = storyboard_clear_scene_reference(story_id, str(data.get("sceneId") or "").strip(), str(data.get("role") or "").strip())
             return jsonify({"ok": True, "story": story})
         raise ValueError("Unknown Storyboard operation.")
     except FileNotFoundError as exc:

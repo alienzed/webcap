@@ -40,6 +40,13 @@ def test_registered_test_models_satisfy_shared_runner_contract():
         assert model.MEDIA_KIND in ("image", "video")
 
 
+def test_test_model_without_setting_options_uses_empty_choices():
+    model = get_test_model("minimax_h3")
+    template = model.load_template()
+
+    assert model.setting_options(template, lambda *_args: []) == {}
+
+
 def test_krea_candidate_replaces_only_candidate_slot_and_test_bindings():
     model = get_test_model("krea2_raw")
     template = model.load_template()

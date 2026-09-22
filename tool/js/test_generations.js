@@ -489,24 +489,19 @@
       var unrated = Number(session.unrated || 0);
       rate.classList.toggle('hidden', !resultFolder || unrated <= 0);
 
-      var remove = document.createElement('button');
       var active = session.status === 'running' || session.status === 'stopping';
-      remove.type = 'button';
-      remove.className = 'test-generations-remove-candidate';
-      if (active) {
-        remove.dataset.sessionStop = name;
-        remove.title = session.status === 'stopping' ? 'Stopping this Test session' : 'Stop this Test session';
-        remove.setAttribute('aria-label', remove.title);
-        remove.disabled = session.status === 'stopping';
-      } else {
+      actions.appendChild(open);
+      actions.appendChild(rate);
+      if (!active) {
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'test-generations-remove-candidate';
         remove.dataset.sessionDelete = name;
         remove.title = 'Delete this Test session';
         remove.setAttribute('aria-label', 'Delete Test session ' + name);
+        remove.textContent = '×';
+        actions.appendChild(remove);
       }
-      remove.textContent = '×';
-      actions.appendChild(open);
-      actions.appendChild(rate);
-      actions.appendChild(remove);
 
       row.appendChild(copy);
       row.appendChild(actions);
@@ -558,6 +553,38 @@
     if (startedAt) parts.push('elapsed ' + formatElapsedMs(Date.now() - startedAt));
     if (lastContactAt) parts.push('contact ' + formatElapsedMs(Date.now() - lastContactAt) + ' ago');
     return parts.length ? ' · ' + parts.join(' · ') : '';
+  }
+
+  function syncActiveTestCard(status) {
+    var card = el('test-generations-active');
+    var progress = el('test-generations-active-progress');
+    var current = el('test-generations-active-current');
+    var meta = el('test-generations-active-meta');
+    var stopBtn = el('test-generations-stop-btn');
+    if (!card || !progress || !current || !meta || !stopBtn) {
+      throw new Error('Test Generations requires its Active Test controls.');
+    }
+
+    var active = !!(status && (status.status === 'running' || status.status === 'stopping'));
+    card.classList.toggle('hidden', !active);
+    if (!active) {
+      progress.textContent = '';
+      current.textContent = '';
+      meta.textContent = '';
+      stopBtn.disabled = false;
+      stopBtn.textContent = 'Stop';
+      return;
+    }
+
+    var completed = Number(status.completed || 0);
+    var total = Number(status.total || 0);
+    var failed = Number(status.failed || 0);
+    var details = liveStatusDetails(status).replace(/^\s*·\s*/, '');
+    progress.textContent = completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '');
+    current.textContent = String(status.current || (status.status === 'stopping' ? 'Stopping current generation…' : 'Preparing next generation…'));
+    meta.textContent = details;
+    stopBtn.disabled = status.status === 'stopping';
+    stopBtn.textContent = status.status === 'stopping' ? 'Stopping…' : 'Stop';
   }
 
   function statusText(status) {
@@ -1434,6 +1461,7 @@
     if (!isOpen()) return;
     request('test_status').then(function (status) {
       syncActiveRunControls(status);
+      syncActiveTestCard(status);
       refreshActivityButton();
       if (status && (status.status === 'running' || status.status === 'stopping')) showSessionError = true;
       var activeSession = String(status && status.session || '');
@@ -1623,6 +1651,7 @@
     compareIndex = 0;
     setResultsView('grid');
     renderStatus({ status: 'idle' });
+    syncActiveTestCard({ status: 'idle' });
     refreshActivityButton();
     request('test_prepare').then(function (payload) {
       prepared = payload;
@@ -1632,6 +1661,7 @@
       var initialStatus = payload.latest || { status: 'idle' };
       if (initialStatus.status === 'running' || initialStatus.status === 'stopping') showSessionError = true;
       syncActiveRunControls(initialStatus);
+      syncActiveTestCard(initialStatus);
       renderStatus(initialStatus);
       refreshSessions().then(function () {
         if ((payload.latest && (payload.latest.status === 'running' || payload.latest.status === 'stopping')) || queuedTestJobs.length) pollStatus();
@@ -1675,6 +1705,7 @@
     }).then(function (payload) {
       var status = payload && payload.latest ? payload.latest : currentStatus;
       syncActiveRunControls(status);
+      syncActiveTestCard(status);
       refreshActivityButton();
       if (status && status.session) {
         showSessionError = true;
@@ -1697,6 +1728,7 @@
     if (stopBtn) stopBtn.disabled = true;
     request('test_stop').then(function (status) {
       syncActiveRunControls(status);
+      syncActiveTestCard(status);
       refreshActivityButton();
       if (!currentSession || currentSession === String(status && status.session || '')) renderStatus(status);
       pollStatus();
@@ -1753,6 +1785,7 @@
 
     button.onclick = openPane;
     el('test-generations-run-btn').onclick = startRun;
+    el('test-generations-stop-btn').onclick = function () { stopRun(this); };
     el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
     el('test-generations-open-results-btn').onclick = function () {
@@ -1819,11 +1852,6 @@
       var rate = event.target.closest('[data-session-rate]');
       if (rate) {
         openResultsFolder(rate.dataset.sessionRate, { rateItems: true });
-        return;
-      }
-      var stop = event.target.closest('[data-session-stop]');
-      if (stop) {
-        stopRun(stop);
         return;
       }
       var remove = event.target.closest('[data-session-delete]');

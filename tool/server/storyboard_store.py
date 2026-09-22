@@ -582,6 +582,8 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
 
     for key in (
         "prompt",
+        "sourcePrompt",
+        "wildcardsEnabled",
         "durationSeconds",
         "seed",
         "seedMode",

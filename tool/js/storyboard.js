@@ -211,6 +211,56 @@
     });
   }
 
+  function setDevelopStatus(text) {
+    var node = el('storyboard-develop-status');
+    if (node) node.textContent = text || '';
+  }
+
+  function developStory() {
+    if (!storyState.story) return;
+    var modelId = storyState.director.modelId;
+    if (!modelId) {
+      reportError(new Error('Choose a Storyboard Director model first.'));
+      return;
+    }
+    var concept = el('storyboard-story-concept').value.trim();
+    if (!concept) {
+      setDevelopStatus('Write a Story concept first.');
+      return;
+    }
+
+    var storyId = storyState.story.id;
+    var hasScenes = Array.isArray(storyState.story.sceneOrder) && storyState.story.sceneOrder.length > 0;
+    if (hasScenes && !window.confirm(
+      'Developing this Story again will replace the active Scene plan. Existing Scenes and Takes will remain recoverable in Removed Scenes. Continue?'
+    )) return;
+
+    var button = el('storyboard-develop-btn');
+    button.disabled = true;
+    setDevelopStatus('Director is developing the Story…');
+    flushPendingSaves().then(function () {
+      return directorRequest({
+        storyId: storyId,
+        operation: 'develop_story',
+        model: modelId,
+        replaceExisting: hasScenes
+      });
+    }).then(function (payload) {
+      if (!storyState.story || storyState.story.id !== storyId) return;
+      storyState.story = payload.story;
+      storyState.sequenceExport = null;
+      renderStory();
+      setDevelopStatus('Developed ' + String(payload.sceneCount || 0) + ' Scenes with ' + String(payload.model || modelId) + '.');
+      setSaveState('Saved');
+      return refreshLibrary();
+    }).catch(function (err) {
+      setDevelopStatus('Story development failed.');
+      reportError(err);
+    }).finally(function () {
+      button.disabled = false;
+    });
+  }
+
   function setSaveState(text) {
     var node = el('storyboard-save-state');
     if (node) node.textContent = text || '';
@@ -590,6 +640,10 @@
     el('storyboard-story-tags').value = storyTagsText(storyState.story);
     el('storyboard-story-status').value = storyState.story.status || 'active';
     el('storyboard-story-pinned').checked = !!storyState.story.pinned;
+    var developButton = el('storyboard-develop-btn');
+    if (developButton) {
+      developButton.textContent = (storyState.story.sceneOrder || []).length ? 'Develop Again' : 'Develop Story';
+    }
     renderScenes();
     renderSequencePreview();
     renderLibrary();
@@ -1098,6 +1152,7 @@
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
 
     el('storyboard-new-btn').onclick = createStory;
+    el('storyboard-develop-btn').onclick = developStory;
     el('storyboard-add-scene-btn').onclick = addScene;
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;

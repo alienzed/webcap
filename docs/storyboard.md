@@ -153,15 +153,16 @@ The schema should support future providers without forcing Phase 1 to implement 
 }
 ```
 
-Future LoRA entries:
+Scene LoRA entries are provider-visible names plus the strength consumed by the current H3 Power LoRA Loader:
 
 ```json
 {
   "name": "character/alice.safetensors",
-  "strengthModel": 0.9,
-  "strengthClip": 1.0
+  "strength": 0.9
 }
 ```
+
+The H3 turbo LoRA that belongs to the base workflow stays implicit and is not duplicated into Scene data.
 
 Future references use semantic roles rather than ComfyUI node IDs:
 
@@ -267,14 +268,13 @@ The current Storyboard H3 generation path is intentionally narrow:
 - all of those use the official three-field base prompt contract;
 - Ref2VA is a separate future task family and should not leak its six-section prompt vocabulary into the current Director-model runtime.
 
-Storyboard should eventually query ComfyUI for capabilities it actually exposes rather than assuming them:
+Storyboard queries ComfyUI for available LoRAs and only offers Scene selections that ComfyUI can actually see. Other capabilities may still be discovered later where that improves correctness:
 
-- available LoRAs
 - model/workflow availability
 - supported reference inputs
 - generation job status/outputs
 
-Do not allow Storyboard to invent a LoRA path that ComfyUI cannot see once discovery is wired.
+Do not allow Storyboard to invent provider paths that ComfyUI cannot see.
 
 The Storyboard schema must not store ComfyUI node IDs as domain meaning. Node/workflow bindings belong in a narrow workflow adapter.
 
@@ -363,9 +363,16 @@ The first usable slice is now implemented with a Storyboard-owned MiniMax H3 pat
 - the generated Take freezes the actual prompt, source prompt, duration, aspect ratio, megapixels, seed, workflow profile, and provider job ID
 - manual Story/Scene text editing remains the canonical authoring path; an LLM is not required
 
+The current slice now also includes Scene LoRA discovery/selection:
+
+- Storyboard discovers LoRAs from ComfyUI's `LoraLoader` object info;
+- the base H3 turbo LoRA remains implicit and is excluded from the selectable list;
+- each Scene stores an ordered `name + strength` list;
+- the workflow adapter resolves every selected name against the running ComfyUI instance before submission and appends it to the Power LoRA Loader;
+- generated Take provenance freezes the selected Scene LoRAs.
+
 Still to add after real usage validates this slice:
 
-- Storyboard LoRA discovery/selection beyond the H3 turbo LoRA already in the base workflow
 - guide/reference-to-video roles beyond H3's first/last-frame image-to-video sockets
 - stop/cancel and restart recovery for Storyboard generation jobs
 - bounded batch generation if the one-Take workflow proves useful
@@ -426,7 +433,7 @@ The first intentionally small assembly slice is now implemented:
 - Storyboard validates that their media streams match closely enough for a safe lossless splice;
 - ffmpeg's concat demuxer joins them with stream copy rather than silently resizing/re-encoding;
 - the result is written predictably to `exports/selected-sequence.mp4`;
-- `exports/selected-sequence.json` records exactly which Scene/Take selections produced that export;
+- `exports/selected-sequence.json` records exactly which Scene/Take selections produced that export and is the durable export state after WebCap restarts;
 - the finished sequence is playable directly in the Selected sequence panel;
 - if the user changes Take selection afterward, the previous export is visibly treated as stale rather than presented as current.
 

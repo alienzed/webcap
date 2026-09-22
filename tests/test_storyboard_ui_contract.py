@@ -70,6 +70,9 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "Exit state" in storyboard
     assert "Notes" in storyboard
     assert "Selected sequence" in storyboard
+    assert "Export Sequence" in storyboard
+    assert "/fs/storyboard/assembly" in storyboard
+    assert "data-sequence-export" in storyboard
 
     assert "ollama" not in app.lower()
     assert "test-generations" not in storyboard

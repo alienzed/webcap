@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import tempfile
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,15 @@ VALID_STATUSES = {"active", "complete", "archived"}
 VALID_SEED_MODES = {"random", "fixed"}
 VALID_REFERENCE_ROLES = {"first_frame", "last_frame", "guide_frame"}
 VALID_REFERENCE_FRAMES = {"first", "last"}
+
+_mutation_lock = threading.RLock()
+
+
+def _serialized_mutation(func):
+    def wrapped(*args, **kwargs):
+        with _mutation_lock:
+            return func(*args, **kwargs)
+    return wrapped
 
 
 def _utc_now():
@@ -207,13 +217,6 @@ def list_stories():
             "createdAt": story.get("createdAt"),
             "updatedAt": story.get("updatedAt"),
         })
-    stories.sort(
-        key=lambda item: (
-            0 if item.get("pinned") else 1,
-            str(item.get("updatedAt") or ""),
-        ),
-        reverse=False,
-    )
     pinned = [item for item in stories if item.get("pinned")]
     unpinned = [item for item in stories if not item.get("pinned")]
     pinned.sort(key=lambda item: str(item.get("updatedAt") or ""), reverse=True)
@@ -221,6 +224,7 @@ def list_stories():
     return pinned + unpinned
 
 
+@_serialized_mutation
 def create_story(payload):
     story = _normalize_story(payload or {})
     path = _story_path(story["id"])
@@ -241,6 +245,7 @@ def load_story(story_id):
     return story
 
 
+@_serialized_mutation
 def update_story(story_id, payload):
     current = load_story(story_id)
     story = _normalize_story(payload or {}, existing=current, story_id=story_id)
@@ -248,6 +253,7 @@ def update_story(story_id, payload):
     return story
 
 
+@_serialized_mutation
 def add_scene(story_id, payload=None):
     story = load_story(story_id)
     scene_id = _new_id("scene")
@@ -260,6 +266,7 @@ def add_scene(story_id, payload=None):
     return story, scene
 
 
+@_serialized_mutation
 def update_scene(story_id, scene_id, payload):
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
@@ -274,6 +281,7 @@ def update_scene(story_id, scene_id, payload):
     return story, scene
 
 
+@_serialized_mutation
 def duplicate_scene(story_id, scene_id):
     story = load_story(story_id)
     current = (story.get("scenes") or {}).get(scene_id)
@@ -289,6 +297,8 @@ def duplicate_scene(story_id, scene_id):
         "summary": current.get("summary") or "",
         "prompt": current.get("prompt") or "",
         "durationSeconds": current.get("durationSeconds", 6),
+        "aspectRatio": current.get("aspectRatio", "4:3 (Standard)"),
+        "megapixels": current.get("megapixels", 0.2),
         "seed": current.get("seed"),
         "seedMode": current.get("seedMode", "random"),
         "wildcardsEnabled": bool(current.get("wildcardsEnabled")),
@@ -308,6 +318,7 @@ def duplicate_scene(story_id, scene_id):
     return story, scene
 
 
+@_serialized_mutation
 def reorder_scenes(story_id, ordered_ids):
     story = load_story(story_id)
     if not isinstance(ordered_ids, list):
@@ -322,13 +333,16 @@ def reorder_scenes(story_id, ordered_ids):
     return story
 
 
+@_serialized_mutation
 def delete_scene(story_id, scene_id):
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     if scene_id not in scenes:
         raise FileNotFoundError("Scene does not exist.")
+    scene_order = list(story.get("sceneOrder") or [])
     scene = dict(scenes.pop(scene_id))
     scene["removedAt"] = _utc_now()
+    scene["removedOrderIndex"] = scene_order.index(scene_id) if scene_id in scene_order else len(scene_order)
     removed = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
     removed[scene_id] = scene
     story["removedScenes"] = removed
@@ -339,6 +353,7 @@ def delete_scene(story_id, scene_id):
     return story
 
 
+@_serialized_mutation
 def restore_scene(story_id, scene_id):
     story = load_story(story_id)
     removed = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
@@ -347,11 +362,15 @@ def restore_scene(story_id, scene_id):
         raise FileNotFoundError("Removed Scene does not exist.")
     restored = dict(scene)
     restored.pop("removedAt", None)
+    order_index = restored.pop("removedOrderIndex", len(story.get("sceneOrder") or []))
     restored["updatedAt"] = _utc_now()
     story["scenes"][scene_id] = restored
     del removed[scene_id]
     story["removedScenes"] = removed
-    story["sceneOrder"].append(scene_id)
+    scene_order = list(story.get("sceneOrder") or [])
+    insert_at = max(0, min(int(order_index), len(scene_order)))
+    scene_order.insert(insert_at, scene_id)
+    story["sceneOrder"] = scene_order
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story
@@ -366,6 +385,7 @@ def _scene_for_story(story, scene_id):
     return scene_id, scene
 
 
+@_serialized_mutation
 def add_take_upload(story_id, scene_id, filename, stream):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
@@ -431,6 +451,7 @@ def add_take_upload(story_id, scene_id, filename, stream):
     return story, take
 
 
+@_serialized_mutation
 def remove_take(story_id, scene_id, take_id):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
@@ -440,8 +461,10 @@ def remove_take(story_id, scene_id, take_id):
     if not isinstance(take, dict):
         raise FileNotFoundError("Take does not exist.")
 
+    take_order = list(scene.get("takeOrder") or [])
     removed_take = dict(take)
     removed_take["removedAt"] = _utc_now()
+    removed_take["removedOrderIndex"] = take_order.index(resolved_take_id) if resolved_take_id in take_order else len(take_order)
     removed = scene.get("removedTakes") if isinstance(scene.get("removedTakes"), dict) else {}
     removed[resolved_take_id] = removed_take
     del takes[resolved_take_id]
@@ -456,6 +479,7 @@ def remove_take(story_id, scene_id, take_id):
     return story
 
 
+@_serialized_mutation
 def restore_take(story_id, scene_id, take_id):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
@@ -467,12 +491,16 @@ def restore_take(story_id, scene_id, take_id):
 
     restored = dict(take)
     restored.pop("removedAt", None)
+    order_index = restored.pop("removedOrderIndex", len(scene.get("takeOrder") or []))
     takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
     takes[resolved_take_id] = restored
     del removed[resolved_take_id]
     scene["takes"] = takes
     scene["removedTakes"] = removed
-    scene["takeOrder"] = list(scene.get("takeOrder") or []) + [resolved_take_id]
+    take_order = list(scene.get("takeOrder") or [])
+    insert_at = max(0, min(int(order_index), len(take_order)))
+    take_order.insert(insert_at, resolved_take_id)
+    scene["takeOrder"] = take_order
     scene["updatedAt"] = _utc_now()
     story["updatedAt"] = scene["updatedAt"]
     _write_json_atomic(_story_path(story_id), story)
@@ -529,6 +557,7 @@ def _reference_media_for_take(story_id, source_scene_id, take, frame):
     return ("references/" + source_scene_id + "/" + filename).replace("\\", "/")
 
 
+@_serialized_mutation
 def set_scene_reference_from_take(story_id, scene_id, role, source_scene_id, source_take_id, frame):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
@@ -557,6 +586,7 @@ def set_scene_reference_from_take(story_id, scene_id, role, source_scene_id, sou
     return story, reference
 
 
+@_serialized_mutation
 def clear_scene_reference(story_id, scene_id, role):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
@@ -573,6 +603,7 @@ def clear_scene_reference(story_id, scene_id, role):
     return story
 
 
+@_serialized_mutation
 def finalize_generated_take(story_id, scene_id, take_id, provenance):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
@@ -589,6 +620,8 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
         "seedMode",
         "aspectRatio",
         "megapixels",
+        "loras",
+        "references",
         "workflowProfile",
         "providerJobId",
     ):
@@ -602,6 +635,7 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
     return story, take
 
 
+@_serialized_mutation
 def rate_take(story_id, scene_id, take_id, rating):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
@@ -625,6 +659,7 @@ def rate_take(story_id, scene_id, take_id, rating):
     return story, take
 
 
+@_serialized_mutation
 def select_take(story_id, scene_id, take_id):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)

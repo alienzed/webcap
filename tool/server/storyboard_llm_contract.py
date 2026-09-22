@@ -6,7 +6,7 @@ DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
 DIRECTOR_CONTEXT_PATH = DOCS_ROOT / "storyboard-director-context.txt"
 H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
-VALID_OPERATIONS = {"develop_story", "write_prompt", "refine_prompt"}
+VALID_OPERATIONS = {"expand_concept", "develop_story", "write_prompt", "refine_prompt"}
 
 
 def _read_text(path, label):
@@ -133,6 +133,33 @@ def build_request(story, scene_id, operation, instruction=""):
 
     director_context = _read_text(DIRECTOR_CONTEXT_PATH, "Storyboard director context")
     h3_runtime_context = _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context")
+
+    if operation == "expand_concept":
+        concept = _clean(story.get("concept"))
+        if not concept:
+            raise ValueError("Story concept / overview is required to expand a Story.")
+        blocks = [
+            "[DIRECTOR CONTEXT]\n" + director_context,
+        ]
+        title = _clean(story.get("title"))
+        if title:
+            blocks.append("[STORY TITLE]\n" + title)
+        blocks.append("[CURRENT CONCEPT]\n" + concept)
+        style = _clean(story.get("style"))
+        if style:
+            blocks.append("[STORY STYLE]\n" + style)
+        blocks.append(
+            "[CURRENT TASK]\nExpand this Story concept into a richer creative overview that can drive later Scene planning. "
+            "Develop the narrative arc, important characters, setting, conflict, progression, and ending direction when "
+            "the seed supports them. Be creatively useful and fill in sensible connective material rather than asking "
+            "questions. Preserve explicit facts from the original concept and supplied style. Do not break the Story into "
+            "Scenes yet and do not write MiniMax H3 prompts. Return only the expanded Story concept as polished prose."
+        )
+        return {
+            "operation": operation,
+            "output": "text",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+        }
 
     if operation == "develop_story":
         concept = _clean(story.get("concept"))

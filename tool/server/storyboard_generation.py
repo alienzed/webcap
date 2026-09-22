@@ -362,8 +362,8 @@ def _scene_settings(scene):
         raise ValueError("Storyboard resolution and duration must be numeric.") from exc
     if megapixels <= 0:
         raise ValueError("Storyboard resolution must be greater than zero megapixels.")
-    if duration <= 0:
-        raise ValueError("Storyboard duration must be greater than zero seconds.")
+    if duration < 4 or duration > 15:
+        raise ValueError("MiniMax H3 Storyboard duration must be between 4 and 15 seconds.")
 
     seed_mode = str(scene.get("seedMode") or "random").strip().lower()
     if seed_mode == "fixed":

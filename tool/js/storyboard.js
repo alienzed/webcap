@@ -216,6 +216,42 @@
     if (node) node.textContent = text || '';
   }
 
+  function expandConcept() {
+    if (!storyState.story) return;
+    var modelId = storyState.director.modelId;
+    if (!modelId) {
+      reportError(new Error('Choose a Storyboard Director model first.'));
+      return;
+    }
+    var concept = el('storyboard-story-concept').value.trim();
+    if (!concept) {
+      setDevelopStatus('Write a Story concept first.');
+      return;
+    }
+
+    var storyId = storyState.story.id;
+    var button = el('storyboard-expand-concept-btn');
+    button.disabled = true;
+    setDevelopStatus('Director is expanding the concept…');
+    flushPendingSaves().then(function () {
+      return directorRequest({
+        storyId: storyId,
+        operation: 'expand_concept',
+        model: modelId
+      });
+    }).then(function (payload) {
+      if (!storyState.story || storyState.story.id !== storyId) return;
+      el('storyboard-story-concept').value = payload.result || '';
+      setDevelopStatus('Concept expanded with ' + String(payload.model || modelId) + '.');
+      return saveStoryNow();
+    }).catch(function (err) {
+      setDevelopStatus('Concept expansion failed.');
+      reportError(err);
+    }).finally(function () {
+      button.disabled = false;
+    });
+  }
+
   function developStory() {
     if (!storyState.story) return;
     var modelId = storyState.director.modelId;
@@ -1152,6 +1188,7 @@
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
 
     el('storyboard-new-btn').onclick = createStory;
+    el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-develop-btn').onclick = developStory;
     el('storyboard-add-scene-btn').onclick = addScene;
     el('storyboard-director-model').addEventListener('change', function () {

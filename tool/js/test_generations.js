@@ -670,7 +670,7 @@
     }
 
     if (historyItems.length) {
-      var historyList = appendGroup('Completed', historyItems.length, 'is-history');
+      var historyList = appendGroup('Finished', historyItems.length, 'is-history');
       historyItems.forEach(function (session) { appendSessionRow(session, historyList); });
     }
 

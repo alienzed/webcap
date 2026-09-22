@@ -300,6 +300,29 @@ def test_test_bench_activity_rail_and_live_session_contract():
 
 
 
+def test_selected_test_session_rehydrates_across_navigation_and_queue_handoff():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "var currentSessionFolder = '';" in script
+    assert "var currentSessionModel = '';" in script
+    assert "currentSessionFolder === launchFolder" in script
+    assert "currentSessionModel === requestedModelId" in script
+    assert "request('test_open_session', { session: rememberedSession })" in script
+    assert "var selectedWasLive = !!(" in script
+    assert "currentSession !== activeSession" in script
+    assert "request('test_open_session', { session: currentSession })" in script
+
+
+def test_test_polling_keeps_active_worker_status_separate_from_selected_preview():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
+
+    assert "syncActiveTestCard(status);" in poll
+    assert "if (!currentSession || currentSession === activeSession)" in poll
+    assert "else if (selectedWasLive)" in poll
+    assert "renderStatus(selectedStatus);" in poll
+
+
 def test_active_test_card_is_separate_from_selected_session_results():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")

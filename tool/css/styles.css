@@ -3025,6 +3025,7 @@ iframe {
   overflow: auto;
 }
 .test-generations-result-card {
+  position: relative;
   align-self: start;
   min-width: 0;
   overflow: hidden;
@@ -3110,11 +3111,7 @@ iframe {
   white-space: nowrap;
 }
 .test-generations-result-footer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 7px 6px 9px;
+  padding: 6px 9px 7px;
 }
 .test-generations-result-primary {
   display: flex;
@@ -3138,7 +3135,15 @@ iframe {
   font-size: 10px;
   white-space: nowrap;
 }
+.test-generations-result-secondary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .test-generations-result-source {
+  min-width: 0;
   overflow: hidden;
   color: var(--muted);
   font-size: 10px;
@@ -3147,6 +3152,7 @@ iframe {
 }
 .test-generations-result-rating {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 1px;
   min-height: 18px;
@@ -3176,17 +3182,43 @@ iframe {
   opacity: .65;
 }
 .test-generations-result-remove {
-  width: auto;
-  min-height: 24px;
-  margin: 0;
-  padding: 3px 7px;
-  border-color: color-mix(in srgb, var(--danger, #f87171) 45%, var(--border));
-  color: var(--danger, #f87171);
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 3;
+  display: grid;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 68%, transparent);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  opacity: .28;
+  cursor: pointer;
+  transition: opacity .12s ease, background .12s ease, border-color .12s ease, color .12s ease;
+}
+.test-generations-result-card:hover .test-generations-result-remove,
+.test-generations-compare-item:hover .test-generations-result-remove,
+.test-generations-result-remove:hover,
+.test-generations-result-remove:focus-visible {
+  opacity: 1;
 }
 .test-generations-result-remove:hover,
 .test-generations-result-remove:focus-visible {
-  border-color: var(--danger, #f87171);
+  border-color: color-mix(in srgb, var(--danger, #f87171) 55%, var(--border));
+  background: color-mix(in srgb, var(--panel) 88%, var(--danger, #f87171) 12%);
   color: var(--danger, #f87171);
+  outline: none;
+}
+.test-generations-result-remove:disabled {
+  opacity: .5;
+  cursor: default;
 }
 .test-generations-recent-sets {
   margin-top: 2px;
@@ -3254,6 +3286,7 @@ iframe {
   min-height: 0;
 }
 .test-generations-compare-item {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;

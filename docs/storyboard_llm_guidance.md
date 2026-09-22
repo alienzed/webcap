@@ -2,7 +2,7 @@
 
 This document defines the stable authoring contract for LLM assistance inside WebCap Storyboard.
 
-It is intentionally provider-neutral. The first runtime is expected to be ComfyUI's native `Generate Text` / `TextGenerate` path, but Storyboard must not depend on hidden provider memory, a particular Qwen checkpoint, Ollama, or a persistent chat session.
+It is intentionally provider-neutral at the request-contract layer. The first runtime implementation uses WebCap-managed llama.cpp, but Storyboard must not depend on hidden provider memory, a particular Qwen checkpoint, or a persistent provider session.
 
 For MiniMax H3 prompt syntax and model-facing prompt rules, see `docs/mmh3-prompt-guidelines.md`.
 
@@ -138,7 +138,7 @@ For MiniMax H3, the current official model specification supports 4-15 second ou
 
 Assume every LLM inference call is stateless.
 
-ComfyUI's core `TextGenerate` node receives the prompt plus optional image/video/audio context and returns `generated_text`. Its built-in/default chat template is formatting, not durable Storyboard memory.
+The current llama.cpp runtime can maintain transient KV/prompt cache while a model remains loaded, but the first WebCap integration deliberately unloads the Director after each request to keep GPU ownership simple. Any such cache is therefore an optimization, never canonical memory.
 
 Therefore:
 
@@ -261,7 +261,7 @@ Storyboard should let the user select the compatible local text model used for L
 
 Initial strategy:
 
-- expose one Storyboard-level **Director model** selector populated from models the configured ComfyUI text workflow can actually load;
+- expose one Storyboard-level **Director model** selector populated from local GGUFs the configured llama.cpp router can actually load;
 - use that selection for planning, auditing, prompt writing, and revision unless later testing proves per-task model selection worthwhile;
 - treat the selected model as runtime preference, not canonical Story meaning;
 - when an LLM proposal/audit is persisted for provenance, record the model identifier that produced it;
@@ -465,5 +465,5 @@ Current external references:
 - MiniMax H3 official model/recommended workflow: https://www.minimax.io/news/minimax-h3-open-source
 - MiniMax H3 base prompt-writing guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md
 - MiniMax H3 full-reference guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
-- ComfyUI core TextGenerate implementation: https://github.com/Comfy-Org/ComfyUI/blob/master/comfy_extras/nodes_textgen.py
-- ComfyUI TextGenerate embedded docs: https://github.com/Comfy-Org/embedded-docs/blob/main/comfyui_embedded_docs/docs/TextGenerate/en.md
+- llama.cpp server/router documentation: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
+- llama.cpp CUDA build documentation: https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md

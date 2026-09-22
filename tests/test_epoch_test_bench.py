@@ -349,6 +349,69 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
     assert status["results"][0]["outputVideo"] == "base.mp4"
 
 
+def test_run_batch_persists_elapsed_ms_for_success_and_failure(tmp_path, monkeypatch):
+    session = tmp_path / "session"
+    session.mkdir()
+    bench._atomic_write_json(
+        session / "test.json",
+        {
+            "status": "running",
+            "model": "h3",
+            "prompt": "prompt",
+            "total": 2,
+            "completed": 0,
+            "failed": 0,
+            "failures": [],
+            "results": [],
+            "current": "",
+            "error": "",
+        },
+    )
+    lora = Path("C:/ComfyUI/models/loras/mh3/run-03__epoch24.safetensors")
+    times = iter([100.0, 107.5, 200.0, 201.75])
+
+    monkeypatch.setattr(bench.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(bench, "_available_comfy_lora_names", lambda: ["mh3/run-03__epoch24.safetensors"])
+    monkeypatch.setattr(bench, "_load_template", lambda: {
+        "115": {"inputs": {"aspect_ratio": "2:3", "megapixels": 0.2}},
+        "129": {"inputs": {"noise_seed": 123}},
+        "133": {"inputs": {"value": 7}},
+        "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
+        "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
+    })
+
+    def queue(workflow):
+        if "148" in workflow:
+            raise RuntimeError("candidate boom")
+        return "base-prompt"
+
+    monkeypatch.setattr(bench, "_queue_workflow", queue)
+    monkeypatch.setattr(
+        bench,
+        "_wait_for_video",
+        lambda _prompt_id, **_kwargs: {
+            "filename": "base.mp4",
+            "type": "output",
+            "fullpath": "C:/ComfyUI/output/base.mp4",
+        },
+    )
+    monkeypatch.setattr(
+        bench,
+        "_move_saved_video",
+        lambda _ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
+    )
+
+    bench._run_batch("folder-key", session, [lora], "prompt")
+
+    persisted = json.loads((session / "test.json").read_text(encoding="utf-8"))
+    assert persisted["results"][0]["sourceLoRA"] == "Base"
+    assert persisted["results"][0]["elapsedMs"] == 7500
+    assert persisted["failures"][0]["sourceLoRA"] == lora.name
+    assert persisted["failures"][0]["elapsedMs"] == 1750
+    assert persisted["results"][0]["elapsedMs"] >= 0
+    assert persisted["failures"][0]["elapsedMs"] >= 0
+
+
 def test_base_generation_does_not_depend_on_candidate_lora_inventory(tmp_path, monkeypatch):
     session = tmp_path / "session"
     session.mkdir()

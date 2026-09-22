@@ -2475,6 +2475,12 @@ iframe {
   min-height: 0;
   overflow: hidden;
 }
+.test-generations-body.test-generations-rail-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+.test-generations-body.test-generations-rail-collapsed .test-generations-rail {
+  display: none;
+}
 .test-generations-rail {
   display: flex;
   min-width: 0;
@@ -2853,12 +2859,34 @@ iframe {
 .test-generations-actions .review-captions-btn,
 .test-generations-actions .training-btn { width: auto; }
 .test-generations-results-section {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
   padding: 16px;
+}
+.test-generations-rail-toggle-btn {
+  position: absolute;
+  z-index: 3;
+  bottom: 8px;
+  left: 8px;
+  width: 24px;
+  min-width: 24px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--muted);
+  box-shadow: none;
+  cursor: pointer;
+}
+.test-generations-rail-toggle-btn:hover,
+.test-generations-rail-toggle-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--text);
 }
 .test-generations-results-heading {
   display: flex;

@@ -612,6 +612,103 @@
     return candidateFile;
   }
 
+  function candidateIdentity(result) {
+    if (String(result && result.kind || '') === 'base' || String(result && result.sourceLoRA || '') === 'Base') {
+      return { primary: 'Base', secondary: '' };
+    }
+
+    var sourceFile = candidateFileForResult(result) || String(result && result.sourceLoRA || '');
+    var provenance = result && result.provenance && typeof result.provenance === 'object' ? result.provenance : {};
+    var runSequence = String(provenance.sourceRunSequence || '').trim();
+    var epoch = provenance.sourceEpoch;
+    var match = sourceFile.match(/^(.*)__epoch(\d+)\.safetensors$/i);
+
+    if (!runSequence && match) {
+      var runMatch = String(match[1] || '').match(/(?:^|[-_])run[-_]?(\d+)$/i);
+      if (runMatch) runSequence = runMatch[1];
+    }
+    if ((epoch === undefined || epoch === null || epoch === '') && match) epoch = match[2];
+
+    var identity = [];
+    if (runSequence) identity.push('Run ' + String(runSequence).padStart(2, '0'));
+    if (epoch !== undefined && epoch !== null && String(epoch).trim() !== '') identity.push('Epoch ' + String(epoch).trim());
+
+    return {
+      primary: identity.length ? identity.join(' · ') : (stagedFileParts(sourceFile).label || sourceFile || 'Result'),
+      secondary: sourceFile
+    };
+  }
+
+  function formatCandidateElapsed(milliseconds) {
+    var value = Number(milliseconds);
+    if (!isFinite(value) || value < 0) return '';
+    var seconds = Math.floor(value / 1000);
+    var hours = Math.floor(seconds / 3600);
+    var minutes = Math.floor((seconds % 3600) / 60);
+    seconds %= 60;
+    if (hours) return hours + 'h ' + minutes + 'm';
+    if (minutes) return minutes + 'm ' + seconds + 's';
+    return seconds + 's';
+  }
+
+  function buildResultFooter(result, options) {
+    var opts = options || {};
+    var footer = document.createElement('div');
+    footer.className = 'test-generations-result-footer' + (opts.failed ? ' test-generations-failure-footer' : '');
+
+    var copy = document.createElement('div');
+    copy.className = opts.failed ? 'test-generations-failure-copy' : 'test-generations-result-copy';
+
+    var identity = candidateIdentity(result);
+    var primaryRow = document.createElement('div');
+    primaryRow.className = 'test-generations-result-primary';
+
+    var label = document.createElement('div');
+    label.className = 'test-generations-result-name';
+    label.textContent = identity.primary;
+    primaryRow.appendChild(label);
+
+    var elapsed = formatCandidateElapsed(result && result.elapsedMs);
+    if (elapsed) {
+      var timing = document.createElement('span');
+      timing.className = 'test-generations-result-elapsed';
+      timing.textContent = opts.failed ? 'Failed after ' + elapsed : elapsed;
+      primaryRow.appendChild(timing);
+    }
+    copy.appendChild(primaryRow);
+
+    if (identity.secondary) {
+      var source = document.createElement('div');
+      source.className = 'test-generations-result-source';
+      source.textContent = identity.secondary;
+      source.title = identity.secondary;
+      copy.appendChild(source);
+    }
+
+    if (opts.failed) {
+      var detail = document.createElement('div');
+      detail.className = 'test-generations-result-error';
+      detail.textContent = String(result && result.error || 'Generation failed.');
+      copy.appendChild(detail);
+    }
+
+    footer.appendChild(copy);
+
+    var candidateFile = candidateFileForResult(result);
+    if (candidateFile) {
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'review-captions-btn test-generations-result-remove';
+      remove.dataset.removeCandidate = candidateFile;
+      remove.title = 'Delete the staged LoRA and its result from this session. Other sessions are unchanged.';
+      remove.setAttribute('aria-label', 'Remove candidate ' + candidateFile);
+      remove.textContent = 'Remove';
+      footer.appendChild(remove);
+    }
+
+    return footer;
+  }
+
   function formatTestVideoTime(value) {
     var seconds = Math.max(0, Number(value) || 0);
     var minutes = Math.floor(seconds / 60);
@@ -795,26 +892,7 @@
       appendTestPreviewVideo(item, video);
       videos.push(video);
 
-      var footer = document.createElement('div');
-      footer.className = 'test-generations-result-footer';
-      var label = document.createElement('div');
-      label.className = 'test-generations-result-name';
-      label.textContent = String(result.sourceLoRA || result.outputVideo || 'Result');
-      footer.appendChild(label);
-
-      var candidateFile = candidateFileForResult(result);
-      if (candidateFile) {
-        var remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'test-generations-remove-candidate';
-        remove.dataset.removeCandidate = candidateFile;
-        remove.title = 'Remove this candidate and its current Test render';
-        remove.setAttribute('aria-label', 'Remove candidate ' + candidateFile);
-        remove.textContent = '×';
-        footer.appendChild(remove);
-      }
-
-      item.appendChild(footer);
+      item.appendChild(buildResultFooter(result));
       stage.appendChild(item);
     });
 
@@ -903,25 +981,7 @@
         card.appendChild(placeholder);
       }
 
-      var footer = document.createElement('div');
-      footer.className = 'test-generations-result-footer';
-      var label = document.createElement('div');
-      label.className = 'test-generations-result-name';
-      label.textContent = String(result.sourceLoRA || outputVideo || 'Result');
-      footer.appendChild(label);
-
-      var candidateFile = candidateFileForResult(result);
-      if (candidateFile) {
-        var remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'test-generations-remove-candidate';
-        remove.dataset.removeCandidate = candidateFile;
-        remove.title = 'Remove this candidate and its current Test render';
-        remove.setAttribute('aria-label', 'Remove candidate ' + candidateFile);
-        remove.textContent = '×';
-        footer.appendChild(remove);
-      }
-      card.appendChild(footer);
+      card.appendChild(buildResultFooter(result));
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);
@@ -944,20 +1004,7 @@
       placeholder.textContent = 'Generation failed';
       card.appendChild(placeholder);
 
-      var footer = document.createElement('div');
-      footer.className = 'test-generations-result-footer test-generations-failure-footer';
-      var copy = document.createElement('div');
-      copy.className = 'test-generations-failure-copy';
-      var label = document.createElement('div');
-      label.className = 'test-generations-result-name';
-      label.textContent = String(failure.sourceLoRA || 'Result');
-      var detail = document.createElement('div');
-      detail.className = 'test-generations-result-error';
-      detail.textContent = String(failure.error || 'Generation failed.');
-      copy.appendChild(label);
-      copy.appendChild(detail);
-      footer.appendChild(copy);
-      card.appendChild(footer);
+      card.appendChild(buildResultFooter(failure, { failed: true }));
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);

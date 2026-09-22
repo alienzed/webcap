@@ -394,7 +394,10 @@ def _available_comfy_names(node_type, input_name, label):
     node = payload.get(node_type) if isinstance(payload, dict) else None
     inputs = node.get("input") if isinstance(node, dict) and isinstance(node.get("input"), dict) else {}
     required = inputs.get("required") if isinstance(inputs.get("required"), dict) else {}
+    optional = inputs.get("optional") if isinstance(inputs.get("optional"), dict) else {}
     spec = required.get(input_name)
+    if spec is None:
+        spec = optional.get(input_name)
     choices = spec[0] if isinstance(spec, (list, tuple)) and spec else None
     if not isinstance(choices, (list, tuple)):
         raise RuntimeError("ComfyUI did not expose the available " + label + " names for " + node_type + ".")

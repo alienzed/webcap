@@ -172,9 +172,9 @@ def stop_server():
         _stop_server_locked()
 
 
-def _server_signature(settings, executable):
+def _server_signature(settings):
     return (
-        str(executable),
+        str(settings["llama_server"]),
         str(settings["models_dir"]),
         int(settings["port"]),
         int(settings["context_size"]),
@@ -185,8 +185,7 @@ def _ensure_server():
     global _process, _log_handle, _server_settings_signature
     with _process_lock:
         settings = _director_config()
-        executable = _resolve_executable()
-        desired_signature = _server_signature(settings, executable)
+        desired_signature = _server_signature(settings)
 
         if _process is not None and _process.poll() is None:
             if _server_settings_signature == desired_signature and _health_ok():
@@ -204,6 +203,7 @@ def _ensure_server():
 
         models_dir = settings["models_dir"]
         models_dir.mkdir(parents=True, exist_ok=True)
+        executable = _resolve_executable()
         log_path = _runtime_dir() / "llama-server.log"
         _log_handle = open(log_path, "a", encoding="utf-8")
         command = [

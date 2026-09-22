@@ -197,6 +197,17 @@ A future Take record should capture:
 
 Changing a Scene after generating a Take must not rewrite that Take's provenance.
 
+## LLM prompting materials
+
+Storyboard keeps its LLM instructions in versioned repo documents rather than relying on hidden session state:
+
+- `docs/storyboard_llm_guidance.md` — stable "why we are here", task modes, continuity rules, stateless-memory contract, and runtime context assembly.
+- `docs/mmh3-prompt-guidelines.md` — MiniMax H3-specific prompt-writing rules grounded in the current official H3 guides.
+- `docs/mmh3-prompt-template.txt` — concise H3 prompt skeleton.
+- `docs/storyboard-director-context.txt` — compact copy/paste director context for immediate manual testing with ComfyUI `Generate Text`.
+
+WebCap should eventually assemble provider requests from these stable instructions plus current Story/Scene context. The provider is not the authoritative session store.
+
 ## Provider direction
 
 ### LLM authoring

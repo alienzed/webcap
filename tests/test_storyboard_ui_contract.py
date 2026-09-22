@@ -39,6 +39,8 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
 
     assert 'id="storyboard-story-concept"' in html
+    assert 'id="storyboard-story-style"' in html
+    assert 'id="storyboard-sequence-preview"' in html
     assert 'id="storyboard-story-tags"' in html
     assert 'id="storyboard-story-status"' in html
     assert 'id="storyboard-story-pinned"' in html
@@ -50,6 +52,11 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "references" in store
     assert "takeOrder" in store
     assert "selectedTakeId" in store
+    assert "add_take_upload" in store
+    assert "rate_take" in store
+    assert "select_take" in store
+    assert "data-take-upload" in storyboard
+    assert "Selected sequence" in storyboard
 
     assert "ollama" not in app.lower()
     assert "comfy" not in storyboard.lower()

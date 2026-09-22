@@ -7,6 +7,20 @@ import pytest
 from tool.server import epoch_test_bench as bench
 
 
+def patch_default_test_model(monkeypatch, template=None, settings=None):
+    model = bench.get_test_model()
+    monkeypatch.setattr(bench, "get_test_model", lambda _profile_id=None: model)
+    if template is not None:
+        monkeypatch.setattr(model, "load_template", lambda: copy.deepcopy(template))
+    if settings is not None:
+        monkeypatch.setattr(
+            model,
+            "normalize_settings",
+            lambda _template, _new_seed, _values=None: dict(settings),
+        )
+    return model
+
+
 
 def test_windows_curl_transport_posts_json_via_stdin(monkeypatch):
     calls = {}
@@ -719,8 +733,8 @@ def test_prepare_exposes_supported_test_aspect_ratios(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()
     (staged / "epoch01.safetensors").write_bytes(b"weights")
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
-    monkeypatch.setattr(bench, "_visible_status", lambda _folder: {"status": "idle"})
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None: {"status": "idle"})
 
     payload = bench.prepare(tmp_path)
 
@@ -793,7 +807,7 @@ def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeyp
     candidate.with_suffix(".webcap.json").write_text("{}", encoding="utf-8")
     other = staged / "run-02__epoch20.safetensors"
     other.write_bytes(b"keep")
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
 
     payload = bench.remove_candidate(tmp_path, candidate.name)
 
@@ -866,7 +880,7 @@ def test_remove_candidate_deletes_only_current_session_result(tmp_path, monkeypa
     candidate = staged / "run-01__epoch10.safetensors"
     candidate.write_bytes(b"copy")
     candidate.with_suffix(".webcap.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
 
     current = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
     older = tmp_path / bench.TEST_RESULTS_DIR / "session-b"
@@ -911,7 +925,7 @@ def test_remove_candidate_refuses_active_session_result_mutation(tmp_path, monke
     staged.mkdir()
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
 
     session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
     session.mkdir(parents=True)
@@ -943,7 +957,7 @@ def test_remove_candidate_cleans_historical_session_when_result_files_are_alread
     staged.mkdir()
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
 
     session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
     session.mkdir(parents=True)
@@ -1028,7 +1042,7 @@ def test_prepare_then_start_from_session_folder_reuses_same_staged_loras(tmp_pat
         }
     })
     monkeypatch.setattr(bench, "host_path_for_training_path", lambda value: Path(value))
-    monkeypatch.setattr(bench, "_visible_status", lambda _folder: {"status": "idle"})
+    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None: {"status": "idle"})
     monkeypatch.setattr(bench, "_read_json_response", lambda *args, **kwargs: {})
     monkeypatch.setattr(bench, "_resolve_comfy_template_assets", lambda template: template)
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
@@ -1066,16 +1080,26 @@ def test_start_queued_skips_selected_loras_removed_after_enqueue(tmp_path, monke
     removed = staged / "epoch10.safetensors"
     keep.write_bytes(b"keep")
     removed.write_bytes(b"remove")
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(bench, "_read_json_response", lambda *_args, **_kwargs: {})
-    monkeypatch.setattr(bench, "_resolve_comfy_template_assets", lambda template: template)
-    monkeypatch.setattr(bench, "_load_template", lambda: {
+    template = {
         "115": {"inputs": {"aspect_ratio": "2:3", "megapixels": 0.2}},
         "129": {"inputs": {"noise_seed": 123}},
         "133": {"inputs": {"value": 7}},
         "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
         "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
-    })
+    }
+    model = patch_default_test_model(
+        monkeypatch,
+        template=template,
+        settings={
+            "seed": 123,
+            "aspectRatio": "2:3",
+            "megapixels": 0.2,
+            "duration": 7,
+        },
+    )
+    monkeypatch.setattr(model, "resolve_assets", lambda selected, *_args: selected)
     monkeypatch.setattr(bench, "_active_threads", {})
     monkeypatch.setattr(bench, "_active_sessions", {})
     monkeypatch.setattr(bench, "_stop_requests", set())
@@ -1117,7 +1141,7 @@ def test_start_queued_skips_selected_loras_removed_after_enqueue(tmp_path, monke
 def test_start_queued_skips_job_when_all_selected_loras_are_gone_and_base_is_off(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
 
     payload = bench.start_queued(tmp_path, {
         "resolvedPrompt": "prompt",
@@ -1176,7 +1200,7 @@ def test_activity_snapshot_exposes_current_set_and_active_run(tmp_path, monkeypa
 
     folder_key = str(set_folder.resolve())
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
     monkeypatch.setattr(bench, "_active_sessions", {folder_key: session})
     monkeypatch.setattr(bench, "_stop_requests", set())
@@ -1335,7 +1359,7 @@ def test_remove_candidate_is_idempotent_when_staged_file_is_already_gone(tmp_pat
     staged.mkdir()
     other = staged / "epoch20.safetensors"
     other.write_bytes(b"weights")
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
 
     payload = bench.remove_candidate(tmp_path, "epoch10.safetensors")
 
@@ -1354,7 +1378,7 @@ def test_remove_candidate_allows_active_batch(tmp_path, monkeypatch):
             return True
 
     folder_key = str(tmp_path.resolve())
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
     monkeypatch.setattr(bench, "_active_sessions", {})
     monkeypatch.setattr(bench, "_stop_requests", set())
@@ -1493,15 +1517,18 @@ def test_queued_request_freezes_prompt_seed_and_selected_files(tmp_path, monkeyp
     first.write_bytes(b"one")
     second.write_bytes(b"two")
 
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [first, second])
-    monkeypatch.setattr(bench, "_load_template", lambda: {"template": True})
-    monkeypatch.setattr(bench, "_normalized_test_settings", lambda *_args, **_kwargs: {
-        "seed": 12345,
-        "aspectRatio": "2:3 (Portrait Photo)",
-        "megapixels": 0.2,
-        "duration": 7,
-    })
+    patch_default_test_model(
+        monkeypatch,
+        template={"template": True},
+        settings={
+            "seed": 12345,
+            "aspectRatio": "2:3 (Portrait Photo)",
+            "megapixels": 0.2,
+            "duration": 7,
+        },
+    )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt.replace("{place}", "studio") + " #" + str(seed))
 
     payload = bench._build_queued_request(
@@ -1539,15 +1566,18 @@ def test_concurrent_enqueue_state_after_dispatch_uses_live_worker_not_stale_snap
     candidate = staged / "epoch01.safetensors"
     candidate.write_bytes(b"weights")
 
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
-    monkeypatch.setattr(bench, "_load_template", lambda: {})
-    monkeypatch.setattr(bench, "_normalized_test_settings", lambda *_args, **_kwargs: {
-        "seed": 77,
-        "aspectRatio": "1:1 (Square)",
-        "megapixels": 0.2,
-        "duration": 5,
-    })
+    patch_default_test_model(
+        monkeypatch,
+        template={},
+        settings={
+            "seed": 77,
+            "aspectRatio": "1:1 (Square)",
+            "megapixels": 0.2,
+            "duration": 5,
+        },
+    )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
     monkeypatch.setattr(bench, "_pending_tests", [])
@@ -1577,15 +1607,18 @@ def test_enqueue_test_queues_behind_active_test(tmp_path, monkeypatch):
     candidate = staged / "epoch01.safetensors"
     candidate.write_bytes(b"weights")
 
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
-    monkeypatch.setattr(bench, "_load_template", lambda: {})
-    monkeypatch.setattr(bench, "_normalized_test_settings", lambda *_args, **_kwargs: {
-        "seed": 77,
-        "aspectRatio": "1:1 (Square)",
-        "megapixels": 0.2,
-        "duration": 5,
-    })
+    patch_default_test_model(
+        monkeypatch,
+        template={},
+        settings={
+            "seed": 77,
+            "aspectRatio": "1:1 (Square)",
+            "megapixels": 0.2,
+            "duration": 5,
+        },
+    )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
     monkeypatch.setattr(bench, "_advance_test_queue", lambda: None)
@@ -1604,15 +1637,18 @@ def test_first_test_does_not_wait_for_training_queue(tmp_path, monkeypatch):
     candidate = staged / "epoch01.safetensors"
     candidate.write_bytes(b"weights")
 
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
-    monkeypatch.setattr(bench, "_load_template", lambda: {})
-    monkeypatch.setattr(bench, "_normalized_test_settings", lambda *_args, **_kwargs: {
-        "seed": 77,
-        "aspectRatio": "1:1 (Square)",
-        "megapixels": 0.2,
-        "duration": 5,
-    })
+    patch_default_test_model(
+        monkeypatch,
+        template={},
+        settings={
+            "seed": 77,
+            "aspectRatio": "1:1 (Square)",
+            "megapixels": 0.2,
+            "duration": 5,
+        },
+    )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
     monkeypatch.setattr(bench, "_advance_test_queue", lambda: None)
@@ -1631,15 +1667,18 @@ def test_first_test_start_failure_reports_real_error(tmp_path, monkeypatch):
     candidate = staged / "epoch01.safetensors"
     candidate.write_bytes(b"weights")
 
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
-    monkeypatch.setattr(bench, "_load_template", lambda: {})
-    monkeypatch.setattr(bench, "_normalized_test_settings", lambda *_args, **_kwargs: {
-        "seed": 77,
-        "aspectRatio": "1:1 (Square)",
-        "megapixels": 0.2,
-        "duration": 5,
-    })
+    patch_default_test_model(
+        monkeypatch,
+        template={},
+        settings={
+            "seed": 77,
+            "aspectRatio": "1:1 (Square)",
+            "megapixels": 0.2,
+            "duration": 5,
+        },
+    )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
     monkeypatch.setattr(bench, "_active_threads", {})
@@ -1663,15 +1702,18 @@ def test_first_test_returns_direct_start_payload_without_latest_status_lookup(tm
     candidate = staged / "epoch01.safetensors"
     candidate.write_bytes(b"weights")
 
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
-    monkeypatch.setattr(bench, "_load_template", lambda: {})
-    monkeypatch.setattr(bench, "_normalized_test_settings", lambda *_args, **_kwargs: {
-        "seed": 77,
-        "aspectRatio": "1:1 (Square)",
-        "megapixels": 0.2,
-        "duration": 5,
-    })
+    patch_default_test_model(
+        monkeypatch,
+        template={},
+        settings={
+            "seed": 77,
+            "aspectRatio": "1:1 (Square)",
+            "megapixels": 0.2,
+            "duration": 5,
+        },
+    )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
     monkeypatch.setattr(bench, "_active_threads", {})
@@ -1681,7 +1723,7 @@ def test_first_test_returns_direct_start_payload_without_latest_status_lookup(tm
         "session": "2026-09-20_0100-h3",
         "resultFolder": "sets/subject/test-generations/2026-09-20_0100-h3",
     })
-    monkeypatch.setattr(bench, "status", lambda _folder: (_ for _ in ()).throw(AssertionError("enqueue should not call status()")))
+    monkeypatch.setattr(bench, "status", lambda _folder, model_id=None: (_ for _ in ()).throw(AssertionError("enqueue should not call status()")))
 
     payload = bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
 
@@ -1727,7 +1769,7 @@ def test_remove_candidate_allows_local_test_fifo_reference(tmp_path, monkeypatch
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
 
-    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
     monkeypatch.setattr(bench, "_pending_tests", [{
         "id": "queued-one",
         "folder": "sets/subject",

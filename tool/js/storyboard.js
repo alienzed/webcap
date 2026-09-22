@@ -282,9 +282,12 @@
   function restorePreviousConcept() {
     if (!storyState.story || storyState.director.busy || typeof storyState.story.previousConcept !== 'string') return;
     var storyId = storyState.story.id;
-    request({
-      operation: 'restore_previous_concept',
-      storyId: storyId
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () {
+      return request({
+        operation: 'restore_previous_concept',
+        storyId: storyId
+      });
     }).then(function (payload) {
       if (!storyState.story || storyState.story.id !== storyId) return;
       storyState.story = payload.story;

@@ -1,0 +1,73 @@
+from tool.server import app as app_module
+
+
+def test_storyboard_route_is_independent_of_current_set(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    root.mkdir()
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", str(root))
+
+    client = app_module.app.test_client()
+
+    created = client.post("/fs/storyboard", json={
+        "operation": "create_story",
+        "story": {
+            "title": "Storm Hotel",
+            "concept": "Arrival in a storm.",
+            "tags": ["storm", "hotel"],
+            "pinned": True,
+        },
+    })
+    assert created.status_code == 200
+    story = created.get_json()["story"]
+    assert story["title"] == "Storm Hotel"
+
+    listed = client.get("/fs/storyboard")
+    assert listed.status_code == 200
+    assert listed.get_json()["stories"][0]["id"] == story["id"]
+
+    loaded = client.get("/fs/storyboard", query_string={"story": story["id"]})
+    assert loaded.status_code == 200
+    assert loaded.get_json()["story"]["concept"] == "Arrival in a storm."
+
+    scene_added = client.post("/fs/storyboard", json={
+        "operation": "add_scene",
+        "storyId": story["id"],
+        "scene": {
+            "title": "Arrival",
+            "prompt": "A car arrives at night.",
+            "durationSeconds": 8,
+        },
+    })
+    assert scene_added.status_code == 200
+    scene = scene_added.get_json()["scene"]
+
+    removed = client.post("/fs/storyboard", json={
+        "operation": "delete_scene",
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+    })
+    assert removed.status_code == 200
+    assert scene["id"] in removed.get_json()["story"]["removedScenes"]
+
+    restored = client.post("/fs/storyboard", json={
+        "operation": "restore_scene",
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+    })
+    assert restored.status_code == 200
+    assert scene["id"] in restored.get_json()["story"]["scenes"]
+
+    story_path = root / "output" / "storyboards" / story["id"] / "story.json"
+    assert story_path.is_file()
+
+
+def test_storyboard_route_rejects_unknown_operation(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    root.mkdir()
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", str(root))
+    client = app_module.app.test_client()
+
+    response = client.post("/fs/storyboard", json={"operation": "nope"})
+
+    assert response.status_code == 400
+    assert response.get_json() == {"ok": False, "error": "Unknown Storyboard operation."}

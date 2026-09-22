@@ -256,9 +256,11 @@ def test_test_generations_compare_mode_reuses_current_session_results():
     assert "function buildResultFooter(result, options)" in script
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
     result_block = script.split("function renderResults(status)", 1)[1].split("function syncActiveRunControls(status)", 1)[0]
-    assert "item.appendChild(buildResultFooter(result));" in compare_block
-    assert "card.appendChild(buildResultFooter(result));" in result_block
-    assert "card.appendChild(buildResultFooter(failure, { failed: true }));" in result_block
+    assert "var remove = buildResultRemoveButton(result);" in compare_block
+    assert "if (remove) item.appendChild(remove);" in compare_block
+    assert "var remove = buildResultRemoveButton(result);" in result_block
+    assert "if (remove) card.appendChild(remove);" in result_block
+    assert "var remove = buildResultRemoveButton(failure);" in result_block
     assert "remove.dataset.removeCandidate = candidateFile" in script
     assert ".test-generations-compare-stage" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
@@ -377,10 +379,15 @@ def test_test_result_footer_identity_timing_and_remove_contract():
     assert "return seconds + 's';" in script
     assert "opts.failed ? 'Failed after ' + elapsed : elapsed" in script
     assert "source.title = identity.secondary;" in script
-    assert "remove.textContent = 'Remove';" in script
+    assert "function buildResultRemoveButton(result)" in script
+    assert "remove.textContent = '×';" in script
+    assert "Remove this staged candidate and its result from this session." in script
+    assert "secondaryRow.className = 'test-generations-result-secondary';" in script
     assert ".test-generations-result-source" in css
     assert ".test-generations-result-elapsed" in css
+    assert ".test-generations-result-secondary" in css
     assert ".test-generations-result-remove" in css
+    assert "position: absolute;" in css
 
 
 def test_test_result_stars_are_shared_by_grid_and_compare():

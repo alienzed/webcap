@@ -277,6 +277,7 @@ def test_test_bench_activity_rail_and_live_session_contract():
     assert "function refreshActivityButton()" in script
     assert "function openTestBenchActivity()" in script
     assert "window.testGenerationsFolderLoaded = testGenerationsFolderLoaded" in script
+    assert "window.openTestBenchForFolder = openTestBenchFolder" in script
     assert "window.refreshTestBenchActivity = refreshActivityButton" in script
     assert "activityButton.classList.toggle('test-running', !!active)" in script
     assert ".activity-rail-btn.test-running::after" in (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")

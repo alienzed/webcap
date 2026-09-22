@@ -11,8 +11,8 @@ def default_prompt(workflow):
 
 
 def template_settings(workflow):
-    dimensions = str((((workflow.get("328") or {}).get("inputs") or {}).get("dimensions") or "")).strip()
-    if not dimensions:
+    dimensions = str((((workflow.get("328") or {}).get("inputs") or {}).get("dimensions") or ""))
+    if not dimensions.strip():
         raise ValueError("Krea Test workflow has no dimensions in node 328.")
     return {"dimensions": dimensions}
 
@@ -20,8 +20,8 @@ def template_settings(workflow):
 def normalize_settings(workflow, new_seed, values=None):
     defaults = template_settings(workflow)
     selected = values if isinstance(values, dict) else {}
-    selected_dimensions = str(selected.get("dimensions") or defaults["dimensions"]).strip()
-    if not selected_dimensions:
+    selected_dimensions = str(selected.get("dimensions") or defaults["dimensions"])
+    if not selected_dimensions.strip():
         raise ValueError("Test dimensions are required.")
     try:
         seed = selected.get("seed")

@@ -1,5 +1,6 @@
 (function () {
-  var H3_PROFILE_ID = 'minimax_h3';
+  var supportedTestModelIds = [];
+  var testModelsLoaded = false;
   var pollTimer = null;
   var prepared = null;
   var launchFolder = '';
@@ -226,7 +227,29 @@
   }
 
   function isTestModelSupported() {
-    return getWorkingModelProfileId() === H3_PROFILE_ID;
+    return supportedTestModelIds.indexOf(String(getWorkingModelProfileId() || '')) !== -1;
+  }
+
+  function refreshSupportedTestModels() {
+    return fetch('/fs/test_generations/models').then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Could not read supported Test models.');
+        }
+        supportedTestModelIds = Array.isArray(payload.models)
+          ? payload.models.map(function (item) { return String(item && item.id || ''); }).filter(Boolean)
+          : [];
+        testModelsLoaded = true;
+        syncLaunchVisibility();
+        syncActiveRunControls(currentStatus);
+        return payload;
+      });
+    }).catch(function (err) {
+      testModelsLoaded = true;
+      supportedTestModelIds = [];
+      syncLaunchVisibility();
+      throw err;
+    });
   }
 
   function syncLaunchVisibility() {
@@ -235,11 +258,11 @@
     var hasFolder = !!(state && state.folder);
     var supported = isTestModelSupported();
     button.classList.toggle('hidden', !hasFolder);
-    button.disabled = hasFolder && !supported;
-    button.textContent = supported ? 'Open Test Bench' : 'H3 Test Only';
+    button.disabled = hasFolder && (!testModelsLoaded || !supported);
+    button.textContent = !testModelsLoaded ? 'Loading Test Bench…' : (supported ? 'Open Test Bench' : 'Testing unavailable');
     button.title = supported
-      ? 'Compare staged H3 LoRAs with frozen generation settings.'
-      : 'Test Bench currently supports MiniMax H3 only. Select MiniMax H3 as the working model to open it.';
+      ? 'Compare staged LoRAs with frozen generation settings.'
+      : 'Test Generations is not available for the selected Base Model.';
   }
 
   function stagedFileParts(fileName) {
@@ -252,7 +275,7 @@
 
   function sessionLabel(sessionName) {
     var name = String(sessionName || '');
-    var match = name.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})-h3$/i);
+    var match = name.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})(?:-|$)/i);
     return match ? match[1] + ' · ' + match[2] + ':' + match[3] : name;
   }
 
@@ -1165,7 +1188,7 @@
       runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;
       runBtn.title = supported
         ? 'Queue this frozen Test batch.'
-        : 'New Test runs currently require MiniMax H3 as the working model.';
+        : 'Test Generations is not available for the selected Base Model.';
     }
   }
 
@@ -1820,7 +1843,7 @@
     renderStatus({ status: 'idle' });
     syncActiveTestCard({ status: 'idle' });
     refreshActivityButton();
-    request('test_prepare').then(function (payload) {
+    request('test_prepare', { modelId: getWorkingModelProfileId() }).then(function (payload) {
       prepared = payload;
       renderStagedFiles(payload);
       renderSessions(payload.sessions, []);
@@ -1841,7 +1864,7 @@
 
   function startRun() {
     if (!isTestModelSupported()) {
-      return showError(new Error('New Test runs currently require MiniMax H3 as the working model.'));
+      return showError(new Error('Test Generations is not available for the selected Base Model.'));
     }
     var name = String(el('test-generations-session-name') && el('test-generations-session-name').value || '').trim();
     var prompt = String(el('test-generations-prompt') && el('test-generations-prompt').value || '').trim();
@@ -1863,6 +1886,7 @@
     request('test_enqueue', {
       name: name,
       selectedFiles: selectedFiles,
+      modelId: getWorkingModelProfileId(),
       includeBase: includeBase,
       prompt: prompt,
       aspectRatio: aspectRatio,
@@ -1927,7 +1951,8 @@
   function removeCandidate(fileName, sessionName) {
     return request('test_remove_candidate', {
       fileName: String(fileName || ''),
-      session: String(sessionName || '')
+      session: String(sessionName || ''),
+      modelId: getWorkingModelProfileId()
     }).then(function (payload) {
       if (prepared) {
         prepared.count = Number(payload.count || 0);
@@ -2106,9 +2131,11 @@
     window.addEventListener('webcap:working-model-changed', function () {
       syncLaunchVisibility();
       syncActiveRunControls(currentStatus);
+      if (isOpen() && isTestModelSupported()) openPane();
     });
     syncTestRailCollapseUi();
     syncLaunchVisibility();
+    refreshSupportedTestModels().catch(showError);
     refreshActivityButton();
   }
 

@@ -1958,6 +1958,15 @@
     renderStatus({ status: 'idle' });
     syncActiveTestCard({ status: 'idle' });
     refreshActivityButton();
+    if (!isTestModelSupported()) {
+      if (summary) summary.textContent = 'Testing unavailable for selected Base Model.';
+      if (errorEl) {
+        errorEl.textContent = 'Test Generations is not available for the selected Base Model.';
+        errorEl.classList.remove('hidden');
+      }
+      syncActiveRunControls({ status: 'idle' });
+      return;
+    }
     request('test_prepare', { modelId: getWorkingModelProfileId() }).then(function (payload) {
       prepared = payload;
       if (Array.isArray(payload.warnings)) {
@@ -2252,7 +2261,7 @@
     window.addEventListener('webcap:working-model-changed', function () {
       syncLaunchVisibility();
       syncActiveRunControls(currentStatus);
-      if (isOpen() && isTestModelSupported()) openPane();
+      if (isOpen()) openPane();
     });
     syncTestRailCollapseUi();
     syncLaunchVisibility();

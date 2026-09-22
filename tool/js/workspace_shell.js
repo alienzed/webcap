@@ -439,17 +439,13 @@ function syncApplicationShellContext() {
   }
 
   if (workspaceTitle) {
-    workspaceTitle.textContent = storyboardOpen
-      ? 'Storyboard'
-      : (testOpen
-      ? 'Test Generations'
-      : (surface === 'training'
-        ? 'Training'
-        : (surface === 'reviewOutput'
-          ? 'Review Set'
-          : (surface === 'grid'
-            ? 'Grid'
-            : (surface === 'focus' ? 'Focus' : 'Prep')))));
+    if (storyboardOpen) workspaceTitle.textContent = 'Storyboard';
+    else if (testOpen) workspaceTitle.textContent = 'Test Generations';
+    else if (surface === 'training') workspaceTitle.textContent = 'Training';
+    else if (surface === 'reviewOutput') workspaceTitle.textContent = 'Review Set';
+    else if (surface === 'grid') workspaceTitle.textContent = 'Grid';
+    else if (surface === 'focus') workspaceTitle.textContent = 'Focus';
+    else workspaceTitle.textContent = 'Prep';
   }
 
   renderApplicationHeaderBreadcrumb(navigation);

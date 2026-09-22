@@ -59,6 +59,11 @@ function reportConsoleWarning(source, message) {
 }
 
 
+function reportConsoleInfo(source, message) {
+  appendToConsolePanel('[' + String(source || 'WebCap') + '] ' + String(message || ''));
+}
+
+
 function isConsolePanelVisible() {
   if (!ui.consolePanelEl) return false;
   return !ui.consolePanelEl.classList.contains('hidden') &&

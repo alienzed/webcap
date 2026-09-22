@@ -178,3 +178,17 @@ def test_storyboard_director_actions_share_one_busy_state_and_concept_restore():
     assert "setDirectorBusy(false);" in storyboard
     assert "function restorePreviousConcept()" in storyboard
     assert "operation: 'restore_previous_concept'" in storyboard
+
+
+def test_storyboard_take_generation_uses_global_console_and_recovers_button_on_failure():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+    console = (ROOT / "tool" / "js" / "console_panel.js").read_text(encoding="utf-8")
+
+    assert "function reportConsoleInfo(source, message)" in console
+    assert "function reportGenerationStatus(sceneId, job, previousJob)" in storyboard
+    assert "reportConsoleInfo(generationConsoleLabel(sceneId)" in storyboard
+    assert "syncGenerationButton(sceneId, null);" in storyboard
+    assert "throw new Error(job.error || 'Storyboard generation failed.');" in storyboard
+    assert "data-generation-status" not in storyboard
+    assert ".storyboard-generation-status" not in css

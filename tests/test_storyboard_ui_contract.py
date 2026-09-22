@@ -56,6 +56,12 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "rate_take" in store
     assert "select_take" in store
     assert "data-take-upload" in storyboard
+    assert "data-take-action=\"remove\"" in storyboard
+    assert "remove_take" in storyboard
+    assert "restore_take" in storyboard
+    assert "set_scene_reference_from_take" in storyboard
+    assert "data-reference-previous" in storyboard
+    assert "data-reference-apply" in storyboard
     assert "Selected sequence" in storyboard
 
     assert "ollama" not in app.lower()

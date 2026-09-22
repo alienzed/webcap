@@ -229,7 +229,7 @@ Early authoring operations should be explicit functions rather than a general ag
 - inspect Story continuity
 - optionally return structured JSON
 
-Manual prompt fields remain fully usable without an LLM.
+Manual prompt fields remain fully usable without an LLM. Storyboard generation always consumes those stored manual fields; future LLM assistance may propose edits to them but must never become a prerequisite for generation.
 
 ### ComfyUI
 
@@ -319,18 +319,26 @@ Still to add:
 
 Goal: generate Takes without coupling Storyboard to Test Generations.
 
-Deliver a small Storyboard-owned generation boundary that:
+The first usable slice is now implemented with a Storyboard-owned MiniMax H3 path:
 
-- discovers supported ComfyUI assets/capabilities
-- lists only LoRAs ComfyUI can see
-- freezes Scene intent into Take provenance
-- submits a configured workflow
-- monitors completion/failure
-- copies/records output into the Story's take structure
-- supports one Take, bounded batch, and supervised continuous generation
-- begins with the current MiniMax H3 workflow
+- a dedicated Storyboard API-format H3 workflow template, separate from Test Generations
+- a dedicated Storyboard ComfyUI transport/worker with no Test Generations state or queue dependency
+- manual Scene prompt, duration, aspect ratio, megapixels, wildcard intent, and seed behavior feed the workflow directly
+- ComfyUI model/VAE/turbo-LoRA names are resolved against what the running ComfyUI instance actually exposes
+- generation runs asynchronously and reports visible running/completed/failed state in the Scene
+- completed MP4 output is copied into the Scene's Take folder
+- the generated Take freezes the actual prompt, source prompt, duration, aspect ratio, megapixels, seed, workflow profile, and provider job ID
+- manual Story/Scene text editing remains the canonical authoring path; an LLM is not required
 
-Only extract a lower-level shared ComfyUI executor from Test Generations if the extraction clearly simplifies both consumers and preserves existing behavior.
+Still to add after real usage validates this slice:
+
+- Storyboard LoRA discovery/selection beyond the H3 turbo LoRA already in the base workflow
+- map semantic first/last-frame references into the H3 image-to-video sockets
+- stop/cancel and restart recovery for Storyboard generation jobs
+- bounded batch generation if the one-Take workflow proves useful
+- cleanup of Storyboard-owned temporary ComfyUI output after the Take copy is confirmed
+
+Do not extract a shared ComfyUI service from Test Generations merely to reduce duplicated transport code. Revisit sharing only if both consumers have a stable identical lower-level need.
 
 ### Phase 4 - Reference continuity
 

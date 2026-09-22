@@ -222,7 +222,7 @@ The first Storyboard Director runtime is now **llama.cpp**, managed by WebCap as
 The runtime uses llama.cpp's router mode rather than one hard-coded model process:
 
 - WebCap starts `llama-server` locally on loopback only;
-- `--models-dir` points at a dedicated Director GGUF folder;
+- `--models-dir` points at WebCap's existing shared Model Root `text_encoders` folder;
 - the Storyboard Director selector is populated from llama.cpp's model list;
 - `--models-max 1` keeps at most one Director model resident;
 - WebCap explicitly loads the selected model for a Director request and unloads it afterward;
@@ -401,7 +401,7 @@ Goal: make authoring faster without changing the canonical Story model.
 Current first runtime slice:
 
 - WebCap-managed llama.cpp router process on loopback;
-- local GGUF discovery through a configurable Director model folder;
+- local GGUF discovery through the existing configured WebCap Model Root (`text_encoders`);
 - Storyboard-level Director model selector;
 - existing `write_prompt` and `refine_prompt` contracts executed through llama.cpp;
 - thinking disabled for these bounded authoring calls;
@@ -490,7 +490,6 @@ Minimal configuration lives under `storyboard.director` in `tool/config.json`:
   "storyboard": {
     "director": {
       "llama_server": "/absolute/path/to/llama-server",
-      "models_dir": "/absolute/path/to/director-models",
       "port": 8189,
       "context_size": 8192,
       "max_tokens": 4096
@@ -499,9 +498,9 @@ Minimal configuration lives under `storyboard.director` in `tool/config.json`:
 }
 ```
 
-`llama_server` may be left empty when `llama-server` is already on WebCap's PATH. `models_dir` may also be left empty; WebCap then uses `<filesystem.models>/director` when a models root exists, otherwise `<filesystem.root>/models/director`.
+`llama_server` may be left empty when `llama-server` is already on WebCap's PATH. Director model discovery reuses WebCap's existing `filesystem.models` / **Models Root** setting and scans its `text_encoders` subfolder, so there is no second model-root configuration.
 
-Put local `.gguf` Director models in that folder. WebCap does not automatically download multi-gigabyte models. The first implementation intentionally requires an explicit local model file so downloads remain visible and user-controlled.
+Put local `.gguf` Director models in that existing `text_encoders` folder. On the WSL training machine, a Windows-style Models Root is converted through WebCap's existing WSL path helper before llama.cpp starts. WebCap does not automatically download multi-gigabyte models; downloads remain visible and user-controlled.
 
 On the WSL training machine, prefer running a Linux CUDA build of llama.cpp inside the same WSL environment as WebCap. A Windows `llama-server.exe` can introduce path-translation problems for model files even though WSL can launch Windows executables.
 

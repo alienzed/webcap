@@ -37,6 +37,7 @@ TEST_ASPECT_RATIO_OPTIONS = (
 )
 _lock = threading.Lock()
 _status_lock = threading.Lock()
+_rating_lock = threading.Lock()
 _dispatch_lock = threading.Lock()
 _active_threads = {}
 _active_sessions = {}
@@ -1020,19 +1021,20 @@ def rate_result(folder_path, session_name, output_video, rating):
         raise ValueError("Test result rating must be between 0 and 5.")
 
     state_path = session / ".webcap_state.json"
-    folder_state = read_folder_state(state_path)
-    ratings = folder_state.get("ratings_by_media")
-    if not isinstance(ratings, dict):
-        ratings = {}
-    else:
-        ratings = dict(ratings)
+    with _rating_lock:
+        folder_state = read_folder_state(state_path)
+        ratings = folder_state.get("ratings_by_media")
+        if not isinstance(ratings, dict):
+            ratings = {}
+        else:
+            ratings = dict(ratings)
 
-    if normalized_rating == 0:
-        ratings.pop(output_name, None)
-    else:
-        ratings[output_name] = normalized_rating
-    folder_state["ratings_by_media"] = ratings
-    write_folder_state_atomic(state_path, folder_state)
+        if normalized_rating == 0:
+            ratings.pop(output_name, None)
+        else:
+            ratings[output_name] = normalized_rating
+        folder_state["ratings_by_media"] = ratings
+        write_folder_state_atomic(state_path, folder_state)
 
     return {
         "operation": "test_rate_result",

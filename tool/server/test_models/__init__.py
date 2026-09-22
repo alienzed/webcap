@@ -37,10 +37,10 @@ class TestModel:
         if resolver is None:
             return {}
         if not callable(resolver):
-            raise RuntimeError("Test model setting_options must be callable.")
+            raise TypeError("Test model setting_options must be callable.")
         options = resolver(workflow, available_names)
         if not isinstance(options, dict):
-            raise RuntimeError("Test model setting_options must return an object.")
+            raise TypeError("Test model setting_options must return an object.")
         return options
 
     def __getattr__(self, name):

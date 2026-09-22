@@ -207,6 +207,7 @@ Storyboard keeps its LLM instructions in versioned repo documents rather than re
 - `docs/mmh3-prompt-guidelines.md` — MiniMax H3-specific prompt-writing rules grounded in the current official H3 guides.
 - `docs/mmh3-prompt-template.txt` — concise base-mode skeleton copied from the current official MiniMax H3 output contract; it is not a competing WebCap-specific format.
 - `docs/storyboard-director-context.txt` — compact copy/paste director context for immediate manual testing with ComfyUI `Generate Text`.
+- `docs/storyboard-scene-plan.schema.json` — strict JSON contract for whole-Story -> ordered Scene planning; WebCap validates before creating canonical Scenes.
 
 WebCap should eventually assemble provider requests from these stable instructions plus current Story/Scene context. The provider is not the authoritative session store.
 
@@ -367,7 +368,7 @@ Candidates:
 - correction/revision loop
 - continuity review
 - lightweight conversational panel if it proves useful
-- structured output validation before applying changes
+- structured Story-planning output validated against `docs/storyboard-scene-plan.schema.json` before applying changes
 
 Manual editing remains available at all times. AI output proposes or edits the same Scene objects the user can edit directly.
 

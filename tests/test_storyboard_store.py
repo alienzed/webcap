@@ -68,8 +68,15 @@ def test_story_scene_lifecycle(storyboard_fs):
     )
     assert reordered["sceneOrder"][0] == second["id"]
 
-    deleted = storyboard_store.delete_scene(story["id"], duplicate["id"])
-    assert duplicate["id"] not in deleted["scenes"]
+    removed = storyboard_store.delete_scene(story["id"], duplicate["id"])
+    assert duplicate["id"] not in removed["scenes"]
+    assert duplicate["id"] in removed["removedScenes"]
+    assert "removedAt" in removed["removedScenes"][duplicate["id"]]
+
+    restored = storyboard_store.restore_scene(story["id"], duplicate["id"])
+    assert duplicate["id"] in restored["scenes"]
+    assert duplicate["id"] not in restored["removedScenes"]
+    assert restored["sceneOrder"][-1] == duplicate["id"]
 
 
 def test_reorder_requires_every_scene_exactly_once(storyboard_fs):

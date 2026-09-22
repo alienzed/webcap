@@ -937,7 +937,7 @@
                                             <strong>Next run</strong>
                                             <button id="test-generations-info-btn" type="button" class="mini-info-btn" title="How Test Generations works" aria-label="How Test Generations works">i</button>
                                         </div>
-                                        <span id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</span>
+                                        <span id="test-generations-summary" class="test-generations-summary">Loading Test folder...</span>
                                     </div>
                                     <label class="training-run-option test-generations-prompt">
                                         <span>Prompt</span>
@@ -945,10 +945,11 @@
                                     </label>
                                     <div class="test-generations-setup-options">
                                         <div class="test-generations-settings-grid">
-                                            <label class="training-run-option"><span>Aspect ratio</span><select id="test-generations-aspect"></select></label>
-                                            <label class="training-run-option"><span>Resolution (MP)</span><input id="test-generations-megapixels" type="number" min="0.2" step="0.1"></label>
-                                            <label class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="3" step="1"></label>
-                                            <label class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>
+                                            <label id="test-generations-aspect-field" class="training-run-option"><span>Aspect ratio</span><select id="test-generations-aspect"></select></label>
+                                            <label id="test-generations-megapixels-field" class="training-run-option"><span>Resolution (MP)</span><input id="test-generations-megapixels" type="number" min="0.2" step="0.1"></label>
+                                            <label id="test-generations-duration-field" class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="3" step="1"></label>
+                                            <label id="test-generations-dimensions-field" class="training-run-option hidden"><span>Dimensions</span><input id="test-generations-dimensions" type="text"></label>
+                                            <label id="test-generations-seed-field" class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>
                                         </div>
                                         <div class="test-generations-actions">
                                             <label class="test-generations-session-name">

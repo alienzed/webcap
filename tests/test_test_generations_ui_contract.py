@@ -4,6 +4,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_test_settings_use_comfy_dimensions_choices():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert '<select id="test-generations-dimensions"></select>' in html
+    assert "payload.settingOptions && Array.isArray(payload.settingOptions.dimensions)" in script
+    assert "dimensions.value = selectedDimensions" in script
+
+
 def test_test_generations_uses_training_pane_and_core_controls():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

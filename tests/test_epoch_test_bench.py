@@ -609,9 +609,9 @@ def test_base_workflow_bypasses_candidate_lora_loader():
     assert workflow["138"]["inputs"]["clip"] == ["128", 0]
 
 
-def test_new_session_seed_is_javascript_safe():
+def test_new_session_seed_uses_portable_32_bit_range():
     seed = bench._new_session_seed()
-    assert 0 <= seed < 2 ** 53
+    assert 0 <= seed <= 4294967295
 
 
 def test_visible_status_marks_persisted_running_session_interrupted_without_worker(tmp_path, monkeypatch):

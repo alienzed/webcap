@@ -103,3 +103,15 @@ def test_storyboard_document_records_file_based_guardrails():
     assert "Storyboard is additive, not invasive." in doc
     assert "WebCap owns meaning; providers own execution" in doc
     assert "Phase 1 - Manual-first functional Storyboard" in doc
+
+
+def test_storyboard_save_barrier_waits_for_inflight_autosaves():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "storySavePromise: null" in storyboard
+    assert "sceneSavePromises: {}" in storyboard
+    assert "var previous = storyState.storySavePromise;" in storyboard
+    assert "var previous = storyState.sceneSavePromises[sceneId];" in storyboard
+    assert "return Promise.all(pending).then(function () {" in storyboard
+    assert "saveStoryNow().catch(reportError);" in storyboard
+    assert "saveSceneNow(sceneId).catch(reportError);" in storyboard

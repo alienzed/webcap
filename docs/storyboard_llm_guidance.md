@@ -198,6 +198,17 @@ What shape to return and whether explanatory prose is allowed.
 
 Do not send the entire Story, all Takes, the H3 guide, or a long chat transcript by default. Context should be deliberate, inspectable, and small enough that the model can distinguish instructions from background information. Prefer `style + current task` until a concrete operation proves it needs more.
 
+## First integration slice
+
+The first runtime integration should expose only two Scene-local operations:
+
+- `write_prompt`: create an H3 model-facing prompt from the stored manual Scene intent.
+- `refine_prompt`: revise the existing stored prompt from one explicit human correction.
+
+Do not add chat history, autonomous Story mutation, automatic Scene creation, or continuity-review loops to the first runtime integration. Those remain later operations after the local model proves useful.
+
+The pure request builder in `tool/server/storyboard_llm_contract.py` defines this boundary before any provider transport is attached.
+
 ## Task modes
 
 ### 1. Story Planner

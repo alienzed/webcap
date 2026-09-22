@@ -238,6 +238,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "sceneOrder": scene_order,
         "scenes": scenes,
         "removedScenes": removed_scenes,
+        "development": copy.deepcopy(current.get("development")) if isinstance(current.get("development"), dict) else None,
     }
 
 
@@ -311,6 +312,96 @@ def add_scene(story_id, payload=None):
     _write_json_atomic(_story_path(story_id), story)
     (_story_dir(story_id) / "takes" / scene_id).mkdir(parents=True, exist_ok=True)
     return story, scene
+
+
+def _validate_developed_plan(plan):
+    if not isinstance(plan, dict):
+        raise ValueError("Developed Story plan must be an object.")
+    scenes = plan.get("scenes")
+    if not isinstance(scenes, list) or len(scenes) < 2:
+        raise ValueError("Developed Story plan must contain at least two Scenes.")
+
+    normalized = []
+    for index, item in enumerate(scenes, start=1):
+        if not isinstance(item, dict):
+            raise ValueError("Developed Story Scene " + str(index) + " must be an object.")
+        title = str(item.get("title") or "").strip()
+        summary = str(item.get("summary") or "").strip()
+        entry_state = str(item.get("entryState") or "").strip()
+        exit_state = str(item.get("exitState") or "").strip()
+        prompt = str(item.get("prompt") or "").strip()
+        if not title or not summary or not entry_state or not exit_state or not prompt:
+            raise ValueError("Developed Story Scene " + str(index) + " is missing required content.")
+        try:
+            duration = float(item.get("suggestedDurationSeconds"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Developed Story Scene duration must be numeric.") from exc
+        if duration < 4 or duration > 15:
+            raise ValueError("Developed Story Scene duration must be between 4 and 15 seconds.")
+        continuity = item.get("continuity")
+        if not isinstance(continuity, dict):
+            raise ValueError("Developed Story Scene continuity must be an object.")
+        carry_forward = continuity.get("carryForward")
+        if not isinstance(carry_forward, list):
+            raise ValueError("Developed Story Scene carryForward must be a list.")
+        normalized.append({
+            "title": title,
+            "summary": summary,
+            "entryState": entry_state,
+            "exitState": exit_state,
+            "prompt": prompt,
+            "durationSeconds": duration,
+            "continuity": {
+                "continuesPreviousScene": bool(continuity.get("continuesPreviousScene")),
+                "carryForward": [str(value).strip() for value in carry_forward if str(value).strip()],
+            },
+        })
+    return normalized
+
+
+@_serialized_mutation
+def apply_developed_plan(story_id, plan, model_id=""):
+    story = load_story(story_id)
+    planned_scenes = _validate_developed_plan(plan)
+    now = _utc_now()
+
+    removed = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
+    active_order = list(story.get("sceneOrder") or [])
+    active_scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    for index, scene_id in enumerate(active_order):
+        scene = active_scenes.get(scene_id)
+        if not isinstance(scene, dict):
+            continue
+        archived = copy.deepcopy(scene)
+        archived["removedAt"] = now
+        archived["removedReason"] = "replaced_by_develop_story"
+        archived["removedOrderIndex"] = index
+        archived["removedBeforeId"] = active_order[index - 1] if index > 0 else None
+        archived["removedAfterId"] = active_order[index + 1] if index + 1 < len(active_order) else None
+        removed[scene_id] = archived
+
+    new_scenes = {}
+    new_order = []
+    for item in planned_scenes:
+        scene_id = _new_id("scene")
+        scene = _normalize_scene(scene_id, item)
+        new_scenes[scene_id] = scene
+        new_order.append(scene_id)
+
+    story["scenes"] = new_scenes
+    story["sceneOrder"] = new_order
+    story["removedScenes"] = removed
+    story["development"] = {
+        "createdAt": now,
+        "model": str(model_id or "").strip(),
+        "plan": copy.deepcopy(plan),
+    }
+    story["updatedAt"] = now
+    _write_json_atomic(_story_path(story_id), story)
+
+    for scene_id in new_order:
+        (_story_dir(story_id) / "takes" / scene_id).mkdir(parents=True, exist_ok=True)
+    return story
 
 
 @_serialized_mutation

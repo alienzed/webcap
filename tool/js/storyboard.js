@@ -8,6 +8,12 @@
     sceneTimers: {},
     generationJobs: {},
     sequenceExport: null,
+    generationCapabilities: {
+      loras: [],
+      baseLoras: [],
+      available: false,
+      error: ''
+    },
     director: {
       models: [],
       modelId: window.localStorage.getItem('webcap.storyboard.directorModel') || '',
@@ -64,6 +70,29 @@
         }
         return body;
       });
+    });
+  }
+
+  function refreshGenerationCapabilities() {
+    return fetch('/fs/storyboard/generation/capabilities').then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body || !body.ok) {
+          throw new Error((body && body.error) || 'Storyboard generation capabilities failed.');
+        }
+        storyState.generationCapabilities.available = true;
+        storyState.generationCapabilities.loras = body.loras || [];
+        storyState.generationCapabilities.baseLoras = body.baseLoras || [];
+        storyState.generationCapabilities.error = '';
+        if (storyState.story) renderScenes();
+        return body;
+      });
+    }).catch(function (err) {
+      storyState.generationCapabilities.available = false;
+      storyState.generationCapabilities.loras = [];
+      storyState.generationCapabilities.baseLoras = [];
+      storyState.generationCapabilities.error = String(err && err.message ? err.message : err);
+      if (storyState.story) renderScenes();
+      return null;
     });
   }
 
@@ -326,6 +355,27 @@
     return value == null ? fallback : value;
   }
 
+  function loraOptions(selectedName) {
+    var names = (storyState.generationCapabilities.loras || []).slice();
+    if (selectedName && names.indexOf(selectedName) < 0) names.unshift(selectedName);
+    if (!names.length) return '<option value="">No selectable LoRAs</option>';
+    return names.map(function (name) {
+      return '<option value="' + escapeHtml(name) + '"' + (name === selectedName ? ' selected' : '') + '>' +
+        escapeHtml(name) + '</option>';
+    }).join('');
+  }
+
+  function loraRowHtml(lora) {
+    lora = lora || {};
+    var name = String(lora.name || '');
+    var strength = lora.strength == null ? 1 : lora.strength;
+    return '<div class="storyboard-lora-row" data-scene-lora-row>' +
+      '<select data-scene-lora-name>' + loraOptions(name) + '</select>' +
+      '<input type="number" step="0.05" data-scene-lora-strength value="' + escapeHtml(strength) + '" aria-label="LoRA strength">' +
+      '<button type="button" class="review-captions-btn" data-scene-lora-remove title="Remove LoRA">×</button>' +
+    '</div>';
+  }
+
   function activeTakeOptions(story, selectedTakeId) {
     var options = '<option value="">Choose a Take</option>';
     (story.sceneOrder || []).forEach(function (sourceSceneId, sceneIndex) {
@@ -379,6 +429,13 @@
           generationStatus = 'Completed';
         }
       }
+      var sceneLoras = Array.isArray(scene.loras) ? scene.loras : [];
+      var loraRowsHtml = sceneLoras.map(loraRowHtml).join('');
+      var baseLoras = storyState.generationCapabilities.baseLoras || [];
+      var loraStatus = storyState.generationCapabilities.available
+        ? (baseLoras.length ? 'Base: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
+        : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
+      var canAddLora = storyState.generationCapabilities.available && (storyState.generationCapabilities.loras || []).length > 0;
       var referencesHtml = (Array.isArray(scene.references) ? scene.references : []).map(function (reference) {
         if (!reference || !reference.role) return '';
         return '<span class="storyboard-reference-chip">' +
@@ -457,6 +514,11 @@
             '</div>' +
             '<label class="storyboard-field"><span>Seed</span><input type="number" min="0" step="1" data-scene-field="seed" value="' + escapeHtml(seed) + '" placeholder="Set when fixed"></label>' +
             '<label class="storyboard-inline-check"><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
+            '<div class="storyboard-lora-panel">' +
+              '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
+              '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>' +
+              '<span class="storyboard-reference-empty">' + escapeHtml(loraStatus) + '</span>' +
+            '</div>' +
             '<div class="storyboard-reference-panel">' +
               '<strong>References</strong>' +
               (referencesHtml ? '<div class="storyboard-reference-chips">' + referencesHtml + '</div>' : '<span class="storyboard-reference-empty">No references assigned.</span>') +
@@ -623,7 +685,13 @@
       megapixels: field('megapixels').value,
       seedMode: field('seedMode').value,
       seed: seedNode.value === '' ? null : seedNode.value,
-      wildcardsEnabled: field('wildcardsEnabled').checked
+      wildcardsEnabled: field('wildcardsEnabled').checked,
+      loras: Array.prototype.map.call(root.querySelectorAll('[data-scene-lora-row]'), function (row) {
+        return {
+          name: row.querySelector('[data-scene-lora-name]').value,
+          strength: row.querySelector('[data-scene-lora-strength]').value
+        };
+      }).filter(function (item) { return !!item.name; })
     };
   }
 
@@ -973,6 +1041,7 @@
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     refreshDirector();
+    refreshGenerationCapabilities();
     refreshLibrary().then(function () {
       if (storyState.story) {
         renderStory();
@@ -1011,8 +1080,24 @@
       el(id).addEventListener('change', scheduleStorySave);
     });
 
-    el('storyboard-scenes-list').addEventListener('input', handleSceneInput);
+    el('storyboard-scenes-list').addEventListener('input', function (event) {
+      var loraRow = event.target.closest('[data-scene-lora-row]');
+      if (loraRow) {
+        var loraScene = loraRow.closest('.storyboard-scene[data-scene-id]');
+        if (!loraScene) throw new Error('LoRA Scene is missing.');
+        scheduleSceneSave(loraScene.dataset.sceneId);
+        return;
+      }
+      handleSceneInput(event);
+    });
     el('storyboard-scenes-list').addEventListener('change', function (event) {
+      var loraRow = event.target.closest('[data-scene-lora-row]');
+      if (loraRow) {
+        var loraScene = loraRow.closest('.storyboard-scene[data-scene-id]');
+        if (!loraScene) throw new Error('LoRA Scene is missing.');
+        scheduleSceneSave(loraScene.dataset.sceneId);
+        return;
+      }
       var upload = event.target.closest('[data-take-upload]');
       if (upload) {
         var uploadScene = upload.closest('.storyboard-scene[data-scene-id]');
@@ -1030,6 +1115,26 @@
       handleSceneInput(event);
     });
     el('storyboard-scenes-list').addEventListener('click', function (event) {
+      var addLora = event.target.closest('[data-scene-lora-add]');
+      if (addLora) {
+        var addLoraScene = addLora.closest('.storyboard-scene[data-scene-id]');
+        if (!addLoraScene) throw new Error('LoRA Scene is missing.');
+        var list = addLoraScene.querySelector('[data-scene-lora-list]');
+        if (!list) throw new Error('LoRA list is missing.');
+        list.insertAdjacentHTML('beforeend', loraRowHtml({}));
+        scheduleSceneSave(addLoraScene.dataset.sceneId);
+        return;
+      }
+      var removeLora = event.target.closest('[data-scene-lora-remove]');
+      if (removeLora) {
+        var removeLoraScene = removeLora.closest('.storyboard-scene[data-scene-id]');
+        if (!removeLoraScene) throw new Error('LoRA Scene is missing.');
+        var removeRow = removeLora.closest('[data-scene-lora-row]');
+        if (!removeRow) throw new Error('LoRA row is missing.');
+        removeRow.remove();
+        scheduleSceneSave(removeLoraScene.dataset.sceneId);
+        return;
+      }
       var directorWrite = event.target.closest('[data-director-write]');
       if (directorWrite) {
         var writeScene = directorWrite.closest('.storyboard-scene[data-scene-id]');

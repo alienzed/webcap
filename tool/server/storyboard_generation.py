@@ -34,6 +34,18 @@ ASPECT_RATIO_OPTIONS = (
 _lock = threading.Lock()
 _jobs = {}
 _active_job_id = None
+GPU_RESERVATION_OWNER = "storyboard-generation"
+
+
+def _reserve_gpu():
+    from .training_runner import reserve_gpu_for_external_work
+    if not reserve_gpu_for_external_work(GPU_RESERVATION_OWNER):
+        raise RuntimeError("GPU is busy with Training, Test Generations, or another Storyboard generation.")
+
+
+def _release_gpu():
+    from .training_runner import release_gpu_for_external_work
+    release_gpu_for_external_work(GPU_RESERVATION_OWNER)
 
 
 def _utc_now():
@@ -584,6 +596,7 @@ def _run_generation(job_id, story_id, scene_id, settings):
         app_config.debug_traceback()
         _update_job(job_id, status="failed", completedAt=_utc_now(), error=str(exc))
     finally:
+        _release_gpu()
         with _lock:
             if _active_job_id == job_id:
                 _active_job_id = None
@@ -603,6 +616,10 @@ def start_generation(story_id, scene_id):
             if active and active.get("status") in ("queued", "running"):
                 raise RuntimeError("A Storyboard generation is already running.")
             _active_job_id = None
+
+    _reserve_gpu()
+
+    with _lock:
         job_id = str(uuid.uuid4())
         _jobs[job_id] = {
             "jobId": job_id,
@@ -624,7 +641,15 @@ def start_generation(story_id, scene_id):
         daemon=True,
         name="storyboard-generation-" + job_id[:8],
     )
-    thread.start()
+    try:
+        thread.start()
+    except Exception:
+        _release_gpu()
+        with _lock:
+            _jobs.pop(job_id, None)
+            if _active_job_id == job_id:
+                _active_job_id = None
+        raise
     return _public_job(_jobs[job_id])
 
 

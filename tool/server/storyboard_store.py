@@ -341,9 +341,12 @@ def _validate_developed_plan(plan):
         continuity = item.get("continuity")
         if not isinstance(continuity, dict):
             raise ValueError("Developed Story Scene continuity must be an object.")
+        continues_previous = continuity.get("continuesPreviousScene")
+        if not isinstance(continues_previous, bool):
+            raise ValueError("Developed Story Scene continuesPreviousScene must be boolean.")
         carry_forward = continuity.get("carryForward")
-        if not isinstance(carry_forward, list):
-            raise ValueError("Developed Story Scene carryForward must be a list.")
+        if not isinstance(carry_forward, list) or any(not isinstance(value, str) for value in carry_forward):
+            raise ValueError("Developed Story Scene carryForward must be a list of strings.")
         normalized.append({
             "title": title,
             "summary": summary,
@@ -352,8 +355,8 @@ def _validate_developed_plan(plan):
             "prompt": prompt,
             "durationSeconds": duration,
             "continuity": {
-                "continuesPreviousScene": bool(continuity.get("continuesPreviousScene")),
-                "carryForward": [str(value).strip() for value in carry_forward if str(value).strip()],
+                "continuesPreviousScene": continues_previous,
+                "carryForward": [value.strip() for value in carry_forward if value.strip()],
             },
         })
     return normalized

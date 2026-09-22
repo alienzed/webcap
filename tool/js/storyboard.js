@@ -6,7 +6,13 @@
     story: null,
     saveTimer: 0,
     sceneTimers: {},
-    generationJobs: {}
+    generationJobs: {},
+    director: {
+      models: [],
+      modelId: window.localStorage.getItem('webcap.storyboard.directorModel') || '',
+      available: false,
+      error: ''
+    }
   };
 
   function el(id) {
@@ -42,6 +48,117 @@
         }
         return body;
       });
+    });
+  }
+
+  function directorRequest(payload) {
+    var options = payload
+      ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+      : {};
+    return fetch('/fs/storyboard/director', options).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body || !body.ok) {
+          throw new Error((body && body.error) || 'Storyboard Director request failed.');
+        }
+        return body;
+      });
+    });
+  }
+
+  function renderDirectorSelector() {
+    var select = el('storyboard-director-model');
+    var status = el('storyboard-director-status');
+    if (!select || !status) return;
+
+    var models = storyState.director.models || [];
+    if (!storyState.director.available) {
+      select.innerHTML = '<option value="">Director unavailable</option>';
+      select.disabled = true;
+      status.textContent = storyState.director.error || '';
+      return;
+    }
+
+    if (!models.length) {
+      select.innerHTML = '<option value="">No GGUF models found</option>';
+      select.disabled = true;
+      status.textContent = 'Add GGUFs to the Director model folder.';
+      return;
+    }
+
+    select.disabled = false;
+    select.innerHTML = models.map(function (model) {
+      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(model.label || model.id) + '</option>';
+    }).join('');
+
+    var selected = storyState.director.modelId;
+    if (!models.some(function (model) { return model.id === selected; })) {
+      selected = models[0].id;
+      storyState.director.modelId = selected;
+      window.localStorage.setItem('webcap.storyboard.directorModel', selected);
+    }
+    select.value = selected;
+    status.textContent = 'llama.cpp';
+  }
+
+  function refreshDirector() {
+    return directorRequest(null).then(function (payload) {
+      storyState.director.available = !!payload.available;
+      storyState.director.models = payload.models || [];
+      storyState.director.error = payload.error || '';
+      renderDirectorSelector();
+      return payload;
+    }).catch(function (err) {
+      storyState.director.available = false;
+      storyState.director.models = [];
+      storyState.director.error = String(err && err.message ? err.message : err);
+      renderDirectorSelector();
+    });
+  }
+
+  function updateSceneDirectorStatus(sceneId, text) {
+    var root = sceneElement(sceneId);
+    var node = root && root.querySelector('[data-director-status]');
+    if (node) node.textContent = text || '';
+  }
+
+  function runDirector(sceneId, operation) {
+    if (!storyState.story) return;
+    var modelId = storyState.director.modelId;
+    if (!modelId) {
+      reportError(new Error('Choose a Storyboard Director model first.'));
+      return;
+    }
+    var root = sceneElement(sceneId);
+    if (!root) throw new Error('Scene editor is missing for ' + sceneId + '.');
+
+    var instruction = '';
+    if (operation === 'refine_prompt') {
+      var correction = root.querySelector('[data-director-correction]');
+      instruction = correction ? correction.value.trim() : '';
+      if (!instruction) {
+        updateSceneDirectorStatus(sceneId, 'Enter a correction first.');
+        return;
+      }
+    }
+
+    updateSceneDirectorStatus(sceneId, 'Director working…');
+    flushPendingSaves().then(function () {
+      return directorRequest({
+        storyId: storyState.story.id,
+        sceneId: sceneId,
+        operation: operation,
+        model: modelId,
+        instruction: instruction
+      });
+    }).then(function (payload) {
+      var prompt = root.querySelector('[data-scene-field="prompt"]');
+      if (!prompt) throw new Error('Scene generation prompt field is missing.');
+      prompt.value = payload.result || '';
+      updateSceneDirectorStatus(sceneId, 'Generated with ' + String(payload.model || modelId));
+      return saveSceneNow(sceneId);
+    }).catch(function (err) {
+      updateSceneDirectorStatus(sceneId, 'Director failed');
+      reportError(err);
     });
   }
 
@@ -246,6 +363,12 @@
               '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="2" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
             '</div>' +
             '<label class="storyboard-field"><span>Generation prompt</span><textarea data-scene-field="prompt" rows="7" placeholder="Paste or write the full model-facing prompt here.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea></label>' +
+            '<div class="storyboard-director-actions">' +
+              '<button type="button" class="review-captions-btn" data-director-write>Write with Director</button>' +
+              '<input type="text" data-director-correction placeholder="Correction for existing prompt...">' +
+              '<button type="button" class="review-captions-btn" data-director-refine>Refine</button>' +
+              '<span class="storyboard-save-state" data-director-status></span>' +
+            '</div>' +
             '<label class="storyboard-field"><span>Notes</span><textarea data-scene-field="notes" rows="2" placeholder="Continuity reminders, corrections, ideas...">' + escapeHtml(sceneValue(scene, 'notes', '')) + '</textarea></label>' +
           '</div>' +
           '<div class="storyboard-scene-meta">' +
@@ -775,6 +898,7 @@
     workspace.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+    refreshDirector();
     refreshLibrary().then(function () {
       if (storyState.story) {
         renderStory();
@@ -792,6 +916,10 @@
 
     el('storyboard-new-btn').onclick = createStory;
     el('storyboard-add-scene-btn').onclick = addScene;
+    el('storyboard-director-model').addEventListener('change', function () {
+      storyState.director.modelId = this.value;
+      window.localStorage.setItem('webcap.storyboard.directorModel', this.value);
+    });
 
     el('storyboard-library-list').onclick = function (event) {
       var row = event.target.closest('[data-story-id]');
@@ -824,6 +952,20 @@
       handleSceneInput(event);
     });
     el('storyboard-scenes-list').addEventListener('click', function (event) {
+      var directorWrite = event.target.closest('[data-director-write]');
+      if (directorWrite) {
+        var writeScene = directorWrite.closest('.storyboard-scene[data-scene-id]');
+        if (!writeScene) throw new Error('Director Scene is missing.');
+        runDirector(writeScene.dataset.sceneId, 'write_prompt');
+        return;
+      }
+      var directorRefine = event.target.closest('[data-director-refine]');
+      if (directorRefine) {
+        var refineScene = directorRefine.closest('.storyboard-scene[data-scene-id]');
+        if (!refineScene) throw new Error('Director Scene is missing.');
+        runDirector(refineScene.dataset.sceneId, 'refine_prompt');
+        return;
+      }
       var generate = event.target.closest('[data-scene-generate]');
       if (generate) {
         var generateSceneRoot = generate.closest('.storyboard-scene[data-scene-id]');

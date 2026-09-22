@@ -295,18 +295,18 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
     ]
     queued = []
     monkeypatch.setattr(
-        bench,
-        "_available_comfy_lora_names",
-        lambda: ["mh3/set/epoch01.safetensors", "mh3/set/epoch02.safetensors"],
+        bench.get_test_model().adapter,
+        "available_lora_names",
+        lambda _available_names: ["mh3/set/epoch01.safetensors", "mh3/set/epoch02.safetensors"],
     )
 
-    monkeypatch.setattr(bench, "_load_template", lambda: {
+    template = {
         "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
         "129": {"inputs": {"noise_seed": 123}},
         "133": {"inputs": {"value": 7}},
         "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
         "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
-    })
+    }
 
     def queue(workflow):
         if "148" not in workflow:
@@ -325,7 +325,7 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
     monkeypatch.setattr(
         bench,
         "_wait_for_video",
-        lambda _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
+        lambda _model, _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
     )
     monkeypatch.setattr(
         bench,
@@ -333,7 +333,7 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
         lambda _video_ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
-    bench._run_batch("folder-key", session, loras, "prompt")
+    bench._run_batch("folder-key", session, loras, "prompt", template=template)
 
     status = bench._read_status(session)
     assert queued == [
@@ -346,7 +346,7 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
     assert status["failures"][0]["sourceLoRA"] == "epoch01.safetensors"
     assert [result["sourceLoRA"] for result in status["results"]] == ["Base", "epoch02.safetensors"]
     assert status["results"][0]["kind"] == "base"
-    assert status["results"][0]["outputVideo"] == "base.mp4"
+    assert status["results"][0]["mediaFile"] == "base.mp4"
 
 
 def test_run_batch_persists_elapsed_ms_for_success_and_failure(tmp_path, monkeypatch):
@@ -371,14 +371,18 @@ def test_run_batch_persists_elapsed_ms_for_success_and_failure(tmp_path, monkeyp
     times = iter([100.0, 107.5, 200.0, 201.75])
 
     monkeypatch.setattr(bench.time, "monotonic", lambda: next(times))
-    monkeypatch.setattr(bench, "_available_comfy_lora_names", lambda: ["mh3/run-03__epoch24.safetensors"])
-    monkeypatch.setattr(bench, "_load_template", lambda: {
+    monkeypatch.setattr(
+        bench.get_test_model().adapter,
+        "available_lora_names",
+        lambda _available_names: ["mh3/run-03__epoch24.safetensors"],
+    )
+    template = {
         "115": {"inputs": {"aspect_ratio": "2:3", "megapixels": 0.2}},
         "129": {"inputs": {"noise_seed": 123}},
         "133": {"inputs": {"value": 7}},
         "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
         "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
-    })
+    }
 
     def queue(workflow):
         if "148" in workflow:
@@ -389,7 +393,7 @@ def test_run_batch_persists_elapsed_ms_for_success_and_failure(tmp_path, monkeyp
     monkeypatch.setattr(
         bench,
         "_wait_for_video",
-        lambda _prompt_id, **_kwargs: {
+        lambda _model, _prompt_id, **_kwargs: {
             "filename": "base.mp4",
             "type": "output",
             "fullpath": "C:/ComfyUI/output/base.mp4",
@@ -401,7 +405,7 @@ def test_run_batch_persists_elapsed_ms_for_success_and_failure(tmp_path, monkeyp
         lambda _ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
-    bench._run_batch("folder-key", session, [lora], "prompt")
+    bench._run_batch("folder-key", session, [lora], "prompt", template=template)
 
     persisted = json.loads((session / "test.json").read_text(encoding="utf-8"))
     assert persisted["results"][0]["sourceLoRA"] == "Base"
@@ -431,23 +435,23 @@ def test_base_generation_does_not_depend_on_candidate_lora_inventory(tmp_path, m
     )
     lora = Path("C:/ComfyUI/models/loras/mh3/set/epoch01.safetensors")
     monkeypatch.setattr(
-        bench,
-        "_available_comfy_lora_names",
-        lambda: (_ for _ in ()).throw(RuntimeError("no candidate LoRAs available")),
+        bench.get_test_model().adapter,
+        "available_lora_names",
+        lambda _available_names: (_ for _ in ()).throw(RuntimeError("no candidate LoRAs available")),
     )
-    monkeypatch.setattr(bench, "_load_template", lambda: {
+    template = {
         "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
         "129": {"inputs": {"noise_seed": 123}},
         "133": {"inputs": {"value": 7}},
         "138": {"inputs": {"model": ["148", 0], "clip": ["148", 1]}},
         "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
         "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
-    })
+    }
     monkeypatch.setattr(bench, "_queue_workflow", lambda _workflow: "prompt-ok")
     monkeypatch.setattr(
         bench,
         "_wait_for_video",
-        lambda _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
+        lambda _model, _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
     )
     monkeypatch.setattr(
         bench,
@@ -455,7 +459,7 @@ def test_base_generation_does_not_depend_on_candidate_lora_inventory(tmp_path, m
         lambda _video_ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
-    bench._run_batch("folder-key", session, [lora], "prompt")
+    bench._run_batch("folder-key", session, [lora], "prompt", template=template)
 
     status = bench._read_status(session)
     assert status["status"] == "complete"
@@ -484,7 +488,11 @@ def test_run_batch_records_missing_candidate_and_continues(tmp_path, monkeypatch
     )
     first = Path("C:/ComfyUI/models/loras/mh3/set/epoch01.safetensors")
     missing = Path("C:/ComfyUI/models/loras/mh3/set/epoch02.safetensors")
-    monkeypatch.setattr(bench, "_available_comfy_lora_names", lambda: ["mh3/set/epoch01.safetensors"])
+    monkeypatch.setattr(
+        bench.get_test_model().adapter,
+        "available_lora_names",
+        lambda _available_names: ["mh3/set/epoch01.safetensors"],
+    )
     monkeypatch.setattr(bench, "_load_template", lambda: {
         "115": {"inputs": {"aspect_ratio": "2:3 (Portrait Photo)", "megapixels": 0.2}},
         "129": {"inputs": {"noise_seed": 123}},
@@ -496,7 +504,7 @@ def test_run_batch_records_missing_candidate_and_continues(tmp_path, monkeypatch
     monkeypatch.setattr(
         bench,
         "_wait_for_video",
-        lambda _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
+        lambda _model, _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
     )
     monkeypatch.setattr(
         bench,
@@ -504,7 +512,7 @@ def test_run_batch_records_missing_candidate_and_continues(tmp_path, monkeypatch
         lambda _video_ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
-    bench._run_batch("folder-key", session, [first, missing], "prompt")
+    bench._run_batch("folder-key", session, [first, missing], "prompt", template=template)
 
     status = bench._read_status(session)
     assert status["status"] == "complete"
@@ -671,12 +679,12 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
         "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
     }
     seen = []
-    monkeypatch.setattr(bench, "_load_template", lambda: pytest.fail("worker must use the resolved template from start"))
+    monkeypatch.setattr(bench.get_test_model(), "load_template", lambda: pytest.fail("worker must use the resolved template from start"))
     monkeypatch.setattr(bench, "_queue_workflow", lambda workflow: seen.append(workflow["127"]["inputs"]["unet_name"]) or "prompt-id")
     monkeypatch.setattr(
         bench,
         "_wait_for_video",
-        lambda _prompt_id, **_kwargs: {"filename": "x.mp4", "subfolder": "webcap-tests", "type": "output", "fullpath": "C:/ComfyUI/output/webcap-tests/x.mp4"},
+        lambda _model, _prompt_id, **_kwargs: {"filename": "x.mp4", "subfolder": "webcap-tests", "type": "output", "fullpath": "C:/ComfyUI/output/webcap-tests/x.mp4"},
     )
     monkeypatch.setattr(
         bench,
@@ -684,7 +692,11 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
         lambda _ref, destination, filename_prefix=None: Path(destination).write_bytes(b"video"),
     )
 
-    monkeypatch.setattr(bench, "_available_comfy_lora_names", lambda: ["mh3/epoch01.safetensors"])
+    monkeypatch.setattr(
+        bench.get_test_model().adapter,
+        "available_lora_names",
+        lambda _available_names: ["mh3/epoch01.safetensors"],
+    )
 
     bench._run_batch(
         "folder-key",

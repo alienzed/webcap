@@ -1043,6 +1043,78 @@ def test_prepare_then_start_from_session_folder_reuses_same_staged_loras(tmp_pat
 
 
 
+def test_start_queued_skips_selected_loras_removed_after_enqueue(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    keep = staged / "epoch20.safetensors"
+    removed = staged / "epoch10.safetensors"
+    keep.write_bytes(b"keep")
+    removed.write_bytes(b"remove")
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_read_json_response", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(bench, "_resolve_comfy_template_assets", lambda template: template)
+    monkeypatch.setattr(bench, "_load_template", lambda: {
+        "115": {"inputs": {"aspect_ratio": "2:3", "megapixels": 0.2}},
+        "129": {"inputs": {"noise_seed": 123}},
+        "133": {"inputs": {"value": 7}},
+        "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
+        "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
+    })
+    monkeypatch.setattr(bench, "_active_threads", {})
+    monkeypatch.setattr(bench, "_active_sessions", {})
+    monkeypatch.setattr(bench, "_stop_requests", set())
+
+    class FakeThread:
+        def __init__(self, target=None, args=(), **_kwargs):
+            self.args = args
+            self.started = False
+
+        def is_alive(self):
+            return self.started
+
+        def start(self):
+            self.started = True
+
+    threads = []
+    monkeypatch.setattr(bench.threading, "Thread", lambda *args, **kwargs: threads.append(FakeThread(*args, **kwargs)) or threads[-1])
+
+    request = {
+        "resolvedPrompt": "prompt",
+        "sourcePrompt": "prompt",
+        "selectedFiles": [removed.name, keep.name],
+        "includeBase": False,
+        "seed": 123,
+        "aspectRatio": "2:3",
+        "megapixels": 0.2,
+        "duration": 7,
+        "total": 2,
+    }
+    removed.unlink()
+
+    payload = bench.start_queued(tmp_path, request)
+
+    assert payload["status"] == "running"
+    assert payload["total"] == 1
+    assert [path.name for path in threads[0].args[2]] == [keep.name]
+
+
+def test_start_queued_skips_job_when_all_selected_loras_are_gone_and_base_is_off(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+
+    payload = bench.start_queued(tmp_path, {
+        "resolvedPrompt": "prompt",
+        "sourcePrompt": "prompt",
+        "selectedFiles": ["epoch10.safetensors"],
+        "includeBase": False,
+        "total": 1,
+    })
+
+    assert payload == {"status": "skipped"}
+    assert not (tmp_path / bench.TEST_RESULTS_DIR).exists()
+
+
 def test_recent_test_sets_exposes_set_level_summary_only(tmp_path, monkeypatch):
     set_folder = tmp_path / "HH4013"
     session = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1300-h3"

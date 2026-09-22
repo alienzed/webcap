@@ -32,7 +32,7 @@ from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
-from .storyboard_generation import generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
+from .storyboard_generation import generation_capabilities as storyboard_generation_capabilities, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_llm_runtime import run_contract as storyboard_run_llm_contract, status as storyboard_director_status
@@ -494,6 +494,15 @@ def storyboard_assembly_route():
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         app.logger.exception("STORYBOARD ASSEMBLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/generation/capabilities", methods=["GET"])
+def storyboard_generation_capabilities_route():
+    try:
+        return jsonify({"ok": True, **storyboard_generation_capabilities()})
+    except Exception as exc:
+        app.logger.exception("STORYBOARD GENERATION CAPABILITIES FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

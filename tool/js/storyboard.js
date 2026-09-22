@@ -216,7 +216,7 @@
   }
 
   function assemblyMatchesSelection(job, selected) {
-    if (!job || !Array.isArray(job.selection)) return false;
+    if (!job || !storyState.story || job.storyId !== storyState.story.id || !Array.isArray(job.selection)) return false;
     if (job.selection.length !== selected.length) return false;
     return job.selection.every(function (item, index) {
       return item.sceneId === selected[index].sceneId && item.takeId === selected[index].take.id;

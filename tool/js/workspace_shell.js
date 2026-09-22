@@ -105,6 +105,7 @@ function normalizeShellRouteWorkspace(value) {
   var workspace = String(value || '').trim().toLowerCase();
   if (workspace === 'training') return 'training';
   if (workspace === 'test') return 'test';
+  if (workspace === 'storyboard') return 'storyboard';
   if (workspace === 'review') return 'review';
   if (workspace === 'grid') return 'grid';
   return 'prep';
@@ -125,6 +126,7 @@ function parseShellLocationRoute() {
 function currentShellRouteWorkspace() {
   var navigation = deriveShellNavigationState();
   if (navigation.activity === 'test') return 'test';
+  if (navigation.activity === 'storyboard') return 'storyboard';
   if (navigation.workspaceRoot === 'training') return 'training';
   if (navigation.workspaceRoot === 'review') return 'review';
   if (navigation.workspaceRoot === 'grid') return 'grid';
@@ -137,7 +139,7 @@ function syncShellLocationRoute() {
   var workspace = currentShellRouteWorkspace();
   var params = new URLSearchParams();
   var folder = String(state && state.folder || '');
-  if (folder) params.set('folder', folder);
+  if (folder && workspace !== 'storyboard') params.set('folder', folder);
   if (workspace === 'training' && getTrainingWorkspaceEntryKind() === 'global') params.set('scope', 'global');
   var nextHash = '#/' + workspace + (params.toString() ? '?' + params.toString() : '');
   if (window.location.hash === nextHash) return;
@@ -173,6 +175,8 @@ function restoreInitialShellLocationRoute() {
     openMediaGridSurface();
   } else if (route.workspace === 'test' && typeof window.openTestBenchForCurrentFolder === 'function') {
     window.openTestBenchForCurrentFolder();
+  } else if (route.workspace === 'storyboard' && typeof window.openStoryboardActivity === 'function') {
+    window.openStoryboardActivity();
   } else {
     setWorkspaceSurface('default', { skipRemember: true });
   }
@@ -206,17 +210,22 @@ function toggleShellImmersive() {
 function deriveShellNavigationState() {
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   var testOpen = !!document.querySelector('.test-generations-pane:not(.hidden)');
-  var activity = testOpen ? 'test' : (surface === 'training' ? 'training' : 'prep');
-  var workspaceRoot = testOpen
-    ? 'test'
-    : (surface === 'training'
-      ? 'training'
-      : (surface === 'reviewOutput'
-        ? 'review'
-        : (surface === 'grid' ? 'grid' : (surface === 'focus' ? 'focus' : (surface === 'configEditor' ? 'config' : 'prep')))));
-  var contextKind = activity === 'training' && getTrainingWorkspaceEntryKind() === 'global'
-    ? 'global'
-    : (state && state.folder ? 'set' : 'none');
+  var storyboardOpen = !!document.querySelector('.storyboard-workspace:not(.hidden)');
+  var activity = storyboardOpen ? 'storyboard' : (testOpen ? 'test' : (surface === 'training' ? 'training' : 'prep'));
+  var workspaceRoot = storyboardOpen
+    ? 'storyboard'
+    : (testOpen
+      ? 'test'
+      : (surface === 'training'
+        ? 'training'
+        : (surface === 'reviewOutput'
+          ? 'review'
+          : (surface === 'grid' ? 'grid' : (surface === 'focus' ? 'focus' : (surface === 'configEditor' ? 'config' : 'prep'))))));
+  var contextKind = activity === 'storyboard'
+    ? 'none'
+    : (activity === 'training' && getTrainingWorkspaceEntryKind() === 'global'
+      ? 'global'
+      : (state && state.folder ? 'set' : 'none'));
   shellNavigationState.activity = activity;
   shellNavigationState.workspaceRoot = workspaceRoot;
   shellNavigationState.contextKind = contextKind;
@@ -414,9 +423,12 @@ function syncApplicationShellContext() {
   var annotationActions = document.getElementById('workbench-annotation-actions');
   var sidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
   var testOpen = navigation.activity === 'test';
+  var storyboardOpen = navigation.activity === 'storyboard';
   var contextText = '';
 
-  if (testOpen) {
+  if (storyboardOpen) {
+    contextText = '';
+  } else if (testOpen) {
     contextText = folder ? '' : 'Select a set';
   } else if (surface === 'training') {
     contextText = getTrainingWorkspaceEntryKind() === 'global'
@@ -427,7 +439,9 @@ function syncApplicationShellContext() {
   }
 
   if (workspaceTitle) {
-    workspaceTitle.textContent = testOpen
+    workspaceTitle.textContent = storyboardOpen
+      ? 'Storyboard'
+      : (testOpen
       ? 'Test Generations'
       : (surface === 'training'
         ? 'Training'
@@ -435,7 +449,7 @@ function syncApplicationShellContext() {
           ? 'Review Set'
           : (surface === 'grid'
             ? 'Grid'
-            : (surface === 'focus' ? 'Focus' : 'Prep'))));
+            : (surface === 'focus' ? 'Focus' : 'Prep')))));
   }
 
   renderApplicationHeaderBreadcrumb(navigation);
@@ -444,9 +458,9 @@ function syncApplicationShellContext() {
     workspaceContext.textContent = contextText;
   }
 
-  var previewContextRelevant = !testOpen && (surface === 'default' || surface === 'focus');
+  var previewContextRelevant = !testOpen && !storyboardOpen && (surface === 'default' || surface === 'focus');
   previewHeader.classList.toggle('shell-context-hidden', !previewContextRelevant);
-  annotationActions.classList.toggle('shell-context-hidden', testOpen || surface !== 'default');
+  annotationActions.classList.toggle('shell-context-hidden', testOpen || storyboardOpen || surface !== 'default');
 
   var modelRelevant = navigation.activity === 'training' || navigation.activity === 'test';
   if (modelControl) modelControl.classList.toggle('hidden', !modelRelevant);
@@ -457,7 +471,7 @@ function syncApplicationShellContext() {
   }
 
   if (sidebarToggle) {
-    var sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');
+    var sidebarToggleVisible = !testOpen && !storyboardOpen && (surface === 'default' || surface === 'training');
     sidebarToggle.classList.toggle('hidden', !sidebarToggleVisible);
     if (typeof updateSidebarCollapseUi === 'function') {
       updateSidebarCollapseUi(ui && ui.appEl ? ui.appEl.classList.contains('left-rail-collapsed') : false);
@@ -467,6 +481,7 @@ function syncApplicationShellContext() {
   var prepBtn = document.getElementById('activity-prep-btn');
   var trainingBtn = document.getElementById('activity-training-btn');
   var testBtn = document.getElementById('activity-test-btn');
+  var storyboardBtn = document.getElementById('activity-storyboard-btn');
 
   if (prepBtn) {
     var prepActive = navigation.activity === 'prep';
@@ -486,10 +501,17 @@ function syncApplicationShellContext() {
     testBtn.setAttribute('aria-pressed', testActive ? 'true' : 'false');
     testBtn.setAttribute('aria-current', testActive ? 'page' : 'false');
   }
+  if (storyboardBtn) {
+    var storyboardActive = navigation.activity === 'storyboard';
+    storyboardBtn.classList.toggle('active', storyboardActive);
+    storyboardBtn.setAttribute('aria-pressed', storyboardActive ? 'true' : 'false');
+    storyboardBtn.setAttribute('aria-current', storyboardActive ? 'page' : 'false');
+  }
 }
 
 function openPrepActivity() {
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
+  if (typeof window !== 'undefined' && typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   if (surface === 'grid') {
     closeMediaGridSurface();
@@ -631,6 +653,7 @@ function exitWorkspaceSurface(surfaceOverride) {
 
 function openTrainingSurface(mode) {
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
+  if (typeof window !== 'undefined' && typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
   if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
     stopFocusedAnnotation();
   }
@@ -760,8 +783,20 @@ function wireWorkspaceHeaderUi() {
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
         stopFocusedAnnotation();
       }
+      if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
       if (typeof window.openTestBenchActivity !== 'function') throw new Error('Test Bench activity is not available.');
       window.openTestBenchActivity();
+    };
+  }
+  var storyboardActivityBtn = document.getElementById('activity-storyboard-btn');
+  if (storyboardActivityBtn && !storyboardActivityBtn.__workspaceWired) {
+    storyboardActivityBtn.__workspaceWired = true;
+    storyboardActivityBtn.onclick = function () {
+      if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
+        stopFocusedAnnotation();
+      }
+      if (typeof window.openStoryboardActivity !== 'function') throw new Error('Storyboard activity is not available.');
+      window.openStoryboardActivity();
     };
   }
   var configEditorBackBtn = document.getElementById('config-editor-back-btn');

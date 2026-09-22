@@ -1,16 +1,5 @@
 import copy
-import json
-from pathlib import Path
-
-from ..training_profiles import MINIMAX_H3_PROFILE_ID
-
-
-PROFILE_ID = MINIMAX_H3_PROFILE_ID
-STAGING_KEY = "h3"
-SESSION_SLUG = "h3"
-MEDIA_KIND = "video"
 OUTPUT_EXTENSIONS = (".mp4",)
-TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "templates" / "comfyui" / "minimax_h3_test_api.json"
 
 ASPECT_RATIO_OPTIONS = (
     "1:1 (Square)",
@@ -22,16 +11,6 @@ ASPECT_RATIO_OPTIONS = (
     "16:9 (Widescreen)",
     "21:9 (Ultrawide)",
 )
-
-
-def load_template():
-    try:
-        workflow = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Could not read the MiniMax H3 Test Bench workflow template.") from exc
-    if not isinstance(workflow, dict):
-        raise ValueError("MiniMax H3 Test Bench workflow template must be a JSON object.")
-    return workflow
 
 
 def default_prompt(workflow):

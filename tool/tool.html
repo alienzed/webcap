@@ -931,31 +931,44 @@
                                 <p>Completed videos are stored in this set's Test Generations sessions. ComfyUI output is treated as temporary staging and cleaned after WebCap moves each finished render into the session.</p>
                             </div>
                             <section class="test-generations-controls">
-                                <div class="test-generations-form-heading">
-                                    <div class="test-generations-form-title">
-                                        <strong>Next run</strong>
-                                        <button id="test-generations-info-btn" type="button" class="mini-info-btn" title="How Test Generations works" aria-label="How Test Generations works">i</button>
+                                <section class="test-generations-next-run" aria-label="Next Test run">
+                                    <div class="test-generations-form-heading">
+                                        <div class="test-generations-form-title">
+                                            <strong>Next run</strong>
+                                            <button id="test-generations-info-btn" type="button" class="mini-info-btn" title="How Test Generations works" aria-label="How Test Generations works">i</button>
+                                        </div>
+                                        <span id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</span>
                                     </div>
-                                    <span id="test-generations-summary" class="test-generations-summary">Loading H3 Test folder...</span>
-                                </div>
-                                <label class="training-run-option test-generations-prompt">
-                                    <span>Prompt</span>
-                                    <textarea id="test-generations-prompt" rows="5"></textarea>
-                                </label>
-                                <div class="test-generations-setup-options">
-                                    <div class="test-generations-settings-grid">
-                                        <label class="training-run-option"><span>Aspect ratio</span><select id="test-generations-aspect"></select></label>
-                                        <label class="training-run-option"><span>Resolution (MP)</span><input id="test-generations-megapixels" type="number" min="0.2" step="0.1"></label>
-                                        <label class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="3" step="1"></label>
-                                        <label class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>
+                                    <label class="training-run-option test-generations-prompt">
+                                        <span>Prompt</span>
+                                        <textarea id="test-generations-prompt" rows="5"></textarea>
+                                    </label>
+                                    <div class="test-generations-setup-options">
+                                        <div class="test-generations-settings-grid">
+                                            <label class="training-run-option"><span>Aspect ratio</span><select id="test-generations-aspect"></select></label>
+                                            <label class="training-run-option"><span>Resolution (MP)</span><input id="test-generations-megapixels" type="number" min="0.2" step="0.1"></label>
+                                            <label class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="3" step="1"></label>
+                                            <label class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="9007199254740991" step="1"></label>
+                                        </div>
+                                        <div class="test-generations-actions">
+                                            <label class="test-generations-session-name">
+                                                <input id="test-generations-session-name" type="text" maxlength="120" placeholder="Session name (optional)" aria-label="Session name (optional)">
+                                            </label>
+                                            <button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button>
+                                        </div>
                                     </div>
-                                    <div class="test-generations-actions">
-                                        <label class="test-generations-session-name">
-                                            <input id="test-generations-session-name" type="text" maxlength="120" placeholder="Session name (optional)" aria-label="Session name (optional)">
-                                        </label>
-                                        <button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button>
+                                </section>
+                                <section id="test-generations-active" class="test-generations-active hidden" aria-label="Active Test">
+                                    <div class="test-generations-active-heading">
+                                        <strong>Active Test</strong>
+                                        <span id="test-generations-active-progress"></span>
                                     </div>
-                                </div>
+                                    <div id="test-generations-active-current" class="test-generations-active-current"></div>
+                                    <div class="test-generations-active-footer">
+                                        <span id="test-generations-active-meta" class="test-generations-active-meta"></span>
+                                        <button id="test-generations-stop-btn" type="button" class="review-captions-btn test-generations-stop-btn">Stop</button>
+                                    </div>
+                                </section>
                                 <div id="test-generations-status" class="training-command-status" aria-live="polite"></div>
                                 <div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>
                                 <section class="test-generations-library">

@@ -40,6 +40,9 @@ def test_story_scene_lifecycle(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, first = storyboard_store.add_scene(story["id"], {
         "title": "Arrival",
+        "summary": "A car reaches the hotel.",
+        "entryState": "The road is empty in heavy rain.",
+        "exitState": "The car has stopped beneath the hotel awning.",
         "prompt": "A car arrives.",
         "durationSeconds": 8,
         "seedMode": "fixed",
@@ -50,6 +53,8 @@ def test_story_scene_lifecycle(storyboard_fs):
     assert story["sceneOrder"] == [first["id"], second["id"]]
     assert first["seed"] == 42
     assert first["durationSeconds"] == 8
+    assert first["entryState"] == "The road is empty in heavy rain."
+    assert first["exitState"] == "The car has stopped beneath the hotel awning."
 
     story, updated = storyboard_store.update_scene(
         story["id"],
@@ -63,6 +68,8 @@ def test_story_scene_lifecycle(storyboard_fs):
     story, duplicate = storyboard_store.duplicate_scene(story["id"], first["id"])
     assert story["sceneOrder"][1] == duplicate["id"]
     assert duplicate["prompt"] == updated["prompt"]
+    assert duplicate["entryState"] == updated["entryState"]
+    assert duplicate["exitState"] == updated["exitState"]
     assert duplicate["takes"] == {}
     assert duplicate["takeOrder"] == []
 
@@ -80,7 +87,7 @@ def test_story_scene_lifecycle(storyboard_fs):
     restored = storyboard_store.restore_scene(story["id"], duplicate["id"])
     assert duplicate["id"] in restored["scenes"]
     assert duplicate["id"] not in restored["removedScenes"]
-    assert restored["sceneOrder"][-1] == duplicate["id"]
+    assert restored["sceneOrder"] == [second["id"], duplicate["id"], first["id"]]
 
 
 def test_reorder_requires_every_scene_exactly_once(storyboard_fs):

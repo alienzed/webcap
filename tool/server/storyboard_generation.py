@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config as app_config
-from .storyboard_store import add_take_upload, finalize_generated_take, load_story
+from .storyboard_store import add_take_upload, finalize_generated_take, load_story, storyboard_root
 
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
@@ -132,6 +132,121 @@ def _read_bytes(url, timeout=60):
             return response.read()
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
         raise RuntimeError("Could not retrieve the ComfyUI Storyboard output.") from exc
+
+
+def _multipart_image_request(url, image_path, subfolder):
+    image_path = Path(image_path)
+    boundary = "----WebCapStoryboard" + uuid.uuid4().hex
+    crlf = "\r\n"
+    parts = []
+
+    def field(name, value):
+        parts.append(("--" + boundary + crlf).encode("utf-8"))
+        parts.append(('Content-Disposition: form-data; name="' + name + '"' + crlf + crlf).encode("utf-8"))
+        parts.append(str(value).encode("utf-8"))
+        parts.append(crlf.encode("utf-8"))
+
+    parts.append(("--" + boundary + crlf).encode("utf-8"))
+    parts.append((
+        'Content-Disposition: form-data; name="image"; filename="' + image_path.name.replace('"', "") + '"' + crlf
+        + "Content-Type: application/octet-stream" + crlf + crlf
+    ).encode("utf-8"))
+    parts.append(image_path.read_bytes())
+    parts.append(crlf.encode("utf-8"))
+    field("overwrite", "true")
+    field("type", "input")
+    field("subfolder", subfolder)
+    parts.append(("--" + boundary + "--" + crlf).encode("utf-8"))
+    body = b"".join(parts)
+    content_type = "multipart/form-data; boundary=" + boundary
+
+    curl_path = _windows_curl_path()
+    if curl_path:
+        command = [
+            curl_path,
+            "--silent",
+            "--show-error",
+            "--fail-with-body",
+            "--max-time",
+            "60",
+            "--request",
+            "POST",
+            "--header",
+            "Content-Type: " + content_type,
+            "--data-binary",
+            "@-",
+            url,
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                input=body,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=65,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RuntimeError("Could not upload the Storyboard reference image to ComfyUI.") from exc
+        if result.returncode != 0:
+            detail = (
+                result.stdout.decode("utf-8", errors="replace").strip()
+                or result.stderr.decode("utf-8", errors="replace").strip()
+            )
+            raise RuntimeError("ComfyUI reference upload failed: " + (detail or "curl.exe failed."))
+        response_body = result.stdout
+    else:
+        request = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                response_body = response.read()
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
+            raise RuntimeError("Could not upload the Storyboard reference image to ComfyUI.") from exc
+
+    try:
+        payload = json.loads(response_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("ComfyUI returned invalid reference-upload JSON.") from exc
+    name = str(payload.get("name") or "").strip() if isinstance(payload, dict) else ""
+    returned_subfolder = str(payload.get("subfolder") or "").strip() if isinstance(payload, dict) else ""
+    if not name:
+        raise RuntimeError("ComfyUI did not return the uploaded reference image name.")
+    return (returned_subfolder.rstrip("/\\") + "/" + name) if returned_subfolder else name
+
+
+def _resolve_story_reference_path(story_id, media_path):
+    raw = str(media_path or "").strip()
+    relative = Path(raw)
+    if not raw or relative.is_absolute() or ".." in relative.parts:
+        raise RuntimeError("Storyboard reference media path is invalid.")
+    story_dir = (storyboard_root() / str(story_id)).resolve()
+    resolved = (story_dir / relative).resolve()
+    if resolved != story_dir and story_dir not in resolved.parents:
+        raise RuntimeError("Storyboard reference media path escapes its Story folder.")
+    if not resolved.is_file():
+        raise FileNotFoundError("Storyboard reference media file does not exist.")
+    return resolved
+
+
+def _upload_scene_references(story_id, job_id, references):
+    mapped = {}
+    for reference in references:
+        if not isinstance(reference, dict):
+            continue
+        role = str(reference.get("role") or "").strip()
+        if role == "guide_frame":
+            raise RuntimeError("Guide-frame references are stored but are not yet supported by the H3 Storyboard generator.")
+        if role not in ("first_frame", "last_frame"):
+            continue
+        media_path = _resolve_story_reference_path(story_id, reference.get("mediaPath"))
+        subfolder = "webcap-storyboard/" + story_id + "/" + job_id
+        mapped[role] = _multipart_image_request(COMFY_BASE_URL + "/upload/image", media_path, subfolder)
+    return mapped
 
 
 def _load_template():
@@ -257,6 +372,7 @@ def _scene_settings(scene):
         "duration": duration,
         "seed": seed,
         "seedMode": seed_mode,
+        "references": copy.deepcopy(scene.get("references") or []),
     }
 
 
@@ -273,7 +389,7 @@ def _resolve_wildcard_prompt(prompt, seed):
     return resolved
 
 
-def _build_workflow(template, settings, filename_prefix):
+def _build_workflow(template, settings, filename_prefix, uploaded_references=None):
     workflow = _resolve_template_assets(template)
     prompt_inputs = workflow["146"]["inputs"]
     prompt_inputs["wildcard_text"] = settings["prompt"]
@@ -290,6 +406,18 @@ def _build_workflow(template, settings, filename_prefix):
     power_inputs["model"] = ["161", 0]
     power_inputs["clip"] = ["128", 0]
     workflow.pop("148", None)
+
+    reference_nodes = {"first_frame": "190", "last_frame": "191"}
+    for role, node_id in reference_nodes.items():
+        image_name = str((uploaded_references or {}).get(role) or "").strip()
+        if not image_name:
+            continue
+        workflow[node_id] = {
+            "inputs": {"image": image_name},
+            "class_type": "LoadImage",
+            "_meta": {"title": "Storyboard " + role.replace("_", " ")},
+        }
+        workflow["131"]["inputs"][role] = [node_id, 0]
     return workflow
 
 
@@ -411,7 +539,8 @@ def _run_generation(job_id, story_id, scene_id, settings):
         if settings.get("wildcardsEnabled"):
             settings = dict(settings)
             settings["prompt"] = _resolve_wildcard_prompt(settings["prompt"], settings["seed"])
-        workflow = _build_workflow(_load_template(), settings, filename_prefix)
+        uploaded_references = _upload_scene_references(story_id, job_id, settings.get("references") or [])
+        workflow = _build_workflow(_load_template(), settings, filename_prefix, uploaded_references=uploaded_references)
         prompt_id = _queue_workflow(workflow)
         _update_job(job_id, comfyJobId=prompt_id, comfyStatus="pending")
         output_ref = _wait_for_output(prompt_id, job_id)

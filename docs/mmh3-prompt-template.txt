@@ -1,34 +1,48 @@
-# MiniMax H3 Prompt Template
+# MiniMax H3 Base Prompt Output Skeleton
 
-**STYLE / GLOBAL LOOK**
-[medium, genre, realism/stylization, lighting, color, atmosphere, lens/look]
+This file intentionally mirrors the current official MiniMax H3 base-mode output contract.
+Use `docs/mmh3-prompt-guidelines.md` for WebCap-specific authoring guidance.
 
-**CHARACTERS / SUBJECTS**
-[who/what is present, appearance, wardrobe, important persistent details]
+For T2VA:
 
-**ENVIRONMENT**
-[location, time of day, weather, background, spatial relationships]
+```text
+integrated_multimodal_description: [Shot 1] ...
 
-**SHOT TIMELINE / ACTION**
-[Shot 1] [opening composition, subject state, action, camera movement]
-[Shot 2] At [timestamp], [next action/change, framing, camera behavior]
-[Shot 3] At [timestamp], [continuation/reaction/transformation/cut]
+overall_soundscape: ...
 
-**CAMERA / CINEMATOGRAPHY**
-[shot size, angle, lens character, camera path, speed, stabilization, focus behavior]
+non_diegetic_music: ...
+```
 
-**PHYSICAL MOTION / PERFORMANCE**
-[body movement, facial expression, object motion, timing, interaction, secondary motion]
+For I2VA, prepend exactly:
 
-**DIALOGUE / VOCALS**
-[Speaker]: <d>[English] dialogue here</d>
-[delivery, emotion, volume, timing if important]
+```text
+For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
+```
 
-**OVERALL SOUNDSCAPE**
-[environmental sound, Foley, impacts, ambience, voices, spatial/audio character]
+Then one blank line and the three base fields.
 
-**NON-DIEGETIC MUSIC**
-[music style, instrumentation, intensity, progression, or “no music”]
+For FL2VA, prepend the official first/last alignment line:
 
-**CONTINUITY / CONSTRAINTS**
-[details that must remain consistent; things that should not change or appear]
+```text
+How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the S.SS-second mark of the target video.
+```
+
+Then one blank line and the three base fields.
+
+For L2VA, prepend the official last-frame alignment line:
+
+```text
+How the reference pictures align with the target video — <Picture 1> (from [Shot N]) aligns with the S.SS-second mark of the target video.
+```
+
+Then one blank line and the three base fields.
+
+Notes:
+
+- `[Shot 1]` has no timestamp.
+- Later shots use strictly increasing cut times inside the requested duration.
+- `S.SS` is the effective duration formatted to exactly two decimal places.
+- Ref2VA does **not** use this three-field base skeleton; follow the official six-section reference-mode structure documented in `docs/mmh3-prompt-guidelines.md`.
+
+Official source of truth:
+`MiniMax-AI/MiniMax-H3/skills/h3-prompt-writing/references/base-en.txt`

@@ -2042,7 +2042,6 @@
     compareIndex = 0;
     setResultsView('grid');
     renderStatus({ status: 'idle' });
-    syncActiveTestCard({ status: 'idle' });
     refreshActivityButton();
     if (!isTestModelSupported()) {
       if (summary) summary.textContent = 'Testing unavailable for selected Base Model.';
@@ -2066,7 +2065,6 @@
       var initialStatus = payload.latest || { status: 'idle' };
       if (initialStatus.status === 'running' || initialStatus.status === 'stopping') showSessionError = true;
       syncActiveRunControls(initialStatus);
-      syncActiveTestCard(initialStatus);
       var previewReady = rememberedSession
         ? request('test_open_session', { session: rememberedSession }).then(function (selectedStatus) {
             renderStatus(selectedStatus);

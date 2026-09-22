@@ -199,7 +199,7 @@ def _h3_test_directory(folder_path):
 
 def _lora_files(test_directory):
     if not test_directory.is_dir():
-        raise FileNotFoundError("H3 Test folder does not exist: " + str(test_directory))
+        raise FileNotFoundError("Test staging folder does not exist: " + str(test_directory))
     return sorted(
         [path for path in test_directory.iterdir() if path.is_file() and path.suffix.lower() == ".safetensors"],
         key=lambda path: path.name.lower(),
@@ -1037,10 +1037,10 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
     for result in removed_results:
         output_name = _result_media_file(result)
         if output_name:
-            video_path = _session_result_path(session, output_name)
+            media_path = _session_result_path(session, output_name)
             caption_path = _session_result_path(session, Path(output_name).with_suffix(".txt").name)
-            if video_path.is_file():
-                paths.append(video_path)
+            if media_path.is_file():
+                paths.append(media_path)
             if caption_path.is_file():
                 paths.append(caption_path)
 

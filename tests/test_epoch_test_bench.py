@@ -54,6 +54,26 @@ def test_windows_curl_transport_posts_json_via_stdin(monkeypatch):
     assert json.loads(calls["input"].decode("utf-8")) == payload
 
 
+def test_windows_curl_transport_surfaces_http_response_body(monkeypatch):
+    class Result:
+        returncode = 22
+        stdout = b'{"error":{"type":"prompt_outputs_failed_validation","details":"bad node"}}'
+        stderr = b"curl: (22) The requested URL returned error: 400"
+
+    monkeypatch.setattr(bench.subprocess, "run", lambda *_args, **_kwargs: Result())
+
+    with pytest.raises(RuntimeError) as exc:
+        bench._windows_curl_request(
+            "/mnt/c/Windows/System32/curl.exe",
+            "http://127.0.0.1:8188/prompt",
+            method="POST",
+            payload={"prompt": {}},
+        )
+
+    assert "prompt_outputs_failed_validation" in str(exc.value)
+    assert "bad node" in str(exc.value)
+
+
 def test_queue_workflow_supplies_stable_uuid_to_comfy(monkeypatch):
     calls = []
 
@@ -629,6 +649,28 @@ def test_run_batch_marks_failed_when_template_load_fails(tmp_path, monkeypatch):
     assert status["status"] == "failed"
     assert status["error"] == "template boom"
 
+
+
+def test_available_comfy_names_accepts_optional_combo_inputs(monkeypatch):
+    monkeypatch.setattr(
+        bench,
+        "_read_json_response",
+        lambda *_args, **_kwargs: {
+            "CustomNode": {
+                "input": {
+                    "required": {},
+                    "optional": {
+                        "dimensions": [[" 832 x 1216  (portrait)", "1024 x 1024 (square)"]]
+                    },
+                }
+            }
+        },
+    )
+
+    assert bench._available_comfy_names("CustomNode", "dimensions", "dimensions") == [
+        " 832 x 1216  (portrait)",
+        "1024 x 1024 (square)",
+    ]
 
 
 def test_template_assets_resolve_to_names_exposed_by_comfy(monkeypatch):

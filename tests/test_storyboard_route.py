@@ -137,3 +137,29 @@ def test_storyboard_route_rejects_unknown_operation(tmp_path, monkeypatch):
 
     assert response.status_code == 400
     assert response.get_json() == {"ok": False, "error": "Unknown Storyboard operation."}
+
+
+def test_storyboard_generation_route_starts_and_reads_job(monkeypatch):
+    monkeypatch.setattr(app_module, "storyboard_start_generation", lambda story_id, scene_id: {
+        "jobId": "job-1",
+        "storyId": story_id,
+        "sceneId": scene_id,
+        "status": "running",
+    })
+    monkeypatch.setattr(app_module, "storyboard_generation_status", lambda job_id: {
+        "jobId": job_id,
+        "status": "completed",
+        "takeId": "take-1",
+    })
+    client = app_module.app.test_client()
+
+    started = client.post("/fs/storyboard/generation", json={
+        "storyId": "story-1",
+        "sceneId": "scene-1",
+    })
+    assert started.status_code == 200
+    assert started.get_json()["job"]["status"] == "running"
+
+    status = client.get("/fs/storyboard/generation", query_string={"job": "job-1"})
+    assert status.status_code == 200
+    assert status.get_json()["job"]["takeId"] == "take-1"

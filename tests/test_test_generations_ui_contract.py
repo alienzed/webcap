@@ -515,3 +515,30 @@ def test_test_generations_rail_has_clear_working_history_navigation_hierarchy():
     assert "grid-template-columns: minmax(400px, 430px) minmax(0, 1fr);" in css
     assert ".test-generations-library-section > .test-generations-library-heading" in css
     assert ".test-generations-recent-sets {" in css
+
+def test_historical_test_session_errors_do_not_claim_current_failure():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "var showSessionError = false;" in script
+    render = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
+    assert "showSessionError && status && status.error" in render
+    open_pane = script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
+    assert "showSessionError = false;" in open_pane
+    assert "initialStatus.status === 'running' || initialStatus.status === 'stopping'" in open_pane
+    open_session = script.split("function openSession(sessionName)", 1)[1].split("function deleteSession(sessionName)", 1)[0]
+    assert "showSessionError = true;" in open_session
+
+
+def test_test_generations_sidebar_is_collapsible_like_media_rail():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-rail-toggle-btn"' in html
+    assert "function syncTestRailCollapseUi()" in script
+    assert "function toggleTestRailCollapsed()" in script
+    assert "el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;" in script
+    assert ".test-generations-body.test-generations-rail-collapsed {" in css
+    assert ".test-generations-body.test-generations-rail-collapsed .test-generations-rail {" in css
+    assert ".test-generations-rail-toggle-btn {" in css
+

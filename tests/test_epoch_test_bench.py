@@ -830,56 +830,29 @@ def test_legacy_session_status_uses_default_test_model(tmp_path, monkeypatch):
     assert status["modelId"] == bench.get_test_model().PROFILE_ID
 
 
-def test_rate_result_writes_normal_session_rating_state(tmp_path, monkeypatch):
+def test_rating_summary_reads_standard_folder_ratings(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     session = tmp_path / "set" / bench.TEST_RESULTS_DIR / "2026-09-21_2200-h3"
     session.mkdir(parents=True)
     bench._atomic_write_json(session / "test.json", {
         "status": "complete",
+        "modelId": bench.get_test_model().PROFILE_ID,
         "results": [{
             "kind": "lora",
             "candidateFile": "run-03__epoch24.safetensors",
             "sourceLoRA": "run-03__epoch24.safetensors",
-            "outputVideo": "epoch24.mp4",
+            "mediaFile": "epoch24.mp4",
         }],
     })
     (session / ".webcap_state.json").write_text(
-        json.dumps({"flags": {"keep.mp4": "green"}, "ratings_by_media": {"other.mp4": 2}}),
+        json.dumps({"ratings_by_media": {"epoch24.mp4": 4}}),
         encoding="utf-8",
     )
 
-    payload = bench.rate_result("set", session.name, "epoch24.mp4", 4)
+    payload = bench.rating_summary("set", model_id=bench.get_test_model().PROFILE_ID)
 
-    saved = json.loads((session / ".webcap_state.json").read_text(encoding="utf-8"))
-    assert saved["flags"] == {"keep.mp4": "green"}
-    assert saved["ratings_by_media"] == {"other.mp4": 2, "epoch24.mp4": 4}
-    assert payload["rating"] == 4
-    assert payload["sessionStatus"]["results"][0]["rating"] == 4
     assert payload["candidateScores"]["run-03__epoch24.safetensors"] == {"average": 4.0, "count": 1}
-
-
-def test_rate_result_can_clear_rating_and_reject_unknown_output(tmp_path, monkeypatch):
-    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
-    session = tmp_path / "set" / bench.TEST_RESULTS_DIR / "2026-09-21_2201-h3"
-    session.mkdir(parents=True)
-    bench._atomic_write_json(session / "test.json", {
-        "status": "complete",
-        "results": [{"kind": "base", "sourceLoRA": "Base", "outputVideo": "base.mp4"}],
-    })
-    (session / ".webcap_state.json").write_text(
-        json.dumps({"ratings_by_media": {"base.mp4": 5}}),
-        encoding="utf-8",
-    )
-
-    payload = bench.rate_result("set", session.name, "base.mp4", 0)
-
-    saved = json.loads((session / ".webcap_state.json").read_text(encoding="utf-8"))
-    assert saved["ratings_by_media"] == {}
-    assert payload["rating"] == 0
-    assert "rating" not in payload["sessionStatus"]["results"][0]
-
-    with pytest.raises(ValueError, match="does not exist"):
-        bench.rate_result("set", session.name, "missing.mp4", 3)
+    assert payload["sessions"][0]["unrated"] == 0
 
 
 def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeypatch):

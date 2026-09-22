@@ -63,6 +63,9 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "data-reference-previous" in storyboard
     assert "data-reference-apply" in storyboard
     assert "data-scene-generate" in storyboard
+    assert "data-scene-lora-add" in storyboard
+    assert "data-scene-lora-name" in storyboard
+    assert "/fs/storyboard/generation/capabilities" in storyboard
     assert "/fs/storyboard/generation" in storyboard
     assert "Generation prompt" in storyboard
     assert "Summary / intent" in storyboard

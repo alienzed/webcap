@@ -1,3 +1,5 @@
+from io import BytesIO
+
 from tool.server import app as app_module
 
 
@@ -40,6 +42,34 @@ def test_storyboard_route_is_independent_of_current_set(tmp_path, monkeypatch):
     })
     assert scene_added.status_code == 200
     scene = scene_added.get_json()["scene"]
+
+    uploaded = client.post("/fs/storyboard/take_upload", data={
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+        "file": (BytesIO(b"fake-video"), "take.mp4"),
+    }, content_type="multipart/form-data")
+    assert uploaded.status_code == 200
+    take = uploaded.get_json()["take"]
+    assert take["sourceFilename"] == "take.mp4"
+
+    rated = client.post("/fs/storyboard", json={
+        "operation": "rate_take",
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+        "takeId": take["id"],
+        "rating": 5,
+    })
+    assert rated.status_code == 200
+    assert rated.get_json()["take"]["rating"] == 5
+
+    selected = client.post("/fs/storyboard", json={
+        "operation": "select_take",
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+        "takeId": take["id"],
+    })
+    assert selected.status_code == 200
+    assert selected.get_json()["story"]["scenes"][scene["id"]]["selectedTakeId"] == take["id"]
 
     removed = client.post("/fs/storyboard", json={
         "operation": "delete_scene",

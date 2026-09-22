@@ -20,6 +20,7 @@
         <link rel="stylesheet" href="/static/css/styles.css">
         <link rel="stylesheet" href="/static/css/checklist.css">
         <link rel="stylesheet" href="/static/css/workspace_shell.css">
+        <link rel="stylesheet" href="/static/css/storyboard.css">
         <link rel="stylesheet" href="/static/css/workbench.css">
         <link rel="stylesheet" href="/static/css/modals.css">
         <link rel="stylesheet" href="/static/css/media_grid.css">
@@ -67,6 +68,15 @@
                         <path d="M7 3h10"></path>
                         <path d="M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"></path>
                         <path d="M8 14h8"></path>
+                    </svg>
+                </button>
+                <button id="activity-storyboard-btn" type="button" class="activity-rail-btn" title="Storyboard" aria-label="Storyboard" aria-pressed="false" aria-controls="storyboard-workspace">
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                        <path d="M4 9h16"></path>
+                        <path d="M9 4v5"></path>
+                        <path d="M15 4v5"></path>
+                        <path d="m10 13 5 3-5 3z"></path>
                     </svg>
                 </button>
                 <div class="activity-rail-spacer"></div>
@@ -1022,7 +1032,46 @@
                     </div>
                 </section>
             </section>
-                        <div id="console-panel" class="hidden" aria-hidden="true">
+                        <section id="storyboard-workspace" class="storyboard-workspace hidden" data-workspace-root="storyboard" aria-label="Storyboard workspace">
+                <aside class="storyboard-library" aria-label="Stories">
+                    <header class="storyboard-library-header">
+                        <strong>Stories</strong>
+                        <button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Story</button>
+                    </header>
+                    <div id="storyboard-library-list" class="storyboard-library-list"></div>
+                </aside>
+                <section class="storyboard-editor" aria-label="Story editor">
+                    <header class="storyboard-editor-header">
+                        <strong>Story</strong>
+                        <div class="storyboard-director-header">
+                            <label for="storyboard-director-model">Director</label>
+                            <select id="storyboard-director-model" aria-label="Storyboard Director model">
+                                <option value="">Director unavailable</option>
+                            </select>
+                            <span id="storyboard-director-status" class="storyboard-save-state" aria-live="polite"></span>
+                        </div>
+                        <span id="storyboard-save-state" class="storyboard-save-state" aria-live="polite"></span>
+                    </header>
+                    <div id="storyboard-editor-empty" class="storyboard-editor-empty">Create or open a Story to begin.</div>
+                    <div id="storyboard-editor-content" class="storyboard-editor-scroll hidden">
+                        <div class="storyboard-story-fields">
+                            <label class="storyboard-field"><span>Title</span><input id="storyboard-story-title" type="text" maxlength="200"></label>
+                            <label class="storyboard-field"><span>Status</span><select id="storyboard-story-status"><option value="active">Active</option><option value="complete">Complete</option><option value="archived">Archived</option></select></label>
+                            <label class="storyboard-inline-check"><input id="storyboard-story-pinned" type="checkbox"> Pinned</label>
+                            <label class="storyboard-field storyboard-concept-field"><span>Concept / overview</span><textarea id="storyboard-story-concept" rows="4" placeholder="High-level grounded overview of the Story."></textarea></label>
+                            <label class="storyboard-field storyboard-style-field"><span>Style / atmosphere</span><textarea id="storyboard-story-style" rows="3" placeholder="Overall look and feel: genre, era, lighting, camera language, texture..."></textarea></label>
+                            <label class="storyboard-field storyboard-tags-field"><span>Tags</span><input id="storyboard-story-tags" type="text" placeholder="horror, hotel, storm"></label>
+                        </div>
+                        <section id="storyboard-sequence-preview" class="storyboard-sequence-preview hidden" aria-label="Selected sequence"></section>
+                        <div class="storyboard-scenes-heading">
+                            <div><strong>Scenes</strong><div class="storyboard-save-state">One Scene = one generatable unit.</div></div>
+                            <button id="storyboard-add-scene-btn" type="button" class="storyboard-primary-btn">Add Scene</button>
+                        </div>
+                        <div id="storyboard-scenes-list" class="storyboard-scenes-list"></div>
+                    </div>
+                </section>
+            </section>
+            <div id="console-panel" class="hidden" aria-hidden="true">
                 <div class="console-panel-header">
                     <strong class="console-panel-title">Console</strong>
                     <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>
@@ -1516,6 +1565,7 @@
         <script src="/static/js/training_workspace.js"></script>
         <script src="/static/js/workspace_shell.js"></script>
         <script src="/static/js/test_generations.js"></script>
+        <script src="/static/js/storyboard.js"></script>
         <script src="/static/js/main.js"></script>
     </body>
 </html>

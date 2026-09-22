@@ -100,5 +100,13 @@
     },
     "termWrapperPrefixesByTerm": {}
   },
-  "debug": true
+  "debug": true,
+  "storyboard": {
+    "director": {
+      "llama_server": "",
+      "port": 8189,
+      "context_size": 8192,
+      "max_tokens": 4096
+    }
+  }
 }

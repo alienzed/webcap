@@ -31,6 +31,11 @@ from .training_review import discover_saved_initializers, prepare_training_revie
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
+from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
+from .storyboard_generation import generation_capabilities as storyboard_generation_capabilities, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
+from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
+from .storyboard_llm_contract import build_request as storyboard_build_llm_request
+from .storyboard_llm_runtime import run_contract as storyboard_run_llm_contract, status as storyboard_director_status
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -406,6 +411,173 @@ def media_video_clip_status():
             app_config.debug_print("[media_video_clip_status] ERROR:", e)
             app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
+
+@app.route("/fs/storyboard", methods=["GET", "POST"])
+def storyboard_route():
+    try:
+        if request.method == "GET":
+            story_id = str(request.args.get("story") or "").strip()
+            if story_id:
+                return jsonify({"ok": True, "story": storyboard_load_story(story_id)})
+            return jsonify({"ok": True, "stories": storyboard_list_stories()})
+
+        data = request.get_json(silent=True) or {}
+        operation = str(data.get("operation") or "").strip()
+        story_id = str(data.get("storyId") or "").strip()
+        if operation == "create_story":
+            return jsonify({"ok": True, "story": storyboard_create_story(data.get("story") or {})})
+        if operation == "update_story":
+            return jsonify({"ok": True, "story": storyboard_update_story(story_id, data.get("story") or {})})
+        if operation == "add_scene":
+            story, scene = storyboard_add_scene(story_id, data.get("scene") or {})
+            return jsonify({"ok": True, "story": story, "scene": scene})
+        if operation == "update_scene":
+            story, scene = storyboard_update_scene(story_id, str(data.get("sceneId") or "").strip(), data.get("scene") or {})
+            return jsonify({"ok": True, "story": story, "scene": scene})
+        if operation == "duplicate_scene":
+            story, scene = storyboard_duplicate_scene(story_id, str(data.get("sceneId") or "").strip())
+            return jsonify({"ok": True, "story": story, "scene": scene})
+        if operation == "reorder_scenes":
+            story = storyboard_reorder_scenes(story_id, data.get("sceneOrder"))
+            return jsonify({"ok": True, "story": story})
+        if operation == "delete_scene":
+            story = storyboard_delete_scene(story_id, str(data.get("sceneId") or "").strip())
+            return jsonify({"ok": True, "story": story})
+        if operation == "restore_scene":
+            story = storyboard_restore_scene(story_id, str(data.get("sceneId") or "").strip())
+            return jsonify({"ok": True, "story": story})
+        if operation == "rate_take":
+            story, take = storyboard_rate_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip(), data.get("rating"))
+            return jsonify({"ok": True, "story": story, "take": take})
+        if operation == "select_take":
+            story = storyboard_select_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip())
+            return jsonify({"ok": True, "story": story})
+        if operation == "remove_take":
+            story = storyboard_remove_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip())
+            return jsonify({"ok": True, "story": story})
+        if operation == "restore_take":
+            story = storyboard_restore_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip())
+            return jsonify({"ok": True, "story": story})
+        if operation == "set_scene_reference_from_take":
+            story, reference = storyboard_set_scene_reference_from_take(
+                story_id,
+                str(data.get("sceneId") or "").strip(),
+                str(data.get("role") or "").strip(),
+                str(data.get("sourceSceneId") or "").strip(),
+                str(data.get("sourceTakeId") or "").strip(),
+                str(data.get("frame") or "").strip(),
+            )
+            return jsonify({"ok": True, "story": story, "reference": reference})
+        if operation == "clear_scene_reference":
+            story = storyboard_clear_scene_reference(story_id, str(data.get("sceneId") or "").strip(), str(data.get("role") or "").strip())
+            return jsonify({"ok": True, "story": story})
+        raise ValueError("Unknown Storyboard operation.")
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STORYBOARD REQUEST FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/assembly", methods=["GET", "POST"])
+def storyboard_assembly_route():
+    try:
+        if request.method == "GET":
+            story_id = str(request.args.get("story") or "").strip()
+            return jsonify({"ok": True, "export": storyboard_current_export(story_id)})
+        data = request.get_json(silent=True) or {}
+        return jsonify({
+            "ok": True,
+            "export": storyboard_export_selected_sequence(str(data.get("storyId") or "").strip()),
+        })
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STORYBOARD ASSEMBLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/generation/capabilities", methods=["GET"])
+def storyboard_generation_capabilities_route():
+    try:
+        return jsonify({"ok": True, **storyboard_generation_capabilities()})
+    except Exception as exc:
+        app.logger.exception("STORYBOARD GENERATION CAPABILITIES FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/generation", methods=["GET", "POST"])
+def storyboard_generation_route():
+    try:
+        if request.method == "GET":
+            job_id = str(request.args.get("job") or "").strip()
+            return jsonify({"ok": True, "job": storyboard_generation_status(job_id)})
+        data = request.get_json(silent=True) or {}
+        return jsonify({
+            "ok": True,
+            "job": storyboard_start_generation(
+                str(data.get("storyId") or "").strip(),
+                str(data.get("sceneId") or "").strip(),
+            ),
+        })
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STORYBOARD GENERATION FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/director", methods=["GET", "POST"])
+def storyboard_director_route():
+    try:
+        if request.method == "GET":
+            return jsonify({"ok": True, **storyboard_director_status()})
+
+        data = request.get_json(silent=True) or {}
+        story_id = str(data.get("storyId") or "").strip()
+        scene_id = str(data.get("sceneId") or "").strip()
+        operation = str(data.get("operation") or "").strip()
+        model_id = str(data.get("model") or "").strip()
+        instruction = str(data.get("instruction") or "").strip()
+
+        story = storyboard_load_story(story_id)
+        contract = storyboard_build_llm_request(
+            story,
+            scene_id,
+            operation,
+            instruction=instruction,
+        )
+        result = storyboard_run_llm_contract(model_id, contract)
+        return jsonify({
+            "ok": True,
+            "result": result["text"],
+            "model": result["model"],
+            "usage": result.get("usage"),
+            "timings": result.get("timings"),
+        })
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STORYBOARD DIRECTOR FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/take_upload", methods=["POST"])
+def storyboard_take_upload_route():
+    try:
+        story_id = str(request.form.get("storyId") or "").strip()
+        scene_id = str(request.form.get("sceneId") or "").strip()
+        upload = request.files.get("file")
+        if upload is None or not upload.filename:
+            raise ValueError("Missing Take media file.")
+        story, take = storyboard_add_take_upload(story_id, scene_id, upload.filename, upload.stream)
+        return jsonify({"ok": True, "story": story, "take": take})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STORYBOARD TAKE UPLOAD FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
 
 @app.route("/fs/training_profiles", methods=["GET"])
 def training_profiles_route():

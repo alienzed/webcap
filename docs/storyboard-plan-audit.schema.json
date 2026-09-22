@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "storyboard-plan-audit.schema.json",
+  "title": "WebCap Storyboard Plan Audit",
+  "description": "Semantic audit result for a schema-valid Storyboard scene plan. This is advisory model output, not deterministic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["valid", "issues"],
+  "properties": {
+    "valid": {
+      "type": "boolean",
+      "description": "True only when no material semantic issue was found."
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sceneIndex", "type", "description"],
+        "properties": {
+          "sceneIndex": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "description": "Zero-based Scene index when the issue belongs to one Scene; null for whole-plan issues."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "invented_fact",
+              "missing_beat",
+              "handoff",
+              "persistent_state",
+              "scene_overload",
+              "continuity_reset",
+              "ending",
+              "other"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

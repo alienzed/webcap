@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "storyboard-scene-plan.schema.json",
+  "title": "WebCap Storyboard Scene Plan",
+  "description": "Structured output contract for planning an ordered Story into independently generatable Scenes. WebCap assigns canonical Scene IDs after validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scenes"],
+  "properties": {
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "summary", "entryState", "exitState", "suggestedDurationSeconds", "continuity"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Concrete visible/audible intent for this one generation unit. Detailed cinematography belongs to the later prompt-writing pass unless essential to Story intent."
+          },
+          "entryState": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What must already be true when this Scene begins."
+          },
+          "exitState": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What should be true when this Scene ends."
+          },
+          "suggestedDurationSeconds": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Suggested clip duration. Runtime generation-profile limits are validated separately by WebCap."
+          },
+          "continuity": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["continuesPreviousScene", "carryForward"],
+            "properties": {
+              "continuesPreviousScene": {
+                "type": "boolean",
+                "description": "True when this Scene directly inherits the previous Scene's exit state rather than acting as a continuity reset."
+              },
+              "carryForward": {
+                "type": "array",
+                "description": "Changed state established by this Scene that must remain true in later Scenes until superseded. Do not repeat static Story bible facts here.",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

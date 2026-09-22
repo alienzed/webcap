@@ -229,6 +229,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "id": resolved_id,
         "title": str(payload.get("title", current.get("title", "")) or "").strip(),
         "concept": str(payload.get("concept", current.get("concept", "")) or ""),
+        "previousConcept": current.get("previousConcept") if isinstance(current.get("previousConcept"), str) else None,
         "style": str(payload.get("style", current.get("style", "")) or ""),
         "tags": _normalize_tags(payload.get("tags", current.get("tags", []))),
         "status": status,
@@ -314,49 +315,92 @@ def add_scene(story_id, payload=None):
     return story, scene
 
 
+@_serialized_mutation
+def apply_concept_expansion(story_id, expanded_concept):
+    story = load_story(story_id)
+    expanded = str(expanded_concept or "").strip()
+    if not expanded:
+        raise ValueError("Expanded Story concept is empty.")
+    previous = str(story.get("concept") or "")
+    story["previousConcept"] = previous
+    story["concept"] = expanded
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story
+
+
+@_serialized_mutation
+def restore_previous_concept(story_id):
+    story = load_story(story_id)
+    previous = story.get("previousConcept")
+    if not isinstance(previous, str):
+        raise FileNotFoundError("No previous Story concept is available.")
+    story["concept"] = previous
+    story["previousConcept"] = None
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story
+
+
 def _validate_developed_plan(plan):
     if not isinstance(plan, dict):
         raise ValueError("Developed Story plan must be an object.")
+    if set(plan.keys()) != {"scenes"}:
+        raise ValueError("Developed Story plan contains unsupported fields.")
     scenes = plan.get("scenes")
     if not isinstance(scenes, list) or len(scenes) < 2:
         raise ValueError("Developed Story plan must contain at least two Scenes.")
 
+    scene_keys = {
+        "title",
+        "summary",
+        "entryState",
+        "exitState",
+        "prompt",
+        "suggestedDurationSeconds",
+        "continuity",
+    }
+    continuity_keys = {"continuesPreviousScene", "carryForward"}
     normalized = []
     for index, item in enumerate(scenes, start=1):
         if not isinstance(item, dict):
             raise ValueError("Developed Story Scene " + str(index) + " must be an object.")
-        title = str(item.get("title") or "").strip()
-        summary = str(item.get("summary") or "").strip()
-        entry_state = str(item.get("entryState") or "").strip()
-        exit_state = str(item.get("exitState") or "").strip()
-        prompt = str(item.get("prompt") or "").strip()
-        if not title or not summary or not entry_state or not exit_state or not prompt:
-            raise ValueError("Developed Story Scene " + str(index) + " is missing required content.")
-        try:
-            duration = float(item.get("suggestedDurationSeconds"))
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Developed Story Scene duration must be numeric.") from exc
+        if set(item.keys()) != scene_keys:
+            raise ValueError("Developed Story Scene " + str(index) + " has missing or unsupported fields.")
+
+        text_fields = {}
+        for key in ("title", "summary", "entryState", "exitState", "prompt"):
+            value = item.get(key)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError("Developed Story Scene " + str(index) + " has invalid " + key + ".")
+            text_fields[key] = value.strip()
+
+        duration_value = item.get("suggestedDurationSeconds")
+        if isinstance(duration_value, bool) or not isinstance(duration_value, (int, float)):
+            raise ValueError("Developed Story Scene duration must be numeric.")
+        duration = float(duration_value)
         if duration < 4 or duration > 15:
             raise ValueError("Developed Story Scene duration must be between 4 and 15 seconds.")
+
         continuity = item.get("continuity")
-        if not isinstance(continuity, dict):
-            raise ValueError("Developed Story Scene continuity must be an object.")
+        if not isinstance(continuity, dict) or set(continuity.keys()) != continuity_keys:
+            raise ValueError("Developed Story Scene continuity has missing or unsupported fields.")
         continues_previous = continuity.get("continuesPreviousScene")
         if not isinstance(continues_previous, bool):
             raise ValueError("Developed Story Scene continuesPreviousScene must be boolean.")
         carry_forward = continuity.get("carryForward")
-        if not isinstance(carry_forward, list) or any(not isinstance(value, str) for value in carry_forward):
-            raise ValueError("Developed Story Scene carryForward must be a list of strings.")
+        if (
+            not isinstance(carry_forward, list)
+            or any(not isinstance(value, str) or not value.strip() for value in carry_forward)
+        ):
+            raise ValueError("Developed Story Scene carryForward must be a list of non-empty strings.")
+
         normalized.append({
-            "title": title,
-            "summary": summary,
-            "entryState": entry_state,
-            "exitState": exit_state,
-            "prompt": prompt,
+            **text_fields,
             "durationSeconds": duration,
             "continuity": {
                 "continuesPreviousScene": continues_previous,
-                "carryForward": [value.strip() for value in carry_forward if value.strip()],
+                "carryForward": [value.strip() for value in carry_forward],
             },
         })
     return normalized
@@ -508,6 +552,7 @@ def restore_scene(story_id, scene_id):
         raise FileNotFoundError("Removed Scene does not exist.")
     restored = dict(scene)
     restored.pop("removedAt", None)
+    restored.pop("removedReason", None)
     story["sceneOrder"] = _restore_ordered_id(story.get("sceneOrder") or [], scene_id, restored)
     restored.pop("removedOrderIndex", None)
     restored.pop("removedBeforeId", None)

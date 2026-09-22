@@ -78,7 +78,7 @@ Storyboard owns the canonical Story, Scene, Take, revision, rating, selection, a
 External/local providers perform work:
 
 ```text
-Storyboard -> Ollama (story/scene development)
+Storyboard -> LLM adapter (native ComfyUI TextGenerate first; Ollama remains an optional fallback)
 Storyboard -> ComfyUI (image/video generation)
 ```
 
@@ -102,6 +102,7 @@ Initial fields:
   "id": "stable-story-id",
   "title": "Storm Hotel",
   "concept": "High-level reminder and grounded overview.",
+  "style": "Persistent atmosphere, cinematic language, era, texture, and visual tone.",
   "tags": ["horror", "hotel"],
   "status": "active",
   "pinned": true,
@@ -141,6 +142,7 @@ The schema should support future providers without forcing Phase 1 to implement 
   "loras": [],
   "references": [],
   "notes": "",
+  "takes": {},
   "takeOrder": [],
   "selectedTakeId": null,
   "createdAt": "ISO-8601",
@@ -196,9 +198,16 @@ Changing a Scene after generating a Take must not rewrite that Take's provenance
 
 ## Provider direction
 
-### Ollama
+### LLM authoring
 
-The existing local Ollama model is the preferred first LLM integration because it is already installed and useful.
+Native ComfyUI TextGenerate is the preferred first runtime so Storyboard does not require a second local service. The initial model direction is Qwen3.5 with a low-refusal/Heretic variant. WebCap should keep a thin LLM request boundary so an Ollama adapter can replace or complement ComfyUI later without changing Story or Scene data.
+
+LLM context stays deliberately small:
+
+- Story `style` is the durable atmosphere/cinematic block and should normally be included.
+- Story concept and current Scene context are included only when useful to the requested operation.
+- Full chat transcripts and ChatGPT-like long-term memory are not part of the design.
+- ComfyUI inference calls are treated as stateless; WebCap owns any continuity worth preserving.
 
 Early authoring operations should be explicit functions rather than a general agent framework:
 
@@ -208,7 +217,7 @@ Early authoring operations should be explicit functions rather than a general ag
 - inspect Story continuity
 - optionally return structured JSON
 
-Phase 1 does not require Ollama. Prompt fields must remain fully usable by copy/paste.
+Manual prompt fields remain fully usable without an LLM.
 
 ### ComfyUI
 
@@ -277,13 +286,17 @@ The MVP is successful if a real Story can be created, authored over time, closed
 
 Goal: make Storyboard useful for supervised production before automated intelligence.
 
-Candidates:
+Current implementation on the Storyboard branch now includes:
 
-- Take records and take folders
-- attach/import an existing generated media file as a Take
-- preview/rate/delete/select Takes
-- selected Take per Scene
-- sequence preview using selected Takes
+- Take records stored with each Scene while media stays under predictable `takes/<scene-id>/` folders
+- manual image/video upload as a Take, copied into the Story folder
+- frozen Scene prompt/settings provenance on import
+- Take preview, 1-5 rating, and selected Take per Scene
+- selected-Take sequence preview in Scene order
+
+Still to add:
+
+- reversible Take removal
 - extract first/last frames from a selected Take
 - manual first/last/reference image assignment
 - duplicate Scene while inheriting generation intent
@@ -318,7 +331,7 @@ Candidates:
 - reference image selection from Story, WebCap media, Krea outputs, or filesystem
 - semantic reference roles mapped by workflow adapters
 
-### Phase 5 - Ollama-assisted authoring
+### Phase 5 - LLM-assisted authoring
 
 Goal: make authoring faster without changing the canonical Story model.
 

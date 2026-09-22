@@ -134,6 +134,8 @@ The schema should support future providers without forcing Phase 1 to implement 
   "id": "stable-scene-id",
   "title": "Entering the lobby",
   "summary": "Alice enters and notices wet footprints.",
+  "entryState": "Alice is outside the closed lobby door in the rain.",
+  "exitState": "Alice is inside beside the closed door, focused on wet footprints.",
   "prompt": "Full model-facing prompt, manually authored or pasted.",
   "durationSeconds": 6,
   "seed": null,
@@ -203,7 +205,7 @@ Storyboard keeps its LLM instructions in versioned repo documents rather than re
 
 - `docs/storyboard_llm_guidance.md` — stable "why we are here", task modes, continuity rules, stateless-memory contract, and runtime context assembly.
 - `docs/mmh3-prompt-guidelines.md` — MiniMax H3-specific prompt-writing rules grounded in the current official H3 guides.
-- `docs/mmh3-prompt-template.txt` — concise H3 prompt skeleton.
+- `docs/mmh3-prompt-template.txt` — concise base-mode skeleton copied from the current official MiniMax H3 output contract; it is not a competing WebCap-specific format.
 - `docs/storyboard-director-context.txt` — compact copy/paste director context for immediate manual testing with ComfyUI `Generate Text`.
 
 WebCap should eventually assemble provider requests from these stable instructions plus current Story/Scene context. The provider is not the authoritative session store.

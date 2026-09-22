@@ -329,6 +329,93 @@
 .storyboard-takes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .storyboard-take { min-width: 0; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-soft); }
 .storyboard-take.selected { outline: 2px solid var(--accent, var(--border)); outline-offset: -2px; }
-.storyboard-take-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px; margin-top: 7px; }
+.storyboard-take-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 6px; margin-top: 7px; }
 .storyboard-take-footer strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .storyboard-take-footer select { min-width: 88px; }
+
+
+.storyboard-reference-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-soft);
+}
+
+.storyboard-reference-panel > strong {
+  font-size: 11px;
+}
+
+.storyboard-reference-empty {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.storyboard-reference-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.storyboard-reference-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.storyboard-reference-chip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.storyboard-reference-editor {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 1.4fr) 1fr auto;
+  gap: 5px;
+}
+
+.storyboard-reference-editor select {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg, var(--panel));
+  color: var(--text);
+  padding: 5px;
+  font-size: 11px;
+}
+
+.storyboard-reference-quick {
+  align-self: flex-start;
+}
+
+.storyboard-removed-takes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.storyboard-removed-takes > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (max-width: 1180px) {
+  .storyboard-reference-editor {
+    grid-template-columns: 1fr 1fr;
+  }
+}

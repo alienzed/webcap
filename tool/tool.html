@@ -926,9 +926,9 @@
                         <aside class="test-generations-rail">
                             <div id="test-generations-help" class="test-generations-help hidden">
                                 <strong>How Test Generations works</strong>
-                                <p>Each run uses one frozen prompt, aspect ratio, resolution, duration, and seed across the Base render and every staged LoRA so the results are directly comparable.</p>
-                                <p>Prompt, aspect ratio, resolution, and duration are remembered for this set. The seed is shared within a batch, then randomized for the next batch.</p>
-                                <p>Completed videos are stored in this set's Test Generations sessions. ComfyUI output is treated as temporary staging and cleaned after WebCap moves each finished render into the session.</p>
+                                <p>Each run freezes the selected model, prompt, generation settings, and seed across the Base render and every staged LoRA so the results are directly comparable.</p>
+                                <p>Prompt, model-specific settings, and candidate selection are remembered separately for each model. The seed is shared within a batch, then randomized for the next batch.</p>
+                                <p>The supplied ComfyUI workflow defines inference. WebCap only applies the approved Test bindings, launches it, and stores the completed media in the session.</p>
                             </div>
                             <section class="test-generations-controls">
                                 <section class="test-generations-next-run" aria-label="Next Test run">

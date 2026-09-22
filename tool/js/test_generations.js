@@ -674,6 +674,22 @@
     return stars;
   }
 
+  function syncResultRatingButtons(outputVideo, rating) {
+    var name = String(outputVideo || '').trim();
+    var value = Math.max(0, Math.min(5, Number(rating || 0)));
+    if (!name) return;
+    Array.prototype.forEach.call(
+      document.querySelectorAll('[data-test-rating][data-output-video="' + CSS.escape(name) + '"]'),
+      function (star) {
+        var starValue = Number(star.dataset.testRating || 0);
+        var active = starValue <= value;
+        star.classList.toggle('active', active);
+        star.textContent = active ? '★' : '☆';
+        star.disabled = false;
+      }
+    );
+  }
+
   function rateCurrentSessionResult(button) {
     var rating = Number(button && button.dataset.testRating || 0);
     var outputVideo = String(button && button.dataset.outputVideo || '').trim();
@@ -691,6 +707,7 @@
       outputVideo: outputVideo,
       rating: rating
     }).then(function (payload) {
+      syncResultRatingButtons(outputVideo, payload && payload.rating);
       if (payload && payload.sessionStatus) renderStatus(payload.sessionStatus);
       if (prepared && payload && payload.candidateScores) {
         prepared.candidateScores = payload.candidateScores;

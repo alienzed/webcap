@@ -333,7 +333,7 @@ The first usable slice is now implemented with a Storyboard-owned MiniMax H3 pat
 Still to add after real usage validates this slice:
 
 - Storyboard LoRA discovery/selection beyond the H3 turbo LoRA already in the base workflow
-- map semantic first/last-frame references into the H3 image-to-video sockets
+- guide/reference-to-video roles beyond H3's first/last-frame image-to-video sockets
 - stop/cancel and restart recovery for Storyboard generation jobs
 - bounded batch generation if the one-Take workflow proves useful
 - cleanup of Storyboard-owned temporary ComfyUI output after the Take copy is confirmed
@@ -344,13 +344,13 @@ Do not extract a shared ComfyUI service from Test Generations merely to reduce d
 
 Goal: make scene-to-scene visual continuity practical.
 
-The provider-independent continuity model is now present: semantic reference roles are stored on Scenes, video Take boundary frames can be materialized into the Story's `references/` folder, and the previous Scene's selected Take can feed the next Scene's `first_frame` reference.
+The continuity path is now usable end to end for H3 first/last-frame generation: semantic reference roles are stored on Scenes, video Take boundary frames can be materialized into the Story's `references/` folder, the previous Scene's selected Take can feed the next Scene's `first_frame` reference, and the Storyboard H3 adapter uploads those images to ComfyUI and binds them to the native `first_frame` / `last_frame` sockets.
 
 Remaining provider-facing work:
 
-- map First Image / Last Image roles into the MiniMax H3 workflow adapter
-- arbitrary guide frames where the H3 workflow supports them
+- arbitrary guide/reference-to-video inputs where the H3 reference workflow supports them
 - reference image selection from WebCap media, Krea outputs, or filesystem
+- cleanup of uploaded temporary ComfyUI input references after a generation is safely captured
 - keep semantic reference roles independent of ComfyUI node IDs
 
 ### Phase 5 - LLM-assisted authoring

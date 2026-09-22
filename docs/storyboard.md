@@ -143,6 +143,7 @@ The schema should support future providers without forcing Phase 1 to implement 
   "references": [],
   "notes": "",
   "takes": {},
+  "removedTakes": {},
   "takeOrder": [],
   "selectedTakeId": null,
   "createdAt": "ISO-8601",
@@ -292,14 +293,15 @@ Current implementation on the Storyboard branch now includes:
 - manual image/video upload as a Take, copied into the Story folder
 - frozen Scene prompt/settings provenance on import
 - Take preview, 1-5 rating, and selected Take per Scene
+- reversible Take removal that retains media and metadata for restore
 - selected-Take sequence preview in Scene order
+- semantic `first_frame`, `last_frame`, and `guide_frame` reference assignment from existing Takes
+- first/last frame extraction for video Takes using WebCap's existing ffmpeg frame path
+- a direct previous-selected-Take last-frame -> next-Scene first-frame continuity action
 
 Still to add:
 
-- reversible Take removal
-- extract first/last frames from a selected Take
-- manual first/last/reference image assignment
-- duplicate Scene while inheriting generation intent
+- arbitrary external/manual reference image staging beyond existing Story Takes
 - scene-level generation presets/default inheritance only where the workflow proves it useful
 
 ### Phase 3 - ComfyUI generation adapter
@@ -323,13 +325,14 @@ Only extract a lower-level shared ComfyUI executor from Test Generations if the 
 
 Goal: make scene-to-scene visual continuity practical.
 
-Candidates:
+The provider-independent continuity model is now present: semantic reference roles are stored on Scenes, video Take boundary frames can be materialized into the Story's `references/` folder, and the previous Scene's selected Take can feed the next Scene's `first_frame` reference.
 
-- First Image / Last Image bindings
-- selected previous Take -> extract last frame -> next Scene first frame
+Remaining provider-facing work:
+
+- map First Image / Last Image roles into the MiniMax H3 workflow adapter
 - arbitrary guide frames where the H3 workflow supports them
-- reference image selection from Story, WebCap media, Krea outputs, or filesystem
-- semantic reference roles mapped by workflow adapters
+- reference image selection from WebCap media, Krea outputs, or filesystem
+- keep semantic reference roles independent of ComfyUI node IDs
 
 ### Phase 5 - LLM-assisted authoring
 

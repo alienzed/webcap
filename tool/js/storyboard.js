@@ -168,7 +168,9 @@
 
   function openStory(storyId) {
     setSaveState('Loading...');
-    return request(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
+    return flushPendingSaves().then(function () {
+      return request(null, 'story=' + encodeURIComponent(storyId));
+    }).then(function (payload) {
       storyState.story = payload.story;
       renderStory();
       setSaveState('Saved');
@@ -176,9 +178,11 @@
   }
 
   function createStory() {
-    return request({
-      operation: 'create_story',
-      story: { title: 'Untitled Story', concept: '', tags: [], status: 'active', pinned: false }
+    return flushPendingSaves().then(function () {
+      return request({
+        operation: 'create_story',
+        story: { title: 'Untitled Story', concept: '', tags: [], status: 'active', pinned: false }
+      });
     }).then(function (payload) {
       storyState.story = payload.story;
       return refreshLibrary().then(function () {
@@ -268,14 +272,29 @@
     }, 450);
   }
 
+  function flushPendingSaves() {
+    var chain = Promise.resolve();
+    if (storyState.saveTimer) {
+      clearTimeout(storyState.saveTimer);
+      storyState.saveTimer = 0;
+      chain = chain.then(saveStoryNow);
+    }
+    Object.keys(storyState.sceneTimers).forEach(function (sceneId) {
+      clearTimeout(storyState.sceneTimers[sceneId]);
+      delete storyState.sceneTimers[sceneId];
+      chain = chain.then(function () { return saveSceneNow(sceneId); });
+    });
+    return chain;
+  }
+
   function addScene() {
     if (!storyState.story) return;
     setSaveState('Saving...');
-    request({
+    flushPendingSaves().then(function () { return request({
       operation: 'add_scene',
       storyId: storyState.story.id,
       scene: { title: 'New Scene', durationSeconds: 6, seedMode: 'random' }
-    }).then(function (payload) {
+    }); }).then(function (payload) {
       storyState.story = payload.story;
       renderStory();
       setSaveState('Saved');
@@ -294,11 +313,11 @@
     order[index] = order[next];
     order[next] = temp;
     setSaveState('Saving...');
-    request({
+    flushPendingSaves().then(function () { return request({
       operation: 'reorder_scenes',
       storyId: storyState.story.id,
       sceneOrder: order
-    }).then(function (payload) {
+    }); }).then(function (payload) {
       storyState.story = payload.story;
       renderStory();
       setSaveState('Saved');
@@ -307,11 +326,11 @@
 
   function duplicateScene(sceneId) {
     setSaveState('Saving...');
-    request({
+    flushPendingSaves().then(function () { return request({
       operation: 'duplicate_scene',
       storyId: storyState.story.id,
       sceneId: sceneId
-    }).then(function (payload) {
+    }); }).then(function (payload) {
       storyState.story = payload.story;
       renderStory();
       setSaveState('Saved');
@@ -324,11 +343,11 @@
     var label = scene && scene.title ? scene.title : 'this Scene';
     if (!window.confirm('Delete "' + label + '" from this Story? Existing take files, if any, are left on disk.')) return;
     setSaveState('Saving...');
-    request({
+    flushPendingSaves().then(function () { return request({
       operation: 'delete_scene',
       storyId: storyState.story.id,
       sceneId: sceneId
-    }).then(function (payload) {
+    }); }).then(function (payload) {
       storyState.story = payload.story;
       renderStory();
       setSaveState('Saved');

@@ -282,6 +282,7 @@
   function restorePreviousConcept() {
     if (!storyState.story || storyState.director.busy || typeof storyState.story.previousConcept !== 'string') return;
     var storyId = storyState.story.id;
+    setDirectorBusy(true);
     setSaveState('Saving...');
     flushPendingSaves().then(function () {
       return request({
@@ -295,7 +296,9 @@
       setDevelopStatus('Previous concept restored.');
       setSaveState('Saved');
       return refreshLibrary();
-    }).catch(reportError);
+    }).catch(reportError).finally(function () {
+      setDirectorBusy(false);
+    });
   }
 
   function developStory() {

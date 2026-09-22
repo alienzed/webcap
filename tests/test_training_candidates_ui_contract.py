@@ -71,10 +71,13 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "toggleTrainingCandidatesFullscreen" in script
     assert "Saved in region:" in script
     assert "Open Epoch Folder" in script
-    assert "Open Test Folder" in script
-    assert "/fs/training_candidates/open_test" in script
-    assert "Copy to Test Folder" in script
-    assert "Remove from Test Folder" in script
+    assert "trainingCandidatesPinnedDetailsHtml" in script
+    assert "training-candidates-chart-footer" in script
+    assert "training-candidates-open-generations" in script
+    assert "Copy to Test" in script
+    assert "Remove from Test" in script
+    assert "Open Test Folder" not in script
+    assert "/fs/training_candidates/open_test" not in script
     assert "inTestFolder" in script
     assert "/fs/training_candidates/" in script
     assert "remove_from_test" in script
@@ -121,7 +124,11 @@ const data = {
 const context = {
   document: {getElementById(id) {return elements[id];}, querySelector() {return null;}, addEventListener() {}, removeEventListener() {}},
   escapeHtml(s) { return String(s).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;'); },
-  trainingWorkspaceState: {candidateFolder:'set',candidateJobId:'job',candidateAlgorithm:'v5',candidateRequestVersion:0,runnerJobs:[],history:{jobs:[]}},
+  trainingWorkspaceState: {
+    candidateFolder:'set',candidateJobId:'job',candidateAlgorithm:'v5',candidateRequestVersion:0,
+    runnerJobs:[{id:'job',folder:'set',stages:'h3',profileId:'minimax_h3'}],history:{jobs:[]},
+    profiles:[{id:'minimax_h3',test:{enabled:true,stagingKey:'h3'}}]
+  },
   state: {folder:'set'},
   trainingRunnerStatusLabel(s) { return s; }, setStatus() {},
   trainingRunnerRequest(url) { requests.push(url); return Promise.resolve({ok:true,analysis:data,run:{status:'done'}}); }
@@ -190,7 +197,9 @@ assert(svg.includes('r="14"'));
 assert(svg.includes('data-training-candidate-line="showRawStep"'));
 assert(!svg.includes('data-training-candidate-line="showRawStep" checked'));
 assert(svg.includes('training-candidates-marker training-candidates-epoch-marker in-test-folder'));
-assert(svg.includes('Remove from Test Folder'));
+assert(svg.includes('Test Generations · 1'));
+assert(svg.includes('data-training-candidates-open-generations'));
+assert(svg.includes('Remove from Test'));
 context.trainingCandidatesDisplayState().showRawStep=false;
 context.trainingCandidatesDisplayState().showEpochLoss=false;
 const filteredSvg=context.trainingCandidatesSvg(data);
@@ -217,17 +226,22 @@ const tooltipData = {points:data.epochLossPoints,analysis:data.analysisPoints,sm
 assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipData).includes('Robust loss: 0.2000'));
   assert(!context.trainingCandidatesTooltipHtml({step:150,epoch:1,loss:.2},tooltipData).includes('Candidate region:'));
   const savedData = Object.assign({}, tooltipData, {savedArtifacts:[{epoch:1,status:'available',fileName:'adapter.safetensors',inTestFolder:true}], testFolderStatus:{state:'available'}});
-  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Remove from Test Folder'));
+  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Remove from Test'));
   assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('data-training-candidate-test-action="remove"'));
   assert(!context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('disabled'));
   const uncopiedData = Object.assign({}, savedData, {savedArtifacts:[{epoch:1,status:'available',fileName:'adapter.safetensors',inTestFolder:false}]});
-  assert(context.trainingCandidatesPinnedActionsHtml(1,uncopiedData).includes('Copy to Test Folder'));
+  assert(context.trainingCandidatesPinnedActionsHtml(1,uncopiedData).includes('Copy to Test'));
   assert(context.trainingCandidatesPinnedActionsHtml(1,uncopiedData).includes('data-training-candidate-test-action="copy"'));
   const unavailableData = Object.assign({}, savedData, {testFolderStatus:{state:'unknown',error:'Test root is unavailable'}});
-  assert(context.trainingCandidatesPinnedActionsHtml(1,unavailableData).includes('Test folder unavailable: Test root is unavailable'));
+  assert(context.trainingCandidatesPinnedDetailsHtml({step:190,epoch:1,loss:.2},unavailableData).includes('Test folder unavailable: Test root is unavailable'));
+  assert(context.trainingCandidatesPinnedDetailsHtml({step:190,epoch:1,loss:.2},savedData).includes('Epoch 1 · Step 190'));
+  assert(context.trainingCandidatesPinnedDetailsHtml({step:190,epoch:1,loss:.2},savedData).includes('Saved'));
   assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Open Epoch Folder'));
-  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Open Test Folder'));
+  assert(!context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Open Test Folder'));
   assert(context.trainingCandidatesPinnedActionsHtml(2,savedData)==='');
+  assert(context.trainingCandidatesTestGenerationsButtonHtml(savedData).includes('Test Generations · 1'));
+  assert(!context.trainingCandidatesTestGenerationsButtonHtml(savedData).includes(' disabled'));
+  assert(context.trainingCandidatesTestGenerationsButtonHtml(uncopiedData).includes(' disabled'));
 (async () => {
     for (const algorithm of ['v5','v3']) {
     elements['training-candidates-algorithm'].value=algorithm;

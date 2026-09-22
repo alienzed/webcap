@@ -20,18 +20,14 @@ def template_settings(workflow):
     return {"dimensions": dimensions}
 
 
-def normalize_settings(
-    workflow,
-    new_seed,
-    dimensions=None,
-    seed=None,
-    **_unused,
-):
+def normalize_settings(workflow, new_seed, values=None):
     defaults = template_settings(workflow)
-    selected_dimensions = str(dimensions or defaults["dimensions"]).strip()
+    selected = values if isinstance(values, dict) else {}
+    selected_dimensions = str(selected.get("dimensions") or defaults["dimensions"]).strip()
     if not selected_dimensions:
         raise ValueError("Test dimensions are required.")
     try:
+        seed = selected.get("seed")
         selected_seed = new_seed() if seed is None or str(seed).strip() == "" else int(seed)
     except (TypeError, ValueError) as exc:
         raise ValueError("Test seed must be numeric.") from exc

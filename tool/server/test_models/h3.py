@@ -31,14 +31,16 @@ def template_settings(workflow):
     }
 
 
-def normalize_settings(workflow, new_seed, aspect_ratio=None, megapixels=None, duration=None, seed=None):
+def normalize_settings(workflow, new_seed, values=None):
     defaults = template_settings(workflow)
-    selected_aspect = str(aspect_ratio or defaults["aspectRatio"]).strip()
+    selected = values if isinstance(values, dict) else {}
+    selected_aspect = str(selected.get("aspectRatio") or defaults["aspectRatio"]).strip()
     if selected_aspect not in ASPECT_RATIO_OPTIONS:
         raise ValueError("Unsupported Test Generations aspect ratio: " + selected_aspect)
     try:
-        selected_megapixels = float(defaults["megapixels"] if megapixels is None else megapixels)
-        selected_duration = float(defaults["duration"] if duration is None else duration)
+        selected_megapixels = float(defaults["megapixels"] if selected.get("megapixels") in (None, "") else selected.get("megapixels"))
+        selected_duration = float(defaults["duration"] if selected.get("duration") in (None, "") else selected.get("duration"))
+        seed = selected.get("seed")
         selected_seed = new_seed() if seed is None or str(seed).strip() == "" else int(seed)
     except (TypeError, ValueError) as exc:
         raise ValueError("Test resolution, duration, and seed must be numeric.") from exc

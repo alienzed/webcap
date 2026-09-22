@@ -65,11 +65,38 @@
     syncTestRailCollapseUi();
   }
 
+  function currentTestModelId() {
+    return String(getWorkingModelProfileId() || '');
+  }
+
+  function savedTestModelState() {
+    var modelId = currentTestModelId();
+    var byModel = state && state.testGenerationByModel && typeof state.testGenerationByModel === 'object'
+      ? state.testGenerationByModel
+      : {};
+    var saved = byModel[modelId];
+    if (saved && typeof saved === 'object') {
+      return {
+        prompt: String(saved.prompt || ''),
+        settings: saved.settings && typeof saved.settings === 'object'
+          ? saved.settings
+          : {}
+      };
+    }
+    return {
+      prompt: String(state && state.testGenerationPrompt || ''),
+      settings: state && state.testGenerationSettings && typeof state.testGenerationSettings === 'object'
+        ? state.testGenerationSettings
+        : {}
+    };
+  }
+
   function currentPersistedSettings() {
     return {
       aspectRatio: String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim(),
       megapixels: Number(el('test-generations-megapixels') && el('test-generations-megapixels').value || 0),
       duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0),
+      dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || '').trim(),
       selectedFiles: selectedCandidateFiles(),
       includeBase: !el('test-generations-base-include') || el('test-generations-base-include').checked
     };
@@ -77,12 +104,20 @@
 
   function captureTestBenchSave(prompt) {
     if (!state || String(state.folder || '') !== String(launchFolder || '')) return null;
+    var modelId = currentTestModelId();
+    var settings = currentPersistedSettings();
     state.testGenerationPrompt = String(prompt || '');
-    state.testGenerationSettings = currentPersistedSettings();
+    state.testGenerationSettings = settings;
+    if (!state.testGenerationByModel || typeof state.testGenerationByModel !== 'object') state.testGenerationByModel = {};
+    state.testGenerationByModel[modelId] = {
+      prompt: String(prompt || ''),
+      settings: JSON.parse(JSON.stringify(settings))
+    };
     var capturedSave = captureCurrentFolderStateSave();
     if (!capturedSave) return null;
     capturedSave.snapshot.test_generation_prompt = state.testGenerationPrompt;
     capturedSave.snapshot.test_generation_settings = JSON.parse(JSON.stringify(state.testGenerationSettings));
+    capturedSave.snapshot.test_generation_by_model = JSON.parse(JSON.stringify(state.testGenerationByModel));
     return capturedSave;
   }
 
@@ -311,11 +346,11 @@
       ? payload.candidateScores
       : {};
     if (!(selectedCandidates instanceof Set)) {
+      var savedSettings = savedTestModelState().settings;
       var savedSelection = state
         && String(state.folder || '') === String(launchFolder || '')
-        && state.testGenerationSettings
-        && Array.isArray(state.testGenerationSettings.selectedFiles)
-          ? state.testGenerationSettings.selectedFiles
+        && Array.isArray(savedSettings.selectedFiles)
+          ? savedSettings.selectedFiles
           : null;
       selectedCandidates = new Set(savedSelection === null ? files : savedSelection);
     }
@@ -335,10 +370,10 @@
     baseRow.title = 'Include a Base rendition for comparison in the next Test run';
 
     var baseInclude = document.createElement('input');
+    var savedSettings = savedTestModelState().settings;
     var includeBase = !(state
       && String(state.folder || '') === String(launchFolder || '')
-      && state.testGenerationSettings
-      && state.testGenerationSettings.includeBase === false);
+      && savedSettings.includeBase === false);
     baseInclude.type = 'checkbox';
     baseInclude.id = 'test-generations-base-include';
     baseInclude.className = 'test-generations-candidate-checkbox';
@@ -1787,14 +1822,27 @@
 
   function populateControls(payload) {
     var defaults = payload.defaults || {};
+    var settings = Array.isArray(payload.settings) ? payload.settings : [];
+    var saved = savedTestModelState();
+    var savedSettings = saved.settings || {};
     var aspect = el('test-generations-aspect');
     var megapixels = el('test-generations-megapixels');
     var duration = el('test-generations-duration');
+    var dimensions = el('test-generations-dimensions');
     var seed = el('test-generations-seed');
     var prompt = el('test-generations-prompt');
-    var savedSettings = state && String(state.folder || '') === String(launchFolder || '') && state.testGenerationSettings
-      ? state.testGenerationSettings
-      : {};
+
+    [
+      ['aspectRatio', 'test-generations-aspect-field'],
+      ['megapixels', 'test-generations-megapixels-field'],
+      ['duration', 'test-generations-duration-field'],
+      ['dimensions', 'test-generations-dimensions-field'],
+      ['seed', 'test-generations-seed-field']
+    ].forEach(function (entry) {
+      var field = el(entry[1]);
+      if (field) field.classList.toggle('hidden', settings.indexOf(entry[0]) === -1);
+    });
+
     var selectedAspect = String(savedSettings.aspectRatio || defaults.aspectRatio || '');
     var options = Array.isArray(payload.aspectRatioOptions) ? payload.aspectRatioOptions.slice() : [];
     if (selectedAspect && options.indexOf(selectedAspect) < 0) options.unshift(selectedAspect);
@@ -1804,14 +1852,12 @@
       }).join('');
       aspect.value = selectedAspect;
     }
-    if (megapixels) megapixels.value = String(savedSettings.megapixels || defaults.megapixels);
-    if (duration) duration.value = String(savedSettings.duration || defaults.duration);
-    if (seed) seed.value = String(defaults.seed);
+    if (megapixels) megapixels.value = String(savedSettings.megapixels || defaults.megapixels || '');
+    if (duration) duration.value = String(savedSettings.duration || defaults.duration || '');
+    if (dimensions) dimensions.value = String(savedSettings.dimensions || defaults.dimensions || '');
+    if (seed) seed.value = String(defaults.seed || '');
     if (prompt) {
-      var savedPrompt = state && String(state.folder || '') === String(launchFolder || '')
-        ? String(state.testGenerationPrompt || '')
-        : '';
-      prompt.value = savedPrompt.trim() ? savedPrompt : String(payload.defaultPrompt || '');
+      prompt.value = saved.prompt.trim() ? saved.prompt : String(payload.defaultPrompt || '');
     }
   }
 
@@ -1827,7 +1873,7 @@
     node.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
-    if (summary) summary.textContent = 'Loading H3 Test folder...';
+    if (summary) summary.textContent = 'Loading Test folder...';
     if (list) list.textContent = '';
     if (errorEl) {
       errorEl.textContent = '';
@@ -1871,14 +1917,18 @@
     var selectedFiles = selectedCandidateFiles();
     var baseInclude = el('test-generations-base-include');
     var includeBase = !baseInclude || baseInclude.checked;
-    var aspectRatio = String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim();
-    var megapixels = String(el('test-generations-megapixels') && el('test-generations-megapixels').value || '').trim();
-    var duration = String(el('test-generations-duration') && el('test-generations-duration').value || '').trim();
-    var seed = String(el('test-generations-seed') && el('test-generations-seed').value || '').trim();
+    var declaredSettings = prepared && Array.isArray(prepared.settings) ? prepared.settings : [];
+    var settings = {};
+    if (declaredSettings.indexOf('aspectRatio') !== -1) settings.aspectRatio = String(el('test-generations-aspect').value || '').trim();
+    if (declaredSettings.indexOf('megapixels') !== -1) settings.megapixels = String(el('test-generations-megapixels').value || '').trim();
+    if (declaredSettings.indexOf('duration') !== -1) settings.duration = String(el('test-generations-duration').value || '').trim();
+    if (declaredSettings.indexOf('dimensions') !== -1) settings.dimensions = String(el('test-generations-dimensions').value || '').trim();
+    if (declaredSettings.indexOf('seed') !== -1) settings.seed = String(el('test-generations-seed').value || '').trim();
     if (!selectedFiles.length) return showError(new Error('Select at least one staged LoRA to test.'));
     if (!prompt) return showError(new Error('A test prompt is required.'));
+    if (declaredSettings.indexOf('aspectRatio') !== -1 && !settings.aspectRatio) return showError(new Error('An aspect ratio is required.'));
+    if (declaredSettings.indexOf('dimensions') !== -1 && !settings.dimensions) return showError(new Error('Dimensions are required.'));
     saveTestBenchState(prompt);
-    if (!aspectRatio) return showError(new Error('An aspect ratio is required.'));
     var runBtn = el('test-generations-run-btn');
     var errorEl = el('test-generations-error');
     if (runBtn) runBtn.disabled = true;
@@ -1889,10 +1939,7 @@
       modelId: getWorkingModelProfileId(),
       includeBase: includeBase,
       prompt: prompt,
-      aspectRatio: aspectRatio,
-      megapixels: megapixels,
-      duration: duration,
-      seed: seed
+      settings: settings
     }).then(function (payload) {
       var startedStatus = payload && payload.latest ? payload.latest : null;
       var status = startedStatus || currentStatus;
@@ -2117,7 +2164,7 @@
     el('test-generations-prompt').addEventListener('input', function () {
       saveTestBenchState(this.value);
     });
-    ['test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration'].forEach(function (id) {
+    ['test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-dimensions'].forEach(function (id) {
       el(id).addEventListener('change', function () {
         saveTestBenchState(String(el('test-generations-prompt').value || ''));
       });

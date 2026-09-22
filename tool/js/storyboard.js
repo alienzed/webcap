@@ -216,6 +216,12 @@
     if (node) node.textContent = text || '';
   }
 
+  function setStoryDirectorInputsDisabled(disabled) {
+    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style'].forEach(function (id) {
+      el(id).disabled = !!disabled;
+    });
+  }
+
   function expandConcept() {
     if (!storyState.story) return;
     var modelId = storyState.director.modelId;
@@ -232,6 +238,7 @@
     var storyId = storyState.story.id;
     var button = el('storyboard-expand-concept-btn');
     button.disabled = true;
+    setStoryDirectorInputsDisabled(true);
     setDevelopStatus('Director is expanding the concept…');
     flushPendingSaves().then(function () {
       return directorRequest({
@@ -249,6 +256,7 @@
       reportError(err);
     }).finally(function () {
       button.disabled = false;
+      setStoryDirectorInputsDisabled(false);
     });
   }
 
@@ -273,6 +281,7 @@
 
     var button = el('storyboard-develop-btn');
     button.disabled = true;
+    setStoryDirectorInputsDisabled(true);
     setDevelopStatus('Director is developing the Story…');
     flushPendingSaves().then(function () {
       return directorRequest({
@@ -294,6 +303,7 @@
       reportError(err);
     }).finally(function () {
       button.disabled = false;
+      setStoryDirectorInputsDisabled(false);
     });
   }
 

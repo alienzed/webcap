@@ -675,14 +675,14 @@
     });
   }
 
-  function pollGeneration(sceneId, jobId) {
+  function pollGeneration(storyId, sceneId, jobId) {
     window.setTimeout(function () {
       generationRequest(null, 'job=' + encodeURIComponent(jobId)).then(function (payload) {
         var job = payload.job;
         storyState.generationJobs[sceneId] = job;
         if (job.status === 'running') {
           renderScenes();
-          pollGeneration(sceneId, jobId);
+          pollGeneration(storyId, sceneId, jobId);
           return;
         }
         if (job.status === 'failed') {
@@ -690,7 +690,10 @@
           throw new Error(job.error || 'Storyboard generation failed.');
         }
         if (job.status === 'completed') {
-          return request(null, 'story=' + encodeURIComponent(storyState.story.id)).then(function (storyPayload) {
+          if (!storyState.story || storyState.story.id !== storyId) {
+            return refreshLibrary();
+          }
+          return request(null, 'story=' + encodeURIComponent(storyId)).then(function (storyPayload) {
             storyState.story = storyPayload.story;
             renderStory();
             setSaveState('Saved');
@@ -713,7 +716,7 @@
       storyState.generationJobs[sceneId] = payload.job;
       renderScenes();
       setSaveState('Saved');
-      pollGeneration(sceneId, payload.job.jobId);
+      pollGeneration(storyState.story.id, sceneId, payload.job.jobId);
     }).catch(reportError);
   }
 

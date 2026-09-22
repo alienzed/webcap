@@ -278,3 +278,68 @@ def test_scene_loras_are_persisted_ordered_and_duplicated(storyboard_fs):
                 {"name": "same.safetensors", "strength": 0.5},
             ],
         })
+
+
+def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story", "concept": "A short film."})
+    story, old_scene = storyboard_store.add_scene(story["id"], {"title": "Old", "prompt": "Old prompt"})
+    story, old_take = storyboard_store.add_take_upload(
+        story["id"], old_scene["id"], "old.mp4", BytesIO(b"old-video")
+    )
+    old_media = storyboard_fs / "output" / "storyboards" / story["id"] / old_take["mediaPath"]
+
+    plan = {
+        "scenes": [
+            {
+                "title": "Opening",
+                "summary": "A woman enters a quiet lobby.",
+                "entryState": "She stands outside the lobby doors.",
+                "exitState": "She is inside the lobby.",
+                "prompt": "integrated_multimodal_description: [Shot 1] She enters.\n\noverall_soundscape: Rain.\n\nnon_diegetic_music: None.",
+                "suggestedDurationSeconds": 6,
+                "continuity": {"continuesPreviousScene": False, "carryForward": []},
+            },
+            {
+                "title": "Desk",
+                "summary": "She approaches the empty desk.",
+                "entryState": "She is inside the lobby.",
+                "exitState": "She stands at the empty desk.",
+                "prompt": "integrated_multimodal_description: [Shot 1] She crosses the lobby.\n\noverall_soundscape: Footsteps.\n\nnon_diegetic_music: Low drone.",
+                "suggestedDurationSeconds": 8,
+                "continuity": {"continuesPreviousScene": True, "carryForward": ["She remains inside the hotel."]},
+            },
+        ]
+    }
+
+    developed = storyboard_store.apply_developed_plan(story["id"], plan, model_id="director.gguf")
+
+    assert len(developed["sceneOrder"]) == 2
+    assert old_scene["id"] not in developed["scenes"]
+    assert old_scene["id"] in developed["removedScenes"]
+    assert developed["removedScenes"][old_scene["id"]]["removedReason"] == "replaced_by_develop_story"
+    assert old_media.read_bytes() == b"old-video"
+    assert developed["development"]["model"] == "director.gguf"
+    assert developed["development"]["plan"] == plan
+
+    first = developed["scenes"][developed["sceneOrder"][0]]
+    assert first["title"] == "Opening"
+    assert first["durationSeconds"] == 6
+    assert "integrated_multimodal_description" in first["prompt"]
+
+
+def test_apply_developed_plan_rejects_single_scene_or_out_of_range_duration(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    with pytest.raises(ValueError, match="at least two"):
+        storyboard_store.apply_developed_plan(story["id"], {"scenes": []})
+
+    bad_scene = {
+        "title": "Too long",
+        "summary": "Too much happens.",
+        "entryState": "Start.",
+        "exitState": "End.",
+        "prompt": "Prompt.",
+        "suggestedDurationSeconds": 20,
+        "continuity": {"continuesPreviousScene": False, "carryForward": []},
+    }
+    with pytest.raises(ValueError, match="between 4 and 15"):
+        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_scene, dict(bad_scene)]})

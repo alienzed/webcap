@@ -101,7 +101,7 @@
       aspectRatio: String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim(),
       megapixels: Number(el('test-generations-megapixels') && el('test-generations-megapixels').value || 0),
       duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0),
-      dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || '').trim(),
+      dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || ''),
       selectedFiles: selectedCandidateFiles(),
       includeBase: !el('test-generations-base-include') || el('test-generations-base-include').checked
     };
@@ -1965,12 +1965,12 @@
     if (declaredSettings.indexOf('aspectRatio') !== -1) settings.aspectRatio = String(el('test-generations-aspect').value || '').trim();
     if (declaredSettings.indexOf('megapixels') !== -1) settings.megapixels = String(el('test-generations-megapixels').value || '').trim();
     if (declaredSettings.indexOf('duration') !== -1) settings.duration = String(el('test-generations-duration').value || '').trim();
-    if (declaredSettings.indexOf('dimensions') !== -1) settings.dimensions = String(el('test-generations-dimensions').value || '').trim();
+    if (declaredSettings.indexOf('dimensions') !== -1) settings.dimensions = String(el('test-generations-dimensions').value || '');
     if (declaredSettings.indexOf('seed') !== -1) settings.seed = String(el('test-generations-seed').value || '').trim();
     if (!selectedFiles.length) return showError(new Error('Select at least one staged LoRA to test.'));
     if (!prompt) return showError(new Error('A test prompt is required.'));
     if (declaredSettings.indexOf('aspectRatio') !== -1 && !settings.aspectRatio) return showError(new Error('An aspect ratio is required.'));
-    if (declaredSettings.indexOf('dimensions') !== -1 && !settings.dimensions) return showError(new Error('Dimensions are required.'));
+    if (declaredSettings.indexOf('dimensions') !== -1 && !settings.dimensions.trim()) return showError(new Error('Dimensions are required.'));
     saveTestBenchState(prompt);
     var runBtn = el('test-generations-run-btn');
     var errorEl = el('test-generations-error');

@@ -511,6 +511,13 @@
       var scene = scenes[sceneId] || {};
       var seedMode = sceneValue(scene, 'seedMode', 'random');
       var seed = sceneValue(scene, 'seed', '');
+      var seedDisplay = seedMode === 'fixed' && seed !== '' && seed != null ? seed : -1;
+      var sceneReferences = Array.isArray(scene.references) ? scene.references : [];
+      var continuityConfigured = !!(
+        String(sceneValue(scene, 'entryState', '')).trim() ||
+        String(sceneValue(scene, 'exitState', '')).trim() ||
+        String(sceneValue(scene, 'notes', '')).trim()
+      );
       var takes = scene.takes && typeof scene.takes === 'object' ? scene.takes : {};
       var removedTakes = scene.removedTakes && typeof scene.removedTakes === 'object' ? scene.removedTakes : {};
       var takeOrder = Array.isArray(scene.takeOrder) ? scene.takeOrder : [];
@@ -531,12 +538,17 @@
       }
       var sceneLoras = Array.isArray(scene.loras) ? scene.loras : [];
       var loraRowsHtml = sceneLoras.map(loraRowHtml).join('');
+      var advancedSummaryParts = [];
+      if (seedMode === 'fixed') advancedSummaryParts.push('Fixed seed');
+      if (scene.wildcardsEnabled) advancedSummaryParts.push('Wildcards');
+      if (sceneLoras.length) advancedSummaryParts.push(sceneLoras.length + ' LoRA' + (sceneLoras.length === 1 ? '' : 's'));
+      var advancedSummary = advancedSummaryParts.length ? advancedSummaryParts.join(' · ') : 'Optional';
       var baseLoras = storyState.generationCapabilities.baseLoras || [];
       var loraStatus = storyState.generationCapabilities.available
         ? (baseLoras.length ? 'Base: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
         : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
       var canAddLora = storyState.generationCapabilities.available && (storyState.generationCapabilities.loras || []).length > 0;
-      var referencesHtml = (Array.isArray(scene.references) ? scene.references : []).map(function (reference) {
+      var referencesHtml = sceneReferences.map(function (reference) {
         if (!reference || !reference.role) return '';
         return '<span class="storyboard-reference-chip">' +
           escapeHtml(reference.role.replace(/_/g, ' ')) + ' · ' +
@@ -577,68 +589,84 @@
           '<span class="storyboard-scene-number">Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
           '<input class="storyboard-scene-title" data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title">' +
           '<div class="storyboard-scene-actions">' +
-            '<button type="button" class="review-captions-btn" data-scene-action="up" title="Move Scene up" ' + (index === 0 ? 'disabled' : '') + '>↑</button>' +
-            '<button type="button" class="review-captions-btn" data-scene-action="down" title="Move Scene down" ' + (index === order.length - 1 ? 'disabled' : '') + '>↓</button>' +
-            '<button type="button" class="review-captions-btn" data-scene-action="duplicate" title="Duplicate Scene">Duplicate</button>' +
-            '<button type="button" class="review-captions-btn" data-scene-action="delete" title="Remove Scene">Remove</button>' +
+            '<button type="button" class="review-captions-btn" data-scene-action="up" title="Move Scene up" aria-label="Move Scene up" ' + (index === 0 ? 'disabled' : '') + '>↑</button>' +
+            '<button type="button" class="review-captions-btn" data-scene-action="down" title="Move Scene down" aria-label="Move Scene down" ' + (index === order.length - 1 ? 'disabled' : '') + '>↓</button>' +
+            '<button type="button" class="review-captions-btn" data-scene-action="duplicate" title="Duplicate this Scene, including its current authoring settings">Duplicate</button>' +
+            '<button type="button" class="review-captions-btn" data-scene-action="delete" title="Remove this Scene; it remains recoverable under Removed Scenes">Remove</button>' +
           '</div>' +
         '</header>' +
         '<div class="storyboard-scene-body">' +
           '<div class="storyboard-scene-main">' +
-            '<label class="storyboard-field"><span>Summary / intent</span><textarea data-scene-field="summary" rows="2" placeholder="What happens in this scene?">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>' +
-            '<div class="storyboard-scene-handoff-row">' +
-              '<label class="storyboard-field"><span>Entry state</span><textarea data-scene-field="entryState" rows="2" placeholder="What must already be true when this Scene begins?">' + escapeHtml(sceneValue(scene, 'entryState', '')) + '</textarea></label>' +
-              '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="2" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
-            '</div>' +
-            '<label class="storyboard-field"><span>Generation prompt</span><textarea data-scene-field="prompt" rows="7" placeholder="Paste or write the full model-facing prompt here.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea></label>' +
-            '<div class="storyboard-director-actions">' +
-              '<button type="button" class="review-captions-btn" data-director-write>Write with Director</button>' +
-              '<input type="text" data-director-correction placeholder="Correction for existing prompt...">' +
-              '<button type="button" class="review-captions-btn" data-director-refine>Refine</button>' +
-              '<span class="storyboard-save-state" data-director-status></span>' +
-            '</div>' +
-            '<label class="storyboard-field"><span>Notes</span><textarea data-scene-field="notes" rows="2" placeholder="Continuity reminders, corrections, ideas...">' + escapeHtml(sceneValue(scene, 'notes', '')) + '</textarea></label>' +
-          '</div>' +
-          '<div class="storyboard-scene-meta">' +
-            '<div class="storyboard-scene-meta-row">' +
-              '<label class="storyboard-field"><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
-              '<label class="storyboard-field"><span>Seed mode</span><select data-scene-field="seedMode"><option value="random"' + (seedMode === 'random' ? ' selected' : '') + '>Random</option><option value="fixed"' + (seedMode === 'fixed' ? ' selected' : '') + '>Fixed</option></select></label>' +
-            '</div>' +
-            '<div class="storyboard-scene-meta-row">' +
-              '<label class="storyboard-field"><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
-                ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
-                  return '<option value="' + escapeHtml(value) + '"' + (sceneValue(scene, 'aspectRatio', '4:3 (Standard)') === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
-                }).join('') +
-              '</select></label>' +
-              '<label class="storyboard-field"><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneValue(scene, 'megapixels', 0.2)) + '"></label>' +
-            '</div>' +
-            '<label class="storyboard-field"><span>Seed</span><input type="number" min="0" step="1" data-scene-field="seed" value="' + escapeHtml(seed) + '" placeholder="Set when fixed"></label>' +
-            '<label class="storyboard-inline-check"><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
-            '<div class="storyboard-lora-panel">' +
-              '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
-              '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>' +
-              '<span class="storyboard-reference-empty">' + escapeHtml(loraStatus) + '</span>' +
-            '</div>' +
-            '<div class="storyboard-reference-panel">' +
-              '<strong>References</strong>' +
-              (referencesHtml ? '<div class="storyboard-reference-chips">' + referencesHtml + '</div>' : '<span class="storyboard-reference-empty">No references assigned.</span>') +
-              (previousSelectedTakeId
-                ? '<button type="button" class="review-captions-btn storyboard-reference-quick" data-reference-previous>Previous selected Take → first frame</button>'
-                : (index > 0 ? '<span class="storyboard-reference-empty">Select a Take in the previous Scene for quick continuity.</span>' : '')) +
-              '<div class="storyboard-reference-editor">' +
-                '<select data-reference-role><option value="first_frame">First frame</option><option value="last_frame">Last frame</option></select>' +
-                '<select data-reference-source>' + activeTakeOptions(story, '') + '</select>' +
-                '<select data-reference-frame><option value="last">Last frame</option><option value="first">First frame</option></select>' +
-                '<button type="button" class="review-captions-btn" data-reference-apply>Assign</button>' +
+            '<label class="storyboard-field storyboard-scene-intent"><span>Scene intent</span><textarea data-scene-field="summary" rows="2" placeholder="Describe what happens in this Scene.">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>' +
+            '<div class="storyboard-prompt-block">' +
+              '<div class="storyboard-prompt-heading">' +
+                '<span>Generation prompt</span>' +
+                '<button type="button" class="review-captions-btn" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
+              '</div>' +
+              '<textarea class="storyboard-prompt-textarea" data-scene-field="prompt" rows="7" placeholder="Full model-facing prompt. Write it directly or let the Director draft it from the Scene intent.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea>' +
+              '<div class="storyboard-director-actions">' +
+                '<input type="text" data-director-correction placeholder="Tell the Director what to change in this prompt...">' +
+                '<button type="button" class="review-captions-btn" data-director-refine title="Apply this correction to the existing generation prompt.">Refine</button>' +
+                '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
             '</div>' +
-            '<div class="storyboard-generate-panel">' +
-              '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate' + (generationRunning ? ' disabled' : '') + '>' +
-                (generationRunning ? 'Generating…' : 'Generate Take') +
-              '</button>' +
-              '<span class="storyboard-generation-status" data-generation-status>' + generationStatus + '</span>' +
-            '</div>' +
+            '<details class="storyboard-scene-disclosure storyboard-continuity-details">' +
+              '<summary><span>Continuity &amp; notes</span><span class="storyboard-disclosure-summary-state">' + (continuityConfigured ? 'Configured' : 'Optional') + '</span></summary>' +
+              '<div class="storyboard-disclosure-body">' +
+                '<div class="storyboard-scene-handoff-row">' +
+                  '<label class="storyboard-field"><span>Entry state</span><textarea data-scene-field="entryState" rows="2" placeholder="What must already be true when this Scene begins?">' + escapeHtml(sceneValue(scene, 'entryState', '')) + '</textarea></label>' +
+                  '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="2" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
+                '</div>' +
+                '<label class="storyboard-field"><span>Notes</span><textarea data-scene-field="notes" rows="2" placeholder="Continuity reminders, corrections, ideas...">' + escapeHtml(sceneValue(scene, 'notes', '')) + '</textarea></label>' +
+              '</div>' +
+            '</details>' +
           '</div>' +
+          '<aside class="storyboard-scene-meta">' +
+            '<div class="storyboard-scene-quick">' +
+              '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
+              '<div class="storyboard-generate-panel">' +
+                '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Generate a new Take from the current saved Scene."' + (generationRunning ? ' disabled' : '') + '>' +
+                  (generationRunning ? 'Generating…' : 'Generate Take') +
+                '</button>' +
+                '<span class="storyboard-generation-status" data-generation-status>' + generationStatus + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<details class="storyboard-scene-disclosure storyboard-advanced-details">' +
+              '<summary><span>Advanced</span><span class="storyboard-disclosure-summary-state">' + escapeHtml(advancedSummary) + '</span></summary>' +
+              '<div class="storyboard-disclosure-body">' +
+                '<div class="storyboard-scene-meta-row">' +
+                  '<label class="storyboard-field" title="Currently stored per Scene; keep this consistent across a Story unless you intentionally need an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
+                    ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
+                      return '<option value="' + escapeHtml(value) + '"' + (sceneValue(scene, 'aspectRatio', '4:3 (Standard)') === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
+                    }).join('') +
+                  '</select></label>' +
+                  '<label class="storyboard-field" title="Output size target for this Scene. Useful when promoting a shot toward final output."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneValue(scene, 'megapixels', 0.2)) + '"></label>' +
+                '</div>' +
+                '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
+                '<label class="storyboard-inline-check" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
+                '<div class="storyboard-lora-panel">' +
+                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add a Scene-specific LoRA override."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
+                  '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>' +
+                  '<span class="storyboard-reference-empty">' + escapeHtml(loraStatus) + '</span>' +
+                '</div>' +
+              '</div>' +
+            '</details>' +
+            '<details class="storyboard-scene-disclosure storyboard-reference-details">' +
+              '<summary><span>References</span><span class="storyboard-disclosure-summary-state">' + (sceneReferences.length ? sceneReferences.length + ' assigned' : 'None') + '</span></summary>' +
+              '<div class="storyboard-disclosure-body">' +
+                (referencesHtml ? '<div class="storyboard-reference-chips">' + referencesHtml + '</div>' : '<span class="storyboard-reference-empty">No references assigned.</span>') +
+                (previousSelectedTakeId
+                  ? '<button type="button" class="review-captions-btn storyboard-reference-quick" data-reference-previous title="Use the previous Scene\'s selected Take as this Scene\'s first-frame reference.">Previous selected Take → first frame</button>'
+                  : (index > 0 ? '<span class="storyboard-reference-empty">Select a Take in the previous Scene for quick continuity.</span>' : '')) +
+                '<div class="storyboard-reference-editor">' +
+                  '<select data-reference-role title="Which reference slot this media should fill."><option value="first_frame">First frame</option><option value="last_frame">Last frame</option></select>' +
+                  '<select data-reference-source title="Choose an existing Take to use as a reference.">' + activeTakeOptions(story, '') + '</select>' +
+                  '<select data-reference-frame title="Choose which frame from the source Take to use."><option value="last">Last frame</option><option value="first">First frame</option></select>' +
+                  '<button type="button" class="review-captions-btn" data-reference-apply title="Assign the selected Take frame to this reference slot.">Assign</button>' +
+                '</div>' +
+              '</div>' +
+            '</details>' +
+          '</aside>' +
         '</div>' +
         '<div class="storyboard-takes">' +
           '<div class="storyboard-takes-header"><div><strong>Takes</strong><span>Imported media is copied into this Story and keeps a frozen Scene snapshot.</span></div>' +
@@ -790,6 +818,8 @@
       return root.querySelector('[data-scene-field="' + name + '"]');
     }
     var seedNode = field('seed');
+    var seedText = String(seedNode.value || '').trim();
+    var randomSeed = seedText === '' || seedText === '-1';
     return {
       title: field('title').value,
       summary: field('summary').value,
@@ -800,8 +830,8 @@
       durationSeconds: field('durationSeconds').value,
       aspectRatio: field('aspectRatio').value,
       megapixels: field('megapixels').value,
-      seedMode: field('seedMode').value,
-      seed: seedNode.value === '' ? null : seedNode.value,
+      seedMode: randomSeed ? 'random' : 'fixed',
+      seed: randomSeed ? null : seedText,
       wildcardsEnabled: field('wildcardsEnabled').checked,
       loras: Array.prototype.map.call(root.querySelectorAll('[data-scene-lora-row]'), function (row) {
         return {

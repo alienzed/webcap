@@ -274,7 +274,7 @@
               '</div>' +
             '</div>' +
             '<div class="storyboard-generate-panel">' +
-              '<button type="button" class="training-btn training-launch-btn storyboard-generate-btn" data-scene-generate' + (generationRunning ? ' disabled' : '') + '>' +
+              '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate' + (generationRunning ? ' disabled' : '') + '>' +
                 (generationRunning ? 'Generating…' : 'Generate Take') +
               '</button>' +
               '<span class="storyboard-generation-status">' + generationStatus + '</span>' +

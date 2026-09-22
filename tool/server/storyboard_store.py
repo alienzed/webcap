@@ -145,6 +145,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         raise ValueError("Story status must be active, complete, or archived.")
 
     scenes = current.get("scenes") if isinstance(current.get("scenes"), dict) else {}
+    removed_scenes = current.get("removedScenes") if isinstance(current.get("removedScenes"), dict) else {}
     scene_order = current.get("sceneOrder") if isinstance(current.get("sceneOrder"), list) else []
     scene_order = [scene_id for scene_id in scene_order if scene_id in scenes]
 
@@ -160,6 +161,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "updatedAt": now,
         "sceneOrder": scene_order,
         "scenes": scenes,
+        "removedScenes": removed_scenes,
     }
 
 
@@ -306,9 +308,31 @@ def delete_scene(story_id, scene_id):
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     if scene_id not in scenes:
         raise FileNotFoundError("Scene does not exist.")
-    del scenes[scene_id]
+    scene = dict(scenes.pop(scene_id))
+    scene["removedAt"] = _utc_now()
+    removed = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
+    removed[scene_id] = scene
+    story["removedScenes"] = removed
     story["sceneOrder"] = [value for value in story.get("sceneOrder") or [] if value != scene_id]
     story["scenes"] = scenes
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story
+
+
+def restore_scene(story_id, scene_id):
+    story = load_story(story_id)
+    removed = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
+    scene = removed.get(scene_id)
+    if not isinstance(scene, dict):
+        raise FileNotFoundError("Removed Scene does not exist.")
+    restored = dict(scene)
+    restored.pop("removedAt", None)
+    restored["updatedAt"] = _utc_now()
+    story["scenes"][scene_id] = restored
+    del removed[scene_id]
+    story["removedScenes"] = removed
+    story["sceneOrder"].append(scene_id)
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story

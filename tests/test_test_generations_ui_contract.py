@@ -547,6 +547,7 @@ def test_test_generations_sidebar_is_collapsible_like_media_rail():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
+    assert 'id="test-generations-body"' in html
     assert 'id="test-generations-rail-toggle-btn"' in html
     assert "function syncTestRailCollapseUi()" in script
     assert "function toggleTestRailCollapsed()" in script
@@ -554,4 +555,3 @@ def test_test_generations_sidebar_is_collapsible_like_media_rail():
     assert ".test-generations-body.test-generations-rail-collapsed {" in css
     assert ".test-generations-body.test-generations-rail-collapsed .test-generations-rail {" in css
     assert ".test-generations-rail-toggle-btn {" in css
-

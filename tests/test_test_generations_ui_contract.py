@@ -13,6 +13,16 @@ def test_test_settings_use_comfy_dimensions_choices():
     assert "dimensions.value = selectedDimensions" in script
 
 
+def test_base_model_selector_stays_available_and_reprepares_test_workspace():
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "modelSelect.disabled = navigation.activity === 'test'" not in shell
+    assert "Select the Base Model for Test Generations" in shell
+    assert "if (isOpen()) openPane();" in script
+    assert "Testing unavailable for selected Base Model." in script
+
+
 def test_test_generations_uses_training_pane_and_core_controls():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

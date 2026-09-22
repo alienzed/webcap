@@ -6,6 +6,8 @@
   var prepared = null;
   var launchFolder = '';
   var currentSession = '';
+  var currentSessionFolder = '';
+  var currentSessionModel = '';
   var currentStatus = {};
   var resultsView = 'grid';
   var compareIndex = 0;
@@ -1784,7 +1786,11 @@
 
   function renderStatus(status) {
     currentStatus = status || {};
-    if (status) currentSession = String(status.session || '');
+    if (status && status.session) {
+      currentSession = String(status.session || '');
+      currentSessionFolder = String(launchFolder || '');
+      currentSessionModel = String(status.modelId || status.model || currentTestModelId() || '');
+    }
     syncActiveRunControls(status || {});
     var openFolderBtn = el('test-generations-open-results-btn');
     var rateItemsBtn = el('test-generations-rate-items-btn');
@@ -1821,17 +1827,33 @@
       refreshActivityButton();
       if (status && (status.status === 'running' || status.status === 'stopping')) showSessionError = true;
       var activeSession = String(status && status.session || '');
+      var selectedWasLive = !!(
+        currentSession &&
+        currentSession !== activeSession &&
+        currentStatus &&
+        String(currentStatus.session || '') === currentSession &&
+        (currentStatus.status === 'running' || currentStatus.status === 'stopping')
+      );
+      var previewRefresh = Promise.resolve();
+
       if (!currentSession || currentSession === activeSession) {
         renderStatus(status);
+      } else if (selectedWasLive) {
+        previewRefresh = request('test_open_session', { session: currentSession }).then(function (selectedStatus) {
+          renderStatus(selectedStatus);
+        });
       }
-      if (status && (status.status === 'running' || status.status === 'stopping')) {
-        if (queuedTestJobs.length) refreshSessions().catch(showError);
-        pollTimer = setTimeout(pollStatus, 2000);
-      } else {
-        refreshSessions().then(function () {
+
+      return previewRefresh.then(function () {
+        if (status && (status.status === 'running' || status.status === 'stopping')) {
+          if (queuedTestJobs.length) refreshSessions().catch(showError);
+          pollTimer = setTimeout(pollStatus, 2000);
+          return null;
+        }
+        return refreshSessions().then(function () {
           if (queuedTestJobs.length && isOpen()) pollTimer = setTimeout(pollStatus, 5000);
-        }).catch(showError);
-      }
+        });
+      });
     }).catch(showError);
   }
 
@@ -2010,6 +2032,17 @@
     var errorEl = el('test-generations-error');
     if (!node || !frame) throw new Error('Test Generations requires the app frame and Test workspace.');
     launchFolder = owningSetFolder(state && state.folder || '');
+    var requestedModelId = currentTestModelId();
+    var rememberedSession = (
+      currentSession &&
+      currentSessionFolder === launchFolder &&
+      currentSessionModel === requestedModelId
+    ) ? currentSession : '';
+    if (!rememberedSession) {
+      currentSession = '';
+      currentSessionFolder = '';
+      currentSessionModel = '';
+    }
     frame.classList.add('workspace-test-open');
     node.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
@@ -2022,7 +2055,6 @@
     }
     prepared = null;
     selectedCandidates = null;
-    currentSession = '';
     currentStatus = {};
     showSessionError = false;
     compareIndex = 0;
@@ -2053,8 +2085,24 @@
       if (initialStatus.status === 'running' || initialStatus.status === 'stopping') showSessionError = true;
       syncActiveRunControls(initialStatus);
       syncActiveTestCard(initialStatus);
-      renderStatus(initialStatus);
-      refreshSessions().then(function () {
+      var previewReady = rememberedSession
+        ? request('test_open_session', { session: rememberedSession }).then(function (selectedStatus) {
+            renderStatus(selectedStatus);
+          }).catch(function (err) {
+            reportConsoleWarning(
+              'Test Generations',
+              'Could not restore selected Test session ' + rememberedSession + ': ' +
+              String(err && err.message ? err.message : err)
+            );
+            currentSession = '';
+            currentSessionFolder = '';
+            currentSessionModel = '';
+            renderStatus(initialStatus);
+          })
+        : Promise.resolve(renderStatus(initialStatus));
+      previewReady.then(function () {
+        return refreshSessions();
+      }).then(function () {
         if ((payload.latest && (payload.latest.status === 'running' || payload.latest.status === 'stopping')) || queuedTestJobs.length) pollStatus();
       }).catch(showError);
     }).catch(function (err) {
@@ -2144,6 +2192,8 @@
       renderSessions(payload && payload.sessions);
       if (currentSession === String(payload.deleted || '')) {
         currentSession = '';
+        currentSessionFolder = '';
+        currentSessionModel = '';
         showSessionError = false;
         renderStatus(payload.latest || { status: 'idle' });
       }

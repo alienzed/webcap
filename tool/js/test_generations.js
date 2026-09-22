@@ -84,12 +84,16 @@
           : {}
       };
     }
-    return {
-      prompt: String(state && state.testGenerationPrompt || ''),
-      settings: state && state.testGenerationSettings && typeof state.testGenerationSettings === 'object'
-        ? state.testGenerationSettings
-        : {}
-    };
+    var model = supportedTestModels[modelId] || {};
+    if (model.default === true) {
+      return {
+        prompt: String(state && state.testGenerationPrompt || ''),
+        settings: state && state.testGenerationSettings && typeof state.testGenerationSettings === 'object'
+          ? state.testGenerationSettings
+          : {}
+      };
+    }
+    return { prompt: '', settings: {} };
   }
 
   function currentPersistedSettings() {
@@ -107,13 +111,29 @@
     if (!state || String(state.folder || '') !== String(launchFolder || '')) return null;
     var modelId = currentTestModelId();
     var settings = currentPersistedSettings();
-    state.testGenerationPrompt = String(prompt || '');
-    state.testGenerationSettings = settings;
     if (!state.testGenerationByModel || typeof state.testGenerationByModel !== 'object') state.testGenerationByModel = {};
+    var currentModel = supportedTestModels[modelId] || {};
+    if (currentModel.default !== true) {
+      Object.keys(supportedTestModels).some(function (supportedId) {
+        var supported = supportedTestModels[supportedId] || {};
+        if (supported.default !== true || state.testGenerationByModel[supportedId]) return false;
+        state.testGenerationByModel[supportedId] = {
+          prompt: String(state.testGenerationPrompt || ''),
+          settings: state.testGenerationSettings && typeof state.testGenerationSettings === 'object'
+            ? JSON.parse(JSON.stringify(state.testGenerationSettings))
+            : {}
+        };
+        return true;
+      });
+    }
     state.testGenerationByModel[modelId] = {
       prompt: String(prompt || ''),
       settings: JSON.parse(JSON.stringify(settings))
     };
+    if (currentModel.default === true) {
+      state.testGenerationPrompt = String(prompt || '');
+      state.testGenerationSettings = settings;
+    }
     var capturedSave = captureCurrentFolderStateSave();
     if (!capturedSave) return null;
     capturedSave.snapshot.test_generation_prompt = state.testGenerationPrompt;
@@ -1701,7 +1721,7 @@
   function pollStatus() {
     if (pollTimer) clearTimeout(pollTimer);
     if (!isOpen()) return;
-    request('test_status').then(function (status) {
+    request('test_status', { modelId: currentTestModelId() }).then(function (status) {
       syncActiveRunControls(status);
       syncActiveTestCard(status);
       refreshActivityButton();
@@ -2027,7 +2047,7 @@
         renderStatus(payload.sessionStatus);
         return null;
       }
-      return request('test_status').then(renderStatus);
+      return request('test_status', { modelId: currentTestModelId() }).then(renderStatus);
     }).then(function () {
       return refreshSessions();
     });

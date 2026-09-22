@@ -450,10 +450,9 @@ function syncApplicationShellContext() {
 
   var modelRelevant = navigation.activity === 'training' || navigation.activity === 'test';
   if (modelControl) modelControl.classList.toggle('hidden', !modelRelevant);
-  if (modelSelect) {
-    modelSelect.disabled = navigation.activity === 'test';
+  if (modelSelect && !modelSelect.disabled) {
     modelSelect.title = navigation.activity === 'test'
-      ? 'Base Model is fixed while Test Generations is open.'
+      ? 'Select the Base Model for Test Generations. Active and queued tests keep their captured model.'
       : '';
   }
 

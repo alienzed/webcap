@@ -40,6 +40,7 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert ".test-generations-workspace" in css
     assert ".test-generations-results" in css
     assert ".test-generations-result-card video" in css
+    assert ".test-generations-result-card img" in css
     assert ".test-generations-setup-overview" in css
     assert ".test-generations-setup-options" in css
     assert 'id="test-generations-files-count"' in html
@@ -149,6 +150,25 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert ".test-generations-session-row:not([data-queue-job-id])" in css
     assert ".test-generations-result-footer" in css
 
+
+
+def test_session_list_orders_active_then_queue_then_history():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    block = script.split("function renderSessions(sessions, queuedJobs)", 1)[1].split("function refreshSessions()", 1)[0]
+
+    assert "activeItems.forEach(appendSessionRow);" in block
+    assert "queued.forEach(function (job)" in block
+    assert "historyItems.forEach(appendSessionRow);" in block
+    assert block.index("activeItems.forEach(appendSessionRow);") < block.index("queued.forEach(function (job)")
+    assert block.index("queued.forEach(function (job)") < block.index("historyItems.forEach(appendSessionRow);")
+
+
+def test_active_session_row_surfaces_live_elapsed_time():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    block = script.split("function sessionStatusText(session)", 1)[1].split("function syncVisibleSessionProgress", 1)[0]
+
+    assert "session.candidateStartedAt || session.startedAt" in block
+    assert "formatElapsedMs(Date.now() - startedAt)" in block
 
 def test_active_session_row_uses_live_polled_progress():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -300,10 +320,10 @@ def test_test_result_stars_are_shared_by_grid_and_compare():
 
     assert "function buildResultRating(result)" in script
     assert "function rateCurrentSessionResult(button)" in script
-    assert "function syncResultRatingButtons(outputVideo, rating)" in script
+    assert "function syncResultRatingButtons(mediaFile, rating)" in script
     assert "request('test_rate_result'" in script
     assert "session: currentSession" in script
-    assert "outputVideo: outputVideo" in script
+    assert "mediaFile: mediaFile" in script
     assert "rating: rating" in script
     assert "star.textContent = value <= currentRating ? '★' : '☆';" in script
     assert "if (!opts.failed)" in script
@@ -326,13 +346,13 @@ def test_test_result_stars_are_shared_by_grid_and_compare():
 def test_test_rating_refresh_preserves_preview_dom():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    sync_block = script.split("function syncResultRatingButtons(outputVideo, rating)", 1)[1].split("function rateCurrentSessionResult(button)", 1)[0]
+    sync_block = script.split("function syncResultRatingButtons(mediaFile, rating)", 1)[1].split("function rateCurrentSessionResult(button)", 1)[0]
     assert "document.querySelectorAll" in sync_block
     assert "star.classList.toggle('active', active);" in sync_block
     assert "star.textContent = active ? '★' : '☆';" in sync_block
 
     rate_block = script.split("function rateCurrentSessionResult(button)", 1)[1].split("function buildResultFooter", 1)[0]
-    assert "syncResultRatingButtons(outputVideo, payload && payload.rating);" in rate_block
+    assert "syncResultRatingButtons(mediaFile, payload && payload.rating);" in rate_block
     assert "renderStatus(payload.sessionStatus);" in rate_block
 
 
@@ -366,7 +386,9 @@ def test_compare_videos_start_muted():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
-    assert "video.muted = true;" in compare_block
+    preview_block = script.split("function appendTestPreview(container, resultFolder, result, options)", 1)[1].split("function candidateFileForResult", 1)[0]
+    assert "appendTestPreview(item, resultFolder, result, { muted: true })" in compare_block
+    assert "video.muted = !!(options && options.muted);" in preview_block
 
 
 
@@ -506,13 +528,16 @@ def test_recent_test_sets_reuse_existing_session_history():
     assert "dataset.recentTestOpen" in script
 
 
-def test_test_execution_is_h3_gated_even_when_workspace_is_opened_indirectly():
+def test_test_execution_uses_backend_model_capabilities_even_when_workspace_is_opened_indirectly():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert "function isTestModelSupported()" in script
+    assert "function refreshSupportedTestModels()" in script
+    assert "fetch('/fs/test_generations/models')" in script
+    assert "supportedTestModelIds.indexOf(String(getWorkingModelProfileId() || '')) !== -1" in script
     assert "runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;" in script
     assert "if (!isTestModelSupported())" in script
-    assert "New Test runs currently require MiniMax H3 as the working model." in script
+    assert "Test Generations is not available for the selected Base Model." in script
     assert "syncLaunchVisibility();" in script[script.index("function testGenerationsFolderLoaded()"):script.index("function stagedFileParts(", script.index("function testGenerationsFolderLoaded()"))]
     assert "syncActiveRunControls(currentStatus);" in script
     assert ".test-generations-video-transport, video, button" in script
@@ -528,14 +553,14 @@ def test_recent_test_sets_are_cached_during_active_test_polling():
 def test_saved_test_history_does_not_require_external_staging_folder():
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
 
-    prepare_start = backend.index("def prepare(folder_path):")
+    prepare_start = backend.index("def prepare(folder_path, model_id=None):")
     prepare_end = backend.index("\ndef status(", prepare_start)
     prepare = backend[prepare_start:prepare_end]
     assert "except ValueError:" in prepare
     assert "loras = []" in prepare
     assert '"sessions": list_sessions(folder_path)' in prepare
     start_start = backend.index("def start_queued(folder_path")
-    assert "_h3_test_directory(folder_path)" in backend[start_start:]
+    assert "_test_directory(folder_path, model)" in backend[start_start:]
     assert 'operation == "test_start"' not in backend
 
 def test_test_generations_rate_items_reuses_unrated_single_item_review():

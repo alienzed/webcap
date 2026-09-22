@@ -165,30 +165,30 @@ def test_storyboard_generation_route_starts_and_reads_job(monkeypatch):
     assert status.get_json()["job"]["takeId"] == "take-1"
 
 
-def test_storyboard_assembly_route_starts_and_reads_job(monkeypatch):
-    monkeypatch.setattr(app_module, "storyboard_start_assembly", lambda story_id: {
-        "jobId": "assembly-1",
+
+def test_storyboard_assembly_route_exports_and_reads_current_export(monkeypatch):
+    monkeypatch.setattr(app_module, "storyboard_export_selected_sequence", lambda story_id: {
         "storyId": story_id,
-        "status": "running",
+        "folder": "output/storyboards/" + story_id + "/exports",
+        "media": "selected-sequence.mp4",
+        "itemCount": 1,
         "selection": [{"sceneId": "scene-1", "takeId": "take-1"}],
+        "current": True,
     })
-    monkeypatch.setattr(app_module, "storyboard_assembly_status", lambda job_id: {
-        "jobId": job_id,
-        "storyId": "story-1",
-        "status": "completed",
+    monkeypatch.setattr(app_module, "storyboard_current_export", lambda story_id: {
+        "storyId": story_id,
+        "folder": "output/storyboards/" + story_id + "/exports",
+        "media": "selected-sequence.mp4",
+        "itemCount": 1,
         "selection": [{"sceneId": "scene-1", "takeId": "take-1"}],
-        "output": {
-            "folder": "output/storyboards/story-1/exports",
-            "media": "selected-sequence.mp4",
-            "itemCount": 1,
-        },
+        "current": True,
     })
     client = app_module.app.test_client()
 
-    started = client.post("/fs/storyboard/assembly", json={"storyId": "story-1"})
-    assert started.status_code == 200
-    assert started.get_json()["job"]["status"] == "running"
+    exported = client.post("/fs/storyboard/assembly", json={"storyId": "story-1"})
+    assert exported.status_code == 200
+    assert exported.get_json()["export"]["media"] == "selected-sequence.mp4"
 
-    status = client.get("/fs/storyboard/assembly", query_string={"job": "assembly-1"})
-    assert status.status_code == 200
-    assert status.get_json()["job"]["output"]["media"] == "selected-sequence.mp4"
+    current = client.get("/fs/storyboard/assembly", query_string={"story": "story-1"})
+    assert current.status_code == 200
+    assert current.get_json()["export"]["current"] is True

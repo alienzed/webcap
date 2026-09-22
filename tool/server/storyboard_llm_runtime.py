@@ -400,6 +400,13 @@ def _free_comfy_models():
         return False
 
 
+def _model_status(model_id):
+    for model in list_models(reload=False):
+        if model["id"] == model_id:
+            return model["status"]
+    return ""
+
+
 def chat(model_id, messages, response_schema=None, max_tokens=None):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Storyboard Director messages are required.")
@@ -408,11 +415,12 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
         _ensure_server()
         _model_record(model_id)
         _reserve_gpu()
-        model_loaded = False
+        load_attempted = False
+        cleanup_safe = True
         try:
             _free_comfy_models()
+            load_attempted = True
             _load_model(model_id)
-            model_loaded = True
 
             settings = _director_config()
             payload = {
@@ -448,14 +456,27 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
                 "timings": response.get("timings") if isinstance(response, dict) else None,
             }
         finally:
-            if model_loaded:
+            cleanup_error = None
+            if load_attempted:
                 try:
-                    _unload_model(model_id)
-                except Exception:
-                    # Do not release the shared GPU reservation while a model may
-                    # still be resident. Stopping WebCap's router is the safe fallback.
-                    stop_server()
-            _release_gpu()
+                    if _model_status(model_id) != "unloaded":
+                        _unload_model(model_id)
+                except Exception as exc:
+                    if _process is not None:
+                        stop_server()
+                    else:
+                        cleanup_safe = False
+                        cleanup_error = RuntimeError(
+                            "Storyboard Director could not confirm that the selected model was unloaded "
+                            "from an external llama.cpp router. The GPU reservation is being kept to avoid "
+                            "colliding with Training or generation work. Stop/unload that router model, then "
+                            "restart WebCap before using GPU work again."
+                        )
+                        cleanup_error.__cause__ = exc
+            if cleanup_safe:
+                _release_gpu()
+            if cleanup_error is not None:
+                raise cleanup_error
 
 
 def run_contract(model_id, contract):

@@ -2666,14 +2666,6 @@ iframe {
 .test-generations-staged-panel {
   box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 65%, transparent);
 }
-.test-generations-library-section {
-  min-width: 0;
-}
-.test-generations-library-section > .test-generations-library-heading {
-  padding: 4px 2px 6px;
-  border-bottom: 0;
-  background: transparent;
-}
 .test-generations-library-heading-primary {
   display: flex;
   min-width: 0;

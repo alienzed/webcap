@@ -12,6 +12,7 @@
   var testActivity = {};
   var selectedCandidates = null;
   var queuedTestJobs = [];
+  var showSessionError = false;
   var debouncedPromptSave = debounceCreate(500);
 
   function el(id) { return document.getElementById(id); }
@@ -1377,7 +1378,7 @@
     var errorEl = el('test-generations-error');
     if (statusEl) statusEl.textContent = statusText(status);
     if (errorEl) {
-      errorEl.textContent = status && status.error ? String(status.error) : '';
+      errorEl.textContent = showSessionError && status && status.error ? String(status.error) : '';
       errorEl.classList.toggle('hidden', !errorEl.textContent);
     }
     renderSessionMeta(status || {});
@@ -1391,6 +1392,7 @@
     request('test_status').then(function (status) {
       syncActiveRunControls(status);
       refreshActivityButton();
+      if (status && (status.status === 'running' || status.status === 'stopping')) showSessionError = true;
       var activeSession = String(status && status.session || '');
       if (!currentSession || currentSession === activeSession) {
         renderStatus(status);
@@ -1573,6 +1575,7 @@
     selectedCandidates = null;
     currentSession = '';
     currentStatus = {};
+    showSessionError = false;
     compareIndex = 0;
     setResultsView('grid');
     renderStatus({ status: 'idle' });
@@ -1582,8 +1585,10 @@
       renderStagedFiles(payload);
       renderSessions(payload.sessions, []);
       populateControls(payload);
-      syncActiveRunControls(payload.latest || { status: 'idle' });
-      renderStatus(payload.latest || { status: 'idle' });
+      var initialStatus = payload.latest || { status: 'idle' };
+      if (initialStatus.status === 'running' || initialStatus.status === 'stopping') showSessionError = true;
+      syncActiveRunControls(initialStatus);
+      renderStatus(initialStatus);
       refreshSessions().then(function () {
         if ((payload.latest && (payload.latest.status === 'running' || payload.latest.status === 'stopping')) || queuedTestJobs.length) pollStatus();
       }).catch(showError);
@@ -1627,7 +1632,10 @@
       var status = payload && payload.latest ? payload.latest : currentStatus;
       syncActiveRunControls(status);
       refreshActivityButton();
-      if (status && status.session) renderStatus(status);
+      if (status && status.session) {
+        showSessionError = true;
+        renderStatus(status);
+      }
       var nextSeed = el('test-generations-seed');
       if (nextSeed) nextSeed.value = String(randomSeed());
       var nameInput = el('test-generations-session-name');
@@ -1656,6 +1664,7 @@
 
   function openSession(sessionName) {
     request('test_open_session', { session: String(sessionName || '') }).then(function (status) {
+      showSessionError = true;
       renderStatus(status);
     }).catch(showError);
   }
@@ -1665,6 +1674,7 @@
       renderSessions(payload && payload.sessions);
       if (currentSession === String(payload.deleted || '')) {
         currentSession = '';
+        showSessionError = false;
         renderStatus(payload.latest || { status: 'idle' });
       }
     });

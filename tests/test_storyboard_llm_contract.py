@@ -58,6 +58,8 @@ def test_write_prompt_request_is_deliberately_local_and_manual_first():
     assert "first_frame exact visual anchor supplied" in prompt
     assert "Previous exit state: She is just inside the closed front door" in prompt
     assert "integrated_multimodal_description" in prompt
+    assert "[H3 MODE]\nI2VA" in prompt
+    assert "at 0.00 seconds into the target video" in prompt
 
     assert "A long concept that should not be sent" not in prompt
     assert "UNRELATED SCENE PROMPT MUST NOT LEAK" not in prompt
@@ -114,3 +116,33 @@ def test_refine_prompt_requires_prompt_and_instruction():
 def test_unknown_llm_operation_fails_loudly():
     with pytest.raises(ValueError, match="Unsupported"):
         storyboard_llm_contract.build_request(_story(), "scene-2", "chat")
+
+
+def test_h3_mode_is_derived_from_reference_roles():
+    story = _story()
+    scene = story["scenes"]["scene-2"]
+
+    scene["references"] = []
+    prompt = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")["prompt"]
+    assert "[H3 MODE]\nT2VA" in prompt
+    assert "How the reference pictures align" not in prompt
+    assert "at 0.00 seconds into the target video" not in prompt
+
+    scene["references"] = [{"role": "last_frame"}]
+    prompt = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")["prompt"]
+    assert "[H3 MODE]\nL2VA" in prompt
+    assert "aligns with the 8.00-second mark" in prompt
+
+    scene["references"] = [{"role": "first_frame"}, {"role": "last_frame"}]
+    prompt = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")["prompt"]
+    assert "[H3 MODE]\nFL2VA" in prompt
+    assert "0.00-second mark" in prompt
+    assert "8.00-second mark" in prompt
+
+
+def test_runtime_request_uses_compact_h3_context_not_full_guidance():
+    prompt = storyboard_llm_contract.build_request(_story(), "scene-2", "write_prompt")["prompt"]
+
+    assert "MINIMAX H3 STORYBOARD WRITING RULES" in prompt
+    assert "Full-reference / Ref2VA" not in prompt
+    assert "Official source of truth" not in prompt

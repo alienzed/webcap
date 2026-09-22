@@ -7,6 +7,7 @@
     saveTimer: 0,
     sceneTimers: {},
     generationJobs: {},
+    assemblyJob: null,
     director: {
       models: [],
       modelId: window.localStorage.getItem('webcap.storyboard.directorModel') || '',
@@ -45,6 +46,21 @@
       return response.json().then(function (body) {
         if (!response.ok || !body || !body.ok) {
           throw new Error((body && body.error) || 'Storyboard request failed.');
+        }
+        return body;
+      });
+    });
+  }
+
+  function assemblyRequest(payload, query) {
+    var url = '/fs/storyboard/assembly' + (query ? '?' + query : '');
+    var options = payload
+      ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+      : {};
+    return fetch(url, options).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body || !body.ok) {
+          throw new Error((body && body.error) || 'Storyboard sequence export failed.');
         }
         return body;
       });
@@ -187,10 +203,7 @@
     return '<video src="' + escapeHtml(url) + '" controls muted preload="metadata"></video>';
   }
 
-  function renderSequencePreview() {
-    var host = el('storyboard-sequence-preview');
-    if (!host || !storyState.story) return;
-    var story = storyState.story;
+  function selectedSequenceItems(story) {
     var selected = [];
     (story.sceneOrder || []).forEach(function (sceneId, index) {
       var scene = (story.scenes || {})[sceneId] || {};
@@ -199,15 +212,52 @@
       if (!take) return;
       selected.push({ sceneId: sceneId, scene: scene, take: take, number: index + 1 });
     });
+    return selected;
+  }
+
+  function assemblyMatchesSelection(job, selected) {
+    if (!job || !Array.isArray(job.selection)) return false;
+    if (job.selection.length !== selected.length) return false;
+    return job.selection.every(function (item, index) {
+      return item.sceneId === selected[index].sceneId && item.takeId === selected[index].take.id;
+    });
+  }
+
+  function renderSequencePreview() {
+    var host = el('storyboard-sequence-preview');
+    if (!host || !storyState.story) return;
+    var story = storyState.story;
+    var selected = selectedSequenceItems(story);
     if (!selected.length) {
       host.innerHTML = '';
       host.classList.add('hidden');
       return;
     }
     host.classList.remove('hidden');
+    var assembly = storyState.assemblyJob;
+    var assemblyCurrent = assemblyMatchesSelection(assembly, selected);
+    var assemblyRunning = assemblyCurrent && assembly.status === 'running';
+    var assemblyStatus = '';
+    if (assemblyCurrent && assembly.status === 'failed') assemblyStatus = 'Export failed · ' + escapeHtml(assembly.error || 'Unknown error');
+    else if (assemblyCurrent && assembly.status === 'completed') assemblyStatus = 'Exported · ' + String(assembly.output && assembly.output.itemCount || selected.length) + ' Takes';
+    else if (assemblyRunning) assemblyStatus = 'Exporting…';
+    else if (assembly && !assemblyCurrent) assemblyStatus = 'Selection changed since last export';
+
+    var outputHtml = '';
+    if (assemblyCurrent && assembly.status === 'completed' && assembly.output) {
+      var outputUrl = '/caption/media?folder=' + encodeURIComponent(assembly.output.folder) +
+        '&media=' + encodeURIComponent(assembly.output.media);
+      outputHtml = '<div class="storyboard-sequence-output"><video src="' + escapeHtml(outputUrl) +
+        '" controls preload="metadata"></video></div>';
+    }
+
     host.innerHTML = '<header class="storyboard-sequence-header"><div><strong>Selected sequence</strong><span>' +
       selected.length + ' selected Take' + (selected.length === 1 ? '' : 's') +
-      '</span></div></header><div class="storyboard-sequence-list">' +
+      '</span></div><div class="storyboard-sequence-actions">' +
+      '<button type="button" class="storyboard-primary-btn" data-sequence-export' + (assemblyRunning ? ' disabled' : '') + '>' +
+        (assemblyRunning ? 'Exporting…' : 'Export Sequence') +
+      '</button><span class="storyboard-save-state" data-sequence-status>' + assemblyStatus + '</span>' +
+      '</div></header>' + outputHtml + '<div class="storyboard-sequence-list">' +
       selected.map(function (item) {
         return '<article class="storyboard-sequence-card">' +
           '<div class="storyboard-sequence-label">Scene ' + String(item.number).padStart(2, '0') + ' · ' +
@@ -215,6 +265,35 @@
           '<div class="storyboard-sequence-media">' + takePreviewHtml(story.id, item.sceneId, item.take) + '</div>' +
         '</article>';
       }).join('') + '</div>';
+  }
+
+  function pollAssembly(jobId) {
+    window.setTimeout(function () {
+      assemblyRequest(null, 'job=' + encodeURIComponent(jobId)).then(function (payload) {
+        storyState.assemblyJob = payload.job;
+        renderSequencePreview();
+        if (payload.job.status === 'running') {
+          pollAssembly(jobId);
+          return;
+        }
+        if (payload.job.status === 'failed') {
+          throw new Error(payload.job.error || 'Storyboard sequence export failed.');
+        }
+      }).catch(reportError);
+    }, 1000);
+  }
+
+  function exportSelectedSequence() {
+    if (!storyState.story) return;
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () {
+      return assemblyRequest({ storyId: storyState.story.id });
+    }).then(function (payload) {
+      storyState.assemblyJob = payload.job;
+      renderSequencePreview();
+      setSaveState('Saved');
+      pollAssembly(payload.job.jobId);
+    }).catch(reportError);
   }
 
   function renderLibrary() {
@@ -919,6 +998,10 @@
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;
       window.localStorage.setItem('webcap.storyboard.directorModel', this.value);
+    });
+
+    el('storyboard-sequence-preview').addEventListener('click', function (event) {
+      if (event.target.closest('[data-sequence-export]')) exportSelectedSequence();
     });
 
     el('storyboard-library-list').onclick = function (event) {

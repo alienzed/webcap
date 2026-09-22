@@ -31,6 +31,7 @@ from .training_review import discover_saved_initializers, prepare_training_revie
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
+from .storyboard_store import add_scene as storyboard_add_scene, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, reorder_scenes as storyboard_reorder_scenes, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -406,6 +407,45 @@ def media_video_clip_status():
             app_config.debug_print("[media_video_clip_status] ERROR:", e)
             app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
+
+@app.route("/fs/storyboard", methods=["GET", "POST"])
+def storyboard_route():
+    try:
+        if request.method == "GET":
+            story_id = str(request.args.get("story") or "").strip()
+            if story_id:
+                return jsonify({"ok": True, "story": storyboard_load_story(story_id)})
+            return jsonify({"ok": True, "stories": storyboard_list_stories()})
+
+        data = request.get_json(silent=True) or {}
+        operation = str(data.get("operation") or "").strip()
+        story_id = str(data.get("storyId") or "").strip()
+        if operation == "create_story":
+            return jsonify({"ok": True, "story": storyboard_create_story(data.get("story") or {})})
+        if operation == "update_story":
+            return jsonify({"ok": True, "story": storyboard_update_story(story_id, data.get("story") or {})})
+        if operation == "add_scene":
+            story, scene = storyboard_add_scene(story_id, data.get("scene") or {})
+            return jsonify({"ok": True, "story": story, "scene": scene})
+        if operation == "update_scene":
+            story, scene = storyboard_update_scene(story_id, str(data.get("sceneId") or "").strip(), data.get("scene") or {})
+            return jsonify({"ok": True, "story": story, "scene": scene})
+        if operation == "duplicate_scene":
+            story, scene = storyboard_duplicate_scene(story_id, str(data.get("sceneId") or "").strip())
+            return jsonify({"ok": True, "story": story, "scene": scene})
+        if operation == "reorder_scenes":
+            story = storyboard_reorder_scenes(story_id, data.get("sceneOrder"))
+            return jsonify({"ok": True, "story": story})
+        if operation == "delete_scene":
+            story = storyboard_delete_scene(story_id, str(data.get("sceneId") or "").strip())
+            return jsonify({"ok": True, "story": story})
+        raise ValueError("Unknown Storyboard operation.")
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STORYBOARD REQUEST FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
 
 @app.route("/fs/training_profiles", methods=["GET"])
 def training_profiles_route():

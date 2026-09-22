@@ -22,6 +22,7 @@ COMFY_BASE_URL = "http://127.0.0.1:8188"
 
 _process = None
 _log_handle = None
+_server_settings_signature = None
 _process_lock = threading.RLock()
 _request_lock = threading.Lock()
 
@@ -148,9 +149,10 @@ def _log_tail():
 
 
 def _stop_server_locked():
-    global _process, _log_handle
+    global _process, _log_handle, _server_settings_signature
     process = _process
     _process = None
+    _server_settings_signature = None
     if process is not None and process.poll() is None:
         process.terminate()
         try:
@@ -170,13 +172,25 @@ def stop_server():
         _stop_server_locked()
 
 
-def _ensure_server():
-    global _process, _log_handle
-    with _process_lock:
-        if _process is not None and _process.poll() is None and _health_ok():
-            return
+def _server_signature(settings, executable):
+    return (
+        str(executable),
+        str(settings["models_dir"]),
+        int(settings["port"]),
+        int(settings["context_size"]),
+    )
 
-        if _process is not None:
+
+def _ensure_server():
+    global _process, _log_handle, _server_settings_signature
+    with _process_lock:
+        settings = _director_config()
+        executable = _resolve_executable()
+        desired_signature = _server_signature(settings, executable)
+
+        if _process is not None and _process.poll() is None:
+            if _server_settings_signature == desired_signature and _health_ok():
+                return
             _stop_server_locked()
 
         if _health_ok():
@@ -188,10 +202,8 @@ def _ensure_server():
                 ) from exc
             return
 
-        settings = _director_config()
         models_dir = settings["models_dir"]
         models_dir.mkdir(parents=True, exist_ok=True)
-        executable = _resolve_executable()
         log_path = _runtime_dir() / "llama-server.log"
         _log_handle = open(log_path, "a", encoding="utf-8")
         command = [
@@ -215,6 +227,7 @@ def _ensure_server():
                 stdin=subprocess.DEVNULL,
                 close_fds=True,
             )
+            _server_settings_signature = desired_signature
         except OSError:
             _stop_server_locked()
             raise

@@ -31,10 +31,10 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert "(results.length + failures.length) < total" in script
     assert "host.innerHTML = html" not in script
     assert "Previews appear as each LoRA finishes." in script
-    assert "aspectRatio: aspectRatio" in script
-    assert "megapixels: megapixels" in script
-    assert "duration: duration" in script
-    assert "seed: seed" in script
+    assert "settings: settings" in script
+    assert "var declaredSettings = prepared && Array.isArray(prepared.settings)" in script
+    assert "test-generations-dimensions" in script
+    assert "settings.seed" in script
 
     assert ".test-generations-pane" in css
     assert ".test-generations-workspace" in css
@@ -74,7 +74,7 @@ def test_test_generation_previews_keep_stable_width_and_natural_height():
     assert "flex: 1 1 0;" in results_rule
     assert "grid-auto-rows: max-content;" in results_rule
 
-    video_rule = css.split(".test-generations-result-card video {", 1)[1].split("}", 1)[0]
+    video_rule = css.split(".test-generations-result-card video,\n.test-generations-result-card img {", 1)[1].split("}", 1)[0]
     assert "width: 100%;" in video_rule
     assert "height: auto;" in video_rule
     assert "aspect-ratio:" not in video_rule

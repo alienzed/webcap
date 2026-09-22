@@ -3044,14 +3044,13 @@ iframe {
 .test-generations-failure-placeholder {
   min-height: 120px;
 }
-.test-generations-failure-footer {
-  display: block;
-}
-.test-generations-failure-copy {
+.test-generations-failure-copy,
+.test-generations-result-copy {
+  display: grid;
   min-width: 0;
+  gap: 2px;
 }
 .test-generations-result-error {
-  margin-top: 3px;
   overflow: hidden;
   color: var(--danger, #f87171);
   font-size: 10px;
@@ -3063,16 +3062,50 @@ iframe {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 6px 7px 6px 9px;
 }
+.test-generations-result-primary {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
 .test-generations-result-name {
+  min-width: 0;
   overflow: hidden;
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.test-generations-result-elapsed {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.test-generations-result-source {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-generations-result-remove {
+  width: auto;
+  min-height: 24px;
+  margin: 0;
+  padding: 3px 7px;
+  border-color: color-mix(in srgb, var(--danger, #f87171) 45%, var(--border));
+  color: var(--danger, #f87171);
+}
+.test-generations-result-remove:hover,
+.test-generations-result-remove:focus-visible {
+  border-color: var(--danger, #f87171);
+  color: var(--danger, #f87171);
 }
 .test-generations-recent-sets {
   margin-top: 2px;

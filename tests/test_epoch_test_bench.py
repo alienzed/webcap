@@ -1904,3 +1904,19 @@ def test_remove_candidate_allows_local_test_fifo_reference(tmp_path, monkeypatch
 
     assert payload["removed"] == candidate.name
     assert not candidate.exists()
+
+
+def test_running_test_session_owns_stop_control():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
+    js = (root / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (root / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-active"' not in html
+    assert 'id="test-generations-stop-btn"' not in html
+    assert "syncActiveTestCard" not in js
+    assert "stop.dataset.sessionStop = name;" in js
+    assert "session.status === 'stopping' ? 'Stopping…' : 'Stop'" in js
+    assert "event.target.closest('[data-session-stop]')" in js
+    assert ".test-generations-active" not in css
+    assert ".test-generations-stop-btn" in css

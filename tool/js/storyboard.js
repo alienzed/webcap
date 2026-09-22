@@ -22,6 +22,7 @@
       models: [],
       modelId: window.localStorage.getItem('webcap.storyboard.directorModel') || '',
       available: false,
+      busy: false,
       error: ''
     }
   };
@@ -134,7 +135,7 @@
       return;
     }
 
-    select.disabled = false;
+    select.disabled = !!storyState.director.busy;
     select.innerHTML = models.map(function (model) {
       return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(model.label || model.id) + '</option>';
     }).join('');
@@ -171,7 +172,7 @@
   }
 
   function runDirector(sceneId, operation) {
-    if (!storyState.story) return;
+    if (!storyState.story || storyState.director.busy) return;
     var modelId = storyState.director.modelId;
     if (!modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
@@ -190,6 +191,7 @@
       }
     }
 
+    setDirectorBusy(true);
     updateSceneDirectorStatus(sceneId, 'Director working…');
     flushPendingSaves().then(function () {
       return directorRequest({
@@ -208,6 +210,8 @@
     }).catch(function (err) {
       updateSceneDirectorStatus(sceneId, 'Director failed');
       reportError(err);
+    }).finally(function () {
+      setDirectorBusy(false);
     });
   }
 
@@ -222,8 +226,24 @@
     });
   }
 
+  function setDirectorBusy(busy) {
+    storyState.director.busy = !!busy;
+    setStoryDirectorInputsDisabled(busy);
+    ['storyboard-expand-concept-btn', 'storyboard-develop-btn'].forEach(function (id) {
+      var node = el(id);
+      if (node) node.disabled = !!busy;
+    });
+    var restore = el('storyboard-restore-concept-btn');
+    if (restore) restore.disabled = !!busy;
+    var selector = el('storyboard-director-model');
+    if (selector) selector.disabled = !!busy || !storyState.director.available || !(storyState.director.models || []).length;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-director-write], [data-director-refine]'), function (button) {
+      button.disabled = !!busy;
+    });
+  }
+
   function expandConcept() {
-    if (!storyState.story) return;
+    if (!storyState.story || storyState.director.busy) return;
     var modelId = storyState.director.modelId;
     if (!modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
@@ -236,9 +256,7 @@
     }
 
     var storyId = storyState.story.id;
-    var button = el('storyboard-expand-concept-btn');
-    button.disabled = true;
-    setStoryDirectorInputsDisabled(true);
+    setDirectorBusy(true);
     setDevelopStatus('Director is expanding the concept…');
     flushPendingSaves().then(function () {
       return directorRequest({
@@ -248,20 +266,37 @@
       });
     }).then(function (payload) {
       if (!storyState.story || storyState.story.id !== storyId) return;
-      el('storyboard-story-concept').value = payload.result || '';
+      storyState.story = payload.story;
+      renderStory();
       setDevelopStatus('Concept expanded with ' + String(payload.model || modelId) + '.');
-      return saveStoryNow();
+      setSaveState('Saved');
+      return refreshLibrary();
     }).catch(function (err) {
       setDevelopStatus('Concept expansion failed.');
       reportError(err);
     }).finally(function () {
-      button.disabled = false;
-      setStoryDirectorInputsDisabled(false);
+      setDirectorBusy(false);
     });
   }
 
+  function restorePreviousConcept() {
+    if (!storyState.story || storyState.director.busy || typeof storyState.story.previousConcept !== 'string') return;
+    var storyId = storyState.story.id;
+    request({
+      operation: 'restore_previous_concept',
+      storyId: storyId
+    }).then(function (payload) {
+      if (!storyState.story || storyState.story.id !== storyId) return;
+      storyState.story = payload.story;
+      renderStory();
+      setDevelopStatus('Previous concept restored.');
+      setSaveState('Saved');
+      return refreshLibrary();
+    }).catch(reportError);
+  }
+
   function developStory() {
-    if (!storyState.story) return;
+    if (!storyState.story || storyState.director.busy) return;
     var modelId = storyState.director.modelId;
     if (!modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
@@ -279,9 +314,7 @@
       'Developing this Story again will replace the active Scene plan. Existing Scenes and Takes will remain recoverable in Removed Scenes. Continue?'
     )) return;
 
-    var button = el('storyboard-develop-btn');
-    button.disabled = true;
-    setStoryDirectorInputsDisabled(true);
+    setDirectorBusy(true);
     setDevelopStatus('Director is developing the Story…');
     flushPendingSaves().then(function () {
       return directorRequest({
@@ -302,8 +335,7 @@
       setDevelopStatus('Story development failed.');
       reportError(err);
     }).finally(function () {
-      button.disabled = false;
-      setStoryDirectorInputsDisabled(false);
+      setDirectorBusy(false);
     });
   }
 
@@ -718,7 +750,12 @@
     if (developButton) {
       developButton.textContent = (storyState.story.sceneOrder || []).length ? 'Develop Again' : 'Develop Story';
     }
+    var restoreConceptButton = el('storyboard-restore-concept-btn');
+    if (restoreConceptButton) {
+      restoreConceptButton.classList.toggle('hidden', typeof storyState.story.previousConcept !== 'string');
+    }
     renderScenes();
+    setDirectorBusy(storyState.director.busy);
     renderSequencePreview();
     renderLibrary();
   }
@@ -1229,6 +1266,7 @@
 
     el('storyboard-new-btn').onclick = createStory;
     el('storyboard-expand-concept-btn').onclick = expandConcept;
+    el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
     el('storyboard-add-scene-btn').onclick = addScene;
     el('storyboard-director-model').addEventListener('change', function () {

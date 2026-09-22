@@ -13,6 +13,9 @@ function sanitizeFolderState(data) {
   var testGenerationSettings = (src.test_generation_settings && typeof src.test_generation_settings === 'object')
     ? src.test_generation_settings
     : {};
+  var testGenerationByModel = (src.test_generation_by_model && typeof src.test_generation_by_model === 'object')
+    ? JSON.parse(JSON.stringify(src.test_generation_by_model))
+    : {};
   var testGenerationMegapixels = Number(testGenerationSettings.megapixels);
   var testGenerationDuration = Number(testGenerationSettings.duration);
   var testGenerationSelectedFiles = Array.isArray(testGenerationSettings.selectedFiles)
@@ -192,6 +195,7 @@ function sanitizeFolderState(data) {
       duration: isFinite(testGenerationDuration) && testGenerationDuration > 0 ? testGenerationDuration : null,
       selectedFiles: testGenerationSelectedFiles
     },
+    test_generation_by_model: testGenerationByModel,
     annotate_strip_visible: !!src.annotate_strip_visible,
     caption_helper_panel_collapsed: !!src.caption_helper_panel_collapsed,
     media_filters: {
@@ -369,6 +373,9 @@ function snapshotFolderStateFromDom() {
     test_generation_settings: (state.testGenerationSettings && typeof state.testGenerationSettings === 'object')
       ? JSON.parse(JSON.stringify(state.testGenerationSettings))
       : {},
+    test_generation_by_model: (state.testGenerationByModel && typeof state.testGenerationByModel === 'object')
+      ? JSON.parse(JSON.stringify(state.testGenerationByModel))
+      : {},
     annotate_strip_visible: !!window.annotateStripVisible,
     caption_helper_panel_collapsed: !!window.captionHelperPanelCollapsed,
     media_filters: mediaFilters,
@@ -409,6 +416,9 @@ function applyFolderStateToDom(folderState) {
   state.testGenerationPrompt = String(clean.test_generation_prompt || '');
   state.testGenerationSettings = (clean.test_generation_settings && typeof clean.test_generation_settings === 'object')
     ? JSON.parse(JSON.stringify(clean.test_generation_settings))
+    : {};
+  state.testGenerationByModel = (clean.test_generation_by_model && typeof clean.test_generation_by_model === 'object')
+    ? JSON.parse(JSON.stringify(clean.test_generation_by_model))
     : {};
   state.mutatedSet = new Set(Array.isArray(clean.mutated_media_keys) ? clean.mutated_media_keys : []);
   state.mutatedByMediaSource = {};

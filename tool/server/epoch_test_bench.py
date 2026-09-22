@@ -169,10 +169,12 @@ def _normalized_test_settings(template, aspect_ratio=None, megapixels=None, dura
     return get_test_model().normalize_settings(
         template,
         _new_session_seed,
-        aspect_ratio=aspect_ratio,
-        megapixels=megapixels,
-        duration=duration,
-        seed=seed,
+        {
+            "aspectRatio": aspect_ratio,
+            "megapixels": megapixels,
+            "duration": duration,
+            "seed": seed,
+        },
     )
 
 def _owning_set_directory(folder_path):
@@ -1278,16 +1280,17 @@ def _run_batch(
 def _build_queued_request(
     folder_path,
     prompt,
-    aspect_ratio=None,
-    megapixels=None,
-    duration=None,
+    settings=None,
     seed=None,
     name=None,
     selected_files=None,
     include_base=True,
     model_id=None,
+    aspect_ratio=None,
+    megapixels=None,
+    duration=None,
 ):
-    model = get_test_model(model_id or get_test_model().PROFILE_ID)
+    model = get_test_model(model_id)
     prompt = str(prompt or "").strip()
     if not prompt:
         raise ValueError("A test prompt is required.")
@@ -1298,30 +1301,35 @@ def _build_queued_request(
     session_name = str(name or "").strip()
     if len(session_name) > 120:
         raise ValueError("Test session name must be 120 characters or fewer.")
+
+    requested_settings = dict(settings) if isinstance(settings, dict) else {}
+    # Legacy H3 request fields remain accepted while the UI moves to the generic settings object.
+    legacy = {
+        "aspectRatio": aspect_ratio,
+        "megapixels": megapixels,
+        "duration": duration,
+        "seed": seed,
+    }
+    for key, value in legacy.items():
+        if key not in requested_settings and value is not None:
+            requested_settings[key] = value
+
     template = model.load_template()
-    settings = model.normalize_settings(
-        template,
-        _new_session_seed,
-        aspect_ratio=aspect_ratio,
-        megapixels=megapixels,
-        duration=duration,
-        seed=seed,
-    )
-    resolved_prompt = _resolve_wildcard_prompt(prompt, settings["seed"])
+    normalized_settings = model.normalize_settings(template, _new_session_seed, requested_settings)
+    resolved_prompt = _resolve_wildcard_prompt(prompt, normalized_settings["seed"])
     include_base = include_base is not False
-    return {
+    request = {
         "modelId": model.PROFILE_ID,
         "name": session_name,
         "sourcePrompt": prompt,
         "resolvedPrompt": resolved_prompt,
         "selectedFiles": [path.name for path in loras],
         "includeBase": include_base,
-        "seed": settings["seed"],
-        "aspectRatio": settings.get("aspectRatio"),
-        "megapixels": settings.get("megapixels"),
-        "duration": settings.get("duration"),
+        "settings": dict(normalized_settings),
         "total": len(loras) + (1 if include_base else 0),
     }
+    request.update(normalized_settings)
+    return request
 
 def _queue_job_payload(job, position=0):
     payload = {
@@ -1401,18 +1409,31 @@ def clear_queued(folder_path):
         _pending_tests[:] = kept
     return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path)["jobs"]}
 
-def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None, seed=None, name=None, selected_files=None, include_base=True, model_id=None):
+def enqueue(
+    folder_path,
+    prompt,
+    settings=None,
+    seed=None,
+    name=None,
+    selected_files=None,
+    include_base=True,
+    model_id=None,
+    aspect_ratio=None,
+    megapixels=None,
+    duration=None,
+):
     request = _build_queued_request(
         folder_path,
         prompt,
-        aspect_ratio=aspect_ratio,
-        megapixels=megapixels,
-        duration=duration,
+        settings=settings,
         seed=seed,
         name=name,
         selected_files=selected_files,
         include_base=include_base,
         model_id=model_id,
+        aspect_ratio=aspect_ratio,
+        megapixels=megapixels,
+        duration=duration,
     )
     folder = _relative_set_folder(folder_path)
     job = {
@@ -1467,7 +1488,7 @@ def queued_jobs(folder_path):
 
 def start_queued(folder_path, request):
     request = dict(request or {})
-    model = get_test_model(request.get("modelId") or request.get("model") or get_test_model().PROFILE_ID)
+    model = get_test_model(request.get("modelId") or request.get("model"))
     prompt = str(request.get("resolvedPrompt") or "").strip()
     source_prompt = str(request.get("sourcePrompt") or prompt).strip()
     if not prompt:
@@ -1484,6 +1505,10 @@ def start_queued(folder_path, request):
     if not loras and not include_base:
         _logger.warning("Queued Test skipped because no selected staged LoRAs remain.")
         return {"status": "skipped"}
+
+    requested_settings = request.get("settings") if isinstance(request.get("settings"), dict) else {
+        key: request.get(key) for key in model.settings
+    }
 
     with _lock:
         _prune_dead_test_workers_locked()
@@ -1511,38 +1536,27 @@ def start_queued(folder_path, request):
             "comfyJobId": "",
             "comfyStatus": "",
             "comfyLastContactAt": None,
-            "seed": request.get("seed"),
-            "aspectRatio": request.get("aspectRatio"),
-            "megapixels": request.get("megapixels"),
-            "duration": request.get("duration"),
+            "settings": dict(requested_settings),
             "includeBase": include_base,
             "results": [],
             "resultFolder": _relative_to_fs_root(session_directory),
         }
+        payload.update(requested_settings)
         _atomic_write_json(_status_path(session_directory), payload)
 
     try:
         _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
         template = model.resolve_assets(model.load_template(), _available_comfy_names, _resolve_comfy_name)
-        settings = model.normalize_settings(
-            template,
-            _new_session_seed,
-            aspect_ratio=request.get("aspectRatio"),
-            megapixels=request.get("megapixels"),
-            duration=request.get("duration"),
-            seed=request.get("seed"),
-        )
-        payload["seed"] = settings["seed"]
-        payload["aspectRatio"] = settings.get("aspectRatio")
-        payload["megapixels"] = settings.get("megapixels")
-        payload["duration"] = settings.get("duration")
+        normalized_settings = model.normalize_settings(template, _new_session_seed, requested_settings)
+        payload["settings"] = dict(normalized_settings)
+        payload.update(normalized_settings)
         payload["includeBase"] = include_base
         payload["total"] = len(loras) + (1 if include_base else 0)
         payload["status"] = "running"
         _atomic_write_json(_status_path(session_directory), payload)
         thread = threading.Thread(
             target=_run_batch,
-            args=(folder_key, session_directory, loras, prompt, settings, template, include_base, model),
+            args=(folder_key, session_directory, loras, prompt, normalized_settings, template, include_base, model),
             name="webcap-test-generations-" + model.SESSION_SLUG,
             daemon=True,
         )
@@ -1567,7 +1581,7 @@ def supported_models():
 
 
 def prepare(folder_path, model_id=None):
-    model = get_test_model(model_id or get_test_model().PROFILE_ID)
+    model = get_test_model(model_id)
     template = model.load_template()
     try:
         test_directory = _test_directory(folder_path, model)
@@ -1579,7 +1593,9 @@ def prepare(folder_path, model_id=None):
     return {
         "operation": "test_prepare",
         "modelId": model.PROFILE_ID,
+        "modelLabel": str(model.profile["label"]),
         "mediaKind": model.MEDIA_KIND,
+        "settings": list(model.settings),
         "defaultPrompt": model.default_prompt(template),
         "defaults": defaults,
         "aspectRatioOptions": list(getattr(model, "ASPECT_RATIO_OPTIONS", ())),
@@ -1661,6 +1677,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return enqueue(
             folder_path,
             criteria.get("prompt"),
+            settings=criteria.get("settings"),
             aspect_ratio=criteria.get("aspectRatio"),
             megapixels=criteria.get("megapixels"),
             duration=criteria.get("duration"),

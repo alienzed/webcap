@@ -70,6 +70,7 @@ def test_assemble_losslessly_splices_matching_selected_takes(storyboard_fs, monk
     assert output["itemCount"] == 2
     assert "-c" in observed["command"]
     assert "copy" in observed["command"]
+    assert "0:v:0" in observed["command"]
 
 
 def test_assemble_rejects_mismatched_streams_instead_of_reencoding(storyboard_fs, monkeypatch):
@@ -95,3 +96,33 @@ def test_selected_sequence_rejects_non_video_take(storyboard_fs):
 
     with pytest.raises(RuntimeError, match="video Takes only"):
         storyboard_assembly.selected_sequence(story["id"])
+
+
+def test_current_export_survives_process_state_and_detects_selection_changes(storyboard_fs, monkeypatch):
+    story, first_scene, second_scene, first_take, second_take = _story_with_selected_videos()
+    _loaded, items = storyboard_assembly.selected_sequence(story["id"])
+    monkeypatch.setattr(
+        storyboard_assembly,
+        "_probe_stream_signature",
+        lambda _path: [{"codec_type": "video", "codec_name": "h264", "width": 768, "height": 768}],
+    )
+    monkeypatch.setattr(storyboard_assembly, "normalize_path_permissions", lambda _path: None)
+
+    def fake_run(command, capture_output, text):
+        with open(command[-1], "wb") as handle:
+            handle.write(b"joined-video")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(storyboard_assembly.subprocess, "run", fake_run)
+    storyboard_assembly._assemble(story["id"], items)
+
+    current = storyboard_assembly.current_export(story["id"])
+    assert current["current"] is True
+    assert current["selection"] == [
+        {"sceneId": first_scene["id"], "takeId": first_take["id"]},
+        {"sceneId": second_scene["id"], "takeId": second_take["id"]},
+    ]
+
+    storyboard_store.select_take(story["id"], first_scene["id"], "")
+    stale = storyboard_assembly.current_export(story["id"])
+    assert stale["current"] is False

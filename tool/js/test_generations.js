@@ -1755,7 +1755,7 @@
   }
 
   function showError(err) {
-    console.error('[Test Generations]', err);
+    reportConsoleError('Test Generations', err);
     var errorEl = el('test-generations-error');
     if (errorEl) {
       errorEl.textContent = String(err && err.message ? err.message : err);
@@ -1951,6 +1951,11 @@
     refreshActivityButton();
     request('test_prepare', { modelId: getWorkingModelProfileId() }).then(function (payload) {
       prepared = payload;
+      if (Array.isArray(payload.warnings)) {
+        payload.warnings.forEach(function (warning) {
+          if (String(warning || '').trim()) reportConsoleWarning('Test Generations', warning);
+        });
+      }
       renderStagedFiles(payload);
       renderSessions(payload.sessions, []);
       populateControls(payload);

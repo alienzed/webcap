@@ -36,6 +36,20 @@ def normalize_settings(workflow, new_seed, values=None):
     }
 
 
+def setting_options(workflow, available_names):
+    choices = available_names(
+        "SDXL Empty Latent Image (rgthree)",
+        "dimensions",
+        "dimensions",
+    )
+    selected = template_settings(workflow)["dimensions"]
+    if selected not in choices:
+        raise RuntimeError(
+            "ComfyUI does not list the workflow's current Krea dimensions value: " + selected
+        )
+    return {"dimensions": choices}
+
+
 def available_lora_names(available_names):
     return available_names("LoraLoader", "lora_name", "LoRA")
 

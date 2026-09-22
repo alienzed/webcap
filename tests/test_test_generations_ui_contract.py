@@ -343,6 +343,13 @@ def test_test_result_stars_are_shared_by_grid_and_compare():
     assert "write_folder_state_atomic(state_path, folder_state)" in backend
 
 
+def test_history_mutations_do_not_replace_another_models_prepared_candidates():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "String(payload.sessionStatus.modelId || payload.sessionStatus.model || '') === String(prepared.modelId || '')" in script
+    assert "String(payload.modelId || '') === String(prepared.modelId || '')" in script
+
+
 def test_test_rating_refresh_preserves_preview_dom():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 

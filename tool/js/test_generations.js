@@ -2393,6 +2393,7 @@
 
   window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
   window.openTestBenchActivity = openTestBenchActivity;
+  window.openTestBenchForFolder = openTestBenchFolder;
   window.openTestBenchForCurrentFolder = openPane;
   window.closeTestBenchActivity = closePane;
   window.refreshTestBenchActivity = refreshActivityButton;

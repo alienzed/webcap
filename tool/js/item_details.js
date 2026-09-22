@@ -693,12 +693,6 @@ function appendMetadataProgressRow(listEl, label, progress, options) {
   listEl.appendChild(row);
 }
 
-function saveItemRatingsToFolderState() {
-  var capturedSave = captureCurrentFolderStateSave();
-  if (!capturedSave) return Promise.resolve(false);
-  return writeCapturedFolderState(capturedSave);
-}
-
 function setRatingForMediaKey(mediaKey, rating) {
   if (!mediaKey) return;
   if (!state.ratings || typeof state.ratings !== 'object') {
@@ -719,7 +713,10 @@ function setRatingForMediaKey(mediaKey, rating) {
   } else {
     state.ratings[mediaKey] = next;
   }
-  saveItemRatingsToFolderState();
+  setMediaRating(state.folder, mediaKey, next).catch(function (err) {
+    console.error('[webcap] MEDIA RATING SAVE FAILED:', err);
+    setStatus('MEDIA RATING SAVE FAILED: ' + (err && err.message ? err.message : err));
+  });
   renderPreviewHeaderMeta();
   renderItemMetadataPanel();
   renderFileList();

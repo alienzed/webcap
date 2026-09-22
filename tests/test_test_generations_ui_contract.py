@@ -318,16 +318,17 @@ def test_test_result_stars_are_shared_by_grid_and_compare():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
 
-    assert "function buildResultRating(result)" in script
+    assert "function buildResultRating(result, sessionName)" in script
     assert "function rateCurrentSessionResult(button)" in script
     assert "function syncResultRatingButtons(mediaFile, rating)" in script
     assert "request('test_rate_result'" in script
-    assert "session: currentSession" in script
+    assert "star.dataset.testSession = owningSession;" in script
+    assert "session: sessionName" in script
     assert "mediaFile: mediaFile" in script
     assert "rating: rating" in script
     assert "star.textContent = value <= currentRating ? '★' : '☆';" in script
     assert "if (!opts.failed)" in script
-    assert "var rating = buildResultRating(result);" in script
+    assert "var rating = buildResultRating(result, opts.session);" in script
 
     footer_block = script.split("function buildResultFooter(result, options)", 1)[1].split("function formatTestVideoTime", 1)[0]
     assert "copy.appendChild(rating);" in footer_block
@@ -360,6 +361,9 @@ def test_test_rating_refresh_preserves_preview_dom():
 
     rate_block = script.split("function rateCurrentSessionResult(button)", 1)[1].split("function buildResultFooter", 1)[0]
     assert "syncResultRatingButtons(mediaFile, payload && payload.rating);" in rate_block
+    assert "var sessionName = String(button && button.dataset.testSession || '').trim();" in rate_block
+    assert "if (!sessionName)" in rate_block
+    assert "session: sessionName" in rate_block
     assert "renderStatus(payload.sessionStatus);" in rate_block
 
 

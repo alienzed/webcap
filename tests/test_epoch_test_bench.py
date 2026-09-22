@@ -40,6 +40,75 @@ def test_windows_curl_transport_posts_json_via_stdin(monkeypatch):
     assert json.loads(calls["input"].decode("utf-8")) == payload
 
 
+def test_queue_workflow_supplies_stable_uuid_to_comfy(monkeypatch):
+    calls = []
+
+    def fake_request(url, method="GET", payload=None, timeout=10):
+        calls.append((url, method, payload))
+        return {"prompt_id": payload["prompt_id"]}
+
+    monkeypatch.setattr(bench, "_read_json_response", fake_request)
+
+    prompt_id = bench._queue_workflow({"1": {"inputs": {}}})
+
+    assert calls[0][0] == bench.COMFY_BASE_URL + "/prompt"
+    assert calls[0][1] == "POST"
+    assert calls[0][2]["prompt"] == {"1": {"inputs": {}}}
+    assert calls[0][2]["prompt_id"] == prompt_id
+    assert len(prompt_id) == 36
+
+
+def test_wait_for_video_uses_jobs_api_and_records_live_status(tmp_path, monkeypatch):
+    session = tmp_path / "session"
+    session.mkdir()
+    bench._atomic_write_json(session / "test.json", {"status": "running"})
+    prompt_id = "11111111-1111-1111-1111-111111111111"
+    jobs = [
+        {"id": prompt_id, "status": "pending"},
+        {"id": prompt_id, "status": "in_progress"},
+        {
+            "id": prompt_id,
+            "status": "completed",
+            "outputs": {
+                "141": {
+                    "gifs": [{
+                        "filename": "render.mp4",
+                        "subfolder": "webcap-tests",
+                        "type": "output",
+                    }]
+                }
+            },
+        },
+    ]
+
+    monkeypatch.setattr(bench, "_read_comfy_job", lambda _prompt_id: jobs.pop(0))
+    monkeypatch.setattr(bench.time, "sleep", lambda _seconds: None)
+
+    result = bench._wait_for_video(prompt_id, timeout=5, session_directory=session)
+
+    assert result["filename"] == "render.mp4"
+    status = bench._read_status(session)
+    assert status["comfyJobId"] == prompt_id
+    assert status["comfyStatus"] == "completed"
+    assert status["comfyLastContactAt"]
+
+
+def test_wait_for_video_surfaces_structured_comfy_error(monkeypatch):
+    prompt_id = "11111111-1111-1111-1111-111111111111"
+    monkeypatch.setattr(bench, "_read_comfy_job", lambda _prompt_id: {
+        "id": prompt_id,
+        "status": "failed",
+        "execution_error": {
+            "node_id": "148",
+            "node_type": "LoraLoader",
+            "exception_message": "LoRA is missing",
+        },
+    })
+
+    with pytest.raises(RuntimeError, match=r"LoRA is missing .*148 / LoraLoader"):
+        bench._wait_for_video(prompt_id, timeout=5)
+
+
 def test_lora_files_are_filtered_and_sorted(tmp_path):
     (tmp_path / "epoch10.safetensors").write_bytes(b"")
     (tmp_path / "Epoch02.safetensors").write_bytes(b"")
@@ -256,7 +325,7 @@ def test_run_batch_adds_base_and_continues_after_candidate_failure(tmp_path, mon
     monkeypatch.setattr(
         bench,
         "_wait_for_video",
-        lambda _prompt_id: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
+        lambda _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
     )
     monkeypatch.setattr(
         bench,
@@ -315,7 +384,7 @@ def test_base_generation_does_not_depend_on_candidate_lora_inventory(tmp_path, m
     monkeypatch.setattr(
         bench,
         "_wait_for_video",
-        lambda _prompt_id: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
+        lambda _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
     )
     monkeypatch.setattr(
         bench,
@@ -364,7 +433,7 @@ def test_run_batch_records_missing_candidate_and_continues(tmp_path, monkeypatch
     monkeypatch.setattr(
         bench,
         "_wait_for_video",
-        lambda _prompt_id: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
+        lambda _prompt_id, **_kwargs: {"filename": "ok.mp4", "type": "output", "fullpath": "C:/ComfyUI/output/ok.mp4"},
     )
     monkeypatch.setattr(
         bench,
@@ -544,7 +613,7 @@ def test_run_batch_uses_resolved_template_passed_by_start(tmp_path, monkeypatch)
     monkeypatch.setattr(
         bench,
         "_wait_for_video",
-        lambda _prompt_id: {"filename": "x.mp4", "subfolder": "webcap-tests", "type": "output", "fullpath": "C:/ComfyUI/output/webcap-tests/x.mp4"},
+        lambda _prompt_id, **_kwargs: {"filename": "x.mp4", "subfolder": "webcap-tests", "type": "output", "fullpath": "C:/ComfyUI/output/webcap-tests/x.mp4"},
     )
     monkeypatch.setattr(
         bench,
@@ -604,32 +673,42 @@ def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeyp
     assert payload["files"] == [other.name]
 
 
-def test_stop_marks_active_session_stopping_and_interrupts_comfy(tmp_path, monkeypatch):
+def test_stop_marks_active_session_stopping_and_cancels_its_comfy_job(tmp_path, monkeypatch):
     class ActiveThread:
         def is_alive(self):
             return True
 
     session = tmp_path / "session"
     session.mkdir()
-    bench._atomic_write_json(session / "test.json", {"status": "running", "current": "epoch10.safetensors"})
+    prompt_id = "11111111-1111-1111-1111-111111111111"
+    bench._atomic_write_json(session / "test.json", {
+        "status": "running",
+        "current": "epoch10.safetensors",
+        "comfyJobId": prompt_id,
+    })
     folder_key = str(tmp_path.resolve())
     monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
     monkeypatch.setattr(bench, "_active_sessions", {folder_key: session})
     monkeypatch.setattr(bench, "_stop_requests", set())
-    interrupted = []
-    monkeypatch.setattr(bench, "_interrupt_comfy", lambda: interrupted.append(True))
+    cancelled = []
+    monkeypatch.setattr(bench, "_cancel_comfy_job", lambda job_id: cancelled.append(job_id) or True)
 
     status = bench.stop(tmp_path)
 
     assert status["status"] == "stopping"
     assert folder_key in bench._stop_requests
-    assert interrupted == [True]
+    assert cancelled == [prompt_id]
 
 
-def test_stopped_batch_deletes_its_session_after_the_worker_exits(tmp_path, monkeypatch):
+def test_stopped_batch_preserves_session_after_worker_exit(tmp_path, monkeypatch):
     session = tmp_path / "session"
     session.mkdir()
-    bench._atomic_write_json(session / "test.json", {"status": "stopping", "completed": 0, "total": 1})
+    bench._atomic_write_json(session / "test.json", {
+        "status": "stopping",
+        "completed": 1,
+        "total": 3,
+        "results": [{"kind": "base", "outputVideo": "base.mp4"}],
+    })
     folder_key = str(tmp_path.resolve())
     advanced = []
 
@@ -640,7 +719,11 @@ def test_stopped_batch_deletes_its_session_after_the_worker_exits(tmp_path, monk
 
     bench._run_batch(folder_key, session, [], "prompt", template={})
 
-    assert not session.exists()
+    assert session.exists()
+    persisted = bench._read_status(session)
+    assert persisted["status"] == "stopped"
+    assert persisted["completed"] == 1
+    assert persisted["results"] == [{"kind": "base", "outputVideo": "base.mp4"}]
     assert folder_key not in bench._active_threads
     assert folder_key not in bench._active_sessions
     assert advanced == [True]

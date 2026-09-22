@@ -2736,9 +2736,7 @@ iframe {
 .test-generations-staged-list {
   display: grid;
   gap: 4px;
-  max-height: 180px;
   padding: 7px;
-  overflow: auto;
 }
 .test-generations-staged-row {
   display: grid;
@@ -2772,10 +2770,8 @@ iframe {
 .test-generations-sessions-list {
   display: grid;
   gap: 8px;
-  max-height: 260px;
   min-width: 0;
   padding: 7px;
-  overflow: auto;
 }
 .test-generations-session-group {
   display: grid;

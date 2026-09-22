@@ -14,6 +14,32 @@ def test_supported_test_models_come_from_profile_policy():
     assert models["krea2_raw"]["default"] is False
 
 
+def test_registered_test_models_satisfy_shared_runner_contract():
+    for item in supported_models():
+        model = get_test_model(item["id"])
+        template = model.load_template()
+        prompt = model.default_prompt(template)
+        settings = model.normalize_settings(template, lambda: 12345, model.template_settings(template))
+
+        assert isinstance(prompt, str) and prompt.strip()
+        assert settings["seed"] == 12345
+        assert isinstance(model.build_workflow(
+            template,
+            prompt,
+            None,
+            settings=settings,
+            filename_prefix="webcap-tests/contract/base",
+        ), dict)
+        assert isinstance(model.build_workflow(
+            template,
+            prompt,
+            "webcap-contract-test.safetensors",
+            settings=settings,
+            filename_prefix="webcap-tests/contract/candidate",
+        ), dict)
+        assert model.MEDIA_KIND in ("image", "video")
+
+
 def test_krea_candidate_replaces_only_candidate_slot_and_test_bindings():
     model = get_test_model("krea2_raw")
     template = model.load_template()

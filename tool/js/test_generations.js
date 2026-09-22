@@ -15,6 +15,7 @@
   var selectedCandidates = null;
   var queuedTestJobs = [];
   var showSessionError = false;
+  var reportedFailureKeys = new Set();
   var debouncedPromptSave = debounceCreate(500);
 
   function el(id) { return document.getElementById(id); }
@@ -1211,6 +1212,17 @@
 
     failures.forEach(function (failure, index) {
       var failureKey = 'failure:' + String(failure.sourceLoRA || 'result') + ':' + index;
+      var diagnosticKey = String(status && status.session || '') + ':' + failureKey + ':' + String(failure.error || '');
+      if (!reportedFailureKeys.has(diagnosticKey)) {
+        reportedFailureKeys.add(diagnosticKey);
+        reportConsoleError(
+          'Test Generations',
+          new Error(
+            (String(failure.sourceLoRA || failure.candidateFile || 'Generation') + ': ') +
+            String(failure.error || 'Generation failed.')
+          )
+        );
+      }
       var exists = Array.prototype.some.call(
         host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
         function (card) { return card.dataset.resultKey === failureKey; }

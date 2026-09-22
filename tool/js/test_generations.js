@@ -933,6 +933,20 @@
     });
   }
 
+  function buildResultRemoveButton(result) {
+    var candidateFile = candidateFileForResult(result);
+    if (!candidateFile) return null;
+
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'test-generations-result-remove';
+    remove.dataset.removeCandidate = candidateFile;
+    remove.title = 'Remove this staged candidate and its result from this session.';
+    remove.setAttribute('aria-label', 'Remove staged candidate ' + candidateFile);
+    remove.textContent = '×';
+    return remove;
+  }
+
   function buildResultFooter(result, options) {
     var opts = options || {};
     var footer = document.createElement('div');
@@ -959,18 +973,23 @@
     }
     copy.appendChild(primaryRow);
 
+    var secondaryRow = document.createElement('div');
+    secondaryRow.className = 'test-generations-result-secondary';
+
     if (identity.secondary) {
       var source = document.createElement('div');
       source.className = 'test-generations-result-source';
       source.textContent = identity.secondary;
       source.title = identity.secondary;
-      copy.appendChild(source);
+      secondaryRow.appendChild(source);
     }
 
     if (!opts.failed) {
       var rating = buildResultRating(result, opts.resultFolder);
-      if (rating) copy.appendChild(rating);
+      if (rating) secondaryRow.appendChild(rating);
     }
+
+    if (secondaryRow.childNodes.length) copy.appendChild(secondaryRow);
 
     if (opts.failed) {
       var detail = document.createElement('div');
@@ -980,19 +999,6 @@
     }
 
     footer.appendChild(copy);
-
-    var candidateFile = candidateFileForResult(result);
-    if (candidateFile) {
-      var remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'review-captions-btn test-generations-result-remove';
-      remove.dataset.removeCandidate = candidateFile;
-      remove.title = 'Delete the staged LoRA and its result from this session. Other sessions are unchanged.';
-      remove.setAttribute('aria-label', 'Remove candidate ' + candidateFile);
-      remove.textContent = 'Remove';
-      footer.appendChild(remove);
-    }
-
     return footer;
   }
 
@@ -1175,6 +1181,8 @@
       var preview = appendTestPreview(item, resultFolder, result, { muted: true });
       if (preview && preview.tagName === 'VIDEO') videos.push(preview);
 
+      var remove = buildResultRemoveButton(result);
+      if (remove) item.appendChild(remove);
       item.appendChild(buildResultFooter(result, { resultFolder: resultFolder }));
       stage.appendChild(item);
     });
@@ -1261,6 +1269,8 @@
         card.appendChild(placeholder);
       }
 
+      var remove = buildResultRemoveButton(result);
+      if (remove) card.appendChild(remove);
       card.appendChild(buildResultFooter(result, { resultFolder: resultFolder }));
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
@@ -1295,6 +1305,8 @@
       placeholder.textContent = 'Generation failed';
       card.appendChild(placeholder);
 
+      var remove = buildResultRemoveButton(failure);
+      if (remove) card.appendChild(remove);
       card.appendChild(buildResultFooter(failure, { failed: true }));
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');

@@ -169,6 +169,19 @@ def inspect_video_frame(source_path, approximate_time=None, frame_index=None):
     }
 
 
+def extract_boundary_frame_png(source_path, boundary):
+    if not source_path.exists() or not source_path.is_file():
+        raise RuntimeError("Source media file not found")
+    if source_path.suffix.lower() not in VIDEO_EXTS:
+        raise RuntimeError("Boundary frame extraction is only available for video files")
+    boundary = str(boundary or "").strip().lower()
+    if boundary not in {"first", "last"}:
+        raise RuntimeError("Boundary frame must be first or last")
+    _, timestamps = _cached_frame_timestamps(source_path)
+    frame_index = 0 if boundary == "first" else len(timestamps) - 1
+    return _extract_frame_png(source_path, frame_index)
+
+
 def resolve_exact_start(source_path, frame_index, source_fingerprint):
     expected = str(source_fingerprint or "").strip()
     if not expected:

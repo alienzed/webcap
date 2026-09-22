@@ -32,6 +32,7 @@ from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
+from .storyboard_generation import generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -472,6 +473,27 @@ def storyboard_route():
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         app.logger.exception("STORYBOARD REQUEST FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/generation", methods=["GET", "POST"])
+def storyboard_generation_route():
+    try:
+        if request.method == "GET":
+            job_id = str(request.args.get("job") or "").strip()
+            return jsonify({"ok": True, "job": storyboard_generation_status(job_id)})
+        data = request.get_json(silent=True) or {}
+        return jsonify({
+            "ok": True,
+            "job": storyboard_start_generation(
+                str(data.get("storyId") or "").strip(),
+                str(data.get("sceneId") or "").strip(),
+            ),
+        })
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STORYBOARD GENERATION FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

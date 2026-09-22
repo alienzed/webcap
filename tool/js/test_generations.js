@@ -46,6 +46,24 @@
 
   function pane() { return el('test-generations-pane'); }
 
+  function syncTestRailCollapseUi() {
+    var body = el('test-generations-body');
+    var toggle = el('test-generations-rail-toggle-btn');
+    if (!body || !toggle) throw new Error('Test Generations requires its sidebar collapse controls.');
+    var collapsed = body.classList.contains('test-generations-rail-collapsed');
+    toggle.textContent = collapsed ? '>' : '<';
+    toggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+    toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+  }
+
+  function toggleTestRailCollapsed() {
+    var body = el('test-generations-body');
+    if (!body) throw new Error('Test Generations requires its sidebar container.');
+    body.classList.toggle('test-generations-rail-collapsed');
+    syncTestRailCollapseUi();
+  }
+
   function currentPersistedSettings() {
     return {
       aspectRatio: String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim(),
@@ -1709,6 +1727,7 @@
 
     button.onclick = openPane;
     el('test-generations-run-btn').onclick = startRun;
+    el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
     el('test-generations-open-results-btn').onclick = function () {
       openResultsFolder(this.dataset.resultFolder);
@@ -1848,6 +1867,7 @@
       syncLaunchVisibility();
       syncActiveRunControls(currentStatus);
     });
+    syncTestRailCollapseUi();
     syncLaunchVisibility();
     refreshActivityButton();
   }

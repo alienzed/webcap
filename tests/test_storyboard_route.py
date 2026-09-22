@@ -192,3 +192,17 @@ def test_storyboard_assembly_route_exports_and_reads_current_export(monkeypatch)
     current = client.get("/fs/storyboard/assembly", query_string={"story": "story-1"})
     assert current.status_code == 200
     assert current.get_json()["export"]["current"] is True
+
+
+def test_storyboard_generation_capabilities_route(monkeypatch):
+    monkeypatch.setattr(app_module, "storyboard_generation_capabilities", lambda: {
+        "loras": ["characters/alice.safetensors"],
+        "baseLoras": ["mh3/turbo.safetensors"],
+    })
+    client = app_module.app.test_client()
+
+    response = client.get("/fs/storyboard/generation/capabilities")
+
+    assert response.status_code == 200
+    assert response.get_json()["loras"] == ["characters/alice.safetensors"]
+    assert response.get_json()["baseLoras"] == ["mh3/turbo.safetensors"]

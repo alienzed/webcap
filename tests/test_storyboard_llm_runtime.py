@@ -260,3 +260,57 @@ def test_owned_router_restarts_when_runtime_settings_change(tmp_path, monkeypatc
         storyboard_llm_runtime._log_handle = None
         storyboard_llm_runtime._process = None
         storyboard_llm_runtime._server_settings_signature = None
+
+
+def test_run_contract_parses_schema_constrained_json(monkeypatch):
+    schema = {"type": "object", "properties": {"scenes": {"type": "array"}}}
+    captured = {}
+
+    def fake_chat(model_id, messages, response_schema=None, max_tokens=None):
+        captured["model"] = model_id
+        captured["messages"] = messages
+        captured["schema"] = response_schema
+        return {"text": '{"scenes": []}', "model": model_id}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "chat", fake_chat)
+
+    result = storyboard_llm_runtime.run_contract("director", {
+        "prompt": "Develop it.",
+        "output": "json",
+        "response_schema": schema,
+    })
+
+    assert captured["schema"] == schema
+    assert result["data"] == {"scenes": []}
+
+
+def test_chat_wraps_json_schema_for_llama_cpp(monkeypatch):
+    calls = []
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
+    monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_status", lambda model_id: "unloaded")
+    monkeypatch.setattr(storyboard_llm_runtime, "_release_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: {
+        "llama_server": "",
+        "models_dir": None,
+        "port": 8189,
+        "context_size": 8192,
+        "max_tokens": 4096,
+    })
+
+    def fake_http(path, method="GET", payload=None, timeout=30):
+        calls.append(payload)
+        return {"choices": [{"message": {"content": '{"ok": true}'}}]}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_http_json", fake_http)
+
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
+    storyboard_llm_runtime.chat("director", [{"role": "user", "content": "x"}], response_schema=schema)
+
+    assert calls[-1]["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {"name": "storyboard_response", "schema": schema},
+    }

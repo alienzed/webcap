@@ -17,6 +17,7 @@ from pathlib import Path
 
 from . import config as app_config
 from .folder_state_store import read_folder_state, write_folder_state_atomic
+from .test_models import get_test_model
 from .test_models import h3 as h3_test_model
 from .training_test_paths import test_copy_path
 
@@ -187,8 +188,12 @@ def _folder_key(folder_path):
     return str(_owning_set_directory(folder_path))
 
 
+def _test_directory(folder_path, model):
+    return test_copy_path(model.STAGING_KEY, _owning_set_directory(folder_path).name)
+
+
 def _h3_test_directory(folder_path):
-    return test_copy_path("h3", _owning_set_directory(folder_path).name)
+    return _test_directory(folder_path, h3_test_model)
 
 
 def _lora_files(test_directory):
@@ -680,10 +685,11 @@ def _session_directory(folder_path, session_name):
     return session
 
 
-def _new_session_directory(folder_path):
+def _new_session_directory(folder_path, model=None):
+    selected_model = model or h3_test_model
     root = _session_root(folder_path)
     root.mkdir(parents=True, exist_ok=True)
-    base = datetime.now().strftime("%Y-%m-%d_%H%M-h3")
+    base = datetime.now().strftime("%Y-%m-%d_%H%M-") + selected_model.SESSION_SLUG
     candidate = root / base
     suffix = 2
     while candidate.exists():
@@ -691,7 +697,6 @@ def _new_session_directory(folder_path):
         suffix += 1
     candidate.mkdir()
     return candidate
-
 
 def _status_path(session_directory):
     return Path(session_directory) / "test.json"
@@ -1053,18 +1058,20 @@ def _new_session_seed():
     return secrets.randbelow(2 ** 53)
 
 
-def _result_paths(session_directory, lora_file, stem_override=None):
+def _result_paths(session_directory, lora_file, stem_override=None, extension=".mp4"):
     raw_stem = str(stem_override or lora_file.stem)
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", raw_stem).strip("._") or "result"
-    video = Path(session_directory) / (stem + ".mp4")
+    suffix_text = str(extension or "").strip()
+    if not suffix_text.startswith("."):
+        suffix_text = "." + suffix_text
+    media = Path(session_directory) / (stem + suffix_text)
     caption = Path(session_directory) / (stem + ".txt")
     suffix = 2
-    while video.exists() or caption.exists():
-        video = Path(session_directory) / (stem + "-" + str(suffix) + ".mp4")
+    while media.exists() or caption.exists():
+        media = Path(session_directory) / (stem + "-" + str(suffix) + suffix_text)
         caption = Path(session_directory) / (stem + "-" + str(suffix) + ".txt")
         suffix += 1
-    return video, caption
-
+    return media, caption
 
 def _stop_requested(folder_key):
     with _lock:
@@ -1238,20 +1245,23 @@ def _build_queued_request(
     name=None,
     selected_files=None,
     include_base=True,
+    model_id=None,
 ):
+    model = get_test_model(model_id or h3_test_model.PROFILE_ID)
     prompt = str(prompt or "").strip()
     if not prompt:
         raise ValueError("A test prompt is required.")
-    test_directory = _h3_test_directory(folder_path)
+    test_directory = _test_directory(folder_path, model)
     loras = _selected_lora_files(test_directory, selected_files=selected_files)
     if not loras:
-        raise ValueError("The H3 Test folder contains no .safetensors files.")
+        raise ValueError("The Test folder contains no .safetensors files.")
     session_name = str(name or "").strip()
     if len(session_name) > 120:
         raise ValueError("Test session name must be 120 characters or fewer.")
-    template = _load_template()
-    settings = _normalized_test_settings(
+    template = model.load_template()
+    settings = model.normalize_settings(
         template,
+        _new_session_seed,
         aspect_ratio=aspect_ratio,
         megapixels=megapixels,
         duration=duration,
@@ -1260,26 +1270,32 @@ def _build_queued_request(
     resolved_prompt = _resolve_wildcard_prompt(prompt, settings["seed"])
     include_base = include_base is not False
     return {
-        "model": "h3",
+        "modelId": model.PROFILE_ID,
         "name": session_name,
         "sourcePrompt": prompt,
         "resolvedPrompt": resolved_prompt,
         "selectedFiles": [path.name for path in loras],
         "includeBase": include_base,
         "seed": settings["seed"],
-        "aspectRatio": settings["aspectRatio"],
-        "megapixels": settings["megapixels"],
-        "duration": settings["duration"],
+        "aspectRatio": settings.get("aspectRatio"),
+        "megapixels": settings.get("megapixels"),
+        "duration": settings.get("duration"),
         "total": len(loras) + (1 if include_base else 0),
     }
 
-
 def _queue_job_payload(job, position=0):
-    payload = {"id": str(job.get("id") or ""), "folder": str(job.get("folder") or ""), "runName": str(job.get("runName") or ""), "status": "queued", "testTotal": int(job.get("testTotal") or 0), "createdAt": float(job.get("createdAt") or 0)}
+    payload = {
+        "id": str(job.get("id") or ""),
+        "folder": str(job.get("folder") or ""),
+        "runName": str(job.get("runName") or ""),
+        "modelId": str(job.get("modelId") or ""),
+        "status": "queued",
+        "testTotal": int(job.get("testTotal") or 0),
+        "createdAt": float(job.get("createdAt") or 0),
+    }
     if position:
         payload["queuePosition"] = int(position)
     return payload
-
 
 def _prune_dead_test_workers_locked():
     dead_keys = [key for key, thread in _active_threads.items() if not thread or not thread.is_alive()]
@@ -1287,8 +1303,6 @@ def _prune_dead_test_workers_locked():
         _active_threads.pop(key, None)
         _active_sessions.pop(key, None)
         _stop_requests.discard(key)
-
-
 
 def _advance_test_queue():
     global _test_gpu_reserved
@@ -1347,7 +1361,7 @@ def clear_queued(folder_path):
         _pending_tests[:] = kept
     return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path)["jobs"]}
 
-def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None, seed=None, name=None, selected_files=None, include_base=True):
+def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=None, seed=None, name=None, selected_files=None, include_base=True, model_id=None):
     request = _build_queued_request(
         folder_path,
         prompt,
@@ -1358,12 +1372,14 @@ def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=No
         name=name,
         selected_files=selected_files,
         include_base=include_base,
+        model_id=model_id,
     )
     folder = _relative_set_folder(folder_path)
     job = {
         "id": secrets.token_hex(6),
         "folder": folder,
         "runName": str(request.get("name") or ""),
+        "modelId": str(request.get("modelId") or ""),
         "testTotal": int(request.get("total") or 0),
         "createdAt": time.time(),
         "request": request,
@@ -1411,39 +1427,34 @@ def queued_jobs(folder_path):
 
 def start_queued(folder_path, request):
     request = dict(request or {})
+    model = get_test_model(request.get("modelId") or request.get("model") or h3_test_model.PROFILE_ID)
     prompt = str(request.get("resolvedPrompt") or "").strip()
     source_prompt = str(request.get("sourcePrompt") or prompt).strip()
     if not prompt:
         raise ValueError("Queued Test Generations job has no resolved prompt.")
     session_name = str(request.get("name") or "").strip()
     folder_key = _folder_key(folder_path)
-    test_directory = _h3_test_directory(folder_path)
+    test_directory = _test_directory(folder_path, model)
     selected_loras = _selected_lora_files(test_directory, selected_files=request.get("selectedFiles"))
     loras = [path for path in selected_loras if path.is_file()]
     missing = [path.name for path in selected_loras if not path.is_file()]
     if missing:
-        _logger.warning(
-            "Queued Test skipped removed staged LoRA(s): %s",
-            ", ".join(missing),
-        )
+        _logger.warning("Queued Test skipped removed staged LoRA(s): %s", ", ".join(missing))
     include_base = request.get("includeBase") is not False
     if not loras and not include_base:
         _logger.warning("Queued Test skipped because no selected staged LoRAs remain.")
         return {"status": "skipped"}
 
     with _lock:
-        dead_keys = [key for key, thread in _active_threads.items() if not thread.is_alive()]
-        for key in dead_keys:
-            _active_threads.pop(key, None)
-            _active_sessions.pop(key, None)
-            _stop_requests.discard(key)
+        _prune_dead_test_workers_locked()
         active = _active_threads.get(folder_key)
         if active and active.is_alive():
             raise RuntimeError("This set already has an active Test Generations batch.")
-        session_directory = _new_session_directory(folder_path)
+        session_directory = _new_session_directory(folder_path, model=model)
         payload = {
             "status": "starting",
-            "model": "h3",
+            "modelId": model.PROFILE_ID,
+            "mediaKind": model.MEDIA_KIND,
             "session": session_directory.name,
             "name": session_name,
             "sourcePrompt": source_prompt,
@@ -1464,7 +1475,7 @@ def start_queued(folder_path, request):
             "aspectRatio": request.get("aspectRatio"),
             "megapixels": request.get("megapixels"),
             "duration": request.get("duration"),
-            "includeBase": request.get("includeBase") is not False,
+            "includeBase": include_base,
             "results": [],
             "resultFolder": _relative_to_fs_root(session_directory),
         }
@@ -1472,26 +1483,27 @@ def start_queued(folder_path, request):
 
     try:
         _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
-        template = _resolve_comfy_template_assets(_load_template())
-        settings = _normalized_test_settings(
+        template = model.resolve_assets(model.load_template(), _available_comfy_names, _resolve_comfy_name)
+        settings = model.normalize_settings(
             template,
+            _new_session_seed,
             aspect_ratio=request.get("aspectRatio"),
             megapixels=request.get("megapixels"),
             duration=request.get("duration"),
             seed=request.get("seed"),
         )
         payload["seed"] = settings["seed"]
-        payload["aspectRatio"] = settings["aspectRatio"]
-        payload["megapixels"] = settings["megapixels"]
-        payload["duration"] = settings["duration"]
+        payload["aspectRatio"] = settings.get("aspectRatio")
+        payload["megapixels"] = settings.get("megapixels")
+        payload["duration"] = settings.get("duration")
         payload["includeBase"] = include_base
         payload["total"] = len(loras) + (1 if include_base else 0)
         payload["status"] = "running"
         _atomic_write_json(_status_path(session_directory), payload)
         thread = threading.Thread(
             target=_run_batch,
-            args=(folder_key, session_directory, loras, prompt, settings, template, include_base),
-            name="webcap-h3-test-generations",
+            args=(folder_key, session_directory, loras, prompt, settings, template, include_base, model),
+            name="webcap-test-generations-" + model.SESSION_SLUG,
             daemon=True,
         )
         with _lock:
@@ -1507,29 +1519,29 @@ def start_queued(folder_path, request):
         _atomic_write_json(_status_path(session_directory), payload)
         return payload
 
-def prepare(folder_path):
-    template = _load_template()
+def prepare(folder_path, model_id=None):
+    model = get_test_model(model_id or h3_test_model.PROFILE_ID)
+    template = model.load_template()
     try:
-        test_directory = _h3_test_directory(folder_path)
+        test_directory = _test_directory(folder_path, model)
         loras = _lora_files(test_directory) if test_directory.is_dir() else []
     except ValueError:
         loras = []
-    defaults = _template_test_settings(template)
+    defaults = model.template_settings(template)
     defaults["seed"] = _new_session_seed()
-    aspect_options = list(TEST_ASPECT_RATIO_OPTIONS)
     return {
         "operation": "test_prepare",
-        "model": "h3",
-        "defaultPrompt": _default_prompt(template),
+        "modelId": model.PROFILE_ID,
+        "mediaKind": model.MEDIA_KIND,
+        "defaultPrompt": model.default_prompt(template),
         "defaults": defaults,
-        "aspectRatioOptions": aspect_options,
+        "aspectRatioOptions": list(getattr(model, "ASPECT_RATIO_OPTIONS", ())),
         "count": len(loras),
         "files": [path.name for path in loras],
         "candidateScores": _candidate_rating_scores(folder_path),
         "sessions": list_sessions(folder_path),
         "latest": status(folder_path),
     }
-
 
 def status(folder_path):
     payload = _visible_status(folder_path)
@@ -1560,7 +1572,8 @@ def stop(folder_path):
 def handle_request(folder_path, mode, selection_criteria=None):
     operation = str(mode or "").strip().lower()
     if operation == "test_prepare":
-        return prepare(folder_path)
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return prepare(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_status":
         return status(folder_path)
     if operation == "test_sessions":
@@ -1607,5 +1620,6 @@ def handle_request(folder_path, mode, selection_criteria=None):
             name=criteria.get("name"),
             selected_files=criteria.get("selectedFiles"),
             include_base=criteria.get("includeBase"),
+            model_id=criteria.get("modelId"),
         )
     raise ValueError("Unsupported Test Generations operation: " + operation)

@@ -288,3 +288,53 @@ def test_storyboard_director_requires_confirmation_before_replacing_existing_sce
 
     assert response.status_code == 400
     assert "Confirm replacement" in response.get_json()["error"]
+
+
+def test_storyboard_director_expands_concept_with_recovery(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    root.mkdir()
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", str(root))
+    client = app_module.app.test_client()
+
+    created = client.post("/fs/storyboard", json={
+        "operation": "create_story",
+        "story": {"title": "Gangster", "concept": "Rise and fall of a New York gangster."},
+    }).get_json()["story"]
+
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_build_llm_request",
+        lambda story, scene_id, operation, instruction="": {
+            "operation": operation,
+            "output": "text",
+            "prompt": "expand",
+        },
+    )
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_run_llm_contract",
+        lambda model, contract: {
+            "text": "A richer rise-and-fall crime story with a complete arc.",
+            "model": model,
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    expanded = client.post("/fs/storyboard/director", json={
+        "storyId": created["id"],
+        "operation": "expand_concept",
+        "model": "director.gguf",
+    })
+    assert expanded.status_code == 200
+    expanded_story = expanded.get_json()["story"]
+    assert expanded_story["concept"].startswith("A richer")
+    assert expanded_story["previousConcept"] == "Rise and fall of a New York gangster."
+
+    restored = client.post("/fs/storyboard", json={
+        "operation": "restore_previous_concept",
+        "storyId": created["id"],
+    })
+    assert restored.status_code == 200
+    assert restored.get_json()["story"]["concept"] == "Rise and fall of a New York gangster."
+    assert restored.get_json()["story"]["previousConcept"] is None

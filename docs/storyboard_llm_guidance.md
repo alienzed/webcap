@@ -227,9 +227,13 @@ Planner rules:
 
 - each proposed Scene must be independently generatable;
 - preserve a clear narrative progression;
+- begin from the first Story state actually supplied; do not invent transportation, preceding actions, unseen rooms, or other setup to explain an arrival;
 - use natural scene boundaries where continuity can reset safely;
+- when `continuesPreviousScene` is true, the next Scene's `entryState` must be physically compatible with the previous Scene's `exitState`; do not hide unexplained movement between them;
 - avoid specifying low-level H3 syntax unless asked;
-- keep each Scene summary focused on what must happen, not prose decoration;
+- keep each Scene summary focused on narrative/physical intent rather than detailed shot design; camera choices belong to the later H3-writing pass unless a camera behavior is itself essential to the Story intent;
+- do not repeat the entire character/location visual bible in every Scene; WebCap already owns persistent Story context;
+- use `continuity.carryForward` only for changed state that must remain true beyond the current Scene, such as an object being left behind or carried forward;
 - flag an intent that is too dense rather than hiding the problem.
 
 The canonical structured-output contract is `docs/storyboard-scene-plan.schema.json`.
@@ -238,16 +242,69 @@ A planning call should return JSON only, matching that schema. WebCap assigns ca
 
 The contract deliberately keeps planning separate from final H3 prompt writing. It captures:
 
-- a short Story summary;
 - ordered Scene title and visible intent;
 - entry and exit state;
 - suggested duration;
 - whether continuity directly carries from the previous Scene;
-- only the continuity notes that materially affect that Scene.
+- changed state that must carry forward into later Scenes.
+
+The canonical Story concept/style remain WebCap-owned input. The planner does not return another paraphrased Story summary or duplicate the persistent visual bible, because those copies create drift without adding durable state.
 
 When continuing an existing Story, use the previous Scene's exit state to establish the next Scene's entry state where continuity actually carries across. Do not force a handoff across an intentional reset, relocation, or time jump.
 
 WebCap should parse and validate the complete response before applying any proposed Scenes. Do not partially import a malformed result. If JSON is syntactically or structurally invalid, one explicit repair pass may be attempted using the same schema and the invalid response as input; if repair still fails, expose the failure and leave Story state unchanged.
+
+
+## Model selection
+
+Storyboard should let the user select the compatible local text model used for LLM authoring rather than baking one checkpoint into Story data.
+
+Initial strategy:
+
+- expose one Storyboard-level **Director model** selector populated from models the configured ComfyUI text workflow can actually load;
+- use that selection for planning, auditing, prompt writing, and revision unless later testing proves per-task model selection worthwhile;
+- treat the selected model as runtime preference, not canonical Story meaning;
+- when an LLM proposal/audit is persisted for provenance, record the model identifier that produced it;
+- do not require a Story migration when the preferred model changes.
+
+Cross-model workflows are an optional quality tool, not the default. A future user may deliberately plan with one model and audit with another.
+
+## Validation, semantic audit, and repair
+
+LLM self-review is useful but is not a deterministic validator.
+
+For whole-Story planning, prefer this bounded pipeline:
+
+```text
+Story context
+    -> planner
+    -> JSON/schema validation
+    -> semantic audit
+    -> one repair pass when needed
+    -> JSON/schema validation again
+    -> human preview/import
+```
+
+The mechanical and semantic responsibilities stay separate:
+
+1. **WebCap validation** checks JSON syntax, schema shape, required fields, types, and other facts that can be evaluated deterministically.
+2. **LLM semantic audit** checks fidelity and reasoning: invented facts, omitted Story beats, overloaded Scenes, broken entry/exit handoffs, lost persistent object state, inappropriate continuity resets, and violation of the requested ending.
+3. **Repair** receives the original Story context, the schema-valid proposed plan, and the audit issues, then returns a complete replacement plan matching `docs/storyboard-scene-plan.schema.json`.
+4. WebCap validates the replacement again before showing/applying it.
+
+The audit output contract is `docs/storyboard-plan-audit.schema.json`.
+
+A same-model audit is the default because it is simple and often improves a first pass. An optional different Director model may be selected as auditor later for cross-model critique.
+
+Do not create an open-ended agent loop. Start with at most one semantic audit and one repair pass. If the repaired plan still fails structural validation or materially conflicts with the Story, expose the result to the human rather than recursively asking the model to fix itself.
+
+For H3 prompt writing, the same pattern may later be used in a lighter form:
+
+```text
+draft prompt -> narrow checklist audit -> one revision
+```
+
+but only after the direct prompt-writing workflow is useful enough to justify the extra inference cost.
 
 ### 2. H3 Prompt Writer
 

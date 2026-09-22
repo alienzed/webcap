@@ -149,3 +149,13 @@ def test_storyboard_can_develop_concept_directly_into_scenes():
     assert "replaceExisting: hasScenes" in storyboard
     assert "Existing Scenes and Takes will remain recoverable" in storyboard
     assert "Develop Again" in storyboard
+
+
+def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-expand-concept-btn"' in html
+    assert "function expandConcept()" in storyboard
+    assert "operation: 'expand_concept'" in storyboard
+    assert "return saveStoryNow();" in storyboard

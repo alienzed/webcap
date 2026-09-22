@@ -247,7 +247,7 @@
           '</div>' +
           '<div class="storyboard-scene-meta">' +
             '<div class="storyboard-scene-meta-row">' +
-              '<label class="storyboard-field"><span>Duration (s)</span><input type="number" min="0.1" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
+              '<label class="storyboard-field"><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
               '<label class="storyboard-field"><span>Seed mode</span><select data-scene-field="seedMode"><option value="random"' + (seedMode === 'random' ? ' selected' : '') + '>Random</option><option value="fixed"' + (seedMode === 'fixed' ? ' selected' : '') + '>Fixed</option></select></label>' +
             '</div>' +
             '<div class="storyboard-scene-meta-row">' +

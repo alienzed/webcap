@@ -496,8 +496,20 @@
     var rows = host.querySelectorAll('.test-generations-session-row[data-session-name]');
     Array.prototype.some.call(rows, function (row) {
       if (String(row.dataset.sessionName || '') !== sessionName) return false;
-      var meta = row.querySelector('.test-generations-session-copy span');
+      var meta = row.querySelector('.test-generations-session-copy > span');
       if (meta) meta.textContent = sessionStatusText(status);
+      var progress = row.querySelector('.test-generations-session-progress');
+      if (progress) {
+        var completed = Number(status.completed || 0);
+        var failed = Number(status.failed || 0);
+        var total = Number(status.total || 0);
+        var processed = Math.max(0, completed + failed);
+        var percent = total > 0 ? Math.max(0, Math.min(100, processed / total * 100)) : 0;
+        progress.setAttribute('aria-valuemax', String(total || 0));
+        progress.setAttribute('aria-valuenow', String(processed));
+        var fill = progress.querySelector('span');
+        if (fill) fill.style.width = percent.toFixed(1) + '%';
+      }
       return true;
     });
   }

@@ -69,7 +69,7 @@ def _windows_curl_request(curl_path, url, method="GET", payload=None, timeout=10
         curl_path,
         "--silent",
         "--show-error",
-        "--fail",
+        "--fail-with-body",
         "--max-time",
         str(timeout),
         "--request",
@@ -92,7 +92,9 @@ def _windows_curl_request(curl_path, url, method="GET", payload=None, timeout=10
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ConnectionError(str(exc)) from exc
     if result.returncode != 0:
-        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        stderr_detail = result.stderr.decode("utf-8", errors="replace").strip()
+        body_detail = result.stdout.decode("utf-8", errors="replace").strip()
+        detail = body_detail or stderr_detail
         if result.returncode in (5, 6, 7, 28):
             raise ConnectionError(detail or "curl.exe could not reach ComfyUI.")
         raise RuntimeError(
@@ -1640,12 +1642,14 @@ def prepare(folder_path, model_id=None):
         loras = []
     defaults = model.template_settings(template)
     defaults["seed"] = _new_session_seed()
+    setting_options = model.setting_options(template, _available_comfy_names)
     return {
         "operation": "test_prepare",
         "modelId": model.PROFILE_ID,
         "modelLabel": str(model.profile["label"]),
         "mediaKind": model.MEDIA_KIND,
         "settings": list(model.settings),
+        "settingOptions": setting_options,
         "defaultPrompt": model.default_prompt(template),
         "defaults": defaults,
         "aspectRatioOptions": list(getattr(model, "ASPECT_RATIO_OPTIONS", ())),

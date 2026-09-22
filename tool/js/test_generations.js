@@ -1,5 +1,6 @@
 (function () {
   var supportedTestModelIds = [];
+  var supportedTestModels = {};
   var testModelsLoaded = false;
   var pollTimer = null;
   var prepared = null;
@@ -271,8 +272,13 @@
         if (!response.ok || !payload || payload.ok === false) {
           throw new Error(payload && payload.error ? payload.error : 'Could not read supported Test models.');
         }
+        supportedTestModels = {};
         supportedTestModelIds = Array.isArray(payload.models)
-          ? payload.models.map(function (item) { return String(item && item.id || ''); }).filter(Boolean)
+          ? payload.models.map(function (item) {
+              var id = String(item && item.id || '');
+              if (id) supportedTestModels[id] = item;
+              return id;
+            }).filter(Boolean)
           : [];
         testModelsLoaded = true;
         syncLaunchVisibility();
@@ -282,6 +288,7 @@
     }).catch(function (err) {
       testModelsLoaded = true;
       supportedTestModelIds = [];
+      supportedTestModels = {};
       syncLaunchVisibility();
       throw err;
     });
@@ -360,7 +367,10 @@
     var summary = el('test-generations-summary');
     var countEl = el('test-generations-files-count');
     var host = el('test-generations-files');
-    if (summary) summary.textContent = count + ' LoRA' + (count === 1 ? '' : 's') + ' staged';
+    if (summary) {
+      summary.textContent = (String(payload && payload.modelLabel || '').trim() ? String(payload.modelLabel).trim() + ' · ' : '') +
+        count + ' LoRA' + (count === 1 ? '' : 's') + ' staged';
+    }
     if (countEl) countEl.textContent = String(count);
     if (!host) return;
     host.innerHTML = '';
@@ -560,7 +570,9 @@
       var meta = document.createElement('span');
       var total = Number(job.testTotal || 0);
       var position = Number(job.queuePosition || 0);
-      meta.textContent = 'queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
+      var queuedModel = supportedTestModels[String(job.modelId || '')] || {};
+      meta.textContent = (String(queuedModel.label || '').trim() ? String(queuedModel.label).trim() + ' · ' : '') +
+        'queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
       copy.appendChild(title);
       copy.appendChild(meta);
 
@@ -1613,12 +1625,17 @@
   function sessionMetaText(status) {
     if (!status || !status.session) return '';
     var parts = [];
+    var modelId = String(status.modelId || status.model || '');
+    var model = supportedTestModels[modelId] || {};
+    var settings = status.settings && typeof status.settings === 'object' ? status.settings : status;
     if (String(status.name || '').trim()) parts.push(String(status.name).trim());
     parts.push(sessionLabel(status.session));
-    if (status.aspectRatio) parts.push(String(status.aspectRatio));
-    if (status.megapixels !== undefined && status.megapixels !== null && status.megapixels !== '') parts.push(String(status.megapixels) + ' MP');
-    if (status.duration !== undefined && status.duration !== null && status.duration !== '') parts.push(String(status.duration) + 's');
-    if (status.seed !== undefined && status.seed !== null && status.seed !== '') parts.push('Seed ' + String(status.seed));
+    if (String(model.label || '').trim()) parts.push(String(model.label).trim());
+    if (settings.aspectRatio) parts.push(String(settings.aspectRatio));
+    if (settings.megapixels !== undefined && settings.megapixels !== null && settings.megapixels !== '') parts.push(String(settings.megapixels) + ' MP');
+    if (settings.duration !== undefined && settings.duration !== null && settings.duration !== '') parts.push(String(settings.duration) + 's');
+    if (settings.dimensions) parts.push(String(settings.dimensions).trim());
+    if (settings.seed !== undefined && settings.seed !== null && settings.seed !== '') parts.push('Seed ' + String(settings.seed));
     return parts.join(' · ');
   }
 

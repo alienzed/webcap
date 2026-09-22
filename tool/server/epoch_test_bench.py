@@ -1061,10 +1061,12 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
     return _session_status(session)
 
 
-def _latest_status(folder_path):
+def _latest_status(folder_path, model_id=None):
     root = _session_root(folder_path)
     if not root.is_dir():
         return {"status": "idle"}
+    selected_model_id = str(model_id or "").strip()
+    default_model_id = get_test_model().PROFILE_ID
     sessions = sorted(
         [path for path in root.iterdir() if path.is_dir() and (path / "test.json").is_file()],
         key=lambda path: path.name.lower(),
@@ -1072,13 +1074,16 @@ def _latest_status(folder_path):
     )
     for session in sessions:
         payload = _session_status(session)
-        if payload:
-            return payload
+        if not payload:
+            continue
+        session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
+        if selected_model_id and session_model_id != selected_model_id:
+            continue
+        return payload
     return {"status": "idle"}
 
-
-def _visible_status(folder_path):
-    payload = _latest_status(folder_path)
+def _visible_status(folder_path, model_id=None):
+    payload = _latest_status(folder_path, model_id=model_id)
     if payload.get("status") not in ("running", "stopping"):
         return payload
     session_name = str(payload.get("session") or "").strip()
@@ -1086,7 +1091,6 @@ def _visible_status(folder_path):
         return payload
     session_directory = _session_directory(folder_path, session_name)
     return _visible_session_status(folder_path, session_directory)
-
 
 def _staged_lora_provenance(lora_file):
     sidecar = Path(lora_file).with_suffix(".webcap.json")
@@ -1611,16 +1615,15 @@ def prepare(folder_path, model_id=None):
         "files": [path.name for path in loras],
         "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID),
         "sessions": list_sessions(folder_path),
-        "latest": status(folder_path),
+        "latest": status(folder_path, model_id=model.PROFILE_ID),
     }
 
-def status(folder_path):
-    payload = _visible_status(folder_path)
+def status(folder_path, model_id=None):
+    payload = _visible_status(folder_path, model_id=model_id)
     session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
     if not session_name:
         return payload
     return _with_session_ratings(_session_directory(folder_path, session_name), payload)
-
 
 def stop(folder_path):
     folder_key = _folder_key(folder_path)
@@ -1646,7 +1649,8 @@ def handle_request(folder_path, mode, selection_criteria=None):
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return prepare(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_status":
-        return status(folder_path)
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return status(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_sessions":
         return {"operation": "test_sessions", "sessions": list_sessions(folder_path)}
     if operation == "test_queue":

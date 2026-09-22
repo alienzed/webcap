@@ -162,7 +162,8 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
     assert 'id="storyboard-expand-concept-btn"' in html
     assert "function expandConcept()" in storyboard
     assert "operation: 'expand_concept'" in storyboard
-    assert "return saveStoryNow();" in storyboard
+    assert "storyState.story = payload.story;" in storyboard
+    assert "previousConcept" in storyboard
 
 
 def test_storyboard_director_actions_share_one_busy_state_and_concept_restore():

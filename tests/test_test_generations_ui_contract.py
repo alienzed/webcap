@@ -124,10 +124,13 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "function removeCandidate(fileName, sessionName)" in script
     assert "session: String(sessionName || '')" in script
     assert "removeCandidate(button.dataset.fileName, '')" in script
-    assert "removeCandidate(remove.dataset.removeCandidate, currentSession)" in script
+    assert "function removeCurrentSessionCandidate(button)" in script
+    assert "window.confirm(" in script
+    assert "This deletes the staged LoRA and its result from the current session. Other sessions are unchanged." in script
+    assert "removeCurrentSessionCandidate(remove);" in script
+    assert "button.disabled = true;" in script
     assert "button.disabled = false;" in script
     assert "queueCancel.disabled = false;" in script
-    assert "remove.disabled = false;" in script
     assert "row.dataset.sessionName = name;" in script
     assert "row.dataset.queueJobId = String(job.id || '');" in script
     assert "openSession(row.dataset.sessionName);" in script
@@ -183,6 +186,12 @@ def test_test_generations_compare_mode_reuses_current_session_results():
     assert "video.addEventListener('pause'" in script
     assert "video.addEventListener('seeked'" in script
     assert "video.addEventListener('ratechange'" in script
+    assert "function buildResultFooter(result, options)" in script
+    compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
+    result_block = script.split("function renderResults(status)", 1)[1].split("function syncActiveRunControls(status)", 1)[0]
+    assert "item.appendChild(buildResultFooter(result));" in compare_block
+    assert "card.appendChild(buildResultFooter(result));" in result_block
+    assert "card.appendChild(buildResultFooter(failure, { failed: true }));" in result_block
     assert "remove.dataset.removeCandidate = candidateFile" in script
     assert ".test-generations-compare-stage" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
@@ -253,6 +262,40 @@ def test_live_test_status_surfaces_comfy_job_progress_and_errors_to_console():
     assert "comfyLastContactAt" in script
     assert "liveStatusDetails(status)" in script
     assert "console.error('[Test Generations]', err);" in script
+
+
+def test_test_result_footer_identity_timing_and_remove_contract():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "function candidateIdentity(result)" in script
+    assert "provenance.sourceRunSequence" in script
+    assert "provenance.sourceEpoch" in script
+    assert "Run ' + String(runSequence).padStart(2, '0')" in script
+    assert "Epoch ' + String(epoch).trim()" in script
+    assert "sourceFile.match(/^(.*)__epoch(\\d+)\\.safetensors$/i)" in script
+    assert "primary: 'Base', secondary: ''" in script
+    assert "function formatCandidateElapsed(milliseconds)" in script
+    assert "if (!isFinite(value) || value < 0) return '';" in script
+    assert "return hours + 'h ' + minutes + 'm';" in script
+    assert "return minutes + 'm ' + seconds + 's';" in script
+    assert "return seconds + 's';" in script
+    assert "opts.failed ? 'Failed after ' + elapsed : elapsed" in script
+    assert "source.title = identity.secondary;" in script
+    assert "remove.textContent = 'Remove';" in script
+    assert ".test-generations-result-source" in css
+    assert ".test-generations-result-elapsed" in css
+    assert ".test-generations-result-remove" in css
+
+
+def test_result_card_transport_remains_always_visible_without_toggle():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    transport = script.split("function appendTestPreviewVideo(container, video)", 1)[1].split("function setResultsView(mode)", 1)[0]
+    assert "video.controls = false;" in transport
+    assert "container.appendChild(transport);" in transport
+    assert "controlsToggle" not in script
+    assert "toggleControls" not in script
 
 
 def test_compare_polling_preserves_video_elements_and_refreshes_navigation_only():

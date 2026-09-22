@@ -97,12 +97,9 @@
     var story = storyState.story;
     var order = Array.isArray(story.sceneOrder) ? story.sceneOrder : [];
     var scenes = story.scenes || {};
-    if (!order.length) {
-      host.innerHTML = '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
-      return;
-    }
+    var removedScenes = story.removedScenes || {};
 
-    host.innerHTML = order.map(function (sceneId, index) {
+    var activeHtml = order.map(function (sceneId, index) {
       var scene = scenes[sceneId] || {};
       var seedMode = sceneValue(scene, 'seedMode', 'random');
       var seed = sceneValue(scene, 'seed', '');
@@ -114,7 +111,7 @@
             '<button type="button" class="review-captions-btn" data-scene-action="up" title="Move Scene up" ' + (index === 0 ? 'disabled' : '') + '>↑</button>' +
             '<button type="button" class="review-captions-btn" data-scene-action="down" title="Move Scene down" ' + (index === order.length - 1 ? 'disabled' : '') + '>↓</button>' +
             '<button type="button" class="review-captions-btn" data-scene-action="duplicate" title="Duplicate Scene">Duplicate</button>' +
-            '<button type="button" class="review-captions-btn" data-scene-action="delete" title="Delete Scene">Delete</button>' +
+            '<button type="button" class="review-captions-btn" data-scene-action="delete" title="Remove Scene">Remove</button>' +
           '</div>' +
         '</header>' +
         '<div class="storyboard-scene-body">' +
@@ -135,6 +132,23 @@
         '</div>' +
       '</section>';
     }).join('');
+
+    if (!activeHtml) activeHtml = '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
+
+    var removedIds = Object.keys(removedScenes);
+    var removedHtml = '';
+    if (removedIds.length) {
+      removedHtml = '<section class="storyboard-removed-scenes"><div class="storyboard-list-section-title">Removed Scenes</div>' +
+        removedIds.map(function (sceneId) {
+          var scene = removedScenes[sceneId] || {};
+          return '<div class="storyboard-removed-scene" data-removed-scene-id="' + escapeHtml(sceneId) + '">' +
+            '<span>' + escapeHtml(scene.title || 'Untitled Scene') + '</span>' +
+            '<button type="button" class="review-captions-btn" data-restore-scene="' + escapeHtml(sceneId) + '">Restore</button>' +
+          '</div>';
+        }).join('') + '</section>';
+    }
+
+    host.innerHTML = activeHtml + removedHtml;
   }
 
   function renderStory() {
@@ -341,10 +355,24 @@
   function deleteScene(sceneId) {
     var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
     var label = scene && scene.title ? scene.title : 'this Scene';
-    if (!window.confirm('Delete "' + label + '" from this Story? Existing take files, if any, are left on disk.')) return;
+    if (!window.confirm('Remove "' + label + '" from this Story? It will remain recoverable in Removed Scenes.')) return;
     setSaveState('Saving...');
     flushPendingSaves().then(function () { return request({
       operation: 'delete_scene',
+      storyId: storyState.story.id,
+      sceneId: sceneId
+    }); }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+      refreshLibrary();
+    }).catch(reportError);
+  }
+
+  function restoreScene(sceneId) {
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () { return request({
+      operation: 'restore_scene',
       storyId: storyState.story.id,
       sceneId: sceneId
     }); }).then(function (payload) {
@@ -426,7 +454,14 @@
 
     el('storyboard-scenes-list').addEventListener('input', handleSceneInput);
     el('storyboard-scenes-list').addEventListener('change', handleSceneInput);
-    el('storyboard-scenes-list').addEventListener('click', handleSceneAction);
+    el('storyboard-scenes-list').addEventListener('click', function (event) {
+      var restore = event.target.closest('[data-restore-scene]');
+      if (restore) {
+        restoreScene(restore.dataset.restoreScene);
+        return;
+      }
+      handleSceneAction(event);
+    });
   }
 
   window.openStoryboardActivity = openStoryboardActivity;

@@ -2,8 +2,6 @@ import json
 import os
 import subprocess
 import tempfile
-import threading
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,9 +10,6 @@ from .storyboard_store import load_story, storyboard_root
 
 
 VIDEO_EXTS = {".mp4", ".webm", ".ogg", ".mov", ".mkv", ".avi", ".m4v", ".wmv", ".mpg", ".mpeg"}
-_lock = threading.Lock()
-_jobs = {}
-_active_job_id = None
 
 
 def _utc_now():
@@ -23,6 +18,18 @@ def _utc_now():
 
 def _story_dir(story_id):
     return storyboard_root() / str(story_id)
+
+
+def _selection(story):
+    result = []
+    for scene_id in story.get("sceneOrder") or []:
+        scene = (story.get("scenes") or {}).get(scene_id)
+        if not isinstance(scene, dict):
+            continue
+        take_id = str(scene.get("selectedTakeId") or "").strip()
+        if take_id:
+            result.append({"sceneId": scene_id, "takeId": take_id})
+    return result
 
 
 def _resolve_story_media(story_id, media_path):
@@ -75,7 +82,7 @@ def _probe_stream_signature(path):
         "ffprobe",
         "-v", "error",
         "-show_entries",
-        "stream=index,codec_type,codec_name,codec_tag_string,width,height,pix_fmt,r_frame_rate,time_base,sample_fmt,sample_rate,channels,channel_layout",
+        "stream=codec_type,codec_name,codec_tag_string,width,height,pix_fmt,r_frame_rate,time_base,sample_fmt,sample_rate,channels,channel_layout",
         "-of", "json",
         str(path),
     ]
@@ -89,11 +96,8 @@ def _probe_stream_signature(path):
     streams = payload.get("streams") if isinstance(payload, dict) else None
     if not isinstance(streams, list) or not streams:
         raise RuntimeError("Selected Take has no readable media streams.")
-    signature = []
-    for stream in streams:
-        if not isinstance(stream, dict):
-            continue
-        signature.append({
+    return [
+        {
             key: stream.get(key)
             for key in (
                 "codec_type", "codec_name", "codec_tag_string",
@@ -101,8 +105,10 @@ def _probe_stream_signature(path):
                 "sample_fmt", "sample_rate", "channels", "channel_layout",
             )
             if stream.get(key) is not None
-        })
-    return signature
+        }
+        for stream in streams
+        if isinstance(stream, dict) and stream.get("codec_type") in {"video", "audio"}
+    ]
 
 
 def _ffconcat_quote(path):
@@ -154,7 +160,8 @@ def _assemble(story_id, items):
             "-f", "concat",
             "-safe", "0",
             "-i", str(list_path),
-            "-map", "0",
+            "-map", "0:v:0",
+            "-map", "0:a?",
             "-c", "copy",
             "-movflags", "+faststart",
             str(temp_output),
@@ -165,11 +172,16 @@ def _assemble(story_id, items):
         os.replace(temp_output, destination)
         normalize_path_permissions(destination)
 
+        selection = [
+            {"sceneId": item["sceneId"], "takeId": item["takeId"]}
+            for item in items
+        ]
         manifest = {
             "version": 1,
             "storyId": story_id,
             "createdAt": _utc_now(),
             "output": "exports/selected-sequence.mp4",
+            "selection": selection,
             "items": [
                 {
                     "sceneId": item["sceneId"],
@@ -184,10 +196,14 @@ def _assemble(story_id, items):
         _write_json_atomic(manifest_path, manifest)
         normalize_path_permissions(manifest_path)
         return {
+            "storyId": story_id,
             "folder": "output/storyboards/" + story_id + "/exports",
             "media": "selected-sequence.mp4",
             "manifest": "exports/selected-sequence.json",
+            "createdAt": manifest["createdAt"],
             "itemCount": len(items),
+            "selection": selection,
+            "current": True,
         }
     finally:
         try:
@@ -202,90 +218,49 @@ def _assemble(story_id, items):
             pass
 
 
-def _public_job(job):
-    if not isinstance(job, dict):
-        return None
-    result = dict(job)
-    result.pop("_items", None)
-    return result
-
-
-def _run_job(job_id):
-    global _active_job_id
-    try:
-        with _lock:
-            job = _jobs.get(job_id)
-            if not job:
-                return
-            items = list(job.get("_items") or [])
-            story_id = job["storyId"]
-        output = _assemble(story_id, items)
-        with _lock:
-            current = _jobs.get(job_id)
-            if current:
-                current["status"] = "completed"
-                current["completedAt"] = _utc_now()
-                current["output"] = output
-    except Exception as exc:
-        with _lock:
-            current = _jobs.get(job_id)
-            if current:
-                current["status"] = "failed"
-                current["completedAt"] = _utc_now()
-                current["error"] = str(exc)
-    finally:
-        with _lock:
-            if _active_job_id == job_id:
-                _active_job_id = None
-
-
-def start_assembly(story_id):
-    global _active_job_id
+def export_selected_sequence(story_id):
     story_id = str(story_id or "").strip()
     if not story_id:
         raise ValueError("Story ID is required.")
     _story, items = selected_sequence(story_id)
+    return _assemble(story_id, items)
 
-    with _lock:
-        if _active_job_id:
-            active = _jobs.get(_active_job_id)
-            if active and active.get("status") == "running":
-                raise RuntimeError("A Storyboard sequence export is already running.")
-            _active_job_id = None
 
-        job_id = uuid.uuid4().hex[:12]
-        selection = [
-            {"sceneId": item["sceneId"], "takeId": item["takeId"]}
-            for item in items
-        ]
-        _jobs[job_id] = {
-            "jobId": job_id,
-            "storyId": story_id,
-            "status": "running",
-            "startedAt": _utc_now(),
-            "completedAt": None,
-            "selection": selection,
-            "output": None,
-            "error": "",
-            "_items": items,
-        }
-        _active_job_id = job_id
+def current_export(story_id):
+    story_id = str(story_id or "").strip()
+    if not story_id:
+        raise ValueError("Story ID is required.")
 
-    thread = threading.Thread(target=_run_job, args=(job_id,), daemon=True, name="storyboard-assembly-" + job_id)
+    story = load_story(story_id)
+    export_dir = _story_dir(story_id) / "exports"
+    media_path = export_dir / "selected-sequence.mp4"
+    manifest_path = export_dir / "selected-sequence.json"
+    if not media_path.exists() and not manifest_path.exists():
+        return None
+    if not media_path.is_file() or not manifest_path.is_file():
+        raise RuntimeError("Storyboard sequence export is incomplete; expected both MP4 and manifest.")
+
     try:
-        thread.start()
-    except Exception:
-        with _lock:
-            _jobs.pop(job_id, None)
-            if _active_job_id == job_id:
-                _active_job_id = None
-        raise
-    return _public_job(_jobs[job_id])
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Storyboard sequence export manifest is unreadable.") from exc
+    if not isinstance(manifest, dict) or manifest.get("storyId") != story_id:
+        raise RuntimeError("Storyboard sequence export manifest does not match this Story.")
 
-
-def assembly_status(job_id):
-    with _lock:
-        job = _jobs.get(str(job_id or "").strip())
-        if not job:
-            raise FileNotFoundError("Storyboard sequence export job does not exist.")
-        return _public_job(job)
+    selection = manifest.get("selection")
+    if not isinstance(selection, list):
+        selection = [
+            {"sceneId": item.get("sceneId"), "takeId": item.get("takeId")}
+            for item in manifest.get("items") or []
+            if isinstance(item, dict)
+        ]
+    return {
+        "storyId": story_id,
+        "folder": "output/storyboards/" + story_id + "/exports",
+        "media": "selected-sequence.mp4",
+        "manifest": "exports/selected-sequence.json",
+        "createdAt": str(manifest.get("createdAt") or ""),
+        "itemCount": len(selection),
+        "selection": selection,
+        "current": selection == _selection(story),
+    }

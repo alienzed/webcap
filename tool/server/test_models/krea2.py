@@ -1,7 +1,4 @@
 import copy
-from pathlib import Path
-
-
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif")
 
 

@@ -213,6 +213,34 @@ Use `N/A` when no non-diegetic score is wanted.
 
 Music or radio audible inside the scene is diegetic and belongs in the chronological multimodal description instead.
 
+## Continuity anchoring without LoRAs or references
+
+H3 does not inherit the appearance of a previous independently generated Scene unless the workflow explicitly conditions it.
+
+If Storyboard indicates that a recurring character, location, furnishing set, vehicle, or other persistent visual element has **no** active LoRA or usable visual reference, the H3 prompt should repeat the stable visual anchors needed to recreate it.
+
+For characters, this may include:
+
+- age range and build;
+- hair color/style/length;
+- skin tone where relevant;
+- face-defining traits when useful;
+- wardrobe colors, garment types, accessories;
+- distinctive props or carried objects.
+
+For locations, this may include:
+
+- architecture and room proportions;
+- wall/floor materials and color;
+- major furniture and placement;
+- windows, doors, stairs, counters, lighting fixtures;
+- persistent props and spatial relationships;
+- recurring lighting/weather/time-of-day cues.
+
+Do not assume phrases such as "the same woman," "the same room," or "the hotel lobby" are sufficient across independent generations.
+
+If a LoRA or exact visual reference already anchors the subject or environment, reduce redundant description and spend prompt budget on action, camera behavior, performance, and the details that actually change in this Scene.
+
 ## Continuity
 
 Unless the current instruction explicitly changes them, preserve Storyboard-provided continuity facts.

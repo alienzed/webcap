@@ -192,3 +192,12 @@ def test_storyboard_take_generation_uses_global_console_and_recovers_button_on_f
     assert "throw new Error(job.error || 'Storyboard generation failed.');" in storyboard
     assert "data-generation-status" not in storyboard
     assert ".storyboard-generation-status" not in css
+
+
+def test_storyboard_take_generation_ui_supports_scene_queue_state():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "job.status === 'queued'" in storyboard
+    assert "Take generation queued" in storyboard
+    assert "Queued…" in storyboard
+    assert "job.status === 'queued' || job.status === 'running'" in storyboard

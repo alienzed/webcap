@@ -1076,7 +1076,7 @@ def _workflow_seed(workflow):
     return get_test_model().workflow_seed(workflow)
 
 def _new_session_seed():
-    return secrets.randbelow(2 ** 53)
+    return secrets.randbelow(2 ** 32)
 
 
 def _result_paths(session_directory, lora_file, stem_override=None, extension=".mp4"):

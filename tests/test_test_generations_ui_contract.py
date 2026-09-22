@@ -119,25 +119,27 @@ def test_test_generations_uses_explicit_workspace_root():
     assert "grid-area: workspace;" in shell_css
 
 
-def test_recent_test_sets_are_workspace_history_not_current_set_details():
+def test_test_activity_is_permanent_and_recent_sets_are_not_in_the_test_pane():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
-    rail_start = html.index('<aside class="test-generations-rail">')
-    rail_end = html.index('</aside>', rail_start)
-    recent_list = html.index('id="test-generations-recent-sets-list"')
-    render_block = script.split("function renderRecentTestSets(items)", 1)[1].split("function syncActivityButton(payload)", 1)[0]
+    assert 'id="activity-test-btn" type="button" class="activity-rail-btn"' in html
+    assert 'id="test-generations-recent-sets-list"' not in html
+    assert "function renderRecentTestSets(items)" not in script
+    assert ".test-generations-recent-sets" not in css
+    assert "activityButton.classList.remove('hidden');" in script
 
-    assert rail_start < recent_list < rail_end
-    assert '<details id="test-generations-recent-drawer"' not in html
-    assert "sessionCount" in render_block
-    assert "item.completed" not in render_block
-    assert "item.total" not in render_block
-    assert "item.failed" not in render_block
-    assert "item.status" not in render_block
-    assert ".test-generations-recent-sets" in css
-    assert "flex-direction: column;" in css
+
+def test_test_activity_primary_click_respects_current_set_before_global_activity():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    block = script.split("function openTestBenchActivity()", 1)[1].split("function openTestBenchActivityMenu", 1)[0]
+    assert "var currentFolder = String(state && state.folder || '');" in block
+    assert "if (currentFolder)" in block
+    assert "openTestBenchFolder(currentFolder);" in block
+    assert block.index("openTestBenchFolder(currentFolder);") < block.index("testActivity.active")
+    assert "if (active && active.folder) openTestBenchFolder(String(active.folder));" in block
 
 
 def test_test_generation_sessions_and_candidate_removal_contract():
@@ -621,18 +623,20 @@ def test_test_preview_controls_do_not_cover_video_frames():
     assert ".test-generations-video-transport {" in css
 
 
-def test_recent_test_sets_reuse_existing_session_history():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+def test_test_activity_menu_reuses_recent_session_history_for_explicit_cross_set_navigation():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
 
-    assert 'id="test-generations-recent-sets-list"' in html
     assert "def recent_test_sets(limit=8):" in backend
     assert '"recent": recent_test_sets()' in backend
-    assert "function renderRecentTestSets(items)" in script
+    assert "function buildTestActivityContextActions()" in script
+    assert "function openTestBenchActivityMenu(event)" in script
+    assert "showContextMenu(event.clientX, event.clientY, actions);" in script
+    assert "activityButton.oncontextmenu = openTestBenchActivityMenu;" in script
+    assert "recentActions.length >= 5" in script
+    assert "folder === currentFolder" in script
+    assert "seen[folder]" in script
     assert "function openTestBenchFolder(folder)" in script
-    assert "data.recentTestOpen" not in script
-    assert "dataset.recentTestOpen" in script
 
 
 def test_test_execution_uses_backend_model_capabilities_even_when_workspace_is_opened_indirectly():
@@ -763,16 +767,14 @@ def test_test_generations_queue_contract():
 
 
 
-def test_test_generations_rail_has_clear_working_history_navigation_hierarchy():
+def test_test_generations_rail_stays_scoped_to_current_set_work():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
     assert 'class="test-generations-library-panel test-generations-staged-panel"' in html
     assert 'class="test-generations-library-panel test-generations-sessions"' in html
-    assert 'class="test-generations-library-section test-generations-recent-sets"' in html
+    assert 'class="test-generations-library-section test-generations-recent-sets"' not in html
     assert "grid-template-columns: minmax(400px, 430px) minmax(0, 1fr);" in css
-    assert ".test-generations-library-section > .test-generations-library-heading" in css
-    assert ".test-generations-recent-sets {" in css
 
 def test_historical_test_session_errors_do_not_claim_current_failure():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

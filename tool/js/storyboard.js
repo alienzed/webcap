@@ -7,7 +7,7 @@
     saveTimer: 0,
     sceneTimers: {},
     generationJobs: {},
-    assemblyJob: null,
+    sequenceExport: null,
     director: {
       models: [],
       modelId: window.localStorage.getItem('webcap.storyboard.directorModel') || '',
@@ -234,19 +234,16 @@
       return;
     }
     host.classList.remove('hidden');
-    var assembly = storyState.assemblyJob;
-    var assemblyCurrent = assemblyMatchesSelection(assembly, selected);
-    var assemblyRunning = assemblyCurrent && assembly.status === 'running';
+    var assembly = storyState.sequenceExport;
+    var assemblyCurrent = assemblyMatchesSelection(assembly, selected) && assembly.current !== false;
     var assemblyStatus = '';
-    if (assemblyCurrent && assembly.status === 'failed') assemblyStatus = 'Export failed · ' + escapeHtml(assembly.error || 'Unknown error');
-    else if (assemblyCurrent && assembly.status === 'completed') assemblyStatus = 'Exported · ' + String(assembly.output && assembly.output.itemCount || selected.length) + ' Takes';
-    else if (assemblyRunning) assemblyStatus = 'Exporting…';
+    if (assemblyCurrent) assemblyStatus = 'Exported · ' + String(assembly.itemCount || selected.length) + ' Takes';
     else if (assembly && !assemblyCurrent) assemblyStatus = 'Selection changed since last export';
 
     var outputHtml = '';
-    if (assemblyCurrent && assembly.status === 'completed' && assembly.output) {
-      var outputUrl = '/caption/media?folder=' + encodeURIComponent(assembly.output.folder) +
-        '&media=' + encodeURIComponent(assembly.output.media);
+    if (assemblyCurrent) {
+      var outputUrl = '/caption/media?folder=' + encodeURIComponent(assembly.folder) +
+        '&media=' + encodeURIComponent(assembly.media);
       outputHtml = '<div class="storyboard-sequence-output"><video src="' + escapeHtml(outputUrl) +
         '" controls preload="metadata"></video></div>';
     }
@@ -254,9 +251,8 @@
     host.innerHTML = '<header class="storyboard-sequence-header"><div><strong>Selected sequence</strong><span>' +
       selected.length + ' selected Take' + (selected.length === 1 ? '' : 's') +
       '</span></div><div class="storyboard-sequence-actions">' +
-      '<button type="button" class="storyboard-primary-btn" data-sequence-export' + (assemblyRunning ? ' disabled' : '') + '>' +
-        (assemblyRunning ? 'Exporting…' : 'Export Sequence') +
-      '</button><span class="storyboard-save-state" data-sequence-status>' + assemblyStatus + '</span>' +
+      '<button type="button" class="storyboard-primary-btn" data-sequence-export>Export Sequence</button>' +
+      '<span class="storyboard-save-state" data-sequence-status>' + assemblyStatus + '</span>' +
       '</div></header>' + outputHtml + '<div class="storyboard-sequence-list">' +
       selected.map(function (item) {
         return '<article class="storyboard-sequence-card">' +
@@ -267,32 +263,28 @@
       }).join('') + '</div>';
   }
 
-  function pollAssembly(jobId) {
-    window.setTimeout(function () {
-      assemblyRequest(null, 'job=' + encodeURIComponent(jobId)).then(function (payload) {
-        storyState.assemblyJob = payload.job;
+  function refreshSequenceExport(storyId) {
+    return assemblyRequest(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
+      if (storyState.story && storyState.story.id === storyId) {
+        storyState.sequenceExport = payload.export || null;
         renderSequencePreview();
-        if (payload.job.status === 'running') {
-          pollAssembly(jobId);
-          return;
-        }
-        if (payload.job.status === 'failed') {
-          throw new Error(payload.job.error || 'Storyboard sequence export failed.');
-        }
-      }).catch(reportError);
-    }, 1000);
+      }
+      return payload;
+    });
   }
 
   function exportSelectedSequence() {
     if (!storyState.story) return;
-    setSaveState('Saving...');
+    var storyId = storyState.story.id;
+    setSaveState('Exporting sequence...');
     flushPendingSaves().then(function () {
-      return assemblyRequest({ storyId: storyState.story.id });
+      return assemblyRequest({ storyId: storyId });
     }).then(function (payload) {
-      storyState.assemblyJob = payload.job;
-      renderSequencePreview();
+      if (storyState.story && storyState.story.id === storyId) {
+        storyState.sequenceExport = payload.export || null;
+        renderSequencePreview();
+      }
       setSaveState('Saved');
-      pollAssembly(payload.job.jobId);
     }).catch(reportError);
   }
 
@@ -551,8 +543,10 @@
       return request(null, 'story=' + encodeURIComponent(storyId));
     }).then(function (payload) {
       storyState.story = payload.story;
+      storyState.sequenceExport = null;
       renderStory();
       setSaveState('Saved');
+      return refreshSequenceExport(storyId);
     }).catch(reportError);
   }
 
@@ -564,6 +558,7 @@
       });
     }).then(function (payload) {
       storyState.story = payload.story;
+      storyState.sequenceExport = null;
       return refreshLibrary().then(function () {
         renderStory();
         setSaveState('Saved');

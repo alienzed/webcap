@@ -242,6 +242,17 @@ Storyboard should expose a compatible local **Director model** selector rather t
 
 ComfyUI remains the generation engine.
 
+The current Storyboard H3 generation path is intentionally narrow:
+
+- it loads the FL2VA task-family checkpoint;
+- it uses ComfyUI's `MiniMaxH3ImageToVideo` conditioning node;
+- no exact keyframe -> T2VA-style base prompting;
+- first frame only -> I2VA-style base prompting;
+- first + last frames -> FL2VA base prompting;
+- last frame only -> L2VA-style base prompting;
+- all of those use the official three-field base prompt contract;
+- Ref2VA is a separate future task family and should not leak its six-section prompt vocabulary into the current Director-model runtime.
+
 Storyboard should eventually query ComfyUI for capabilities it actually exposes rather than assuming them:
 
 - available LoRAs
@@ -356,7 +367,8 @@ The continuity path is now usable end to end for H3 first/last-frame generation:
 
 Remaining provider-facing work:
 
-- arbitrary guide/reference-to-video inputs where the H3 reference workflow supports them
+- arbitrary guide/reference-to-video inputs where the current base-family workflow supports them
+- a separate future Ref2VA adapter only if richer full-reference generation proves worthwhile; do not overload the current FL2VA-family path with Ref2VA semantics
 - reference image selection from WebCap media, Krea outputs, or filesystem
 - cleanup of uploaded temporary ComfyUI input references after a generation is safely captured
 - keep semantic reference roles independent of ComfyUI node IDs

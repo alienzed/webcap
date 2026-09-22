@@ -62,10 +62,16 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "set_scene_reference_from_take" in storyboard
     assert "data-reference-previous" in storyboard
     assert "data-reference-apply" in storyboard
+    assert "data-scene-generate" in storyboard
+    assert "/fs/storyboard/generation" in storyboard
+    assert "Generation prompt" in storyboard
+    assert "Summary / intent" in storyboard
+    assert "Notes" in storyboard
     assert "Selected sequence" in storyboard
 
     assert "ollama" not in app.lower()
-    assert "comfy" not in storyboard.lower()
+    assert "test-generations" not in storyboard
+    assert "training-btn" not in storyboard
     assert "fetch('/fs/storyboard'" not in storyboard  # request helper builds the URL once.
 
 

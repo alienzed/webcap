@@ -516,6 +516,7 @@
       host.innerHTML = '<div class="test-generations-library-empty">No test sessions yet.</div>';
       return;
     }
+
     var activeItems = items.filter(function (session) {
       return session && (session.status === 'running' || session.status === 'stopping' || session.status === 'starting');
     });
@@ -523,7 +524,26 @@
       return activeItems.indexOf(session) === -1;
     });
 
-    function appendSessionRow(session) {
+    function appendGroup(label, count, className) {
+      var group = document.createElement('section');
+      group.className = 'test-generations-session-group ' + className;
+      var heading = document.createElement('div');
+      heading.className = 'test-generations-session-group-heading';
+      var title = document.createElement('strong');
+      title.textContent = label;
+      var badge = document.createElement('span');
+      badge.textContent = String(count);
+      heading.appendChild(title);
+      heading.appendChild(badge);
+      var body = document.createElement('div');
+      body.className = 'test-generations-session-group-list';
+      group.appendChild(heading);
+      group.appendChild(body);
+      host.appendChild(group);
+      return body;
+    }
+
+    function appendSessionRow(session, target) {
       var name = String(session.session || '');
       var row = document.createElement('div');
       row.className = 'test-generations-session-row';
@@ -538,6 +558,25 @@
       meta.textContent = sessionStatusText(session);
       copy.appendChild(title);
       copy.appendChild(meta);
+
+      var active = session.status === 'running' || session.status === 'stopping' || session.status === 'starting';
+      if (active) {
+        var completed = Number(session.completed || 0);
+        var failed = Number(session.failed || 0);
+        var total = Number(session.total || 0);
+        var processed = Math.max(0, completed + failed);
+        var percent = total > 0 ? Math.max(0, Math.min(100, processed / total * 100)) : 0;
+        var progress = document.createElement('div');
+        progress.className = 'test-generations-session-progress';
+        progress.setAttribute('role', 'progressbar');
+        progress.setAttribute('aria-valuemin', '0');
+        progress.setAttribute('aria-valuemax', String(total || 0));
+        progress.setAttribute('aria-valuenow', String(processed));
+        var fill = document.createElement('span');
+        fill.style.width = percent.toFixed(1) + '%';
+        progress.appendChild(fill);
+        copy.appendChild(progress);
+      }
 
       var actions = document.createElement('div');
       actions.className = 'test-generations-session-actions';
@@ -558,7 +597,6 @@
       var unrated = Number(session.unrated || 0);
       rate.classList.toggle('hidden', !resultFolder || unrated <= 0);
 
-      var active = session.status === 'running' || session.status === 'stopping' || session.status === 'starting';
       actions.appendChild(open);
       actions.appendChild(rate);
       if (!active) {
@@ -574,46 +612,56 @@
 
       row.appendChild(copy);
       row.appendChild(actions);
-      host.appendChild(row);
+      target.appendChild(row);
     }
 
-    activeItems.forEach(appendSessionRow);
+    if (activeItems.length) {
+      var runningList = appendGroup('Running', activeItems.length, 'is-running');
+      activeItems.forEach(function (session) { appendSessionRow(session, runningList); });
+    }
 
-    queued.forEach(function (job) {
-      var row = document.createElement('div');
-      row.className = 'test-generations-session-row';
-      row.dataset.queueJobId = String(job.id || '');
+    if (queued.length) {
+      var queuedList = appendGroup('Queued', queued.length, 'is-queued');
+      queued.forEach(function (job) {
+        var row = document.createElement('div');
+        row.className = 'test-generations-session-row';
+        row.dataset.queueJobId = String(job.id || '');
 
-      var copy = document.createElement('div');
-      copy.className = 'test-generations-session-copy';
-      var title = document.createElement('strong');
-      title.textContent = String(job.runName || '').trim() || 'Queued Test';
-      var meta = document.createElement('span');
-      var total = Number(job.testTotal || 0);
-      var position = Number(job.queuePosition || 0);
-      var queuedModel = supportedTestModels[String(job.modelId || '')] || {};
-      meta.textContent = (String(queuedModel.label || '').trim() ? String(queuedModel.label).trim() + ' · ' : '') +
-        'queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
-      copy.appendChild(title);
-      copy.appendChild(meta);
+        var copy = document.createElement('div');
+        copy.className = 'test-generations-session-copy';
+        var title = document.createElement('strong');
+        title.textContent = String(job.runName || '').trim() || 'Queued Test';
+        var meta = document.createElement('span');
+        var total = Number(job.testTotal || 0);
+        var position = Number(job.queuePosition || 0);
+        var queuedModel = supportedTestModels[String(job.modelId || '')] || {};
+        meta.textContent = (String(queuedModel.label || '').trim() ? String(queuedModel.label).trim() + ' · ' : '') +
+          'queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
+        copy.appendChild(title);
+        copy.appendChild(meta);
 
-      var actions = document.createElement('div');
-      actions.className = 'test-generations-session-actions';
-      var remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'test-generations-remove-candidate';
-      remove.dataset.queueCancel = String(job.id || '');
-      remove.title = 'Remove this queued Test session';
-      remove.setAttribute('aria-label', 'Remove queued Test session ' + title.textContent);
-      remove.textContent = '×';
-      actions.appendChild(remove);
+        var actions = document.createElement('div');
+        actions.className = 'test-generations-session-actions';
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'test-generations-remove-candidate';
+        remove.dataset.queueCancel = String(job.id || '');
+        remove.title = 'Remove this queued Test session';
+        remove.setAttribute('aria-label', 'Remove queued Test session ' + title.textContent);
+        remove.textContent = '×';
+        actions.appendChild(remove);
 
-      row.appendChild(copy);
-      row.appendChild(actions);
-      host.appendChild(row);
-    });
+        row.appendChild(copy);
+        row.appendChild(actions);
+        queuedList.appendChild(row);
+      });
+    }
 
-    historyItems.forEach(appendSessionRow);
+    if (historyItems.length) {
+      var historyList = appendGroup('Completed', historyItems.length, 'is-history');
+      historyItems.forEach(function (session) { appendSessionRow(session, historyList); });
+    }
+
     syncSessionSelection();
   }
 

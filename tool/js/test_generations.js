@@ -1826,6 +1826,22 @@
   }
 
 
+  function removeCurrentSessionCandidate(button) {
+    var candidateFile = String(button && button.dataset.removeCandidate || '').trim();
+    if (!candidateFile) return;
+    var confirmed = window.confirm(
+      'Remove ' + candidateFile + '?\n\n' +
+      'This deletes the staged LoRA and its result from the current session. Other sessions are unchanged.'
+    );
+    if (!confirmed) return;
+    button.disabled = true;
+    removeCandidate(candidateFile, currentSession).catch(function (err) {
+      button.disabled = false;
+      showError(err);
+    });
+  }
+
+
   function bindUi() {
     var button = el('test-generations-open-btn');
     var workspace = el('test-generations-workspace');
@@ -1918,11 +1934,7 @@
     el('test-generations-results').onclick = function (event) {
       var remove = event.target.closest('[data-remove-candidate]');
       if (remove) {
-        remove.disabled = true;
-        removeCandidate(remove.dataset.removeCandidate, currentSession).catch(function (err) {
-          remove.disabled = false;
-          showError(err);
-        });
+        removeCurrentSessionCandidate(remove);
         return;
       }
       if (event.target.closest('.test-generations-video-transport, video, button')) return;
@@ -1934,11 +1946,7 @@
     el('test-generations-compare').onclick = function (event) {
       var remove = event.target.closest('[data-remove-candidate]');
       if (remove) {
-        remove.disabled = true;
-        removeCandidate(remove.dataset.removeCandidate, currentSession).catch(function (err) {
-          remove.disabled = false;
-          showError(err);
-        });
+        removeCurrentSessionCandidate(remove);
         return;
       }
       if (event.target.closest('[data-compare-previous]')) {

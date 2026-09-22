@@ -789,9 +789,9 @@
     return /\.(?:png|jpe?g|webp|gif|bmp|avif)$/.test(fileName) ? 'image' : (fileName ? 'video' : '');
   }
 
-  function buildResultRating(result, sessionName) {
+  function buildResultRating(result, resultFolder) {
     var mediaFile = resultMediaFile(result);
-    var owningSession = String(sessionName || '').trim();
+    var ratingFolder = String(resultFolder || '').trim();
     if (!mediaFile) return null;
 
     var currentRating = Math.max(0, Math.min(5, Number(result && result.rating || 0)));
@@ -805,7 +805,7 @@
       star.className = 'test-generations-result-star' + (value <= currentRating ? ' active' : '');
       star.dataset.testRating = String(value);
       star.dataset.mediaFile = mediaFile;
-      star.dataset.testSession = owningSession;
+      star.dataset.ratingFolder = ratingFolder;
       star.title = 'Rate ' + value + ' star' + (value === 1 ? '' : 's');
       star.setAttribute('aria-label', star.title);
       star.textContent = value <= currentRating ? '★' : '☆';
@@ -814,14 +814,15 @@
     return stars;
   }
 
-  function syncResultRatingButtons(mediaFile, rating) {
+  function syncResultRatingButtons(resultFolder, mediaFile, rating) {
+    var folder = String(resultFolder || '').trim();
     var name = String(mediaFile || '').trim();
     var value = Math.max(0, Math.min(5, Number(rating || 0)));
-    if (!name) return;
+    if (!folder || !name) return;
     Array.prototype.forEach.call(
-      document.querySelectorAll('[data-test-rating][data-media-file]'),
+      document.querySelectorAll('[data-test-rating][data-media-file][data-rating-folder]'),
       function (star) {
-        if (String(star.dataset.mediaFile || '') !== name) return;
+        if (String(star.dataset.ratingFolder || '') !== folder || String(star.dataset.mediaFile || '') !== name) return;
         var starValue = Number(star.dataset.testRating || 0);
         var active = starValue <= value;
         star.classList.toggle('active', active);
@@ -831,13 +832,13 @@
     );
   }
 
-  function rateCurrentSessionResult(button) {
+  function rateTestResult(button) {
     var rating = Number(button && button.dataset.testRating || 0);
     var mediaFile = String(button && button.dataset.mediaFile || '').trim();
-    var sessionName = String(button && button.dataset.testSession || '').trim();
+    var resultFolder = String(button && button.dataset.ratingFolder || '').trim();
     if (!mediaFile || rating < 1 || rating > 5) return;
-    if (!sessionName) {
-      showError(new Error('Test result has no owning session.'));
+    if (!resultFolder) {
+      showError(new Error('Test result has no result folder.'));
       return;
     }
 
@@ -848,20 +849,16 @@
       });
     }
 
-    request('test_rate_result', {
-      session: sessionName,
-      mediaFile: mediaFile,
-      rating: rating
+    setMediaRating(resultFolder, mediaFile, rating).then(function (payload) {
+      syncResultRatingButtons(resultFolder, mediaFile, payload && payload.rating);
+      if (currentStatus && String(currentStatus.resultFolder || '') === resultFolder && Array.isArray(currentStatus.results)) {
+        currentStatus.results.forEach(function (result) {
+          if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
+        });
+      }
+      return request('test_rating_summary', { modelId: currentTestModelId() });
     }).then(function (payload) {
-      syncResultRatingButtons(mediaFile, payload && payload.rating);
-      if (payload && payload.sessionStatus) renderStatus(payload.sessionStatus);
-      if (
-        prepared &&
-        payload &&
-        payload.candidateScores &&
-        payload.sessionStatus &&
-        String(payload.sessionStatus.modelId || payload.sessionStatus.model || '') === String(prepared.modelId || '')
-      ) {
+      if (prepared && payload && payload.candidateScores) {
         prepared.candidateScores = payload.candidateScores;
         renderStagedFiles(prepared);
       }
@@ -911,7 +908,7 @@
     }
 
     if (!opts.failed) {
-      var rating = buildResultRating(result, opts.session);
+      var rating = buildResultRating(result, opts.resultFolder);
       if (rating) copy.appendChild(rating);
     }
 
@@ -1118,7 +1115,7 @@
       var preview = appendTestPreview(item, resultFolder, result, { muted: true });
       if (preview && preview.tagName === 'VIDEO') videos.push(preview);
 
-      item.appendChild(buildResultFooter(result, { session: String(status && status.session || '') }));
+      item.appendChild(buildResultFooter(result, { resultFolder: resultFolder }));
       stage.appendChild(item);
     });
 
@@ -1204,7 +1201,7 @@
         card.appendChild(placeholder);
       }
 
-      card.appendChild(buildResultFooter(result, { session: String(status && status.session || '') }));
+      card.appendChild(buildResultFooter(result, { resultFolder: resultFolder }));
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);
@@ -2202,7 +2199,7 @@
     el('test-generations-results').onclick = function (event) {
       var rating = event.target.closest('[data-test-rating]');
       if (rating) {
-        rateCurrentSessionResult(rating);
+        rateTestResult(rating);
         return;
       }
       var remove = event.target.closest('[data-remove-candidate]');
@@ -2219,7 +2216,7 @@
     el('test-generations-compare').onclick = function (event) {
       var rating = event.target.closest('[data-test-rating]');
       if (rating) {
-        rateCurrentSessionResult(rating);
+        rateTestResult(rating);
         return;
       }
       var remove = event.target.closest('[data-remove-candidate]');

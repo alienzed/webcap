@@ -52,6 +52,29 @@ Unless explicitly asked to change them, preserve:
 
 If the supplied context is genuinely contradictory, expose the contradiction rather than quietly choosing one version.
 
+## Continuity anchoring and descriptive redundancy
+
+Continuity must not depend on the model remembering a previous Scene.
+
+When a persistent element is **not** strongly anchored by a LoRA, exact reference image, or other explicit conditioning, repeat enough concrete visual description in each relevant Scene to make the intended continuity reconstructible from that Scene alone.
+
+This applies especially to:
+
+- character identity and physical appearance;
+- hairstyle, wardrobe, accessories, and carried objects;
+- recurring locations;
+- room layout, architecture, furnishings, and distinctive props;
+- recurring vehicles or other major objects;
+- persistent weather, time of day, lighting, and color treatment.
+
+For example, if a character has no identity LoRA or usable visual reference, do not reduce later prompts to "the woman" or "she." Re-establish the important identity cues: approximate age, build, hair, clothing, distinctive features, and anything else needed to keep the character visually stable.
+
+Likewise, if a room is recurring without a reference image, restate the major spatial and furnishing anchors rather than merely saying "the same hotel lobby." A later generation cannot be assumed to know what "the same" looked like.
+
+When a LoRA or reference image **does** strongly establish an element, avoid unnecessary repetition. Keep only the descriptors needed to disambiguate the intended subject/reference, preserve Story-specific facts, or specify what changes in the current Scene.
+
+The goal is not maximal verbosity. The goal is to make each Scene independently generatable while preserving the visual constants that matter.
+
 ## Scene scope and duration discipline
 
 A Storyboard Scene is one generation unit.

@@ -33,7 +33,7 @@ from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_generation import generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
-from .storyboard_assembly import assembly_status as storyboard_assembly_status, start_assembly as storyboard_start_assembly
+from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_llm_runtime import run_contract as storyboard_run_llm_contract, status as storyboard_director_status
 
@@ -483,12 +483,12 @@ def storyboard_route():
 def storyboard_assembly_route():
     try:
         if request.method == "GET":
-            job_id = str(request.args.get("job") or "").strip()
-            return jsonify({"ok": True, "job": storyboard_assembly_status(job_id)})
+            story_id = str(request.args.get("story") or "").strip()
+            return jsonify({"ok": True, "export": storyboard_current_export(story_id)})
         data = request.get_json(silent=True) or {}
         return jsonify({
             "ok": True,
-            "job": storyboard_start_assembly(str(data.get("storyId") or "").strip()),
+            "export": storyboard_export_selected_sequence(str(data.get("storyId") or "").strip()),
         })
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404

@@ -83,6 +83,24 @@ def _write_json_atomic(path, payload):
             os.unlink(tmp_name)
 
 
+def _restore_ordered_id(order, item_id, removed):
+    restored = list(order or [])
+    before_id = str(removed.get("removedBeforeId") or "")
+    after_id = str(removed.get("removedAfterId") or "")
+    if after_id and after_id in restored:
+        restored.insert(restored.index(after_id), item_id)
+        return restored
+    if before_id and before_id in restored:
+        restored.insert(restored.index(before_id) + 1, item_id)
+        return restored
+    try:
+        index = int(removed.get("removedOrderIndex"))
+    except (TypeError, ValueError):
+        index = len(restored)
+    restored.insert(max(0, min(index, len(restored))), item_id)
+    return restored
+
+
 def _normalize_tags(value):
     if value is None:
         return []
@@ -342,7 +360,10 @@ def delete_scene(story_id, scene_id):
     scene_order = list(story.get("sceneOrder") or [])
     scene = dict(scenes.pop(scene_id))
     scene["removedAt"] = _utc_now()
-    scene["removedOrderIndex"] = scene_order.index(scene_id) if scene_id in scene_order else len(scene_order)
+    order_index = scene_order.index(scene_id) if scene_id in scene_order else len(scene_order)
+    scene["removedOrderIndex"] = order_index
+    scene["removedBeforeId"] = scene_order[order_index - 1] if order_index > 0 else None
+    scene["removedAfterId"] = scene_order[order_index + 1] if order_index + 1 < len(scene_order) else None
     removed = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
     removed[scene_id] = scene
     story["removedScenes"] = removed
@@ -362,15 +383,14 @@ def restore_scene(story_id, scene_id):
         raise FileNotFoundError("Removed Scene does not exist.")
     restored = dict(scene)
     restored.pop("removedAt", None)
-    order_index = restored.pop("removedOrderIndex", len(story.get("sceneOrder") or []))
+    story["sceneOrder"] = _restore_ordered_id(story.get("sceneOrder") or [], scene_id, restored)
+    restored.pop("removedOrderIndex", None)
+    restored.pop("removedBeforeId", None)
+    restored.pop("removedAfterId", None)
     restored["updatedAt"] = _utc_now()
     story["scenes"][scene_id] = restored
     del removed[scene_id]
     story["removedScenes"] = removed
-    scene_order = list(story.get("sceneOrder") or [])
-    insert_at = max(0, min(int(order_index), len(scene_order)))
-    scene_order.insert(insert_at, scene_id)
-    story["sceneOrder"] = scene_order
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story
@@ -464,7 +484,10 @@ def remove_take(story_id, scene_id, take_id):
     take_order = list(scene.get("takeOrder") or [])
     removed_take = dict(take)
     removed_take["removedAt"] = _utc_now()
-    removed_take["removedOrderIndex"] = take_order.index(resolved_take_id) if resolved_take_id in take_order else len(take_order)
+    order_index = take_order.index(resolved_take_id) if resolved_take_id in take_order else len(take_order)
+    removed_take["removedOrderIndex"] = order_index
+    removed_take["removedBeforeId"] = take_order[order_index - 1] if order_index > 0 else None
+    removed_take["removedAfterId"] = take_order[order_index + 1] if order_index + 1 < len(take_order) else None
     removed = scene.get("removedTakes") if isinstance(scene.get("removedTakes"), dict) else {}
     removed[resolved_take_id] = removed_take
     del takes[resolved_take_id]
@@ -491,16 +514,15 @@ def restore_take(story_id, scene_id, take_id):
 
     restored = dict(take)
     restored.pop("removedAt", None)
-    order_index = restored.pop("removedOrderIndex", len(scene.get("takeOrder") or []))
+    scene["takeOrder"] = _restore_ordered_id(scene.get("takeOrder") or [], resolved_take_id, restored)
+    restored.pop("removedOrderIndex", None)
+    restored.pop("removedBeforeId", None)
+    restored.pop("removedAfterId", None)
     takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
     takes[resolved_take_id] = restored
     del removed[resolved_take_id]
     scene["takes"] = takes
     scene["removedTakes"] = removed
-    take_order = list(scene.get("takeOrder") or [])
-    insert_at = max(0, min(int(order_index), len(take_order)))
-    take_order.insert(insert_at, resolved_take_id)
-    scene["takeOrder"] = take_order
     scene["updatedAt"] = _utc_now()
     story["updatedAt"] = scene["updatedAt"]
     _write_json_atomic(_story_path(story_id), story)

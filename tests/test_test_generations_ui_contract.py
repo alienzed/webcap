@@ -32,6 +32,23 @@ def test_test_seed_uses_shared_32_bit_range():
     assert "return values[0];" in script
 
 
+def test_test_results_header_promotes_view_tabs_and_keeps_rate_as_the_only_action():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'class="test-generations-view-tabs" role="tablist"' in html
+    assert 'id="test-generations-view-grid-btn"' in html
+    assert 'id="test-generations-view-compare-btn"' in html
+    assert 'id="test-generations-rate-items-btn"' in html
+    assert 'id="test-generations-open-results-btn"' not in html
+    assert 'class="test-generations-results-actions"' in html
+    assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);" in css
+    assert ".test-generations-view-tab.active" in css
+    assert "border-bottom-color: var(--accent);" in css
+    assert "setAttribute('aria-selected'" in script
+
+
 def test_test_generations_uses_training_pane_and_core_controls():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
@@ -702,7 +719,7 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
     assert 'id="test-generations-session-name"' in html
-    assert 'id="test-generations-open-results-btn"' in html
+    assert 'id="test-generations-open-results-btn"' not in html
     assert "var selectedCandidates = null;" in script
     assert "dataset.candidateSelect" in script
     assert "selectedFiles: selectedFiles" in script

@@ -75,8 +75,9 @@ def build_request(story, scene_id, operation, instruction=""):
     if operation not in VALID_OPERATIONS:
         raise ValueError("Unsupported Storyboard LLM operation.")
 
+    scene_id = _clean(scene_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
-    scene = scenes.get(_clean(scene_id))
+    scene = scenes.get(scene_id)
     if not isinstance(scene, dict):
         raise FileNotFoundError("Scene does not exist.")
 

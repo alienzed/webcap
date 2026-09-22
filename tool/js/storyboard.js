@@ -179,7 +179,6 @@
       var previousSceneId = index > 0 ? order[index - 1] : '';
       var previousScene = previousSceneId ? scenes[previousSceneId] || {} : {};
       var previousSelectedTakeId = previousScene.selectedTakeId || '';
-      var firstFrameReference = referenceForRole(scene, 'first_frame');
       var generationJob = storyState.generationJobs[sceneId] || null;
       var generationRunning = generationJob && generationJob.status === 'running';
       var generationStatus = '';
@@ -267,8 +266,8 @@
                 ? '<button type="button" class="review-captions-btn storyboard-reference-quick" data-reference-previous>Previous selected Take → first frame</button>'
                 : (index > 0 ? '<span class="storyboard-reference-empty">Select a Take in the previous Scene for quick continuity.</span>' : '')) +
               '<div class="storyboard-reference-editor">' +
-                '<select data-reference-role><option value="first_frame">First frame</option><option value="last_frame">Last frame</option><option value="guide_frame">Guide frame</option></select>' +
-                '<select data-reference-source>' + activeTakeOptions(story, firstFrameReference && firstFrameReference.sourceTakeId) + '</select>' +
+                '<select data-reference-role><option value="first_frame">First frame</option><option value="last_frame">Last frame</option></select>' +
+                '<select data-reference-source>' + activeTakeOptions(story, '') + '</select>' +
                 '<select data-reference-frame><option value="last">Last frame</option><option value="first">First frame</option></select>' +
                 '<button type="button" class="review-captions-btn" data-reference-apply>Assign</button>' +
               '</div>' +

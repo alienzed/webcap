@@ -250,7 +250,7 @@ Deliver:
   - add Scene
   - edit Scene
   - duplicate Scene
-  - remove Scene explicitly
+  - remove Scene explicitly, retaining it in `removedScenes` for restore
   - reorder Scenes
   - manual prompt entry/paste
   - title/summary/notes
@@ -358,6 +358,6 @@ While implementing Phase 1:
 - do not store transient browser-only state as canonical Story data
 - do not make a current set/folder selection a prerequisite to opening Storyboard
 - do not hide provider or persistence failures
-- keep destructive Scene/Story actions explicit
+- keep destructive Scene/Story actions explicit and reversible; Phase 1 Scene removal is retained in `story.json` and can be restored
 
 The architecture should leave obvious seams for later provider integration, but Phase 1 should solve only the real manual authoring workflow.

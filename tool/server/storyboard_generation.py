@@ -34,6 +34,7 @@ ASPECT_RATIO_OPTIONS = (
 _lock = threading.Lock()
 _jobs = {}
 _active_job_id = None
+_pending_job_ids = []
 GPU_RESERVATION_OWNER = "storyboard-generation"
 
 
@@ -579,7 +580,16 @@ def _download_output(output_ref):
 
 
 def _public_job(job):
-    return dict(job) if isinstance(job, dict) else None
+    if not isinstance(job, dict):
+        return None
+    return {key: value for key, value in job.items() if not str(key).startswith("_")}
+
+
+def _refresh_queue_positions_locked():
+    for index, queued_job_id in enumerate(_pending_job_ids, start=1):
+        queued = _jobs.get(queued_job_id)
+        if queued is not None and queued.get("status") == "queued":
+            queued["queuePosition"] = index
 
 
 def _update_job(job_id, **fields):
@@ -588,6 +598,68 @@ def _update_job(job_id, **fields):
         if current is None:
             return
         current.update(fields)
+
+
+def _start_job_thread(job_id):
+    with _lock:
+        job = _jobs.get(job_id)
+        if job is None:
+            raise FileNotFoundError("Storyboard generation job does not exist.")
+        story_id = job["storyId"]
+        scene_id = job["sceneId"]
+        settings = copy.deepcopy(job["_settings"])
+
+    thread = threading.Thread(
+        target=_run_generation,
+        args=(job_id, story_id, scene_id, settings),
+        daemon=True,
+        name="storyboard-generation-" + job_id[:8],
+    )
+    thread.start()
+
+
+def _start_next_queued_or_release():
+    global _active_job_id
+    while True:
+        with _lock:
+            next_job_id = None
+            while _pending_job_ids:
+                candidate_id = _pending_job_ids.pop(0)
+                candidate = _jobs.get(candidate_id)
+                if candidate is None or candidate.get("status") != "queued":
+                    continue
+                candidate.update({
+                    "status": "running",
+                    "startedAt": _utc_now(),
+                    "queuePosition": 0,
+                    "comfyStatus": "starting",
+                })
+                _active_job_id = candidate_id
+                next_job_id = candidate_id
+                break
+            _refresh_queue_positions_locked()
+
+        if next_job_id is None:
+            _release_gpu()
+            return
+
+        try:
+            _start_job_thread(next_job_id)
+            return
+        except Exception as exc:
+            app_config.debug_print("[storyboard-generation] COULD NOT START QUEUED JOB:", exc)
+            app_config.debug_traceback()
+            with _lock:
+                failed = _jobs.get(next_job_id)
+                if failed is not None:
+                    failed.update({
+                        "status": "failed",
+                        "completedAt": _utc_now(),
+                        "error": str(exc),
+                        "queuePosition": 0,
+                    })
+                if _active_job_id == next_job_id:
+                    _active_job_id = None
 
 
 def _run_generation(job_id, story_id, scene_id, settings):
@@ -643,57 +715,81 @@ def _run_generation(job_id, story_id, scene_id, settings):
         app_config.debug_traceback()
         _update_job(job_id, status="failed", completedAt=_utc_now(), error=str(exc))
     finally:
-        _release_gpu()
         with _lock:
             if _active_job_id == job_id:
                 _active_job_id = None
+        _start_next_queued_or_release()
 
 
 def start_generation(story_id, scene_id):
     global _active_job_id
     story = load_story(story_id)
-    scene = (story.get("scenes") or {}).get(str(scene_id or "").strip())
+    scene_id = str(scene_id or "").strip()
+    scene = (story.get("scenes") or {}).get(scene_id)
     if not isinstance(scene, dict):
         raise FileNotFoundError("Scene does not exist.")
     settings = _scene_settings(scene)
+    job_id = str(uuid.uuid4())
 
     with _lock:
-        if _active_job_id:
-            active = _jobs.get(_active_job_id)
-            if active and active.get("status") in ("queued", "running"):
-                raise RuntimeError("A Storyboard generation is already running.")
-            _active_job_id = None
+        active = _jobs.get(_active_job_id) if _active_job_id else None
+        if active is not None and active.get("status") == "running":
+            if active.get("sceneId") == scene_id:
+                raise RuntimeError("This Scene already has a Take generation in progress.")
+            for queued_job_id in _pending_job_ids:
+                queued = _jobs.get(queued_job_id)
+                if queued is not None and queued.get("status") == "queued" and queued.get("sceneId") == scene_id:
+                    raise RuntimeError("This Scene already has a queued Take generation.")
+            _jobs[job_id] = {
+                "jobId": job_id,
+                "storyId": story_id,
+                "sceneId": scene_id,
+                "status": "queued",
+                "queuedAt": _utc_now(),
+                "startedAt": None,
+                "completedAt": None,
+                "queuePosition": len(_pending_job_ids) + 1,
+                "comfyJobId": None,
+                "comfyStatus": "",
+                "takeId": None,
+                "error": "",
+                "_settings": settings,
+            }
+            _pending_job_ids.append(job_id)
+            _refresh_queue_positions_locked()
+            return _public_job(_jobs[job_id])
 
-    _reserve_gpu()
-
-    with _lock:
-        job_id = str(uuid.uuid4())
+        _active_job_id = None
+        _reserve_gpu()
         _jobs[job_id] = {
             "jobId": job_id,
             "storyId": story_id,
             "sceneId": scene_id,
             "status": "running",
+            "queuedAt": _utc_now(),
             "startedAt": _utc_now(),
             "completedAt": None,
+            "queuePosition": 0,
             "comfyJobId": None,
             "comfyStatus": "starting",
             "takeId": None,
             "error": "",
+            "_settings": settings,
         }
         _active_job_id = job_id
 
-    thread = threading.Thread(
-        target=_run_generation,
-        args=(job_id, story_id, scene_id, settings),
-        daemon=True,
-        name="storyboard-generation-" + job_id[:8],
-    )
     try:
-        thread.start()
+        _start_job_thread(job_id)
     except Exception:
         _release_gpu()
         with _lock:
-            _jobs.pop(job_id, None)
+            failed = _jobs.get(job_id)
+            if failed is not None:
+                failed.update({
+                    "status": "failed",
+                    "completedAt": _utc_now(),
+                    "error": "Could not start Storyboard generation worker.",
+                })
             if _active_job_id == job_id:
                 _active_job_id = None
         raise

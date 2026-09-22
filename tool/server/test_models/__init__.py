@@ -36,7 +36,7 @@ class TestModel:
         return getattr(self.adapter, name)
 
 
-def _test_profiles():
+def _build_models():
     supported = {}
     for profile in training_profiles():
         policy = profile.get("test") if isinstance(profile.get("test"), dict) else {}
@@ -50,22 +50,24 @@ def _test_profiles():
     return supported
 
 
+_MODELS = _build_models()
+
+
 def get_test_model(profile_id=None):
-    supported = _test_profiles()
     model_id = str(profile_id or "").strip()
     if not model_id:
-        defaults = [model for model in supported.values() if model.policy.get("default") is True]
+        defaults = [model for model in _MODELS.values() if model.policy.get("default") is True]
         if len(defaults) == 1:
             return defaults[0]
         raise ValueError("Test Generations requires a model ID.")
     try:
-        return supported[model_id]
+        return _MODELS[model_id]
     except KeyError as exc:
         raise ValueError("Test Generations does not support model: " + model_id) from exc
 
 
 def supported_profile_ids():
-    return tuple(_test_profiles())
+    return tuple(_MODELS)
 
 
 def supported_models():
@@ -77,5 +79,5 @@ def supported_models():
             "settings": list(model.settings),
             "default": model.policy.get("default") is True,
         }
-        for model in _test_profiles().values()
+        for model in _MODELS.values()
     ]

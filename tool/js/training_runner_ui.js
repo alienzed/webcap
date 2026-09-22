@@ -631,6 +631,19 @@ function trainingPlannedEpochCount(job) {
   }, 0);
 }
 
+function formatTrainingJobSettings(job) {
+  var settings = job && job.trainingSettings && typeof job.trainingSettings === 'object' ? job.trainingSettings : {};
+  var parts = [];
+  var lr = formatTrainingRunLearningRate(settings.optimizerLr);
+  var rank = Number(settings.adapterRank);
+  var dropoutText = settings.adapterDropout == null ? '' : String(settings.adapterDropout).trim();
+  var dropout = Number(dropoutText);
+  if (lr) parts.push('LR ' + lr);
+  if (isFinite(rank) && rank > 0) parts.push('R' + Math.round(rank));
+  if (dropoutText && isFinite(dropout)) parts.push('D' + dropoutText);
+  return parts.join(' · ');
+}
+
 function trainingOutputIdentity(job) {
   var runPath = String(job && job.outputRunPath || '').trim();
   if (runPath) {
@@ -694,6 +707,8 @@ function buildTrainingQueueHtml(queuedJobs) {
       var resumeEpoch = Number(resumePoint.epoch);
       var resumeStep = Number(resumePoint.step);
       var workloadParts = [];
+      var settingsText = formatTrainingJobSettings(queuedJob);
+      if (settingsText) workloadParts.push(settingsText);
       if (plannedEpochs) {
         var remainingEpochs = queuedJob.resumeFromCheckpoint && isFinite(resumeEpoch) && resumeEpoch > 0
           ? Math.max(0, plannedEpochs - resumeEpoch)
@@ -910,6 +925,7 @@ function renderTrainingRunner() {
     trainingWorkspaceState.runnerSelectedJobId = job.id;
   }
   var elapsed = formatTrainingRunnerElapsed(job);
+  var activeSettings = formatTrainingJobSettings(job);
   var status = String(job.status || 'unknown');
   var statusLabel = trainingRunnerStatusLabel(status);
   var statusTitle = status === 'running'
@@ -955,7 +971,7 @@ function renderTrainingRunner() {
   els.runnerSummary.innerHTML = '<div class="training-runner-active-row">' +
     '<div class="training-runner-state" title="Active model and elapsed run time.">' +
       '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '" title="' + escapeHtml(statusTitle) + '">' + escapeHtml(statusLabel) + '</span>' +
-      '<span>' + escapeHtml(trainingJobLabel(job)) + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span>' +
+      '<span>' + escapeHtml(trainingJobLabel(job)) + (activeSettings ? ' · ' + escapeHtml(activeSettings) : '') + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span>' +
     '</div>' +
     '<button type="button" class="training-runner-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
     queuePosition +

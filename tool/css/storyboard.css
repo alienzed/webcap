@@ -277,3 +277,21 @@
     grid-column: auto;
   }
 }
+
+.storyboard-removed-scenes {
+  margin-top: 14px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.storyboard-removed-scene {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  margin: 4px 0;
+  border: 1px dashed var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+}

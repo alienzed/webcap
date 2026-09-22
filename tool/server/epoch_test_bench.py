@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 import os
 import re
 import secrets
@@ -10,6 +11,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +23,7 @@ COMFY_BASE_URL = "http://127.0.0.1:8188"
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "comfyui" / "minimax_h3_test_api.json"
 TEST_RESULTS_DIR = "test-generations"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
+COMFY_JOB_MISSING_GRACE_SECONDS = 10
 GPU_RESERVATION_OWNER = "test-generations"
 TEST_ASPECT_RATIO_OPTIONS = (
     "1:1 (Square)",
@@ -33,6 +36,7 @@ TEST_ASPECT_RATIO_OPTIONS = (
     "21:9 (Ultrawide)",
 )
 _lock = threading.Lock()
+_status_lock = threading.Lock()
 _dispatch_lock = threading.Lock()
 _active_threads = {}
 _active_sessions = {}
@@ -40,6 +44,7 @@ _stop_requests = set()
 _recent_sets_cache = {"expires": 0.0, "items": []}
 _pending_tests = []
 _test_gpu_reserved = False
+_logger = logging.getLogger(__name__)
 
 
 def _reserve_gpu_for_test_generations():
@@ -146,21 +151,16 @@ def _read_bytes(url, timeout=30):
         raise RuntimeError("Could not retrieve the ComfyUI output.") from exc
 
 
-def _interrupt_comfy():
-    url = COMFY_BASE_URL + "/interrupt"
-    curl_path = _windows_curl_path()
-    if curl_path:
-        try:
-            _windows_curl_request(curl_path, url, method="POST", timeout=5)
-            return
-        except (ConnectionError, RuntimeError) as exc:
-            raise RuntimeError("Could not interrupt the current ComfyUI generation.") from exc
-    req = urllib.request.Request(url, data=b"", method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=5):
-            return
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
-        raise RuntimeError("Could not interrupt the current ComfyUI generation.") from exc
+def _cancel_comfy_job(prompt_id):
+    job_id = str(prompt_id or "").strip()
+    if not job_id:
+        return False
+    response = _read_json_response(
+        COMFY_BASE_URL + "/api/jobs/" + urllib.parse.quote(job_id, safe="") + "/cancel",
+        method="POST",
+        timeout=5,
+    )
+    return bool(response.get("cancelled")) if isinstance(response, dict) else False
 
 
 def _load_template():
@@ -566,32 +566,106 @@ def _find_video_ref(value):
 
 
 def _queue_workflow(workflow):
-    response = _read_json_response(COMFY_BASE_URL + "/prompt", method="POST", payload={"prompt": workflow})
-    prompt_id = str(response.get("prompt_id") or "").strip() if isinstance(response, dict) else ""
-    if not prompt_id:
-        raise RuntimeError("ComfyUI did not return a prompt ID.")
+    prompt_id = str(uuid.uuid4())
+    response = _read_json_response(
+        COMFY_BASE_URL + "/prompt",
+        method="POST",
+        payload={"prompt": workflow, "prompt_id": prompt_id},
+    )
+    returned_id = str(response.get("prompt_id") or "").strip() if isinstance(response, dict) else ""
+    if returned_id != prompt_id:
+        raise RuntimeError("ComfyUI did not accept the requested Test job ID.")
     return prompt_id
 
 
-def _wait_for_video(prompt_id, timeout=GENERATION_TIMEOUT_SECONDS):
-    history_url = COMFY_BASE_URL + "/history/" + urllib.parse.quote(prompt_id, safe="")
+def _read_comfy_job(prompt_id):
+    url = COMFY_BASE_URL + "/api/jobs/" + urllib.parse.quote(str(prompt_id or ""), safe="")
+    try:
+        payload = _read_json_response(url)
+    except RuntimeError as exc:
+        if "404" in str(exc):
+            return None
+        raise
+    if not isinstance(payload, dict):
+        raise RuntimeError("ComfyUI returned invalid Test job status.")
+    return payload
+
+
+def _format_comfy_job_error(job):
+    error = job.get("execution_error") if isinstance(job, dict) and isinstance(job.get("execution_error"), dict) else {}
+    message = str(error.get("exception_message") or "").strip()
+    node_id = str(error.get("node_id") or "").strip()
+    node_type = str(error.get("node_type") or "").strip()
+    detail = message or "ComfyUI reported an execution error."
+    node = " / ".join(value for value in (node_id, node_type) if value)
+    return detail + ((" (" + node + ")") if node else "")
+
+
+def _update_live_comfy_status(session_directory, **fields):
+    with _status_lock:
+        status = _read_status(session_directory) or {}
+        status.update(fields)
+        _atomic_write_json(_status_path(session_directory), status)
+        return status
+
+
+def _wait_for_video(
+    prompt_id,
+    timeout=GENERATION_TIMEOUT_SECONDS,
+    session_directory=None,
+    folder_key=None,
+):
     deadline = time.monotonic() + timeout
+    missing_since = None
     while True:
         if time.monotonic() >= deadline:
             raise RuntimeError("Timed out waiting for ComfyUI to finish this generation.")
-        history = _read_json_response(history_url)
-        entry = history.get(prompt_id) if isinstance(history, dict) else None
-        if isinstance(entry, dict):
-            status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
-            status_text = str(status.get("status_str") or "").lower()
-            if status_text == "error":
-                raise RuntimeError("ComfyUI reported an execution error.")
-            video_ref = _find_video_ref(entry.get("outputs") or {})
+        if folder_key and _stop_requested(folder_key):
+            _cancel_comfy_job(prompt_id)
+            raise RuntimeError("Test run stopped.")
+
+        job = _read_comfy_job(prompt_id)
+        now_ms = int(time.time() * 1000)
+        if job is None:
+            if missing_since is None:
+                missing_since = time.monotonic()
+            if session_directory is not None:
+                _update_live_comfy_status(
+                    session_directory,
+                    comfyJobId=prompt_id,
+                    comfyStatus="missing",
+                    comfyLastContactAt=now_ms,
+                )
+            if time.monotonic() - missing_since >= COMFY_JOB_MISSING_GRACE_SECONDS:
+                raise RuntimeError(
+                    "ComfyUI lost Test job " + str(prompt_id) + "; ComfyUI may have restarted."
+                )
+            time.sleep(2)
+            continue
+
+        missing_since = None
+        job_status = str(job.get("status") or "").strip().lower()
+        if session_directory is not None:
+            _update_live_comfy_status(
+                session_directory,
+                comfyJobId=prompt_id,
+                comfyStatus=job_status,
+                comfyLastContactAt=now_ms,
+            )
+
+        if job_status in ("pending", "in_progress"):
+            time.sleep(2)
+            continue
+        if job_status == "failed":
+            raise RuntimeError(_format_comfy_job_error(job))
+        if job_status == "cancelled":
+            raise RuntimeError("ComfyUI cancelled this Test generation.")
+        if job_status == "completed":
+            video_ref = _find_video_ref(job.get("outputs") or {})
             if video_ref:
                 return video_ref
-            if status.get("completed") is True or status_text == "success":
-                raise RuntimeError("ComfyUI completed the workflow without returning an MP4 output.")
-        time.sleep(2)
+            raise RuntimeError("ComfyUI completed the workflow without returning an MP4 output.")
+        raise RuntimeError("ComfyUI returned unknown Test job status: " + (job_status or "empty") + ".")
 
 
 def _comfy_saved_output_path(video_ref):
@@ -1052,12 +1126,14 @@ def _stop_requested(folder_key):
 
 
 def _mark_stopped(session_directory):
-    status = _read_status(session_directory) or {}
-    status["status"] = "stopped"
-    status["current"] = ""
-    status["error"] = ""
-    _atomic_write_json(_status_path(session_directory), status)
-    return status
+    with _status_lock:
+        status = _read_status(session_directory) or {}
+        status["status"] = "stopped"
+        status["current"] = ""
+        status["error"] = ""
+        status["comfyStatus"] = "cancelled"
+        _atomic_write_json(_status_path(session_directory), status)
+        return status
 
 
 def _run_batch(folder_key, session_directory, loras, prompt, settings=None, template=None, include_base=True):
@@ -1091,9 +1167,14 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
             output_prefix = _candidate_output_prefix(session_directory, candidate_index, candidate)
             video_path = None
             caption_path = None
-            status = _read_status(session_directory) or {}
-            status["current"] = candidate["label"]
-            _atomic_write_json(status_file, status)
+            with _status_lock:
+                status = _read_status(session_directory) or {}
+                status["current"] = candidate["label"]
+                status["candidateStartedAt"] = int(time.time() * 1000)
+                status["comfyJobId"] = ""
+                status["comfyStatus"] = ""
+                status["comfyLastContactAt"] = None
+                _atomic_write_json(status_file, status)
             try:
                 comfy_lora_name = None
                 if candidate["kind"] == "lora":
@@ -1112,7 +1193,17 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                     filename_prefix=output_prefix,
                 )
                 prompt_id = _queue_workflow(workflow)
-                video_ref = _wait_for_video(prompt_id)
+                _update_live_comfy_status(
+                    session_directory,
+                    comfyJobId=prompt_id,
+                    comfyStatus="pending",
+                    comfyLastContactAt=int(time.time() * 1000),
+                )
+                video_ref = _wait_for_video(
+                    prompt_id,
+                    session_directory=session_directory,
+                    folder_key=folder_key,
+                )
                 video_path, caption_path = _result_paths(
                     session_directory,
                     lora_file,
@@ -1120,25 +1211,27 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 )
                 _move_saved_video(video_ref, video_path, filename_prefix=output_prefix)
                 caption_path.write_text(prompt, encoding="utf-8")
-                status = _read_status(session_directory) or {}
-                results = status.get("results") if isinstance(status.get("results"), list) else []
-                result = {
-                    "kind": candidate["kind"],
-                    "sourceLoRA": candidate["label"],
-                    "outputVideo": video_path.name,
-                    "prompt": prompt,
-                    "seed": _workflow_seed(workflow),
-                }
-                if candidate["kind"] == "lora":
-                    result["candidateFile"] = lora_file.name
-                    provenance = _staged_lora_provenance(lora_file)
-                    if provenance:
-                        result["provenance"] = provenance
-                results.append(result)
-                status["results"] = results
-                status["completed"] = int(status.get("completed") or 0) + 1
-                status["current"] = ""
-                _atomic_write_json(status_file, status)
+                with _status_lock:
+                    status = _read_status(session_directory) or {}
+                    results = status.get("results") if isinstance(status.get("results"), list) else []
+                    result = {
+                        "kind": candidate["kind"],
+                        "sourceLoRA": candidate["label"],
+                        "outputVideo": video_path.name,
+                        "prompt": prompt,
+                        "seed": _workflow_seed(workflow),
+                    }
+                    if candidate["kind"] == "lora":
+                        result["candidateFile"] = lora_file.name
+                        provenance = _staged_lora_provenance(lora_file)
+                        if provenance:
+                            result["provenance"] = provenance
+                    results.append(result)
+                    status["results"] = results
+                    status["completed"] = int(status.get("completed") or 0) + 1
+                    status["current"] = ""
+                    status["comfyStatus"] = "completed"
+                    _atomic_write_json(status_file, status)
             except Exception as exc:
                 for owned_path in (caption_path, video_path):
                     if owned_path and Path(owned_path).is_file():
@@ -1146,36 +1239,37 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                 if _stop_requested(folder_key):
                     _mark_stopped(session_directory)
                     return
-                status = _read_status(session_directory) or {}
-                failures = status.get("failures") if isinstance(status.get("failures"), list) else []
-                failures.append({"sourceLoRA": candidate["label"], "error": str(exc)})
-                status["failures"] = failures
-                status["failed"] = int(status.get("failed") or 0) + 1
-                status["current"] = ""
-                status["error"] = ""
-                _atomic_write_json(status_file, status)
+                _logger.exception("Test generation candidate failed: %s", candidate["label"])
+                with _status_lock:
+                    status = _read_status(session_directory) or {}
+                    failures = status.get("failures") if isinstance(status.get("failures"), list) else []
+                    failures.append({"sourceLoRA": candidate["label"], "error": str(exc)})
+                    status["failures"] = failures
+                    status["failed"] = int(status.get("failed") or 0) + 1
+                    status["current"] = ""
+                    status["error"] = ""
+                    status["comfyStatus"] = "failed"
+                    _atomic_write_json(status_file, status)
 
-        status = _read_status(session_directory) or {}
-        status["status"] = "stopped" if _stop_requested(folder_key) else "complete"
-        status["current"] = ""
-        _atomic_write_json(status_file, status)
+        with _status_lock:
+            status = _read_status(session_directory) or {}
+            status["status"] = "stopped" if _stop_requested(folder_key) else "complete"
+            status["current"] = ""
+            _atomic_write_json(status_file, status)
     except Exception as exc:
-        status = _read_status(session_directory) or {}
-        status["status"] = "failed"
-        status["current"] = ""
-        status["error"] = str(exc)
-        _atomic_write_json(status_file, status)
+        _logger.exception("Test generation batch failed.")
+        with _status_lock:
+            status = _read_status(session_directory) or {}
+            status["status"] = "failed"
+            status["current"] = ""
+            status["error"] = str(exc)
+            _atomic_write_json(status_file, status)
     finally:
         with _lock:
-            stopped = folder_key in _stop_requests
             _active_threads.pop(folder_key, None)
             _active_sessions.pop(folder_key, None)
             _stop_requests.discard(folder_key)
-        try:
-            if stopped:
-                shutil.rmtree(session_directory)
-        finally:
-            _advance_test_queue()
+        _advance_test_queue()
 
 def _build_queued_request(
     folder_path,
@@ -1391,6 +1485,11 @@ def start_queued(folder_path, request):
             "failures": [],
             "current": "",
             "error": "",
+            "startedAt": int(time.time() * 1000),
+            "candidateStartedAt": None,
+            "comfyJobId": "",
+            "comfyStatus": "",
+            "comfyLastContactAt": None,
             "seed": request.get("seed"),
             "aspectRatio": request.get("aspectRatio"),
             "megapixels": request.get("megapixels"),
@@ -1483,10 +1582,13 @@ def stop(folder_path):
         if not thread or not thread.is_alive() or not session_directory:
             raise RuntimeError("No active Test Generations batch to stop.")
         _stop_requests.add(folder_key)
-    status = _read_status(session_directory) or {}
-    status["status"] = "stopping"
-    _atomic_write_json(_status_path(session_directory), status)
-    _interrupt_comfy()
+    with _status_lock:
+        status = _read_status(session_directory) or {}
+        status["status"] = "stopping"
+        _atomic_write_json(_status_path(session_directory), status)
+    prompt_id = str(status.get("comfyJobId") or "").strip()
+    if prompt_id:
+        _cancel_comfy_job(prompt_id)
     return status
 
 

@@ -87,7 +87,7 @@ def _resolve_executable():
     if not discovered:
         raise FileNotFoundError(
             "llama-server was not found. Install a recent CUDA-enabled llama.cpp build "
-            "or set storyboard.director.llama_server in tool/config.json."
+            "or configure App Settings > Storyboard > llama-server executable."
         )
     return discovered
 

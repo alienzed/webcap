@@ -75,20 +75,62 @@ When a LoRA or reference image **does** strongly establish an element, avoid unn
 
 The goal is not maximal verbosity. The goal is to make each Scene independently generatable while preserving the visual constants that matter.
 
-## Scene scope and duration discipline
+## Scene state, handoff, and duration discipline
 
 A Storyboard Scene is one generation unit.
+
+Reason about each Scene as:
+
+```text
+entry state -> action / progression -> exit state
+```
+
+The entry state describes what must already be true when the Scene begins. The exit state describes what should be true when the Scene ends. This makes scene-to-scene continuity explicit without requiring a conversational LLM session.
+
+When a Scene continues directly from the previous Scene, WebCap should normally provide the previous Scene's relevant exit state as context. When useful, it may also provide the previous selected Take or a frame/reference derived from it. Do not require the full previous prompt or full Story history when a compact exit-state handoff is enough.
+
+When a Scene is intentionally independent, relocated, time-skipped, or otherwise a continuity reset, do not carry previous-Scene details forward merely because they exist.
 
 Treat the requested duration as a hard creative budget. A Scene should contain a plausible amount of visible action, camera motion, dialogue, and state change for that duration.
 
 Do not compress a long chain of narrative events into one clip simply because they were mentioned in the Story overview.
 
-If an intent clearly needs more than one generation:
+Scene-fit assessment is a first-class authoring result. A planning/revision call may return:
 
-- preserve the requested intent;
-- recommend a split into two or more Scenes;
-- identify a natural handoff point;
-- do not invent extra plot events just to fill time.
+```json
+{
+  "fit": "fits",
+  "reason": "",
+  "suggestedScenes": []
+}
+```
+
+or, when the intent is overloaded:
+
+```json
+{
+  "fit": "split",
+  "reason": "The requested state changes are unlikely to read clearly in one 8-second generation.",
+  "suggestedScenes": [
+    {
+      "title": "Door closes",
+      "summary": "She enters, closes the door, and pauses with her hand on the handle.",
+      "entryState": "...",
+      "exitState": "The door is closed; she has not yet noticed the footprints.",
+      "suggestedDurationSeconds": 6
+    },
+    {
+      "title": "Footprints",
+      "summary": "She turns from the door and notices the wet footprints.",
+      "entryState": "The door is closed; she is still beside it.",
+      "exitState": "She is focused on the footprints.",
+      "suggestedDurationSeconds": 6
+    }
+  ]
+}
+```
+
+The caller decides whether it wants a fit assessment, a final H3 prompt, or both. Do not mix a mandatory prompt-only output contract with a mandatory split explanation in the same call.
 
 For MiniMax H3, the current official model specification supports 4-15 second output; the actual WebCap workflow configuration remains authoritative for what can be generated locally.
 
@@ -127,10 +169,13 @@ For example, the MiniMax H3 prompt-writing rules when producing an H3 prompt.
 Title, concept, persistent style, and only the continuity facts relevant to this request.
 
 [SCENE CONTEXT]
-Current Scene title, summary, prompt, duration, references, and nearby Scene information where useful.
+Current Scene title, summary, entry state, intended action/progression, exit state, prompt, duration, conditioning/reference coverage, and nearby Scene information where useful.
+
+[PREVIOUS-SCENE HANDOFF]
+Include the previous Scene's relevant exit state when the current Scene continues from it. Include a selected Take/frame reference only when it materially helps continuity. Omit this block for deliberate continuity resets.
 
 [CURRENT TASK]
-Exactly one operation: plan, write, revise, or review.
+Exactly one operation: plan, assess fit/splitting, write, revise, enrich, or review.
 
 [OUTPUT CONTRACT]
 What shape to return and whether explanatory prose is allowed.
@@ -169,11 +214,15 @@ Preferred structured result:
     {
       "title": "Short identifying title",
       "summary": "What visibly happens in this generation unit.",
+      "entryState": "What must already be true at the beginning.",
+      "exitState": "What should be true at the end.",
       "suggestedDurationSeconds": 8
     }
   ]
 }
 ```
+
+When continuing an existing Story, use the previous Scene's exit state to establish the next Scene's entry state where continuity actually carries across. Do not force a handoff across an intentional reset, relocation, or time jump.
 
 ### 2. H3 Prompt Writer
 
@@ -193,7 +242,10 @@ Rules:
 - preserve the Scene's narrative intent;
 - use observable audiovisual description rather than abstract plot summary;
 - fit action and camera changes into the duration;
-- do not add dialogue, text, props, characters, cuts, or music unless supported by the intent/context or explicitly allowed;
+- do not add dialogue, text, props, characters, cuts, music, or decorative filmmaking choices unless supported by the intent/context or explicitly allowed;
+- prefer positive concrete visual specification over long negative-constraint lists;
+- when the task explicitly asks to develop, enrich, or make the Scene more cinematic, add useful visual, performance, camera, sound, and environmental detail while preserving Story facts and the Scene's narrative function;
+- do not emit wildcard syntax or invent LoRA trigger tokens as part of ordinary creative expansion; those are later workflow concerns unless explicitly supplied by WebCap;
 - output the model-facing prompt only unless the caller requests structured metadata.
 
 ### 3. Scene Reviser
@@ -230,6 +282,54 @@ Look for:
 - duration/action overload.
 
 Do not rewrite Scenes automatically unless asked. Report specific conflicts and the Scenes involved.
+
+## Persistent facts, Scene-local facts, and conditioning coverage
+
+Do not promote a temporary Scene detail into permanent Story continuity unless WebCap explicitly marks it persistent.
+
+Examples:
+
+- a character's core appearance may be persistent;
+- a coat worn only in one sequence may be Scene-local or sequence-local;
+- a prop picked up in one Scene becomes persistent only while the Story state says it remains carried;
+- lighting caused by a temporary event should not silently become the Story's global lighting style.
+
+Conditioning is dimensional rather than all-or-nothing.
+
+A character LoRA may strongly anchor identity while leaving wardrobe, accessories, pose, age presentation, or environment unspecified. A first-frame image may anchor everything visible at the opening instant but not details outside the frame or later state changes. A location reference may anchor furnishings while saying nothing about character identity.
+
+For each important continuity dimension, ask whether it is already covered by:
+
+- an active LoRA;
+- an exact first/last/guide frame;
+- a character/location/style reference;
+- explicit Story/Scene text.
+
+Repeat concrete description for the dimensions that remain uncovered. Do not remove useful wardrobe/location/furnishing detail merely because some other aspect of the Scene is conditioned.
+
+## Hard anchors and incompatible requests
+
+Exact keyframes and other hard references are physical constraints, not suggestions.
+
+If a user request conflicts with an exact anchor, do not pretend both can be true. Identify the incompatibility or place the requested change after/before the anchored state when that is physically plausible.
+
+Example: if the exact first frame shows a red coat, a request that the Scene *starts* with a blue coat requires changing the first-frame reference. A request that the coat changes later in the Scene may be compatible.
+
+## Positive specification
+
+Prefer describing the desired visible state directly:
+
+```text
+a dark green tufted sofa against the left wall beneath two brass sconces
+```
+
+rather than accumulating negative constraints such as:
+
+```text
+do not change the sofa, do not move the sconces, do not alter the wall
+```
+
+Negative instructions may be useful in the authoring/reasoning layer when identifying forbidden drift, but the final generation prompt should favor concrete positive audiovisual description unless a model-specific requirement says otherwise.
 
 ## Reference media
 

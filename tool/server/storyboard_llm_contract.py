@@ -3,7 +3,7 @@ from pathlib import Path
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
 DIRECTOR_CONTEXT_PATH = DOCS_ROOT / "storyboard-director-context.txt"
-H3_TEMPLATE_PATH = DOCS_ROOT / "mmh3-prompt-template.txt"
+H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 VALID_OPERATIONS = {"write_prompt", "refine_prompt"}
 
 
@@ -18,7 +18,7 @@ def _clean(value):
     return str(value or "").strip()
 
 
-def _reference_summary(scene):
+def _reference_roles(scene):
     roles = []
     for reference in scene.get("references") or []:
         if not isinstance(reference, dict):
@@ -28,9 +28,53 @@ def _reference_summary(scene):
             continue
         if role not in roles:
             roles.append(role)
+    return roles
+
+
+def _reference_summary(scene):
+    roles = _reference_roles(scene)
     if not roles:
         return ""
     return ", ".join(role + " exact visual anchor supplied" for role in roles)
+
+
+def _h3_mode(scene):
+    roles = set(_reference_roles(scene))
+    if roles == {"first_frame", "last_frame"}:
+        return "FL2VA"
+    if roles == {"first_frame"}:
+        return "I2VA"
+    if roles == {"last_frame"}:
+        return "L2VA"
+    return "T2VA"
+
+
+def _h3_output_contract(scene):
+    mode = _h3_mode(scene)
+    duration = float(scene.get("durationSeconds") or 0)
+    if mode == "I2VA":
+        preamble = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."
+    elif mode == "L2VA":
+        preamble = (
+            "How the reference pictures align with the target video — <Picture 1> (from [Shot N]) "
+            "aligns with the " + format(duration, ".2f") + "-second mark of the target video."
+        )
+    elif mode == "FL2VA":
+        preamble = (
+            "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns "
+            "with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the "
+            + format(duration, ".2f") + "-second mark of the target video."
+        )
+    else:
+        preamble = ""
+
+    core = (
+        "integrated_multimodal_description: [Shot 1] ...\n\n"
+        "overall_soundscape: ...\n\n"
+        "non_diegetic_music: ..."
+    )
+    body = core if not preamble else preamble + "\n\n" + core
+    return mode, body
 
 
 def _scene_context(scene):
@@ -85,7 +129,8 @@ def build_request(story, scene_id, operation, instruction=""):
     scene_context = _scene_context(scene)
     previous_handoff = _previous_handoff(story, scene_id)
     director_context = _read_text(DIRECTOR_CONTEXT_PATH, "Storyboard director context")
-    h3_template = _read_text(H3_TEMPLATE_PATH, "MiniMax H3 prompt template")
+    h3_runtime_context = _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context")
+    h3_mode, h3_output = _h3_output_contract(scene)
 
     blocks = [
         "[DIRECTOR CONTEXT]\n" + director_context,
@@ -101,9 +146,15 @@ def build_request(story, scene_id, operation, instruction=""):
         if not _clean(scene.get("summary")):
             raise ValueError("Scene summary / intent is required to write a prompt.")
         blocks.append(
+            "[H3 WRITING RULES]\n" + h3_runtime_context
+        )
+        blocks.append(
+            "[H3 MODE]\n" + h3_mode
+        )
+        blocks.append(
             "[H3 OUTPUT CONTRACT]\n"
-            + h3_template
-            + "\n\nUse the supplied Scene facts and references. Return only the final model-facing prompt."
+            + h3_output
+            + "\n\nUse the supplied Scene facts and exact frame anchors. Return only the final model-facing prompt."
         )
         blocks.append(
             "[CURRENT TASK]\nWrite the MiniMax H3 prompt for this Scene. "
@@ -118,8 +169,14 @@ def build_request(story, scene_id, operation, instruction=""):
             raise ValueError("A refinement instruction is required.")
         blocks.append("[EXISTING PROMPT]\n" + existing_prompt)
         blocks.append(
+            "[H3 WRITING RULES]\n" + h3_runtime_context
+        )
+        blocks.append(
+            "[H3 MODE]\n" + h3_mode
+        )
+        blocks.append(
             "[H3 OUTPUT CONTRACT]\n"
-            + h3_template
+            + h3_output
             + "\n\nPreserve all prompt details unrelated to the requested correction. Return only the revised model-facing prompt."
         )
         blocks.append("[CURRENT TASK]\nApply this correction with the smallest coherent change:\n" + correction)

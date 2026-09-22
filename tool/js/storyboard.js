@@ -53,6 +53,52 @@
     return Array.isArray(story && story.tags) ? story.tags.join(', ') : '';
   }
 
+  function takeMediaUrl(storyId, sceneId, take) {
+    var mediaPath = String(take && take.mediaPath ? take.mediaPath : '');
+    var filename = mediaPath.split('/').pop();
+    var folder = 'output/storyboards/' + storyId + '/takes/' + sceneId;
+    return '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(filename);
+  }
+
+  function takePreviewHtml(storyId, sceneId, take) {
+    var url = takeMediaUrl(storyId, sceneId, take);
+    var path = String(take && take.mediaPath ? take.mediaPath : '').toLowerCase();
+    if (/\.(png|jpe?g|webp|gif|bmp)$/.test(path)) {
+      return '<img src="' + escapeHtml(url) + '" alt="">';
+    }
+    return '<video src="' + escapeHtml(url) + '" controls muted preload="metadata"></video>';
+  }
+
+  function renderSequencePreview() {
+    var host = el('storyboard-sequence-preview');
+    if (!host || !storyState.story) return;
+    var story = storyState.story;
+    var selected = [];
+    (story.sceneOrder || []).forEach(function (sceneId, index) {
+      var scene = (story.scenes || {})[sceneId] || {};
+      var takeId = scene.selectedTakeId;
+      var take = takeId && scene.takes ? scene.takes[takeId] : null;
+      if (!take) return;
+      selected.push({ sceneId: sceneId, scene: scene, take: take, number: index + 1 });
+    });
+    if (!selected.length) {
+      host.innerHTML = '';
+      host.classList.add('hidden');
+      return;
+    }
+    host.classList.remove('hidden');
+    host.innerHTML = '<header class="storyboard-sequence-header"><div><strong>Selected sequence</strong><span>' +
+      selected.length + ' selected Take' + (selected.length === 1 ? '' : 's') +
+      '</span></div></header><div class="storyboard-sequence-list">' +
+      selected.map(function (item) {
+        return '<article class="storyboard-sequence-card">' +
+          '<div class="storyboard-sequence-label">Scene ' + String(item.number).padStart(2, '0') + ' · ' +
+            escapeHtml(item.scene.title || 'Untitled Scene') + '</div>' +
+          '<div class="storyboard-sequence-media">' + takePreviewHtml(story.id, item.sceneId, item.take) + '</div>' +
+        '</article>';
+      }).join('') + '</div>';
+  }
+
   function renderLibrary() {
     var host = el('storyboard-library-list');
     if (!host) return;
@@ -103,6 +149,26 @@
       var scene = scenes[sceneId] || {};
       var seedMode = sceneValue(scene, 'seedMode', 'random');
       var seed = sceneValue(scene, 'seed', '');
+      var takes = scene.takes && typeof scene.takes === 'object' ? scene.takes : {};
+      var takeOrder = Array.isArray(scene.takeOrder) ? scene.takeOrder : [];
+      var takesHtml = takeOrder.map(function (takeId, takeIndex) {
+        var take = takes[takeId];
+        if (!take) return '';
+        var rating = take.rating == null ? '' : String(take.rating);
+        var selected = scene.selectedTakeId === takeId;
+        var ratingOptions = '<option value="">Unrated</option>';
+        [1, 2, 3, 4, 5].forEach(function (value) {
+          ratingOptions += '<option value="' + value + '"' + (rating === String(value) ? ' selected' : '') + '>' + value + ' star' + (value === 1 ? '' : 's') + '</option>';
+        });
+        return '<article class="storyboard-take' + (selected ? ' selected' : '') + '" data-take-id="' + escapeHtml(takeId) + '">' +
+          '<div class="storyboard-take-media">' + takePreviewHtml(story.id, sceneId, take) + '</div>' +
+          '<div class="storyboard-take-footer">' +
+            '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
+            '<select data-take-rating="' + escapeHtml(takeId) + '" aria-label="Take rating">' + ratingOptions + '</select>' +
+            '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
+          '</div>' +
+        '</article>';
+      }).join('');
       return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<header class="storyboard-scene-header">' +
           '<span class="storyboard-scene-number">Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
@@ -127,8 +193,14 @@
             '</div>' +
             '<label class="storyboard-field"><span>Seed</span><input type="number" min="0" step="1" data-scene-field="seed" value="' + escapeHtml(seed) + '" placeholder="Set when fixed"></label>' +
             '<label class="storyboard-inline-check"><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
-            '<div class="storyboard-planned"><strong>Planned integrations</strong><br>LoRA chain · image/reference inputs · generated Takes. Phase 1 keeps these provider-independent and manual.</div>' +
+            '<div class="storyboard-planned"><strong>Next integrations</strong><br>LoRA chain · image/reference inputs · direct ComfyUI generation.</div>' +
           '</div>' +
+        '</div>' +
+        '<div class="storyboard-takes">' +
+          '<div class="storyboard-takes-header"><div><strong>Takes</strong><span>Imported media is copied into this Story and keeps a frozen Scene snapshot.</span></div>' +
+            '<label class="review-captions-btn storyboard-take-upload-btn">Add Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
+          '</div>' +
+          '<div class="storyboard-takes-grid">' + (takesHtml || '<div class="storyboard-takes-empty">No Takes yet.</div>') + '</div>' +
         '</div>' +
       '</section>';
     }).join('');
@@ -165,10 +237,12 @@
 
     el('storyboard-story-title').value = storyState.story.title || '';
     el('storyboard-story-concept').value = storyState.story.concept || '';
+    el('storyboard-story-style').value = storyState.story.style || '';
     el('storyboard-story-tags').value = storyTagsText(storyState.story);
     el('storyboard-story-status').value = storyState.story.status || 'active';
     el('storyboard-story-pinned').checked = !!storyState.story.pinned;
     renderScenes();
+    renderSequencePreview();
     renderLibrary();
   }
 
@@ -195,7 +269,7 @@
     return flushPendingSaves().then(function () {
       return request({
         operation: 'create_story',
-        story: { title: 'Untitled Story', concept: '', tags: [], status: 'active', pinned: false }
+        story: { title: 'Untitled Story', concept: '', style: '', tags: [], status: 'active', pinned: false }
       });
     }).then(function (payload) {
       storyState.story = payload.story;
@@ -210,6 +284,7 @@
     return {
       title: el('storyboard-story-title').value,
       concept: el('storyboard-story-concept').value,
+      style: el('storyboard-story-style').value,
       tags: el('storyboard-story-tags').value.split(',').map(function (value) { return value.trim(); }).filter(Boolean),
       status: el('storyboard-story-status').value,
       pinned: el('storyboard-story-pinned').checked
@@ -383,6 +458,57 @@
     }).catch(reportError);
   }
 
+  function uploadTake(sceneId, file) {
+    if (!storyState.story || !file) return;
+    setSaveState('Adding Take...');
+    flushPendingSaves().then(function () {
+      var form = new FormData();
+      form.append('storyId', storyState.story.id);
+      form.append('sceneId', sceneId);
+      form.append('file', file, file.name);
+      return fetch('/fs/storyboard/take_upload', { method: 'POST', body: form }).then(function (response) {
+        return response.json().then(function (body) {
+          if (!response.ok || !body || !body.ok) throw new Error((body && body.error) || 'Take upload failed.');
+          return body;
+        });
+      });
+    }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+      refreshLibrary();
+    }).catch(reportError);
+  }
+
+  function rateTake(sceneId, takeId, rating) {
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () { return request({
+      operation: 'rate_take',
+      storyId: storyState.story.id,
+      sceneId: sceneId,
+      takeId: takeId,
+      rating: rating === '' ? null : Number(rating)
+    }); }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
+  function selectTake(sceneId, takeId) {
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () { return request({
+      operation: 'select_take',
+      storyId: storyState.story.id,
+      sceneId: sceneId,
+      takeId: takeId
+    }); }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
   function handleSceneInput(event) {
     var field = event.target.closest('[data-scene-field]');
     if (!field) return;
@@ -445,7 +571,7 @@
       if (row) openStory(row.dataset.storyId);
     };
 
-    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-tags'].forEach(function (id) {
+    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style', 'storyboard-story-tags'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);
     });
     ['storyboard-story-status', 'storyboard-story-pinned'].forEach(function (id) {
@@ -453,8 +579,31 @@
     });
 
     el('storyboard-scenes-list').addEventListener('input', handleSceneInput);
-    el('storyboard-scenes-list').addEventListener('change', handleSceneInput);
+    el('storyboard-scenes-list').addEventListener('change', function (event) {
+      var upload = event.target.closest('[data-take-upload]');
+      if (upload) {
+        var uploadScene = upload.closest('.storyboard-scene[data-scene-id]');
+        if (!uploadScene) throw new Error('Take upload Scene is missing.');
+        uploadTake(uploadScene.dataset.sceneId, upload.files && upload.files[0]);
+        return;
+      }
+      var rating = event.target.closest('[data-take-rating]');
+      if (rating) {
+        var ratingScene = rating.closest('.storyboard-scene[data-scene-id]');
+        if (!ratingScene) throw new Error('Take rating Scene is missing.');
+        rateTake(ratingScene.dataset.sceneId, rating.dataset.takeRating, rating.value);
+        return;
+      }
+      handleSceneInput(event);
+    });
     el('storyboard-scenes-list').addEventListener('click', function (event) {
+      var takeAction = event.target.closest('[data-take-action="select"]');
+      if (takeAction) {
+        var takeScene = takeAction.closest('.storyboard-scene[data-scene-id]');
+        if (!takeScene) throw new Error('Take selection Scene is missing.');
+        selectTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
+        return;
+      }
       var restore = event.target.closest('[data-restore-scene]');
       if (restore) {
         restoreScene(restore.dataset.restoreScene);

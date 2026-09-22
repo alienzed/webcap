@@ -54,6 +54,15 @@ _PROFILES = {
         "runs": (
             {"id": "train", "label": "Train", "stages": ("krea2",)},
         ),
+        "test": {
+            "enabled": True,
+            "adapter": "krea2",
+            "stagingKey": "krea2",
+            "sessionSlug": "krea2",
+            "mediaKind": "image",
+            "workflowFile": "krea2_test_api.json",
+            "settings": ("dimensions", "seed"),
+        },
     },
     WAN21_PROFILE_ID: {
         "id": WAN21_PROFILE_ID,
@@ -82,6 +91,16 @@ _PROFILES = {
         "runs": (
             {"id": "train", "label": "Train", "stages": ("h3",)},
         ),
+        "test": {
+            "enabled": True,
+            "default": True,
+            "adapter": "h3",
+            "stagingKey": "h3",
+            "sessionSlug": "h3",
+            "mediaKind": "video",
+            "workflowFile": "minimax_h3_test_api.json",
+            "settings": ("aspectRatio", "megapixels", "duration", "seed"),
+        },
     },
 }
 

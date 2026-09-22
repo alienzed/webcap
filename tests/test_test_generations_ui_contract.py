@@ -182,13 +182,13 @@ def test_test_generation_sessions_and_candidate_removal_contract():
 
 
 
-def test_session_list_groups_running_queue_then_completed():
+def test_session_list_groups_running_queue_then_finished():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     block = script.split("function renderSessions(sessions, queuedJobs)", 1)[1].split("function refreshSessions()", 1)[0]
 
     assert "appendGroup('Running', activeItems.length, 'is-running')" in block
     assert "appendGroup('Queued', queued.length, 'is-queued')" in block
-    assert "appendGroup('Completed', historyItems.length, 'is-history')" in block
+    assert "appendGroup('Finished', historyItems.length, 'is-history')" in block
     assert block.index("appendGroup('Running'") < block.index("appendGroup('Queued'")
     assert block.index("appendGroup('Queued'") < block.index("appendGroup('Completed'")
 

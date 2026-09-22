@@ -241,6 +241,10 @@
         '<div class="storyboard-scene-body">' +
           '<div class="storyboard-scene-main">' +
             '<label class="storyboard-field"><span>Summary / intent</span><textarea data-scene-field="summary" rows="2" placeholder="What happens in this scene?">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>' +
+            '<div class="storyboard-scene-handoff-row">' +
+              '<label class="storyboard-field"><span>Entry state</span><textarea data-scene-field="entryState" rows="2" placeholder="What must already be true when this Scene begins?">' + escapeHtml(sceneValue(scene, 'entryState', '')) + '</textarea></label>' +
+              '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="2" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
+            '</div>' +
             '<label class="storyboard-field"><span>Generation prompt</span><textarea data-scene-field="prompt" rows="7" placeholder="Paste or write the full model-facing prompt here.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea></label>' +
             '<label class="storyboard-field"><span>Notes</span><textarea data-scene-field="notes" rows="2" placeholder="Continuity reminders, corrections, ideas...">' + escapeHtml(sceneValue(scene, 'notes', '')) + '</textarea></label>' +
           '</div>' +
@@ -413,6 +417,8 @@
     return {
       title: field('title').value,
       summary: field('summary').value,
+      entryState: field('entryState').value,
+      exitState: field('exitState').value,
       prompt: field('prompt').value,
       notes: field('notes').value,
       durationSeconds: field('durationSeconds').value,

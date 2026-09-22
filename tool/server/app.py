@@ -33,6 +33,8 @@ from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_generation import generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
+from .storyboard_llm_contract import build_request as storyboard_build_llm_request
+from .storyboard_llm_runtime import run_contract as storyboard_run_llm_contract, status as storyboard_director_status
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -494,6 +496,41 @@ def storyboard_generation_route():
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         app.logger.exception("STORYBOARD GENERATION FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/director", methods=["GET", "POST"])
+def storyboard_director_route():
+    try:
+        if request.method == "GET":
+            return jsonify({"ok": True, **storyboard_director_status()})
+
+        data = request.get_json(silent=True) or {}
+        story_id = str(data.get("storyId") or "").strip()
+        scene_id = str(data.get("sceneId") or "").strip()
+        operation = str(data.get("operation") or "").strip()
+        model_id = str(data.get("model") or "").strip()
+        instruction = str(data.get("instruction") or "").strip()
+
+        story = storyboard_load_story(story_id)
+        contract = storyboard_build_llm_request(
+            story,
+            scene_id,
+            operation,
+            instruction=instruction,
+        )
+        result = storyboard_run_llm_contract(model_id, contract)
+        return jsonify({
+            "ok": True,
+            "result": result["text"],
+            "model": result["model"],
+            "usage": result.get("usage"),
+            "timings": result.get("timings"),
+        })
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STORYBOARD DIRECTOR FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

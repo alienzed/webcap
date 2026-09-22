@@ -2,6 +2,7 @@ import json
 import os
 import stat
 import tempfile
+import threading
 from pathlib import Path
 
 from .permissions import normalize_path_permissions
@@ -13,6 +14,34 @@ class FolderStateReadError(RuntimeError):
 
 class FolderStateUnsafeWriteError(RuntimeError):
     pass
+
+
+_media_rating_lock = threading.Lock()
+
+
+def set_media_rating(state_path, media_key, rating):
+    key = str(media_key or "").strip()
+    if not key:
+        raise ValueError("Media rating requires a media key.")
+    try:
+        normalized = int(round(float(rating)))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Media rating must be between 0 and 5.") from exc
+    if normalized < 0 or normalized > 5:
+        raise ValueError("Media rating must be between 0 and 5.")
+
+    path = Path(state_path)
+    with _media_rating_lock:
+        state = read_folder_state(path)
+        ratings = state.get("ratings_by_media")
+        ratings = dict(ratings) if isinstance(ratings, dict) else {}
+        if normalized == 0:
+            ratings.pop(key, None)
+        else:
+            ratings[key] = normalized
+        state["ratings_by_media"] = ratings
+        write_folder_state_atomic(path, state)
+    return normalized
 
 
 def reject_wholesale_state_map_clear(previous_state, next_state):

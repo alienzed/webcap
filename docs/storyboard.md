@@ -325,6 +325,7 @@ The first usable slice is now implemented with a Storyboard-owned MiniMax H3 pat
 
 - a dedicated Storyboard API-format H3 workflow template, separate from Test Generations
 - a dedicated Storyboard ComfyUI transport/worker with no Test Generations state or queue dependency
+- the existing low-level GPU reservation gate is shared so Storyboard cannot collide with active Training or Test generation work; Storyboard still does not consume or mutate those workflows' state
 - manual Scene prompt, duration, aspect ratio, megapixels, wildcard intent, and seed behavior feed the workflow directly
 - ComfyUI model/VAE/turbo-LoRA names are resolved against what the running ComfyUI instance actually exposes
 - generation runs asynchronously and reports visible running/completed/failed state in the Scene

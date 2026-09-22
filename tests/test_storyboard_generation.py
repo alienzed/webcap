@@ -160,3 +160,22 @@ def test_guide_frame_reference_fails_visibly_before_generation(tmp_path):
             "job-1",
             [{"role": "guide_frame", "mediaPath": "references/guide.png"}],
         )
+
+
+def test_scene_settings_reject_h3_duration_outside_supported_range(storyboard_fs):
+    with pytest.raises(ValueError, match="between 4 and 15"):
+        storyboard_generation._scene_settings({
+            "prompt": "Prompt",
+            "durationSeconds": 3,
+            "aspectRatio": "4:3 (Standard)",
+            "megapixels": 0.2,
+            "seedMode": "random",
+        })
+    with pytest.raises(ValueError, match="between 4 and 15"):
+        storyboard_generation._scene_settings({
+            "prompt": "Prompt",
+            "durationSeconds": 16,
+            "aspectRatio": "4:3 (Standard)",
+            "megapixels": 0.2,
+            "seedMode": "random",
+        })

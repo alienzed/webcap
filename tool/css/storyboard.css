@@ -198,6 +198,13 @@
   min-width: 0;
 }
 
+.storyboard-develop-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+
 
 .storyboard-sequence-preview {
   margin-bottom: 18px;

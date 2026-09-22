@@ -850,6 +850,26 @@ def _session_rating_map(session_directory):
     return ratings
 
 
+def _result_media_file(result):
+    if not isinstance(result, dict):
+        return ""
+    return str(result.get("mediaFile") or result.get("outputVideo") or "").strip()
+
+
+def _result_media_kind(result):
+    if not isinstance(result, dict):
+        return ""
+    kind = str(result.get("mediaKind") or "").strip().lower()
+    if kind:
+        return kind
+    name = _result_media_file(result).lower()
+    if name.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".avif")):
+        return "image"
+    if name:
+        return "video"
+    return ""
+
+
 def _with_session_ratings(session_directory, payload):
     if not payload:
         return payload
@@ -862,7 +882,7 @@ def _with_session_ratings(session_directory, payload):
             enriched.append(result)
             continue
         item = dict(result)
-        output_name = str(item.get("outputVideo") or "")
+        output_name = _result_media_file(item)
         if output_name in ratings:
             item["rating"] = ratings[output_name]
         enriched.append(item)
@@ -885,7 +905,7 @@ def _candidate_rating_scores(folder_path):
             if not isinstance(result, dict) or str(result.get("kind") or "") == "base":
                 continue
             candidate_name = str(result.get("candidateFile") or result.get("sourceLoRA") or "").strip()
-            output_name = str(result.get("outputVideo") or "").strip()
+            output_name = _result_media_file(result)
             rating = ratings.get(output_name)
             if not candidate_name or rating is None:
                 continue
@@ -960,8 +980,8 @@ def list_sessions(folder_path):
             1
             for result in results
             if isinstance(result, dict)
-            and str(result.get("outputVideo") or "").strip()
-            and str(result.get("outputVideo") or "").strip() not in ratings
+            and _result_media_file(result)
+            and _result_media_file(result) not in ratings
         )
         sessions.append({
             "session": session.name,
@@ -998,9 +1018,9 @@ def delete_session(folder_path, session_name):
     }
 
 
-def rate_result(folder_path, session_name, output_video, rating):
+def rate_result(folder_path, session_name, media_file, rating):
     session = _session_directory(folder_path, session_name)
-    output_name = str(output_video or "").strip()
+    output_name = str(media_file or "").strip()
     if not output_name:
         raise ValueError("Test result filename is required.")
 
@@ -1008,7 +1028,7 @@ def rate_result(folder_path, session_name, output_video, rating):
     results = payload.get("results") if isinstance(payload.get("results"), list) else []
     if not any(
         isinstance(result, dict)
-        and str(result.get("outputVideo") or "").strip() == output_name
+        and _result_media_file(result) == output_name
         for result in results
     ):
         raise ValueError("Test result does not exist in this session: " + output_name)
@@ -1038,7 +1058,7 @@ def rate_result(folder_path, session_name, output_video, rating):
 
     return {
         "operation": "test_rate_result",
-        "outputVideo": output_name,
+        "mediaFile": output_name,
         "rating": normalized_rating,
         "sessionStatus": _with_session_ratings(session, _visible_session_status(folder_path, session)),
         "candidateScores": _candidate_rating_scores(folder_path),
@@ -1081,7 +1101,7 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
 
     paths = []
     for result in removed_results:
-        output_name = str(result.get("outputVideo") or "").strip()
+        output_name = _result_media_file(result)
         if output_name:
             video_path = _session_result_path(session, output_name)
             caption_path = _session_result_path(session, Path(output_name).with_suffix(".txt").name)
@@ -1271,7 +1291,8 @@ def _run_batch(folder_key, session_directory, loras, prompt, settings=None, temp
                     result = {
                         "kind": candidate["kind"],
                         "sourceLoRA": candidate["label"],
-                        "outputVideo": video_path.name,
+                        "mediaFile": video_path.name,
+                        "mediaKind": "video",
                         "prompt": prompt,
                         "seed": _workflow_seed(workflow),
                         "elapsedMs": _candidate_elapsed_ms(candidate_started_at),
@@ -1685,7 +1706,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return rate_result(
             folder_path,
             criteria.get("session"),
-            criteria.get("outputVideo"),
+            criteria.get("mediaFile") or criteria.get("outputVideo"),
             criteria.get("rating"),
         )
     if operation == "test_stop":

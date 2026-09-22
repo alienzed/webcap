@@ -173,8 +173,20 @@ def test_run_contract_requires_prompt(monkeypatch):
         storyboard_llm_runtime.run_contract("model", {"prompt": ""})
 
 
-def test_ensure_server_accepts_compatible_existing_router(monkeypatch):
+def test_ensure_server_accepts_compatible_existing_router(tmp_path, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "_process", None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_server_settings_signature", None)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "llama_server": "",
+            "models_dir": tmp_path / "text_encoders",
+            "port": 8189,
+            "context_size": 8192,
+            "max_tokens": 4096,
+        },
+    )
     monkeypatch.setattr(storyboard_llm_runtime, "_health_ok", lambda: True)
     monkeypatch.setattr(
         storyboard_llm_runtime,

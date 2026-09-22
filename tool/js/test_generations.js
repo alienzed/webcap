@@ -624,7 +624,7 @@
     var match = sourceFile.match(/^(.*)__epoch(\d+)\.safetensors$/i);
 
     if (!runSequence && match) {
-      var runMatch = String(match[1] || '').match(/(?:^|[-_])run[-_]?(\d+)$/i);
+      var runMatch = String(match[1] || '').match(/(?:^|[-_])(?:run[-_]?)?(\d+)$/i);
       if (runMatch) runSequence = runMatch[1];
     }
     if ((epoch === undefined || epoch === null || epoch === '') && match) epoch = match[2];

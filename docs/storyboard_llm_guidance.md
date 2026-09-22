@@ -221,23 +221,22 @@ Planner rules:
 - keep each Scene summary focused on what must happen, not prose decoration;
 - flag an intent that is too dense rather than hiding the problem.
 
-Preferred structured result:
+The canonical structured-output contract is `docs/storyboard-scene-plan.schema.json`.
 
-```json
-{
-  "scenes": [
-    {
-      "title": "Short identifying title",
-      "summary": "What visibly happens in this generation unit.",
-      "entryState": "What must already be true at the beginning.",
-      "exitState": "What should be true at the end.",
-      "suggestedDurationSeconds": 8
-    }
-  ]
-}
-```
+A planning call should return JSON only, matching that schema. WebCap assigns canonical Scene IDs after validation; the LLM should not invent IDs.
+
+The contract deliberately keeps planning separate from final H3 prompt writing. It captures:
+
+- a short Story summary;
+- ordered Scene title and visible intent;
+- entry and exit state;
+- suggested duration;
+- whether continuity directly carries from the previous Scene;
+- only the continuity notes that materially affect that Scene.
 
 When continuing an existing Story, use the previous Scene's exit state to establish the next Scene's entry state where continuity actually carries across. Do not force a handoff across an intentional reset, relocation, or time jump.
+
+WebCap should parse and validate the complete response before applying any proposed Scenes. Do not partially import a malformed result. If JSON is syntactically or structurally invalid, one explicit repair pass may be attempted using the same schema and the invalid response as input; if repair still fails, expose the failure and leave Story state unchanged.
 
 ### 2. H3 Prompt Writer
 

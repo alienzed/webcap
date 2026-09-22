@@ -213,6 +213,18 @@ Use `N/A` when no non-diegetic score is wanted.
 
 Music or radio audible inside the scene is diegetic and belongs in the chronological multimodal description instead.
 
+## Scene handoff and conditioning coverage
+
+When the current Scene continues directly from a previous Storyboard Scene, use the supplied previous exit state as context for the new opening state. If a selected Take/frame reference is supplied, treat its declared role according to the selected H3 mode.
+
+Do not carry previous-Scene context across an intentional continuity reset, location change, or time jump unless the Story explicitly preserves those facts.
+
+Conditioning is not all-or-nothing. An identity LoRA may anchor identity without anchoring wardrobe or environment; an exact first frame anchors what is visible at time zero but not unseen details. Repeat the concrete visual descriptors that remain unanchored.
+
+If a requested change conflicts with an exact first/last/keyframe anchor, do not describe an impossible contradiction. The anchor must change, or the requested change must occur at a compatible point in the Scene.
+
+Prefer positive visual specification over negative constraint lists in the final H3 prompt.
+
 ## Continuity anchoring without LoRAs or references
 
 H3 does not inherit the appearance of a previous independently generated Scene unless the workflow explicitly conditions it.

@@ -358,7 +358,7 @@ The first usable slice is now implemented with a Storyboard-owned MiniMax H3 pat
 - the existing low-level GPU reservation gate is shared so Storyboard cannot collide with active Training or Test generation work; Storyboard still does not consume or mutate those workflows' state
 - manual Scene prompt, duration, aspect ratio, megapixels, wildcard intent, and seed behavior feed the workflow directly
 - ComfyUI model/VAE/turbo-LoRA names are resolved against what the running ComfyUI instance actually exposes
-- generation runs asynchronously and reports visible running/completed/failed state in the Scene
+- generation runs asynchronously; one Storyboard Take runs at a time while other Scene generations may queue with their Scene settings frozen at enqueue time
 - completed MP4 output is copied into the Scene's Take folder
 - the generated Take freezes the actual prompt, source prompt, duration, aspect ratio, megapixels, seed, workflow profile, and provider job ID
 - manual Story/Scene text editing remains the canonical authoring path; an LLM is not required
@@ -375,7 +375,7 @@ Still to add after real usage validates this slice:
 
 - guide/reference-to-video roles beyond H3's first/last-frame image-to-video sockets
 - stop/cancel and restart recovery for Storyboard generation jobs
-- bounded batch generation if the one-Take workflow proves useful
+- bounded same-Scene batch generation if repeated manual Take clicks prove insufficient
 - cleanup of Storyboard-owned temporary ComfyUI output after the Take copy is confirmed
 
 Do not extract a shared ComfyUI service from Test Generations merely to reduce duplicated transport code. Revisit sharing only if both consumers have a stable identical lower-level need.

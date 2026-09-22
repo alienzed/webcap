@@ -1,6 +1,17 @@
 # Epoch Test Bench — Implementation Plan
 
-**Status:** Planned; not implemented. Phase 1 is manual post-training or paused-run testing. Automated interleaved evaluation is the north star, not the first implementation.
+**Status:** Historical plan. Test Generations is now implemented and supports model-policy-driven H3 and Krea2 workflows. The sections below remain useful design history but are not the current implementation contract.
+
+## Current architecture note — 2026-09-22
+
+- Test Generations model identity and capabilities come from the existing training profile registry; shared Test code does not branch on H3 or Krea model IDs.
+- Model adapters own only workflow mechanics such as bindings, asset resolution, Base bypass, and output extraction.
+- ComfyUI workflows are application-owned inference truth. WebCap mutates only approved bindings and does not reinterpret the workflow recipe.
+- Test jobs freeze model, prompt, settings, candidate selection, and a parsed workflow snapshot when queued. Durable session evidence records the workflow filename and canonical SHA-256 fingerprint.
+- Training and Test intentionally do **not** share one scheduler. Training has a durable recovery/checkpoint/pause/resume queue; Test uses a small in-memory FIFO whose durable evidence is the session folders.
+- The shared resource boundary is GPU ownership: Training exposes the external-work reservation primitive, and Test uses it to prevent concurrent managed GPU work.
+- Future user-supplied workflow support should build on workflow identity/bindings and adapter contracts before considering a generalized plugin or queue framework.
+
 
 ## Purpose and boundary
 

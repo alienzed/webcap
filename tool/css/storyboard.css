@@ -419,3 +419,42 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+
+.storyboard-primary-btn {
+  min-height: 30px;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.storyboard-primary-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.storyboard-primary-btn:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.storyboard-generate-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.storyboard-generate-btn {
+  flex: 0 0 auto;
+}
+
+.storyboard-generation-status {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}

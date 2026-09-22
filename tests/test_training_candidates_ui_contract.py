@@ -131,6 +131,9 @@ const context = {
   },
   state: {folder:'set'},
   trainingRunnerStatusLabel(s) { return s; }, setStatus() {},
+  getTrainingRunnerJobById(id) {
+    return context.trainingWorkspaceState.runnerJobs.find(job => job.id === id) || null;
+  },
   trainingRunnerRequest(url) { requests.push(url); return Promise.resolve({ok:true,analysis:data,run:{status:'done'}}); }
 };
 vm.createContext(context);

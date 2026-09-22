@@ -347,6 +347,26 @@ def _resolve_template_assets(template):
     return workflow
 
 
+def generation_capabilities():
+    template = _load_template()
+    available = _available_comfy_names("LoraLoader", "lora_name", "LoRA")
+    base_loras = []
+    power_inputs = ((template.get("138") or {}).get("inputs") or {})
+    for value in power_inputs.values():
+        if not isinstance(value, dict) or value.get("on") is not True:
+            continue
+        configured = str(value.get("lora") or "").strip()
+        if not configured:
+            continue
+        resolved = _resolve_comfy_name(configured, available, "LoRA")
+        if resolved not in base_loras:
+            base_loras.append(resolved)
+    base_keys = {_normalize_name(name) for name in base_loras}
+    selectable = [name for name in available if _normalize_name(name) not in base_keys]
+    selectable.sort(key=lambda value: value.casefold())
+    return {"loras": selectable, "baseLoras": base_loras}
+
+
 def _scene_settings(scene):
     prompt = str(scene.get("prompt") or "").strip()
     if not prompt:
@@ -421,6 +441,29 @@ def _build_workflow(template, settings, filename_prefix, uploaded_references=Non
     power_inputs["model"] = ["161", 0]
     power_inputs["clip"] = ["128", 0]
     workflow.pop("148", None)
+
+    selected_loras = settings.get("loras") or []
+    if selected_loras:
+        available_loras = _available_comfy_names("LoraLoader", "lora_name", "LoRA")
+        existing = {
+            _normalize_name(value.get("lora"))
+            for value in power_inputs.values()
+            if isinstance(value, dict) and value.get("on") is True and value.get("lora")
+        }
+        next_index = 2
+        for item in selected_loras:
+            resolved = _resolve_comfy_name(item.get("name"), available_loras, "LoRA")
+            if _normalize_name(resolved) in existing:
+                raise RuntimeError("Selected LoRA is already part of the base H3 workflow: " + resolved)
+            while "lora_" + str(next_index) in power_inputs:
+                next_index += 1
+            power_inputs["lora_" + str(next_index)] = {
+                "on": True,
+                "lora": resolved,
+                "strength": float(item.get("strength", 1.0)),
+            }
+            existing.add(_normalize_name(resolved))
+            next_index += 1
 
     reference_nodes = {"first_frame": "190", "last_frame": "191"}
     for role, node_id in reference_nodes.items():

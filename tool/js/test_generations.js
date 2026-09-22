@@ -486,6 +486,14 @@
     if (startedAt && session && (session.status === 'running' || session.status === 'stopping')) {
       text += ' · ' + formatElapsedMs(Date.now() - startedAt);
     }
+    if (
+      session &&
+      currentStatus &&
+      String(currentStatus.session || '') === String(session.session || '') &&
+      (session.status === 'running' || session.status === 'stopping')
+    ) {
+      text += liveStatusDetails(currentStatus);
+    }
     return text;
   }
 
@@ -611,7 +619,15 @@
 
       actions.appendChild(open);
       actions.appendChild(rate);
-      if (!active) {
+      if (active) {
+        var stop = document.createElement('button');
+        stop.type = 'button';
+        stop.className = 'review-captions-btn test-generations-stop-btn';
+        stop.dataset.sessionStop = name;
+        stop.textContent = session.status === 'stopping' ? 'Stopping…' : 'Stop';
+        stop.disabled = session.status === 'stopping';
+        actions.appendChild(stop);
+      } else {
         var remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'test-generations-remove-candidate';
@@ -720,38 +736,6 @@
     if (startedAt) parts.push('elapsed ' + formatElapsedMs(Date.now() - startedAt));
     if (lastContactAt) parts.push('contact ' + formatElapsedMs(Date.now() - lastContactAt) + ' ago');
     return parts.length ? ' · ' + parts.join(' · ') : '';
-  }
-
-  function syncActiveTestCard(status) {
-    var card = el('test-generations-active');
-    var progress = el('test-generations-active-progress');
-    var current = el('test-generations-active-current');
-    var meta = el('test-generations-active-meta');
-    var stopBtn = el('test-generations-stop-btn');
-    if (!card || !progress || !current || !meta || !stopBtn) {
-      throw new Error('Test Generations requires its Active Test controls.');
-    }
-
-    var active = !!(status && (status.status === 'running' || status.status === 'stopping'));
-    card.classList.toggle('hidden', !active);
-    if (!active) {
-      progress.textContent = '';
-      current.textContent = '';
-      meta.textContent = '';
-      stopBtn.disabled = false;
-      stopBtn.textContent = 'Stop';
-      return;
-    }
-
-    var completed = Number(status.completed || 0);
-    var total = Number(status.total || 0);
-    var failed = Number(status.failed || 0);
-    var details = liveStatusDetails(status).replace(/^\s*·\s*/, '');
-    progress.textContent = completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '');
-    current.textContent = String(status.current || (status.status === 'stopping' ? 'Stopping current generation…' : 'Preparing next generation…'));
-    meta.textContent = details;
-    stopBtn.disabled = status.status === 'stopping';
-    stopBtn.textContent = status.status === 'stopping' ? 'Stopping…' : 'Stop';
   }
 
   function statusText(status) {
@@ -1822,7 +1806,6 @@
     if (!isOpen()) return;
     request('test_status', { modelId: currentTestModelId() }).then(function (status) {
       syncActiveRunControls(status);
-      syncActiveTestCard(status);
       refreshActivityButton();
       if (status && (status.status === 'running' || status.status === 'stopping')) showSessionError = true;
       var activeSession = String(status && status.session || '');
@@ -2146,7 +2129,6 @@
       var startedStatus = payload && payload.latest ? payload.latest : null;
       var status = startedStatus || currentStatus;
       syncActiveRunControls(status);
-      if (startedStatus) syncActiveTestCard(startedStatus);
       refreshActivityButton();
       if (startedStatus && startedStatus.session) {
         showSessionError = true;
@@ -2169,7 +2151,6 @@
     if (stopBtn) stopBtn.disabled = true;
     request('test_stop').then(function (status) {
       syncActiveRunControls(status);
-      syncActiveTestCard(status);
       refreshActivityButton();
       if (!currentSession || currentSession === String(status && status.session || '')) renderStatus(status);
       pollStatus();
@@ -2247,7 +2228,6 @@
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
-    el('test-generations-stop-btn').onclick = function () { stopRun(this); };
     el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
     el('test-generations-rate-items-btn').onclick = function () {
@@ -2296,6 +2276,11 @@
           queueCancel.disabled = false;
           showError(err);
         });
+        return;
+      }
+      var sessionStop = event.target.closest('[data-session-stop]');
+      if (sessionStop) {
+        stopRun(sessionStop);
         return;
       }
       var folderOpen = event.target.closest('[data-session-folder-open]');

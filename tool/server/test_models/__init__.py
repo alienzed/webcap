@@ -32,6 +32,17 @@ class TestModel:
             raise ValueError("Test workflow template must be a JSON object: " + self.TEMPLATE_PATH.name)
         return workflow
 
+    def setting_options(self, workflow, available_names):
+        resolver = getattr(self.adapter, "setting_options", None)
+        if resolver is None:
+            return {}
+        if not callable(resolver):
+            raise RuntimeError("Test model setting_options must be callable.")
+        options = resolver(workflow, available_names)
+        if not isinstance(options, dict):
+            raise RuntimeError("Test model setting_options must return an object.")
+        return options
+
     def __getattr__(self, name):
         return getattr(self.adapter, name)
 

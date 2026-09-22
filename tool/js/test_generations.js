@@ -391,8 +391,13 @@
     var completed = Number(session && session.completed || 0);
     var total = Number(session && session.total || 0);
     var failed = Number(session && session.failed || 0);
-    return String(session && session.status || '') + ' · ' + completed + ' / ' + total +
+    var text = String(session && session.status || '') + ' · ' + completed + ' / ' + total +
       (failed ? ' · ' + failed + ' failed' : '');
+    var startedAt = Number(session && (session.candidateStartedAt || session.startedAt) || 0);
+    if (startedAt && session && (session.status === 'running' || session.status === 'stopping')) {
+      text += ' · ' + formatElapsedMs(Date.now() - startedAt);
+    }
+    return text;
   }
 
   function syncVisibleSessionProgress(status) {
@@ -422,39 +427,14 @@
       host.innerHTML = '<div class="test-generations-library-empty">No test sessions yet.</div>';
       return;
     }
-    queued.forEach(function (job) {
-      var row = document.createElement('div');
-      row.className = 'test-generations-session-row';
-      row.dataset.queueJobId = String(job.id || '');
-
-      var copy = document.createElement('div');
-      copy.className = 'test-generations-session-copy';
-      var title = document.createElement('strong');
-      title.textContent = String(job.runName || '').trim() || 'Queued Test';
-      var meta = document.createElement('span');
-      var total = Number(job.testTotal || 0);
-      var position = Number(job.queuePosition || 0);
-      meta.textContent = 'queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
-      copy.appendChild(title);
-      copy.appendChild(meta);
-
-      var actions = document.createElement('div');
-      actions.className = 'test-generations-session-actions';
-      var remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'test-generations-remove-candidate';
-      remove.dataset.queueCancel = String(job.id || '');
-      remove.title = 'Remove this queued Test session';
-      remove.setAttribute('aria-label', 'Remove queued Test session ' + title.textContent);
-      remove.textContent = '×';
-      actions.appendChild(remove);
-
-      row.appendChild(copy);
-      row.appendChild(actions);
-      host.appendChild(row);
+    var activeItems = items.filter(function (session) {
+      return session && (session.status === 'running' || session.status === 'stopping' || session.status === 'starting');
+    });
+    var historyItems = items.filter(function (session) {
+      return activeItems.indexOf(session) === -1;
     });
 
-    items.forEach(function (session) {
+    function appendSessionRow(session) {
       var name = String(session.session || '');
       var row = document.createElement('div');
       row.className = 'test-generations-session-row';
@@ -489,7 +469,7 @@
       var unrated = Number(session.unrated || 0);
       rate.classList.toggle('hidden', !resultFolder || unrated <= 0);
 
-      var active = session.status === 'running' || session.status === 'stopping';
+      var active = session.status === 'running' || session.status === 'stopping' || session.status === 'starting';
       actions.appendChild(open);
       actions.appendChild(rate);
       if (!active) {
@@ -506,7 +486,43 @@
       row.appendChild(copy);
       row.appendChild(actions);
       host.appendChild(row);
+    }
+
+    activeItems.forEach(appendSessionRow);
+
+    queued.forEach(function (job) {
+      var row = document.createElement('div');
+      row.className = 'test-generations-session-row';
+      row.dataset.queueJobId = String(job.id || '');
+
+      var copy = document.createElement('div');
+      copy.className = 'test-generations-session-copy';
+      var title = document.createElement('strong');
+      title.textContent = String(job.runName || '').trim() || 'Queued Test';
+      var meta = document.createElement('span');
+      var total = Number(job.testTotal || 0);
+      var position = Number(job.queuePosition || 0);
+      meta.textContent = 'queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
+      copy.appendChild(title);
+      copy.appendChild(meta);
+
+      var actions = document.createElement('div');
+      actions.className = 'test-generations-session-actions';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'test-generations-remove-candidate';
+      remove.dataset.queueCancel = String(job.id || '');
+      remove.title = 'Remove this queued Test session';
+      remove.setAttribute('aria-label', 'Remove queued Test session ' + title.textContent);
+      remove.textContent = '×';
+      actions.appendChild(remove);
+
+      row.appendChild(copy);
+      row.appendChild(actions);
+      host.appendChild(row);
     });
+
+    historyItems.forEach(appendSessionRow);
     syncSessionSelection();
   }
 
@@ -600,8 +616,28 @@
     return String(status.status || '');
   }
 
-  function videoUrl(folder, fileName) {
+  function mediaUrl(folder, fileName) {
     return '/caption/media?folder=' + encodeURIComponent(String(folder || '')) + '&media=' + encodeURIComponent(String(fileName || ''));
+  }
+
+  function appendTestPreview(container, resultFolder, result, options) {
+    var fileName = resultMediaFile(result);
+    var kind = resultMediaKind(result);
+    if (!container || !resultFolder || !fileName) return null;
+    if (kind === 'image') {
+      var image = document.createElement('img');
+      image.src = mediaUrl(resultFolder, fileName);
+      image.alt = 'Test preview image';
+      image.loading = 'lazy';
+      container.appendChild(image);
+      return image;
+    }
+    var video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = !!(options && options.muted);
+    video.src = mediaUrl(resultFolder, fileName);
+    appendTestPreviewVideo(container, video);
+    return video;
   }
 
   function candidateFileForResult(result) {
@@ -651,9 +687,20 @@
     return seconds + 's';
   }
 
+  function resultMediaFile(result) {
+    return String(result && (result.mediaFile || result.outputVideo) || '').trim();
+  }
+
+  function resultMediaKind(result) {
+    var explicitKind = String(result && result.mediaKind || '').trim().toLowerCase();
+    if (explicitKind) return explicitKind;
+    var fileName = resultMediaFile(result).toLowerCase();
+    return /\.(?:png|jpe?g|webp|gif|bmp|avif)$/.test(fileName) ? 'image' : (fileName ? 'video' : '');
+  }
+
   function buildResultRating(result) {
-    var outputVideo = String(result && result.outputVideo || '').trim();
-    if (!outputVideo) return null;
+    var mediaFile = resultMediaFile(result);
+    if (!mediaFile) return null;
 
     var currentRating = Math.max(0, Math.min(5, Number(result && result.rating || 0)));
     var stars = document.createElement('div');
@@ -665,7 +712,7 @@
       star.type = 'button';
       star.className = 'test-generations-result-star' + (value <= currentRating ? ' active' : '');
       star.dataset.testRating = String(value);
-      star.dataset.outputVideo = outputVideo;
+      star.dataset.mediaFile = mediaFile;
       star.title = 'Rate ' + value + ' star' + (value === 1 ? '' : 's');
       star.setAttribute('aria-label', star.title);
       star.textContent = value <= currentRating ? '★' : '☆';
@@ -674,14 +721,14 @@
     return stars;
   }
 
-  function syncResultRatingButtons(outputVideo, rating) {
-    var name = String(outputVideo || '').trim();
+  function syncResultRatingButtons(mediaFile, rating) {
+    var name = String(mediaFile || '').trim();
     var value = Math.max(0, Math.min(5, Number(rating || 0)));
     if (!name) return;
     Array.prototype.forEach.call(
-      document.querySelectorAll('[data-test-rating][data-output-video]'),
+      document.querySelectorAll('[data-test-rating][data-media-file]'),
       function (star) {
-        if (String(star.dataset.outputVideo || '') !== name) return;
+        if (String(star.dataset.mediaFile || '') !== name) return;
         var starValue = Number(star.dataset.testRating || 0);
         var active = starValue <= value;
         star.classList.toggle('active', active);
@@ -693,8 +740,8 @@
 
   function rateCurrentSessionResult(button) {
     var rating = Number(button && button.dataset.testRating || 0);
-    var outputVideo = String(button && button.dataset.outputVideo || '').trim();
-    if (!currentSession || !outputVideo || rating < 1 || rating > 5) return;
+    var mediaFile = String(button && button.dataset.mediaFile || '').trim();
+    if (!currentSession || !mediaFile || rating < 1 || rating > 5) return;
 
     var row = button.closest('.test-generations-result-rating');
     if (row) {
@@ -705,10 +752,10 @@
 
     request('test_rate_result', {
       session: currentSession,
-      outputVideo: outputVideo,
+      mediaFile: mediaFile,
       rating: rating
     }).then(function (payload) {
-      syncResultRatingButtons(outputVideo, payload && payload.rating);
+      syncResultRatingButtons(mediaFile, payload && payload.rating);
       if (payload && payload.sessionStatus) renderStatus(payload.sessionStatus);
       if (prepared && payload && payload.candidateScores) {
         prepared.candidateScores = payload.candidateScores;
@@ -942,7 +989,7 @@
     compareIndex = Math.max(0, Math.min(compareIndex, results.length - 2));
     var pair = [results[compareIndex], results[compareIndex + 1]];
     var compareKey = resultFolder + '|' + pair.map(function (result, index) {
-      return String(result.outputVideo || result.sourceLoRA || ('result-' + (compareIndex + index)));
+      return String(resultMediaFile(result) || result.sourceLoRA || ('result-' + (compareIndex + index)));
     }).join('|');
     if (String(host.dataset.compareKey || '') === compareKey && host.querySelector('.test-generations-compare-stage')) {
       var existingPrevious = host.querySelector('[data-compare-previous]');
@@ -964,12 +1011,8 @@
       var item = document.createElement('article');
       item.className = 'test-generations-compare-item';
 
-      var video = document.createElement('video');
-      video.preload = 'metadata';
-      video.muted = true;
-      video.src = videoUrl(resultFolder, String(result.outputVideo || ''));
-      appendTestPreviewVideo(item, video);
-      videos.push(video);
+      var preview = appendTestPreview(item, resultFolder, result, { muted: true });
+      if (preview && preview.tagName === 'VIDEO') videos.push(preview);
 
       item.appendChild(buildResultFooter(result));
       stage.appendChild(item);
@@ -1001,7 +1044,7 @@
     controls.appendChild(next);
     host.appendChild(stage);
     host.appendChild(controls);
-    syncCompareVideos(videos);
+    if (videos.length === pair.length) syncCompareVideos(videos);
   }
 
   function renderResults(status) {
@@ -1019,8 +1062,8 @@
     }
 
     var validKeys = results.map(function (result, index) {
-      var outputVideo = String(result.outputVideo || '');
-      return outputVideo || (String(result.sourceLoRA || 'result') + ':' + index);
+      var mediaFile = resultMediaFile(result);
+      return mediaFile || (String(result.sourceLoRA || 'result') + ':' + index);
     }).concat(failures.map(function (failure, index) {
       return 'failure:' + String(failure.sourceLoRA || 'result') + ':' + index;
     }));
@@ -1035,8 +1078,8 @@
     if ((results.length || failures.length || (status && status.status === 'running')) && empty) empty.remove();
 
     results.forEach(function (result, index) {
-      var outputVideo = String(result.outputVideo || '');
-      var resultKey = outputVideo || (String(result.sourceLoRA || 'result') + ':' + index);
+      var mediaFile = resultMediaFile(result);
+      var resultKey = mediaFile || (String(result.sourceLoRA || 'result') + ':' + index);
       var exists = Array.prototype.some.call(
         host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
         function (card) { return card.dataset.resultKey === resultKey; }
@@ -1048,11 +1091,8 @@
       card.dataset.resultKey = resultKey;
       card.dataset.compareIndex = String(index);
 
-      if (resultFolder && outputVideo) {
-        var video = document.createElement('video');
-        video.preload = 'metadata';
-        video.src = videoUrl(resultFolder, outputVideo);
-        appendTestPreviewVideo(card, video);
+      if (resultFolder && mediaFile) {
+        appendTestPreview(card, resultFolder, result);
       } else {
         var placeholder = document.createElement('div');
         placeholder.className = 'test-generations-preview-placeholder';

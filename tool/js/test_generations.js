@@ -679,8 +679,9 @@
     var value = Math.max(0, Math.min(5, Number(rating || 0)));
     if (!name) return;
     Array.prototype.forEach.call(
-      document.querySelectorAll('[data-test-rating][data-output-video="' + CSS.escape(name) + '"]'),
+      document.querySelectorAll('[data-test-rating][data-output-video]'),
       function (star) {
+        if (String(star.dataset.outputVideo || '') !== name) return;
         var starValue = Number(star.dataset.testRating || 0);
         var active = starValue <= value;
         star.classList.toggle('active', active);

@@ -17,17 +17,16 @@ from pathlib import Path
 
 from . import config as app_config
 from .folder_state_store import read_folder_state, write_folder_state_atomic
-from .test_models import get_test_model, supported_profile_ids
-from .test_models import h3 as h3_test_model
+from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import test_copy_path
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
-TEMPLATE_PATH = h3_test_model.TEMPLATE_PATH
+TEMPLATE_PATH = get_test_model().TEMPLATE_PATH
 TEST_RESULTS_DIR = "test-generations"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
 COMFY_JOB_MISSING_GRACE_SECONDS = 10
 GPU_RESERVATION_OWNER = "test-generations"
-TEST_ASPECT_RATIO_OPTIONS = h3_test_model.ASPECT_RATIO_OPTIONS
+TEST_ASPECT_RATIO_OPTIONS = tuple(getattr(get_test_model(), "ASPECT_RATIO_OPTIONS", ()))
 _lock = threading.Lock()
 _status_lock = threading.Lock()
 _rating_lock = threading.Lock()
@@ -158,16 +157,16 @@ def _cancel_comfy_job(prompt_id):
 
 
 def _load_template():
-    return h3_test_model.load_template()
+    return get_test_model().load_template()
 
 def _default_prompt(workflow=None):
-    return h3_test_model.default_prompt(workflow or _load_template())
+    return get_test_model().default_prompt(workflow or _load_template())
 
 def _template_test_settings(workflow=None):
-    return h3_test_model.template_settings(workflow or _load_template())
+    return get_test_model().template_settings(workflow or _load_template())
 
 def _normalized_test_settings(template, aspect_ratio=None, megapixels=None, duration=None, seed=None):
-    return h3_test_model.normalize_settings(
+    return get_test_model().normalize_settings(
         template,
         _new_session_seed,
         aspect_ratio=aspect_ratio,
@@ -193,7 +192,7 @@ def _test_directory(folder_path, model):
 
 
 def _h3_test_directory(folder_path):
-    return _test_directory(folder_path, h3_test_model)
+    return _test_directory(folder_path, get_test_model())
 
 
 def _lora_files(test_directory):
@@ -349,9 +348,9 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
             session_status.get("modelId")
             or session_status.get("model")
             or resolved_model_id
-            or h3_test_model.PROFILE_ID
+            or get_test_model().PROFILE_ID
         )
-    model = get_test_model(resolved_model_id or h3_test_model.PROFILE_ID)
+    model = get_test_model(resolved_model_id or get_test_model().PROFILE_ID)
     test_directory = _test_directory(folder_path, model)
     candidate = test_directory / name
     sidecar = candidate.with_suffix(".webcap.json")
@@ -425,10 +424,10 @@ def _resolve_comfy_name(configured_name, available, label):
 
 
 def _available_comfy_lora_names():
-    return h3_test_model.available_lora_names(_available_comfy_names)
+    return get_test_model().available_lora_names(_available_comfy_names)
 
 def _resolve_comfy_template_assets(template):
-    return h3_test_model.resolve_assets(template, _available_comfy_names, _resolve_comfy_name)
+    return get_test_model().resolve_assets(template, _available_comfy_names, _resolve_comfy_name)
 
 def _resolve_wildcard_prompt(prompt, seed):
     response = _read_json_response(
@@ -452,7 +451,7 @@ def _workflow_for_lora(
     strength_clip=1,
     filename_prefix=None,
 ):
-    return h3_test_model.build_workflow(
+    return get_test_model().build_workflow(
         template,
         prompt,
         comfy_lora_name,
@@ -463,7 +462,7 @@ def _workflow_for_lora(
     )
 
 def _find_video_ref(value):
-    return h3_test_model.find_output_ref(value)
+    return get_test_model().find_output_ref(value)
 
 def _queue_workflow(workflow):
     prompt_id = str(uuid.uuid4())
@@ -722,7 +721,7 @@ def _session_directory(folder_path, session_name):
 
 
 def _new_session_directory(folder_path, model=None):
-    selected_model = model or h3_test_model
+    selected_model = model or get_test_model()
     root = _session_root(folder_path)
     root.mkdir(parents=True, exist_ok=True)
     base = datetime.now().strftime("%Y-%m-%d_%H%M-") + selected_model.SESSION_SLUG
@@ -1089,7 +1088,7 @@ def _staged_lora_provenance(lora_file):
 
 
 def _workflow_seed(workflow):
-    return h3_test_model.workflow_seed(workflow)
+    return get_test_model().workflow_seed(workflow)
 
 def _new_session_seed():
     return secrets.randbelow(2 ** 53)
@@ -1140,7 +1139,7 @@ def _run_batch(
     include_base=True,
     model=None,
 ):
-    selected_model = model or h3_test_model
+    selected_model = model or get_test_model()
     status_file = _status_path(session_directory)
     try:
         template = copy.deepcopy(template) if template is not None else selected_model.load_template()
@@ -1288,7 +1287,7 @@ def _build_queued_request(
     include_base=True,
     model_id=None,
 ):
-    model = get_test_model(model_id or h3_test_model.PROFILE_ID)
+    model = get_test_model(model_id or get_test_model().PROFILE_ID)
     prompt = str(prompt or "").strip()
     if not prompt:
         raise ValueError("A test prompt is required.")
@@ -1468,7 +1467,7 @@ def queued_jobs(folder_path):
 
 def start_queued(folder_path, request):
     request = dict(request or {})
-    model = get_test_model(request.get("modelId") or request.get("model") or h3_test_model.PROFILE_ID)
+    model = get_test_model(request.get("modelId") or request.get("model") or get_test_model().PROFILE_ID)
     prompt = str(request.get("resolvedPrompt") or "").strip()
     source_prompt = str(request.get("sourcePrompt") or prompt).strip()
     if not prompt:
@@ -1563,18 +1562,12 @@ def start_queued(folder_path, request):
 def supported_models():
     return {
         "operation": "test_models",
-        "models": [
-            {
-                "id": profile_id,
-                "mediaKind": get_test_model(profile_id).MEDIA_KIND,
-            }
-            for profile_id in supported_profile_ids()
-        ],
+        "models": registered_test_models(),
     }
 
 
 def prepare(folder_path, model_id=None):
-    model = get_test_model(model_id or h3_test_model.PROFILE_ID)
+    model = get_test_model(model_id or get_test_model().PROFILE_ID)
     template = model.load_template()
     try:
         test_directory = _test_directory(folder_path, model)

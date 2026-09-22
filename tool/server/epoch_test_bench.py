@@ -33,6 +33,7 @@ TEST_ASPECT_RATIO_OPTIONS = (
     "21:9 (Ultrawide)",
 )
 _lock = threading.Lock()
+_dispatch_lock = threading.Lock()
 _active_threads = {}
 _active_sessions = {}
 _stop_requests = set()
@@ -1240,36 +1241,37 @@ def _prune_dead_test_workers_locked():
 
 def _advance_test_queue():
     global _test_gpu_reserved
-    last_payload = None
-    while True:
-        release_gpu = False
-        with _lock:
-            _prune_dead_test_workers_locked()
-            if any(thread and thread.is_alive() for thread in _active_threads.values()):
-                return None
-            if not _pending_tests:
-                if _test_gpu_reserved:
-                    _test_gpu_reserved = False
-                    release_gpu = True
-                job = None
-            else:
-                if not _test_gpu_reserved:
-                    if not _reserve_gpu_for_test_generations():
-                        return None
-                    _test_gpu_reserved = True
-                job = _pending_tests.pop(0)
-        if job is None:
-            if release_gpu:
-                _release_gpu_for_test_generations()
-            return last_payload
-        try:
-            folder_path = app_config.safe_join_fs_root(str(job.get("folder") or ""))
-            payload = start_queued(folder_path, job.get("request") or {})
-        except Exception as exc:
-            payload = {"status": "failed", "error": str(exc)}
-        last_payload = payload
-        if str((payload or {}).get("status") or "") in ("starting", "running"):
-            return payload
+    with _dispatch_lock:
+        last_payload = None
+        while True:
+            release_gpu = False
+            with _lock:
+                _prune_dead_test_workers_locked()
+                if any(thread and thread.is_alive() for thread in _active_threads.values()):
+                    return None
+                if not _pending_tests:
+                    if _test_gpu_reserved:
+                        _test_gpu_reserved = False
+                        release_gpu = True
+                    job = None
+                else:
+                    if not _test_gpu_reserved:
+                        if not _reserve_gpu_for_test_generations():
+                            return None
+                        _test_gpu_reserved = True
+                    job = _pending_tests.pop(0)
+            if job is None:
+                if release_gpu:
+                    _release_gpu_for_test_generations()
+                return last_payload
+            try:
+                folder_path = app_config.safe_join_fs_root(str(job.get("folder") or ""))
+                payload = start_queued(folder_path, job.get("request") or {})
+            except Exception as exc:
+                payload = {"status": "failed", "error": str(exc)}
+            last_payload = payload
+            if str((payload or {}).get("status") or "") in ("starting", "running"):
+                return payload
 
 def cancel_queued(folder_path, job_id):
     folder = _relative_set_folder(folder_path)
@@ -1317,22 +1319,30 @@ def enqueue(folder_path, prompt, aspect_ratio=None, megapixels=None, duration=No
     }
     with _lock:
         _prune_dead_test_workers_locked()
-        had_active_test = any(thread and thread.is_alive() for thread in _active_threads.values())
         _pending_tests.append(job)
 
     advance_payload = _advance_test_queue()
 
     with _lock:
+        _prune_dead_test_workers_locked()
         still_queued = any(str(item.get("id") or "") == job["id"] for item in _pending_tests)
+        has_active_test = any(thread and thread.is_alive() for thread in _active_threads.values())
 
-    if not had_active_test:
-        if still_queued:
-            with _lock:
-                _pending_tests[:] = [item for item in _pending_tests if str(item.get("id") or "") != job["id"]]
-            raise RuntimeError("Pause Training before starting Test Generations.")
+    if still_queued and not has_active_test:
+        with _lock:
+            _pending_tests[:] = [item for item in _pending_tests if str(item.get("id") or "") != job["id"]]
+        raise RuntimeError("Pause Training before starting Test Generations.")
+
+    if not still_queued:
         if isinstance(advance_payload, dict) and str(advance_payload.get("status") or "") == "failed":
             raise RuntimeError(str(advance_payload.get("error") or "Test Generations could not start."))
-        if not isinstance(advance_payload, dict) or str(advance_payload.get("status") or "") not in ("starting", "running"):
+        if (
+            not has_active_test
+            and (
+                not isinstance(advance_payload, dict)
+                or str(advance_payload.get("status") or "") not in ("starting", "running")
+            )
+        ):
             raise RuntimeError("Test Generations did not start.")
 
     return {

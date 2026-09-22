@@ -522,3 +522,38 @@
     max-width: 100%;
   }
 }
+
+
+.storyboard-sequence-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.storyboard-sequence-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.storyboard-sequence-output {
+  margin-bottom: 10px;
+}
+
+.storyboard-sequence-output video {
+  display: block;
+  width: min(100%, 960px);
+  max-height: 540px;
+  margin: 0 auto;
+  border-radius: 6px;
+  background: #000;
+}
+
+@media (max-width: 760px) {
+  .storyboard-sequence-header,
+  .storyboard-sequence-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

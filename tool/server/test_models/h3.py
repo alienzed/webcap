@@ -1,3 +1,5 @@
+from .common import validate_test_seed
+
 import copy
 OUTPUT_EXTENSIONS = (".mp4",)
 
@@ -41,15 +43,15 @@ def normalize_settings(workflow, new_seed, values=None):
         selected_megapixels = float(defaults["megapixels"] if selected.get("megapixels") in (None, "") else selected.get("megapixels"))
         selected_duration = float(defaults["duration"] if selected.get("duration") in (None, "") else selected.get("duration"))
         seed = selected.get("seed")
-        selected_seed = new_seed() if seed is None or str(seed).strip() == "" else int(seed)
+        selected_seed = validate_test_seed(
+            new_seed() if seed is None or str(seed).strip() == "" else seed
+        )
     except (TypeError, ValueError) as exc:
         raise ValueError("Test resolution, duration, and seed must be numeric.") from exc
     if selected_megapixels <= 0:
         raise ValueError("Test resolution must be greater than zero megapixels.")
     if selected_duration <= 0:
         raise ValueError("Test duration must be greater than zero seconds.")
-    if selected_seed < 0 or selected_seed >= 2 ** 63:
-        raise ValueError("Test seed must be between 0 and 9223372036854775807.")
     return {
         "aspectRatio": selected_aspect,
         "megapixels": selected_megapixels,

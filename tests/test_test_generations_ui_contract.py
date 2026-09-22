@@ -297,6 +297,16 @@ def test_live_test_status_surfaces_comfy_job_progress_and_errors_to_console():
     assert "reportConsoleError('Test Generations', err);" in script
 
 
+def test_failed_test_cards_report_to_global_console_once():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "var reportedFailureKeys = new Set();" in script
+    assert "if (!reportedFailureKeys.has(diagnosticKey))" in script
+    assert "reportedFailureKeys.add(diagnosticKey);" in script
+    assert "reportConsoleError(" in script
+    assert "failure.error || 'Generation failed.'" in script
+
+
 def test_test_prepare_warnings_reach_global_console():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 

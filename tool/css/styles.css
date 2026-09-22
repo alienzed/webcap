@@ -3229,57 +3229,6 @@ iframe {
   opacity: .5;
   cursor: default;
 }
-.test-generations-recent-sets {
-  margin-top: 2px;
-  padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-}
-.test-generations-recent-sets > .test-generations-library-heading {
-  color: var(--muted);
-  font-size: 11px;
-}
-.test-generations-recent-sets-list {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.test-generations-recent-set-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding: 5px 6px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-}
-.test-generations-recent-set-row:hover {
-  background: var(--hover);
-}
-.test-generations-recent-set-copy {
-  min-width: 0;
-}
-.test-generations-recent-set-copy strong,
-.test-generations-recent-set-copy span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.test-generations-recent-set-copy strong {
-  color: var(--text);
-  font-size: 12px;
-}
-.test-generations-recent-set-copy span {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 10px;
-}
-.test-generations-recent-set-row .review-captions-btn {
-  width: auto;
-  margin: 0;
-}
 .test-generations-compare {
   display: flex;
   flex: 1 1 0;

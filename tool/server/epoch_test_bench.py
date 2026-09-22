@@ -754,6 +754,8 @@ def _session_status(session_directory):
         return None
     visible = dict(payload)
     visible["session"] = Path(session_directory).name
+    if not visible.get("modelId"):
+        visible["modelId"] = str(visible.get("model") or get_test_model().PROFILE_ID)
     if not visible.get("resultFolder"):
         visible["resultFolder"] = _relative_to_fs_root(session_directory)
     return visible

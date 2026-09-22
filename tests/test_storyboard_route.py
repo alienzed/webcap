@@ -206,3 +206,85 @@ def test_storyboard_generation_capabilities_route(monkeypatch):
     assert response.status_code == 200
     assert response.get_json()["loras"] == ["characters/alice.safetensors"]
     assert response.get_json()["baseLoras"] == ["mh3/turbo.safetensors"]
+
+
+def test_storyboard_director_develops_story_and_applies_plan(monkeypatch):
+    story = {"id": "story-1", "concept": "A rise and fall story.", "sceneOrder": [], "scenes": {}}
+    plan = {
+        "scenes": [
+            {
+                "title": "Rise",
+                "summary": "He gains power.",
+                "entryState": "He is unknown.",
+                "exitState": "He controls the neighborhood.",
+                "prompt": "prompt one",
+                "suggestedDurationSeconds": 8,
+                "continuity": {"continuesPreviousScene": False, "carryForward": []},
+            },
+            {
+                "title": "Fall",
+                "summary": "His empire collapses.",
+                "entryState": "He controls the neighborhood.",
+                "exitState": "He is alone.",
+                "prompt": "prompt two",
+                "suggestedDurationSeconds": 10,
+                "continuity": {"continuesPreviousScene": True, "carryForward": []},
+            },
+        ]
+    }
+    applied = dict(story)
+    applied["sceneOrder"] = ["scene-1", "scene-2"]
+
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_build_llm_request",
+        lambda loaded, scene_id, operation, instruction="": {
+            "operation": operation,
+            "output": "json",
+            "prompt": "develop",
+            "response_schema": {},
+        },
+    )
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_run_llm_contract",
+        lambda model, contract: {"model": model, "data": plan, "usage": None, "timings": None},
+    )
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_apply_developed_plan",
+        lambda story_id, received_plan, model_id="": applied
+        if received_plan == plan and model_id == "director.gguf"
+        else (_ for _ in ()).throw(AssertionError("wrong developed plan")),
+    )
+
+    client = app_module.app.test_client()
+    response = client.post("/fs/storyboard/director", json={
+        "storyId": "story-1",
+        "operation": "develop_story",
+        "model": "director.gguf",
+    })
+
+    assert response.status_code == 200
+    assert response.get_json()["sceneCount"] == 2
+    assert response.get_json()["story"]["sceneOrder"] == ["scene-1", "scene-2"]
+
+
+def test_storyboard_director_requires_confirmation_before_replacing_existing_scenes(monkeypatch):
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: {
+        "id": story_id,
+        "concept": "Existing story.",
+        "sceneOrder": ["scene-1"],
+        "scenes": {"scene-1": {"id": "scene-1"}},
+    })
+    client = app_module.app.test_client()
+
+    response = client.post("/fs/storyboard/director", json={
+        "storyId": "story-1",
+        "operation": "develop_story",
+        "model": "director.gguf",
+    })
+
+    assert response.status_code == 400
+    assert "Confirm replacement" in response.get_json()["error"]

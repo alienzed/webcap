@@ -1043,6 +1043,13 @@
                 <section class="storyboard-editor" aria-label="Story editor">
                     <header class="storyboard-editor-header">
                         <strong>Story</strong>
+                        <div class="storyboard-director-header">
+                            <label for="storyboard-director-model">Director</label>
+                            <select id="storyboard-director-model" aria-label="Storyboard Director model">
+                                <option value="">Director unavailable</option>
+                            </select>
+                            <span id="storyboard-director-status" class="storyboard-save-state" aria-live="polite"></span>
+                        </div>
                         <span id="storyboard-save-state" class="storyboard-save-state" aria-live="polite"></span>
                     </header>
                     <div id="storyboard-editor-empty" class="storyboard-editor-empty">Create or open a Story to begin.</div>

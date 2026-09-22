@@ -633,6 +633,7 @@
             '<div class="storyboard-take-identity" title="' + escapeHtml(take.sourceFilename || '') + '">' +
               '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
               '<span>' + escapeHtml(takeMetaLabel(take)) + '</span>' +
+              '<input type="text" maxlength="120" data-take-label="' + escapeHtml(takeId) + '" value="' + escapeHtml(take.label || '') + '" placeholder="Label this Take…" aria-label="Take label">' +
             '</div>' +
             '<select data-take-rating="' + escapeHtml(takeId) + '" aria-label="Take rating">' + ratingOptions + '</select>' +
             '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
@@ -1068,6 +1069,21 @@
     }).catch(reportError);
   }
 
+  function labelTake(sceneId, takeId, label) {
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () { return request({
+      operation: 'label_take',
+      storyId: storyState.story.id,
+      sceneId: sceneId,
+      takeId: takeId,
+      label: String(label || '').trim()
+    }); }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
   function rateTake(sceneId, takeId, rating) {
     setSaveState('Saving...');
     flushPendingSaves().then(function () { return request({
@@ -1386,6 +1402,13 @@
         var uploadScene = upload.closest('.storyboard-scene[data-scene-id]');
         if (!uploadScene) throw new Error('Take upload Scene is missing.');
         uploadTake(uploadScene.dataset.sceneId, upload.files && upload.files[0]);
+        return;
+      }
+      var takeLabel = event.target.closest('[data-take-label]');
+      if (takeLabel) {
+        var labelScene = takeLabel.closest('.storyboard-scene[data-scene-id]');
+        if (!labelScene) throw new Error('Take label Scene is missing.');
+        labelTake(labelScene.dataset.sceneId, takeLabel.dataset.takeLabel, takeLabel.value);
         return;
       }
       var rating = event.target.closest('[data-take-rating]');

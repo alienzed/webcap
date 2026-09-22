@@ -294,7 +294,24 @@ def test_live_test_status_surfaces_comfy_job_progress_and_errors_to_console():
     assert "candidateStartedAt || status.startedAt" in script
     assert "comfyLastContactAt" in script
     assert "liveStatusDetails(status)" in script
-    assert "console.error('[Test Generations]', err);" in script
+    assert "reportConsoleError('Test Generations', err);" in script
+
+
+def test_test_prepare_warnings_reach_global_console():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "Array.isArray(payload.warnings)" in script
+    assert "reportConsoleWarning('Test Generations', warning);" in script
+
+
+def test_global_console_reports_text_safely_and_marks_attention():
+    script = (ROOT / "tool" / "js" / "console_panel.js").read_text(encoding="utf-8")
+
+    assert "div.textContent = String(msg);" in script
+    assert "div.innerHTML" not in script
+    assert "function reportConsoleError(source, err)" in script
+    assert "function reportConsoleWarning(source, message)" in script
+    assert "markConsoleAttention(true)" in script
 
 
 def test_test_result_footer_identity_timing_and_remove_contract():

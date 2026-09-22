@@ -125,3 +125,21 @@ def test_chat_stops_router_if_model_cannot_be_confirmed_unloaded(monkeypatch):
 def test_run_contract_requires_prompt(monkeypatch):
     with pytest.raises(ValueError, match="prompt is empty"):
         storyboard_llm_runtime.run_contract("model", {"prompt": ""})
+
+
+def test_ensure_server_accepts_compatible_existing_router(monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "_process", None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_health_ok", lambda: True)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda *args, **kwargs: {
+            "data": [{
+                "id": "existing-model",
+                "path": "/models/existing-model.gguf",
+                "status": {"value": "unloaded"},
+            }]
+        },
+    )
+
+    storyboard_llm_runtime._ensure_server()

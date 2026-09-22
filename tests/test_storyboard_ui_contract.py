@@ -136,3 +136,16 @@ def test_storyboard_director_configuration_is_first_class_app_setting():
     assert "appSettingsStoryboardLlamaServerEl" in constants
     assert "App Settings > Storyboard > llama-server executable" in runtime
 
+
+
+def test_storyboard_can_develop_concept_directly_into_scenes():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-develop-btn"' in html
+    assert 'id="storyboard-develop-status"' in html
+    assert "function developStory()" in storyboard
+    assert "operation: 'develop_story'" in storyboard
+    assert "replaceExisting: hasScenes" in storyboard
+    assert "Existing Scenes and Takes will remain recoverable" in storyboard
+    assert "Develop Again" in storyboard

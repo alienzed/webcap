@@ -1,0 +1,297 @@
+# MiniMax H3 Prompt Guidelines for Storyboard
+
+This is WebCap's working guide for converting a Storyboard Scene into a MiniMax H3 model-facing prompt.
+
+It condenses the current official MiniMax H3 prompt-writing documentation into the rules Storyboard needs. It is not a replacement for the official source documents; when syntax changes upstream, verify and update this file.
+
+Official sources:
+
+- Base T2VA / I2VA / FL2VA / L2VA guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md
+- Full-reference guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
+- H3 model/recommended workflow: https://www.minimax.io/news/minimax-h3-open-source
+
+## Storyboard rule: one Scene is one generation
+
+Before formatting a prompt, decide whether the requested action reasonably fits in the Scene duration.
+
+The current official H3 specification supports 4-15 second clips at 24 FPS. WebCap's configured workflow may impose a narrower local range and is authoritative at runtime.
+
+Do not solve an overloaded Scene by packing every requested event into dense prose. Prefer a clean sequence of observable beats. If the intent cannot plausibly fit, recommend splitting it into multiple Storyboard Scenes.
+
+## Select the H3 workflow mode first
+
+The prompt shape depends on how reference images are used.
+
+- **T2VA** — text only.
+- **I2VA** — one exact first-frame image.
+- **FL2VA** — exact first and last frames.
+- **L2VA** — one exact last-frame image.
+- **Full-reference / Ref2VA** — richer image/video/audio references with explicit roles.
+
+Do not treat a generic visual reference as an exact first/last frame unless Storyboard marked it with that semantic role.
+
+## Base prompt output structure
+
+For T2VA, begin directly with the three core fields.
+
+For I2VA, FL2VA, and L2VA, first emit the appropriate reference-alignment instruction required by MiniMax's official guide, then one blank line, then the core fields.
+
+The core field order is fixed:
+
+```text
+integrated_multimodal_description: [Shot 1] ...
+
+overall_soundscape: ...
+
+non_diegetic_music: ...
+```
+
+The existing concise skeleton lives in `docs/mmh3-prompt-template.txt`.
+
+### integrated_multimodal_description
+
+This is the main chronological audiovisual description.
+
+It should establish:
+
+- visual medium/style;
+- initial framing and composition;
+- subjects and persistent appearance details relevant to the shot;
+- environment and key props;
+- visible actions and state changes;
+- camera behavior;
+- dialogue/singing where requested;
+- synchronized diegetic audio where it belongs on the timeline.
+
+Write things the viewer can see or hear. Avoid abstract plot summaries such as "she realizes she is in danger" unless that realization is expressed through observable performance.
+
+### Shots and timestamps
+
+`[Shot 1]` has no timestamp.
+
+Only later shots have cut times:
+
+```text
+[Shot 2] At 00:04.500, ...
+```
+
+Cut times must be strictly increasing and fall within the Scene duration.
+
+A new shot should add meaningful new information: a different viewpoint, subject state, place, time, or narrative beat.
+
+If only framing distance or angle changes slightly, prefer continuous camera motion over a cut.
+
+Do not add cuts merely to make the prompt seem cinematic.
+
+### Camera language
+
+Describe camera movement naturally inside the shot.
+
+Useful official H3 vocabulary includes:
+
+- push in / pull out;
+- zoom in / zoom out;
+- pan left / right;
+- truck left / right;
+- tilt up / down;
+- pedestal up / down;
+- arc shot;
+- tracking shot;
+- static shot;
+- slight / strong shake;
+- POV;
+- clockwise / counterclockwise roll.
+
+Specify amplitude or speed only when it materially matters. Avoid stacking camera labels as a detached keyword list.
+
+### Performance and physical motion
+
+Describe intermediate physical states when they matter.
+
+Prefer:
+
+```text
+She closes the door, keeps one hand on the handle for a beat, then slowly turns toward the wet footprints.
+```
+
+over:
+
+```text
+She enters, closes the door, notices footprints, becomes frightened, investigates, and runs upstairs.
+```
+
+The first gives the video model a temporal path. The second is a compressed plot summary.
+
+Include useful secondary motion when it supports the shot: fabric, hair, rain, smoke, object inertia, breathing, reflections, or environmental response.
+
+Do not invent secondary actions that compete with the Scene's main beat.
+
+## First/last-frame grounding
+
+### I2VA
+
+Treat the supplied first image as the exact opening frame.
+
+Begin from the established:
+
+- identity;
+- clothing;
+- composition;
+- colors;
+- objects;
+- spatial relationships.
+
+Then describe how action develops forward.
+
+Do not redescribe the first frame into a contradictory starting state.
+
+### FL2VA
+
+Treat the two images as exact opening and ending anchors.
+
+Describe the physical/camera path that connects them rather than writing two unrelated static descriptions.
+
+A single continuous shot is generally preferable unless the Storyboard Scene explicitly calls for cuts.
+
+The final described state should converge on the last-frame composition at the end of the requested duration.
+
+### L2VA
+
+Treat the supplied image as the exact final frame.
+
+Infer only a plausible compatible starting state, then describe a path that visibly converges on the final pose/composition.
+
+Do not treat the last-frame image as though it were also the opening composition.
+
+## Dialogue and vocals
+
+Only add dialogue/lyrics when provided or explicitly requested.
+
+Speakers who vocalize receive stable IDs such as `(S1)`, `(S2)` across shots.
+
+The spoken text uses H3's dialogue form:
+
+```text
+<d>[English] Exact dialogue here.</d>
+```
+
+Preserve user-provided dialogue/lyrics verbatim. Do not rewrite, translate, or improve it unless the user explicitly asks.
+
+Speaker identity, delivery, action, and voice description belong outside the `<d>` block.
+
+If voiceover is requested, clearly state that it is off-screen voiceover and that a visible character's lips remain closed where appropriate.
+
+## On-screen text
+
+If the Scene deliberately contains visible signage, labels, captions, or other text, preserve the requested visible text exactly and place it in double quotation marks in the description.
+
+Do not invent visible text as set dressing.
+
+## Sound fields
+
+### overall_soundscape
+
+Use this for the clip-wide summary of:
+
+- ambience;
+- environmental sound;
+- Foley;
+- impacts;
+- non-verbal human sounds.
+
+Do not repeat dialogue or singing here.
+
+Use `N/A` for complete silence only when silence is explicitly intended.
+
+### non_diegetic_music
+
+This is music heard by the audience but not by characters.
+
+Describe concrete musical properties such as instrumentation, tempo, rhythm, and dynamic development.
+
+Use `N/A` when no non-diegetic score is wanted.
+
+Music or radio audible inside the scene is diegetic and belongs in the chronological multimodal description instead.
+
+## Continuity
+
+Unless the current instruction explicitly changes them, preserve Storyboard-provided continuity facts.
+
+Pay particular attention to:
+
+- character identity;
+- wardrobe and hair;
+- number of people;
+- object possession/state;
+- location layout;
+- time/weather;
+- lighting direction;
+- first/last/reference-frame facts.
+
+A model-facing prompt should be self-contained enough to establish important visual facts that are not supplied by an exact reference image, but should not bloat every Scene by repeating irrelevant Story history.
+
+## Full-reference / Ref2VA
+
+Full-reference mode has a different official rewrite structure. Do not force the three-field base format onto it.
+
+The official full-reference structure uses these sections in order:
+
+```text
+subject_definitions
+summary
+retention_analysis
+detailed_description
+overall_soundscape
+non_diegetic_music
+```
+
+Reference labels such as subjects, pictures, videos, and audio have specific meaning in that mode. When Storyboard begins generating through Ref2VA, the workflow adapter must translate semantic Storyboard references into this syntax deliberately.
+
+Until that adapter exists, do not fake Ref2VA formatting by guessing labels.
+
+Current official Ref2VA limits include up to 9 images, up to 3 video clips, and up to 3 audio clips with the documented total-duration/file-count constraints. Runtime capability discovery remains authoritative.
+
+## What the prompt writer should not do
+
+Do not:
+
+- write a screenplay synopsis instead of an audiovisual timeline;
+- silently change continuity;
+- add characters, dialogue, props, text, music, or plot events for flavor;
+- cram a long narrative arc into a short Scene;
+- create a cut for every sentence;
+- treat an exact frame reference as a loose inspiration;
+- treat a loose character/style reference as an exact keyframe;
+- describe impossible simultaneous camera moves;
+- explain the prompt after writing it when the caller requested prompt-only output.
+
+## Revision rule
+
+When revising an existing H3 prompt from a correction, preserve everything unrelated to that correction.
+
+Example request:
+
+```text
+Make her notice the footprints only after the door closes. Keep the camera behind her.
+```
+
+A good revision changes the action timing while retaining the established camera position, setting, wardrobe, sound, and other scene details.
+
+Do not perform an unsolicited rewrite just to vary wording.
+
+## Quality check before returning a prompt
+
+Before returning the final prompt, verify:
+
+1. Does the requested action fit the duration?
+2. Is the workflow mode/reference role correct?
+3. Are Story continuity facts preserved?
+4. Is Shot 1 untimestamped?
+5. Are later cut times increasing and inside the duration?
+6. Do camera actions make physical sense?
+7. Is dialogue exact and correctly tagged?
+8. Are ambience and non-diegetic music separated correctly?
+9. Did the prompt invent anything important that was not requested or needed?
+10. If first/last frames are supplied, does the described motion genuinely connect the anchors?
+
+For prompt-writing operations, return only the final model-facing prompt unless the caller explicitly requests analysis.

@@ -231,9 +231,15 @@ function trainingCandidatesTestProfileId() {
   return matches.length === 1 ? String(matches[0].id || '') : '';
 }
 
-function trainingCandidatesTestGenerationsButtonHtml() {
+function trainingCandidatesTestGenerationsButtonHtml(data) {
   if (!trainingCandidatesTestProfileId()) return '';
-  return '<button type="button" class="review-captions-btn training-candidates-open-generations" data-training-candidates-open-generations title="Open Test Generations for this set and model">Test Generations <span aria-hidden="true">→</span></button>';
+  var stagedCount = (Array.isArray(data && data.savedArtifacts) ? data.savedArtifacts : []).filter(function (artifact) {
+    return artifact && artifact.status === 'available' && artifact.inTestFolder === true;
+  }).length;
+  var label = 'Test Generations' + (stagedCount ? ' · ' + stagedCount : '');
+  return '<button type="button" class="review-captions-btn training-candidates-open-generations" data-training-candidates-open-generations title="' +
+    (stagedCount ? 'Open Test Generations for the staged candidates in this set' : 'Stage at least one saved epoch to open Test Generations') + '"' +
+    (stagedCount ? '' : ' disabled') + '>' + label + ' <span aria-hidden="true">→</span></button>';
 }
 
 function trainingCandidatesSvg(data) {
@@ -342,7 +348,7 @@ function trainingCandidatesSvg(data) {
       '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showSmoothedStep"' + (display.showSmoothedStep ? ' checked' : '') + '><i class="step-smoothed"></i>Smoothed step loss</label>' +
       '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showEpochLoss"' + (display.showEpochLoss ? ' checked' : '') + '><i class="raw"></i>Epoch loss</label>' +
       '<span><i class="suggested"></i>Suggested epoch</span><span><i class="saved"></i>Saved LoRA</span><span><i class="in-test-folder"></i>In Test Folder</span><span><i class="basin"></i>Candidate region</span></div>' +
-      trainingCandidatesTestGenerationsButtonHtml() + '</div>' +
+      trainingCandidatesTestGenerationsButtonHtml(data) + '</div>' +
       (candidates.length ? '' : '<div class="training-candidates-no-candidates">No candidate regions identified by this algorithm.</div>') + '</div>';
 }
 

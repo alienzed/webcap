@@ -75,6 +75,7 @@ def supported_models():
             "label": str(model.profile["label"]),
             "mediaKind": model.MEDIA_KIND,
             "settings": list(model.settings),
+            "default": model.policy.get("default") is True,
         }
         for model in _test_profiles().values()
     ]

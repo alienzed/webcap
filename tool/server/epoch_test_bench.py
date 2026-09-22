@@ -372,6 +372,7 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
     remaining = _lora_files(test_directory) if test_directory.is_dir() else []
     return {
         "operation": "test_remove_candidate",
+        "modelId": model.PROFILE_ID,
         "removed": name,
         "count": len(remaining),
         "files": [path.name for path in remaining],
@@ -934,6 +935,12 @@ def open_session(folder_path, session_name):
 
 def delete_session(folder_path, session_name):
     session = _session_directory(folder_path, session_name)
+    session_status = _read_status(session) or {}
+    model_id = str(
+        session_status.get("modelId")
+        or session_status.get("model")
+        or get_test_model().PROFILE_ID
+    )
     folder_key = _folder_key(folder_path)
     with _lock:
         thread = _active_threads.get(folder_key)
@@ -944,8 +951,9 @@ def delete_session(folder_path, session_name):
     return {
         "operation": "test_delete_session",
         "deleted": session.name,
+        "modelId": model_id,
         "sessions": list_sessions(folder_path),
-        "latest": _latest_status(folder_path),
+        "latest": _latest_status(folder_path, model_id=model_id),
     }
 
 

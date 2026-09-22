@@ -139,3 +139,51 @@ def test_take_upload_freezes_scene_provenance_and_can_be_rated_and_selected(stor
     assert rated["rating"] == 4
     story = storyboard_store.select_take(story["id"], scene["id"], take["id"])
     assert story["scenes"][scene["id"]]["selectedTakeId"] == take["id"]
+
+
+def test_take_removal_is_reversible_without_deleting_media(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "still.png", BytesIO(b"png-bytes")
+    )
+    media_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]
+
+    story = storyboard_store.select_take(story["id"], scene["id"], take["id"])
+    story = storyboard_store.remove_take(story["id"], scene["id"], take["id"])
+    current = story["scenes"][scene["id"]]
+    assert take["id"] not in current["takes"]
+    assert take["id"] in current["removedTakes"]
+    assert current["selectedTakeId"] is None
+    assert media_path.read_bytes() == b"png-bytes"
+
+    story = storyboard_store.restore_take(story["id"], scene["id"], take["id"])
+    current = story["scenes"][scene["id"]]
+    assert take["id"] in current["takes"]
+    assert take["id"] not in current["removedTakes"]
+    assert current["takeOrder"] == [take["id"]]
+
+
+def test_scene_reference_from_image_take_is_semantic_and_clearable(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, source = storyboard_store.add_scene(story["id"], {"title": "Source"})
+    story, target = storyboard_store.add_scene(story["id"], {"title": "Target"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], source["id"], "still.png", BytesIO(b"png-bytes")
+    )
+
+    story, reference = storyboard_store.set_scene_reference_from_take(
+        story["id"], target["id"], "first_frame", source["id"], take["id"], "last"
+    )
+    assert reference == {
+        "role": "first_frame",
+        "source": "take",
+        "sourceSceneId": source["id"],
+        "sourceTakeId": take["id"],
+        "frame": "last",
+        "mediaPath": take["mediaPath"],
+    }
+    assert story["scenes"][target["id"]]["references"] == [reference]
+
+    story = storyboard_store.clear_scene_reference(story["id"], target["id"], "first_frame")
+    assert story["scenes"][target["id"]]["references"] == []

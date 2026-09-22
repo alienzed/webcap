@@ -651,6 +651,62 @@
     return seconds + 's';
   }
 
+  function buildResultRating(result) {
+    var outputVideo = String(result && result.outputVideo || '').trim();
+    if (!outputVideo) return null;
+
+    var currentRating = Math.max(0, Math.min(5, Number(result && result.rating || 0)));
+    var stars = document.createElement('div');
+    stars.className = 'test-generations-result-rating';
+    stars.setAttribute('aria-label', 'Rate this Test result');
+
+    for (var value = 1; value <= 5; value += 1) {
+      var star = document.createElement('button');
+      star.type = 'button';
+      star.className = 'test-generations-result-star' + (value <= currentRating ? ' active' : '');
+      star.dataset.testRating = String(value);
+      star.dataset.outputVideo = outputVideo;
+      star.title = 'Rate ' + value + ' star' + (value === 1 ? '' : 's');
+      star.setAttribute('aria-label', star.title);
+      star.textContent = value <= currentRating ? '★' : '☆';
+      stars.appendChild(star);
+    }
+    return stars;
+  }
+
+  function rateCurrentSessionResult(button) {
+    var rating = Number(button && button.dataset.testRating || 0);
+    var outputVideo = String(button && button.dataset.outputVideo || '').trim();
+    if (!currentSession || !outputVideo || rating < 1 || rating > 5) return;
+
+    var row = button.closest('.test-generations-result-rating');
+    if (row) {
+      Array.prototype.forEach.call(row.querySelectorAll('[data-test-rating]'), function (star) {
+        star.disabled = true;
+      });
+    }
+
+    request('test_rate_result', {
+      session: currentSession,
+      outputVideo: outputVideo,
+      rating: rating
+    }).then(function (payload) {
+      if (payload && payload.sessionStatus) renderStatus(payload.sessionStatus);
+      if (prepared && payload && payload.candidateScores) {
+        prepared.candidateScores = payload.candidateScores;
+        renderStagedFiles(prepared);
+      }
+      if (payload && payload.sessions) renderSessions(payload.sessions, queuedTestJobs);
+    }).catch(function (err) {
+      if (row) {
+        Array.prototype.forEach.call(row.querySelectorAll('[data-test-rating]'), function (star) {
+          star.disabled = false;
+        });
+      }
+      showError(err);
+    });
+  }
+
   function buildResultFooter(result, options) {
     var opts = options || {};
     var footer = document.createElement('div');
@@ -683,6 +739,11 @@
       source.textContent = identity.secondary;
       source.title = identity.secondary;
       copy.appendChild(source);
+    }
+
+    if (!opts.failed) {
+      var rating = buildResultRating(result);
+      if (rating) copy.appendChild(rating);
     }
 
     if (opts.failed) {
@@ -1932,6 +1993,11 @@
       if (row) openSession(row.dataset.sessionName);
     };
     el('test-generations-results').onclick = function (event) {
+      var rating = event.target.closest('[data-test-rating]');
+      if (rating) {
+        rateCurrentSessionResult(rating);
+        return;
+      }
       var remove = event.target.closest('[data-remove-candidate]');
       if (remove) {
         removeCurrentSessionCandidate(remove);
@@ -1944,6 +2010,11 @@
       setResultsView('compare');
     };
     el('test-generations-compare').onclick = function (event) {
+      var rating = event.target.closest('[data-test-rating]');
+      if (rating) {
+        rateCurrentSessionResult(rating);
+        return;
+      }
       var remove = event.target.closest('[data-remove-candidate]');
       if (remove) {
         removeCurrentSessionCandidate(remove);

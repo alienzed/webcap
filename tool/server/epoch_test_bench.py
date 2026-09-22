@@ -1519,6 +1519,15 @@ def start_queued(folder_path, request):
         raise ValueError("Queued Test Generations job has no resolved prompt.")
     session_name = str(request.get("name") or "").strip()
     folder_key = _folder_key(folder_path)
+    test_directory = _h3_test_directory(folder_path)
+    loras = [
+        path
+        for path in _selected_lora_files(test_directory, selected_files=request.get("selectedFiles"))
+        if path.is_file()
+    ]
+    include_base = request.get("includeBase") is not False
+    if not loras and not include_base:
+        return {"status": "skipped"}
 
     with _lock:
         dead_keys = [key for key, thread in _active_threads.items() if not thread.is_alive()]
@@ -1560,10 +1569,6 @@ def start_queued(folder_path, request):
         _atomic_write_json(_status_path(session_directory), payload)
 
     try:
-        test_directory = _h3_test_directory(folder_path)
-        loras = _selected_lora_files(test_directory, selected_files=request.get("selectedFiles"))
-        if not loras:
-            raise ValueError("The H3 Test folder contains no queued .safetensors files.")
         _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
         template = _resolve_comfy_template_assets(_load_template())
         settings = _normalized_test_settings(
@@ -1577,7 +1582,6 @@ def start_queued(folder_path, request):
         payload["aspectRatio"] = settings["aspectRatio"]
         payload["megapixels"] = settings["megapixels"]
         payload["duration"] = settings["duration"]
-        include_base = request.get("includeBase") is not False
         payload["includeBase"] = include_base
         payload["total"] = len(loras) + (1 if include_base else 0)
         payload["status"] = "running"

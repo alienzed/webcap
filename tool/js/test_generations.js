@@ -1704,13 +1704,14 @@
       duration: duration,
       seed: seed
     }).then(function (payload) {
-      var status = payload && payload.latest ? payload.latest : currentStatus;
+      var startedStatus = payload && payload.latest ? payload.latest : null;
+      var status = startedStatus || currentStatus;
       syncActiveRunControls(status);
-      syncActiveTestCard(status);
+      if (startedStatus) syncActiveTestCard(startedStatus);
       refreshActivityButton();
-      if (status && status.session) {
+      if (startedStatus && startedStatus.session) {
         showSessionError = true;
-        renderStatus(status);
+        renderStatus(startedStatus);
       }
       var nextSeed = el('test-generations-seed');
       if (nextSeed) nextSeed.value = String(randomSeed());

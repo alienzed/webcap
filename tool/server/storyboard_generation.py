@@ -373,6 +373,7 @@ def _scene_settings(scene):
         "seed": seed,
         "seedMode": seed_mode,
         "references": copy.deepcopy(scene.get("references") or []),
+        "loras": copy.deepcopy(scene.get("loras") or []),
     }
 
 
@@ -565,6 +566,8 @@ def _run_generation(job_id, story_id, scene_id, settings):
                 "seedMode": settings["seedMode"],
                 "aspectRatio": settings["aspectRatio"],
                 "megapixels": settings["megapixels"],
+                "loras": settings.get("loras") or [],
+                "references": settings.get("references") or [],
                 "workflowProfile": "minimax_h3_storyboard_v1",
                 "providerJobId": prompt_id,
             },

@@ -187,3 +187,71 @@ def test_scene_settings_reject_h3_duration_outside_supported_range(storyboard_fs
             "megapixels": 0.2,
             "seedMode": "random",
         })
+
+
+def test_build_workflow_adds_selected_scene_lora_after_base_lora(monkeypatch):
+    template = {
+        "115": {"inputs": {"aspect_ratio": "4:3 (Standard)", "megapixels": 0.2}},
+        "119": {"inputs": {"vae_name": "video.safetensors"}},
+        "120": {"inputs": {"vae_name": "audio.safetensors"}},
+        "127": {"inputs": {"unet_name": "model.safetensors"}},
+        "128": {"inputs": {"clip_name": "clip.safetensors"}},
+        "129": {"inputs": {"noise_seed": 1}},
+        "131": {"inputs": {}},
+        "133": {"inputs": {"value": 7}},
+        "138": {"inputs": {
+            "model": ["148", 0],
+            "clip": ["148", 1],
+            "lora_1": {"on": True, "lora": "mh3/turbo.safetensors", "strength": 1},
+        }},
+        "141": {"inputs": {"filename_prefix": "old"}},
+        "146": {"inputs": {"wildcard_text": "old", "populated_text": "old", "mode": "populate", "seed": 1}},
+        "148": {"inputs": {"lora_name": "candidate.safetensors"}},
+        "161": {"inputs": {"model": ["127", 0]}},
+    }
+    monkeypatch.setattr(storyboard_generation, "_resolve_template_assets", lambda value: copy.deepcopy(value))
+    monkeypatch.setattr(
+        storyboard_generation,
+        "_available_comfy_names",
+        lambda *_args: ["mh3/turbo.safetensors", "characters/alice.safetensors"],
+    )
+    settings = {
+        "prompt": "Prompt",
+        "sourcePrompt": "Prompt",
+        "wildcardsEnabled": False,
+        "aspectRatio": "4:3 (Standard)",
+        "megapixels": 0.2,
+        "duration": 6,
+        "seed": 1,
+        "seedMode": "fixed",
+        "loras": [{"name": "characters/alice.safetensors", "strength": 0.75}],
+    }
+
+    workflow = storyboard_generation._build_workflow(template, settings, "story/render")
+
+    assert workflow["138"]["inputs"]["lora_1"]["lora"] == "mh3/turbo.safetensors"
+    assert workflow["138"]["inputs"]["lora_2"] == {
+        "on": True,
+        "lora": "characters/alice.safetensors",
+        "strength": 0.75,
+    }
+
+
+def test_generation_capabilities_exclude_base_h3_lora(monkeypatch):
+    monkeypatch.setattr(storyboard_generation, "_load_template", lambda: {
+        "138": {"inputs": {
+            "lora_1": {"on": True, "lora": "mh3/turbo.safetensors", "strength": 1},
+        }}
+    })
+    monkeypatch.setattr(
+        storyboard_generation,
+        "_available_comfy_names",
+        lambda *_args: ["characters/alice.safetensors", "mh3/turbo.safetensors"],
+    )
+
+    payload = storyboard_generation.generation_capabilities()
+
+    assert payload == {
+        "loras": ["characters/alice.safetensors"],
+        "baseLoras": ["mh3/turbo.safetensors"],
+    }

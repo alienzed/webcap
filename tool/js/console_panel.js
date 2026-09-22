@@ -28,8 +28,7 @@ function appendToConsolePanel(msg) {
   var logEl = getConsolePanelLogEl();
   if (!logEl) return;
   var div = document.createElement('div');
-  // Render newlines as <br> for streaming output
-  div.innerHTML = String(msg).replace(/\n/g, '<br>');
+  div.textContent = String(msg);
   logEl.appendChild(div);
   // Limit to last 500 lines for performance
   var maxLines = 500;
@@ -39,6 +38,26 @@ function appendToConsolePanel(msg) {
   // Always scroll to bottom after append
   logEl.scrollTop = logEl.scrollHeight;
 }
+
+function markConsoleAttention(active) {
+  var btn = document.getElementById('console-toggle-btn');
+  if (!btn) return;
+  btn.classList.toggle('has-attention', !!active);
+}
+
+function reportConsoleError(source, err) {
+  var message = String(err && err.message ? err.message : err || 'Unknown error');
+  var prefix = '[' + String(source || 'WebCap') + '] ';
+  appendToConsolePanel(prefix + message);
+  if (window.console && console.error) console.error(prefix + message, err);
+  if (!isConsolePanelVisible()) markConsoleAttention(true);
+}
+
+function reportConsoleWarning(source, message) {
+  appendToConsolePanel('[' + String(source || 'WebCap') + '] ' + String(message || ''));
+  if (!isConsolePanelVisible()) markConsoleAttention(true);
+}
+
 
 function isConsolePanelVisible() {
   if (!ui.consolePanelEl) return false;
@@ -60,12 +79,15 @@ function syncConsoleToggleButton() {
 function showConsolePanel() {
   if (!ui.consolePanelEl) return;
   setConsolePanelVisible(true);
+  markConsoleAttention(false);
   syncConsoleToggleButton();
 }
 
 function toggleConsolePanel() {
   if (!ui.consolePanelEl) return;
-  setConsolePanelVisible(!isConsolePanelVisible());
+  var willShow = !isConsolePanelVisible();
+  setConsolePanelVisible(willShow);
+  if (willShow) markConsoleAttention(false);
   syncConsoleToggleButton();
 }
 

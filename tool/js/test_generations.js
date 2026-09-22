@@ -152,9 +152,9 @@
   }
 
   function randomSeed() {
-    var values = new Uint32Array(2);
+    var values = new Uint32Array(1);
     window.crypto.getRandomValues(values);
-    return ((values[0] & 0x1fffff) * 4294967296) + values[1];
+    return values[0];
   }
 
   function isOpen() {

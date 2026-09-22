@@ -1,3 +1,5 @@
+from .common import validate_test_seed
+
 import copy
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif")
 
@@ -25,11 +27,11 @@ def normalize_settings(workflow, new_seed, values=None):
         raise ValueError("Test dimensions are required.")
     try:
         seed = selected.get("seed")
-        selected_seed = new_seed() if seed is None or str(seed).strip() == "" else int(seed)
+        selected_seed = validate_test_seed(
+            new_seed() if seed is None or str(seed).strip() == "" else seed
+        )
     except (TypeError, ValueError) as exc:
         raise ValueError("Test seed must be numeric.") from exc
-    if selected_seed < 0 or selected_seed >= 2 ** 63:
-        raise ValueError("Test seed must be between 0 and 9223372036854775807.")
     return {
         "dimensions": selected_dimensions,
         "seed": selected_seed,

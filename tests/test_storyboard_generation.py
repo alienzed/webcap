@@ -255,3 +255,84 @@ def test_generation_capabilities_exclude_base_h3_lora(monkeypatch):
         "loras": ["characters/alice.safetensors"],
         "baseLoras": ["mh3/turbo.safetensors"],
     }
+
+
+def test_storyboard_generation_queues_other_scenes_with_frozen_settings(storyboard_fs, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, first = storyboard_store.add_scene(story["id"], {
+        "title": "First",
+        "prompt": "First prompt.",
+        "durationSeconds": 6,
+        "aspectRatio": "16:9 (Widescreen)",
+        "megapixels": 0.2,
+        "seedMode": "fixed",
+        "seed": 11,
+    })
+    story, second = storyboard_store.add_scene(story["id"], {
+        "title": "Second",
+        "prompt": "Second prompt.",
+        "durationSeconds": 7,
+        "aspectRatio": "16:9 (Widescreen)",
+        "megapixels": 0.3,
+        "seedMode": "fixed",
+        "seed": 22,
+    })
+
+    storyboard_generation._jobs.clear()
+    storyboard_generation._pending_job_ids[:] = []
+    storyboard_generation._active_job_id = None
+    monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_generation, "_release_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_generation, "_start_job_thread", lambda _job_id: None)
+
+    active = storyboard_generation.start_generation(story["id"], first["id"])
+    queued = storyboard_generation.start_generation(story["id"], second["id"])
+
+    assert active["status"] == "running"
+    assert queued["status"] == "queued"
+    assert queued["queuePosition"] == 1
+
+    stored = storyboard_generation._jobs[queued["jobId"]]
+    assert stored["_settings"]["prompt"] == "Second prompt."
+    assert stored["_settings"]["duration"] == 7.0
+    assert stored["_settings"]["seed"] == 22
+
+    story = storyboard_store.update_scene(story["id"], second["id"], {"prompt": "Edited later."})[0]
+    assert storyboard_generation._jobs[queued["jobId"]]["_settings"]["prompt"] == "Second prompt."
+
+
+def test_storyboard_generation_rejects_duplicate_scene_while_running_or_queued(storyboard_fs, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, first = storyboard_store.add_scene(story["id"], {
+        "title": "First",
+        "prompt": "First prompt.",
+        "durationSeconds": 6,
+        "aspectRatio": "4:3 (Standard)",
+        "megapixels": 0.2,
+        "seedMode": "fixed",
+        "seed": 1,
+    })
+    story, second = storyboard_store.add_scene(story["id"], {
+        "title": "Second",
+        "prompt": "Second prompt.",
+        "durationSeconds": 6,
+        "aspectRatio": "4:3 (Standard)",
+        "megapixels": 0.2,
+        "seedMode": "fixed",
+        "seed": 2,
+    })
+
+    storyboard_generation._jobs.clear()
+    storyboard_generation._pending_job_ids[:] = []
+    storyboard_generation._active_job_id = None
+    monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_generation, "_release_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_generation, "_start_job_thread", lambda _job_id: None)
+
+    storyboard_generation.start_generation(story["id"], first["id"])
+    with pytest.raises(RuntimeError, match="already has a Take generation in progress"):
+        storyboard_generation.start_generation(story["id"], first["id"])
+
+    storyboard_generation.start_generation(story["id"], second["id"])
+    with pytest.raises(RuntimeError, match="already has a queued Take generation"):
+        storyboard_generation.start_generation(story["id"], second["id"])

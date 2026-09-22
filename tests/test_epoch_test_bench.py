@@ -1247,6 +1247,44 @@ def test_queued_request_freezes_prompt_seed_and_selected_files(tmp_path, monkeyp
 
 
 
+def test_concurrent_enqueue_state_after_dispatch_uses_live_worker_not_stale_snapshot(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch01.safetensors"
+    candidate.write_bytes(b"weights")
+
+    monkeypatch.setattr(bench, "_h3_test_directory", lambda _folder: staged)
+    monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
+    monkeypatch.setattr(bench, "_load_template", lambda: {})
+    monkeypatch.setattr(bench, "_normalized_test_settings", lambda *_args, **_kwargs: {
+        "seed": 77,
+        "aspectRatio": "1:1 (Square)",
+        "megapixels": 0.2,
+        "duration": 5,
+    })
+    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
+    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
+    monkeypatch.setattr(bench, "_pending_tests", [])
+
+    class Live:
+        def is_alive(self):
+            return True
+
+    monkeypatch.setattr(bench, "_active_threads", {})
+
+    def dispatch_first_job():
+        bench._pending_tests.pop(0)
+        bench._active_threads["sets/subject"] = Live()
+        return {"status": "running", "session": "session-one"}
+
+    monkeypatch.setattr(bench, "_advance_test_queue", dispatch_first_job)
+
+    payload = bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
+
+    assert payload["queued"] is False
+    assert payload["latest"]["status"] == "running"
+
+
 def test_enqueue_test_queues_behind_active_test(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()

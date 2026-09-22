@@ -1094,8 +1094,14 @@
     var compareBtn = el('test-generations-view-compare-btn');
     var grid = el('test-generations-results');
     var compare = el('test-generations-compare');
-    if (gridBtn) gridBtn.classList.toggle('active', resultsView === 'grid');
-    if (compareBtn) compareBtn.classList.toggle('active', resultsView === 'compare');
+    if (gridBtn) {
+      gridBtn.classList.toggle('active', resultsView === 'grid');
+      gridBtn.setAttribute('aria-selected', resultsView === 'grid' ? 'true' : 'false');
+    }
+    if (compareBtn) {
+      compareBtn.classList.toggle('active', resultsView === 'compare');
+      compareBtn.setAttribute('aria-selected', resultsView === 'compare' ? 'true' : 'false');
+    }
     if (grid) grid.classList.toggle('hidden', resultsView !== 'grid');
     if (compare) compare.classList.toggle('hidden', resultsView !== 'compare');
     renderResults(currentStatus);
@@ -1790,13 +1796,8 @@
       currentSessionModel = String(status.modelId || status.model || currentTestModelId() || '');
     }
     syncActiveRunControls(status || {});
-    var openFolderBtn = el('test-generations-open-results-btn');
     var rateItemsBtn = el('test-generations-rate-items-btn');
     var resultFolder = String(status && status.resultFolder || '');
-    if (openFolderBtn) {
-      openFolderBtn.dataset.resultFolder = resultFolder;
-      openFolderBtn.classList.toggle('hidden', !resultFolder);
-    }
     if (rateItemsBtn) {
       var hasResults = !!(status && Array.isArray(status.results) && status.results.length);
       rateItemsBtn.dataset.resultFolder = resultFolder;
@@ -2249,9 +2250,6 @@
     el('test-generations-stop-btn').onclick = function () { stopRun(this); };
     el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
-    el('test-generations-open-results-btn').onclick = function () {
-      openResultsFolder(this.dataset.resultFolder);
-    };
     el('test-generations-rate-items-btn').onclick = function () {
       openResultsFolder(this.dataset.resultFolder, { rateItems: true });
     };

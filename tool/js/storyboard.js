@@ -276,7 +276,7 @@
               '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate' + (generationRunning ? ' disabled' : '') + '>' +
                 (generationRunning ? 'Generating…' : 'Generate Take') +
               '</button>' +
-              '<span class="storyboard-generation-status">' + generationStatus + '</span>' +
+              '<span class="storyboard-generation-status" data-generation-status>' + generationStatus + '</span>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -674,24 +674,36 @@
     });
   }
 
+  function updateGenerationStatusUi(sceneId, job) {
+    var root = sceneElement(sceneId);
+    if (!root) return;
+    var status = root.querySelector('[data-generation-status]');
+    if (!status) return;
+    if (job.status === 'running') status.textContent = 'ComfyUI · ' + String(job.comfyStatus || 'starting');
+    else if (job.status === 'failed') status.textContent = 'Failed · ' + String(job.error || 'Generation failed');
+    else if (job.status === 'completed') status.textContent = 'Completed';
+  }
+
   function pollGeneration(storyId, sceneId, jobId) {
     window.setTimeout(function () {
       generationRequest(null, 'job=' + encodeURIComponent(jobId)).then(function (payload) {
         var job = payload.job;
         storyState.generationJobs[sceneId] = job;
+        updateGenerationStatusUi(sceneId, job);
         if (job.status === 'running') {
           pollGeneration(storyId, sceneId, jobId);
           return;
         }
         if (job.status === 'failed') {
-          if (storyState.story && storyState.story.id === storyId) renderScenes();
           throw new Error(job.error || 'Storyboard generation failed.');
         }
         if (job.status === 'completed') {
           if (!storyState.story || storyState.story.id !== storyId) {
             return refreshLibrary();
           }
-          return request(null, 'story=' + encodeURIComponent(storyId)).then(function (storyPayload) {
+          return flushPendingSaves().then(function () {
+            return request(null, 'story=' + encodeURIComponent(storyId));
+          }).then(function (storyPayload) {
             storyState.story = storyPayload.story;
             renderStory();
             setSaveState('Saved');

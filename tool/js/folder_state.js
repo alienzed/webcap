@@ -247,6 +247,47 @@ function writeCapturedFolderState(capturedSave) {
   });
 }
 
+function setMediaRating(folderPath, mediaKey, rating) {
+  var targetFolder = String(folderPath || '');
+  var key = String(mediaKey || '').trim();
+  if (!key) return Promise.reject(new Error('Media rating requires a media key.'));
+
+  var performWrite = function () {
+    return fetch('/fs/folder_state/rating', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder: targetFolder,
+        mediaKey: key,
+        rating: rating
+      })
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Failed to save media rating.');
+        }
+        return payload;
+      });
+    });
+  };
+
+  var previousWrite = folderStateWriteChains[targetFolder] || Promise.resolve();
+  var queuedWrite = previousWrite.catch(function () {
+    return false;
+  }).then(performWrite);
+  folderStateWriteChains[targetFolder] = queuedWrite;
+  queuedWrite.then(function () {
+    if (folderStateWriteChains[targetFolder] === queuedWrite) {
+      delete folderStateWriteChains[targetFolder];
+    }
+  }, function () {
+    if (folderStateWriteChains[targetFolder] === queuedWrite) {
+      delete folderStateWriteChains[targetFolder];
+    }
+  });
+  return queuedWrite;
+}
+
 async function writeFolderStateFile(folderPath, folderState, options) {
   // folderPath: relative path from FS root ('' for root)
   var opts = options || {};

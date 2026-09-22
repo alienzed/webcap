@@ -10,6 +10,29 @@ Official sources:
 - Full-reference guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
 - H3 model/recommended workflow: https://www.minimax.io/news/minimax-h3-open-source
 
+## Current Storyboard runtime scope
+
+Storyboard currently uses the **FL2VA task-family checkpoint** through ComfyUI's `MiniMaxH3ImageToVideo` node.
+
+That one base-family path covers the modes Storyboard currently needs:
+
+- no keyframe image -> T2VA-style generation;
+- first frame only -> I2VA-style generation;
+- first and last frames -> FL2VA generation;
+- last frame only -> L2VA-style generation.
+
+All four use the official **base** prompt contract built around:
+
+```text
+integrated_multimodal_description
+overall_soundscape
+non_diegetic_music
+```
+
+This is the only H3 prompt vocabulary that should be supplied to the current Storyboard prompt-writing runtime.
+
+**Ref2VA is not part of the current Storyboard generation path.** It uses a separate task family/checkpoint and ComfyUI reference-to-video conditioning path. Keep its six-section vocabulary out of ordinary Storyboard LLM requests until Storyboard actually gains Ref2VA generation support.
+
 ## Storyboard rule: one Scene is one generation
 
 Before formatting a prompt, decide whether the requested action reasonably fits in the Scene duration.
@@ -18,17 +41,18 @@ The current official H3 specification supports 4-15 second clips at 24 FPS. WebC
 
 Do not solve an overloaded Scene by packing every requested event into dense prose. Prefer a clean sequence of observable beats. If the intent cannot plausibly fit, recommend splitting it into multiple Storyboard Scenes.
 
-## Select the H3 workflow mode first
+## Select the base H3 mode from Storyboard references
 
-The prompt shape depends on how reference images are used.
+Within the current FL2VA-family runtime, the prompt shape depends on which exact keyframe references are attached:
 
-- **T2VA** — text only.
+- **T2VA** — text only; no exact first/last frame.
 - **I2VA** — one exact first-frame image.
 - **FL2VA** — exact first and last frames.
 - **L2VA** — one exact last-frame image.
-- **Full-reference / Ref2VA** — richer image/video/audio references with explicit roles.
 
 Do not treat a generic visual reference as an exact first/last frame unless Storyboard marked it with that semantic role.
+
+Ref2VA is a separate future runtime path, not another option inside the current `MiniMaxH3ImageToVideo` call.
 
 ## Base prompt output structure
 
@@ -270,11 +294,11 @@ Pay particular attention to:
 
 A model-facing prompt should be self-contained enough to establish important visual facts that are not supplied by an exact reference image, but should not bloat every Scene by repeating irrelevant Story history.
 
-## Full-reference / Ref2VA
+## Future-only: Full-reference / Ref2VA
 
-Full-reference mode has a different official rewrite structure. Do not force the three-field base format onto it.
+Ref2VA is intentionally **out of scope for the current Storyboard runtime**.
 
-The official full-reference structure uses these sections in order:
+It uses a separate task family and a different official six-section rewrite structure:
 
 ```text
 subject_definitions
@@ -285,11 +309,9 @@ overall_soundscape
 non_diegetic_music
 ```
 
-Reference labels such as subjects, pictures, videos, and audio have specific meaning in that mode. When Storyboard begins generating through Ref2VA, the workflow adapter must translate semantic Storyboard references into this syntax deliberately.
+Those labels are useful when Storyboard eventually gains true reference-to-video support, but they should **not** be included in current Director-model prompt context. Mixing the Ref2VA vocabulary into FL2VA-family authoring adds irrelevant instructions and increases drift risk for smaller local LLMs.
 
-Until that adapter exists, do not fake Ref2VA formatting by guessing labels.
-
-Current official Ref2VA limits include up to 9 images, up to 3 video clips, and up to 3 audio clips with the documented total-duration/file-count constraints. Runtime capability discovery remains authoritative.
+When Ref2VA support is implemented, give it a deliberate adapter and task-specific prompt contract rather than expanding the current base-family prompt.
 
 ## What the prompt writer should not do
 

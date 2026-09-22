@@ -747,6 +747,20 @@ def test_normalized_test_settings_rejects_unknown_aspect_ratio():
         bench._normalized_test_settings(bench._load_template(), aspect_ratio="5:4 (Unsupported)")
 
 
+def test_legacy_session_status_uses_default_test_model(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    session = tmp_path / "set" / bench.TEST_RESULTS_DIR / "2026-09-21_2159-h3"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "results": [],
+    })
+
+    status = bench.open_session("set", session.name)
+
+    assert status["modelId"] == bench.get_test_model().PROFILE_ID
+
+
 def test_rate_result_writes_normal_session_rating_state(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     session = tmp_path / "set" / bench.TEST_RESULTS_DIR / "2026-09-21_2200-h3"

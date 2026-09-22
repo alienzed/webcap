@@ -308,7 +308,7 @@ Current implementation on the Storyboard branch now includes:
 - Take preview, 1-5 rating, and selected Take per Scene
 - reversible Take removal that retains media and metadata for restore
 - selected-Take sequence preview in Scene order
-- semantic `first_frame`, `last_frame`, and `guide_frame` reference assignment from existing Takes
+- semantic `first_frame` and `last_frame` reference assignment from existing Takes; `guide_frame` remains a reserved domain role for future reference-to-video support rather than a current UI option
 - first/last frame extraction for video Takes using WebCap's existing ffmpeg frame path
 - a direct previous-selected-Take last-frame -> next-Scene first-frame continuity action
 

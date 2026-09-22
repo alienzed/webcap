@@ -66,6 +66,8 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "/fs/storyboard/generation" in storyboard
     assert "Generation prompt" in storyboard
     assert "Summary / intent" in storyboard
+    assert "Entry state" in storyboard
+    assert "Exit state" in storyboard
     assert "Notes" in storyboard
     assert "Selected sequence" in storyboard
 

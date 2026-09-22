@@ -535,13 +535,38 @@
     return request('test_queue_clear').then(function () { return refreshSessions(); });
   }
 
+  function formatElapsedMs(milliseconds) {
+    var seconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000));
+    var minutes = Math.floor(seconds / 60);
+    var hours = Math.floor(minutes / 60);
+    seconds %= 60;
+    minutes %= 60;
+    if (hours) return hours + 'h ' + String(minutes).padStart(2, '0') + 'm';
+    if (minutes) return minutes + 'm ' + String(seconds).padStart(2, '0') + 's';
+    return seconds + 's';
+  }
+
+  function liveStatusDetails(status) {
+    if (!status || (status.status !== 'running' && status.status !== 'stopping')) return '';
+    var parts = [];
+    var comfyStatus = String(status.comfyStatus || '').trim();
+    var jobId = String(status.comfyJobId || '').trim();
+    var startedAt = Number(status.candidateStartedAt || status.startedAt || 0);
+    var lastContactAt = Number(status.comfyLastContactAt || 0);
+    if (comfyStatus) parts.push('Comfy ' + comfyStatus);
+    if (jobId) parts.push('Job ' + jobId.slice(0, 8));
+    if (startedAt) parts.push('elapsed ' + formatElapsedMs(Date.now() - startedAt));
+    if (lastContactAt) parts.push('contact ' + formatElapsedMs(Date.now() - lastContactAt) + ' ago');
+    return parts.length ? ' · ' + parts.join(' · ') : '';
+  }
+
   function statusText(status) {
     if (!status || status.status === 'idle') return '';
     var completed = Number(status.completed || 0);
     var total = Number(status.total || 0);
     var failed = Number(status.failed || 0);
-    if (status.status === 'running') return 'Running ' + completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '') + (status.current ? ' · ' + status.current : '');
-    if (status.status === 'stopping') return 'Stopping · ' + completed + ' / ' + total;
+    if (status.status === 'running') return 'Running ' + completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '') + (status.current ? ' · ' + status.current : '') + liveStatusDetails(status);
+    if (status.status === 'stopping') return 'Stopping · ' + completed + ' / ' + total + liveStatusDetails(status);
     if (status.status === 'stopped') return 'Stopped · ' + completed + ' / ' + total;
     if (status.status === 'complete') return 'Complete · ' + completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '');
     if (status.status === 'failed') return 'Batch failed · ' + completed + ' / ' + total;
@@ -1427,6 +1452,7 @@
   }
 
   function showError(err) {
+    console.error('[Test Generations]', err);
     var errorEl = el('test-generations-error');
     if (errorEl) {
       errorEl.textContent = String(err && err.message ? err.message : err);

@@ -124,7 +124,8 @@ def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():
     assert "trackedJobIds: loadTrackedGenerateJobs()" in script
     assert "function refreshTrackedGenerateJobs()" in script
     assert "requestJson('/fs/inference?job=' + encodeURIComponent(jobId))" in script
-    assert "reportError(new Error(" in script
+    assert "var generationError = new Error(" in script
+    assert "reportError(generationError, conciseGenerateError(" in script
     assert "webcap.generate.trackedJobs" in script
 
     queue_start = script.index("function renderQueue()")

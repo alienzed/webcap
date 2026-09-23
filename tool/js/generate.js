@@ -629,7 +629,8 @@
     var detail = el('generate-director-activity-detail');
     if (!card || !phase || !detail) throw new Error('Prompt Assistant activity markup is missing.');
 
-    var visible = generateState.director.busy || (activity && activity.active);
+    var terminal = activity && ['complete', 'error'].indexOf(String(activity.phase || '')) !== -1;
+    var visible = generateState.director.busy || (activity && activity.active) || terminal;
     card.classList.toggle('hidden', !visible);
     if (!visible) return;
 

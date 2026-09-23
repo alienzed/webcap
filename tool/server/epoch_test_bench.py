@@ -2144,7 +2144,11 @@ def execute_inference(job_id, request, context):
             inference_runtime.available_names,
             inference_runtime.resolve_name,
         )
-        settings = dict(request.get("settings") or {})
+        settings = model.normalize_settings(
+            template,
+            _new_session_seed,
+            dict(request.get("settings") or {}),
+        )
         prompt = str(request.get("prompt") or "").strip()
         if not prompt:
             raise ValueError("Test inference job has no resolved prompt.")

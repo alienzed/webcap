@@ -50,6 +50,18 @@
     return size.toFixed(digits) + ' ' + units[index];
   }
 
+  function measurementAge(value) {
+    var measuredAt = Number(value);
+    if (!isFinite(measuredAt) || measuredAt <= 0) return '';
+    var seconds = Math.max(0, Math.round(Date.now() / 1000 - measuredAt));
+    if (seconds < 60) return 'measured just now';
+    var minutes = Math.round(seconds / 60);
+    if (minutes < 60) return 'measured ' + minutes + 'm ago';
+    var hours = Math.round(minutes / 60);
+    if (hours < 48) return 'measured ' + hours + 'h ago';
+    return 'measured ' + Math.round(hours / 24) + 'd ago';
+  }
+
   function escapeHtml(value) {
     return String(value == null ? '' : value)
       .replace(/&/g, '&amp;')
@@ -142,7 +154,8 @@
           : 'No managed items found.') + '</div>';
       var body = rows.map(function (item) {
         var measured = item.measured ? bytes(item.bytes) : 'Not measured';
-        var secondary = [item.kind, item.status].filter(Boolean).join(' · ');
+        var age = item.measured ? measurementAge(item.measuredAt) : '';
+        var secondary = [item.kind, item.status, age].filter(Boolean).join(' · ');
         var reason = item.protectedReason ? '<span class="storage-item-reason">' + escapeHtml(item.protectedReason) + '</span>' : '';
         return '<article class="storage-item-row">' +
           '<div class="storage-item-copy"><strong title="' + escapeHtml(item.label) + '">' + escapeHtml(item.label) + '</strong>' +
@@ -215,7 +228,8 @@
   function confirmDelete(item) {
     var sizeText = item.measured ? ' This will reclaim about ' + bytes(item.bytes) + '.' : '';
     var label = item.area === 'storyboard' ? 'Story' : 'artifact';
-    return window.confirm('Permanently delete this ' + label + '?\n\n' + item.label + sizeText + '\n\nThis cannot be undone.');
+    var consequence = item.area === 'storyboard' ? '\nThis removes the Story metadata, its Takes, and references.' : '';
+    return window.confirm('Permanently delete this ' + label + '?\n\n' + item.label + sizeText + consequence + '\n\nThis cannot be undone.');
   }
 
   function findItem(area, id, folder) {

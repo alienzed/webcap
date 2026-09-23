@@ -31,7 +31,7 @@ def _public_model(model):
         "settings": list(model.settings),
         "references": list(model.references),
         "default": bool(model.spec.get("default")),
-        "defaultPrompt": model.default_prompt(template),
+        "defaultPrompt": "",
         "defaultSettings": model.normalize_settings(template, _new_seed, model.template_settings(template)),
         "settingOptions": options,
         "loras": selectable,

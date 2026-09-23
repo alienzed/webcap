@@ -106,6 +106,7 @@ Keep the UI efficient and calm.
 - Keep controls contextual.
 - Prefer visible status over hidden magic.
 - Do not force extra steps when a workflow can stay direct.
+- Polling and live refreshes must preserve DOM identity for stateful or interactive elements (especially video/audio playback, inputs, selection, scroll, and expanded controls). Reconcile by stable key and add/update/remove only what actually changed; do not replace whole live containers on a timer unless an intentional context reset requires it.
 
 ## Analysis / Metadata Rules
 

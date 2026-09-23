@@ -47,7 +47,7 @@ from .training_runtime import (
     wsl_executable as _wsl_executable,
 )
 from .training_candidates import ALGORITHMS as _candidate_algorithms, analyze_run_directory as _analyze_run_directory
-from .execution_queue import reserve_resource as reserve_execution_resource, release_resource as release_execution_resource
+from .execution_queue import reserve_resource as reserve_execution_resource, release_resource as release_execution_resource, resource_owner as execution_resource_owner
 
 
 RUNNER_DIR_NAME = TRAINING_RUNTIME_DIR_NAME
@@ -1634,7 +1634,7 @@ def _refresh_job(job):
 def _launch_next_queued_job(state):
     if state.get("queuePaused"):
         return
-    if _external_gpu_owner:
+    if execution_resource_owner():
         return
     if any(job.get("status") in ACTIVE_STATUSES for job in state.get("jobs", [])):
         return

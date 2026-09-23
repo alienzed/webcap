@@ -1,8 +1,8 @@
 # Execution Queue
 
-WebCap has one shared execution-queue substrate for GPU-backed work and separate domain-owned lanes.
+WebCap has one shared execution-queue substrate for GPU-backed work. Short-form inference shares one common `inference` lane; Training remains a separate long-running scheduler that uses the same execution-resource lock.
 
-The substrate exists to prevent Training, Test Generations, and Storyboard Takes from reimplementing the same queue mechanics. It is not a single mixed user-facing queue. Each feature keeps its own scheduling policy, execution semantics, and UI.
+The substrate exists to prevent Generate, Test Generations, and Storyboard Takes from reimplementing the same queue mechanics. Domain workflows keep their own result/session/Take semantics and contextual UI, but inference scheduling is global so queue position and ordering mean the same thing everywhere.
 
 ## Shared contract
 
@@ -28,46 +28,97 @@ Every lane supports the general queue mechanics that are useful across GPU work:
 - restart reconciliation
 - exclusive GPU/resource ownership
 
-The substrate owns these mechanics and state transitions. It does not know how to stop Diffusion-Pipe, cancel a ComfyUI job, create a Storyboard Take, or interpret a Test Generation session.
+The substrate owns these mechanics and state transitions. It does not know how to stop Diffusion-Pipe, cancel a ComfyUI job, create a Storyboard Take, persist a Generate result, or interpret a Test Generation session.
+
+## Inference lane
+
+Generate, Storyboard Takes, and Test renditions share the `inference` lane.
+
+This means:
+
+- queue position is global across inference clients;
+- FIFO ordering is global unless the user explicitly reorders queued work;
+- valid inference work may be queued while another inference job or Training owns the GPU;
+- GPU availability affects when work starts, not whether valid work may be queued;
+- a running inference job is not preempted;
+- client-specific UI may show a filtered projection of the same jobs.
+
+The inference runner owns dispatch for this lane. Client/domain code owns translating its state into a frozen inference request and committing a successful result back into its own storage.
 
 ## Domain ownership
 
-Domain-specific behavior stays with the caller.
+### Generate
+
+Generate is the first clean client of the generic inference layer.
+
+Generate owns:
+
+- its generation form and local UI preferences;
+- persistent generated-result provenance;
+- generated-media browsing/preview behavior;
+- the full visual Generation Queue surface.
+
+The common inference layer owns model execution, ComfyUI transport, job lifecycle, cancellation, and queue scheduling.
 
 ### Storyboard Takes
 
-Storyboard is the first migrated customer. Each Generate Take click queues a distinct job, including multiple Takes for the same Scene. The queued payload freezes the Scene generation settings at enqueue time.
+Storyboard projects inference jobs as pending Take cards. Each Generate Take click queues a distinct job, including multiple Takes for the same Scene. The queued payload freezes Scene generation settings at enqueue time.
 
 Storyboard owns:
 
-- MiniMax H3 / ComfyUI workflow construction
-- ComfyUI cancellation when Stop is requested
-- generated media download
-- Take creation and provenance
-- pending Take cards in the Scene UI
+- converting saved Story/Scene state into an inference request;
+- Story-wide and Scene LoRA resolution;
+- Storyboard reference semantics;
+- Take creation and provenance;
+- pending Take cards in the Scene UI.
 
-The shared lane owns the queued/running state, ordering, persistence, cancellation state, and resource claim.
+Storyboard does not own a private inference scheduler after migration.
 
 ### Test Generations
 
-Test Generations will migrate next. Its linear Sessions experience remains domain UI even though the underlying jobs gain the same queue controls and recovery contract.
+A Test Session remains a Test-domain grouping, but each Base/candidate rendition becomes an ordinary inference job. This lets other inference work be manually interleaved without losing the frozen comparison settings shared by the Session.
+
+Test Generations owns:
+
+- Session folders and `test.json`;
+- staged/global candidate selection;
+- Base comparison semantics;
+- result aggregation;
+- Grid/Compare/rating UX.
+
+Test Generations does not own a private execution queue after migration.
 
 ### Training
 
-Training migrates last because its active-job semantics are richer. Checkpoint-safe Pause/Finish, epoch progress, disk protection, runner recovery, and Training History remain Training-owned. Its generic queue mechanics move to the shared substrate.
+Training remains separate because its active-job semantics are materially richer and much longer-lived:
+
+- checkpoint-safe Pause/Finish;
+- epoch progress;
+- disk protection;
+- resume and runner recovery;
+- Training History.
+
+Training continues to use its own queue/runner and shares only the global GPU execution resource with inference.
 
 ## Resource arbitration
 
-GPU ownership is global while queues remain independent. Only one execution owner may hold the shared resource at a time.
+Only one execution owner may hold the shared GPU resource at a time.
 
-During migration, the existing Training priority rules remain in force: active Training or an unpaused Training queue blocks external GPU work. Test Generations and Storyboard use the shared resource owner through the Training compatibility bridge until Training itself is migrated.
+The existing Training priority rules remain in force during the inference refactor:
+
+- active Training blocks inference execution;
+- an unpaused queued Training job blocks a new inference start;
+- paused Training allows inference;
+- queued inference remains durable while Training is busy;
+- an already-running inference job is not preempted.
 
 ## UI rule
 
-Shared queue mechanics do not imply shared UI.
+Shared inference scheduling does not imply one monolithic workflow UI.
 
-- Training projects jobs as Training queue rows and progress.
-- Test Generations projects jobs as Sessions and pending results.
-- Storyboard projects jobs as pending Take cards.
+- Generate owns the full Generation Queue management surface.
+- Test Generations projects its jobs as Session progress/results.
+- Storyboard projects its jobs as pending Take cards.
+- Training continues to project its own queue rows and progress.
 
-A caller may choose not to expose reorder, pause, or other supported mechanics when that would damage its workflow.
+Client projections must use the same global queue positions for inference jobs. A client may omit queue controls when they would be redundant or disruptive, but it must not maintain competing queue state.

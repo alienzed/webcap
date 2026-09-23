@@ -14,7 +14,9 @@
       previousPrompt: null,
       status: '',
       activityTimer: 0,
-      activityStartedAt: 0
+      activityStartedAt: 0,
+      preloadTimer: 0,
+      preloading: false
     },
     queue: { jobs: [], paused: false },
     trackedJobIds: loadTrackedGenerateJobs(),
@@ -630,7 +632,7 @@
     if (!card || !phase || !detail) throw new Error('Prompt Assistant activity markup is missing.');
 
     var terminal = activity && ['complete', 'error'].indexOf(String(activity.phase || '')) !== -1;
-    var visible = generateState.director.busy || (activity && activity.active) || terminal;
+    var visible = directorActivityActive() || (activity && activity.active) || terminal;
     card.classList.toggle('hidden', !visible);
     if (!visible) return;
 
@@ -658,8 +660,12 @@
     detail.textContent = parts.join(' · ');
   }
 
+  function directorActivityActive() {
+    return generateState.director.busy || generateState.director.preloading;
+  }
+
   function refreshDirectorActivity() {
-    if (!generateState.director.busy) return Promise.resolve();
+    if (!directorActivityActive()) return Promise.resolve();
     return Promise.all([
       requestJson('/fs/director/activity'),
       requestJson('/fs/system_status').catch(function () { return null; })
@@ -668,7 +674,7 @@
     }).catch(function () {
       renderDirectorActivity({ phase: 'preparing', active: true }, null);
     }).then(function () {
-      if (!generateState.director.busy) return;
+      if (!directorActivityActive()) return;
       if (generateState.director.activityTimer) clearTimeout(generateState.director.activityTimer);
       generateState.director.activityTimer = setTimeout(refreshDirectorActivity, 1500);
     });
@@ -690,7 +696,7 @@
     }).then(function () {
       setTimeout(function () {
         var card = el('generate-director-activity');
-        if (!generateState.director.busy && card) card.classList.add('hidden');
+        if (!directorActivityActive() && card) card.classList.add('hidden');
       }, 2200);
     });
   }
@@ -739,10 +745,58 @@
       generateState.director.available = !!payload.available;
       generateState.director.models = payload.models || [];
       renderDirector();
+      return payload;
     }).catch(function (err) {
       generateState.director.available = false;
       renderDirector();
       reportError(err);
+    });
+  }
+
+  function cancelDirectorPreloadTimer() {
+    if (generateState.director.preloadTimer) clearTimeout(generateState.director.preloadTimer);
+    generateState.director.preloadTimer = 0;
+  }
+
+  function selectedDirectorModel() {
+    return (generateState.director.models || []).find(function (model) {
+      return model.id === generateState.director.modelId;
+    }) || null;
+  }
+
+  function scheduleDirectorPreload() {
+    cancelDirectorPreloadTimer();
+    var model = selectedDirectorModel();
+    if (!generateState.open || generateState.director.busy || generateState.director.preloading ||
+        !generateState.director.available || !model || model.status === 'loaded') return;
+    generateState.director.preloadTimer = setTimeout(function () {
+      generateState.director.preloadTimer = 0;
+      preloadDirectorModel();
+    }, 1500);
+  }
+
+  function reportDirectorPreloadError(err) {
+    var message = String(err && err.message ? err.message : err);
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Prompt Assistant preload', message);
+    else console.error('[Prompt Assistant preload]', err);
+  }
+
+  function preloadDirectorModel() {
+    var model = selectedDirectorModel();
+    if (!generateState.open || generateState.director.busy || generateState.director.preloading ||
+        !model || model.status === 'loaded') return Promise.resolve();
+
+    var requestedModel = model.id;
+    generateState.director.preloading = true;
+    startDirectorActivity();
+    return postJson('/fs/director/preload', { model: requestedModel }).catch(function (err) {
+      reportDirectorPreloadError(err);
+    }).then(function () {
+      generateState.director.preloading = false;
+      finishDirectorActivity();
+      return refreshDirector();
+    }).then(function () {
+      if (generateState.director.modelId !== requestedModel) scheduleDirectorPreload();
     });
   }
 
@@ -835,7 +889,13 @@
     workspace.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
-    Promise.all([refreshCapabilities(), refreshDirector(), refreshQueue(), refreshTrackedGenerateJobs(), refreshResults()]).catch(reportError);
+    Promise.all([
+      refreshCapabilities(),
+      refreshDirector().then(function () { scheduleDirectorPreload(); }),
+      refreshQueue(),
+      refreshTrackedGenerateJobs(),
+      refreshResults()
+    ]).catch(reportError);
     schedulePoll();
   }
 
@@ -843,6 +903,7 @@
     var frame = el('app-frame');
     var workspace = el('generate-workspace');
     generateState.open = false;
+    cancelDirectorPreloadTimer();
     if (workspace) workspace.classList.add('hidden');
     if (frame) frame.classList.remove('workspace-generate-open');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
@@ -885,6 +946,7 @@
       setDirectorStatus('');
       window.localStorage.setItem('webcap.generate.directorModel', this.value);
       renderDirector();
+      scheduleDirectorPreload();
     });
     el('generate-queue-pause').onclick = function () {
       queueAction(generateState.queue.paused ? 'resume_queue' : 'pause_queue');

@@ -101,6 +101,23 @@ def test_generate_prompt_assistant_has_non_modal_live_activity():
     assert '@app.route("/fs/director/activity", methods=["GET"])' in app
 
 
+def test_generate_eager_preloads_prompt_assistant_after_workspace_dwell():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert "preloadTimer: 0" in script
+    assert "preloading: false" in script
+    assert "function scheduleDirectorPreload()" in script
+    assert "function preloadDirectorModel()" in script
+    assert "setTimeout(function () {" in script
+    assert "}, 1500);" in script
+    assert "postJson('/fs/director/preload', { model: requestedModel })" in script
+    assert "refreshDirector().then(function () { scheduleDirectorPreload(); })" in script
+    assert "cancelDirectorPreloadTimer();" in script
+    assert "generateState.director.busy || generateState.director.preloading" in script
+    assert '@app.route("/fs/director/preload", methods=["POST"])' in app
+
+
 def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
 

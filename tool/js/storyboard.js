@@ -14,6 +14,7 @@
     generationPolls: {},
     newTakeCounts: {},
     sequenceExport: null,
+    open: false,
     sceneViewMode: window.localStorage.getItem('webcap.storyboard.sceneView') || 'focus',
     activeSceneId: '',
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
@@ -32,7 +33,9 @@
       error: '',
       previousPrompts: {},
       activityTimer: 0,
-      activityStartedAt: 0
+      activityStartedAt: 0,
+      preloadTimer: 0,
+      preloading: false
     }
   };
 
@@ -181,6 +184,64 @@
     });
   }
 
+  function cancelDirectorPreloadTimer() {
+    if (storyState.director.preloadTimer) clearTimeout(storyState.director.preloadTimer);
+    storyState.director.preloadTimer = 0;
+  }
+
+  function selectedDirectorModel() {
+    return (storyState.director.models || []).find(function (model) {
+      return model.id === storyState.director.modelId;
+    }) || null;
+  }
+
+  function scheduleDirectorPreload() {
+    cancelDirectorPreloadTimer();
+    var model = selectedDirectorModel();
+    if (!storyState.open || storyState.director.busy || storyState.director.preloading ||
+        !storyState.director.available || !model || model.status === 'loaded') return;
+    storyState.director.preloadTimer = setTimeout(function () {
+      storyState.director.preloadTimer = 0;
+      preloadDirectorModel();
+    }, 1500);
+  }
+
+  function reportDirectorPreloadError(err) {
+    var message = String(err && err.message ? err.message : err);
+    if (typeof reportConsoleError === 'function') reportConsoleError('Director preload', message);
+    else if (window.console && console.error) console.error('[Director preload] ' + message, err);
+  }
+
+  function preloadDirectorModel() {
+    var model = selectedDirectorModel();
+    if (!storyState.open || storyState.director.busy || storyState.director.preloading ||
+        !model || model.status === 'loaded') return Promise.resolve();
+
+    var requestedModel = model.id;
+    storyState.director.preloading = true;
+    startDirectorActivity();
+    return fetch('/fs/director/preload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: requestedModel })
+    }).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body || body.ok === false) {
+          throw new Error((body && body.error) || 'Director preload failed.');
+        }
+        return body;
+      });
+    }).catch(function (err) {
+      reportDirectorPreloadError(err);
+    }).then(function () {
+      storyState.director.preloading = false;
+      finishDirectorActivity();
+      return refreshDirector();
+    }).then(function () {
+      if (storyState.director.modelId !== requestedModel) scheduleDirectorPreload();
+    });
+  }
+
   function directorActivityRequest(url) {
     return fetch(url).then(function (response) {
       return response.json().then(function (body) {
@@ -221,7 +282,7 @@
     if (!card || !phase || !detail) throw new Error('Storyboard Director activity markup is missing.');
 
     var terminal = activity && ['complete', 'error'].indexOf(String(activity.phase || '')) !== -1;
-    var visible = storyState.director.busy || (activity && activity.active) || terminal;
+    var visible = directorActivityActive() || (activity && activity.active) || terminal;
     card.classList.toggle('hidden', !visible);
     if (!visible) return;
 
@@ -249,8 +310,12 @@
     detail.textContent = parts.join(' · ');
   }
 
+  function directorActivityActive() {
+    return storyState.director.busy || storyState.director.preloading;
+  }
+
   function refreshDirectorActivity() {
-    if (!storyState.director.busy) return Promise.resolve();
+    if (!directorActivityActive()) return Promise.resolve();
     return Promise.all([
       directorActivityRequest('/fs/director/activity'),
       directorActivityRequest('/fs/system_status').catch(function () { return null; })
@@ -259,7 +324,7 @@
     }).catch(function () {
       renderDirectorActivity({ phase: 'preparing', active: true }, null);
     }).then(function () {
-      if (!storyState.director.busy) return;
+      if (!directorActivityActive()) return;
       if (storyState.director.activityTimer) clearTimeout(storyState.director.activityTimer);
       storyState.director.activityTimer = setTimeout(refreshDirectorActivity, 1500);
     });
@@ -281,7 +346,7 @@
     }).then(function () {
       setTimeout(function () {
         var card = el('storyboard-director-activity');
-        if (!storyState.director.busy && card) card.classList.add('hidden');
+        if (!directorActivityActive() && card) card.classList.add('hidden');
       }, 2200);
     });
   }
@@ -2277,6 +2342,8 @@
   }
 
   function closeStoryboardActivity() {
+    storyState.open = false;
+    cancelDirectorPreloadTimer();
     var frame = el('app-frame');
     var workspace = el('storyboard-workspace');
     if (workspace) workspace.classList.add('hidden');
@@ -2291,11 +2358,12 @@
     var workspace = el('storyboard-workspace');
     if (!frame || !workspace) throw new Error('Storyboard workspace markup is missing.');
     if (typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
+    storyState.open = true;
     frame.classList.add('workspace-storyboard-open');
     workspace.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
-    refreshDirector();
+    refreshDirector().then(function () { scheduleDirectorPreload(); });
     refreshGenerationCapabilities();
     refreshLibrary().then(function () {
       if (storyState.story) {
@@ -2332,6 +2400,7 @@
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;
       window.localStorage.setItem('webcap.storyboard.directorModel', this.value);
+      scheduleDirectorPreload();
     });
 
     el('storyboard-sequence-preview').addEventListener('click', function (event) {

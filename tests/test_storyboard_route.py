@@ -338,3 +338,40 @@ def test_storyboard_director_expands_concept_with_recovery(tmp_path, monkeypatch
     assert restored.status_code == 200
     assert restored.get_json()["story"]["concept"] == "Rise and fall of a New York gangster."
     assert restored.get_json()["story"]["previousConcept"] is None
+
+def test_storyboard_route_can_permanently_delete_take(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    root.mkdir()
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", str(root))
+    client = app_module.app.test_client()
+
+    created = client.post("/fs/storyboard", json={
+        "operation": "create_story",
+        "story": {"title": "Delete Take"},
+    })
+    story = created.get_json()["story"]
+    scene = client.post("/fs/storyboard", json={
+        "operation": "add_scene",
+        "storyId": story["id"],
+        "scene": {"title": "Scene"},
+    }).get_json()["scene"]
+    take = client.post("/fs/storyboard/take_upload", data={
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+        "file": (BytesIO(b"image"), "take.png"),
+    }, content_type="multipart/form-data").get_json()["take"]
+    media_path = root / "output" / "storyboards" / story["id"] / take["mediaPath"]
+    assert media_path.is_file()
+
+    deleted = client.post("/fs/storyboard", json={
+        "operation": "delete_take",
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+        "takeId": take["id"],
+    })
+
+    assert deleted.status_code == 200
+    current = deleted.get_json()["story"]["scenes"][scene["id"]]
+    assert take["id"] not in current["takes"]
+    assert not media_path.exists()
+

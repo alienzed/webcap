@@ -195,7 +195,7 @@ def test_expand_concept_is_creative_but_not_scene_planning():
     assert request["output"] == "text"
     assert "Rise and fall of a New York gangster." in prompt
     assert "Develop the narrative arc" in prompt
-    assert "do not break the Story into Scenes yet" in prompt.lower()
+    assert "do not break the story into scenes yet" in prompt.lower()
     assert "do not write MiniMax H3 prompts" in prompt
 
 

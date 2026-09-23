@@ -350,14 +350,14 @@ This is deliberately separate from the Set lifecycle. Sets may move or be retire
 
 #### Archive layout and ownership
 
-The user's existing convention is an `archive/` directory next to `runs/`. Prefer that filesystem-owned convention over another WebCap-global metadata store:
+The user's existing convention is an `archive/` directory next to the trainer `runs/` root. Only the trainer timestamp folder is retained; WebCap's outer action/capture wrapper is working-state and is not part of the long-term experiment archive. Prefer that filesystem-owned convention over another WebCap-global metadata store:
 
 ```text
-output/
+trainer-output-root/
   runs/
-    <active logical runs>
+    <trainer timestamp run>/
   archive/
-    <finalized logical run>/
+    <finalized trainer timestamp run>/
       webcap-run.json
       selected checkpoint / LoRA
       TensorBoard event files
@@ -398,7 +398,7 @@ Finalization should then:
 3. retain the relevant config/run metadata;
 4. prune intermediate checkpoints/resumable bulk according to an explicit retention contract;
 5. write/enrich `webcap-run.json` using relative paths;
-6. move the completed experiment from `runs/` to sibling `archive/`.
+6. move the trainer timestamp folder from `runs/` to sibling `archive/`; the WebCap action/capture wrapper is not copied as part of this archive operation.
 
 A same-filesystem atomic rename is preferred. Cross-filesystem finalization must use copy -> verify -> commit/remove semantics rather than assuming `rename()` always works. Partial finalization must remain recoverable and must not leave two apparently authoritative experiment copies.
 
@@ -423,8 +423,8 @@ Archive discovery should read shallow `webcap-run.json` manifests and known reta
 The durable hierarchy is:
 
 ```text
-filesystem owns artifacts
--> webcap-run.json owns finalized experiment knowledge
+trainer timestamp folder owns the retained experiment artifacts
+-> webcap-run.json inside that folder owns durable experiment knowledge
 -> WebCap reads/presents that knowledge
 ```
 

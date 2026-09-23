@@ -215,7 +215,7 @@ def enqueue_generate(request, label=""):
     return _job_view(execution_get_job(job["id"]))
 
 
-def enqueue_storyboard(request, story_id, scene_id, label=""):
+def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_id=""):
     _ensure_execution_reconciled()
     story_id = str(story_id or "").strip()
     scene_id = str(scene_id or "").strip()
@@ -245,6 +245,7 @@ def enqueue_storyboard(request, story_id, scene_id, label=""):
             "mediaKind": str(request.get("mediaKind") or ""),
             "storyId": story_id,
             "sceneId": scene_id,
+            "migratedFromJobId": str(migrated_from_job_id or ""),
         },
     )
     return _job_view(execution_get_job(job["id"]))

@@ -597,8 +597,8 @@
 
   function chooseLoraPickerOption(picker, name) {
     picker.value = name || '';
-    closeLoraPicker(picker);
     picker.focus();
+    closeLoraPicker(picker);
   }
 
   function handleLoraPickerKeydown(event) {

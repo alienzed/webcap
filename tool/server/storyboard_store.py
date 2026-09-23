@@ -19,6 +19,7 @@ STORYBOARD_DIRNAME = "storyboards"
 STORY_FILE = "story.json"
 VALID_STATUSES = {"active", "complete", "archived"}
 VALID_SEED_MODES = {"random", "fixed"}
+VALID_INVARIANT_KINDS = {"visual", "character", "world", "sound", "custom"}
 VALID_REFERENCE_ROLES = {"first_frame", "last_frame", "guide_frame"}
 VALID_REFERENCE_FRAMES = {"first", "last"}
 
@@ -144,6 +145,26 @@ def _normalize_loras(value):
             raise ValueError("LoRA strength is outside a reasonable range.")
         seen.add(key)
         result.append({"name": name, "strength": strength})
+    return result
+
+
+def _normalize_story_invariants(value):
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Story invariants must be a list.")
+    result = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("Each Story invariant must be an object.")
+        kind = str(item.get("kind") or "custom").strip().lower()
+        if kind not in VALID_INVARIANT_KINDS:
+            raise ValueError("Story invariant kind is unsupported.")
+        title = str(item.get("title") or "").strip()
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        result.append({"kind": kind, "title": title, "text": text})
     return result
 
 
@@ -297,6 +318,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "concept": str(payload.get("concept", current.get("concept", "")) or ""),
         "previousConcept": current.get("previousConcept") if isinstance(current.get("previousConcept"), str) else None,
         "style": str(payload.get("style", current.get("style", "")) or ""),
+        "invariants": _normalize_story_invariants(payload.get("invariants", current.get("invariants", []))),
         "loras": _normalize_loras(payload.get("loras", current.get("loras", []))),
         "tags": _normalize_tags(payload.get("tags", current.get("tags", []))),
         "status": status,

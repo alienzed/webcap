@@ -148,54 +148,22 @@ def _ensure_execution_reconciled():
             EXECUTION_LANE,
             reason="Inference was interrupted by a WebCap restart.",
         )
-        for job in interrupted:
-            details = job.get("details") if isinstance(job.get("details"), dict) else {}
-            prompt_id = str(details.get("providerJobId") or "").strip()
-            if not prompt_id:
-                continue
-            try:
-                from .inference_runtime import cancel_job_and_wait
-                if not cancel_job_and_wait(prompt_id):
-                    hold_provider_cleanup(
-                        prompt_id,
-                        "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
-                    )
-                    _logger.error(
-                        "Interrupted inference provider job %s did not confirm cancellation.",
-                        prompt_id,
-                    )
-            except Exception:
-                hold_provider_cleanup(
-                    prompt_id,
-                    "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
-                )
-                _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
         interrupted_provider_ids = {
             str((job.get("details") or {}).get("providerJobId") or "").strip()
             for job in interrupted
             if isinstance(job.get("details"), dict)
+            and str((job.get("details") or {}).get("providerJobId") or "").strip()
         }
+        for prompt_id in interrupted_provider_ids:
+            hold_provider_cleanup(
+                prompt_id,
+                "Queue paused: interrupted ComfyUI provider cleanup is pending before inference can resume.",
+            )
         for prompt_id in unresolved_terminal_provider_ids - interrupted_provider_ids:
-            try:
-                from .inference_runtime import cancel_job_and_wait
-                if not cancel_job_and_wait(prompt_id):
-                    hold_provider_cleanup(
-                        prompt_id,
-                        "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",
-                    )
-                    _logger.error(
-                        "Prior terminal inference provider job %s did not confirm cancellation.",
-                        prompt_id,
-                    )
-            except Exception:
-                hold_provider_cleanup(
-                    prompt_id,
-                    "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",
-                )
-                _logger.exception(
-                    "Could not verify prior terminal inference provider job %s.",
-                    prompt_id,
-                )
+            hold_provider_cleanup(
+                prompt_id,
+                "Queue paused: prior ComfyUI provider cleanup is pending before inference can resume.",
+            )
         _startup_reconciled = True
 
 
@@ -260,8 +228,6 @@ def _cancel_failed_provider(job):
 def _advance_queue():
     _ensure_execution_reconciled()
     with _dispatch_lock:
-        if not _reconcile_provider_cleanup_holds():
-            return None
         snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
         if snapshot.get("paused") or snapshot.get("activeJobId"):
             return None
@@ -269,11 +235,17 @@ def _advance_queue():
         queued = [job for job in snapshot.get("jobs", []) if job.get("status") == "queued"]
         if not queued:
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
-                _release_gpu()
+                with _provider_hold_lock:
+                    cleanup_pending = bool(_provider_cleanup_holds)
+                if not cleanup_pending:
+                    _release_gpu()
             return None
 
         owner = execution_resource_owner()
         if owner and owner != GPU_RESERVATION_OWNER:
+            return None
+
+        if not _reconcile_provider_cleanup_holds():
             return None
 
         reserved_here = False

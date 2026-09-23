@@ -6,8 +6,8 @@ import time
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .epoch_test_bench import delete_session, list_sessions
-from .generate_store import MANIFEST_NAME, generation_root
+from .epoch_test_bench import delete_session
+from .generate_store import MANIFEST_NAME
 from .inference_runner import stop_storyboard_jobs
 from .storyboard_store import delete_story, list_stories, storyboard_root
 from .training_action import managed_actions, read_action
@@ -118,7 +118,7 @@ def _training_items(cache):
 
 
 def _generate_items(cache):
-    root = generation_root()
+    root = Path(app_config.FS_ROOT) / "output" / "generations"
     rows = []
     if not root.is_dir():
         return rows
@@ -188,22 +188,34 @@ def _test_items(cache, folder):
     if not set_path.is_dir():
         return []
     rows = []
-    for session in list_sessions(set_path):
-        session_id = str(session.get("session") or "")
-        path = set_path / "test-generations" / session_id
+    root = set_path / "test-generations"
+    if not root.is_dir():
+        return rows
+    for path in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower(), reverse=True):
+        if not path.is_dir() or path.is_symlink():
+            continue
+        manifest = path / "test.json"
+        if not manifest.is_file():
+            continue
+        try:
+            session = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(session, dict):
+            continue
+        session_id = path.name
+        status = str(session.get("status") or "")
+        active = status in {"queued", "starting", "running", "stopping"}
         rows.append(_item(
             "tests",
             session_id,
             session.get("name") or session_id,
             path,
             folder=folder,
-            kind=session.get("modelId") or "Test Session",
-            status=session.get("status") or "",
-            purgeable=str(session.get("status") or "") not in {"queued", "starting", "running", "stopping"},
-            protected_reason=(
-                "Active Test Session; stop it before deletion."
-                if str(session.get("status") or "") in {"queued", "starting", "running", "stopping"} else ""
-            ),
+            kind=session.get("modelId") or session.get("model") or "Test Session",
+            status=status,
+            purgeable=not active,
+            protected_reason=("Active Test Session; stop it before deletion." if active else ""),
             meta={
                 "completed": int(session.get("completed") or 0),
                 "failed": int(session.get("failed") or 0),
@@ -315,7 +327,7 @@ def _resolve_generate(item_id):
     parts = PurePosixPath(str(item_id or "")).parts
     if len(parts) != 2 or any(part in {"", ".", ".."} for part in parts):
         raise ValueError("Generation storage ID is invalid.")
-    root = generation_root().resolve()
+    root = (Path(app_config.FS_ROOT) / "output" / "generations").resolve()
     directory = (root / parts[0] / parts[1]).resolve()
     if directory.parent.parent != root or directory.is_symlink():
         raise ValueError("Generation storage ID escaped the managed root.")

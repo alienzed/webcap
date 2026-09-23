@@ -282,22 +282,22 @@ def test_training_runner_keeps_its_job_state_training_only():
     assert "isTrainingQueueJob" not in script
 
 
-def test_training_presentation_cleans_up_when_leaving_training_surface():
+def test_training_presentation_is_owned_by_training_surface():
     workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
-    start = workspace.index("function syncTrainingWorkspaceUi()")
-    end = workspace.index("window.getTrainingWorkspaceEntryKind", start)
-    block = workspace[start:end]
-    detail_sync = block.index("syncTrainingWorkspaceDetailUi();")
-    console_sync = block.index("syncTrainingConsoleUi();")
-    inactive_guard = block.index("if (!isTrainingWorkspaceActive()) return;")
-    refresh = block.index("refreshTrainingWorkspace();")
+    assert ".app.shell-revamp:not(.workspace-surface-training) .training-runner-output-view {" in css
+    isolation_rule = css.split(".app.shell-revamp:not(.workspace-surface-training) .training-runner-output-view {", 1)[1].split("}", 1)[0]
+    assert "display: none !important;" in isolation_rule
+    assert ".app.shell-revamp.workspace-surface-training:not(.training-config-selected) .editor-wrapper {" in css
 
-    assert -1 not in (detail_sync, console_sync, inactive_guard, refresh)
-    assert detail_sync < inactive_guard
-    assert console_sync < inactive_guard
-    assert inactive_guard < refresh
-    assert "var trainingOutputVisible = active && !isUnavailableSetTraining && detailTab === 'run-log';" in workspace
-    assert "trainingOutputView.classList.toggle('hidden', !trainingOutputVisible);" in workspace
-    assert "editorWrapper.classList.toggle('hidden', active &&" in workspace
+    detail_start = workspace.index("function syncTrainingWorkspaceDetailUi()")
+    detail_end = workspace.index("function syncTrainingWorkspaceUi()", detail_start)
+    detail = workspace[detail_start:detail_end]
+    assert "editorWrapper.classList.toggle('hidden'" not in detail
+
+    ui_start = workspace.index("function syncTrainingWorkspaceUi()")
+    ui_end = workspace.index("window.getTrainingWorkspaceEntryKind", ui_start)
+    ui_block = workspace[ui_start:ui_end]
+    assert ui_block.index("if (!isTrainingWorkspaceActive()) return;") < ui_block.index("syncTrainingWorkspaceDetailUi();")
 

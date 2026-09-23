@@ -113,20 +113,15 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
         "seed": 77,
     })
     settings = storyboard_generation._scene_settings(scene)
-    job_id = "job-1"
-    storyboard_generation._jobs[job_id] = {
-        "jobId": job_id,
-        "storyId": story["id"],
-        "sceneId": scene["id"],
-        "status": "running",
-        "startedAt": "now",
-        "completedAt": None,
-        "comfyJobId": None,
-        "comfyStatus": "starting",
-        "takeId": None,
-        "error": "",
-    }
-    storyboard_generation._active_job_id = job_id
+    queued = execution_queue.enqueue(
+        storyboard_generation.EXECUTION_LANE,
+        {"storyId": story["id"], "sceneId": scene["id"], "settings": settings},
+        metadata={"kind": "storyboard-take", "storyId": story["id"], "sceneId": scene["id"]},
+        job_id="job-1",
+    )
+    job_id = queued["id"]
+    execution_queue.claim_next(storyboard_generation.EXECUTION_LANE)
+    execution_queue.mark_running(job_id)
 
     monkeypatch.setattr(storyboard_generation, "_load_template", lambda: {})
     monkeypatch.setattr(storyboard_generation, "_upload_scene_references", lambda _story_id, _job_id, _refs: {})

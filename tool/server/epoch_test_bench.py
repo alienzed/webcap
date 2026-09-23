@@ -26,7 +26,7 @@ from .execution_queue import (
 
 TEMPLATE_PATH = get_test_model().TEMPLATE_PATH
 TEST_RESULTS_DIR = "test-generations"
-EXECUTION_LANE = "test-generations"
+LEGACY_EXECUTION_LANE = "test-generations"
 TEST_ASPECT_RATIO_OPTIONS = tuple(getattr(get_test_model(), "ASPECT_RATIO_OPTIONS", ()))
 _status_lock = threading.Lock()
 _recent_sets_cache = {"expires": 0.0, "items": []}
@@ -411,7 +411,7 @@ def _candidate_rating_scores(folder_path, model_id=None):
         if values["count"]
     }
 
-def _mark_session_interrupted(session_directory, message):
+def _mark_session_interrupted(session_directory, message="Test Generations session was interrupted by a WebCap restart."):
     status = _read_status(session_directory) or {}
     if status.get("status") not in ("running", "stopping"):
         return _session_status(session_directory)
@@ -590,7 +590,6 @@ def handle_request(folder_path, mode, selection_criteria=None):
 # Shared inference migration -------------------------------------------------
 
 
-LEGACY_EXECUTION_LANE = EXECUTION_LANE
 SHARED_EXECUTION_LANE = "inference"
 
 

@@ -136,7 +136,8 @@ def test_storyboard_llm_job_applies_expanded_concept_before_completion(llm_root,
 
     finished = llm_runner.job_status(job["jobId"])
     assert finished["status"] == "completed"
-    assert finished["result"]["story"]["concept"] == "Expanded concept."
+    assert finished["result"]["storyId"] == story["id"]
+    assert finished["result"]["result"] == "Expanded concept."
     assert storyboard_store.load_story(story["id"])["concept"] == "Expanded concept."
 
 

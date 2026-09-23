@@ -1887,6 +1887,12 @@ def handle_request(folder_path, mode, selection_criteria=None):
 
 # Shared inference migration -------------------------------------------------
 
+_legacy_visible_session_status = _visible_session_status
+_legacy_activity_snapshot = activity_snapshot
+_legacy_stop = stop
+_legacy_delete_session = delete_session
+_legacy_remove_candidate_from_session = _remove_candidate_from_session
+
 LEGACY_EXECUTION_LANE = EXECUTION_LANE
 SHARED_EXECUTION_LANE = "inference"
 
@@ -2529,7 +2535,7 @@ def _visible_session_status(folder_path, session_directory):
     status_payload = _read_status(session_directory) or {}
     if isinstance(status_payload.get("inferenceJobs"), list):
         return _sync_inference_session(session_directory)
-    return _session_status(session_directory)
+    return _legacy_visible_session_status(folder_path, session_directory)
 
 
 def list_sessions(folder_path):
@@ -2612,6 +2618,8 @@ def stop(folder_path):
         raise RuntimeError("No active Test Generations session to stop.")
     session_directory = _session_directory(folder_path, session_id)
     status_payload = _read_status(session_directory) or {}
+    if not isinstance(status_payload.get("inferenceJobs"), list):
+        return _legacy_stop(folder_path)
     status_payload["status"] = "stopping"
     _atomic_write_json(_status_path(session_directory), status_payload)
 
@@ -2627,6 +2635,9 @@ def stop(folder_path):
 
 def delete_session(folder_path, session_name):
     session = _session_directory(folder_path, session_name)
+    session_payload = _read_status(session) or {}
+    if not isinstance(session_payload.get("inferenceJobs"), list):
+        return _legacy_delete_session(folder_path, session_name)
     if _session_has_nonterminal_jobs(session):
         raise RuntimeError("Cannot delete an active Test Generations session. Stop it first.")
     session_status = _read_status(session) or {}
@@ -2643,6 +2654,9 @@ def delete_session(folder_path, session_name):
 
 def _remove_candidate_from_session(folder_path, session_name, candidate_name):
     session = _session_directory(folder_path, session_name)
+    session_payload = _read_status(session) or {}
+    if not isinstance(session_payload.get("inferenceJobs"), list):
+        return _legacy_remove_candidate_from_session(folder_path, session_name, candidate_name)
     if _session_has_nonterminal_jobs(session):
         raise RuntimeError("Cannot remove results from an active Test Generations session. Stop it first.")
 
@@ -2682,7 +2696,8 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
 
 
 def activity_snapshot(folder_path=None):
-    active = []
+    legacy = _legacy_activity_snapshot(folder_path)
+    active = list(legacy.get("active") or [])
     snapshot = execution_lane_snapshot(SHARED_EXECUTION_LANE, include_terminal=False)
     seen = set()
     for job in snapshot.get("jobs", []):

@@ -413,6 +413,51 @@ def create_story(payload):
 
 
 @_serialized_mutation
+def duplicate_story(story_id):
+    source = load_story(story_id)
+    source_scenes = source.get("scenes") if isinstance(source.get("scenes"), dict) else {}
+    duplicate = _normalize_story({
+        "title": (str(source.get("title") or "Untitled Story").strip() + " Copy").strip(),
+        "concept": source.get("concept") or "",
+        "style": source.get("style") or "",
+        "invariants": copy.deepcopy(source.get("invariants") or []),
+        "loras": copy.deepcopy(source.get("loras") or []),
+        "tags": copy.deepcopy(source.get("tags") or []),
+        "status": "active",
+        "pinned": False,
+    })
+
+    duplicate["sceneOrder"] = []
+    duplicate["scenes"] = {}
+    duplicate["removedScenes"] = {}
+    duplicate["development"] = copy.deepcopy(source.get("development")) if isinstance(source.get("development"), dict) else None
+
+    scene_fields = (
+        "title", "summary", "entryState", "exitState", "prompt",
+        "durationSeconds", "aspectRatio", "megapixels", "seed", "seedMode",
+        "wildcardsEnabled", "loras", "storyLoraOverrides", "notes",
+    )
+    for source_scene_id in source.get("sceneOrder") or []:
+        current = source_scenes.get(source_scene_id)
+        if not isinstance(current, dict):
+            raise RuntimeError("Story scene order is invalid.")
+        scene_id = _new_id("scene")
+        payload = {key: copy.deepcopy(current.get(key)) for key in scene_fields if key in current}
+        scene = _normalize_scene(scene_id, payload)
+        duplicate["scenes"][scene_id] = scene
+        duplicate["sceneOrder"].append(scene_id)
+
+    path = _story_path(duplicate["id"])
+    if path.exists():
+        raise RuntimeError("Story already exists.")
+    _write_json_atomic(path, duplicate)
+    (path.parent / "takes").mkdir(parents=True, exist_ok=True)
+    for scene_id in duplicate["sceneOrder"]:
+        (path.parent / "takes" / scene_id).mkdir(parents=True, exist_ok=True)
+    return duplicate
+
+
+@_serialized_mutation
 def delete_story(story_id):
     resolved_id = _safe_story_id(story_id)
     directory = _story_dir(resolved_id)

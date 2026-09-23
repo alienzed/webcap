@@ -23,6 +23,7 @@
       modelId: window.localStorage.getItem('webcap.storyboard.directorModel') || '',
       available: false,
       busy: false,
+      runtimeLabel: '',
       error: ''
     }
   };
@@ -153,19 +154,21 @@
       window.localStorage.setItem('webcap.storyboard.directorModel', selected);
     }
     select.value = selected;
-    status.textContent = 'llama.cpp';
+    status.textContent = storyState.director.runtimeLabel || 'Director';
   }
 
   function refreshDirector() {
     return directorRequest(null).then(function (payload) {
       storyState.director.available = !!payload.available;
       storyState.director.models = payload.models || [];
+      storyState.director.runtimeLabel = payload.runtime || '';
       storyState.director.error = payload.error || '';
       renderDirectorSelector();
       return payload;
     }).catch(function (err) {
       storyState.director.available = false;
       storyState.director.models = [];
+      storyState.director.runtimeLabel = '';
       storyState.director.error = String(err && err.message ? err.message : err);
       renderDirectorSelector();
     });

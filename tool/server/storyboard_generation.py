@@ -16,6 +16,20 @@ from pathlib import Path
 
 from . import config as app_config
 from .storyboard_store import add_take_upload, finalize_generated_take, load_story, resolve_scene_loras, storyboard_root
+from .execution_queue import (
+    cancel_queued as execution_cancel_queued,
+    claim_next as execution_claim_next,
+    enqueue as execution_enqueue,
+    finish_job as execution_finish_job,
+    get_job as execution_get_job,
+    lane_snapshot as execution_lane_snapshot,
+    mark_running as execution_mark_running,
+    pause_lane as execution_pause_lane,
+    request_action as execution_request_action,
+    reorder_job as execution_reorder_job,
+    resume_lane as execution_resume_lane,
+    update_job as execution_update_job,
+)
 
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
@@ -31,11 +45,8 @@ ASPECT_RATIO_OPTIONS = (
     "16:9 (Widescreen)",
     "21:9 (Ultrawide)",
 )
-_lock = threading.Lock()
-_jobs = {}
-_active_job_id = None
-_pending_job_ids = []
-GPU_RESERVATION_OWNER = "storyboard-generation"
+EXECUTION_LANE = "storyboard-takes"
+GPU_RESERVATION_OWNER = EXECUTION_LANE
 
 
 def _reserve_gpu():
@@ -47,10 +58,6 @@ def _reserve_gpu():
 def _release_gpu():
     from .training_runner import release_gpu_for_external_work
     release_gpu_for_external_work(GPU_RESERVATION_OWNER)
-
-
-def _utc_now():
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _windows_curl_path():

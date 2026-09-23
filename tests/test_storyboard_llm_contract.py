@@ -9,6 +9,10 @@ def _story():
         "title": "Storm Hotel",
         "concept": "A long concept that should not be sent for a local prompt-writing operation.",
         "style": "Rain-soaked neo-noir horror, sodium-vapor highlights, restrained handheld camera.",
+        "invariants": [
+            {"kind": "character", "title": "Mara", "text": "Mara has a dark bob, pale raincoat, and a guarded demeanor."},
+            {"kind": "sound", "title": "Score", "text": "Low analog synth, no vocals."},
+        ],
         "sceneOrder": ["scene-1", "scene-2", "scene-3"],
         "scenes": {
             "scene-1": {
@@ -52,6 +56,11 @@ def test_write_prompt_request_is_deliberately_local_and_manual_first():
     assert request["operation"] == "write_prompt"
     assert request["output"] == "text"
     assert "Rain-soaked neo-noir horror" in prompt
+    assert "[STORY INVARIANTS]" in prompt
+    assert "Character: Mara" in prompt
+    assert "dark bob, pale raincoat" in prompt
+    assert "Sound: Score" in prompt
+    assert "Low analog synth, no vocals." in prompt
     assert "Footprints" in prompt
     assert "notices wet footprints" in prompt
     assert "Duration seconds: 8" in prompt
@@ -158,6 +167,9 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert request["response_schema"]["properties"]["scenes"]["minItems"] == 2
     assert "A long concept that should not be sent for a local prompt-writing operation." in prompt
     assert "Rain-soaked neo-noir horror" in prompt
+    assert "[STORY INVARIANTS]" in prompt
+    assert "Character: Mara" in prompt
+    assert "Low analog synth, no vocals." in prompt
     assert "complete model-facing H3 prompt for every Scene now" in prompt
     assert "at least two Scenes" in prompt
     assert "between 4 and 15 seconds" in prompt

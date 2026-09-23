@@ -1,0 +1,43 @@
+name: Storyboard roundoff validation
+
+on:
+  push:
+    branches:
+      - feature/storyboard-roundoff
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: cp tool/config.example.json tool/config.json
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pip install -r requirements.txt
+      - name: Focused Python regressions
+        run: |
+          python -m pytest -q \
+            tests/test_storyboard_store.py::test_uploaded_scene_reference_is_story_owned_and_replaces_cleanly \
+            tests/test_storyboard_store.py::test_uploaded_scene_reference_rejects_video \
+            tests/test_storyboard_store.py::test_take_reference_replaces_and_cleans_manual_upload \
+            tests/test_storyboard_route.py::test_storyboard_route_can_upload_scene_reference \
+            tests/test_storyboard_generation.py::test_storyboard_generation_cleans_owned_comfy_reference_inputs_after_capture \
+            tests/test_storyboard_generation.py::test_owned_comfy_reference_cleanup_is_scoped_to_job_prefix \
+            tests/test_storyboard_ui_contract.py::test_storyboard_roundoff_has_prompt_restore_manual_refs_and_readiness_summary \
+            tests/test_test_generations_ui_contract.py::test_test_prompt_draft_survives_prepare_and_template_fallback
+      - name: JavaScript syntax
+        run: |
+          node --check tool/js/storyboard.js
+          node --check tool/js/test_generations.js

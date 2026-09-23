@@ -1021,12 +1021,15 @@
         '<header class="storyboard-scene-header">' +
           '<span class="storyboard-scene-number">Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
           '<input class="storyboard-scene-title" data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title">' +
-          '<div class="storyboard-scene-actions">' +
-            '<button type="button" class="review-captions-btn" data-scene-action="up" title="Move Scene up" aria-label="Move Scene up" ' + (index === 0 ? 'disabled' : '') + '>↑</button>' +
-            '<button type="button" class="review-captions-btn" data-scene-action="down" title="Move Scene down" aria-label="Move Scene down" ' + (index === order.length - 1 ? 'disabled' : '') + '>↓</button>' +
-            '<button type="button" class="review-captions-btn" data-scene-action="duplicate" title="Duplicate this Scene, including its current authoring settings">Duplicate</button>' +
-            '<button type="button" class="review-captions-btn" data-scene-action="delete" title="Remove this Scene; it remains recoverable under Removed Scenes">Remove</button>' +
-          '</div>' +
+          '<details class="storyboard-scene-menu">' +
+            '<summary title="Scene actions" aria-label="Scene actions">•••</summary>' +
+            '<div class="storyboard-scene-menu-popover">' +
+              '<button type="button" data-scene-action="duplicate">Duplicate Scene</button>' +
+              '<button type="button" data-scene-action="up"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
+              '<button type="button" data-scene-action="down"' + (index === order.length - 1 ? ' disabled' : '') + '>Move later</button>' +
+              '<button type="button" class="danger" data-scene-action="delete">Remove Scene</button>' +
+            '</div>' +
+          '</details>' +
         '</header>' +
         '<div class="storyboard-scene-body">' +
           '<div class="storyboard-scene-main">' +

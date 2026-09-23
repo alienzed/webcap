@@ -71,6 +71,7 @@ def test_scene_settings_resolve_story_loras_before_queueing(storyboard_fs):
         "loras": [
             {"name": "characters/alice.safetensors", "strength": 0.8},
             {"name": "styles/film.safetensors", "strength": 0.5},
+            {"name": "styles/noir.safetensors", "strength": 0.9, "enabled": False},
         ],
     })
     story, scene = storyboard_store.add_scene(story["id"], {

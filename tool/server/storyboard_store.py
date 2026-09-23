@@ -147,7 +147,7 @@ def _normalize_tags(value):
     return result
 
 
-def _normalize_loras(value):
+def _normalize_loras(value, *, allow_enabled=False):
     if value is None:
         return []
     if not isinstance(value, list):
@@ -169,8 +169,14 @@ def _normalize_loras(value):
             raise ValueError("LoRA strength must be numeric.") from exc
         if not (-100.0 < strength < 100.0):
             raise ValueError("LoRA strength is outside a reasonable range.")
+        normalized = {"name": name, "strength": strength}
+        if allow_enabled and "enabled" in item:
+            if not isinstance(item.get("enabled"), bool):
+                raise ValueError("LoRA enabled must be boolean.")
+            if item["enabled"] is False:
+                normalized["enabled"] = False
         seen.add(key)
-        result.append({"name": name, "strength": strength})
+        result.append(normalized)
     return result
 
 
@@ -230,7 +236,7 @@ def _normalize_story_lora_overrides(value):
 
 
 def resolve_scene_loras(story, scene):
-    story_loras = _normalize_loras((story or {}).get("loras", []))
+    story_loras = _normalize_loras((story or {}).get("loras", []), allow_enabled=True)
     scene_loras = _normalize_loras((scene or {}).get("loras", []))
     overrides = {
         item["name"].casefold(): item
@@ -240,6 +246,8 @@ def resolve_scene_loras(story, scene):
 
     resolved = []
     for item in story_loras:
+        if item.get("enabled") is False:
+            continue
         override = overrides.get(item["name"].casefold(), {})
         if override.get("enabled") is False:
             continue
@@ -348,7 +356,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "previousConcept": current.get("previousConcept") if isinstance(current.get("previousConcept"), str) else None,
         "style": str(payload.get("style", current.get("style", "")) or ""),
         "invariants": _normalize_story_invariants(payload.get("invariants", current.get("invariants", []))),
-        "loras": _normalize_loras(payload.get("loras", current.get("loras", []))),
+        "loras": _normalize_loras(payload.get("loras", current.get("loras", [])), allow_enabled=True),
         "tags": _normalize_tags(payload.get("tags", current.get("tags", []))),
         "status": status,
         "pinned": bool(payload.get("pinned", current.get("pinned", False))),

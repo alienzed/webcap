@@ -836,6 +836,19 @@
   gap: 5px;
 }
 
+.storyboard-lora-row-story {
+  grid-template-columns: auto minmax(0, 1fr) 72px auto;
+  align-items: center;
+}
+
+.storyboard-lora-story-enabled {
+  justify-content: center;
+}
+
+.storyboard-lora-row-story-disabled {
+  opacity: 0.55;
+}
+
 .storyboard-lora-row select,
 .storyboard-lora-row input {
   min-width: 0;

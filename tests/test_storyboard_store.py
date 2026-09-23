@@ -447,13 +447,17 @@ def test_story_loras_are_inherited_with_sparse_scene_overrides(storyboard_fs):
         "loras": [
             {"name": "characters/alice.safetensors", "strength": 0.8},
             {"name": "styles/film.safetensors", "strength": 0.5},
+            {"name": "styles/noir.safetensors", "strength": 0.9, "enabled": False},
         ],
     })
+    assert story["loras"][2]["enabled"] is False
+
     story, scene = storyboard_store.add_scene(story["id"], {
         "title": "Scene",
         "storyLoraOverrides": [
             {"name": "characters/alice.safetensors", "strength": 0.65},
             {"name": "styles/film.safetensors", "enabled": False},
+            {"name": "styles/noir.safetensors", "enabled": True},
         ],
         "loras": [{"name": "clothing/dress.safetensors", "strength": 0.7}],
     })

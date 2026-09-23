@@ -235,6 +235,8 @@ def test_storyboard_story_loras_are_inherited_and_overridable_in_scenes():
     assert 'id="storyboard-story-lora-add"' in html
     assert 'id="storyboard-story-lora-picker"' in html
     assert "storyLoraOverrides" in storyboard
+    assert "data-story-lora-global-enabled" in storyboard
+    assert "storyboard-lora-row-story" in storyboard
     assert "data-story-lora-inherited-row" in storyboard
     assert "data-story-lora-enabled" in storyboard
     assert "data-story-lora-scene-strength" in storyboard

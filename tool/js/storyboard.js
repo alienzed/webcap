@@ -759,10 +759,12 @@
     var list = el('storyboard-story-lora-list');
     if (!list) return [];
     return Array.prototype.map.call(list.querySelectorAll('[data-story-lora-row]'), function (row) {
-      return {
+      var item = {
         name: row.querySelector('[data-story-lora-name]').value,
         strength: row.querySelector('[data-story-lora-strength]').value
       };
+      if (!row.querySelector('[data-story-lora-global-enabled]').checked) item.enabled = false;
+      return item;
     }).filter(function (item) { return !!item.name; });
   }
 
@@ -770,7 +772,12 @@
     lora = lora || {};
     var name = String(lora.name || '');
     var strength = lora.strength == null ? 1 : lora.strength;
-    return '<div class="storyboard-lora-row" data-story-lora-row>' +
+    var enabled = lora.enabled !== false;
+    return '<div class="storyboard-lora-row storyboard-lora-row-story" data-story-lora-row>' +
+      '<label class="storyboard-lora-enabled storyboard-lora-story-enabled" title="Enable this Story LoRA">' +
+        '<input type="checkbox" data-story-lora-global-enabled' + (enabled ? ' checked' : '') +
+          ' aria-label="Enable Story LoRA ' + escapeHtml(name) + '">' +
+      '</label>' +
       '<select data-story-lora-name>' + loraOptions(name) + '</select>' +
       '<input type="number" step="0.05" data-story-lora-strength value="' + escapeHtml(strength) + '" aria-label="Story LoRA strength">' +
       '<button type="button" class="review-captions-btn" data-story-lora-remove title="Remove Story LoRA">×</button>' +
@@ -816,16 +823,19 @@
   function inheritedLoraRowHtml(lora, override) {
     lora = lora || {};
     override = override || {};
+    var storyEnabled = lora.enabled !== false;
     var enabled = override.enabled !== false;
     var defaultStrength = Number(lora.strength == null ? 1 : lora.strength);
     var strength = override.strength == null ? defaultStrength : Number(override.strength);
-    return '<div class="storyboard-lora-row storyboard-lora-row-inherited" data-story-lora-inherited-row data-lora-name="' +
+    var disabledAttr = storyEnabled ? '' : ' disabled';
+    return '<div class="storyboard-lora-row storyboard-lora-row-inherited' + (storyEnabled ? '' : ' storyboard-lora-row-story-disabled') +
+      '" data-story-lora-inherited-row data-lora-name="' +
       escapeHtml(lora.name || '') + '" data-story-default-strength="' + escapeHtml(defaultStrength) + '">' +
-      '<label class="storyboard-lora-enabled" title="Use this Story LoRA in this Scene"><input type="checkbox" data-story-lora-enabled' +
-        (enabled ? ' checked' : '') + '><span>Story</span></label>' +
+      '<label class="storyboard-lora-enabled" title="' + escapeHtml(storyEnabled ? 'Use this Story LoRA in this Scene' : 'Disabled at Story level') +
+        '"><input type="checkbox" data-story-lora-enabled' + (enabled ? ' checked' : '') + disabledAttr + '><span>Story</span></label>' +
       '<span class="storyboard-lora-inherited-name" title="' + escapeHtml(lora.name || '') + '">' + escapeHtml(lora.name || '') + '</span>' +
       '<input type="number" step="0.05" data-story-lora-scene-strength value="' + escapeHtml(strength) +
-        '" aria-label="Inherited Story LoRA strength">' +
+        '" aria-label="Inherited Story LoRA strength"' + disabledAttr + '>' +
     '</div>';
   }
 
@@ -964,6 +974,7 @@
     var scenes = story.scenes || {};
     var removedScenes = story.removedScenes || {};
     var storyLoras = Array.isArray(story.loras) ? story.loras : [];
+    var activeStoryLoras = storyLoras.filter(function (lora) { return lora && lora.enabled !== false; });
 
     syncSceneViewControls(order);
     if (storyState.sceneViewMode === 'overview') {
@@ -1038,7 +1049,7 @@
         '</span>';
       }).join('');
       var conditioningSummaryParts = [];
-      if (storyLoras.length) conditioningSummaryParts.push(String(storyLoras.length) + ' inherited');
+      if (activeStoryLoras.length) conditioningSummaryParts.push(String(activeStoryLoras.length) + ' inherited');
       var overrideCount = Object.keys(overrides).length;
       if (overrideCount) conditioningSummaryParts.push(String(overrideCount) + ' override' + (overrideCount === 1 ? '' : 's'));
       if (sceneLoras.length) conditioningSummaryParts.push(String(sceneLoras.length) + ' Scene');

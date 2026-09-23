@@ -553,3 +553,27 @@ def test_comfy_scratch_refuses_symlinked_owned_job_root(monkeypatch, tmp_path):
     with pytest.raises(ValueError, match="symlinked"):
         storage_manager.purge("comfy", "input/generate/job-link")
     assert outside.is_dir()
+
+
+def test_generate_purge_rechecks_active_shared_inference_job(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    directory = _generation(tmp_path, job_id="job-live")
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {
+            "jobs": [{
+                "id": "job-live",
+                "status": "running",
+                "metadata": {"client": "generate"},
+            }],
+        },
+    )
+
+    item = storage_manager.overview("")["items"]["generate"][0]
+    assert item["purgeable"] is False
+    assert item["status"] == "finalizing"
+
+    with pytest.raises(RuntimeError, match="active Generate work"):
+        storage_manager.purge("generate", "2026-09-23/job-live")
+    assert directory.is_dir()

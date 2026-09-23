@@ -151,7 +151,7 @@ def test_grid_deface_shortcut_uses_serial_batch_mutation_bookkeeping():
     assert "return !!MEDIA_EXTENSIONS[ext];" in actions
     assert "if (!items.length)" in actions
     assert "if (!eligibleItems.length)" in actions
-    assert "'Deface ' + eligibleItems.length + ' selected image'" in actions
+    assert "'Deface ' + eligibleItems.length + ' selected media item'" in actions
     assert "for (var i = 0; i < eligibleItems.length; i += 1)" in actions
     assert "var response = await fetch('/fs/deface'" in actions
     assert "var output = await response.text();" in actions

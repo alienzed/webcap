@@ -227,10 +227,10 @@ def enqueue_storyboard(request, story_id, scene_id, label=""):
         "entryState": str(request.get("entryState") or ""),
         "exitState": str(request.get("exitState") or ""),
         "seedMode": str(request.get("seedMode") or ""),
-        "references": copy.deepcopy(request.get("references") or []),
+        "referenceRecords": copy.deepcopy(request.get("referenceRecords") or []),
     }
     frozen_request = copy.deepcopy(request)
-    for key in ("entryState", "exitState", "seedMode"):
+    for key in ("entryState", "exitState", "seedMode", "referenceRecords"):
         frozen_request.pop(key, None)
     job = execution_enqueue(
         EXECUTION_LANE,

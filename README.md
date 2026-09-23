@@ -116,8 +116,10 @@ Start from [`tool/config.example.json`](tool/config.example.json). The important
 - `training.repeat_reference_epochs` — fixed epoch count used when solving generated dataset repeats; default `90` and intentionally independent of a run's selected Epochs value.
 - `training.test_copy_roots` / `training.test_copy_subfolder` — per-model destination roots and optional subfolder for staging LoRAs into the Test Bench.
 - `training.enabled_profiles` — models offered for new training runs; at least one must remain enabled.
-- `storyboard.director.llama_server` — optional explicit llama.cpp `llama-server` executable path; configure this in **App Settings → Storyboard** when it is not on `PATH`.
-- `storyboard.director.port` / `context_size` / `max_tokens` — local Director runtime limits; defaults are `8189`, `8192`, and `4096`.
+- `storyboard.director.mode` — `local` for WebCap-managed llama.cpp or `remote` for an OpenAI-compatible server.
+- `storyboard.director.endpoint` — remote API base (for example `http://host:11434/v1`) when Director mode is `remote`.
+- `storyboard.director.llama_server` — optional explicit llama.cpp `llama-server` executable path used in local mode; configure this in **App Settings → Storyboard** when it is not on `PATH`.
+- `storyboard.director.port` / `context_size` / `max_tokens` — Director runtime limits; local defaults are `8189`, `8192`, and `4096`, while `max_tokens` also applies to remote requests.
 - `analysis.enableFaceAnalysis` — optional Face Focus metadata.
 - `analysis.enableMediaPipeAnalysis` — optional selection-pose metadata/suggestions.
 - `primer.template` — default caption template.

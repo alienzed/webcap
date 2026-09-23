@@ -1,7 +1,9 @@
 import json
+import logging
 import shutil
 import os
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -16,6 +18,9 @@ from .execution_queue import get_job as execution_get_job, update_job as executi
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
 COMFY_JOB_MISSING_GRACE_SECONDS = 10
+COMFY_PROVIDER_STATE_VERSION = 1
+COMFY_PROVIDER_STATE_FILE = "comfy_provider.json"
+_logger = logging.getLogger(__name__)
 
 
 class InferenceStopped(RuntimeError):
@@ -305,6 +310,75 @@ def download_output(output_ref):
     return _read_bytes(COMFY_BASE_URL + "/view?" + query)
 
 
+def _provider_state_path():
+    return Path(app_config.FS_ROOT) / ".webcap_runtime" / COMFY_PROVIDER_STATE_FILE
+
+
+def _write_provider_state(root):
+    path = _provider_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": COMFY_PROVIDER_STATE_VERSION,
+        "root": str(Path(root).resolve()),
+        "learnedAt": time.time(),
+    }
+    fd, temp_name = tempfile.mkstemp(
+        prefix=COMFY_PROVIDER_STATE_FILE + ".",
+        suffix=".tmp",
+        dir=str(path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+def _remember_provider_root(output_path):
+    path = Path(output_path).resolve()
+    output_root = None
+    for parent in (path.parent,) + tuple(path.parents):
+        if parent.name.lower() == "output":
+            output_root = parent.resolve()
+            break
+    if output_root is None:
+        return
+    provider_root = output_root.parent
+    if provider_root == output_root or provider_root.is_symlink():
+        return
+    try:
+        _write_provider_state(provider_root)
+    except OSError:
+        _logger.warning("Could not persist the discovered ComfyUI provider root.", exc_info=True)
+
+
+def known_provider_root():
+    path = _provider_state_path()
+    if not path.is_file() or path.is_symlink():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or payload.get("version") != COMFY_PROVIDER_STATE_VERSION:
+        return None
+    raw_root = str(payload.get("root") or "").strip()
+    if not raw_root:
+        return None
+    root = Path(raw_root)
+    if root.is_symlink() or not root.is_dir():
+        return None
+    output_root = root / "output"
+    if output_root.is_symlink() or not output_root.is_dir():
+        return None
+    return root.resolve()
+
+
 def local_saved_output_path(output_ref):
     if not isinstance(output_ref, dict):
         return None
@@ -314,6 +388,7 @@ def local_saved_output_path(output_ref):
 
     direct = Path(raw_path)
     if direct.is_file():
+        _remember_provider_root(direct)
         return direct
 
     windows_path = PureWindowsPath(raw_path)
@@ -324,6 +399,7 @@ def local_saved_output_path(output_ref):
         for part in parts:
             candidate = candidate / part
         if candidate.is_file():
+            _remember_provider_root(candidate)
             return candidate
     return None
 

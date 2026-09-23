@@ -1679,6 +1679,46 @@
     }
   }
 
+
+  function syncGenerationJobCard(job) {
+    if (!job) return;
+    var card = document.querySelector('[data-generation-job-id="' + CSS.escape(String(job.jobId || '')) + '"]');
+    if (!card) return;
+    var status = String(job.status || '');
+    var queuePosition = Number(job.queuePosition || 0);
+    var statusText = status === 'queued'
+      ? ('Queued' + (queuePosition ? ' · #' + queuePosition : ''))
+      : status === 'starting'
+        ? 'Starting…'
+        : status === 'stopping'
+          ? 'Stopping…'
+          : ('Generating…' + (job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : ''));
+    var mediaStatus = card.querySelector('.storyboard-take-pending-media strong');
+    var footerStatus = card.querySelector('.storyboard-take-identity span');
+    if (mediaStatus) mediaStatus.textContent = statusText;
+    if (footerStatus) footerStatus.textContent = statusText;
+
+    var actionHost = card.querySelector('.storyboard-take-pending-footer');
+    var action = card.querySelector('[data-generation-action]');
+    var wantedAction = status === 'queued'
+      ? 'cancel'
+      : ((status === 'starting' || status === 'running') ? 'stop' : '');
+    if (!wantedAction) {
+      if (action) action.remove();
+      return;
+    }
+    if (!action || action.dataset.generationAction !== wantedAction) {
+      if (action) action.remove();
+      action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'review-captions-btn';
+      action.dataset.generationAction = wantedAction;
+      action.dataset.jobId = String(job.jobId || '');
+      action.textContent = wantedAction === 'cancel' ? 'Cancel' : 'Stop';
+      actionHost.appendChild(action);
+    }
+  }
+
   function clearGenerationPoll(jobId) {
     var timer = storyState.generationPolls[jobId];
     if (timer) window.clearTimeout(timer);
@@ -1697,7 +1737,7 @@
         syncStoryboardGenerationActivity();
 
         if (generationJobIsActive(job)) {
-          if (storyState.story && storyState.story.id === storyId) renderScenes();
+          if (storyState.story && storyState.story.id === storyId) syncGenerationJobCard(job);
           pollGeneration(storyId, jobId);
           return;
         }

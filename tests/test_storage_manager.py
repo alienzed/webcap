@@ -272,8 +272,10 @@ def test_storage_ui_is_isolated_global_activity():
     assert "workspace === 'storage'" in shell
     assert "activity === 'storage'" in shell
     assert "os.walk" not in backend
-    assert 'PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime"}' in backend
+    assert 'PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}' in backend
     assert '"set": _set_items(cache, folder)' in backend
+    assert '"staged": _staged_items(cache, folder)' in backend
+    assert '"comfy": _comfy_items(cache)' in backend
 
 
 def _h3_probe(root, probe_id="h3-20260923-120000-deadbeef", status="completed"):
@@ -465,3 +467,89 @@ def test_staged_test_copy_is_protected_while_shared_inference_references_it(monk
         storage_manager.purge("staged", item["id"], "sets/demo")
     assert candidate.is_file()
     assert candidate.with_suffix(".webcap.json").is_file()
+
+
+def test_comfy_scratch_inventory_is_prefix_scoped_and_purgeable(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path / "fs")
+    provider = tmp_path / "ComfyUI"
+    generate = provider / "input" / "webcap-generate" / "job-old"
+    unknown = provider / "input" / "someone-else" / "job-old"
+    generate.mkdir(parents=True)
+    unknown.mkdir(parents=True)
+    (generate / "reference.png").write_bytes(b"owned")
+    (unknown / "keep.png").write_bytes(b"external")
+    (provider / "output").mkdir(parents=True)
+
+    monkeypatch.setattr(storage_manager.inference_runtime, "known_provider_root", lambda: provider)
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {"jobs": []},
+    )
+
+    items = storage_manager.overview("")["items"]["comfy"]
+    assert [item["id"] for item in items] == ["input/generate/job-old"]
+    assert items[0]["purgeable"] is True
+
+    storage_manager.purge("comfy", "input/generate/job-old")
+
+    assert not generate.exists()
+    assert unknown.is_dir()
+    assert (unknown / "keep.png").is_file()
+
+
+def test_comfy_scratch_rechecks_active_inference_before_purge(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path / "fs")
+    provider = tmp_path / "ComfyUI"
+    scratch = provider / "output" / "webcap-generate" / "job-live"
+    scratch.mkdir(parents=True)
+    (scratch / "render.mp4").write_bytes(b"video")
+    (provider / "input").mkdir(parents=True)
+
+    monkeypatch.setattr(storage_manager.inference_runtime, "known_provider_root", lambda: provider)
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {
+            "jobs": [{
+                "id": "job-live",
+                "status": "running",
+                "metadata": {"client": "generate"},
+            }],
+        },
+    )
+
+    item = storage_manager.overview("")["items"]["comfy"][0]
+    assert item["purgeable"] is False
+    assert "active Generate work" in item["protectedReason"]
+
+    with pytest.raises(RuntimeError, match="queued or active inference work"):
+        storage_manager.purge("comfy", "output/generate/job-live")
+    assert scratch.is_dir()
+
+
+def test_comfy_scratch_refuses_symlinked_owned_job_root(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path / "fs")
+    provider = tmp_path / "ComfyUI"
+    family = provider / "input" / "webcap-generate"
+    family.mkdir(parents=True)
+    (provider / "output").mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = family / "job-link"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("Symlink creation is unavailable on this platform.")
+
+    monkeypatch.setattr(storage_manager.inference_runtime, "known_provider_root", lambda: provider)
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {"jobs": []},
+    )
+
+    assert storage_manager.overview("")["items"]["comfy"] == []
+    with pytest.raises(ValueError, match="symlinked"):
+        storage_manager.purge("comfy", "input/generate/job-link")
+    assert outside.is_dir()

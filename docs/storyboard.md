@@ -103,6 +103,9 @@ Initial fields:
   "title": "Storm Hotel",
   "concept": "High-level reminder and grounded overview.",
   "style": "Persistent atmosphere, cinematic language, era, texture, and visual tone.",
+  "loras": [
+    {"name": "character/alice.safetensors", "strength": 0.9}
+  ],
   "tags": ["horror", "hotel"],
   "status": "active",
   "pinned": true,
@@ -142,6 +145,7 @@ The schema should support future providers without forcing Phase 1 to implement 
   "seedMode": "random",
   "wildcardsEnabled": false,
   "loras": [],
+  "storyLoraOverrides": [],
   "references": [],
   "notes": "",
   "takes": {},
@@ -153,7 +157,7 @@ The schema should support future providers without forcing Phase 1 to implement 
 }
 ```
 
-Scene LoRA entries are provider-visible names plus the strength consumed by the current H3 Power LoRA Loader:
+Story and Scene LoRA entries are provider-visible names plus the strength consumed by the current H3 Power LoRA Loader. Story LoRAs are inherited by every Scene. A Scene stores only sparse `storyLoraOverrides` when it disables an inherited LoRA or changes its strength, plus its own independent `loras`:
 
 ```json
 {
@@ -162,7 +166,9 @@ Scene LoRA entries are provider-visible names plus the strength consumed by the 
 }
 ```
 
-The H3 turbo LoRA that belongs to the base workflow stays implicit and is not duplicated into Scene data.
+An inherited override is keyed by LoRA name, for example `{"name":"character/alice.safetensors","enabled":false}` or `{"name":"character/alice.safetensors","strength":0.7}`. Effective generation settings are resolved when a Take is queued, so later Story changes do not rewrite queued jobs or Take provenance.
+
+The H3 turbo LoRA that belongs to the base workflow stays implicit and is not duplicated into Story or Scene data.
 
 Future references use semantic roles rather than ComfyUI node IDs:
 
@@ -217,21 +223,12 @@ WebCap should eventually assemble provider requests from these stable instructio
 
 ### LLM authoring
 
-The first Storyboard Director runtime is now **llama.cpp**, managed by WebCap as a local subprocess. ComfyUI remains dedicated to H3 image/video inference.
+Storyboard Director supports two execution modes while keeping one provider-neutral authoring layer:
 
-The runtime uses llama.cpp's router mode rather than one hard-coded model process:
+- **Local llama.cpp** — WebCap starts and manages `llama-server` on loopback, discovers GGUFs from the shared Model Root `text_encoders` folder, explicitly loads the selected model for a request, and unloads it afterward.
+- **Remote OpenAI-compatible** — WebCap connects directly to a configured API base such as `http://host:11434/v1`, discovers models from `/models`, and sends the same Director contracts to `/chat/completions`. This path is suitable for Ollama or another compatible server on a different machine.
 
-- WebCap starts `llama-server` locally on loopback only;
-- `--models-dir` points at WebCap's existing shared Model Root `text_encoders` folder;
-- the Storyboard Director selector is populated from llama.cpp's model list;
-- `--models-max 1` keeps at most one Director model resident;
-- WebCap explicitly loads the selected model for a Director request and unloads it afterward;
-- the router process itself remains lightweight and does not own GPU memory while no model is loaded;
-- the selected Director model is a runtime preference stored by the browser, not Story data.
-
-This deliberately conservative first slice unloads the Director after every request. That keeps WebCap's existing GPU reservation gate authoritative and prevents a resident LLM from colliding with Training, Test Generations, or H3 generation. If repeated model loading becomes a meaningful workflow cost, a later phase may keep the Director warm while Storyboard owns the GPU, but correctness comes first.
-
-Before loading a Director model, WebCap asks idle ComfyUI to unload cached models/free memory. Director inference and H3 generation therefore still incur the same fundamental large-model swap imposed by the 32 GB GPU; llama.cpp merely makes the handoff explicit across two specialized runtimes.
+The selected Director model is a runtime preference stored by the browser, not Story data. Remote inference never reserves WebCap's local GPU or asks local ComfyUI to free models. Local llama.cpp keeps the conservative GPU handoff: WebCap reserves the GPU, asks idle ComfyUI to unload cached models/free memory, loads one Director model, then unloads it and releases the reservation after the request.
 
 LLM context stays deliberately small:
 
@@ -251,7 +248,7 @@ Early authoring operations should be explicit functions rather than a general ag
 Manual prompt fields remain fully usable without an LLM. Storyboard generation always consumes those stored manual fields; future LLM assistance may propose edits to them but must never become a prerequisite for generation.
 
 
-Storyboard exposes a local **Director model** selector populated from GGUFs that the configured llama.cpp router can see. The selection is runtime preference, not Story meaning. Initially one selected model handles planning, audit, prompt writing, and revision; cross-model audit can remain an explicit later option.
+Storyboard exposes a **Director model** selector populated from the active runtime's model list. The selection is runtime preference, not Story meaning. Initially one selected model handles planning, audit, prompt writing, and revision; cross-model audit can remain an explicit later option.
 
 ### ComfyUI
 

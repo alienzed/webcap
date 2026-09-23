@@ -94,7 +94,14 @@ def test_inference_runner_executes_claimed_storyboard_job(inference_root, monkey
             "sourcePrompt": "Prompt",
             "settings": {"aspectRatio": "4:3 (Standard)", "megapixels": 0.2, "duration": 6, "seed": 7},
             "loras": [],
-            "references": {},
+            "references": {"first_frame": "references/first.png"},
+            "referenceRecords": [{
+                "role": "first_frame",
+                "mediaPath": "references/first.png",
+                "source": "take",
+                "sourceTakeId": "take-previous",
+                "frame": "last",
+            }],
             "wildcardsEnabled": False,
             "entryState": "Before",
             "exitState": "After",
@@ -125,6 +132,9 @@ def test_inference_runner_executes_claimed_storyboard_job(inference_root, monkey
     assert captured["context"]["storyId"] == "story-1"
     assert captured["context"]["sceneId"] == "scene-1"
     assert captured["context"]["entryState"] == "Before"
+    assert captured["context"]["referenceRecords"][0]["sourceTakeId"] == "take-previous"
+    assert "referenceRecords" not in captured["request"]
+    assert captured["request"]["references"] == {"first_frame": "references/first.png"}
     assert captured["request"]["prompt"] == "Prompt"
 
 

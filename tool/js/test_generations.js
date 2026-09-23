@@ -2148,7 +2148,7 @@
 
   function stopRun(stopBtn) {
     if (stopBtn) stopBtn.disabled = true;
-    request('test_stop').then(function (status) {
+    request('test_stop', { session: String(stopBtn && stopBtn.dataset.sessionStop || '') }).then(function (status) {
       syncActiveRunControls(status);
       refreshActivityButton();
       if (!currentSession || currentSession === String(status && status.session || '')) renderStatus(status);

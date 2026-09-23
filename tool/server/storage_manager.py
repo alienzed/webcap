@@ -1312,14 +1312,19 @@ def start_scan(folder=""):
 def cancel_scan():
     global _SCAN_STATE
     with _SCAN_LOCK:
-        if not isinstance(_SCAN_STATE, dict) or _SCAN_STATE.get("status") not in {"running", "cancelling"}:
-            return scan_status()
-        if _SCAN_CANCEL is not None:
-            _SCAN_CANCEL.set()
-        _SCAN_STATE["status"] = "cancelling"
-        _SCAN_STATE["phase"] = "cancelling"
-        state = dict(_SCAN_STATE)
-    return {"ok": True, "scan": state}
+        active = isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("status") in {"running", "cancelling"}
+        if active:
+            if _SCAN_CANCEL is not None:
+                _SCAN_CANCEL.set()
+            _SCAN_STATE["status"] = "cancelling"
+            _SCAN_STATE["phase"] = "cancelling"
+            state = dict(_SCAN_STATE)
+        else:
+            state = dict(_SCAN_STATE) if isinstance(_SCAN_STATE, dict) else None
+    if state is not None:
+        return {"ok": True, "scan": state}
+    cache = _read_cache()
+    return {"ok": True, "scan": {"status": "idle", "lastScan": cache.get("lastScan")}}
 
 
 def open_path(area, item_id, folder=""):

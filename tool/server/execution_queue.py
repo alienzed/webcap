@@ -169,6 +169,7 @@ def enqueue(lane_name, payload, metadata=None, job_id=None):
             "metadata": frozen_metadata,
             "details": {},
             "result": {},
+            "requestedAction": "",
             "payload": frozen_payload,
         }
         if _find_job(state, job["id"])[1] is not None:
@@ -293,6 +294,48 @@ def finish_job(job_id, status="completed", result=None, error=""):
     return update_job(job_id, status=status, result=result, error=error)
 
 
+def request_action(job_id, action):
+    action = str(action or "").strip().lower()
+    if action not in {"pause", "stop", "cancel"}:
+        raise ValueError("Unsupported execution queue action: " + action)
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        if job.get("status") in TERMINAL_STATUSES:
+            raise ValueError("Execution queue job is already finished.")
+        if action == "cancel" and job.get("status") == "queued":
+            job["status"] = "cancelled"
+            job["finishedAt"] = now
+            job["requestedAction"] = ""
+        else:
+            job["requestedAction"] = action
+            if action in {"stop", "cancel"} and job.get("status") in ACTIVE_STATUSES:
+                job["status"] = "stopping"
+        job["updatedAt"] = now
+        lane = _lane(state, lane_name)
+        if job.get("status") in TERMINAL_STATUSES and lane.get("activeJobId") == job["id"]:
+            lane["activeJobId"] = ""
+        _refresh_positions(lane)
+        _write_state(state)
+        return _public_job(job)
+
+
+def clear_requested_action(job_id):
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        _lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        job["requestedAction"] = ""
+        job["updatedAt"] = now
+        _write_state(state)
+        return _public_job(job)
+
+
 def cancel_queued(job_id):
     with _lock:
         state = _read_state()
@@ -356,6 +399,7 @@ def requeue_job(job_id, front=False, payload=None, metadata=None):
         job["error"] = ""
         job["details"] = {}
         job["result"] = {}
+        job["requestedAction"] = ""
         if payload is not None:
             job["payload"] = copy.deepcopy(payload)
         if isinstance(metadata, dict):

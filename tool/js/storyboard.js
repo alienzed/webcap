@@ -1818,6 +1818,7 @@
   }
 
   function openStoryboardActivity() {
+    if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
     var frame = el('app-frame');
     var workspace = el('storyboard-workspace');
     if (!frame || !workspace) throw new Error('Storyboard workspace markup is missing.');

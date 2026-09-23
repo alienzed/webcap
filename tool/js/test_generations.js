@@ -2007,6 +2007,7 @@
   }
 
   function openPane() {
+    if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
     var node = pane();
     var frame = el('app-frame');
     var summary = el('test-generations-summary');

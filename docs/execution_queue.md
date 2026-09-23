@@ -1,8 +1,8 @@
 # Execution Queue
 
-WebCap has one shared execution-queue substrate for GPU-backed work and separate domain-owned lanes.
+WebCap has one shared execution-queue substrate for GPU-backed work.
 
-The substrate exists to prevent Training, Test Generations, and Storyboard Takes from reimplementing the same queue mechanics. It is not a single mixed user-facing queue. Each feature keeps its own scheduling policy, execution semantics, and UI.
+The substrate owns durable queue mechanics. Domain code owns execution semantics and result storage. The long-term inference target is one common `inference` lane for Generate, Storyboard Takes, and Test renditions, while Training remains a separate long-running scheduler that shares only the GPU execution resource.
 
 ## Shared contract
 
@@ -17,7 +17,7 @@ Every execution job has:
 - a requested action field for domain executors to honor
 - persisted queue state under `<filesystem.root>/.webcap/execution_queue.json`
 
-Every lane supports the general queue mechanics that are useful across GPU work:
+Every lane supports the general queue mechanics useful across GPU work:
 
 - enqueue / start
 - pause / resume scheduling
@@ -27,48 +27,125 @@ Every lane supports the general queue mechanics that are useful across GPU work:
 - restart reconciliation
 - exclusive GPU/resource ownership
 
-The substrate owns these mechanics and state transitions. It does not know how to stop Diffusion-Pipe, cancel a ComfyUI job, create a Storyboard Take, or interpret a Test Generation session.
+The substrate owns these mechanics and state transitions. It does not know how to stop Diffusion-Pipe, cancel a ComfyUI provider job, create a Storyboard Take, persist a standalone Generate result, or interpret a Test Generation session.
 
-## Domain ownership
+State transitions are explicit:
 
-Domain-specific behavior stays with the caller.
+```text
+queued -> starting -> running -> completed / failed / stopped
+                      \
+                       -> stopping -> stopped
+```
+
+Only queued jobs can be cancelled directly. Only active jobs can be stopped or finished.
+
+## Inference target
+
+Generate, Storyboard Takes, and Test renditions are all short-form GPU inference clients and should ultimately share one `inference` lane.
+
+That target means:
+
+- queue position is global across inference clients;
+- FIFO ordering is global unless the user explicitly reorders queued work;
+- valid inference may be queued while another inference job or Training owns the GPU;
+- GPU availability affects when work starts, not whether valid work may be queued;
+- a running inference job is not preempted;
+- each client may show a contextual projection of the same queue;
+- the Generate activity owns the full visual **Generation Queue** management surface.
+
+No automatic priorities, client weights, or fairness scheduler are required initially. Manual ordering is enough.
+
+## Migration state
+
+The target is being reached incrementally so mature workflows are not destabilized.
+
+### Generate
+
+Generate is the first clean client of the common `inference` lane.
+
+Generate owns:
+
+- its standalone prompt/generation UI;
+- generic Director prompt-writing/refinement context;
+- persistent generated-media provenance;
+- generated-media previews.
+
+The inference runner owns:
+
+- durable scheduling;
+- GPU acquisition/release;
+- common ComfyUI transport;
+- provider polling/cancellation;
+- lifecycle transitions.
 
 ### Storyboard Takes
 
-Storyboard is the first migrated customer. Each Generate Take click queues a distinct job, including multiple Takes for the same Scene. The queued payload freezes the Scene generation settings at enqueue time.
+Storyboard currently uses the shared queue substrate through the `storyboard-takes` lane.
 
 Storyboard owns:
 
-- MiniMax H3 / ComfyUI workflow construction
-- ComfyUI cancellation when Stop is requested
-- generated media download
-- Take creation and provenance
-- pending Take cards in the Scene UI
+- converting saved Story/Scene state into frozen generation settings;
+- Story-wide and Scene LoRA resolution;
+- Storyboard reference semantics;
+- Take creation and provenance;
+- pending Take cards.
 
-The shared lane owns the queued/running state, ordering, persistence, cancellation state, and resource claim.
+A later migration moves these jobs to `inference` without changing Storyboard's contextual UI or Take semantics.
 
 ### Test Generations
 
-Test Generations uses the `test-generations` lane. A queued job freezes the prompt, selected staged LoRAs, model settings, and workflow snapshot; starting the job creates the normal Test Session and hands execution back to the existing batch runner.
+Test Generations currently uses the shared queue substrate through the `test-generations` lane.
 
-The Sessions UI remains intentionally linear. The shared substrate supports queue mechanics such as pause/resume and reordering, but Test Generations only exposes the controls its current workflow uses. Queued Test work may wait behind another GPU owner and is pumped by a small Test-owned observer, so it does not depend on the pane staying open.
+A queued Test job freezes the prompt, staged LoRAs, model settings, and workflow snapshot. A Test-owned observer pumps durable queued Sessions, so work no longer depends on the Test pane staying open.
+
+Test owns:
+
+- Session folders and `test.json`;
+- Base/candidate comparison semantics;
+- result aggregation;
+- Grid/Compare/rating UX.
+
+A later migration moves Test execution onto the common `inference` lane. The Test Session remains a domain grouping even when its GPU work becomes common inference work.
 
 ### Training
 
-Training migrates last because its active-job semantics are richer. Checkpoint-safe Pause/Finish, epoch progress, disk protection, runner recovery, and Training History remain Training-owned. Its generic queue mechanics move to the shared substrate.
+Training remains separate because its semantics are materially different:
+
+- multi-hour duration;
+- checkpoint-safe Pause/Finish;
+- epoch progress;
+- disk protection;
+- resume and runner recovery;
+- Training History.
+
+Training continues to use its own queue/runner and shares only the global GPU execution resource with inference.
 
 ## Resource arbitration
 
-GPU ownership is global while queues remain independent. Only one execution owner may hold the shared resource at a time.
+Only one execution owner may hold the shared GPU resource at a time.
 
-During migration, the existing Training priority rules remain in force: active Training or an unpaused Training queue blocks external GPU work. Test Generations and Storyboard use the shared resource owner through the Training compatibility bridge until Training itself is migrated.
+During migration:
+
+- active Training blocks inference execution;
+- an unpaused queued Training job blocks a new external inference start;
+- paused Training allows inference;
+- queued inference remains durable while Training is busy;
+- an already-running inference job is not preempted;
+- separate legacy inference lanes remain mutually exclusive through the same resource owner until they move into `inference`.
+
+## Startup and observers
+
+Durable inference lanes reconcile interrupted active work before their queue observers start.
+
+Queue reads should not be used as a dispatch mechanism. Background observers are responsible for advancing queued work, so navigating to Media, Storyboard, Test, Generate, or another activity does not determine whether GPU work continues.
 
 ## UI rule
 
-Shared queue mechanics do not imply shared UI.
+Shared scheduling does not imply one monolithic workflow UI.
 
-- Training projects jobs as Training queue rows and progress.
-- Test Generations projects jobs as Sessions and pending results.
-- Storyboard projects jobs as pending Take cards.
+- Generate exposes the full Generation Queue.
+- Storyboard projects its work as pending Take cards.
+- Test projects its work as Session progress/results.
+- Training keeps its own queue rows and progress.
 
-A caller may choose not to expose reorder, pause, or other supported mechanics when that would damage its workflow.
+As Storyboard and Test move to the common `inference` lane, their displayed queue positions must be the same global positions shown by Generate. Contextual views may omit controls that do not fit their workflow, but they must not maintain competing queue state.

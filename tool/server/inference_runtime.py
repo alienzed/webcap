@@ -213,6 +213,34 @@ def cancel_job(prompt_id):
     return bool(response.get("cancelled")) if isinstance(response, dict) else False
 
 
+def cancel_job_and_wait(prompt_id, timeout=10):
+    job_id = str(prompt_id or "").strip()
+    if not job_id:
+        return True
+    try:
+        cancel_job(job_id)
+    except Exception:
+        job = read_job(job_id)
+        if job is None:
+            return True
+        status = str(job.get("status") or "").strip().lower()
+        if status in {"completed", "failed", "cancelled"}:
+            return True
+        raise
+
+    deadline = time.monotonic() + max(0.0, float(timeout or 0))
+    while True:
+        job = read_job(job_id)
+        if job is None:
+            return True
+        status = str(job.get("status") or "").strip().lower()
+        if status in {"completed", "failed", "cancelled"}:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.5)
+
+
 def _format_error(job):
     error = job.get("execution_error") if isinstance(job, dict) and isinstance(job.get("execution_error"), dict) else {}
     message = str(error.get("exception_message") or "").strip()
@@ -233,7 +261,10 @@ def wait_for_output(prompt_id, execution_job_id, find_output_ref):
         queue_job = execution_get_job(execution_job_id)
         requested_action = str(queue_job.get("requestedAction") or "")
         if requested_action in ("stop", "cancel"):
-            cancel_job(prompt_id)
+            if not cancel_job_and_wait(prompt_id):
+                raise RuntimeError(
+                    "ComfyUI did not confirm inference cancellation; the Generation Queue must remain paused."
+                )
             status = "cancelled" if requested_action == "cancel" else "stopped"
             raise InferenceStopped(status, "Inference " + status + ".")
 
@@ -271,6 +302,19 @@ def download_output(output_ref):
         "type": output_ref.get("type") or "output",
     })
     return _read_bytes(COMFY_BASE_URL + "/view?" + query)
+
+
+def cleanup_saved_output(output_ref):
+    if not isinstance(output_ref, dict) or str(output_ref.get("type") or "output") != "output":
+        return False
+    fullpath = str(output_ref.get("fullpath") or "").strip()
+    if not fullpath:
+        return False
+    path = Path(fullpath)
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
 
 
 def upload_image(image_path, subfolder, filename=None):

@@ -95,12 +95,16 @@ def test_execution_queue_startup_reconciliation_precedes_monitors():
     app_source = (Path(__file__).parents[1] / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     startup = app_source.split('if __name__ == "__main__":', 1)[1]
 
+    training_reconcile = startup.index("reconcile_training_startup()")
     test_reconcile = startup.index("reconcile_test_generations_startup()")
     storyboard_reconcile = startup.index("reconcile_storyboard_generation_startup()")
     inference_reconcile = startup.index("reconcile_inference_startup()")
     training_observer = startup.index("start_training_runner_observer()")
     inference_observer = startup.index("start_inference_observer()")
 
+    assert training_reconcile < test_reconcile
+    assert training_reconcile < storyboard_reconcile
+    assert training_reconcile < inference_reconcile
     assert test_reconcile < training_observer
     assert storyboard_reconcile < training_observer
     assert inference_reconcile < training_observer

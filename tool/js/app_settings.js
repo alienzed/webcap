@@ -75,8 +75,8 @@ function normalizeAppConfigShape(cfg) {
   if (typeof out.storyboard.director.endpoint !== 'string') out.storyboard.director.endpoint = '';
   if (typeof out.storyboard.director.llama_server !== 'string') out.storyboard.director.llama_server = '';
   if (!Number.isInteger(out.storyboard.director.port)) out.storyboard.director.port = 8189;
-  if (!Number.isInteger(out.storyboard.director.context_size)) out.storyboard.director.context_size = 8192;
-  if (!Number.isInteger(out.storyboard.director.max_tokens)) out.storyboard.director.max_tokens = 4096;
+  if (!Number.isInteger(out.storyboard.director.context_size)) out.storyboard.director.context_size = 16384;
+  if (!Number.isInteger(out.storyboard.director.max_tokens)) out.storyboard.director.max_tokens = 8192;
   if (typeof out.primer.template !== 'string') out.primer.template = '';
   if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};
   if (typeof out.analysis.enableFaceAnalysis !== 'boolean') out.analysis.enableFaceAnalysis = false;
@@ -166,8 +166,8 @@ function collectAppSettingsFormConfig() {
   base.storyboard.director.endpoint = ui.appSettingsStoryboardEndpointEl ? ui.appSettingsStoryboardEndpointEl.value : '';
   base.storyboard.director.llama_server = ui.appSettingsStoryboardLlamaServerEl ? ui.appSettingsStoryboardLlamaServerEl.value : '';
   base.storyboard.director.port = Number(ui.appSettingsStoryboardPortEl ? ui.appSettingsStoryboardPortEl.value : 8189);
-  base.storyboard.director.context_size = Number(ui.appSettingsStoryboardContextSizeEl ? ui.appSettingsStoryboardContextSizeEl.value : 8192);
-  base.storyboard.director.max_tokens = Number(ui.appSettingsStoryboardMaxTokensEl ? ui.appSettingsStoryboardMaxTokensEl.value : 4096);
+  base.storyboard.director.context_size = Number(ui.appSettingsStoryboardContextSizeEl ? ui.appSettingsStoryboardContextSizeEl.value : 16384);
+  base.storyboard.director.max_tokens = Number(ui.appSettingsStoryboardMaxTokensEl ? ui.appSettingsStoryboardMaxTokensEl.value : 8192);
   base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';
   base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);
   base.analysis.enableMediaPipeAnalysis = !!(ui.appSettingsEnableMediaPipeAnalysisEl && ui.appSettingsEnableMediaPipeAnalysisEl.checked);

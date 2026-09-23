@@ -292,14 +292,14 @@ def _advance_queue():
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
             return None
-        except Exception as exc:
+        except Exception:
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
-            execution_pause_lane(
-                EXECUTION_LANE,
-                reason="Queue paused: retained Prompt Assistant / Director model could not be unloaded: " + str(exc),
+            _logger.debug(
+                "Inference is waiting for the retained Prompt Assistant / Director model to yield the GPU.",
+                exc_info=True,
             )
-            raise
+            return None
 
         claimed = execution_claim_next(EXECUTION_LANE)
         if claimed is None:

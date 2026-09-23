@@ -1683,13 +1683,13 @@ def _launch_next_queued_job(state):
     except DirectorRuntimeBusy:
         release_execution_resource(TRAINING_RESOURCE_OWNER)
         return
-    except Exception as exc:
+    except Exception:
         release_execution_resource(TRAINING_RESOURCE_OWNER)
-        state["queuePaused"] = True
-        state["queuePauseReason"] = (
-            "Queue paused: retained Prompt Assistant / Director model could not be unloaded: " + str(exc)
+        _logger.debug(
+            "Training is waiting for the retained Prompt Assistant / Director model to yield the GPU.",
+            exc_info=True,
         )
-        raise
+        return
 
     state["activeJobId"] = ""
     for job in queued_jobs:

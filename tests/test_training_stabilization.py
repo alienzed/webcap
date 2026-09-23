@@ -115,9 +115,9 @@ def test_training_defers_without_pausing_if_director_runtime_is_busy(tmp_path, m
     assert execution_queue.resource_owner() == ""
 
 
-def test_training_pauses_without_launching_if_director_cannot_yield(tmp_path, monkeypatch):
+def test_training_retries_if_retained_director_cannot_yield_yet(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
-    _set(tmp_path)
+    folder = _set(tmp_path)
     execution_queue._resource_owner = ""
     state = {
         "version": 3,
@@ -126,25 +126,37 @@ def test_training_pauses_without_launching_if_director_cannot_yield(tmp_path, mo
         "queuePaused": False,
         "queuePauseReason": "",
     }
+    attempts = []
+
+    def yield_director():
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise RuntimeError("unload failed")
+
+    def launch(job, folder_path):
+        assert folder_path == folder
+        job["status"] = "starting"
 
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "release_loaded_model_for_gpu_work",
-        lambda: (_ for _ in ()).throw(RuntimeError("unload failed")),
+        yield_director,
     )
-    monkeypatch.setattr(
-        training_runner,
-        "_launch_job",
-        lambda *_args: pytest.fail("Training must not launch until the retained LLM is unloaded."),
-    )
+    monkeypatch.setattr(training_runner, "_launch_job", launch)
 
-    with pytest.raises(RuntimeError, match="unload failed"):
-        training_runner._launch_next_queued_job(state)
+    training_runner._launch_next_queued_job(state)
 
-    assert state["queuePaused"] is True
-    assert "could not be unloaded" in state["queuePauseReason"]
+    assert state["queuePaused"] is False
     assert state["jobs"][0]["status"] == "queued"
     assert execution_queue.resource_owner() == ""
+
+    training_runner._launch_next_queued_job(state)
+
+    assert attempts == [True, True]
+    assert state["activeJobId"] == "job-one"
+    assert state["jobs"][0]["status"] == "starting"
+    assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER
+    execution_queue.release_resource(training_runner.TRAINING_RESOURCE_OWNER)
 
 
 def test_canonical_set_tomls_are_materialized_resettable_and_never_mode_duplicated(tmp_path, monkeypatch):

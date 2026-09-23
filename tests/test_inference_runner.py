@@ -181,24 +181,39 @@ def test_inference_releases_existing_idle_reservation_if_director_runtime_is_bus
 
 
 
-def test_inference_pauses_without_claiming_if_director_cannot_yield(inference_root, monkeypatch):
+def test_inference_retries_if_retained_director_cannot_yield_yet(inference_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
     queued = inference_runner.enqueue_generate(
         {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
     )
+    attempts = []
+
+    def yield_director():
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise RuntimeError("unload failed")
+
+    def execute(job_id):
+        execution_queue.finish_job(job_id, status="completed")
 
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "release_loaded_model_for_gpu_work",
-        lambda: (_ for _ in ()).throw(RuntimeError("unload failed")),
+        yield_director,
     )
+    monkeypatch.setattr(inference_runner, "_execute_claimed", execute)
 
-    with pytest.raises(RuntimeError, match="unload failed"):
-        inference_runner._advance_queue()
+    assert inference_runner._advance_queue() is None
 
     lane = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE, include_terminal=False)
-    assert lane["paused"] is True
-    assert "could not be unloaded" in lane["pauseReason"]
+    assert lane["paused"] is False
     assert execution_queue.get_job(queued["jobId"])["status"] == "queued"
+    assert execution_queue.resource_owner() == ""
+
+    finished = inference_runner._advance_queue()
+
+    assert finished["status"] == "completed"
+    assert attempts == [True, True]
     assert execution_queue.resource_owner() == ""
 
 

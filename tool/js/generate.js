@@ -12,7 +12,9 @@
       available: false,
       busy: false,
       previousPrompt: null,
-      status: ''
+      status: '',
+      activityTimer: 0,
+      activityStartedAt: 0
     },
     queue: { jobs: [], paused: false },
     trackedJobIds: loadTrackedGenerateJobs(),
@@ -599,6 +601,99 @@
     }).catch(reportError);
   }
 
+  function directorPhaseLabel(phase) {
+    var labels = {
+      preparing: 'Preparing…',
+      freeing_comfy: 'Preparing GPU…',
+      loading_model: 'Loading model…',
+      generating: 'Generating response…',
+      complete: 'Complete',
+      error: 'Failed'
+    };
+    return labels[String(phase || '')] || 'Working…';
+  }
+
+  function directorMemoryGiB(mib) {
+    var value = Number(mib);
+    return isFinite(value) && value >= 0 ? (value / 1024).toFixed(1) + ' GiB' : '';
+  }
+
+  function directorBytesGiB(bytes) {
+    var value = Number(bytes);
+    return isFinite(value) && value >= 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
+  }
+
+  function renderDirectorActivity(activity, system) {
+    var card = el('generate-director-activity');
+    var phase = el('generate-director-activity-phase');
+    var detail = el('generate-director-activity-detail');
+    if (!card || !phase || !detail) throw new Error('Prompt Assistant activity markup is missing.');
+
+    var visible = generateState.director.busy || (activity && activity.active);
+    card.classList.toggle('hidden', !visible);
+    if (!visible) return;
+
+    phase.textContent = directorPhaseLabel(activity && activity.phase);
+    var startedAt = Number(activity && activity.startedAt) || generateState.director.activityStartedAt;
+    var parts = [];
+    if (startedAt) parts.push(Math.max(0, Math.round(Date.now() / 1000 - startedAt)) + 's elapsed');
+
+    var gpu = system && system.gpu;
+    var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
+    if (primary) {
+      var utilization = Number(primary.utilization);
+      if (isFinite(utilization)) parts.push('GPU ' + Math.round(utilization) + '%');
+      var used = directorMemoryGiB(primary.memoryUsed);
+      var total = directorMemoryGiB(primary.memoryTotal);
+      if (used && total) parts.push('VRAM ' + used + ' / ' + total);
+    }
+
+    var ram = system && system.ram;
+    if (ram && ram.available) {
+      var ramUsed = directorBytesGiB(ram.used);
+      var ramTotal = directorBytesGiB(ram.total);
+      if (ramUsed && ramTotal) parts.push('RAM ' + ramUsed + ' / ' + ramTotal);
+    }
+    detail.textContent = parts.join(' · ');
+  }
+
+  function refreshDirectorActivity() {
+    if (!generateState.director.busy) return Promise.resolve();
+    return Promise.all([
+      requestJson('/fs/director/activity'),
+      requestJson('/fs/system_status')
+    ]).then(function (values) {
+      renderDirectorActivity(values[0], values[1]);
+    }).catch(function () {
+      renderDirectorActivity({ phase: 'preparing', active: true }, null);
+    }).then(function () {
+      if (!generateState.director.busy) return;
+      if (generateState.director.activityTimer) clearTimeout(generateState.director.activityTimer);
+      generateState.director.activityTimer = setTimeout(refreshDirectorActivity, 1500);
+    });
+  }
+
+  function startDirectorActivity() {
+    generateState.director.activityStartedAt = Date.now() / 1000;
+    renderDirectorActivity({ phase: 'preparing', active: true, startedAt: generateState.director.activityStartedAt }, null);
+    refreshDirectorActivity();
+  }
+
+  function finishDirectorActivity() {
+    if (generateState.director.activityTimer) clearTimeout(generateState.director.activityTimer);
+    generateState.director.activityTimer = 0;
+    requestJson('/fs/director/activity').then(function (activity) {
+      renderDirectorActivity(activity, null);
+    }).catch(function () {
+      renderDirectorActivity({ phase: 'complete', active: false }, null);
+    }).then(function () {
+      setTimeout(function () {
+        var card = el('generate-director-activity');
+        if (!generateState.director.busy && card) card.classList.add('hidden');
+      }, 2200);
+    });
+  }
+
   function setDirectorStatus(message) {
     generateState.director.status = String(message || '');
     var status = el('generate-director-status');
@@ -615,7 +710,7 @@
 
     restore.classList.toggle('hidden', generateState.director.previousPrompt === null);
     if (!generateState.director.available) {
-      select.innerHTML = '<option value="">Director unavailable</option>';
+      select.innerHTML = '<option value="">Prompt Assistant unavailable</option>';
       select.disabled = true;
       expand.disabled = true;
       refine.disabled = true;
@@ -635,7 +730,7 @@
     expand.disabled = generateState.director.busy || !chosen;
     refine.disabled = generateState.director.busy || !chosen;
     restore.disabled = generateState.director.busy;
-    status.textContent = chosen ? generateState.director.status : 'No Director models';
+    status.textContent = chosen ? generateState.director.status : 'No Prompt Assistant models';
   }
 
   function refreshDirector() {
@@ -662,14 +757,15 @@
 
   function runDirector(operation) {
     if (generateState.director.busy) return;
-    if (!generateState.director.modelId) throw new Error('Choose a Director model.');
+    if (!generateState.director.modelId) throw new Error('Choose a Prompt Assistant model.');
     var promptNode = el('generate-prompt');
     var prompt = String(promptNode.value || '').trim();
     var instruction = String(el('generate-director-instruction').value || '').trim();
     var previousPrompt = promptNode.value;
     generateState.director.busy = true;
-    setDirectorStatus('Director working…');
+    setDirectorStatus('Prompt Assistant working…');
     renderDirector();
+    startDirectorActivity();
     return postJson('/fs/generate/director', {
       operation: operation,
       directorModel: generateState.director.modelId,
@@ -684,11 +780,12 @@
       if (operation === 'refine_prompt') el('generate-director-instruction').value = '';
       setDirectorStatus(operation === 'write_prompt' ? 'Prompt expanded.' : 'Prompt refined.');
     }).catch(function (err) {
-      setDirectorStatus('Director failed.');
+      setDirectorStatus('Prompt Assistant failed.');
       reportError(err);
     }).then(function () {
       generateState.director.busy = false;
       renderDirector();
+      finishDirectorActivity();
     });
   }
 

@@ -107,7 +107,6 @@
 }
 
 .storyboard-story-menu {
-  position: relative;
   flex: 0 0 auto;
   align-self: center;
   margin-right: 6px;
@@ -139,10 +138,8 @@
 }
 
 .storyboard-story-menu-popover {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 4px);
-  right: 0;
+  position: fixed;
+  z-index: 200;
   min-width: 150px;
   display: none;
   padding: 6px;

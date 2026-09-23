@@ -17,7 +17,7 @@ def _new_seed():
 
 
 def _portable_name(value):
-    return re.sub(r"[\\\\/]+", "/", str(value or ""))
+    return re.sub(r"[\\/]+", "/", str(value or ""))
 
 
 def _public_model(model):

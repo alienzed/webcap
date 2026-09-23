@@ -730,6 +730,17 @@ def generate_reference_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/generate/reference/cleanup", methods=["POST"])
+def generate_reference_cleanup_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        paths = data.get("paths") if isinstance(data.get("paths"), list) else []
+        return jsonify({"ok": True, "removed": generate_cleanup_references(paths)})
+    except Exception as exc:
+        app.logger.exception("GENERATE REFERENCE CLEANUP FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/generate", methods=["POST"])
 def generate_route():
     data = request.get_json(silent=True) or {}

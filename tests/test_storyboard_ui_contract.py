@@ -216,8 +216,42 @@ def test_storyboard_takes_can_be_named_and_loras_filtered():
     assert "def label_take(" in store
     assert "takeMetaLabel(take)" in storyboard
     assert "data-scene-lora-filter" in storyboard
-    assert "function loraOptions(selectedName, filterText)" in storyboard
+    assert "function loraOptions(selectedName, filterText, excludedNames)" in storyboard
     assert ".storyboard-lora-filter" in css
+
+
+def test_storyboard_story_loras_are_inherited_and_overridable_in_scenes():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-story-lora-list"' in html
+    assert 'id="storyboard-story-lora-add"' in html
+    assert "storyLoraOverrides" in storyboard
+    assert "data-story-lora-inherited-row" in storyboard
+    assert "data-story-lora-enabled" in storyboard
+    assert "data-story-lora-scene-strength" in storyboard
+    assert "function syncStoryLorasIntoScenes()" in storyboard
+    assert "def resolve_scene_loras(story, scene):" in store
+    assert ".storyboard-story-authoring" in css
+
+
+def test_storyboard_director_settings_support_remote_openai_compatible_endpoint():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
+    constants = (ROOT / "tool" / "js" / "constants.js").read_text(encoding="utf-8")
+    runtime = (ROOT / "tool" / "server" / "storyboard_llm_runtime.py").read_text(encoding="utf-8")
+
+    assert 'id="app-settings-storyboard-director-mode"' in html
+    assert 'id="app-settings-storyboard-endpoint"' in html
+    assert "Remote OpenAI-compatible" in html
+    assert "out.storyboard.director.mode" in settings
+    assert "out.storyboard.director.endpoint" in settings
+    assert "appSettingsStoryboardDirectorModeEl" in constants
+    assert "appSettingsStoryboardEndpointEl" in constants
+    assert 'settings.get("mode", "local") == "remote"' in runtime
+    assert '"/chat/completions"' in runtime
 
 
 def test_storyboard_lora_filter_controls_available_picker():
@@ -225,6 +259,6 @@ def test_storyboard_lora_filter_controls_available_picker():
 
     assert "data-scene-lora-filter" in storyboard
     assert "data-scene-lora-picker" in storyboard
-    assert "picker.innerHTML = loraOptions('', loraFilter.value);" in storyboard
+    assert "picker.innerHTML = loraOptions('', loraFilter.value" in storyboard
     assert "var selectedName = String(picker.value || '').trim();" in storyboard
-    assert "loraRowHtml({ name: selectedName, strength: 1 }, '')" in storyboard
+    assert "sceneLoraRowHtml({ name: selectedName, strength: 1 }, '', storyLorasFromUi())" in storyboard

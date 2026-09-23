@@ -698,9 +698,28 @@
   }
 
   function chooseLoraPickerOption(picker, name) {
-    picker.value = name || '';
-    picker.focus();
+    var selectedName = availableLoraName(name, loraPickerExcludedNames(picker));
+    if (!selectedName) return;
+
+    if (picker.id === 'storyboard-story-lora-picker') {
+      el('storyboard-story-lora-list').insertAdjacentHTML('beforeend', storyLoraRowHtml({ name: selectedName, strength: 1 }));
+      picker.value = '';
+      closeLoraPicker(picker);
+      syncStoryLorasIntoScenes();
+      scheduleStorySave();
+      picker.focus();
+      return;
+    }
+
+    var scene = picker.closest('.storyboard-scene[data-scene-id]');
+    if (!scene) throw new Error('LoRA picker Scene is missing.');
+    var list = scene.querySelector('[data-scene-lora-list]');
+    if (!list) throw new Error('LoRA list is missing.');
+    list.insertAdjacentHTML('beforeend', sceneLoraRowHtml({ name: selectedName, strength: 1 }));
+    picker.value = '';
     closeLoraPicker(picker);
+    scheduleSceneSave(scene.dataset.sceneId);
+    picker.focus();
   }
 
   function handleLoraPickerKeydown(event) {
@@ -772,8 +791,6 @@
     status.textContent = storyState.generationCapabilities.available
       ? (loras.length ? 'Applied to every Scene by default.' : 'No Story-wide LoRAs.')
       : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
-    var add = el('storyboard-story-lora-add');
-    if (add) add.disabled = !storyState.generationCapabilities.available || !(storyState.generationCapabilities.loras || []).length;
   }
 
   function sceneLoraRowHtml(lora) {
@@ -961,7 +978,6 @@
       var loraStatusText = storyState.generationCapabilities.available
         ? (baseLoras.length ? 'Base LoRA active' : 'LoRAs ready')
         : 'LoRAs unavailable';
-      var canAddLora = storyState.generationCapabilities.available && (storyState.generationCapabilities.loras || []).length > 0;
       var referencesHtml = sceneReferences.map(function (reference) {
         if (!reference || !reference.role) return '';
         return '<span class="storyboard-reference-chip">' +
@@ -989,23 +1005,28 @@
       var takesHtml = takeOrder.map(function (takeId, takeIndex) {
         var take = takes[takeId];
         if (!take) return '';
-        var rating = take.rating == null ? '' : String(take.rating);
+        var rating = Math.max(0, Math.min(5, Number(take.rating || 0)));
         var selected = scene.selectedTakeId === takeId;
-        var ratingOptions = '<option value="">Unrated</option>';
+        var ratingHtml = '<div class="storyboard-take-rating" aria-label="Rate this Take">';
         [1, 2, 3, 4, 5].forEach(function (value) {
-          ratingOptions += '<option value="' + value + '"' + (rating === String(value) ? ' selected' : '') + '>' + value + ' star' + (value === 1 ? '' : 's') + '</option>';
+          ratingHtml += '<button type="button" class="storyboard-take-star' + (value <= rating ? ' active' : '') +
+            '" data-take-rating="' + escapeHtml(takeId) + '" data-rating-value="' + value +
+            '" title="Rate ' + value + ' star' + (value === 1 ? '' : 's') + '" aria-label="Rate ' + value + ' star' + (value === 1 ? '' : 's') + '">' +
+            (value <= rating ? '★' : '☆') + '</button>';
         });
+        ratingHtml += '</div>';
         return '<article class="storyboard-take' + (selected ? ' selected' : '') + '" data-take-id="' + escapeHtml(takeId) + '">' +
-          '<div class="storyboard-take-media">' + takePreviewHtml(story.id, sceneId, take) + '</div>' +
+          '<div class="storyboard-take-media">' + takePreviewHtml(story.id, sceneId, take) +
+            '<button type="button" class="storyboard-take-remove" data-take-action="remove" data-take-id="' + escapeHtml(takeId) + '" title="Remove Take" aria-label="Remove Take">×</button>' +
+          '</div>' +
           '<div class="storyboard-take-footer">' +
             '<div class="storyboard-take-identity" title="' + escapeHtml(take.sourceFilename || '') + '">' +
               '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
               '<span>' + escapeHtml(takeMetaLabel(take)) + '</span>' +
               '<input type="text" maxlength="120" data-take-label="' + escapeHtml(takeId) + '" value="' + escapeHtml(take.label || '') + '" placeholder="Label this Take…" aria-label="Take label">' +
             '</div>' +
-            '<select data-take-rating="' + escapeHtml(takeId) + '" aria-label="Take rating">' + ratingOptions + '</select>' +
+            ratingHtml +
             '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
-            '<button type="button" class="review-captions-btn" data-take-action="remove" data-take-id="' + escapeHtml(takeId) + '">Remove</button>' +
           '</div>' +
         '</article>';
       }).join('');
@@ -1094,13 +1115,13 @@
               '<div class="storyboard-inspector-section-heading"><strong>Conditioning</strong><span>' + escapeHtml(conditioningSummary) + '</span></div>' +
               '<div class="storyboard-conditioning-body">' +
                 '<div class="storyboard-lora-panel">' +
-                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add the chosen Scene-specific LoRA."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
+                  '<div class="storyboard-lora-header"><strong>LoRAs</strong></div>' +
+                  (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Inherited from Story</span><div class="storyboard-lora-list" data-story-lora-inherited-list>' + inheritedLoraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list hidden" data-story-lora-inherited-list></div>') +
+                  (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Scene only</span><div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>') +
                   '<div class="storyboard-lora-picker-wrap">' +
                     '<input type="search" class="storyboard-lora-picker" data-scene-lora-picker autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Filter / choose LoRA…" aria-label="Filter and choose available LoRA">' +
                     '<div class="storyboard-lora-picker-menu hidden" data-lora-picker-menu role="listbox"></div>' +
                   '</div>' +
-                  (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Inherited from Story</span><div class="storyboard-lora-list" data-story-lora-inherited-list>' + inheritedLoraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list hidden" data-story-lora-inherited-list></div>') +
-                  (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Scene only</span><div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>') +
                   '<span class="storyboard-lora-status" title="' + escapeHtml(loraStatusTitle) + '">' + escapeHtml(loraStatusText) + '</span>' +
                 '</div>' +
                 '<details class="storyboard-scene-disclosure storyboard-reference-details">' +
@@ -1124,7 +1145,7 @@
         '</div>' +
         '<div class="storyboard-takes">' +
           '<div class="storyboard-takes-header"><div><strong>Takes</strong><span>Imported media is copied into this Story and keeps a frozen Scene snapshot.</span></div>' +
-            '<label class="review-captions-btn storyboard-take-upload-btn">Add Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
+            '<label class="review-captions-btn storyboard-take-upload-btn" title="Import existing image or video media as a Take for this Scene.">Import Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
           '</div>' +
           '<div class="storyboard-takes-grid">' + (takesHtml + pendingTakesHtml || '<div class="storyboard-takes-empty">No Takes yet.</div>') + '</div>' +
           removedTakesHtml +
@@ -1914,22 +1935,6 @@
       if (option) chooseLoraPickerOption(storyLoraPicker, option.dataset.loraPickerOption);
     });
 
-    el('storyboard-story-lora-add').addEventListener('click', function () {
-      var picker = el('storyboard-story-lora-picker');
-      if (!picker) throw new Error('Story LoRA picker is missing.');
-      var existingNames = storyLorasFromUi().map(function (item) { return item.name; });
-      var selectedName = availableLoraName(picker.value, existingNames);
-      if (!selectedName) {
-        picker.focus();
-        renderLoraPickerMenu(picker);
-        return;
-      }
-      el('storyboard-story-lora-list').insertAdjacentHTML('beforeend', storyLoraRowHtml({ name: selectedName, strength: 1 }));
-      picker.value = '';
-      closeLoraPicker(picker);
-      syncStoryLorasIntoScenes();
-      scheduleStorySave();
-    });
     el('storyboard-story-lora-list').addEventListener('click', function (event) {
       var remove = event.target.closest('[data-story-lora-remove]');
       if (!remove) return;
@@ -1982,18 +1987,10 @@
         labelTake(labelScene.dataset.sceneId, takeLabel.dataset.takeLabel, takeLabel.value);
         return;
       }
-      var rating = event.target.closest('[data-take-rating]');
-      if (rating) {
-        var ratingScene = rating.closest('.storyboard-scene[data-scene-id]');
-        if (!ratingScene) throw new Error('Take rating Scene is missing.');
-        rateTake(ratingScene.dataset.sceneId, rating.dataset.takeRating, rating.value);
-        return;
-      }
       handleSceneInput(event);
     });
     workspace.addEventListener('click', function (event) {
       if (event.target.closest('.storyboard-lora-picker-wrap')) return;
-      if (event.target.closest('#storyboard-story-lora-add, [data-scene-lora-add]')) return;
       closeAllLoraPickers();
     });
 
@@ -2014,26 +2011,6 @@
       var clickedPicker = event.target.closest('[data-scene-lora-picker]');
       if (clickedPicker) {
         renderLoraPickerMenu(clickedPicker);
-        return;
-      }
-      var addLora = event.target.closest('[data-scene-lora-add]');
-      if (addLora) {
-        var addLoraScene = addLora.closest('.storyboard-scene[data-scene-id]');
-        if (!addLoraScene) throw new Error('LoRA Scene is missing.');
-        var list = addLoraScene.querySelector('[data-scene-lora-list]');
-        if (!list) throw new Error('LoRA list is missing.');
-        var picker = addLoraScene.querySelector('[data-scene-lora-picker]');
-        if (!picker) throw new Error('LoRA picker is missing.');
-        var selectedName = availableLoraName(picker.value, loraPickerExcludedNames(picker));
-        if (!selectedName) {
-          picker.focus();
-          renderLoraPickerMenu(picker);
-          return;
-        }
-        list.insertAdjacentHTML('beforeend', sceneLoraRowHtml({ name: selectedName, strength: 1 }));
-        picker.value = '';
-        closeLoraPicker(picker);
-        scheduleSceneSave(addLoraScene.dataset.sceneId);
         return;
       }
       var removeLora = event.target.closest('[data-scene-lora-remove]');
@@ -2070,6 +2047,13 @@
       var executionAction = event.target.closest('[data-generation-action]');
       if (executionAction) {
         generationAction(executionAction.dataset.generationAction, executionAction.dataset.jobId);
+        return;
+      }
+      var takeRating = event.target.closest('[data-take-rating][data-rating-value]');
+      if (takeRating) {
+        var ratingScene = takeRating.closest('.storyboard-scene[data-scene-id]');
+        if (!ratingScene) throw new Error('Take rating Scene is missing.');
+        rateTake(ratingScene.dataset.sceneId, takeRating.dataset.takeRating, takeRating.dataset.ratingValue);
         return;
       }
       var takeAction = event.target.closest('[data-take-action]');

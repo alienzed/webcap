@@ -14,7 +14,6 @@
     generationPolls: {},
     newTakeCounts: {},
     sequenceExport: null,
-    open: false,
     sceneViewMode: window.localStorage.getItem('webcap.storyboard.sceneView') || 'focus',
     activeSceneId: '',
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
@@ -26,7 +25,7 @@
     },
     director: {
       models: [],
-      modelId: window.localStorage.getItem('webcap.storyboard.directorModel') || '',
+      modelId: '',
       available: false,
       busy: false,
       runtimeLabel: '',
@@ -34,9 +33,7 @@
       previousPrompts: {},
       activityTimer: 0,
       activityStartedAt: 0,
-      activityHistory: [],
-      preloadTimer: 0,
-      preloading: false
+      activityHistory: []
     }
   };
 
@@ -205,7 +202,7 @@
     if (!models.some(function (model) { return model.id === selected; })) {
       selected = models[0].id;
       storyState.director.modelId = selected;
-      window.localStorage.setItem('webcap.storyboard.directorModel', selected);
+      setSharedDirectorModelPreference(selected);
     }
     select.value = selected;
     select.title = '';
@@ -225,64 +222,6 @@
       storyState.director.runtimeLabel = '';
       storyState.director.error = String(err && err.message ? err.message : err);
       renderDirectorSelector();
-    });
-  }
-
-  function cancelDirectorPreloadTimer() {
-    if (storyState.director.preloadTimer) clearTimeout(storyState.director.preloadTimer);
-    storyState.director.preloadTimer = 0;
-  }
-
-  function selectedDirectorModel() {
-    return (storyState.director.models || []).find(function (model) {
-      return model.id === storyState.director.modelId;
-    }) || null;
-  }
-
-  function scheduleDirectorPreload() {
-    cancelDirectorPreloadTimer();
-    var model = selectedDirectorModel();
-    if (!storyState.open || storyState.director.busy || storyState.director.preloading ||
-        !storyState.director.available || !model || model.status === 'loaded') return;
-    storyState.director.preloadTimer = setTimeout(function () {
-      storyState.director.preloadTimer = 0;
-      preloadDirectorModel();
-    }, 1500);
-  }
-
-  function reportDirectorPreloadError(err) {
-    var message = String(err && err.message ? err.message : err);
-    if (typeof reportConsoleError === 'function') reportConsoleError('Director preload', message);
-    else if (window.console && console.error) console.error('[Director preload] ' + message, err);
-  }
-
-  function preloadDirectorModel() {
-    var model = selectedDirectorModel();
-    if (!storyState.open || storyState.director.busy || storyState.director.preloading ||
-        !model || model.status === 'loaded') return Promise.resolve();
-
-    var requestedModel = model.id;
-    storyState.director.preloading = true;
-    startDirectorActivity();
-    return fetch('/fs/director/preload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: requestedModel })
-    }).then(function (response) {
-      return response.json().then(function (body) {
-        if (!response.ok || !body || body.ok === false) {
-          throw new Error((body && body.error) || 'Director preload failed.');
-        }
-        return body;
-      });
-    }).catch(function (err) {
-      reportDirectorPreloadError(err);
-    }).then(function () {
-      storyState.director.preloading = false;
-      finishDirectorActivity();
-      return refreshDirector();
-    }).then(function () {
-      if (storyState.director.modelId !== requestedModel) scheduleDirectorPreload();
     });
   }
 
@@ -393,7 +332,7 @@
   }
 
   function directorActivityActive() {
-    return storyState.director.busy || storyState.director.preloading;
+    return storyState.director.busy;
   }
 
   function refreshDirectorActivity() {
@@ -2546,8 +2485,6 @@
   }
 
   function closeStoryboardActivity() {
-    storyState.open = false;
-    cancelDirectorPreloadTimer();
     var frame = el('app-frame');
     var workspace = el('storyboard-workspace');
     if (workspace) workspace.classList.add('hidden');
@@ -2562,12 +2499,12 @@
     var workspace = el('storyboard-workspace');
     if (!frame || !workspace) throw new Error('Storyboard workspace markup is missing.');
     if (typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
-    storyState.open = true;
+    storyState.director.modelId = getSharedDirectorModelPreference('webcap.storyboard.directorModel');
     frame.classList.add('workspace-storyboard-open');
     workspace.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
-    refreshDirector().then(function () { scheduleDirectorPreload(); });
+    refreshDirector();
     refreshGenerationCapabilities();
     refreshLibrary().then(function () {
       if (storyState.story) {
@@ -2602,8 +2539,7 @@
     });
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;
-      window.localStorage.setItem('webcap.storyboard.directorModel', this.value);
-      scheduleDirectorPreload();
+      setSharedDirectorModelPreference(this.value);
     });
 
     el('storyboard-sequence-preview').addEventListener('click', function (event) {

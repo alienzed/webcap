@@ -1510,7 +1510,6 @@
     renderStoryInvariants();
     el('storyboard-story-tags').value = storyTagsText(storyState.story);
     el('storyboard-story-status').value = storyState.story.status || 'active';
-    el('storyboard-story-pinned').checked = !!storyState.story.pinned;
     var developButton = el('storyboard-develop-btn');
     if (developButton) {
       var hasScenes = (storyState.story.sceneOrder || []).length > 0;
@@ -1696,7 +1695,7 @@
       loras: storyLorasFromUi(),
       tags: el('storyboard-story-tags').value.split(',').map(function (value) { return value.trim(); }).filter(Boolean),
       status: el('storyboard-story-status').value,
-      pinned: el('storyboard-story-pinned').checked
+      pinned: !!storyState.story.pinned
     };
   }
 
@@ -2531,9 +2530,7 @@
       row.remove();
       scheduleStorySave();
     });
-    ['storyboard-story-status', 'storyboard-story-pinned'].forEach(function (id) {
-      el(id).addEventListener('change', scheduleStorySave);
-    });
+    el('storyboard-story-status').addEventListener('change', scheduleStorySave);
 
     el('storyboard-story-lora-list').addEventListener('input', function (event) {
       if (!event.target.closest('[data-story-lora-row]')) return;

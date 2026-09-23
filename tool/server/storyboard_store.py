@@ -1094,6 +1094,14 @@ def set_scene_reference_from_take(story_id, scene_id, role, source_scene_id, sou
         raise ValueError("Unsupported Storyboard reference role.")
     frame = str(frame or "").strip().lower()
     media_path = _reference_media_for_take(story_id, source_scene_id, take, frame)
+    old_reference = next(
+        (
+            copy.deepcopy(item)
+            for item in scene.get("references") or []
+            if isinstance(item, dict) and item.get("role") == role
+        ),
+        None,
+    )
     reference = {
         "role": role,
         "source": "take",
@@ -1108,6 +1116,7 @@ def set_scene_reference_from_take(story_id, scene_id, role, source_scene_id, sou
     scene["updatedAt"] = _utc_now()
     story["updatedAt"] = scene["updatedAt"]
     _write_json_atomic(_story_path(story_id), story)
+    _cleanup_replaced_uploaded_reference(story_id, story, old_reference)
     return story, reference
 
 

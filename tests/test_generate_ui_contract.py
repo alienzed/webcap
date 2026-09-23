@@ -93,8 +93,8 @@ def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():
     queue_start = script.index("function renderQueue()")
     queue_end = script.index("function refreshQueue()", queue_start)
     queue_code = script[queue_start:queue_end]
-    assert "data-inference-job-id" not in queue_code
     assert "dataset.inferenceJobId" in queue_code
+    assert "host.querySelectorAll('.generate-queue-row[data-inference-job-id]')" in queue_code
     assert "syncQueueRow(row, job)" in queue_code
     assert "host.innerHTML = jobs.map" not in queue_code
 

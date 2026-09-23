@@ -171,7 +171,7 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert "Character: Mara" in prompt
     assert "Low analog synth, no vocals." in prompt
     assert "complete model-facing H3 prompt for every Scene now" in prompt
-    assert "at least two Scenes" in prompt
+    assert "most developed Stories should land around 4 to 8 Scenes" in prompt
     assert "between 4 and 15 seconds" in prompt
     assert "invent natural dialogue" in prompt
     assert "EXISTING SECOND PROMPT" not in prompt
@@ -195,7 +195,7 @@ def test_expand_concept_is_creative_but_not_scene_planning():
     assert request["output"] == "text"
     assert "Rise and fall of a New York gangster." in prompt
     assert "Develop the narrative arc" in prompt
-    assert "do not break the Story into Scenes yet" in prompt
+    assert "do not break the Story into Scenes yet" in prompt.lower()
     assert "do not write MiniMax H3 prompts" in prompt
 
 

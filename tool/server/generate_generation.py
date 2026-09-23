@@ -3,7 +3,7 @@ import secrets
 import time
 
 from . import inference_runtime
-from .generate_store import persist_result, resolve_reference_path
+from .generate_store import persist_result, resolve_reference_path\nfrom .execution_queue import update_job as execution_update_job
 from .inference_models import get_inference_model, public_models
 
 
@@ -76,8 +76,8 @@ def prepare_request(data):
         role = str(role or "").strip()
         if role not in allowed_references:
             raise ValueError("Unsupported " + model.PROFILE_ID + " reference role: " + role)
-        path = resolve_reference_path(relative_path)
-        references[role] = str(path.relative_to(path.parents[len(path.parts) - len(path.parts)])) if False else str(relative_path)
+        resolve_reference_path(relative_path)
+        references[role] = str(relative_path)
 
     prompt = source_prompt
     wildcards_enabled = bool(data.get("wildcardsEnabled"))
@@ -122,6 +122,7 @@ def execute(job_id, request):
         inference_runtime.resolve_name,
     )
     provider_job_id = inference_runtime.queue_workflow(workflow)
+    execution_update_job(job_id, details={"providerJobId": provider_job_id, "providerStatus": "pending"})
     output_ref = inference_runtime.wait_for_output(provider_job_id, job_id, model.find_output_ref)
     media = inference_runtime.download_output(output_ref)
     elapsed_ms = int((time.monotonic() - started) * 1000)

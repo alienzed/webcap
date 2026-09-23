@@ -44,6 +44,53 @@ def test_story_create_list_and_reload(storyboard_fs):
     assert storyboard_store.list_stories()[0]["title"] == "Storm Hotel"
 
 
+def test_duplicate_story_copies_authoring_but_not_generated_artifacts(storyboard_fs):
+    story = storyboard_store.create_story({
+        "title": "Source Story",
+        "concept": "A motel at night.",
+        "style": "Neo-noir.",
+        "invariants": [{"kind": "world", "title": "Weather", "text": "Heavy rain."}],
+        "tags": ["motel"],
+        "pinned": True,
+    })
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Arrival",
+        "prompt": "A car arrives at a motel.",
+        "loras": [{"name": "character.safetensors", "strength": 0.8}],
+    })
+    story, take = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "take.mp4", BytesIO(b"video")
+    )
+    story = storyboard_store.select_take(story["id"], scene["id"], take["id"])
+
+    duplicate = storyboard_store.duplicate_story(story["id"])
+
+    assert duplicate["id"] != story["id"]
+    assert duplicate["title"] == "Source Story Copy"
+    assert duplicate["concept"] == story["concept"]
+    assert duplicate["style"] == story["style"]
+    assert duplicate["invariants"] == story["invariants"]
+    assert duplicate["tags"] == story["tags"]
+    assert duplicate["status"] == "active"
+    assert duplicate["pinned"] is False
+    assert len(duplicate["sceneOrder"]) == 1
+
+    copied_scene = duplicate["scenes"][duplicate["sceneOrder"][0]]
+    assert copied_scene["id"] != scene["id"]
+    assert copied_scene["title"] == scene["title"]
+    assert copied_scene["prompt"] == scene["prompt"]
+    assert copied_scene["loras"] == scene["loras"]
+    assert copied_scene["takes"] == {}
+    assert copied_scene["removedTakes"] == {}
+    assert copied_scene["takeOrder"] == []
+    assert copied_scene["selectedTakeId"] is None
+    assert copied_scene["references"] == []
+
+    duplicate_dir = storyboard_fs / "output" / "storyboards" / duplicate["id"]
+    assert (duplicate_dir / "story.json").is_file()
+    assert not (duplicate_dir / "exports").exists()
+
+
 def test_delete_story_permanently_removes_complete_story_directory(storyboard_fs):
     story = storyboard_store.create_story({"title": "Disposable Story"})
     story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})

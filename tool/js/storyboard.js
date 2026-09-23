@@ -553,8 +553,10 @@
     var filter = el('storyboard-story-lora-filter');
     var loras = Array.isArray(storyState.story.loras) ? storyState.story.loras : [];
     list.innerHTML = loras.map(function (lora) {
-      return storyLoraRowHtml(lora, filter ? filter.value : '');
+      return storyLoraRowHtml(lora, '');
     }).join('');
+    var picker = el('storyboard-story-lora-picker');
+    if (picker) picker.innerHTML = loraOptions('', filter ? filter.value : '', loras.map(function (item) { return item.name; }));
     status.textContent = storyState.generationCapabilities.available
       ? (loras.length ? 'Applied to every Scene by default.' : 'No Story-wide LoRAs.')
       : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
@@ -626,12 +628,9 @@
           : (stored[key] || {});
         return inheritedLoraRowHtml(lora, override);
       }).join('');
-      Array.prototype.forEach.call(root.querySelectorAll('[data-scene-lora-name]'), function (select) {
-        var selected = select.value;
-        var filter = root.querySelector('[data-scene-lora-filter]');
-        select.innerHTML = loraOptions(selected, filter ? filter.value : '', storyLoras.map(function (item) { return item.name; }));
-        select.value = selected;
-      });
+      var picker = root.querySelector('[data-scene-lora-picker]');
+      var filter = root.querySelector('[data-scene-lora-filter]');
+      if (picker) picker.innerHTML = loraOptions('', filter ? filter.value : '', storyLoras.map(function (item) { return item.name; }));
     });
   }
 
@@ -828,7 +827,11 @@
                 '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
                 '<label class="storyboard-inline-check" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
                 '<div class="storyboard-lora-panel">' +
-                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><input type="search" class="storyboard-lora-filter" data-scene-lora-filter placeholder="Filter Scene LoRAs…" aria-label="Filter available Scene LoRAs"><button type="button" class="review-captions-btn" data-scene-lora-add title="Add a LoRA used only by this Scene."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
+                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add the selected LoRA only to this Scene."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
+                  '<input type="search" class="storyboard-lora-filter" data-scene-lora-filter placeholder="Filter available LoRAs…" aria-label="Filter available Scene LoRAs">' +
+                  '<select class="storyboard-lora-picker" data-scene-lora-picker aria-label="Available Scene LoRAs">' +
+                    loraOptions('', '', storyLoras.map(function (item) { return item.name; })) +
+                  '</select>' +
                   (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Inherited from Story</span><div class="storyboard-lora-list" data-story-lora-inherited-list>' + inheritedLoraRowsHtml + '</div></div>' : '') +
                   '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Scene only</span><div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div></div>' +
                   '<span class="storyboard-reference-empty">' + escapeHtml(loraStatus) + '</span>' +
@@ -1509,12 +1512,9 @@
     });
 
     el('storyboard-story-lora-filter').addEventListener('input', function () {
-      var filter = this.value;
-      Array.prototype.forEach.call(el('storyboard-story-lora-list').querySelectorAll('[data-story-lora-name]'), function (select) {
-        var selected = select.value;
-        select.innerHTML = loraOptions(selected, filter);
-        select.value = selected;
-      });
+      var picker = el('storyboard-story-lora-picker');
+      if (!picker) throw new Error('Story LoRA picker is missing.');
+      picker.innerHTML = loraOptions('', this.value, storyLorasFromUi().map(function (item) { return item.name; }));
     });
     el('storyboard-story-lora-list').addEventListener('input', function (event) {
       if (!event.target.closest('[data-story-lora-row]')) return;
@@ -1527,8 +1527,12 @@
       scheduleStorySave();
     });
     el('storyboard-story-lora-add').addEventListener('click', function () {
-      var filter = el('storyboard-story-lora-filter');
-      el('storyboard-story-lora-list').insertAdjacentHTML('beforeend', storyLoraRowHtml({}, filter ? filter.value : ''));
+      var picker = el('storyboard-story-lora-picker');
+      if (!picker) throw new Error('Story LoRA picker is missing.');
+      var selectedName = String(picker.value || '').trim();
+      if (!selectedName) return;
+      el('storyboard-story-lora-list').insertAdjacentHTML('beforeend', storyLoraRowHtml({ name: selectedName, strength: 1 }, ''));
+      picker.innerHTML = loraOptions('', el('storyboard-story-lora-filter').value, storyLorasFromUi().map(function (item) { return item.name; }));
       syncStoryLorasIntoScenes();
       scheduleStorySave();
     });
@@ -1538,6 +1542,8 @@
       var row = remove.closest('[data-story-lora-row]');
       if (!row) return;
       row.remove();
+      var picker = el('storyboard-story-lora-picker');
+      if (picker) picker.innerHTML = loraOptions('', el('storyboard-story-lora-filter').value, storyLorasFromUi().map(function (item) { return item.name; }));
       syncStoryLorasIntoScenes();
       scheduleStorySave();
     });
@@ -1548,11 +1554,9 @@
         var filterScene = loraFilter.closest('.storyboard-scene[data-scene-id]');
         if (!filterScene) throw new Error('LoRA filter Scene is missing.');
         var storyLoras = storyLorasFromUi();
-        Array.prototype.forEach.call(filterScene.querySelectorAll('[data-scene-lora-name]'), function (select) {
-          var selected = select.value;
-          select.innerHTML = loraOptions(selected, loraFilter.value, storyLoras.map(function (item) { return item.name; }));
-          select.value = selected;
-        });
+        var picker = filterScene.querySelector('[data-scene-lora-picker]');
+        if (!picker) throw new Error('LoRA picker is missing.');
+        picker.innerHTML = loraOptions('', loraFilter.value, storyLoras.map(function (item) { return item.name; }));
         return;
       }
       var loraRow = event.target.closest('[data-scene-lora-row], [data-story-lora-inherited-row]');
@@ -1602,8 +1606,11 @@
         if (!addLoraScene) throw new Error('LoRA Scene is missing.');
         var list = addLoraScene.querySelector('[data-scene-lora-list]');
         if (!list) throw new Error('LoRA list is missing.');
-        var filter = addLoraScene.querySelector('[data-scene-lora-filter]');
-        list.insertAdjacentHTML('beforeend', sceneLoraRowHtml({}, filter ? filter.value : '', storyLorasFromUi()));
+        var picker = addLoraScene.querySelector('[data-scene-lora-picker]');
+        if (!picker) throw new Error('LoRA picker is missing.');
+        var selectedName = String(picker.value || '').trim();
+        if (!selectedName) return;
+        list.insertAdjacentHTML('beforeend', sceneLoraRowHtml({ name: selectedName, strength: 1 }, '', storyLorasFromUi()));
         scheduleSceneSave(addLoraScene.dataset.sceneId);
         return;
       }

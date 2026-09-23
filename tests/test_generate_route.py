@@ -2,6 +2,7 @@ from io import BytesIO
 
 from tool.server import app as app_module
 from tool.server import generate_generation
+from tool.server import generate_store
 
 
 def test_generate_enqueue_is_global_and_uses_frozen_prepared_request(monkeypatch):
@@ -160,3 +161,67 @@ def test_generate_capabilities_publishes_portable_lora_names(monkeypatch):
 
     assert payload["loras"] == ["mh3/candidate.safetensors"]
     assert payload["baseLoras"] == ["mh3/base.safetensors"]
+
+def test_generate_enqueue_failure_cleans_uploaded_references(monkeypatch):
+    cleaned = []
+    monkeypatch.setattr(
+        app_module,
+        "prepare_generate_request",
+        lambda _data: (_ for _ in ()).throw(ValueError("bad request")),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "generate_cleanup_references",
+        lambda references: cleaned.append(dict(references)),
+    )
+    client = app_module.app.test_client()
+
+    response = client.post("/fs/generate", json={
+        "modelId": "minimax_h3",
+        "prompt": "idea",
+        "references": {"first_frame": ".webcap_runtime/generate-references/ref-1/frame.png"},
+    })
+
+    assert response.status_code == 400
+    assert cleaned == [{
+        "first_frame": ".webcap_runtime/generate-references/ref-1/frame.png"
+    }]
+
+
+def test_generate_result_owns_reference_copy_before_transient_cleanup(tmp_path, monkeypatch):
+    monkeypatch.setattr(generate_store.app_config, "FS_ROOT", tmp_path)
+    source_dir = generate_store.reference_root() / "ref-1"
+    source_dir.mkdir(parents=True)
+    source = source_dir / "frame.png"
+    source.write_bytes(b"reference")
+    relative_source = str(source.relative_to(tmp_path)).replace("\\", "/")
+
+    payload = generate_store.persist_result(
+        "job-1",
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "sourcePrompt": "idea",
+            "prompt": "resolved",
+            "settings": {"seed": 7},
+            "loras": [],
+            "references": {"first_frame": relative_source},
+            "wildcardsEnabled": False,
+            "workflowFile": "workflow.json",
+        },
+        {"filename": "render.mp4", "type": "output"},
+        b"video",
+        "provider-1",
+        123,
+    )
+    durable_reference = tmp_path / payload["references"]["first_frame"]
+
+    assert durable_reference.read_bytes() == b"reference"
+    assert payload["references"]["first_frame"] != relative_source
+
+    removed = generate_store.cleanup_references({"first_frame": relative_source})
+
+    assert removed == 1
+    assert not source.exists()
+    assert durable_reference.read_bytes() == b"reference"
+

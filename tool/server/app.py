@@ -27,7 +27,6 @@ from .epoch_test_bench import (
     activity_snapshot as test_generations_activity_snapshot,
     handle_request as handle_epoch_test_bench_request,
     reconcile_startup as reconcile_test_generations_startup,
-    start_observer as start_test_generations_observer,
     supported_models as test_generations_supported_models,
 )
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
@@ -1604,7 +1603,6 @@ if __name__ == "__main__":
     reconcile_storyboard_generation_startup()
     reconcile_inference_startup()
     start_training_runner_observer()
-    start_test_generations_observer()
     start_inference_observer()
     # Only bind to localhost for desktop/offline use.
     # Disable Flask debug mode for a production-like local runtime.

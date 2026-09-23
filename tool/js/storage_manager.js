@@ -76,7 +76,7 @@
 
   function allItems() {
     var groups = storageState.payload && storageState.payload.items || {};
-    return ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime'].reduce(function (rows, area) {
+    return ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].reduce(function (rows, area) {
       return rows.concat((groups[area] || []).map(function (item) {
         return item;
       }));
@@ -131,6 +131,7 @@
       if (item.area === 'storyboard') label = 'Delete Story';
       else if (item.area === 'staged') label = 'Delete Copy';
       else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) label = 'Delete Probe';
+      else if (item.area === 'comfy') label = 'Delete Scratch';
       html += '<button type="button" class="review-captions-btn storage-delete-btn"' + payload + '>' + label + '</button>';
     }
     return html;
@@ -147,9 +148,10 @@
       generate: 'Generations',
       storyboard: 'Storyboard',
       set: 'Current Set (protected)',
-      runtime: 'Runtime / Temporary'
+      runtime: 'Runtime / Temporary',
+      comfy: 'ComfyUI Scratch'
     };
-    host.innerHTML = ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime'].map(function (area) {
+    host.innerHTML = ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].map(function (area) {
       var rows = (groups[area] || []).slice().sort(itemSort);
       var empty = rows.length
         ? ''
@@ -242,6 +244,9 @@
     } else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) {
       label = 'H3 probe';
       consequence = '\nThis removes the captured probe inputs, logs, and probe results.';
+    } else if (item.area === 'comfy') {
+      label = 'ComfyUI scratch tree';
+      consequence = '\nOnly this exact WebCap-prefixed provider job tree is removed.';
     }
     return window.confirm('Permanently delete this ' + label + '?\n\n' + item.label + sizeText + consequence + '\n\nThis cannot be undone.');
   }

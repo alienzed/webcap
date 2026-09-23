@@ -975,6 +975,13 @@
           '<button type="button" data-reference-clear="' + escapeHtml(reference.role) + '" title="Clear reference" aria-label="Clear reference">×</button>' +
         '</span>';
       }).join('');
+      var conditioningSummaryParts = [];
+      if (storyLoras.length) conditioningSummaryParts.push(String(storyLoras.length) + ' inherited');
+      var overrideCount = Object.keys(overrides).length;
+      if (overrideCount) conditioningSummaryParts.push(String(overrideCount) + ' override' + (overrideCount === 1 ? '' : 's'));
+      if (sceneLoras.length) conditioningSummaryParts.push(String(sceneLoras.length) + ' Scene');
+      if (sceneReferences.length) conditioningSummaryParts.push(String(sceneReferences.length) + ' ref' + (sceneReferences.length === 1 ? '' : 's'));
+      var conditioningSummary = conditioningSummaryParts.length ? conditioningSummaryParts.join(' · ') : 'None';
       var removedTakeIds = Object.keys(removedTakes);
       var removedTakesHtml = removedTakeIds.length
         ? '<div class="storyboard-removed-takes"><span>Removed Takes</span>' +
@@ -1044,57 +1051,57 @@
               '</div>' +
             '</details>' +
           '</div>' +
-          '<aside class="storyboard-scene-meta">' +
-            '<div class="storyboard-scene-column-heading">Generation</div>' +
-            '<div class="storyboard-scene-quick">' +
-              '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
-              '<div class="storyboard-generate-panel">' +
-                '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Generate a new Take from the current saved Scene."' + (generationBusy ? ' disabled' : '') + '>' +
-                  (generationQueued ? 'Queued…' : (generationRunning ? 'Generating…' : 'Generate Take')) +
-                '</button>' +
-              '</div>' +
-            '</div>' +
-            '<details class="storyboard-scene-disclosure storyboard-advanced-details">' +
-              '<summary><span>Advanced</span><span class="storyboard-disclosure-summary-state">' + escapeHtml(advancedSummary) + '</span></summary>' +
-              '<div class="storyboard-disclosure-body">' +
-                '<div class="storyboard-scene-meta-row">' +
-                  '<label class="storyboard-field" title="Currently stored per Scene; keep this consistent across a Story unless you intentionally need an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
-                    ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
-                      return '<option value="' + escapeHtml(value) + '"' + (sceneValue(scene, 'aspectRatio', '4:3 (Standard)') === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
-                    }).join('') +
-                  '</select></label>' +
-                  '<label class="storyboard-field" title="Output size target for this Scene. Useful when promoting a shot toward final output."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneValue(scene, 'megapixels', 0.2)) + '"></label>' +
+          '<aside class="storyboard-scene-inspector" aria-label="Scene inspector">' +
+            '<section class="storyboard-inspector-section storyboard-generation-inspector">' +
+              '<div class="storyboard-inspector-section-heading"><strong>Generation</strong><span>Current Scene</span></div>' +
+              '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Generate a new Take from the current saved Scene."' + (generationBusy ? ' disabled' : '') + '>' +
+                (generationQueued ? 'Queued…' : (generationRunning ? 'Generating…' : 'Generate Take')) +
+              '</button>' +
+              '<label class="storyboard-field storyboard-generation-duration" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
+              '<details class="storyboard-scene-disclosure storyboard-advanced-details">' +
+                '<summary><span>Generation settings</span><span class="storyboard-disclosure-summary-state">' + escapeHtml(advancedSummary) + '</span></summary>' +
+                '<div class="storyboard-disclosure-body">' +
+                  '<div class="storyboard-scene-meta-row">' +
+                    '<label class="storyboard-field" title="Currently stored per Scene; keep this consistent across a Story unless you intentionally need an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
+                      ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
+                        return '<option value="' + escapeHtml(value) + '"' + (sceneValue(scene, 'aspectRatio', '4:3 (Standard)') === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
+                      }).join('') +
+                    '</select></label>' +
+                    '<label class="storyboard-field" title="Output size target for this Scene. Useful when promoting a shot toward final output."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneValue(scene, 'megapixels', 0.2)) + '"></label>' +
+                  '</div>' +
+                  '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
+                  '<label class="storyboard-inline-check" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
                 '</div>' +
-                '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
-                '<label class="storyboard-inline-check" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
-              '</div>' +
-            '</details>' +
-          '</aside>' +
-          '<aside class="storyboard-scene-conditioning">' +
-            '<div class="storyboard-scene-column-heading">Conditioning</div>' +
-            '<div class="storyboard-lora-panel">' +
-              '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add the chosen Scene-specific LoRA."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
-              '<div class="storyboard-lora-picker-wrap">' +
-                '<input type="search" class="storyboard-lora-picker" data-scene-lora-picker autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Filter / choose LoRA…" aria-label="Filter and choose available LoRA">' +
-                '<div class="storyboard-lora-picker-menu hidden" data-lora-picker-menu role="listbox"></div>' +
-              '</div>' +
-              (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Inherited from Story</span><div class="storyboard-lora-list" data-story-lora-inherited-list>' + inheritedLoraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list hidden" data-story-lora-inherited-list></div>') +
-              (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Scene only</span><div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>') +
-              '<span class="storyboard-lora-status" title="' + escapeHtml(loraStatusTitle) + '">' + escapeHtml(loraStatusText) + '</span>' +
-            '</div>' +
-            '<details class="storyboard-scene-disclosure storyboard-reference-details">' +
-              '<summary><span>References</span><span class="storyboard-disclosure-summary-state">' + (sceneReferences.length ? sceneReferences.length + ' assigned' : 'None') + '</span></summary>' +
+              '</details>' +
+            '</section>' +
+            '<details class="storyboard-scene-disclosure storyboard-conditioning-details">' +
+              '<summary><span>Conditioning</span><span class="storyboard-disclosure-summary-state">' + escapeHtml(conditioningSummary) + '</span></summary>' +
               '<div class="storyboard-disclosure-body">' +
-                (referencesHtml ? '<div class="storyboard-reference-chips">' + referencesHtml + '</div>' : '<span class="storyboard-reference-empty">No references assigned.</span>') +
-                (previousSelectedTakeId
-                  ? '<button type="button" class="review-captions-btn storyboard-reference-quick" data-reference-previous title="Use the previous Scene\'s selected Take as this Scene\'s first-frame reference.">Previous selected Take → first frame</button>'
-                  : (index > 0 ? '<span class="storyboard-reference-empty">Select a Take in the previous Scene for quick continuity.</span>' : '')) +
-                '<div class="storyboard-reference-editor">' +
-                  '<select data-reference-role title="Which reference slot this media should fill."><option value="first_frame">First frame</option><option value="last_frame">Last frame</option></select>' +
-                  '<select data-reference-source title="Choose an existing Take to use as a reference.">' + activeTakeOptions(story, '') + '</select>' +
-                  '<select data-reference-frame title="Choose which frame from the source Take to use."><option value="last">Last frame</option><option value="first">First frame</option></select>' +
-                  '<button type="button" class="review-captions-btn" data-reference-apply title="Assign the selected Take frame to this reference slot.">Assign</button>' +
+                '<div class="storyboard-lora-panel">' +
+                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add the chosen Scene-specific LoRA."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
+                  '<div class="storyboard-lora-picker-wrap">' +
+                    '<input type="search" class="storyboard-lora-picker" data-scene-lora-picker autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Filter / choose LoRA…" aria-label="Filter and choose available LoRA">' +
+                    '<div class="storyboard-lora-picker-menu hidden" data-lora-picker-menu role="listbox"></div>' +
+                  '</div>' +
+                  (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Inherited from Story</span><div class="storyboard-lora-list" data-story-lora-inherited-list>' + inheritedLoraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list hidden" data-story-lora-inherited-list></div>') +
+                  (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Scene only</span><div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>') +
+                  '<span class="storyboard-lora-status" title="' + escapeHtml(loraStatusTitle) + '">' + escapeHtml(loraStatusText) + '</span>' +
                 '</div>' +
+                '<details class="storyboard-scene-disclosure storyboard-reference-details">' +
+                  '<summary><span>References</span><span class="storyboard-disclosure-summary-state">' + (sceneReferences.length ? sceneReferences.length + ' assigned' : 'None') + '</span></summary>' +
+                  '<div class="storyboard-disclosure-body">' +
+                    (referencesHtml ? '<div class="storyboard-reference-chips">' + referencesHtml + '</div>' : '<span class="storyboard-reference-empty">No references assigned.</span>') +
+                    (previousSelectedTakeId
+                      ? '<button type="button" class="review-captions-btn storyboard-reference-quick" data-reference-previous title="Use the previous Scene\'s selected Take as this Scene\'s first-frame reference.">Previous selected Take → first frame</button>'
+                      : (index > 0 ? '<span class="storyboard-reference-empty">Select a Take in the previous Scene for quick continuity.</span>' : '')) +
+                    '<div class="storyboard-reference-editor">' +
+                      '<select data-reference-role title="Which reference slot this media should fill."><option value="first_frame">First frame</option><option value="last_frame">Last frame</option></select>' +
+                      '<select data-reference-source title="Choose an existing Take to use as a reference.">' + activeTakeOptions(story, '') + '</select>' +
+                      '<select data-reference-frame title="Choose which frame from the source Take to use."><option value="last">Last frame</option><option value="first">First frame</option></select>' +
+                      '<button type="button" class="review-captions-btn" data-reference-apply title="Assign the selected Take frame to this reference slot.">Assign</button>' +
+                    '</div>' +
+                  '</div>' +
+                '</details>' +
               '</div>' +
             '</details>' +
           '</aside>' +

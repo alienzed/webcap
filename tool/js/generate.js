@@ -51,17 +51,29 @@
     }) || null;
   }
 
-  function reportError(err) {
+  function reportError(err, uiMessage) {
     var message = String(err && err.message ? err.message : err);
-    var status = el('generate-status');
-    if (status) status.textContent = message;
     if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Generate', message);
     else console.error('[Generate]', err);
+    if (uiMessage) setStatus(uiMessage, 'error');
   }
 
-  function setStatus(message) {
+  function conciseGenerateError(err, fallback) {
+    var message = String(err && err.message ? err.message : err);
+    if (/ComfyUI|127\\.0\\.0\\.1[^\\n]*8188|port 8188/i.test(message)) return 'ComfyUI unavailable';
+    if (message === 'Choose a Base Model.') return 'Choose a Base Model';
+    if (message === 'Enter a generation prompt.') return 'Prompt required';
+    return String(fallback || 'Generation failed');
+  }
+
+  function setStatus(message, tone) {
     var status = el('generate-status');
-    if (status) status.textContent = String(message || '');
+    if (!status) return;
+    var text = String(message || '').trim();
+    status.textContent = text;
+    status.classList.toggle('hidden', !text);
+    status.classList.toggle('is-error', tone === 'error');
+    status.title = tone === 'error' ? 'See Console for details.' : '';
   }
 
   function loadTrackedGenerateJobs() {
@@ -313,7 +325,7 @@
       setStatus('Queued' + (payload.job.queuePosition ? ' · #' + payload.job.queuePosition : '') + '.');
       return refreshQueue();
     }).catch(function (err) {
-      reportError(err);
+      reportError(err, conciseGenerateError(err, 'Generation failed'));
     }).then(function () {
       button.disabled = false;
     });
@@ -501,9 +513,10 @@
           return;
         }
         if (status === 'failed' || status === 'interrupted') {
-          reportError(new Error(
+          var generationError = new Error(
             'Generation ' + status + (job.error ? ': ' + job.error : '.')
-          ));
+          );
+          reportError(generationError, conciseGenerateError(generationError, status === 'failed' ? 'Generation failed' : 'Generation interrupted'));
           return;
         }
         if (status === 'missing') {
@@ -864,7 +877,9 @@
         });
       }
       setStatus('Ready.');
-    }).catch(reportError);
+    }).catch(function (err) {
+      reportError(err, conciseGenerateError(err, 'Setup unavailable'));
+    });
   }
 
   function schedulePoll() {
@@ -930,7 +945,7 @@
       try { addLora(); } catch (err) { reportError(err); }
     };
     el('generate-run-btn').onclick = function () {
-      try { runGenerate(); } catch (err) { reportError(err); }
+      try { runGenerate(); } catch (err) { reportError(err, conciseGenerateError(err, 'Generation blocked')); }
     };
     el('generate-director-write').onclick = function () {
       try { runDirector('write_prompt'); } catch (err) { reportError(err); }

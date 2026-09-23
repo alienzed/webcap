@@ -42,12 +42,12 @@ def normalize_settings(workflow, new_seed, values=None):
     try:
         selected_megapixels = float(defaults["megapixels"] if selected.get("megapixels") in (None, "") else selected.get("megapixels"))
         selected_duration = float(defaults["duration"] if selected.get("duration") in (None, "") else selected.get("duration"))
-        seed = selected.get("seed")
-        selected_seed = validate_test_seed(
-            new_seed() if seed is None or str(seed).strip() == "" else seed
-        )
     except (TypeError, ValueError) as exc:
-        raise ValueError("Test resolution, duration, and seed must be numeric.") from exc
+        raise ValueError("Test resolution and duration must be numeric.") from exc
+    seed = selected.get("seed")
+    selected_seed = validate_test_seed(
+        new_seed() if seed is None or str(seed).strip() == "" else seed
+    )
     if selected_megapixels <= 0:
         raise ValueError("Test resolution must be greater than zero megapixels.")
     if selected_duration <= 0:

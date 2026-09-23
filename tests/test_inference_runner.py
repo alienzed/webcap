@@ -55,6 +55,12 @@ def test_inference_monitor_is_dormant_without_requested_work(inference_root):
     execution_queue.resume_lane(inference_runner.EXECUTION_LANE)
     assert inference_runner._monitor_has_work() is False
 
+    inference_runner.hold_provider_cleanup(
+        "provider-stale",
+        "Queue paused: stale provider cleanup is pending.",
+    )
+    assert inference_runner._monitor_has_work() is False
+
 
 def test_inference_snapshot_is_passive_and_does_not_reconcile_provider(inference_root, monkeypatch):
     inference_runner._startup_reconciled = False
@@ -538,7 +544,7 @@ def test_cancel_job_and_wait_requires_terminal_provider_state(monkeypatch):
 
     assert inference_runtime.cancel_job_and_wait("provider-123", timeout=1) is True
 
-def test_inference_restart_rediscovers_unresolved_terminal_provider(inference_root, monkeypatch):
+def test_inference_reconcile_holds_unresolved_provider_without_claiming_idle_gpu(inference_root, monkeypatch):
     queued = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,
         {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
@@ -558,6 +564,47 @@ def test_inference_restart_rediscovers_unresolved_terminal_provider(inference_ro
 
     snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
     assert snapshot["paused"] is True
-    assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
+    assert execution_queue.resource_owner() == ""
+    assert inference_runner._monitor_has_work() is False
     with inference_runner._provider_hold_lock:
         assert "provider-still-running" in inference_runner._provider_cleanup_holds
+
+
+def test_inference_resume_checks_pending_cleanup_once_and_stays_dormant_if_unavailable(inference_root, monkeypatch):
+    inference_runner.hold_provider_cleanup(
+        "provider-stale",
+        "Queue paused: stale provider cleanup is pending.",
+    )
+    calls = []
+
+    def unavailable(provider_id):
+        calls.append(provider_id)
+        raise RuntimeError("ComfyUI unavailable")
+
+    monkeypatch.setattr(inference_runtime, "read_job", unavailable)
+
+    result = inference_runner.action("resume_queue")
+
+    assert calls == ["provider-stale"]
+    assert result["queue"]["paused"] is True
+    assert execution_queue.resource_owner() == ""
+    assert inference_runner._monitor_has_work() is False
+
+
+def test_inference_resume_protects_gpu_when_provider_is_confirmed_active(inference_root, monkeypatch):
+    inference_runner.hold_provider_cleanup(
+        "provider-active",
+        "Queue paused: provider cleanup is pending.",
+    )
+    calls = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "read_job",
+        lambda provider_id: calls.append(provider_id) or {"status": "in_progress"},
+    )
+
+    result = inference_runner.action("resume_queue")
+
+    assert calls == ["provider-active"]
+    assert result["queue"]["paused"] is True
+    assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER

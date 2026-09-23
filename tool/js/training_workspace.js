@@ -901,7 +901,6 @@ function syncTrainingWorkspaceDetailUi() {
   var configFileTabs = document.getElementById('config-editor-file-tabs');
   var trainingOutputView = document.getElementById('training-runner-output-view');
   var trainingRunnerEmpty = document.getElementById('training-runner-empty');
-  var editorWrapper = ui && ui.appEl ? ui.appEl.querySelector('.editor-wrapper') : null;
   var hasConfigFile = !!(state && state.currentConfigFile && state.currentConfigFile.file);
   var hasTrainingConfigFile = isSetTraining && hasConfigFile && state.currentConfigFile.folder === state.folder;
   var trainingOutputVisible = active && !isUnavailableSetTraining && detailTab === 'run-log';
@@ -922,7 +921,6 @@ function syncTrainingWorkspaceDetailUi() {
   if (trainingConfigEmpty) trainingConfigEmpty.classList.toggle('hidden', !isSetTraining || detailTab !== 'config' || hasTrainingConfigFile);
   if (trainingOutputView) trainingOutputView.classList.toggle('hidden', !trainingOutputVisible);
   if (trainingRunnerEmpty) trainingRunnerEmpty.classList.toggle('hidden', !trainingOutputVisible || isTrainingRunnerConsoleVisible());
-  if (editorWrapper) editorWrapper.classList.toggle('hidden', active && (!isSetTraining || detailTab !== 'config' || !hasTrainingConfigFile));
   if (fileLabel && active) fileLabel.textContent = hasConfigFile ? state.currentConfigFile.file : 'No config selected.';
   if (saveBtn && active) saveBtn.disabled = !hasTrainingConfigFile;
 }

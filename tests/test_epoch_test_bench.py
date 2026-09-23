@@ -875,3 +875,54 @@ def test_running_test_session_owns_stop_control():
     assert "event.target.closest('[data-session-stop]')" in js
     assert ".test-generations-active" not in css
     assert ".test-generations-stop-btn" in css
+
+def test_completed_test_session_tolerates_pruned_execution_records(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    session = tmp_path / bench.TEST_RESULTS_DIR / "complete-session"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "modelId": bench.get_test_model().PROFILE_ID,
+        "inferenceJobs": ["pruned-job"],
+        "results": [{
+            "jobId": "pruned-job",
+            "kind": "base",
+            "sourceLoRA": "Base",
+            "mediaFile": "base.mp4",
+            "mediaKind": "video",
+            "prompt": "Prompt",
+            "seed": 1,
+            "elapsedMs": 10,
+        }],
+        "failures": [],
+        "completed": 1,
+        "failed": 0,
+        "total": 1,
+    })
+    (session / "base.mp4").write_bytes(b"video")
+
+    payload = bench.open_session(tmp_path, session.name)
+
+    assert payload["status"] == "complete"
+    assert payload["completed"] == 1
+    assert payload["results"][0]["jobId"] == "pruned-job"
+
+
+def test_nonterminal_test_session_fails_loudly_for_missing_execution_record(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    session = tmp_path / bench.TEST_RESULTS_DIR / "queued-session"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "queued",
+        "modelId": bench.get_test_model().PROFILE_ID,
+        "inferenceJobs": ["missing-active-job"],
+        "results": [],
+        "failures": [],
+        "completed": 0,
+        "failed": 0,
+        "total": 1,
+    })
+
+    with pytest.raises(RuntimeError, match="missing active inference job"):
+        bench.open_session(tmp_path, session.name)
+

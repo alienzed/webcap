@@ -104,6 +104,7 @@ function syncWorkspaceHeaderUi() {
 function normalizeShellRouteWorkspace(value) {
   var workspace = String(value || '').trim().toLowerCase();
   if (workspace === 'training') return 'training';
+  if (workspace === 'generate') return 'generate';
   if (workspace === 'test') return 'test';
   if (workspace === 'storyboard') return 'storyboard';
   if (workspace === 'review') return 'review';
@@ -125,6 +126,7 @@ function parseShellLocationRoute() {
 
 function currentShellRouteWorkspace() {
   var navigation = deriveShellNavigationState();
+  if (navigation.activity === 'generate') return 'generate';
   if (navigation.activity === 'test') return 'test';
   if (navigation.activity === 'storyboard') return 'storyboard';
   if (navigation.workspaceRoot === 'training') return 'training';
@@ -139,7 +141,7 @@ function syncShellLocationRoute() {
   var workspace = currentShellRouteWorkspace();
   var params = new URLSearchParams();
   var folder = String(state && state.folder || '');
-  if (folder && workspace !== 'storyboard') params.set('folder', folder);
+  if (folder && workspace !== 'storyboard' && workspace !== 'generate') params.set('folder', folder);
   if (workspace === 'training' && getTrainingWorkspaceEntryKind() === 'global') params.set('scope', 'global');
   var nextHash = '#/' + workspace + (params.toString() ? '?' + params.toString() : '');
   if (window.location.hash === nextHash) return;
@@ -173,6 +175,8 @@ function restoreInitialShellLocationRoute() {
     setWorkspaceSurface('reviewOutput');
   } else if (route.workspace === 'grid' && typeof openMediaGridSurface === 'function') {
     openMediaGridSurface();
+  } else if (route.workspace === 'generate' && typeof window.openGenerateActivity === 'function') {
+    window.openGenerateActivity();
   } else if (route.workspace === 'test' && typeof window.openTestBenchForCurrentFolder === 'function') {
     window.openTestBenchForCurrentFolder();
   } else if (route.workspace === 'storyboard' && typeof window.openStoryboardActivity === 'function') {
@@ -209,19 +213,22 @@ function toggleShellImmersive() {
 
 function deriveShellNavigationState() {
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
+  var generateOpen = !!document.querySelector('.generate-workspace:not(.hidden)');
   var testOpen = !!document.querySelector('.test-generations-pane:not(.hidden)');
   var storyboardOpen = !!document.querySelector('.storyboard-workspace:not(.hidden)');
-  var activity = storyboardOpen ? 'storyboard' : (testOpen ? 'test' : (surface === 'training' ? 'training' : 'prep'));
-  var workspaceRoot = storyboardOpen
-    ? 'storyboard'
-    : (testOpen
-      ? 'test'
-      : (surface === 'training'
-        ? 'training'
-        : (surface === 'reviewOutput'
-          ? 'review'
-          : (surface === 'grid' ? 'grid' : (surface === 'focus' ? 'focus' : (surface === 'configEditor' ? 'config' : 'prep'))))));
-  var contextKind = activity === 'storyboard'
+  var activity = generateOpen ? 'generate' : (storyboardOpen ? 'storyboard' : (testOpen ? 'test' : (surface === 'training' ? 'training' : 'prep')));
+  var workspaceRoot = generateOpen
+    ? 'generate'
+    : (storyboardOpen
+      ? 'storyboard'
+      : (testOpen
+        ? 'test'
+        : (surface === 'training'
+          ? 'training'
+          : (surface === 'reviewOutput'
+            ? 'review'
+            : (surface === 'grid' ? 'grid' : (surface === 'focus' ? 'focus' : (surface === 'configEditor' ? 'config' : 'prep')))))));
+  var contextKind = activity === 'storyboard' || activity === 'generate'
     ? 'none'
     : (activity === 'training' && getTrainingWorkspaceEntryKind() === 'global'
       ? 'global'
@@ -431,11 +438,12 @@ function syncApplicationShellContext() {
   var previewHeader = document.getElementById('preview-header');
   var annotationActions = document.getElementById('workbench-annotation-actions');
   var sidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
+  var generateOpen = navigation.activity === 'generate';
   var testOpen = navigation.activity === 'test';
   var storyboardOpen = navigation.activity === 'storyboard';
   var contextText = '';
 
-  if (storyboardOpen) {
+  if (generateOpen || storyboardOpen) {
     contextText = '';
   } else if (testOpen) {
     contextText = folder ? '' : 'Select a set';
@@ -448,7 +456,8 @@ function syncApplicationShellContext() {
   }
 
   if (workspaceTitle) {
-    if (storyboardOpen) workspaceTitle.textContent = 'Storyboard';
+    if (generateOpen) workspaceTitle.textContent = 'Generate';
+    else if (storyboardOpen) workspaceTitle.textContent = 'Storyboard';
     else if (testOpen) workspaceTitle.textContent = 'Test Generations';
     else if (surface === 'training') workspaceTitle.textContent = 'Training';
     else if (surface === 'reviewOutput') workspaceTitle.textContent = 'Review Set';
@@ -463,9 +472,9 @@ function syncApplicationShellContext() {
     workspaceContext.textContent = contextText;
   }
 
-  var previewContextRelevant = !testOpen && !storyboardOpen && (surface === 'default' || surface === 'focus');
+  var previewContextRelevant = !generateOpen && !testOpen && !storyboardOpen && (surface === 'default' || surface === 'focus');
   previewHeader.classList.toggle('shell-context-hidden', !previewContextRelevant);
-  annotationActions.classList.toggle('shell-context-hidden', testOpen || storyboardOpen || surface !== 'default');
+  annotationActions.classList.toggle('shell-context-hidden', generateOpen || testOpen || storyboardOpen || surface !== 'default');
 
   var modelRelevant = navigation.activity === 'training' || navigation.activity === 'test';
   if (modelControl) modelControl.classList.toggle('hidden', !modelRelevant);
@@ -476,7 +485,7 @@ function syncApplicationShellContext() {
   }
 
   if (sidebarToggle) {
-    var sidebarToggleVisible = !testOpen && !storyboardOpen && (surface === 'default' || surface === 'training');
+    var sidebarToggleVisible = !generateOpen && !testOpen && !storyboardOpen && (surface === 'default' || surface === 'training');
     sidebarToggle.classList.toggle('hidden', !sidebarToggleVisible);
     if (typeof updateSidebarCollapseUi === 'function') {
       updateSidebarCollapseUi(ui && ui.appEl ? ui.appEl.classList.contains('left-rail-collapsed') : false);
@@ -484,6 +493,7 @@ function syncApplicationShellContext() {
   }
 
   var prepBtn = document.getElementById('activity-prep-btn');
+  var generateBtn = document.getElementById('activity-generate-btn');
   var trainingBtn = document.getElementById('activity-training-btn');
   var testBtn = document.getElementById('activity-test-btn');
   var storyboardBtn = document.getElementById('activity-storyboard-btn');
@@ -493,6 +503,12 @@ function syncApplicationShellContext() {
     prepBtn.classList.toggle('active', prepActive);
     prepBtn.setAttribute('aria-pressed', prepActive ? 'true' : 'false');
     prepBtn.setAttribute('aria-current', prepActive ? 'page' : 'false');
+  }
+  if (generateBtn) {
+    var generateActive = navigation.activity === 'generate';
+    generateBtn.classList.toggle('active', generateActive);
+    generateBtn.setAttribute('aria-pressed', generateActive ? 'true' : 'false');
+    generateBtn.setAttribute('aria-current', generateActive ? 'page' : 'false');
   }
   if (trainingBtn) {
     var trainingActive = navigation.activity === 'training';
@@ -515,6 +531,7 @@ function syncApplicationShellContext() {
 }
 
 function openPrepActivity() {
+  if (typeof window !== 'undefined' && typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
   if (typeof window !== 'undefined' && typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
@@ -657,6 +674,7 @@ function exitWorkspaceSurface(surfaceOverride) {
 }
 
 function openTrainingSurface(mode) {
+  if (typeof window !== 'undefined' && typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
   if (typeof window !== 'undefined' && typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
   if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
@@ -774,6 +792,17 @@ function wireWorkspaceHeaderUi() {
     prepActivityBtn.__workspaceWired = true;
     prepActivityBtn.onclick = openPrepActivity;
   }
+  var generateActivityBtn = document.getElementById('activity-generate-btn');
+  if (generateActivityBtn && !generateActivityBtn.__workspaceWired) {
+    generateActivityBtn.__workspaceWired = true;
+    generateActivityBtn.onclick = function () {
+      if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
+        stopFocusedAnnotation();
+      }
+      if (typeof window.openGenerateActivity !== 'function') throw new Error('Generate activity is not available.');
+      window.openGenerateActivity();
+    };
+  }
   var trainingActivityBtn = document.getElementById('activity-training-btn');
   if (trainingActivityBtn && !trainingActivityBtn.__workspaceWired) {
     trainingActivityBtn.__workspaceWired = true;
@@ -788,6 +817,7 @@ function wireWorkspaceHeaderUi() {
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
         stopFocusedAnnotation();
       }
+      if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
       if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
       if (typeof window.openTestBenchActivity !== 'function') throw new Error('Test Bench activity is not available.');
       window.openTestBenchActivity();
@@ -800,6 +830,7 @@ function wireWorkspaceHeaderUi() {
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
         stopFocusedAnnotation();
       }
+      if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
       if (typeof window.openStoryboardActivity !== 'function') throw new Error('Storyboard activity is not available.');
       window.openStoryboardActivity();
     };

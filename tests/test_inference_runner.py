@@ -349,3 +349,27 @@ def test_cancel_job_and_wait_requires_terminal_provider_state(monkeypatch):
 
     assert inference_runtime.cancel_job_and_wait("provider-123", timeout=1) is True
 
+def test_inference_restart_rediscovers_unresolved_terminal_provider(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(
+        queued["id"],
+        details={"providerJobId": "provider-still-running", "providerStatus": "in_progress"},
+    )
+    execution_queue.finish_job(queued["id"], status="failed", error="polling failed")
+
+    inference_runner._startup_reconciled = False
+    monkeypatch.setattr(inference_runtime, "cancel_job_and_wait", lambda _provider_id: False)
+
+    inference_runner.reconcile_startup()
+
+    snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
+    assert snapshot["paused"] is True
+    assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
+    with inference_runner._provider_hold_lock:
+        assert "provider-still-running" in inference_runner._provider_cleanup_holds
+

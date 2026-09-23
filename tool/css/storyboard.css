@@ -580,12 +580,12 @@
 }
 
 .storyboard-reference-panel > strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .storyboard-reference-empty {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .storyboard-reference-chips {
@@ -763,19 +763,20 @@
 }
 
 .storyboard-lora-header strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .storyboard-lora-picker {
   min-width: 0;
   width: 100%;
+  min-height: 36px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 5px;
   background: var(--input-bg, var(--panel));
   color: var(--text);
-  padding: 5px 7px;
+  padding: 7px 9px;
   font: inherit;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .storyboard-lora-picker-wrap {
@@ -801,12 +802,12 @@
 .storyboard-lora-picker-empty {
   display: block;
   width: 100%;
-  padding: 6px 8px;
+  padding: 8px 9px;
   border: 0;
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 11px;
+  font-size: 13px;
   text-align: left;
 }
 
@@ -838,13 +839,14 @@
 .storyboard-lora-row select,
 .storyboard-lora-row input {
   min-width: 0;
+  min-height: 34px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 5px;
   background: var(--input-bg, var(--panel));
   color: var(--text);
-  padding: 5px;
+  padding: 7px;
   font: inherit;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .storyboard-lora-subsection {
@@ -855,7 +857,7 @@
 
 .storyboard-lora-subtitle {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1150,12 +1152,12 @@
   min-width: 0;
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 5px;
   background: var(--input-bg, var(--panel));
   color: var(--text);
-  padding: 6px 7px;
+  padding: 8px 9px;
   font: inherit;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .storyboard-invariant-row textarea {
@@ -1167,9 +1169,6 @@
   align-items: center;
 }
 
-.storyboard-scenes-actions {
-  margin-left: auto;
-}
 
 .storyboard-view-toggle {
   justify-self: center;
@@ -1222,13 +1221,13 @@
 
 .storyboard-scene-progress-step span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
 .storyboard-scene-progress-step strong {
   overflow: hidden;
-  font-size: 13px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1284,8 +1283,8 @@
 .storyboard-scene-overview-number {
   grid-area: number;
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .storyboard-scene-overview-card strong {
@@ -1298,13 +1297,13 @@
 
 .storyboard-scene-overview-summary {
   grid-area: summary;
-  min-height: 34px;
-  max-height: 34px;
+  min-height: 38px;
+  max-height: 38px;
   display: -webkit-box;
   overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -1312,7 +1311,7 @@
 .storyboard-scene-overview-meta {
   grid-area: meta;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .storyboard-scenes-list.is-overview .storyboard-removed-scenes {
@@ -1470,6 +1469,8 @@
 
 .storyboard-takes-header span {
   overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1510,7 +1511,7 @@
 }
 
 .storyboard-take-identity span {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .storyboard-take-identity input {

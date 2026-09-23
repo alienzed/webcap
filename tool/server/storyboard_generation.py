@@ -49,6 +49,8 @@ EXECUTION_LANE = "storyboard-takes"
 GPU_RESERVATION_OWNER = EXECUTION_LANE
 _reconcile_lock = threading.Lock()
 _startup_reconciled = False
+_monitor_lock = threading.Lock()
+_monitor_thread = None
 
 
 def _ensure_startup_reconciled():
@@ -63,6 +65,34 @@ def _ensure_startup_reconciled():
             reason="Storyboard Take generation was interrupted by a WebCap restart.",
         )
         _startup_reconciled = True
+
+
+def _monitor_loop():
+    while True:
+        try:
+            _advance_queue()
+        except Exception:
+            app_config.debug_print("[storyboard-generation] queue monitor failed")
+            app_config.debug_traceback()
+        time.sleep(2)
+
+
+def _ensure_monitor_started():
+    global _monitor_thread
+    with _monitor_lock:
+        if _monitor_thread and _monitor_thread.is_alive():
+            return
+        _monitor_thread = threading.Thread(
+            target=_monitor_loop,
+            name="webcap-storyboard-generation-queue",
+            daemon=True,
+        )
+        _monitor_thread.start()
+
+
+def start_observer():
+    _ensure_startup_reconciled()
+    _ensure_monitor_started()
 
 
 def _reserve_gpu():

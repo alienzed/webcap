@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from tool.server import config as app_config
+from tool.server import epoch_test_bench
 from tool.server import execution_queue
 from tool.server import generate_generation
 from tool.server import inference_runner

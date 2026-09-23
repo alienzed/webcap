@@ -162,7 +162,15 @@
         if (!response.ok || !body || !body.ok) {
           throw new Error((body && body.error) || 'Storyboard Director request failed.');
         }
-        if (payload && body.job) return waitForDirectorJob(body.job);
+        if (payload && body.job) {
+          return waitForDirectorJob(body.job).then(function (result) {
+            if (payload.operation !== 'expand_concept' && payload.operation !== 'develop_story') return result;
+            return request(null, 'story=' + encodeURIComponent(payload.storyId)).then(function (storyPayload) {
+              result.story = storyPayload.story;
+              return result;
+            });
+          });
+        }
         return body;
       });
     });

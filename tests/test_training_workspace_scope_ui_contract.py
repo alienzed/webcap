@@ -85,7 +85,7 @@ Promise.resolve().then(() => Promise.resolve()).then(() => {
     setStatus: text => statuses.push(text)
   });
   vm.createContext(entryContext);
-  vm.runInContext(section(shell, 'function openTrainingSurface(', 'function ensureWorkspaceOverlayHost('), entryContext);
+  vm.runInContext(section(shell, 'function openTrainingSurface(', 'function closeTrainingWorkspaceConfigEditor('), entryContext);
   entryContext.openTrainingSurface('global');
   return Promise.resolve().then(() => {
     if (transitions.join('|') !== 'cancel|mode:global:true|surface:training:true|tab:run-log|chrome') throw new Error('save success transition');

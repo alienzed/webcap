@@ -33,8 +33,7 @@
     var message = String(err && err.message ? err.message : err || 'Storage request failed.');
     var status = el('storage-status');
     if (status) status.textContent = message;
-    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Storage', message);
-    else console.error('[Storage]', err);
+    window.reportConsoleError('Storage', message);
   }
 
   function bytes(value) {
@@ -271,14 +270,14 @@
     var frame = el('app-frame');
     var workspace = el('storage-workspace');
     if (!frame || !workspace) throw new Error('Storage workspace markup is missing.');
-    if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
-    if (typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
-    if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
+    window.closeGenerateActivity();
+    window.closeTestBenchActivity();
+    window.closeStoryboardActivity();
     storageState.open = true;
     frame.classList.add('workspace-storage-open');
     workspace.classList.remove('hidden');
-    if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
-    if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+    window.syncApplicationShellContext();
+    window.syncShellLocationRoute();
     refresh();
   }
 

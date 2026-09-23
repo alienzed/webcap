@@ -819,6 +819,79 @@ def remove_take(story_id, scene_id, take_id):
 
 
 @_serialized_mutation
+def delete_take(story_id, scene_id, take_id):
+    story = load_story(story_id)
+    original_story = copy.deepcopy(story)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    resolved_take_id = str(take_id or "").strip()
+
+    takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
+    removed = scene.get("removedTakes") if isinstance(scene.get("removedTakes"), dict) else {}
+    take = takes.get(resolved_take_id)
+    source = "active"
+    if not isinstance(take, dict):
+        take = removed.get(resolved_take_id)
+        source = "removed"
+    if not isinstance(take, dict):
+        raise FileNotFoundError("Take does not exist.")
+
+    media_path_value = str(take.get("mediaPath") or "").strip()
+    relative = Path(media_path_value)
+    if not media_path_value or relative.is_absolute() or ".." in relative.parts:
+        raise RuntimeError("Storyboard Take media path is invalid.")
+    story_root = _story_dir(story_id).resolve()
+    media_path = (story_root / relative).resolve()
+    if media_path != story_root and story_root not in media_path.parents:
+        raise RuntimeError("Storyboard Take media path escapes its Story folder.")
+
+    for scene_map in (story.get("scenes"), story.get("removedScenes")):
+        if not isinstance(scene_map, dict):
+            continue
+        for candidate_scene in scene_map.values():
+            if not isinstance(candidate_scene, dict):
+                continue
+            for reference in candidate_scene.get("references") or []:
+                if not isinstance(reference, dict):
+                    continue
+                if (
+                    str(reference.get("sourceTakeId") or "") == resolved_take_id
+                    and str(reference.get("mediaPath") or "") == media_path_value
+                ):
+                    raise RuntimeError(
+                        "Take cannot be deleted while its media is used as a Scene reference. Clear that reference first."
+                    )
+
+    if source == "active":
+        del takes[resolved_take_id]
+        scene["takes"] = takes
+        scene["takeOrder"] = [
+            value for value in scene.get("takeOrder") or []
+            if value != resolved_take_id
+        ]
+        if scene.get("selectedTakeId") == resolved_take_id:
+            scene["selectedTakeId"] = None
+    else:
+        del removed[resolved_take_id]
+        scene["removedTakes"] = removed
+
+    now = _utc_now()
+    scene["updatedAt"] = now
+    story["updatedAt"] = now
+    _write_json_atomic(_story_path(story_id), story)
+
+    try:
+        if media_path.exists():
+            if not media_path.is_file():
+                raise RuntimeError("Storyboard Take media path is not a file.")
+            media_path.unlink()
+    except Exception:
+        _write_json_atomic(_story_path(story_id), original_story)
+        raise
+
+    return story
+
+
+@_serialized_mutation
 def restore_take(story_id, scene_id, take_id):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)

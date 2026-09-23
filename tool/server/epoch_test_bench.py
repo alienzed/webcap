@@ -28,7 +28,7 @@ TEMPLATE_PATH = get_test_model().TEMPLATE_PATH
 TEST_RESULTS_DIR = "test-generations"
 LEGACY_EXECUTION_LANE = "test-generations"
 TEST_ASPECT_RATIO_OPTIONS = tuple(getattr(get_test_model(), "ASPECT_RATIO_OPTIONS", ()))
-_status_lock = threading.Lock()
+_status_lock = threading.RLock()
 _recent_sets_cache = {"expires": 0.0, "items": []}
 _reconcile_lock = threading.Lock()
 _startup_reconciled = False
@@ -691,110 +691,110 @@ def _session_has_nonterminal_jobs(session_directory):
 
 
 def _sync_inference_session(session_directory):
-    status = _read_status(session_directory) or {}
-    if not isinstance(status.get("inferenceJobs"), list):
-        return _session_status(session_directory)
+    with _status_lock:
+        status = _read_status(session_directory) or {}
+        if not isinstance(status.get("inferenceJobs"), list):
+            return _session_status(session_directory)
 
-    jobs = _session_job_records(status)
-    results = status.get("results") if isinstance(status.get("results"), list) else []
-    failures = status.get("failures") if isinstance(status.get("failures"), list) else []
-    result_job_ids = {
-        str(item.get("jobId") or "") for item in results if isinstance(item, dict)
-    }
-    failure_job_ids = {
-        str(item.get("jobId") or "") for item in failures if isinstance(item, dict)
-    }
-    skipped_job_ids = set(str(value) for value in (status.get("skippedJobIds") or []))
-    cancelled_job_ids = set(str(value) for value in (status.get("cancelledJobIds") or []))
-    changed = False
+        jobs = _session_job_records(status)
+        results = status.get("results") if isinstance(status.get("results"), list) else []
+        failures = status.get("failures") if isinstance(status.get("failures"), list) else []
+        result_job_ids = {
+            str(item.get("jobId") or "") for item in results if isinstance(item, dict)
+        }
+        failure_job_ids = {
+            str(item.get("jobId") or "") for item in failures if isinstance(item, dict)
+        }
+        skipped_job_ids = set(str(value) for value in (status.get("skippedJobIds") or []))
+        cancelled_job_ids = set(str(value) for value in (status.get("cancelledJobIds") or []))
+        changed = False
 
-    stopping_session = str(status.get("status") or "") in {"stopping", "stopped"}
-    for job in jobs:
-        job_id = str(job.get("id") or "")
-        job_status = str(job.get("status") or "")
-        if (
-            job_status in {"failed", "interrupted"}
-            and job_id not in result_job_ids
-            and job_id not in failure_job_ids
-        ):
-            _kind, candidate_file, label = _job_candidate_identity(job)
-            failures.append({
-                "jobId": job_id,
-                "sourceLoRA": label or candidate_file or "Generation",
-                "candidateFile": candidate_file,
-                "error": str(job.get("error") or "Test generation failed."),
-                "elapsedMs": 0,
-            })
-            failure_job_ids.add(job_id)
-            changed = True
-        if (
-            job_status in {"cancelled", "stopped"}
-            and not stopping_session
-            and job_id not in cancelled_job_ids
-        ):
-            cancelled_job_ids.add(job_id)
-            status["total"] = max(0, int(status.get("total") or 0) - 1)
-            changed = True
+        stopping_session = str(status.get("status") or "") in {"stopping", "stopped"}
+        for job in jobs:
+            job_id = str(job.get("id") or "")
+            job_status = str(job.get("status") or "")
+            if (
+                job_status in {"failed", "interrupted"}
+                and job_id not in result_job_ids
+                and job_id not in failure_job_ids
+            ):
+                _kind, candidate_file, label = _job_candidate_identity(job)
+                failures.append({
+                    "jobId": job_id,
+                    "sourceLoRA": label or candidate_file or "Generation",
+                    "candidateFile": candidate_file,
+                    "error": str(job.get("error") or "Test generation failed."),
+                    "elapsedMs": 0,
+                })
+                failure_job_ids.add(job_id)
+                changed = True
+            if (
+                job_status in {"cancelled", "stopped"}
+                and not stopping_session
+                and job_id not in cancelled_job_ids
+            ):
+                cancelled_job_ids.add(job_id)
+                status["total"] = max(0, int(status.get("total") or 0) - 1)
+                changed = True
 
-    if changed:
-        status["failures"] = failures
-        status["failed"] = len(failures)
-        status["cancelledJobIds"] = sorted(cancelled_job_ids)
-        status["skippedJobIds"] = sorted(skipped_job_ids)
-        _atomic_write_json(_status_path(session_directory), status)
+        if changed:
+            status["failures"] = failures
+            status["failed"] = len(failures)
+            status["cancelledJobIds"] = sorted(cancelled_job_ids)
+            status["skippedJobIds"] = sorted(skipped_job_ids)
+            _atomic_write_json(_status_path(session_directory), status)
 
-    active = next(
-        (
-            job for job in jobs
-            if str(job.get("status") or "") in {"starting", "running", "stopping"}
-        ),
-        None,
-    )
-    queued = [job for job in jobs if str(job.get("status") or "") == "queued"]
-    completed = len(status.get("results") if isinstance(status.get("results"), list) else [])
-    failed = len(status.get("failures") if isinstance(status.get("failures"), list) else [])
-    visible = dict(status)
-    visible["completed"] = completed
-    visible["failed"] = failed
-    visible["queued"] = len(queued)
-    visible["running"] = 1 if active is not None else 0
-    visible["session"] = Path(session_directory).name
-    visible["resultFolder"] = visible.get("resultFolder") or _relative_to_fs_root(session_directory)
+        active = next(
+            (
+                job for job in jobs
+                if str(job.get("status") or "") in {"starting", "running", "stopping"}
+            ),
+            None,
+        )
+        queued = [job for job in jobs if str(job.get("status") or "") == "queued"]
+        completed = len(status.get("results") if isinstance(status.get("results"), list) else [])
+        failed = len(status.get("failures") if isinstance(status.get("failures"), list) else [])
+        visible = dict(status)
+        visible["completed"] = completed
+        visible["failed"] = failed
+        visible["queued"] = len(queued)
+        visible["running"] = 1 if active is not None else 0
+        visible["session"] = Path(session_directory).name
+        visible["resultFolder"] = visible.get("resultFolder") or _relative_to_fs_root(session_directory)
 
-    if active is not None:
-        metadata = active.get("metadata") if isinstance(active.get("metadata"), dict) else {}
-        details = active.get("details") if isinstance(active.get("details"), dict) else {}
-        visible["status"] = "stopping" if stopping_session or str(active.get("status") or "") == "stopping" else "running"
-        visible["current"] = str(metadata.get("label") or metadata.get("candidateFile") or "Generation")
-        started_at = float(active.get("startedAt") or 0)
-        visible["candidateStartedAt"] = int(started_at * 1000) if started_at else None
-        visible["comfyJobId"] = str(details.get("providerJobId") or "")
-        visible["comfyStatus"] = str(details.get("providerStatus") or "")
+        if active is not None:
+            metadata = active.get("metadata") if isinstance(active.get("metadata"), dict) else {}
+            details = active.get("details") if isinstance(active.get("details"), dict) else {}
+            visible["status"] = "stopping" if stopping_session or str(active.get("status") or "") == "stopping" else "running"
+            visible["current"] = str(metadata.get("label") or metadata.get("candidateFile") or "Generation")
+            started_at = float(active.get("startedAt") or 0)
+            visible["candidateStartedAt"] = int(started_at * 1000) if started_at else None
+            visible["comfyJobId"] = str(details.get("providerJobId") or "")
+            visible["comfyStatus"] = str(details.get("providerStatus") or "")
+            return visible
+
+        visible["current"] = ""
+        visible["comfyJobId"] = ""
+        visible["comfyStatus"] = ""
+        visible["candidateStartedAt"] = None
+
+        if stopping_session:
+            terminal_status = "stopped"
+        elif queued:
+            terminal_status = "running" if (completed or failed) else "queued"
+        else:
+            terminal_status = "complete"
+
+        visible["status"] = terminal_status
+        if terminal_status in {"complete", "stopped"} and str(status.get("status") or "") != terminal_status:
+            status["status"] = terminal_status
+            status["current"] = ""
+            status["completed"] = completed
+            status["failed"] = failed
+            status["comfyJobId"] = ""
+            status["comfyStatus"] = ""
+            _atomic_write_json(_status_path(session_directory), status)
         return visible
-
-    visible["current"] = ""
-    visible["comfyJobId"] = ""
-    visible["comfyStatus"] = ""
-    visible["candidateStartedAt"] = None
-
-    if stopping_session:
-        terminal_status = "stopped"
-    elif queued:
-        terminal_status = "running" if (completed or failed) else "queued"
-    else:
-        terminal_status = "complete"
-
-    visible["status"] = terminal_status
-    if terminal_status in {"complete", "stopped"} and str(status.get("status") or "") != terminal_status:
-        status["status"] = terminal_status
-        status["current"] = ""
-        status["completed"] = completed
-        status["failed"] = failed
-        status["comfyJobId"] = ""
-        status["comfyStatus"] = ""
-        _atomic_write_json(_status_path(session_directory), status)
-    return visible
-
 
 def _record_skipped_inference(session_directory, job_id):
     with _status_lock:
@@ -913,8 +913,9 @@ def execute_inference(job_id, request, context):
         )
         with _status_lock:
             status_payload = _read_status(session_directory) or {}
-            status_payload["status"] = "running"
-            status_payload["current"] = candidate_label
+            if str(status_payload.get("status") or "") not in {"stopping", "stopped"}:
+                status_payload["status"] = "running"
+                status_payload["current"] = candidate_label
             status_payload["candidateStartedAt"] = int(time.time() * 1000)
             status_payload["comfyJobId"] = provider_job_id
             status_payload["comfyStatus"] = "pending"
@@ -1030,7 +1031,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "migrationComplete": False,
     }
     payload.update(payload["settings"])
-    _atomic_write_json(_status_path(session_directory), payload)
+    with _status_lock:
+        _atomic_write_json(_status_path(session_directory), payload)
 
     queued_ids = []
     try:
@@ -1050,17 +1052,34 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 label=label,
             )
             queued_ids.append(job["jobId"])
-            payload["inferenceJobs"] = list(queued_ids)
-            _atomic_write_json(_status_path(session_directory), payload)
-        payload["migrationComplete"] = True
-        _atomic_write_json(_status_path(session_directory), payload)
-    except Exception:
+            with _status_lock:
+                current_status = _read_status(session_directory) or {}
+                current_status["inferenceJobs"] = list(queued_ids)
+                _atomic_write_json(_status_path(session_directory), current_status)
+        with _status_lock:
+            current_status = _read_status(session_directory) or {}
+            current_status["inferenceJobs"] = list(queued_ids)
+            current_status["migrationComplete"] = True
+            _atomic_write_json(_status_path(session_directory), current_status)
+    except Exception as exc:
+        rollback_errors = []
         for job_id in queued_ids:
             try:
                 execution_cancel_queued(job_id)
-            except Exception:
+            except Exception as rollback_exc:
+                rollback_errors.append((job_id, rollback_exc))
                 _logger.exception("Could not roll back partially queued Test rendition %s.", job_id)
-        shutil.rmtree(session_directory, ignore_errors=True)
+        if rollback_errors:
+            with _status_lock:
+                current_status = _read_status(session_directory) or {}
+                current_status["migrationComplete"] = False
+                current_status["error"] = (
+                    "Test Session enqueue failed and one or more queued renditions could not be rolled back. "
+                    "The Session was preserved for manual recovery."
+                )
+                _atomic_write_json(_status_path(session_directory), current_status)
+            raise RuntimeError(current_status["error"]) from exc
+        shutil.rmtree(session_directory)
         raise
     return _sync_inference_session(session_directory)
 
@@ -1132,12 +1151,25 @@ def reconcile_startup():
                 if existing:
                     session_directory, existing_status = existing
                     if not existing_status.get("migrationComplete"):
+                        cleanup_failed = False
                         for child_id in existing_status.get("inferenceJobs") or []:
                             try:
                                 execution_cancel_queued(str(child_id))
                             except Exception:
-                                pass
-                        shutil.rmtree(session_directory, ignore_errors=True)
+                                cleanup_failed = True
+                                _logger.exception(
+                                    "Could not cancel partially migrated Test rendition %s; preserving Session %s.",
+                                    child_id,
+                                    session_directory.name,
+                                )
+                        if cleanup_failed:
+                            _logger.error(
+                                "Legacy Test migration recovery for %s remains incomplete; Session %s was left intact.",
+                                legacy_job_id,
+                                session_directory.name,
+                            )
+                            continue
+                        shutil.rmtree(session_directory)
                     else:
                         execution_cancel_queued(legacy_job_id)
                         continue
@@ -1365,11 +1397,12 @@ def stop(folder_path, session_name=None):
         session_directory = _session_directory(folder_path, session_id) if session_id else None
     if not session_id or session_directory is None or payload.get("status") not in {"running", "stopping"}:
         raise RuntimeError("No active Test Generations session to stop.")
-    status_payload = _read_status(session_directory) or {}
-    if not isinstance(status_payload.get("inferenceJobs"), list):
-        raise RuntimeError("This historical Test Session has no active shared inference work.")
-    status_payload["status"] = "stopping"
-    _atomic_write_json(_status_path(session_directory), status_payload)
+    with _status_lock:
+        status_payload = _read_status(session_directory) or {}
+        if not isinstance(status_payload.get("inferenceJobs"), list):
+            raise RuntimeError("This historical Test Session has no active shared inference work.")
+        status_payload["status"] = "stopping"
+        _atomic_write_json(_status_path(session_directory), status_payload)
 
     for job in _session_job_records(status_payload):
         job_status = str(job.get("status") or "")

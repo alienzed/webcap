@@ -139,8 +139,9 @@
 }
 
 .storyboard-editor-scroll {
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 14px 18px 28px;
 }
 
@@ -1126,29 +1127,50 @@
   width: 100%;
 }
 
+.storyboard-scenes-list.is-focus {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .storyboard-scenes-list.is-focus .storyboard-scene {
-  overflow: visible;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
   background: transparent;
   border-color: var(--border-soft);
 }
 
 .storyboard-scenes-list.is-focus .storyboard-scene-body {
+  min-height: 0;
   grid-template-columns: minmax(540px, 760px) minmax(240px, 280px);
   justify-content: start;
-  align-items: start;
+  align-items: stretch;
   gap: 14px;
+  overflow: auto;
 }
 
 .storyboard-scenes-list.is-focus .storyboard-scene-main {
+  min-height: 0;
   max-width: 760px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .storyboard-scenes-list.is-focus .storyboard-scene-intent textarea {
   min-height: 88px;
 }
 
+.storyboard-scenes-list.is-focus .storyboard-prompt-block {
+  min-height: 0;
+}
+
 .storyboard-scenes-list.is-focus .storyboard-prompt-textarea {
-  min-height: 320px;
+  flex: 1 1 auto;
+  min-height: 220px;
+  height: auto;
+  resize: none;
   line-height: 1.45;
 }
 
@@ -1157,6 +1179,9 @@
 }
 
 .storyboard-scene-inspector {
+  position: sticky;
+  top: 0;
+  align-self: start;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1209,10 +1234,9 @@
 }
 
 .storyboard-takes {
-  position: sticky;
+  position: relative;
   z-index: 8;
-  bottom: 0;
-  margin: 12px -10px -10px;
+  margin: 0;
   padding: 8px 10px 10px;
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 94%, var(--bg));
@@ -1317,7 +1341,7 @@
 /* Storyboard three-column flow: Stories library -> Story context -> Scene workspace. */
 .storyboard-editor-scroll {
   display: grid;
-  grid-template-columns: minmax(390px, 460px) minmax(0, 1fr);
+  grid-template-columns: minmax(420px, 500px) minmax(0, 1fr);
   align-items: stretch;
   gap: 0;
   padding: 0;
@@ -1329,10 +1353,13 @@
 
 .storyboard-story-authoring {
   width: 100%;
+  min-height: 0;
   margin: 0;
   grid-template-columns: 1fr;
   gap: 10px;
+  align-content: start;
   align-self: stretch;
+  overflow: auto;
   padding: 14px;
   border-right: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 90%, black 10%);
@@ -1398,9 +1425,13 @@
 
 .storyboard-scene-workspace {
   min-width: 0;
+  min-height: 0;
   width: 100%;
   max-width: none;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   justify-self: stretch;
+  overflow: hidden;
   padding: 14px 18px 0;
   background: var(--panel);
 }
@@ -1419,7 +1450,7 @@
 
 @media (max-width: 1500px) {
   .storyboard-editor-scroll {
-    grid-template-columns: minmax(360px, 430px) minmax(0, 1fr);
+    grid-template-columns: minmax(380px, 440px) minmax(0, 1fr);
   }
 }
 
@@ -1427,6 +1458,7 @@
   .storyboard-editor-scroll,
   .storyboard-editor-scroll.story-collapsed {
     grid-template-columns: 1fr;
+    overflow: auto;
   }
 
   .storyboard-story-authoring,
@@ -1437,8 +1469,33 @@
   }
 
   .storyboard-story-authoring {
+    min-height: auto;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--border);
+  }
+
+  .storyboard-scene-workspace {
+    min-height: auto;
+    display: block;
+    overflow: visible;
+  }
+
+  .storyboard-scenes-list.is-focus {
+    overflow: visible;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene {
+    height: auto;
+    grid-template-rows: auto;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene-body {
+    overflow: visible;
+  }
+
+  .storyboard-scene-inspector {
+    position: static;
   }
 }
 

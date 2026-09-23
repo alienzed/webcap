@@ -297,7 +297,7 @@ def test_storyboard_story_context_is_a_collapsible_middle_column():
     assert 'class="storyboard-scene-workspace"' in html
     assert 'id="storyboard-story-authoring"' in html
     assert "editor.classList.toggle('story-collapsed'" in storyboard
-    assert "grid-template-columns: minmax(390px, 460px) minmax(0, 1fr);" in css
+    assert "grid-template-columns: minmax(420px, 500px) minmax(0, 1fr);" in css
     assert ".storyboard-editor-scroll.story-collapsed" in css
     assert ".storyboard-story-authoring" in css
     assert "grid-template-columns: 1fr;" in css
@@ -321,6 +321,8 @@ def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
     assert "position: sticky;" in css
     assert "overflow-x: auto;" in css
     assert "flex: 0 0 210px;" in css
+    assert "grid-template-rows: auto minmax(0, 1fr) auto;" in css
+    assert "overflow: hidden;" in css
 
 
 def test_storyboard_scene_uses_compact_generation_and_conditioning_inspector():

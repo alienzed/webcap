@@ -484,3 +484,34 @@ def test_storyboard_generation_cleans_owned_comfy_reference_inputs_after_capture
         queued["jobId"] + "/references"
     )
 
+def test_owned_comfy_reference_cleanup_is_scoped_to_job_prefix(tmp_path, monkeypatch):
+    comfy = tmp_path / "ComfyUI"
+    output = comfy / "output" / "webcap-storyboard" / "story" / "scene" / "job" / "render.mp4"
+    owned = comfy / "input" / "webcap-storyboard" / "story" / "scene" / "job" / "references" / "first.png"
+    other = comfy / "input" / "webcap-storyboard" / "story" / "scene" / "other" / "references" / "first.png"
+    output.parent.mkdir(parents=True)
+    owned.parent.mkdir(parents=True)
+    other.parent.mkdir(parents=True)
+    output.write_bytes(b"video")
+    owned.write_bytes(b"owned")
+    other.write_bytes(b"other")
+
+    monkeypatch.setattr(
+        storyboard_generation.inference_runtime,
+        "local_saved_output_path",
+        lambda _ref: output,
+    )
+
+    removed = storyboard_generation.inference_runtime.cleanup_uploaded_inputs(
+        [
+            "webcap-storyboard/story/scene/job/references/first.png",
+            "webcap-storyboard/story/scene/other/references/first.png",
+        ],
+        {"filename": "render.mp4", "type": "output"},
+        owned_prefix="webcap-storyboard/story/scene/job/references",
+    )
+
+    assert removed == 1
+    assert not owned.exists()
+    assert other.read_bytes() == b"other"
+

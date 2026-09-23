@@ -246,7 +246,8 @@ function formatShellDiskSpace(value) {
 
 var shellWorkloadState = {
   trainingActive: false,
-  testingActive: false
+  testingActive: false,
+  generatingActive: false
 };
 
 function getShellWorkloadStatus() {
@@ -255,6 +256,9 @@ function getShellWorkloadStatus() {
   }
   if (shellWorkloadState.testingActive) {
     return { key: 'testing', label: 'Testing' };
+  }
+  if (shellWorkloadState.generatingActive) {
+    return { key: 'generating', label: 'Generating' };
   }
   return { key: 'idle', label: 'Idle' };
 }
@@ -266,6 +270,11 @@ function setShellTrainingActive(active) {
 
 function setShellTestingActive(active) {
   shellWorkloadState.testingActive = !!active;
+  renderShellSystemStatus();
+}
+
+function setShellGeneratingActive(active) {
+  shellWorkloadState.generatingActive = !!active;
   renderShellSystemStatus();
 }
 
@@ -916,3 +925,4 @@ function clearEditorAndPreview() {
 
 window.setShellTrainingActive = setShellTrainingActive;
 window.setShellTestingActive = setShellTestingActive;
+window.setShellGeneratingActive = setShellGeneratingActive;

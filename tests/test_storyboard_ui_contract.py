@@ -180,7 +180,7 @@ def test_storyboard_director_actions_share_one_busy_state_and_concept_restore():
     assert "operation: 'restore_previous_concept'" in storyboard
 
 
-def test_storyboard_take_generation_uses_global_console_and_recovers_button_on_failure():
+def test_storyboard_take_generation_uses_global_console_and_visible_pending_cards():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
     console = (ROOT / "tool" / "js" / "console_panel.js").read_text(encoding="utf-8")
@@ -188,19 +188,24 @@ def test_storyboard_take_generation_uses_global_console_and_recovers_button_on_f
     assert "function reportConsoleInfo(source, message)" in console
     assert "function reportGenerationStatus(sceneId, job, previousJob)" in storyboard
     assert "reportConsoleInfo(generationConsoleLabel(sceneId)" in storyboard
-    assert "syncGenerationButton(sceneId, null);" in storyboard
+    assert "storyboard-take-pending" in storyboard
+    assert "data-generation-action=\"cancel\"" in storyboard
+    assert "data-generation-action=\"stop\"" in storyboard
     assert "throw new Error(job.error || 'Storyboard generation failed.');" in storyboard
-    assert "data-generation-status" not in storyboard
-    assert ".storyboard-generation-status" not in css
+    assert ".storyboard-take-pending" in css
+    assert ".storyboard-take-pending-indicator" in css
 
 
-def test_storyboard_take_generation_ui_supports_scene_queue_state():
+def test_storyboard_take_generation_ui_supports_multiple_jobs_per_scene():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    assert "job.status === 'queued'" in storyboard
+    assert "function generationJobsForScene(sceneId)" in storyboard
+    assert "storyState.generationJobs[job.jobId] = job;" in storyboard
+    assert "Generate Another Take" in storyboard
     assert "Take generation queued" in storyboard
-    assert "Queued…" in storyboard
-    assert "job.status === 'queued' || job.status === 'running'" in storyboard
+    assert "queuePosition" in storyboard
+    assert "refreshGenerationQueue(storyId)" in storyboard
+    assert "generationJobIsActive(job)" in storyboard
 
 
 def test_storyboard_takes_can_be_named_and_loras_filtered():

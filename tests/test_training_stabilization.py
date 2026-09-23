@@ -8,7 +8,7 @@ from PIL import Image
 
 from tool.server import config as app_config
 from tool.server import app as app_module
-from tool.server import run_ops, training_bundle, training_history, training_runner, training_review
+from tool.server import execution_queue, run_ops, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
 from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage, profile_for_mode
@@ -1111,10 +1111,11 @@ def test_external_gpu_reservation_blocks_training_queue_launch(monkeypatch):
         "queuePauseReason": "",
         "jobs": [{"id": "queued", "status": "queued", "folder": "sets/subject"}],
     }
-    monkeypatch.setattr(training_runner, "_external_gpu_owner", "test-generations")
+    execution_queue._resource_owner = "test-generations"
     monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("reserved GPU must not launch training"))
 
     training_runner._launch_next_queued_job(state)
+    execution_queue._resource_owner = ""
 
     assert state["activeJobId"] == ""
     assert state["jobs"][0]["status"] == "queued"
@@ -1122,7 +1123,7 @@ def test_external_gpu_reservation_blocks_training_queue_launch(monkeypatch):
 
 def test_external_gpu_reservation_respects_training_queue_policy(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
-    monkeypatch.setattr(training_runner, "_external_gpu_owner", "")
+    execution_queue._resource_owner = ""
     training_runner._write_state({
         "version": 3,
         "activeJobId": "",

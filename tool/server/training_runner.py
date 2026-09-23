@@ -47,6 +47,7 @@ from .training_runtime import (
     wsl_executable as _wsl_executable,
 )
 from .training_candidates import ALGORITHMS as _candidate_algorithms, analyze_run_directory as _analyze_run_directory
+from .execution_queue import reserve_resource as reserve_execution_resource, release_resource as release_execution_resource, resource_owner as execution_resource_owner
 
 
 RUNNER_DIR_NAME = TRAINING_RUNTIME_DIR_NAME
@@ -62,7 +63,6 @@ _monitor_thread = None
 _startup_reconciled = False
 _state_file_seen = None
 _persisted_managed_job_ids = set()
-_external_gpu_owner = ""
 _logger = logging.getLogger(__name__)
 _CHECKPOINT_SAVE_PATH_PATTERN = re.compile(r"Saving model checkpoint:\s+(.+?)[/\\]global_step\d+[/\\]")
 _TRAINING_LOG_TIMESTAMP_PATTERN = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\]", re.MULTILINE)
@@ -99,7 +99,6 @@ def reserve_gpu_for_external_work(owner):
     owner = str(owner or "").strip()
     if not owner:
         raise ValueError("GPU reservation owner is required.")
-    global _external_gpu_owner
     with _lock:
         state = _read_state()
         jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
@@ -107,18 +106,12 @@ def reserve_gpu_for_external_work(owner):
             return False
         if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
             return False
-        if _external_gpu_owner:
-            return False
-        _external_gpu_owner = owner
-        return True
+    return reserve_execution_resource(owner)
 
 
 def release_gpu_for_external_work(owner):
     owner = str(owner or "").strip()
-    global _external_gpu_owner
-    with _lock:
-        if _external_gpu_owner == owner:
-            _external_gpu_owner = ""
+    release_execution_resource(owner)
 
 
 def _default_state():
@@ -1641,7 +1634,7 @@ def _refresh_job(job):
 def _launch_next_queued_job(state):
     if state.get("queuePaused"):
         return
-    if _external_gpu_owner:
+    if execution_resource_owner():
         return
     if any(job.get("status") in ACTIVE_STATUSES for job in state.get("jobs", [])):
         return

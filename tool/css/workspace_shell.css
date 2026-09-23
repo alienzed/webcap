@@ -295,7 +295,8 @@
 }
 
 .shell-workload-status.is-training,
-.shell-workload-status.is-testing {
+.shell-workload-status.is-testing,
+.shell-workload-status.is-generating {
   color: var(--accent);
 }
 

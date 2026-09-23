@@ -15,6 +15,7 @@ from .execution_queue import (
     recover_lane as execution_recover_lane,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
+    reserve_resource as execution_reserve_resource,
     resource_owner as execution_resource_owner,
     resume_lane as execution_resume_lane,
 )
@@ -97,6 +98,7 @@ def _ensure_execution_reconciled():
                             "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart."
                         ),
                     )
+                    execution_reserve_resource(GPU_RESERVATION_OWNER)
                     _logger.error(
                         "Interrupted inference provider job %s did not confirm cancellation.",
                         prompt_id,
@@ -108,6 +110,7 @@ def _ensure_execution_reconciled():
                         "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart."
                     ),
                 )
+                execution_reserve_resource(GPU_RESERVATION_OWNER)
                 _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
         _startup_reconciled = True
 

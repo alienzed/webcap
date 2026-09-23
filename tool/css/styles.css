@@ -3326,6 +3326,8 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-bt
 .training-candidates-marker line { stroke: #62bc8c; stroke-width: 1.5; stroke-dasharray: 4 3; }
 .training-candidates-marker circle { fill: #62bc8c; stroke: var(--panel-bg, #20242c); stroke-width: 2; }
 .training-candidates-epoch-marker.in-test-folder circle:not(.training-candidates-epoch-hit) { fill: var(--accent); }
+.training-candidates-epoch-marker.is-selected circle:not(.training-candidates-epoch-hit) { fill: #f7d56a; stroke: #fff0a3; stroke-width: 2.5; }
+.training-candidates-marker.is-selected line { stroke: #f7d56a; stroke-width: 2; stroke-dasharray: none; }
 .training-candidates-marker-label { fill: #9ee0b8; font-size: 13px; font-weight: 600; text-anchor: middle; }
 .training-candidates-epoch-marker { cursor: pointer; }
 .training-candidates-epoch-marker:focus { outline: none; }
@@ -3376,6 +3378,10 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-bt
 .training-candidates-pinned-badges span.is-test {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
+}
+.training-candidates-pinned-badges span.is-selected {
+  background: rgba(247, 213, 106, .16);
+  color: #f7d56a;
 }
 .training-candidates-pinned-loss {
   margin-top: 7px;
@@ -3462,6 +3468,7 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
 .training-candidates-legend i.step-smoothed { height: 2px; background: rgba(152, 178, 198, .7); }
 .training-candidates-legend i.suggested { width: 9px; height: 9px; margin: 0 3px; background: #62bc8c; border-radius: 50%; }
 .training-candidates-legend i.saved { width: 6px; height: 6px; margin: 0 5px; background: #b3c5d4; border-radius: 50%; }
+.training-candidates-legend i.selected { width: 9px; height: 9px; margin: 0 3px; background: #f7d56a; border: 2px solid #fff0a3; border-radius: 50%; }
 .training-candidates-legend i.in-test-folder { width: 9px; height: 9px; margin: 0 3px; background: var(--accent); border-radius: 50%; }
 .training-candidates-legend i.basin { height: 10px; background: rgba(94, 177, 137, .3); }
 .training-candidates-open-generations {
@@ -3476,7 +3483,11 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
   cursor: default;
 }
 .training-candidates-no-candidates { color: var(--muted-text, #a3adba); font-size: 12px; }
-.training-candidates-open-epoch, .training-candidates-test-toggle { width: auto; min-height: 28px; padding: 4px 8px; font-size: 12px; white-space: nowrap; }
+.training-candidates-open-epoch, .training-candidates-test-toggle, .training-candidates-select-toggle { width: auto; min-height: 28px; padding: 4px 8px; font-size: 12px; white-space: nowrap; }
+.training-candidates-select-toggle { font-weight: 650; }
+.training-candidates-select-toggle.is-select { border-color: #d5b84f; background: rgba(213, 184, 79, .14); color: #f7d56a; }
+.training-candidates-select-toggle.is-select:hover:not(:disabled) { border-color: #f7d56a; background: rgba(213, 184, 79, .24); }
+.training-candidates-select-toggle.is-clear { border-color: #f7d56a; background: #f7d56a; color: #29250f; }
 .training-candidates-open-epoch { border-color: rgba(163, 173, 186, .45); background: transparent; color: var(--text, #e5e7eb); }
 .training-candidates-test-toggle { font-weight: 650; }
 .training-candidates-test-toggle.is-copy { border-color: #c58a16; background: #c58a16; color: #111827; }

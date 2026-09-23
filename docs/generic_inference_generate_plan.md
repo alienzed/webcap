@@ -14,11 +14,11 @@ The target is:
 - Training remaining a separate long-running queue that only shares GPU resource arbitration;
 - Director runtime reused by Generate while Storyboard keeps Story-specific Director contracts.
 
-This plan is intentionally incremental. It follows the repo contract in `AGENTS.md`: reuse working behavior, keep ownership explicit, avoid framework-like indirection, fail visibly, and prove abstractions with concrete workflows before migrating mature clients.
+This plan was intentionally incremental. It follows the repo contract in `AGENTS.md`: reuse working behavior, keep ownership explicit, avoid framework-like indirection, fail visibly, and prove abstractions with concrete workflows before migrating mature clients.
+
+**Implementation status: complete.** The phase sections below retain the implementation sequence and rationale; this "Current baseline" describes the resulting architecture.
 
 ## Current baseline
-
-As of the start of this work:
 
 - `tool/server/execution_queue.py` provides durable queue mechanics:
   - immutable payload snapshots;
@@ -28,13 +28,13 @@ As of the start of this work:
   - reorder/requeue;
   - restart reconciliation;
   - global execution-resource ownership.
-- Storyboard Takes use the shared substrate through the `storyboard-takes` lane and a Storyboard-owned observer/dispatcher.
-- Test Generations now also uses the shared substrate through the `test-generations` lane. Its previous in-memory pending queue has already been removed; a Test-owned observer pumps durable queued Sessions.
-- Startup reconciliation for Storyboard and Test inference is explicit and runs before their observers start.
-- Training remains independently scheduled in `tool/server/training_runner.py`, but its `reserve_gpu_for_external_work()` bridge already arbitrates with the shared execution resource.
-- `tool/server/test_models/` already contains model-specific ComfyUI knowledge for H3 and Krea2 that is broader than testing alone.
-- The current shared queue API has hardened explicit transitions: queued jobs are claimed into `starting`, marked `running`, stopped with `request_stop`, and only active jobs may be finished. New inference clients must respect that contract.
-- The current Storyboard Scene form already contains most of the controls a generic Generate activity needs: prompt, Director actions, model-facing generation controls, LoRAs, references, seed, and result previews.
+- Generate, Storyboard Takes, and individual Test renditions all use the common `inference` lane and `tool/server/inference_runner.py`.
+- Storyboard owns Story/Scene/Take semantics and its contextual pending-Take projection; Test owns Session aggregation/comparison/rating semantics; Generate owns the full Generation Queue surface and standalone result history.
+- Legacy persisted `storyboard-takes` and `test-generations` queue work is reconciled only as migration compatibility; neither legacy lane has an active scheduler/observer.
+- Startup reconciliation runs before the shared inference observer begins dispatching, and unresolved provider work holds the shared GPU resource rather than allowing overlapping inference.
+- Training remains independently scheduled in `tool/server/training_runner.py` and shares only GPU resource arbitration with inference.
+- Shared H3/Krea2 inference adapters and runtime own model binding, ComfyUI transport, provider polling/cancellation, output retrieval, and generic lifecycle behavior.
+- The shared queue API uses explicit transitions: queued jobs are claimed into `starting`, marked `running`, stopped with `request_stop`, and only active jobs may be finished.
 
 ## Target architecture
 
@@ -399,7 +399,7 @@ Keep/adapt:
 
 - Base Model;
 - prompt;
-- Write with Director;
+- Expand with Director;
 - Refine with Director;
 - duration / aspect / megapixels / dimensions as model capabilities permit;
 - seed;
@@ -753,27 +753,16 @@ Local Director requests still use the same GPU reservation path as generation. R
 
 ---
 
-# Implementation order for this branch
+# Implemented sequence
 
-This branch will work through the plan only until Generate is in place:
+The completed migration followed this order:
 
-1. Phase 0 - queue contract.
-2. Phase 1 - inference runner / shared inference lane.
-3. Phase 2 - shared inference model/runtime layer sufficient for H3 + Krea2 Generate.
-4. Phase 3 - Generate activity, persistent results, global Generation Queue.
-5. Phase 4 - shared Director runtime only to the extent required for Generate Director support.
+1. queue contract and shared `inference` lane;
+2. shared H3/Krea2 inference runtime/model layer;
+3. standalone Generate activity and Generation Queue;
+4. shared Director runtime reuse for Generate;
+5. Storyboard Takes migrated to the common lane;
+6. Test Generations migrated at rendition granularity;
+7. hardening/cleanup, Generate IA polish, explicit Take deletion, and post-migration stability fixes.
 
-Storyboard and Test migrations remain follow-up phases after Generate proves the new path.
-
-## Non-goals for the initial Generate landing
-
-- no Training migration;
-- no Test lane migration yet (Test already uses the shared execution substrate);
-- no Storyboard lane migration yet (Storyboard already uses the shared execution substrate);
-- no event bus;
-- no generic plugin framework;
-- no database;
-- no arbitrary ComfyUI graph editor;
-- no automatic priority/fair-share scheduler;
-- no Prep -> Media rename;
-- no Director background queue yet.
+Training intentionally remains a separate long-running scheduler. There is still no event bus, plugin framework, database, arbitrary ComfyUI graph editor, automatic fair-share scheduler, or Director background inference queue.

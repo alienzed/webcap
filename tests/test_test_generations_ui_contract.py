@@ -832,3 +832,14 @@ def test_test_sessions_project_shared_child_progress_and_targeted_stop():
     assert "' · ' + queued + ' queued'" in script
     assert "request('test_stop', { session: String(stopBtn && stopBtn.dataset.sessionStop || '') })" in script
 
+def test_test_session_polling_preserves_session_row_identity():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    start = script.index("function renderSessions(sessions, queuedJobs)")
+    end = script.index("function refreshSessions()", start)
+    renderer = script[start:end]
+
+    assert "dataset.sessionRowKey" in renderer
+    assert "function ensureRow(key)" in renderer
+    assert "function placeRow(target, row, index)" in renderer
+    assert "host.innerHTML = ''" not in renderer
+

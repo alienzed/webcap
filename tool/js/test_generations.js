@@ -535,11 +535,6 @@
     var clearBtn = el('test-generations-clear-queue-btn');
     if (clearBtn) clearBtn.classList.toggle('hidden', !queued.length);
     if (!host) return;
-    host.innerHTML = '';
-    if (!items.length && !queued.length) {
-      host.innerHTML = '<div class="test-generations-library-empty">No test sessions yet.</div>';
-      return;
-    }
 
     var activeItems = items.filter(function (session) {
       return session && (session.status === 'running' || session.status === 'stopping' || session.status === 'starting');
@@ -548,150 +543,242 @@
       return activeItems.indexOf(session) === -1;
     });
 
-    function appendGroup(label, count, className) {
-      var group = document.createElement('section');
+    var empty = host.querySelector('.test-generations-library-empty');
+    if ((items.length || queued.length) && empty) empty.remove();
+
+    function ensureGroup(key, label, count, className) {
+      var group = host.querySelector('[data-session-group="' + key + '"]');
+      if (!group) {
+        group = document.createElement('section');
+        group.dataset.sessionGroup = key;
+        var heading = document.createElement('div');
+        heading.className = 'test-generations-session-group-heading';
+        var title = document.createElement('strong');
+        title.dataset.sessionGroupTitle = '1';
+        var badge = document.createElement('span');
+        badge.dataset.sessionGroupCount = '1';
+        heading.appendChild(title);
+        heading.appendChild(badge);
+        var body = document.createElement('div');
+        body.className = 'test-generations-session-group-list';
+        body.dataset.sessionGroupList = '1';
+        group.appendChild(heading);
+        group.appendChild(body);
+        host.appendChild(group);
+      }
       group.className = 'test-generations-session-group ' + className;
-      var heading = document.createElement('div');
-      heading.className = 'test-generations-session-group-heading';
-      var title = document.createElement('strong');
-      title.textContent = label;
-      var badge = document.createElement('span');
-      badge.textContent = String(count);
-      heading.appendChild(title);
-      heading.appendChild(badge);
-      var body = document.createElement('div');
-      body.className = 'test-generations-session-group-list';
-      group.appendChild(heading);
-      group.appendChild(body);
-      host.appendChild(group);
-      return body;
+      group.querySelector('[data-session-group-title]').textContent = label;
+      group.querySelector('[data-session-group-count]').textContent = String(count);
+
+      var order = { running: 0, queued: 1, history: 2 };
+      var groups = host.querySelectorAll('[data-session-group]');
+      var expected = groups[order[key]] || null;
+      if (expected !== group) host.insertBefore(group, expected);
+
+      return group.querySelector('[data-session-group-list]');
     }
 
-    function appendSessionRow(session, target) {
-      var name = String(session.session || '');
-      var row = document.createElement('div');
+    function ensureRow(key) {
+      var row = null;
+      Array.prototype.some.call(host.querySelectorAll('[data-session-row-key]'), function (candidate) {
+        if (String(candidate.dataset.sessionRowKey || '') !== key) return false;
+        row = candidate;
+        return true;
+      });
+      if (row) return row;
+
+      row = document.createElement('div');
       row.className = 'test-generations-session-row';
-      row.dataset.sessionName = name;
-      row.title = name;
+      row.dataset.sessionRowKey = key;
 
       var copy = document.createElement('div');
       copy.className = 'test-generations-session-copy';
       var title = document.createElement('strong');
-      title.textContent = String(session.name || '').trim() || sessionLabel(name);
+      title.dataset.sessionRowTitle = '1';
       var meta = document.createElement('span');
-      meta.textContent = sessionStatusText(session);
+      meta.dataset.sessionRowMeta = '1';
       copy.appendChild(title);
       copy.appendChild(meta);
 
+      var actions = document.createElement('div');
+      actions.className = 'test-generations-session-actions';
+      actions.dataset.sessionRowActions = '1';
+
+      row.appendChild(copy);
+      row.appendChild(actions);
+      return row;
+    }
+
+    function placeRow(target, row, index) {
+      var current = target.children[index] || null;
+      if (current !== row) target.insertBefore(row, current);
+    }
+
+    function ensureButton(actions, key, className, text) {
+      var button = actions.querySelector('[data-session-control="' + key + '"]');
+      if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.sessionControl = key;
+        actions.appendChild(button);
+      }
+      button.className = className;
+      button.textContent = text;
+      return button;
+    }
+
+    function removeControl(actions, key) {
+      var button = actions.querySelector('[data-session-control="' + key + '"]');
+      if (button) button.remove();
+    }
+
+    function syncSessionRow(session, target, index) {
+      var name = String(session.session || '');
+      var row = ensureRow('session:' + name);
+      row.className = 'test-generations-session-row';
+      row.dataset.sessionName = name;
+      row.title = name;
+
+      row.querySelector('[data-session-row-title]').textContent =
+        String(session.name || '').trim() || sessionLabel(name);
+      row.querySelector('[data-session-row-meta]').textContent = sessionStatusText(session);
+
+      var copy = row.querySelector('.test-generations-session-copy');
       var active = session.status === 'running' || session.status === 'stopping' || session.status === 'starting';
+      var progress = copy.querySelector('.test-generations-session-progress');
       if (active) {
         var completed = Number(session.completed || 0);
         var failed = Number(session.failed || 0);
         var total = Number(session.total || 0);
         var processed = Math.max(0, completed + failed);
         var percent = total > 0 ? Math.max(0, Math.min(100, processed / total * 100)) : 0;
-        var progress = document.createElement('div');
-        progress.className = 'test-generations-session-progress';
-        progress.setAttribute('role', 'progressbar');
+        if (!progress) {
+          progress = document.createElement('div');
+          progress.className = 'test-generations-session-progress';
+          progress.setAttribute('role', 'progressbar');
+          var fill = document.createElement('span');
+          progress.appendChild(fill);
+          copy.appendChild(progress);
+        }
         progress.setAttribute('aria-valuemin', '0');
         progress.setAttribute('aria-valuemax', String(total || 0));
         progress.setAttribute('aria-valuenow', String(processed));
-        var fill = document.createElement('span');
-        fill.style.width = percent.toFixed(1) + '%';
-        progress.appendChild(fill);
-        copy.appendChild(progress);
+        progress.querySelector('span').style.width = percent.toFixed(1) + '%';
+      } else if (progress) {
+        progress.remove();
       }
 
-      var actions = document.createElement('div');
-      actions.className = 'test-generations-session-actions';
+      var actions = row.querySelector('[data-session-row-actions]');
       var resultFolder = String(session.resultFolder || '');
-
-      var open = document.createElement('button');
-      open.type = 'button';
-      open.className = 'review-captions-btn';
+      var open = ensureButton(actions, 'open', 'review-captions-btn', 'Open');
       open.dataset.sessionFolderOpen = resultFolder;
-      open.textContent = 'Open';
       open.disabled = !resultFolder;
 
-      var rate = document.createElement('button');
-      rate.type = 'button';
-      rate.className = 'review-captions-btn';
+      var rate = ensureButton(actions, 'rate', 'review-captions-btn', 'Rate');
       rate.dataset.sessionRate = resultFolder;
-      rate.textContent = 'Rate';
       var unrated = Number(session.unrated || 0);
       rate.classList.toggle('hidden', !resultFolder || unrated <= 0);
 
-      actions.appendChild(open);
-      actions.appendChild(rate);
       if (active) {
-        var stop = document.createElement('button');
-        stop.type = 'button';
-        stop.className = 'review-captions-btn test-generations-stop-btn';
+        removeControl(actions, 'delete');
+        var stop = ensureButton(
+          actions,
+          'stop',
+          'review-captions-btn test-generations-stop-btn',
+          session.status === 'stopping' ? 'Stopping…' : 'Stop'
+        );
         stop.dataset.sessionStop = name;
-        stop.textContent = session.status === 'stopping' ? 'Stopping…' : 'Stop';
         stop.disabled = session.status === 'stopping';
-        actions.appendChild(stop);
       } else {
-        var remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'test-generations-remove-candidate';
+        removeControl(actions, 'stop');
+        var remove = ensureButton(actions, 'delete', 'test-generations-remove-candidate', '×');
         remove.dataset.sessionDelete = name;
         remove.title = 'Delete this Test session';
         remove.setAttribute('aria-label', 'Delete Test session ' + name);
-        remove.textContent = '×';
-        actions.appendChild(remove);
       }
 
-      row.appendChild(copy);
-      row.appendChild(actions);
-      target.appendChild(row);
+      placeRow(target, row, index);
+      return row;
     }
 
+    function syncQueuedRow(job, target, index) {
+      var jobId = String(job.id || '');
+      var row = ensureRow('queue:' + jobId);
+      row.className = 'test-generations-session-row';
+      row.dataset.queueJobId = jobId;
+      row.removeAttribute('data-session-name');
+      row.querySelector('[data-session-row-title]').textContent =
+        String(job.runName || '').trim() || 'Queued Test';
+
+      var total = Number(job.testTotal || 0);
+      var position = Number(job.queuePosition || 0);
+      var queuedModel = supportedTestModels[String(job.modelId || '')] || {};
+      row.querySelector('[data-session-row-meta]').textContent =
+        (String(queuedModel.label || '').trim() ? String(queuedModel.label).trim() + ' · ' : '') +
+        'queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
+
+      var copy = row.querySelector('.test-generations-session-copy');
+      var progress = copy.querySelector('.test-generations-session-progress');
+      if (progress) progress.remove();
+
+      var actions = row.querySelector('[data-session-row-actions]');
+      Array.prototype.forEach.call(actions.querySelectorAll('[data-session-control]'), function (button) {
+        if (button.dataset.sessionControl !== 'queue-cancel') button.remove();
+      });
+      var remove = ensureButton(actions, 'queue-cancel', 'test-generations-remove-candidate', '×');
+      remove.dataset.queueCancel = jobId;
+      remove.title = 'Remove this queued Test session';
+      remove.setAttribute(
+        'aria-label',
+        'Remove queued Test session ' + row.querySelector('[data-session-row-title]').textContent
+      );
+
+      placeRow(target, row, index);
+      return row;
+    }
+
+    var validRows = {};
+    var usedGroups = {};
+
     if (activeItems.length) {
-      var runningList = appendGroup('Running', activeItems.length, 'is-running');
-      activeItems.forEach(function (session) { appendSessionRow(session, runningList); });
+      usedGroups.running = true;
+      var runningList = ensureGroup('running', 'Running', activeItems.length, 'is-running');
+      activeItems.forEach(function (session, index) {
+        var row = syncSessionRow(session, runningList, index);
+        validRows[String(row.dataset.sessionRowKey || '')] = true;
+      });
     }
 
     if (queued.length) {
-      var queuedList = appendGroup('Queued', queued.length, 'is-queued');
-      queued.forEach(function (job) {
-        var row = document.createElement('div');
-        row.className = 'test-generations-session-row';
-        row.dataset.queueJobId = String(job.id || '');
-
-        var copy = document.createElement('div');
-        copy.className = 'test-generations-session-copy';
-        var title = document.createElement('strong');
-        title.textContent = String(job.runName || '').trim() || 'Queued Test';
-        var meta = document.createElement('span');
-        var total = Number(job.testTotal || 0);
-        var position = Number(job.queuePosition || 0);
-        var queuedModel = supportedTestModels[String(job.modelId || '')] || {};
-        meta.textContent = (String(queuedModel.label || '').trim() ? String(queuedModel.label).trim() + ' · ' : '') +
-          'queued' + (position ? ' · Queue #' + position : '') + (total ? ' · ' + total + ' renders' : '');
-        copy.appendChild(title);
-        copy.appendChild(meta);
-
-        var actions = document.createElement('div');
-        actions.className = 'test-generations-session-actions';
-        var remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'test-generations-remove-candidate';
-        remove.dataset.queueCancel = String(job.id || '');
-        remove.title = 'Remove this queued Test session';
-        remove.setAttribute('aria-label', 'Remove queued Test session ' + title.textContent);
-        remove.textContent = '×';
-        actions.appendChild(remove);
-
-        row.appendChild(copy);
-        row.appendChild(actions);
-        queuedList.appendChild(row);
+      usedGroups.queued = true;
+      var queuedList = ensureGroup('queued', 'Queued', queued.length, 'is-queued');
+      queued.forEach(function (job, index) {
+        var row = syncQueuedRow(job, queuedList, index);
+        validRows[String(row.dataset.sessionRowKey || '')] = true;
       });
     }
 
     if (historyItems.length) {
-      var historyList = appendGroup('Finished', historyItems.length, 'is-history');
-      historyItems.forEach(function (session) { appendSessionRow(session, historyList); });
+      usedGroups.history = true;
+      var historyList = ensureGroup('history', 'Finished', historyItems.length, 'is-history');
+      historyItems.forEach(function (session, index) {
+        var row = syncSessionRow(session, historyList, index);
+        validRows[String(row.dataset.sessionRowKey || '')] = true;
+      });
+    }
+
+    Array.prototype.forEach.call(host.querySelectorAll('[data-session-row-key]'), function (row) {
+      if (!validRows[String(row.dataset.sessionRowKey || '')]) row.remove();
+    });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-session-group]'), function (group) {
+      if (!usedGroups[String(group.dataset.sessionGroup || '')]) group.remove();
+    });
+
+    if (!items.length && !queued.length && !host.querySelector('.test-generations-library-empty')) {
+      empty = document.createElement('div');
+      empty.className = 'test-generations-library-empty';
+      empty.textContent = 'No test sessions yet.';
+      host.appendChild(empty);
     }
 
     syncSessionSelection();

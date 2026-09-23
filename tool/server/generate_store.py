@@ -1,5 +1,7 @@
 import json
+import logging
 import os
+import shutil
 import tempfile
 import time
 from pathlib import Path
@@ -8,6 +10,8 @@ from . import config as app_config
 
 
 MANIFEST_NAME = "generation.json"
+
+_logger = logging.getLogger(__name__)
 
 
 def generation_root():
@@ -50,6 +54,32 @@ def save_reference(upload):
     }
 
 
+def cleanup_references(references):
+    root = reference_root().resolve()
+    values = references.values() if isinstance(references, dict) else references or []
+    removed = 0
+    for relative_path in values:
+        value = str(relative_path or "").strip()
+        if not value:
+            continue
+        candidate = (Path(app_config.FS_ROOT) / value).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            continue
+        if candidate.is_file():
+            candidate.unlink()
+            removed += 1
+        parent = candidate.parent
+        while parent != root:
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
+    return removed
+
+
 def resolve_reference_path(relative_path):
     value = str(relative_path or "").strip()
     if not value:
@@ -71,38 +101,55 @@ def persist_result(job_id, request, output_ref, media_bytes, provider_job_id, el
     directory = generation_root() / day / str(job_id)
     directory.mkdir(parents=True, exist_ok=True)
 
-    suffix = Path(str(output_ref.get("filename") or "")).suffix.lower()
-    if not suffix:
-        suffix = ".bin"
-    media_name = "result" + suffix
-    media_path = directory / media_name
-    media_path.write_bytes(media_bytes)
+    try:
+        suffix = Path(str(output_ref.get("filename") or "")).suffix.lower()
+        if not suffix:
+            suffix = ".bin"
+        media_name = "result" + suffix
+        media_path = directory / media_name
+        media_path.write_bytes(media_bytes)
 
-    root = Path(app_config.FS_ROOT)
-    relative_media = str(media_path.relative_to(root)).replace("\\", "/")
-    relative_manifest = str((directory / MANIFEST_NAME).relative_to(root)).replace("\\", "/")
-    payload = {
-        "version": 1,
-        "jobId": str(job_id),
-        "createdAt": created_at,
-        "modelId": str(request.get("modelId") or ""),
-        "mediaKind": str(request.get("mediaKind") or ""),
-        "sourcePrompt": str(request.get("sourcePrompt") or request.get("prompt") or ""),
-        "resolvedPrompt": str(request.get("prompt") or ""),
-        "settings": request.get("settings") if isinstance(request.get("settings"), dict) else {},
-        "seed": (request.get("settings") or {}).get("seed"),
-        "loras": request.get("loras") if isinstance(request.get("loras"), list) else [],
-        "references": request.get("references") if isinstance(request.get("references"), dict) else {},
-        "wildcardsEnabled": bool(request.get("wildcardsEnabled")),
-        "workflowFile": str(request.get("workflowFile") or ""),
-        "providerJobId": str(provider_job_id or ""),
-        "elapsedMs": int(elapsed_ms or 0),
-        "mediaPath": relative_media,
-        "manifestPath": relative_manifest,
-    }
-    _atomic_write_json(directory / MANIFEST_NAME, payload)
-    return payload
+        root = Path(app_config.FS_ROOT)
+        relative_media = str(media_path.relative_to(root)).replace("\\", "/")
+        relative_manifest = str((directory / MANIFEST_NAME).relative_to(root)).replace("\\", "/")
 
+        persisted_references = {}
+        source_references = request.get("references") if isinstance(request.get("references"), dict) else {}
+        for role, relative_path in source_references.items():
+            source = resolve_reference_path(relative_path)
+            target_dir = directory / "references"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target = target_dir / (str(role) + "-" + source.name)
+            shutil.copy2(source, target)
+            persisted_references[str(role)] = str(target.relative_to(root)).replace("\\", "/")
+
+        payload = {
+            "version": 1,
+            "jobId": str(job_id),
+            "createdAt": created_at,
+            "modelId": str(request.get("modelId") or ""),
+            "mediaKind": str(request.get("mediaKind") or ""),
+            "sourcePrompt": str(request.get("sourcePrompt") or request.get("prompt") or ""),
+            "resolvedPrompt": str(request.get("prompt") or ""),
+            "settings": request.get("settings") if isinstance(request.get("settings"), dict) else {},
+            "seed": (request.get("settings") or {}).get("seed"),
+            "loras": request.get("loras") if isinstance(request.get("loras"), list) else [],
+            "references": persisted_references,
+            "wildcardsEnabled": bool(request.get("wildcardsEnabled")),
+            "workflowFile": str(request.get("workflowFile") or ""),
+            "providerJobId": str(provider_job_id or ""),
+            "elapsedMs": int(elapsed_ms or 0),
+            "mediaPath": relative_media,
+            "manifestPath": relative_manifest,
+        }
+        _atomic_write_json(directory / MANIFEST_NAME, payload)
+        return payload
+    except Exception:
+        try:
+            shutil.rmtree(directory)
+        except OSError:
+            _logger.exception("Could not clean partial Generate result directory %s.", directory)
+        raise
 
 def list_results(limit=100):
     found = []

@@ -15,6 +15,7 @@
       status: ''
     },
     queue: { jobs: [], paused: false },
+    trackedJobIds: loadTrackedGenerateJobs(),
     open: false,
     timer: 0
   };
@@ -57,6 +58,35 @@
   function setStatus(message) {
     var status = el('generate-status');
     if (status) status.textContent = String(message || '');
+  }
+
+  function loadTrackedGenerateJobs() {
+    try {
+      var parsed = JSON.parse(window.localStorage.getItem('webcap.generate.trackedJobs') || '[]');
+      return Array.isArray(parsed)
+        ? parsed.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
+        : [];
+    } catch (_err) {
+      return [];
+    }
+  }
+
+  function saveTrackedGenerateJobs() {
+    window.localStorage.setItem('webcap.generate.trackedJobs', JSON.stringify(generateState.trackedJobIds || []));
+  }
+
+  function trackGenerateJob(jobId) {
+    var id = String(jobId || '').trim();
+    if (!id || generateState.trackedJobIds.indexOf(id) !== -1) return;
+    generateState.trackedJobIds.push(id);
+    saveTrackedGenerateJobs();
+  }
+
+  function untrackGenerateJob(jobId) {
+    var id = String(jobId || '').trim();
+    var before = generateState.trackedJobIds.length;
+    generateState.trackedJobIds = generateState.trackedJobIds.filter(function (value) { return value !== id; });
+    if (generateState.trackedJobIds.length !== before) saveTrackedGenerateJobs();
   }
 
   function savedLoras(modelId) {
@@ -214,17 +244,46 @@
     });
   }
 
+  function cleanupUploadedReferences(paths) {
+    var values = Array.isArray(paths) ? paths.filter(Boolean) : [];
+    if (!values.length) return Promise.resolve();
+    return postJson('/fs/generate/reference/cleanup', { paths: values }).catch(function (err) {
+      if (typeof window.reportConsoleError === 'function') {
+        window.reportConsoleError(
+          'Generate',
+          'Could not clean abandoned Generate reference uploads: ' +
+            String(err && err.message ? err.message : err)
+        );
+      }
+    });
+  }
+
   function collectReferences() {
     var model = currentModel();
     var references = {};
-    var uploads = [];
-    (model && model.references || []).forEach(function (role) {
+    var uploadedPaths = [];
+    var roles = (model && model.references || []).slice();
+    var chain = Promise.resolve();
+
+    roles.forEach(function (role) {
       var input = el('generate-reference-' + role);
       var file = input && input.files && input.files[0];
       if (!file) return;
-      uploads.push(uploadReference(file).then(function (path) { references[role] = path; }));
+      chain = chain.then(function () {
+        return uploadReference(file).then(function (path) {
+          references[role] = path;
+          uploadedPaths.push(path);
+        });
+      });
     });
-    return Promise.all(uploads).then(function () { return references; });
+
+    return chain.then(function () {
+      return references;
+    }).catch(function (err) {
+      return cleanupUploadedReferences(uploadedPaths).then(function () {
+        throw err;
+      });
+    });
   }
 
   function runGenerate() {
@@ -246,6 +305,7 @@
         references: references
       });
     }).then(function (payload) {
+      trackGenerateJob(payload.job && payload.job.jobId);
       setStatus('Queued' + (payload.job.queuePosition ? ' · #' + payload.job.queuePosition : '') + '.');
       return refreshQueue();
     }).catch(function (err) {
@@ -261,44 +321,133 @@
     return 'Generate';
   }
 
+  function createQueueRow(job) {
+    var row = document.createElement('article');
+    row.className = 'generate-queue-row';
+    row.dataset.inferenceJobId = String(job.jobId || '');
+
+    var position = document.createElement('div');
+    position.className = 'generate-queue-position';
+    position.dataset.queuePosition = '1';
+
+    var copy = document.createElement('div');
+    copy.className = 'generate-queue-copy';
+    var title = document.createElement('strong');
+    title.dataset.queueTitle = '1';
+    var detail = document.createElement('span');
+    detail.dataset.queueDetail = '1';
+    copy.appendChild(title);
+    copy.appendChild(detail);
+
+    var actions = document.createElement('div');
+    actions.className = 'generate-queue-actions';
+
+    row.appendChild(position);
+    row.appendChild(copy);
+    row.appendChild(actions);
+    return row;
+  }
+
+  function syncQueueActions(row, job) {
+    var actions = row.querySelector('.generate-queue-actions');
+    if (!actions) return;
+    var queued = job.status === 'queued';
+    var active = ['starting', 'running', 'stopping'].indexOf(job.status) !== -1;
+    var desired = queued ? ['up', 'down', 'cancel'] : (active ? ['stop'] : []);
+    var labels = { up: '↑', down: '↓', cancel: 'Cancel', stop: 'Stop' };
+    var existing = {};
+    Array.prototype.forEach.call(actions.querySelectorAll('[data-inference-action]'), function (button) {
+      existing[String(button.dataset.inferenceAction || '')] = button;
+    });
+
+    Object.keys(existing).forEach(function (action) {
+      if (desired.indexOf(action) === -1) existing[action].remove();
+    });
+
+    desired.forEach(function (action) {
+      var button = existing[action];
+      if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'review-captions-btn';
+        button.dataset.inferenceAction = action;
+      }
+      button.dataset.jobId = String(job.jobId || '');
+      button.textContent = labels[action];
+      button.disabled = action === 'stop' && job.status === 'stopping';
+      if (actions.children[desired.indexOf(action)] !== button) actions.appendChild(button);
+    });
+  }
+
+  function syncQueueRow(row, job) {
+    row.className = 'generate-queue-row status-' + String(job.status || '');
+    row.dataset.inferenceJobId = String(job.jobId || '');
+    var position = row.querySelector('[data-queue-position]');
+    var title = row.querySelector('[data-queue-title]');
+    var detail = row.querySelector('[data-queue-detail]');
+    var queued = job.status === 'queued';
+    if (position) {
+      position.textContent = queued && job.queuePosition
+        ? '#' + job.queuePosition
+        : String(job.status || '').replace(/_/g, ' ');
+    }
+    if (title) title.textContent = queueClientLabel(job) + ' · ' + (job.label || 'Generation');
+    if (detail) {
+      detail.textContent = String(job.modelId || '') +
+        (job.providerStatus ? ' · ' + String(job.providerStatus) : '');
+    }
+    syncQueueActions(row, job);
+  }
+
   function renderQueue() {
     var host = el('generate-queue-list');
     var pause = el('generate-queue-pause');
     if (pause) pause.textContent = generateState.queue.paused ? 'Resume queue' : 'Pause queue';
     if (!host) return;
+
     var jobs = Array.isArray(generateState.queue.jobs) ? generateState.queue.jobs : [];
-    if (!jobs.length) {
-      host.innerHTML = '<div class="generate-queue-empty">No queued inference.</div>';
-      if (typeof window.setShellInferenceActive === 'function') window.setShellInferenceActive(false);
-      return;
-    }
     var running = jobs.some(function (job) {
       return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
     });
     if (typeof window.setShellInferenceActive === 'function') window.setShellInferenceActive(running);
 
-    host.innerHTML = jobs.map(function (job) {
-      var queued = job.status === 'queued';
-      var active = ['starting', 'running', 'stopping'].indexOf(job.status) !== -1;
-      var position = queued && job.queuePosition ? '#' + job.queuePosition : String(job.status || '').replace(/_/g, ' ');
-      var controls = '';
-      if (queued) {
-        controls =
-          '<button type="button" class="review-captions-btn" data-inference-action="up" data-job-id="' + escapeHtml(job.jobId) + '">↑</button>' +
-          '<button type="button" class="review-captions-btn" data-inference-action="down" data-job-id="' + escapeHtml(job.jobId) + '">↓</button>' +
-          '<button type="button" class="review-captions-btn" data-inference-action="cancel" data-job-id="' + escapeHtml(job.jobId) + '">Cancel</button>';
-      } else if (active) {
-        controls = '<button type="button" class="review-captions-btn" data-inference-action="stop" data-job-id="' + escapeHtml(job.jobId) + '">Stop</button>';
+    var empty = host.querySelector('.generate-queue-empty');
+    if (jobs.length && empty) empty.remove();
+
+    var rows = {};
+    Array.prototype.forEach.call(
+      host.querySelectorAll('.generate-queue-row[data-inference-job-id]'),
+      function (row) { rows[String(row.dataset.inferenceJobId || '')] = row; }
+    );
+    var valid = {};
+
+    jobs.forEach(function (job, index) {
+      var key = String(job.jobId || '');
+      if (!key) return;
+      valid[key] = true;
+      var row = rows[key];
+      if (!row) {
+        row = createQueueRow(job);
+        rows[key] = row;
       }
-      return '<article class="generate-queue-row status-' + escapeHtml(job.status) + '">' +
-        '<div class="generate-queue-position">' + escapeHtml(position) + '</div>' +
-        '<div class="generate-queue-copy">' +
-          '<strong>' + escapeHtml(queueClientLabel(job) + ' · ' + (job.label || 'Generation')) + '</strong>' +
-          '<span>' + escapeHtml(job.modelId || '') + (job.providerStatus ? ' · ' + escapeHtml(job.providerStatus) : '') + '</span>' +
-        '</div>' +
-        '<div class="generate-queue-actions">' + controls + '</div>' +
-      '</article>';
-    }).join('');
+      syncQueueRow(row, job);
+
+      var currentRows = host.querySelectorAll('.generate-queue-row[data-inference-job-id]');
+      var expected = currentRows[index] || null;
+      if (expected !== row) host.insertBefore(row, expected);
+      else if (!row.parentNode) host.appendChild(row);
+    });
+
+    Object.keys(rows).forEach(function (key) {
+      if (!valid[key]) rows[key].remove();
+    });
+
+    if (!jobs.length && !host.querySelector('.generate-queue-empty')) {
+      empty = document.createElement('div');
+      empty.className = 'generate-queue-empty';
+      empty.textContent = 'No queued inference.';
+      host.appendChild(empty);
+    }
   }
 
   function refreshQueue() {
@@ -318,8 +467,51 @@
       jobId: jobId || '',
       direction: direction || ''
     }).then(function () {
+      if (operation === 'cancel') untrackGenerateJob(jobId);
       return refreshQueue();
     }).catch(reportError);
+  }
+
+  function refreshTrackedGenerateJobs() {
+    var ids = (generateState.trackedJobIds || []).slice();
+    if (!ids.length) return Promise.resolve([]);
+
+    return Promise.all(ids.map(function (jobId) {
+      return requestJson('/fs/inference?job=' + encodeURIComponent(jobId)).then(function (payload) {
+        return payload.job || null;
+      }).catch(function (err) {
+        return { jobId: jobId, status: 'missing', error: String(err && err.message ? err.message : err) };
+      });
+    })).then(function (jobs) {
+      var refreshResultsNeeded = false;
+      jobs.forEach(function (job) {
+        if (!job) return;
+        var jobId = String(job.jobId || '');
+        var status = String(job.status || '');
+        if (['completed', 'failed', 'interrupted', 'cancelled', 'stopped', 'missing'].indexOf(status) === -1) return;
+
+        untrackGenerateJob(jobId);
+        if (status === 'completed') {
+          refreshResultsNeeded = true;
+          if (generateState.open) setStatus('Generation complete.');
+          return;
+        }
+        if (status === 'failed' || status === 'interrupted') {
+          reportError(new Error(
+            'Generation ' + status + (job.error ? ': ' + job.error : '.')
+          ));
+          return;
+        }
+        if (status === 'missing') {
+          var warning = 'Tracked generation job ' + jobId + ' is no longer available in the execution queue.';
+          if (typeof window.reportConsoleWarning === 'function') window.reportConsoleWarning('Generate', warning);
+          else console.warn('[Generate]', warning);
+          return;
+        }
+        if (generateState.open) setStatus('Generation ' + status + '.');
+      });
+      return refreshResultsNeeded ? refreshResults() : jobs;
+    });
   }
 
   function resultKey(result) {
@@ -528,6 +720,7 @@
     generateState.timer = setTimeout(function () {
       Promise.all([
         refreshQueue(),
+        refreshTrackedGenerateJobs(),
         generateState.open ? refreshResults() : Promise.resolve()
       ]).then(schedulePoll);
     }, generateState.open ? 2000 : 5000);
@@ -544,7 +737,7 @@
     workspace.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
-    Promise.all([refreshCapabilities(), refreshDirector(), refreshQueue(), refreshResults()]).catch(reportError);
+    Promise.all([refreshCapabilities(), refreshDirector(), refreshQueue(), refreshTrackedGenerateJobs(), refreshResults()]).catch(reportError);
     schedulePoll();
   }
 

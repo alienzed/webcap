@@ -172,68 +172,75 @@ def execute_inference(job_id, request, context):
     model = get_inference_model(request.get("modelId"))
     template = model.load_template()
     uploaded = {}
-    for role, relative_path in (request.get("references") or {}).items():
-        source = _resolve_story_reference_path(story_id, relative_path)
-        uploaded[role] = inference_runtime.upload_image(
-            source,
-            "webcap-storyboard/" + story_id + "/" + scene_id + "/" + str(job_id) + "/references",
-            filename=source.name,
+    output_ref = None
+    try:
+        for role, relative_path in (request.get("references") or {}).items():
+            source = _resolve_story_reference_path(story_id, relative_path)
+            uploaded[role] = inference_runtime.upload_image(
+                source,
+                "webcap-storyboard/" + story_id + "/" + scene_id + "/" + str(job_id) + "/references",
+                filename=source.name,
+            )
+
+        filename_prefix = "webcap-storyboard/" + story_id + "/" + scene_id + "/" + str(job_id) + "/render"
+        workflow = model.build_workflow(
+            template,
+            request["prompt"],
+            copy.deepcopy(request["settings"]),
+            copy.deepcopy(request.get("loras") or []),
+            uploaded,
+            filename_prefix,
+            inference_runtime.available_names,
+            inference_runtime.resolve_name,
         )
+        provider_job_id = inference_runtime.queue_workflow(workflow)
+        execution_update_job(
+            job_id,
+            details={"providerJobId": provider_job_id, "providerStatus": "pending"},
+        )
+        output_ref = inference_runtime.wait_for_output(
+            provider_job_id,
+            job_id,
+            model.find_output_ref,
+        )
+        media = inference_runtime.download_output(output_ref)
 
-    filename_prefix = "webcap-storyboard/" + story_id + "/" + scene_id + "/" + str(job_id) + "/render"
-    workflow = model.build_workflow(
-        template,
-        request["prompt"],
-        copy.deepcopy(request["settings"]),
-        copy.deepcopy(request.get("loras") or []),
-        uploaded,
-        filename_prefix,
-        inference_runtime.available_names,
-        inference_runtime.resolve_name,
-    )
-    provider_job_id = inference_runtime.queue_workflow(workflow)
-    execution_update_job(
-        job_id,
-        details={"providerJobId": provider_job_id, "providerStatus": "pending"},
-    )
-    output_ref = inference_runtime.wait_for_output(
-        provider_job_id,
-        job_id,
-        model.find_output_ref,
-    )
-    media = inference_runtime.download_output(output_ref)
-
-    _story, take = add_take_upload(
-        story_id,
-        scene_id,
-        output_ref.get("filename") or "render.mp4",
-        io.BytesIO(media),
-        effective_loras=request.get("loras") or [],
-    )
-    _story, take = finalize_generated_take(
-        story_id,
-        scene_id,
-        take["id"],
-        {
-            "prompt": request["prompt"],
-            "entryState": str(context.get("entryState") or ""),
-            "exitState": str(context.get("exitState") or ""),
-            "sourcePrompt": request.get("sourcePrompt") or request["prompt"],
-            "wildcardsEnabled": bool(request.get("wildcardsEnabled")),
-            "durationSeconds": request["settings"]["duration"],
-            "seed": request["settings"]["seed"],
-            "seedMode": str(context.get("seedMode") or ""),
-            "aspectRatio": request["settings"]["aspectRatio"],
-            "megapixels": request["settings"]["megapixels"],
-            "loras": request.get("loras") or [],
-            "references": copy.deepcopy(context.get("referenceRecords") or []),
-            "workflowProfile": "minimax_h3_storyboard_v1",
-            "providerJobId": provider_job_id,
-        },
-    )
-    execution_update_job(job_id, details={"providerStatus": "completed"})
-    return {"takeId": take["id"]}
-
+        _story, take = add_take_upload(
+            story_id,
+            scene_id,
+            output_ref.get("filename") or "render.mp4",
+            io.BytesIO(media),
+            effective_loras=request.get("loras") or [],
+        )
+        _story, take = finalize_generated_take(
+            story_id,
+            scene_id,
+            take["id"],
+            {
+                "prompt": request["prompt"],
+                "entryState": str(context.get("entryState") or ""),
+                "exitState": str(context.get("exitState") or ""),
+                "sourcePrompt": request.get("sourcePrompt") or request["prompt"],
+                "wildcardsEnabled": bool(request.get("wildcardsEnabled")),
+                "durationSeconds": request["settings"]["duration"],
+                "seed": request["settings"]["seed"],
+                "seedMode": str(context.get("seedMode") or ""),
+                "aspectRatio": request["settings"]["aspectRatio"],
+                "megapixels": request["settings"]["megapixels"],
+                "loras": request.get("loras") or [],
+                "references": copy.deepcopy(context.get("referenceRecords") or []),
+                "workflowProfile": "minimax_h3_storyboard_v1",
+                "providerJobId": provider_job_id,
+            },
+        )
+        execution_update_job(job_id, details={"providerStatus": "completed"})
+        return {"takeId": take["id"]}
+    finally:
+        if output_ref is not None:
+            try:
+                inference_runtime.cleanup_saved_output(output_ref)
+            except OSError as exc:
+                _logger.warning("Could not remove captured Storyboard ComfyUI output: %s", exc)
 
 def _generation_job(job):
     if not isinstance(job, dict):
@@ -295,8 +302,28 @@ def reconcile_startup():
             ).strip()
             if prompt_id:
                 try:
-                    inference_runtime.cancel_job(prompt_id)
+                    if not inference_runtime.cancel_job_and_wait(prompt_id):
+                        from .inference_runner import hold_provider_cleanup
+                        hold_provider_cleanup(
+                            prompt_id,
+                            (
+                                "Queue paused: interrupted legacy Storyboard provider work "
+                                "could not be confirmed stopped after restart."
+                            ),
+                        )
+                        _logger.error(
+                            "Interrupted legacy Storyboard provider job %s did not confirm cancellation.",
+                            prompt_id,
+                        )
                 except Exception:
+                    from .inference_runner import hold_provider_cleanup
+                    hold_provider_cleanup(
+                        prompt_id,
+                        (
+                            "Queue paused: interrupted legacy Storyboard provider work "
+                            "could not be confirmed stopped after restart."
+                        ),
+                    )
                     _logger.exception(
                         "Could not cancel interrupted legacy Storyboard provider job %s.",
                         prompt_id,

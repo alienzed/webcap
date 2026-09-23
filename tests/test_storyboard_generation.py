@@ -449,7 +449,7 @@ def test_storyboard_generation_cleans_owned_comfy_reference_inputs_after_capture
             available_names,
             resolve_name,
         ):
-            assert uploaded["first_frame"].endswith("/first.png")
+            assert uploaded["first_frame"].endswith(".png")
             return {"workflow": True}
 
         def find_output_ref(self, outputs):

@@ -16,7 +16,9 @@ from .training_action import managed_actions, read_action
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
 MEASURABLE_AREAS = {"training", "tests", "generate", "storyboard", "set", "runtime"}
-PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard"}
+PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard", "runtime"}
+ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
+ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
 
 
 def _cache_path():
@@ -186,6 +188,19 @@ def _storyboard_items(cache):
     return rows
 
 
+def _read_test_session_manifest(session_path):
+    manifest = Path(session_path) / "test.json"
+    if manifest.is_symlink() or not manifest.is_file():
+        raise FileNotFoundError("Test Session manifest is unavailable.")
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Test Session manifest is unreadable; refusing Storage ownership decisions.") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("Test Session manifest is invalid; refusing Storage ownership decisions.")
+    return payload
+
+
 def _test_items(cache, folder):
     folder = str(folder or "").strip()
     if not folder:
@@ -200,18 +215,13 @@ def _test_items(cache, folder):
     for path in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower(), reverse=True):
         if not path.is_dir() or path.is_symlink():
             continue
-        manifest = path / "test.json"
-        if not manifest.is_file():
-            continue
         try:
-            session = json.loads(manifest.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(session, dict):
+            session = _read_test_session_manifest(path)
+        except (FileNotFoundError, RuntimeError):
             continue
         session_id = path.name
         status = str(session.get("status") or "")
-        active = status in {"queued", "starting", "running", "stopping"}
+        active = status in ACTIVE_TEST_STATUSES
         rows.append(_item(
             "tests",
             session_id,
@@ -266,6 +276,47 @@ def _set_items(cache, folder):
     return rows
 
 
+def _read_h3_probe_state(probe_path):
+    probe = Path(probe_path)
+    seed_path = probe / "seed.json"
+    if seed_path.is_symlink() or not seed_path.is_file():
+        raise RuntimeError("H3 probe ownership seed is unavailable.")
+    try:
+        seed = json.loads(seed_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("H3 probe ownership seed is unreadable.") from exc
+    if not isinstance(seed, dict) or str(seed.get("id") or "") != probe.name:
+        raise RuntimeError("H3 probe ownership seed does not match its directory.")
+
+    runtime_path = probe / "runtime.json"
+    if not runtime_path.exists():
+        return {
+            "status": "prepared",
+            "purgeable": True,
+            "protectedReason": "",
+            "createdAt": seed.get("createdAt"),
+        }
+    if runtime_path.is_symlink() or not runtime_path.is_file():
+        raise RuntimeError("H3 probe runtime state is unsafe.")
+    try:
+        runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("H3 probe runtime state is unreadable.") from exc
+    if not isinstance(runtime, dict) or str(runtime.get("probeId") or "") != probe.name:
+        raise RuntimeError("H3 probe runtime state does not match its directory.")
+
+    status = str(runtime.get("status") or "").strip().lower()
+    if not status:
+        raise RuntimeError("H3 probe runtime state has no status.")
+    active = status in ACTIVE_H3_PROBE_STATUSES
+    return {
+        "status": status,
+        "purgeable": not active,
+        "protectedReason": ("Active H3 probe; stop it before deletion." if active else ""),
+        "createdAt": seed.get("createdAt"),
+    }
+
+
 def _runtime_items(cache):
     rows = []
     root = Path(app_config.FS_ROOT)
@@ -282,10 +333,15 @@ def _runtime_items(cache):
         for probe in sorted(probes_root.iterdir(), key=lambda p: p.name, reverse=True):
             if not probe.is_dir() or probe.is_symlink():
                 continue
+            try:
+                probe_state = _read_h3_probe_state(probe)
+            except RuntimeError:
+                continue
             rows.append(_item(
                 "runtime", "h3-probe/" + probe.name, probe.name, probe,
-                kind="H3 probe", status="calibration", purgeable=False,
-                protected_reason="Probe deletion is not enabled in the MVP.",
+                kind="H3 probe", status=probe_state["status"], purgeable=probe_state["purgeable"],
+                protected_reason=probe_state["protectedReason"],
+                meta={"createdAt": probe_state.get("createdAt")},
                 cache=cache,
             ))
     return rows
@@ -388,24 +444,40 @@ def _resolve_test(folder, session_id):
     set_path = app_config.safe_join_fs_root(folder).resolve()
     root = (set_path / "test-generations").resolve()
     session = (root / str(session_id or "")).resolve()
-    if session.parent != root or session.is_symlink() or not (session / "test.json").is_file():
+    manifest = session / "test.json"
+    if session.parent != root or session.is_symlink() or manifest.is_symlink() or not manifest.is_file():
         raise FileNotFoundError("Test Session is unavailable.")
     return session
+
+
+def _resolve_h3_probe(item_id):
+    value = str(item_id or "")
+    if not value.startswith("h3-probe/"):
+        raise ValueError("H3 probe storage ID is invalid.")
+    name = value.split("/", 1)[1]
+    if not name or Path(name).name != name:
+        raise ValueError("H3 probe storage ID is invalid.")
+
+    root = (Path(app_config.FS_ROOT) / ".webcap_training" / "h3-probes").resolve()
+    raw_path = root / name
+    if raw_path.is_symlink():
+        raise ValueError("H3 probe storage path is symlinked.")
+    path = raw_path.resolve()
+    if path.parent != root or not path.is_dir():
+        raise FileNotFoundError("H3 probe storage item is unavailable.")
+    return path, _read_h3_probe_state(path)
 
 
 def _resolve_runtime(item_id):
     root = Path(app_config.FS_ROOT).resolve()
     value = str(item_id or "")
     if value == "generate-references":
-        return root / ".webcap_runtime" / "generate-references"
-    if value.startswith("h3-probe/"):
-        name = value.split("/", 1)[1]
-        if not name or Path(name).name != name:
-            raise ValueError("H3 probe storage ID is invalid.")
-        path = root / ".webcap_training" / "h3-probes" / name
+        path = root / ".webcap_runtime" / "generate-references"
         if path.is_symlink():
-            raise ValueError("H3 probe storage path is symlinked.")
+            raise ValueError("Generate reference storage path is symlinked.")
         return path
+    if value.startswith("h3-probe/"):
+        return _resolve_h3_probe(value)[0]
     raise ValueError("Runtime storage ID is invalid.")
 
 
@@ -523,6 +595,11 @@ def purge(area, item_id, folder=""):
         except OSError:
             pass
     elif area == "tests":
+        session = _resolve_test(folder, item_id)
+        session_payload = _read_test_session_manifest(session)
+        status = str(session_payload.get("status") or "").strip().lower()
+        if status in ACTIVE_TEST_STATUSES:
+            raise RuntimeError("Active Test Session; stop it before deletion.")
         set_path = app_config.safe_join_fs_root(folder)
         delete_session(set_path, item_id)
     elif area == "generate":
@@ -537,6 +614,13 @@ def purge(area, item_id, folder=""):
         resolve_item("storyboard", story_id)
         stop_storyboard_jobs(story_id)
         delete_story(story_id)
+    elif area == "runtime":
+        if not str(item_id or "").startswith("h3-probe/"):
+            raise ValueError("This Runtime storage item is lifecycle-managed and cannot be purged manually.")
+        path, probe_state = _resolve_h3_probe(item_id)
+        if not probe_state.get("purgeable"):
+            raise RuntimeError(probe_state.get("protectedReason") or "H3 probe is not safe to delete.")
+        shutil.rmtree(path)
 
     cache = _read_cache()
     cache.get("items", {}).pop(_cache_key(area, item_id, folder), None)

@@ -62,6 +62,22 @@ def test_registered_test_models_reject_seeds_outside_shared_range():
             raise AssertionError(item["id"] + " accepted an oversized Test seed")
 
 
+
+def test_registered_test_models_preserve_seed_validation_error():
+    for item in supported_models():
+        model = get_test_model(item["id"])
+        template = model.load_template()
+        values = model.template_settings(template)
+        values["seed"] = 4294967296
+
+        try:
+            model.normalize_settings(template, lambda: 1, values)
+        except ValueError as exc:
+            assert "4294967295" in str(exc)
+        else:
+            raise AssertionError(item["id"] + " hid the shared Test seed validation error")
+
+
 def test_krea_candidate_replaces_only_candidate_slot_and_test_bindings():
     model = get_test_model("krea2_raw")
     template = model.load_template()

@@ -252,3 +252,13 @@ def test_storyboard_director_settings_support_remote_openai_compatible_endpoint(
     assert "appSettingsStoryboardEndpointEl" in constants
     assert 'settings.get("mode", "local") == "remote"' in runtime
     assert '"/chat/completions"' in runtime
+
+
+def test_storyboard_lora_filter_controls_available_picker():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "data-scene-lora-filter" in storyboard
+    assert "data-scene-lora-picker" in storyboard
+    assert "picker.innerHTML = loraOptions('', loraFilter.value" in storyboard
+    assert "var selectedName = String(picker.value || '').trim();" in storyboard
+    assert "sceneLoraRowHtml({ name: selectedName, strength: 1 }, '', storyLorasFromUi())" in storyboard

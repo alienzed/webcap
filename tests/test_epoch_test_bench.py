@@ -1898,6 +1898,31 @@ def test_run_batch_advances_local_test_fifo(tmp_path, monkeypatch):
 
 
 
+def test_test_queue_shared_controls_support_pause_resume_and_reorder(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
+    execution_queue.pause_lane(bench.EXECUTION_LANE)
+    first = execution_queue.enqueue(
+        bench.EXECUTION_LANE,
+        {},
+        metadata={"folder": "sets/subject", "runName": "First", "modelId": "h3", "testTotal": 1},
+    )
+    second = execution_queue.enqueue(
+        bench.EXECUTION_LANE,
+        {},
+        metadata={"folder": "sets/subject", "runName": "Second", "modelId": "h3", "testTotal": 1},
+    )
+
+    bench.reorder_queued(tmp_path, second["id"], "up")
+    assert [job["id"] for job in bench.queued_jobs(tmp_path)["jobs"]] == [second["id"], first["id"]]
+
+    paused = bench.pause_queue(tmp_path)
+    assert paused["paused"] is True
+    monkeypatch.setattr(bench, "_advance_test_queue", lambda: None)
+    resumed = bench.resume_queue(tmp_path)
+    assert resumed["paused"] is False
+
+
 def test_remove_candidate_allows_queued_test_reference(tmp_path, monkeypatch):
     configure_execution_queue(monkeypatch, tmp_path)
     staged = tmp_path / "staged"

@@ -218,3 +218,13 @@ def test_storyboard_takes_can_be_named_and_loras_filtered():
     assert "data-scene-lora-filter" in storyboard
     assert "function loraOptions(selectedName, filterText)" in storyboard
     assert ".storyboard-lora-filter" in css
+
+
+def test_storyboard_lora_filter_controls_available_picker():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "data-scene-lora-filter" in storyboard
+    assert "data-scene-lora-picker" in storyboard
+    assert "picker.innerHTML = loraOptions('', loraFilter.value);" in storyboard
+    assert "var selectedName = String(picker.value || '').trim();" in storyboard
+    assert "loraRowHtml({ name: selectedName, strength: 1 }, '')" in storyboard

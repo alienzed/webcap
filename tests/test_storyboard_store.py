@@ -431,3 +431,52 @@ def test_take_label_is_editable_and_persists(storyboard_fs):
     assert take["label"] == "Best expression"
     loaded = storyboard_store.load_story(story["id"])
     assert loaded["scenes"][scene["id"]]["takes"][take["id"]]["label"] == "Best expression"
+
+
+def test_story_loras_are_inherited_with_sparse_scene_overrides(storyboard_fs):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "loras": [
+            {"name": "characters/alice.safetensors", "strength": 0.8},
+            {"name": "styles/film.safetensors", "strength": 0.5},
+        ],
+    })
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Scene",
+        "storyLoraOverrides": [
+            {"name": "characters/alice.safetensors", "strength": 0.65},
+            {"name": "styles/film.safetensors", "enabled": False},
+        ],
+        "loras": [{"name": "clothing/dress.safetensors", "strength": 0.7}],
+    })
+
+    assert storyboard_store.resolve_scene_loras(story, scene) == [
+        {"name": "characters/alice.safetensors", "strength": 0.65},
+        {"name": "clothing/dress.safetensors", "strength": 0.7},
+    ]
+
+    story = storyboard_store.update_story(story["id"], {
+        "loras": [
+            {"name": "characters/alice.safetensors", "strength": 0.95},
+            {"name": "styles/film.safetensors", "strength": 0.6},
+        ],
+    })
+    scene = story["scenes"][scene["id"]]
+    assert storyboard_store.resolve_scene_loras(story, scene)[0]["strength"] == 0.65
+
+    story, duplicate = storyboard_store.duplicate_scene(story["id"], scene["id"])
+    assert duplicate["storyLoraOverrides"] == scene["storyLoraOverrides"]
+
+
+def test_scene_local_lora_cannot_duplicate_inherited_story_lora(storyboard_fs):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "loras": [{"name": "characters/alice.safetensors", "strength": 0.8}],
+    })
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Scene",
+        "loras": [{"name": "characters/alice.safetensors", "strength": 0.5}],
+    })
+
+    with pytest.raises(ValueError, match="duplicates a Story LoRA"):
+        storyboard_store.resolve_scene_loras(story, scene)

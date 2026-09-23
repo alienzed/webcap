@@ -1592,14 +1592,16 @@
         storyId: storyId
       });
     }).then(function () {
-      if (deletedWasOpen) storyState.story = null;
-      storyState.sequenceExport = null;
-      storyState.newTakeCounts = {};
-      storyState.activeSceneId = '';
-      storyState.director.previousPrompts = {};
-      storyState.generationJobs = {};
-      Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
-      syncStoryboardGenerationActivity();
+      if (deletedWasOpen) {
+        storyState.story = null;
+        storyState.sequenceExport = null;
+        storyState.newTakeCounts = {};
+        storyState.activeSceneId = '';
+        storyState.director.previousPrompts = {};
+        storyState.generationJobs = {};
+        Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
+        syncStoryboardGenerationActivity();
+      }
       return refreshLibrary();
     }).then(function () {
       if (!deletedWasOpen) {

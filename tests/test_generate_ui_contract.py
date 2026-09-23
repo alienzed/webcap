@@ -145,3 +145,17 @@ def test_generate_partial_reference_uploads_have_a_cleanup_path():
     assert "cleanupUploadedReferences(uploadedPaths)" in script
     assert '@app.route("/fs/generate/reference/cleanup", methods=["POST"])' in app
 
+
+
+def test_generate_errors_keep_detail_in_console_and_use_concise_setup_badge():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert "function conciseGenerateError(err, fallback)" in script
+    assert "window.reportConsoleError('Generate', message)" in script
+    assert "setStatus(uiMessage, 'error')" in script
+    assert "ComfyUI unavailable" in script
+    assert 'id="generate-status" class="generate-status-badge hidden"' in html
+    assert ".generate-status-badge.is-error" in css
+

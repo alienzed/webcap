@@ -353,3 +353,13 @@ def test_storyboard_conditioning_lora_status_and_inherited_rows_render():
     assert 'data-story-lora-inherited-list' in storyboard
     assert 'class="storyboard-lora-subtitle">Inherited from Story</span>' in storyboard
     assert 'class="storyboard-lora-subtitle">Scene only</span>' in storyboard
+
+def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "function syncGenerationJobCard(job)" in storyboard
+    assert "syncGenerationJobCard(job);" in storyboard
+    assert "card.querySelector('.storyboard-take-pending-media strong')" in storyboard
+    active_block = storyboard.split("if (generationJobIsActive(job)) {", 1)[1].split("return;", 1)[0]
+    assert "renderScenes();" not in active_block
+

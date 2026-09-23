@@ -53,6 +53,9 @@ def _job_view(job):
         "label": str(metadata.get("label") or ""),
         "modelId": str(metadata.get("modelId") or ""),
         "mediaKind": str(metadata.get("mediaKind") or ""),
+        "storyId": str(metadata.get("storyId") or ""),
+        "sceneId": str(metadata.get("sceneId") or ""),
+        "sessionId": str(metadata.get("sessionId") or ""),
         "status": str(job.get("status") or ""),
         "queuePosition": int(job.get("queuePosition") or 0),
         "createdAt": job.get("createdAt"),
@@ -111,6 +114,10 @@ def _execute_claimed(job_id):
     if client == "generate":
         from .generate_generation import execute
         result = execute(job_id, request)
+    elif client == "storyboard":
+        from .storyboard_generation import execute_inference
+        context = payload.get("clientContext") if isinstance(payload.get("clientContext"), dict) else {}
+        result = execute_inference(job_id, request, context)
     else:
         raise RuntimeError("Unsupported inference client: " + (client or "empty"))
 
@@ -203,6 +210,42 @@ def enqueue_generate(request, label=""):
             "label": str(label or "Generate"),
             "modelId": str(request.get("modelId") or ""),
             "mediaKind": str(request.get("mediaKind") or ""),
+        },
+    )
+    return _job_view(execution_get_job(job["id"]))
+
+
+def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_id=""):
+    _ensure_execution_reconciled()
+    story_id = str(story_id or "").strip()
+    scene_id = str(scene_id or "").strip()
+    if not story_id or not scene_id:
+        raise ValueError("Storyboard inference requires Story and Scene IDs.")
+    context = {
+        "storyId": story_id,
+        "sceneId": scene_id,
+        "entryState": str(request.get("entryState") or ""),
+        "exitState": str(request.get("exitState") or ""),
+        "seedMode": str(request.get("seedMode") or ""),
+        "referenceRecords": copy.deepcopy(request.get("referenceRecords") or []),
+    }
+    frozen_request = copy.deepcopy(request)
+    for key in ("entryState", "exitState", "seedMode", "referenceRecords"):
+        frozen_request.pop(key, None)
+    job = execution_enqueue(
+        EXECUTION_LANE,
+        {
+            "request": frozen_request,
+            "clientContext": context,
+        },
+        metadata={
+            "client": "storyboard",
+            "label": str(label or "Storyboard Take"),
+            "modelId": str(request.get("modelId") or ""),
+            "mediaKind": str(request.get("mediaKind") or ""),
+            "storyId": story_id,
+            "sceneId": scene_id,
+            "migratedFromJobId": str(migrated_from_job_id or ""),
         },
     )
     return _job_view(execution_get_job(job["id"]))

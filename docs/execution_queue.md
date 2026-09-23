@@ -80,17 +80,17 @@ The inference runner owns:
 
 ### Storyboard Takes
 
-Storyboard currently uses the shared queue substrate through the `storyboard-takes` lane.
+Storyboard Takes now use the common `inference` lane.
 
-Storyboard owns:
+Storyboard still owns:
 
-- converting saved Story/Scene state into frozen generation settings;
+- converting saved Story/Scene state into a frozen inference request;
 - Story-wide and Scene LoRA resolution;
 - Storyboard reference semantics;
 - Take creation and provenance;
 - pending Take cards.
 
-A later migration moves these jobs to `inference` without changing Storyboard's contextual UI or Take semantics.
+The common inference runner now owns scheduling, GPU acquisition/release, ComfyUI transport/polling/cancellation, and lifecycle transitions. Pending Take cards project the same global queue position shown in Generate. Legacy persisted `storyboard-takes` jobs are reconciled at startup so active work is interrupted safely and queued work can be migrated forward.
 
 ### Test Generations
 
@@ -131,7 +131,7 @@ During migration:
 - paused Training allows inference;
 - queued inference remains durable while Training is busy;
 - an already-running inference job is not preempted;
-- separate legacy inference lanes remain mutually exclusive through the same resource owner until they move into `inference`.
+- the remaining legacy Test lane stays mutually exclusive through the same resource owner until Test moves into `inference`.
 
 ## Startup and observers
 

@@ -33,6 +33,7 @@ const context = {
   state: { folder: 'set-a', currentConfigFile: { folder: 'set-a', file: 'draft.toml' } },
   ui: { appEl: element() },
   isSetFolderPath: folder => !!folder && folder !== 'root',
+  isTrainingWorkspaceActive: () => true,
   normalizeWorkspaceSurface: value => value,
   document: { getElementById: id => nodes[id] || null,
     querySelector: selector => selector.indexOf('items') !== -1 ? itemTab : selector.indexOf('config') !== -1 ? configTab : runLogTab },

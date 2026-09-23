@@ -1778,13 +1778,24 @@ def status(folder_path, model_id=None):
     return _with_session_ratings(_session_directory(folder_path, session_name), payload)
 
 def stop(folder_path):
+    _ensure_execution_reconciled()
     folder_key = _folder_key(folder_path)
+    folder = _relative_set_folder(folder_path)
     with _lock:
         thread = _active_threads.get(folder_key)
         session_directory = _active_sessions.get(folder_key)
         if not thread or not thread.is_alive() or not session_directory:
             raise RuntimeError("No active Test Generations batch to stop.")
         _stop_requests.add(folder_key)
+
+    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    active_id = str(snapshot.get("activeJobId") or "")
+    active_job = execution_get_job(active_id) if active_id else None
+    metadata = active_job.get("metadata") if isinstance(active_job, dict) and isinstance(active_job.get("metadata"), dict) else {}
+    if not active_job or str(metadata.get("folder") or "") != folder:
+        raise RuntimeError("Active Test Generations execution job is missing.")
+    execution_request_action(active_id, "stop")
+
     with _status_lock:
         status = _read_status(session_directory) or {}
         status["status"] = "stopping"
@@ -1812,6 +1823,13 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return cancel_queued(folder_path, criteria.get("jobId"))
     if operation == "test_queue_clear":
         return clear_queued(folder_path)
+    if operation == "test_queue_reorder":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return reorder_queued(folder_path, criteria.get("jobId"), criteria.get("direction"))
+    if operation == "test_queue_pause":
+        return pause_queue(folder_path)
+    if operation == "test_queue_resume":
+        return resume_queue(folder_path)
     if operation == "test_open_session":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return open_session(folder_path, criteria.get("session"))

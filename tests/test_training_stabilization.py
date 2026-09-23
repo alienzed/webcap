@@ -644,7 +644,7 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     assert fresh_response.status_code == 200
     custom_text = custom_response.data.decode("utf-8")
     fresh_text = fresh_response.data.decode("utf-8")
-    assert "--resume_from_checkpoint /wsl" + custom.as_posix() in custom_text
+    assert "--resume_from_checkpoint " + custom.as_posix() in custom_text
     assert "--reset_dataloader" in custom_text
     assert "--cache_only" not in custom_text
     assert "--trust_cache" not in custom_text
@@ -655,7 +655,7 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     assert split_response.status_code == 200
     split_text = split_response.data.decode("utf-8")
     assert split_text.index("--cache_only") < split_text.rindex("--trust_cache")
-    assert "--resume_from_checkpoint /wsl" + custom.as_posix() + " --reset_dataloader --trust_cache" in split_text
+    assert "--resume_from_checkpoint " + custom.as_posix() + " --reset_dataloader --trust_cache" in split_text
 
 
 def test_managed_run_rejects_initializer_stage_outside_selected_run(tmp_path, monkeypatch):

@@ -63,6 +63,7 @@ def test_generate_result_polling_preserves_existing_media_nodes():
 def test_generate_director_is_a_reversible_prompt_editor():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
     generation = (ROOT / "tool" / "server" / "generate_generation.py").read_text(encoding="utf-8")
 
     assert ">Expand with Director</button>" in html
@@ -96,7 +97,8 @@ def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():
     assert "trackedJobIds: loadTrackedGenerateJobs()" in script
     assert "function refreshTrackedGenerateJobs()" in script
     assert "requestJson('/fs/inference?job=' + encodeURIComponent(jobId))" in script
-    assert "reportError(new Error(" in script
+    assert "var generationError = new Error(" in script
+    assert "reportError(generationError, conciseGenerateError(" in script
     assert "webcap.generate.trackedJobs" in script
 
     queue_start = script.index("function renderQueue()")

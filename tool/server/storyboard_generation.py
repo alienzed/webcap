@@ -5,7 +5,6 @@ import secrets
 import threading
 from pathlib import Path
 
-from . import config as app_config
 from . import inference_runtime
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
@@ -340,10 +339,6 @@ def reconcile_startup():
             execution_cancel_queued(legacy_job_id)
 
         _startup_reconciled = True
-
-
-def start_observer():
-    reconcile_startup()
 
 
 def start_generation(story_id, scene_id):

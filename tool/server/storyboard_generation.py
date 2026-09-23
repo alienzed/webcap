@@ -238,6 +238,17 @@ def execute_inference(job_id, request, context):
     finally:
         if output_ref is not None:
             try:
+                inference_runtime.cleanup_uploaded_inputs(
+                    uploaded.values(),
+                    output_ref,
+                    owned_prefix=(
+                        "webcap-storyboard/" + story_id + "/" + scene_id + "/" +
+                        str(job_id) + "/references"
+                    ),
+                )
+            except OSError as exc:
+                _logger.warning("Could not remove temporary Storyboard ComfyUI references: %s", exc)
+            try:
                 inference_runtime.cleanup_saved_output(output_ref)
             except OSError as exc:
                 _logger.warning("Could not remove captured Storyboard ComfyUI output: %s", exc)

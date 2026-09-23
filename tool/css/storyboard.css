@@ -320,6 +320,21 @@
   font-size: 16px;
 }
 
+.storyboard-scenes-heading-title {
+  min-width: 0;
+}
+
+.storyboard-progress-summary {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .storyboard-scenes-heading-spacer {
   min-width: 1px;
 }
@@ -631,6 +646,13 @@
 
 .storyboard-reference-quick {
   align-self: flex-start;
+}
+
+.storyboard-reference-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .storyboard-removed-takes {
@@ -950,6 +972,12 @@
   font-weight: 700;
 }
 
+.storyboard-prompt-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .storyboard-prompt-textarea {
   width: 100%;
   min-width: 0;
@@ -1089,6 +1117,17 @@
 
 .storyboard-editor-title {
   flex: 0 0 auto;
+}
+
+.storyboard-delete-story-btn {
+  color: var(--danger, #f87171);
+}
+
+.storyboard-delete-story-btn:hover,
+.storyboard-delete-story-btn:focus-visible {
+  border-color: color-mix(in srgb, var(--danger, #f87171) 55%, var(--border));
+  background: color-mix(in srgb, var(--panel) 88%, var(--danger, #f87171) 12%);
+  color: var(--danger, #f87171);
 }
 
 .storyboard-story-authoring {

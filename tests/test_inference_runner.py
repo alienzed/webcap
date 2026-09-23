@@ -71,6 +71,71 @@ def test_inference_runner_projects_lane_state_without_dispatch_side_effects(infe
     assert execution_queue.get_job(first["id"])["status"] == "queued"
 
 
+def test_stop_storyboard_jobs_cancels_only_matching_queued_jobs(inference_root):
+    matching = inference_runner.enqueue_storyboard(
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "prompt": "Prompt",
+            "settings": {},
+        },
+        "story-delete",
+        "scene-1",
+    )
+    other_story = inference_runner.enqueue_storyboard(
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "prompt": "Prompt",
+            "settings": {},
+        },
+        "story-keep",
+        "scene-2",
+    )
+    generate = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
+    )
+
+    inference_runner.stop_storyboard_jobs("story-delete")
+
+    assert execution_queue.get_job(matching["jobId"])["status"] == "cancelled"
+    assert execution_queue.get_job(other_story["jobId"])["status"] == "queued"
+    assert execution_queue.get_job(generate["jobId"])["status"] == "queued"
+
+
+def test_stop_storyboard_jobs_requests_stop_for_matching_active_job(inference_root, monkeypatch):
+    queued = inference_runner.enqueue_storyboard(
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "prompt": "Prompt",
+            "settings": {},
+        },
+        "story-delete",
+        "scene-1",
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(queued["jobId"])
+
+    real_get_job = inference_runner.execution_get_job
+    calls = {"count": 0}
+
+    def terminal_after_stop(job_id):
+        job = real_get_job(job_id)
+        if job.get("status") == "stopping":
+            calls["count"] += 1
+            if calls["count"] == 1:
+                execution_queue.finish_job(job_id, status="stopped")
+                job = real_get_job(job_id)
+        return job
+
+    monkeypatch.setattr(inference_runner, "execution_get_job", terminal_after_stop)
+
+    inference_runner.stop_storyboard_jobs("story-delete", timeout=1)
+
+    assert real_get_job(queued["jobId"])["status"] == "stopped"
+
+
 def test_inference_runner_honors_stop_requested_during_start(inference_root, monkeypatch):
     queued = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,
@@ -372,4 +437,3 @@ def test_inference_restart_rediscovers_unresolved_terminal_provider(inference_ro
     assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
     with inference_runner._provider_hold_lock:
         assert "provider-still-running" in inference_runner._provider_cleanup_holds
-

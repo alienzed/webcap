@@ -33,7 +33,7 @@ from .training_review import discover_saved_initializers, prepare_training_revie
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
-from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_concept_expansion as storyboard_apply_concept_expansion, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_previous_concept as storyboard_restore_previous_concept, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
+from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_concept_expansion as storyboard_apply_concept_expansion, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_previous_concept as storyboard_restore_previous_concept, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, reconcile_startup as reconcile_storyboard_generation_startup, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
@@ -41,7 +41,7 @@ from .storyboard_llm_runtime import run_contract as storyboard_run_llm_contract,
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .generate_store import cleanup_references as generate_cleanup_references, list_results as generate_list_results, resolve_result_media as generate_resolve_result_media, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
-from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, reconcile_startup as reconcile_inference_startup, snapshot as inference_snapshot, start_observer as start_inference_observer
+from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, reconcile_startup as reconcile_inference_startup, snapshot as inference_snapshot, start_observer as start_inference_observer, stop_storyboard_jobs
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -477,6 +477,11 @@ def storyboard_route():
         story_id = str(data.get("storyId") or "").strip()
         if operation == "create_story":
             return jsonify({"ok": True, "story": storyboard_create_story(data.get("story") or {})})
+        if operation == "delete_story":
+            storyboard_load_story(story_id)
+            stop_storyboard_jobs(story_id)
+            deleted_story_id = storyboard_delete_story(story_id)
+            return jsonify({"ok": True, "storyId": deleted_story_id})
         if operation == "update_story":
             return jsonify({"ok": True, "story": storyboard_update_story(story_id, data.get("story") or {})})
         if operation == "add_scene":
@@ -669,6 +674,30 @@ def storyboard_director_route():
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         app.logger.exception("STORYBOARD DIRECTOR FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/storyboard/reference_upload", methods=["POST"])
+def storyboard_reference_upload_route():
+    try:
+        story_id = str(request.form.get("storyId") or "").strip()
+        scene_id = str(request.form.get("sceneId") or "").strip()
+        role = str(request.form.get("role") or "").strip()
+        upload = request.files.get("file")
+        if upload is None or not upload.filename:
+            raise ValueError("Missing reference image file.")
+        story, reference = storyboard_set_scene_reference_upload(
+            story_id,
+            scene_id,
+            role,
+            upload.filename,
+            upload.stream,
+        )
+        return jsonify({"ok": True, "story": story, "reference": reference})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("STORYBOARD REFERENCE UPLOAD FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

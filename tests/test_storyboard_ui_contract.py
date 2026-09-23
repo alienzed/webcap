@@ -86,6 +86,22 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "fetch('/fs/storyboard'" not in storyboard  # request helper builds the URL once.
 
 
+def test_storyboard_story_deletion_is_explicit_and_permanent():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-delete-story-btn"' in html
+    assert "function deleteStory()" in storyboard
+    assert "This cannot be undone." in storyboard
+    assert "operation: 'delete_story'" in storyboard
+    assert 'if operation == "delete_story":' in app
+    assert "stop_storyboard_jobs(story_id)" in app
+    assert "def delete_story(story_id):" in store
+    assert "shutil.rmtree(directory)" in store
+
+
 def test_storyboard_scene_removal_is_recoverable():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
@@ -386,4 +402,21 @@ def test_storyboard_take_deletion_is_explicit_destructive_and_selected_aware():
     assert "operation: 'delete_take'" in storyboard
     assert "def delete_take(" in store
     assert 'if operation == "delete_take":' in app
+
+def test_storyboard_roundoff_has_prompt_restore_manual_refs_and_readiness_summary():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-progress-summary"' in html
+    assert "previousPrompts: {}" in script
+    assert "function restoreSceneDirectorPrompt(sceneId)" in script
+    assert 'data-director-restore' in script
+    assert "Restore Previous" in script
+    assert "function uploadSceneReference(sceneId, role, file)" in script
+    assert "'/fs/storyboard/reference_upload'" in script
+    assert 'data-reference-upload' in script
+    assert "function renderStoryReadiness()" in script
+    assert "' needs Take'" in script
+    assert "' needs selection'" in script
+    assert "'s selected'" in script
 

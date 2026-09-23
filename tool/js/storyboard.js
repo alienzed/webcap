@@ -29,7 +29,8 @@
       available: false,
       busy: false,
       runtimeLabel: '',
-      error: ''
+      error: '',
+      previousPrompts: {}
     }
   };
 
@@ -184,6 +185,30 @@
     if (node) node.textContent = text || '';
   }
 
+  function syncSceneDirectorRestore(sceneId) {
+    var root = sceneElement(sceneId);
+    var button = root && root.querySelector('[data-director-restore]');
+    if (!button) return;
+    button.classList.toggle(
+      'hidden',
+      typeof storyState.director.previousPrompts[sceneId] !== 'string'
+    );
+  }
+
+  function restoreSceneDirectorPrompt(sceneId) {
+    if (!storyState.story || storyState.director.busy) return;
+    var previous = storyState.director.previousPrompts[sceneId];
+    if (typeof previous !== 'string') return;
+    var root = sceneElement(sceneId);
+    var prompt = root && root.querySelector('[data-scene-field="prompt"]');
+    if (!prompt) throw new Error('Scene generation prompt field is missing.');
+    prompt.value = previous;
+    delete storyState.director.previousPrompts[sceneId];
+    syncSceneDirectorRestore(sceneId);
+    updateSceneDirectorStatus(sceneId, 'Previous prompt restored.');
+    saveSceneNow(sceneId).catch(reportError);
+  }
+
   function runDirector(sceneId, operation) {
     if (!storyState.story || storyState.director.busy) return;
     var modelId = storyState.director.modelId;
@@ -193,6 +218,9 @@
     }
     var root = sceneElement(sceneId);
     if (!root) throw new Error('Scene editor is missing for ' + sceneId + '.');
+    var prompt = root.querySelector('[data-scene-field="prompt"]');
+    if (!prompt) throw new Error('Scene generation prompt field is missing.');
+    var previousPrompt = prompt.value;
 
     var instruction = '';
     if (operation === 'refine_prompt') {
@@ -215,9 +243,12 @@
         instruction: instruction
       });
     }).then(function (payload) {
-      var prompt = root.querySelector('[data-scene-field="prompt"]');
-      if (!prompt) throw new Error('Scene generation prompt field is missing.');
-      prompt.value = payload.result || '';
+      var currentRoot = sceneElement(sceneId);
+      var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
+      if (!currentPrompt) throw new Error('Scene generation prompt field is missing.');
+      storyState.director.previousPrompts[sceneId] = previousPrompt;
+      currentPrompt.value = payload.result || '';
+      syncSceneDirectorRestore(sceneId);
       updateSceneDirectorStatus(sceneId, 'Generated with ' + String(payload.model || modelId));
       return saveSceneNow(sceneId);
     }).catch(function (err) {
@@ -246,7 +277,7 @@
   function setDirectorBusy(busy) {
     storyState.director.busy = !!busy;
     setStoryDirectorInputsDisabled(busy);
-    ['storyboard-expand-concept-btn', 'storyboard-develop-btn'].forEach(function (id) {
+    ['storyboard-expand-concept-btn', 'storyboard-develop-btn', 'storyboard-delete-story-btn'].forEach(function (id) {
       var node = el(id);
       if (node) node.disabled = !!busy;
     });
@@ -254,7 +285,7 @@
     if (restore) restore.disabled = !!busy;
     var selector = el('storyboard-director-model');
     if (selector) selector.disabled = !!busy || !storyState.director.available || !(storyState.director.models || []).length;
-    Array.prototype.forEach.call(document.querySelectorAll('[data-director-write], [data-director-refine]'), function (button) {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-director-write], [data-director-refine], [data-director-restore]'), function (button) {
       button.disabled = !!busy;
     });
   }
@@ -350,6 +381,7 @@
       if (!storyState.story || storyState.story.id !== storyId) return;
       storyState.story = payload.story;
       storyState.sequenceExport = null;
+      storyState.director.previousPrompts = {};
       renderStory();
       setDevelopStatus('Developed ' + String(payload.sceneCount || 0) + ' Scenes with ' + String(payload.model || modelId) + '.');
       setSaveState('Saved');
@@ -513,6 +545,54 @@
       selected.push({ sceneId: sceneId, scene: scene, take: take, number: index + 1 });
     });
     return selected;
+  }
+
+  function renderStoryReadiness() {
+    var node = el('storyboard-progress-summary');
+    if (!node || !storyState.story) return;
+    var story = storyState.story;
+    var order = Array.isArray(story.sceneOrder) ? story.sceneOrder : [];
+    var selected = 0;
+    var selectedSeconds = 0;
+    var generating = 0;
+    var needsTake = 0;
+    var needsSelection = 0;
+
+    order.forEach(function (sceneId) {
+      var scene = (story.scenes || {})[sceneId] || {};
+      var takes = scene.takes && typeof scene.takes === 'object' ? scene.takes : {};
+      var takeIds = Array.isArray(scene.takeOrder) ? scene.takeOrder.filter(function (takeId) {
+        return !!takes[takeId];
+      }) : [];
+      var jobs = generationJobsForScene(sceneId);
+      if (jobs.length) generating += jobs.length;
+
+      var selectedTake = scene.selectedTakeId && takes[scene.selectedTakeId];
+      if (selectedTake) {
+        selected += 1;
+        var seconds = Number(selectedTake.durationSeconds);
+        if (!Number.isFinite(seconds)) seconds = Number(scene.durationSeconds || 0);
+        if (Number.isFinite(seconds) && seconds > 0) selectedSeconds += seconds;
+      } else if (takeIds.length) {
+        needsSelection += 1;
+      } else if (!jobs.length) {
+        needsTake += 1;
+      }
+    });
+
+    var parts = [String(order.length) + ' Scene' + (order.length === 1 ? '' : 's')];
+    if (selected) parts.push(String(selected) + ' selected');
+    if (generating) parts.push(String(generating) + ' generating');
+    if (needsTake) parts.push(String(needsTake) + ' needs Take');
+    if (needsSelection) parts.push(String(needsSelection) + ' needs selection');
+    if (selectedSeconds > 0) {
+      var displaySeconds = Math.round(selectedSeconds * 10) / 10;
+      parts.push(String(displaySeconds) + 's selected');
+    }
+    node.textContent = parts.join(' · ');
+    node.title = selected === order.length && order.length
+      ? 'All Scenes have a selected Take and are ready to export.'
+      : 'Story completion summary';
   }
 
   function assemblyMatchesSelection(job, selected) {
@@ -1067,7 +1147,7 @@
         if (!reference || !reference.role) return '';
         return '<span class="storyboard-reference-chip">' +
           escapeHtml(reference.role.replace(/_/g, ' ')) + ' · ' +
-          escapeHtml(reference.frame || 'source') +
+          escapeHtml(reference.frame || reference.sourceFilename || reference.source || 'source') +
           '<button type="button" data-reference-clear="' + escapeHtml(reference.role) + '" title="Clear reference" aria-label="Clear reference">×</button>' +
         '</span>';
       }).join('');
@@ -1118,7 +1198,12 @@
             '<div class="storyboard-prompt-block">' +
               '<div class="storyboard-prompt-heading">' +
                 '<span>Generation prompt</span>' +
-                '<button type="button" class="review-captions-btn" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
+                '<div class="storyboard-prompt-actions">' +
+                  '<button type="button" class="review-captions-btn" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
+                  '<button type="button" class="review-captions-btn' +
+                    (typeof storyState.director.previousPrompts[sceneId] === 'string' ? '' : ' hidden') +
+                    '" data-director-restore title="Restore the prompt from before the last Director edit.">Restore Previous</button>' +
+                '</div>' +
               '</div>' +
               '<textarea class="storyboard-prompt-textarea" data-scene-field="prompt" rows="7" placeholder="Full model-facing prompt. Write it directly or let the Director draft it from the Scene intent.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea>' +
               '<div class="storyboard-director-actions">' +
@@ -1180,7 +1265,8 @@
                       '<select data-reference-role title="Which reference slot this media should fill."><option value="first_frame">First frame</option><option value="last_frame">Last frame</option></select>' +
                       '<select data-reference-source title="Choose an existing Take to use as a reference.">' + activeTakeOptions(story, '') + '</select>' +
                       '<select data-reference-frame title="Choose which frame from the source Take to use."><option value="last">Last frame</option><option value="first">First frame</option></select>' +
-                      '<button type="button" class="review-captions-btn" data-reference-apply title="Assign the selected Take frame to this reference slot.">Assign</button>' +
+                      '<button type="button" class="review-captions-btn" data-reference-apply title="Assign the selected Take frame to this reference slot.">Assign Take</button>' +
+                      '<label class="review-captions-btn storyboard-reference-upload-btn" title="Upload an image directly into the selected first/last-frame reference slot.">Upload image<input type="file" accept="image/*" data-reference-upload hidden></label>' +
                     '</div>' +
                   '</div>' +
                 '</details>' +
@@ -1250,6 +1336,7 @@
     setStoryCollapsed(storyState.storyCollapsed);
     renderStoryLoras();
     renderScenes();
+    renderStoryReadiness();
     setDirectorBusy(storyState.director.busy);
     renderSequencePreview();
     renderLibrary();
@@ -1271,6 +1358,7 @@
       storyState.story = payload.story;
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};
+      storyState.director.previousPrompts = {};
       return refreshGenerationQueue(storyId);
     }).then(function () {
       renderStory();
@@ -1289,6 +1377,7 @@
       storyState.story = payload.story;
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};
+      storyState.director.previousPrompts = {};
       storyState.generationJobs = {};
       Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
       syncStoryboardGenerationActivity();
@@ -1296,6 +1385,38 @@
         renderStory();
         setSaveState('Saved');
       });
+    }).catch(reportError);
+  }
+
+  function deleteStory() {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    var title = String(storyState.story.title || 'Untitled Story');
+    if (!window.confirm(
+      'Delete "' + title + '" and permanently remove all of its Scenes, Takes, references, and exports? This cannot be undone.'
+    )) return;
+
+    setSaveState('Deleting...');
+    flushPendingSaves().then(function () {
+      return request({
+        operation: 'delete_story',
+        storyId: storyId
+      });
+    }).then(function () {
+      if (storyState.story && storyState.story.id === storyId) storyState.story = null;
+      storyState.sequenceExport = null;
+      storyState.newTakeCounts = {};
+      storyState.activeSceneId = '';
+      storyState.director.previousPrompts = {};
+      storyState.generationJobs = {};
+      Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
+      syncStoryboardGenerationActivity();
+      return refreshLibrary();
+    }).then(function () {
+      var next = storyState.stories && storyState.stories[0];
+      if (next) return openStory(next.id);
+      renderStory();
+      setSaveState('');
     }).catch(reportError);
   }
 
@@ -1698,6 +1819,30 @@
     }).catch(reportError);
   }
 
+  function uploadSceneReference(sceneId, role, file) {
+    if (!storyState.story || !file) return;
+    setSaveState('Adding reference...');
+    flushPendingSaves().then(function () {
+      var form = new FormData();
+      form.append('storyId', storyState.story.id);
+      form.append('sceneId', sceneId);
+      form.append('role', role);
+      form.append('file', file, file.name);
+      return fetch('/fs/storyboard/reference_upload', { method: 'POST', body: form }).then(function (response) {
+        return response.json().then(function (body) {
+          if (!response.ok || !body || !body.ok) {
+            throw new Error((body && body.error) || 'Reference upload failed.');
+          }
+          return body;
+        });
+      });
+    }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
   function generationRequest(payload, query) {
     var url = '/fs/storyboard/generation' + (query ? '?' + query : '');
     var options = payload
@@ -1743,6 +1888,7 @@
       return status === 'starting' || status === 'running' || status === 'stopping';
     });
     setShellGeneratingActive(running);
+    renderStoryReadiness();
   }
 
   function reportGenerationStatus(sceneId, job, previousJob) {
@@ -2055,6 +2201,7 @@
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
 
     el('storyboard-new-btn').onclick = createStory;
+    el('storyboard-delete-story-btn').onclick = deleteStory;
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
@@ -2161,6 +2308,18 @@
         scheduleSceneSave(loraScene.dataset.sceneId);
         return;
       }
+      var referenceUpload = event.target.closest('[data-reference-upload]');
+      if (referenceUpload) {
+        var referenceUploadScene = referenceUpload.closest('.storyboard-scene[data-scene-id]');
+        if (!referenceUploadScene) throw new Error('Reference upload Scene is missing.');
+        var referenceRole = referenceUploadScene.querySelector('[data-reference-role]');
+        uploadSceneReference(
+          referenceUploadScene.dataset.sceneId,
+          referenceRole ? referenceRole.value : 'first_frame',
+          referenceUpload.files && referenceUpload.files[0]
+        );
+        return;
+      }
       var upload = event.target.closest('[data-take-upload]');
       if (upload) {
         var uploadScene = upload.closest('.storyboard-scene[data-scene-id]');
@@ -2223,6 +2382,13 @@
         var refineScene = directorRefine.closest('.storyboard-scene[data-scene-id]');
         if (!refineScene) throw new Error('Director Scene is missing.');
         runDirector(refineScene.dataset.sceneId, 'refine_prompt');
+        return;
+      }
+      var directorRestore = event.target.closest('[data-director-restore]');
+      if (directorRestore) {
+        var restorePromptScene = directorRestore.closest('.storyboard-scene[data-scene-id]');
+        if (!restorePromptScene) throw new Error('Director Scene is missing.');
+        restoreSceneDirectorPrompt(restorePromptScene.dataset.sceneId);
         return;
       }
       var generate = event.target.closest('[data-scene-generate]');

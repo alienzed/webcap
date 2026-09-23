@@ -494,6 +494,8 @@ def _comfy_items(cache):
     rows = []
     for side in ("input", "output"):
         side_root = provider_root / side
+        if side_root.is_symlink() or not side_root.is_dir():
+            continue
         generate_root = side_root / "webcap-generate"
         for job_root in _safe_directories(generate_root):
             job_id = job_root.name
@@ -567,9 +569,10 @@ def _resolve_comfy(item_id):
     if len(names) != count or any(not name or Path(name).name != name for name in names):
         raise ValueError("ComfyUI storage identity is invalid.")
 
-    side_root = (provider_root / side).resolve()
-    if side_root.is_symlink() or not side_root.is_dir():
+    raw_side_root = provider_root / side
+    if raw_side_root.is_symlink() or not raw_side_root.is_dir():
         raise FileNotFoundError("ComfyUI " + side + " root is unavailable.")
+    side_root = raw_side_root.resolve()
     raw_path = side_root / prefix
     for name in names:
         raw_path = raw_path / name

@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 import os
 import re
 import shutil
@@ -24,6 +25,7 @@ VALID_REFERENCE_ROLES = {"first_frame", "last_frame", "guide_frame"}
 VALID_REFERENCE_FRAMES = {"first", "last"}
 
 _mutation_lock = threading.RLock()
+_logger = logging.getLogger(__name__)
 
 
 def _serialized_mutation(func):
@@ -974,6 +976,112 @@ def _reference_media_for_take(story_id, source_scene_id, take, frame):
     return ("references/" + source_scene_id + "/" + filename).replace("\\", "/")
 
 
+def _reference_media_still_used(story, media_path):
+    target = str(media_path or "").strip()
+    if not target:
+        return False
+    for scene_map in (story.get("scenes"), story.get("removedScenes")):
+        if not isinstance(scene_map, dict):
+            continue
+        for scene in scene_map.values():
+            if not isinstance(scene, dict):
+                continue
+            for reference in scene.get("references") or []:
+                if isinstance(reference, dict) and str(reference.get("mediaPath") or "").strip() == target:
+                    return True
+    return False
+
+
+def _cleanup_replaced_uploaded_reference(story_id, story, reference):
+    if not isinstance(reference, dict) or reference.get("source") != "upload":
+        return
+    media_path = str(reference.get("mediaPath") or "").strip()
+    if not media_path or _reference_media_still_used(story, media_path):
+        return
+    try:
+        path = _resolved_story_media_path(story_id, media_path)
+    except FileNotFoundError:
+        return
+    try:
+        path.unlink()
+        parent = path.parent
+        root = (_story_dir(story_id) / "references" / "manual").resolve()
+        while parent != root and root in parent.parents:
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
+    except OSError:
+        _logger.exception("Could not clean replaced Storyboard reference upload %s.", media_path)
+
+
+@_serialized_mutation
+def set_scene_reference_upload(story_id, scene_id, role, filename, stream):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    role = str(role or "").strip().lower()
+    if role not in {"first_frame", "last_frame"}:
+        raise ValueError("Uploaded Storyboard references must target first_frame or last_frame.")
+
+    source_name = str(filename or "").strip()
+    safe_name = Path(source_name).name
+    if not source_name or safe_name != source_name:
+        raise ValueError("Invalid reference image filename.")
+    suffix = Path(safe_name).suffix.lower()
+    if suffix not in MEDIA_ALL_EXTS or suffix in VIDEO_EXTS:
+        raise ValueError("Storyboard reference upload must be an image file.")
+
+    reference_id = _new_id("ref")
+    reference_dir = _story_dir(story_id) / "references" / "manual" / scene_id
+    reference_dir.mkdir(parents=True, exist_ok=True)
+    destination = reference_dir / (reference_id + suffix)
+    fd, tmp_name = tempfile.mkstemp(prefix=reference_id + ".", suffix=".tmp", dir=str(reference_dir))
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            shutil.copyfileobj(stream, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, destination)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+
+    old_reference = next(
+        (
+            copy.deepcopy(item)
+            for item in scene.get("references") or []
+            if isinstance(item, dict) and item.get("role") == role
+        ),
+        None,
+    )
+    reference = {
+        "role": role,
+        "source": "upload",
+        "sourceFilename": safe_name,
+        "mediaPath": str(destination.relative_to(_story_dir(story_id))).replace("\\", "/"),
+    }
+    references = [
+        item for item in scene.get("references") or []
+        if not isinstance(item, dict) or item.get("role") != role
+    ]
+    references.append(reference)
+    scene["references"] = references
+    scene["updatedAt"] = _utc_now()
+    story["updatedAt"] = scene["updatedAt"]
+    try:
+        _write_json_atomic(_story_path(story_id), story)
+    except Exception:
+        try:
+            destination.unlink()
+        except OSError:
+            _logger.exception("Could not clean failed Storyboard reference upload %s.", destination)
+        raise
+
+    _cleanup_replaced_uploaded_reference(story_id, story, old_reference)
+    return story, reference
+
+
 @_serialized_mutation
 def set_scene_reference_from_take(story_id, scene_id, role, source_scene_id, source_take_id, frame):
     story = load_story(story_id)
@@ -1010,6 +1118,14 @@ def clear_scene_reference(story_id, scene_id, role):
     role = str(role or "").strip().lower()
     if role not in VALID_REFERENCE_ROLES:
         raise ValueError("Unsupported Storyboard reference role.")
+    removed_reference = next(
+        (
+            copy.deepcopy(item)
+            for item in scene.get("references") or []
+            if isinstance(item, dict) and item.get("role") == role
+        ),
+        None,
+    )
     scene["references"] = [
         item for item in scene.get("references") or []
         if not isinstance(item, dict) or item.get("role") != role
@@ -1017,6 +1133,7 @@ def clear_scene_reference(story_id, scene_id, role):
     scene["updatedAt"] = _utc_now()
     story["updatedAt"] = scene["updatedAt"]
     _write_json_atomic(_story_path(story_id), story)
+    _cleanup_replaced_uploaded_reference(story_id, story, removed_reference)
     return story
 
 

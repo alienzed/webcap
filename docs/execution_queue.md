@@ -94,18 +94,20 @@ The common inference runner now owns scheduling, GPU acquisition/release, ComfyU
 
 ### Test Generations
 
-Test Generations currently uses the shared queue substrate through the `test-generations` lane.
+Test Generations now uses the common `inference` lane at rendition granularity.
 
-A queued Test job freezes the prompt, staged LoRAs, model settings, and workflow snapshot. A Test-owned observer pumps durable queued Sessions, so work no longer depends on the Test pane staying open.
+A Test Session remains a Test-owned domain grouping, but Base and every selected candidate are frozen as independent inference jobs. They share the Session's resolved prompt, seed, model settings, and workflow snapshot while carrying their own Base/candidate identity.
 
-Test owns:
+Test still owns:
 
 - Session folders and `test.json`;
 - Base/candidate comparison semantics;
-- result aggregation;
-- Grid/Compare/rating UX.
+- candidate provenance and result naming;
+- Session progress aggregation;
+- Grid/Compare/rating UX;
+- missing-candidate skip behavior.
 
-A later migration moves Test execution onto the common `inference` lane. The Test Session remains a domain grouping even when its GPU work becomes common inference work.
+The common inference runner owns scheduling, GPU acquisition/release, provider polling/cancellation, and lifecycle transitions. The full Generation Queue exposes each Test rendition individually, while the Test workspace continues to show the Session as the useful comparison unit.
 
 ### Training
 
@@ -131,7 +133,7 @@ During migration:
 - paused Training allows inference;
 - queued inference remains durable while Training is busy;
 - an already-running inference job is not preempted;
-- the remaining legacy Test lane stays mutually exclusive through the same resource owner until Test moves into `inference`.
+- legacy persisted Test queue work is reconciled into the common inference path at startup; new work has no separate Test execution owner.
 
 ## Startup and observers
 
@@ -148,4 +150,4 @@ Shared scheduling does not imply one monolithic workflow UI.
 - Test projects its work as Session progress/results.
 - Training keeps its own queue rows and progress.
 
-As Storyboard and Test move to the common `inference` lane, their displayed queue positions must be the same global positions shown by Generate. Contextual views may omit controls that do not fit their workflow, but they must not maintain competing queue state.
+Storyboard and Test now use the common `inference` lane, so contextual queue positions are the same global positions shown by Generate. Contextual views may omit controls that do not fit their workflow, but they must not maintain competing queue state.

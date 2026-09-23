@@ -135,7 +135,7 @@ def test_rating_summary_reads_standard_folder_ratings(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
-    payload = bench.rating_summary("set", model_id=bench.get_test_model().PROFILE_ID)
+    payload = bench.rating_summary(tmp_path / "set", model_id=bench.get_test_model().PROFILE_ID)
 
     assert payload["candidateScores"]["run-03__epoch24.safetensors"] == {"average": 4.0, "count": 1}
     assert payload["sessions"][0]["unrated"] == 0
@@ -161,6 +161,7 @@ def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeyp
 
 
 def test_remove_candidate_deletes_only_current_session_result(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     staged = tmp_path / "staged"
     staged.mkdir()
     candidate = staged / "run-01__epoch10.safetensors"
@@ -207,6 +208,7 @@ def test_remove_candidate_deletes_only_current_session_result(tmp_path, monkeypa
 
 
 def test_remove_candidate_cleans_historical_session_when_result_files_are_already_gone(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     staged = tmp_path / "staged"
     staged.mkdir()
     candidate = staged / "epoch10.safetensors"
@@ -237,7 +239,8 @@ def test_remove_candidate_cleans_historical_session_when_result_files_are_alread
     assert payload["sessionStatus"]["total"] == 0
 
 
-def test_sessions_list_open_and_delete_are_scoped_to_current_set(tmp_path):
+def test_sessions_list_open_and_delete_are_scoped_to_current_set(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     first = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-18_0900-h3"
     second = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-18_1000-h3"
     first.mkdir(parents=True)
@@ -517,7 +520,12 @@ def test_activity_snapshot_projects_shared_test_session(tmp_path, monkeypatch):
     staged.mkdir(parents=True)
     session.mkdir(parents=True)
     (staged / "epoch10.safetensors").write_bytes(b"weights")
-    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    default_model_id = bench.get_test_model().PROFILE_ID
+    monkeypatch.setattr(
+        bench,
+        "_test_directory",
+        lambda _folder, model: staged if model.PROFILE_ID == default_model_id else tmp_path / "missing-staged",
+    )
 
     child = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,

@@ -492,3 +492,64 @@ def test_scene_local_lora_cannot_duplicate_inherited_story_lora(storyboard_fs):
 
     with pytest.raises(ValueError, match="duplicates a Story LoRA"):
         storyboard_store.resolve_scene_loras(story, scene)
+
+def test_delete_take_permanently_removes_active_media_and_selection(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "take.png", BytesIO(b"image")
+    )
+    story = storyboard_store.select_take(story["id"], scene["id"], take["id"])
+    media_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]
+    assert media_path.is_file()
+
+    deleted = storyboard_store.delete_take(story["id"], scene["id"], take["id"])
+
+    current = deleted["scenes"][scene["id"]]
+    assert take["id"] not in current["takes"]
+    assert take["id"] not in current["takeOrder"]
+    assert current["selectedTakeId"] is None
+    assert not media_path.exists()
+
+
+def test_delete_take_permanently_removes_soft_removed_take(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "take.png", BytesIO(b"image")
+    )
+    media_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]
+    story = storyboard_store.remove_take(story["id"], scene["id"], take["id"])
+    assert take["id"] in story["scenes"][scene["id"]]["removedTakes"]
+
+    deleted = storyboard_store.delete_take(story["id"], scene["id"], take["id"])
+
+    assert take["id"] not in deleted["scenes"][scene["id"]]["removedTakes"]
+    assert not media_path.exists()
+
+
+def test_delete_take_refuses_media_used_as_live_image_reference(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, source_scene = storyboard_store.add_scene(story["id"], {"title": "Source"})
+    story, target_scene = storyboard_store.add_scene(story["id"], {"title": "Target"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], source_scene["id"], "take.png", BytesIO(b"image")
+    )
+    story, reference = storyboard_store.set_scene_reference_from_take(
+        story["id"],
+        target_scene["id"],
+        "first_frame",
+        source_scene["id"],
+        take["id"],
+        "last",
+    )
+    media_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]
+    assert reference["mediaPath"] == take["mediaPath"]
+
+    with pytest.raises(RuntimeError, match="used as a Scene reference"):
+        storyboard_store.delete_take(story["id"], source_scene["id"], take["id"])
+
+    loaded = storyboard_store.load_story(story["id"])
+    assert take["id"] in loaded["scenes"][source_scene["id"]]["takes"]
+    assert media_path.is_file()
+

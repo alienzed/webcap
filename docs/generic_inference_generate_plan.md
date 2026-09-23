@@ -532,6 +532,8 @@ Do not queue Director requests in this phase. Keep the current synchronous UX un
 
 # Phase 5 - Migrate Storyboard Takes to generic inference
 
+**Branch status:** implemented on `feature/unified-inference-storyboard`; pending validation/merge.
+
 ## Goal
 
 Keep the new Storyboard Scene UX and Take semantics while removing its private generation scheduler/runtime duplication.
@@ -735,7 +737,7 @@ Implemented product capabilities include:
 
 The remaining work is intentionally ordered as follows:
 
-1. **Migrate Storyboard Takes onto the common `inference` lane.** Preserve all Story/Scene/Take semantics and make pending Take queue positions global.
+1. **Storyboard Takes -> common `inference` lane:** implemented on the current migration branch; preserve all Story/Scene/Take semantics and global pending-Take queue positions.
 2. **Migrate Test Generations onto the common `inference` lane.** Preserve Sessions as the Test-owned aggregation while each rendition becomes an ordinary inference job.
 3. **Harden and clean up the unified inference path.** Remove obsolete per-client scheduler/transport duplication only after both migrations are proven.
 4. **Apply the small Generate IA/UX polish pass.** Treat Director as a prompt-editing tool, clarify rough-idea vs finished-prompt authoring, add one-step restore after Director edits, improve Setup/Conditioning hierarchy, and keep GPU/queue messaging contextual.

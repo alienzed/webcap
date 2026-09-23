@@ -345,11 +345,21 @@ def _write_provider_state(root):
 def _remember_provider_root(output_path):
     path = Path(output_path).resolve()
     output_root = None
+    relative = None
     for parent in (path.parent,) + tuple(path.parents):
-        if parent.name.lower() == "output":
-            output_root = parent.resolve()
-            break
-    if output_root is None:
+        if parent.name.lower() != "output":
+            continue
+        candidate_root = parent.resolve()
+        try:
+            candidate_relative = path.relative_to(candidate_root)
+        except ValueError:
+            continue
+        output_root = candidate_root
+        relative = candidate_relative
+        break
+    if output_root is None or relative is None or not relative.parts:
+        return
+    if relative.parts[0] not in {"webcap-generate", "webcap-storyboard", "webcap-tests"}:
         return
     provider_root = output_root.parent
     if provider_root == output_root or provider_root.is_symlink():

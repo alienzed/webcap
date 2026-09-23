@@ -993,3 +993,40 @@ def test_stop_session_state_cannot_be_reverted_by_provider_start_publication(tmp
     manifest = bench._read_status(session)
     assert manifest["status"] == "stopping"
 
+def test_test_enqueue_failure_stops_started_child_and_preserves_recovery_session(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    original_enqueue = inference_runner.enqueue_test
+    calls = {"count": 0}
+
+    def flaky_enqueue(request, context, label=""):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            job = original_enqueue(request, context, label=label)
+            claimed = execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+            assert claimed["id"] == job["jobId"]
+            execution_queue.mark_running(job["jobId"])
+            return job
+        raise RuntimeError("second rendition enqueue failed")
+
+    monkeypatch.setattr(inference_runner, "enqueue_test", flaky_enqueue)
+
+    with pytest.raises(RuntimeError, match="preserved for recovery"):
+        bench.enqueue(
+            tmp_path,
+            "prompt",
+            selected_files=[candidates[0].name],
+            include_base=True,
+        )
+
+    sessions = [path for path in (tmp_path / bench.TEST_RESULTS_DIR).iterdir() if path.is_dir()]
+    assert len(sessions) == 1
+    manifest = bench._read_status(sessions[0])
+    assert manifest["migrationComplete"] is False
+    assert manifest["status"] == "stopping"
+    assert "preserved for recovery" in manifest["error"]
+
+    child_id = manifest["inferenceJobs"][0]
+    child = execution_queue.get_job(child_id)
+    assert child["status"] == "stopping"
+    assert child["requestedAction"] == "stop"
+

@@ -1649,8 +1649,11 @@ def _launch_next_queued_job(state):
         return
 
     try:
-        from .storyboard_llm_runtime import release_loaded_model_for_gpu_work
+        from .storyboard_llm_runtime import DirectorRuntimeBusy, release_loaded_model_for_gpu_work
         release_loaded_model_for_gpu_work()
+    except DirectorRuntimeBusy:
+        release_execution_resource(TRAINING_RESOURCE_OWNER)
+        return
     except Exception as exc:
         release_execution_resource(TRAINING_RESOURCE_OWNER)
         state["queuePaused"] = True

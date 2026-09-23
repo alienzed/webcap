@@ -314,3 +314,63 @@ def test_chat_wraps_json_schema_for_llama_cpp(monkeypatch):
         "type": "json_schema",
         "json_schema": {"name": "storyboard_response", "schema": schema},
     }
+
+
+def test_remote_chat_uses_openai_compatible_endpoint_without_local_gpu_management(monkeypatch):
+    calls = []
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: calls.append("server"))
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
+    monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: calls.append("reserve"))
+    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: calls.append("free-comfy"))
+    monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: calls.append("load:" + model_id))
+    monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append("unload:" + model_id))
+    monkeypatch.setattr(storyboard_llm_runtime, "_release_gpu", lambda: calls.append("release"))
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "mode": "remote",
+            "endpoint": "http://director-box:11434/v1",
+            "llama_server": "",
+            "models_dir": None,
+            "port": 8189,
+            "context_size": 8192,
+            "max_tokens": 4096,
+        },
+    )
+
+    captured = {}
+
+    def fake_http(path, method="GET", payload=None, timeout=30):
+        captured["path"] = path
+        captured["method"] = method
+        captured["payload"] = payload
+        return {"choices": [{"message": {"content": "remote prompt"}}]}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_http_json", fake_http)
+
+    result = storyboard_llm_runtime.chat(
+        "qwen-remote",
+        [{"role": "user", "content": "Write."}],
+    )
+
+    assert result["text"] == "remote prompt"
+    assert captured["path"] == "/chat/completions"
+    assert captured["payload"]["model"] == "qwen-remote"
+    assert "reasoning_effort" not in captured["payload"]
+    assert "chat_template_kwargs" not in captured["payload"]
+    assert calls == ["server"]
+
+
+def test_remote_server_url_preserves_openai_api_prefix(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "mode": "remote",
+            "endpoint": "http://director-box:11434/v1/",
+            "port": 8189,
+        },
+    )
+
+    assert storyboard_llm_runtime._server_url("/models") == "http://director-box:11434/v1/models"

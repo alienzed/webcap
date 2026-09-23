@@ -429,17 +429,29 @@
     return storyState.activeSceneId;
   }
 
+  function renderSceneProgression(order) {
+    var host = el('storyboard-scene-progression');
+    if (!host || !storyState.story) return;
+    order = Array.isArray(order) ? order : [];
+    var scenes = storyState.story.scenes || {};
+    var active = ensureActiveScene(order);
+    host.innerHTML = order.map(function (sceneId, index) {
+      var scene = scenes[sceneId] || {};
+      return '<button type="button" class="storyboard-scene-progress-step' + (sceneId === active ? ' active' : '') + '" data-scene-progress="' + escapeHtml(sceneId) + '">' +
+        '<span>Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
+        '<strong>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
+      '</button>';
+    }).join('') +
+      '<button type="button" class="storyboard-scene-progress-add" data-scene-progress-add title="Add Scene" aria-label="Add Scene">+</button>';
+  }
+
   function syncSceneViewControls(order) {
     order = Array.isArray(order) ? order : [];
     if (storyState.sceneViewMode !== 'overview' && storyState.sceneViewMode !== 'focus') storyState.sceneViewMode = 'focus';
-    var active = ensureActiveScene(order);
-    var index = active ? order.indexOf(active) : -1;
+    ensureActiveScene(order);
     el('storyboard-scenes-overview-btn').classList.toggle('active', storyState.sceneViewMode === 'overview');
     el('storyboard-scenes-focus-btn').classList.toggle('active', storyState.sceneViewMode === 'focus');
-    el('storyboard-scene-pager').classList.toggle('hidden', storyState.sceneViewMode !== 'focus' || !order.length);
-    el('storyboard-scene-position').textContent = order.length ? 'Scene ' + String(index + 1) + ' of ' + String(order.length) : '';
-    el('storyboard-scene-prev-btn').disabled = index <= 0;
-    el('storyboard-scene-next-btn').disabled = index < 0 || index >= order.length - 1;
+    renderSceneProgression(order);
   }
 
   function setSceneViewMode(mode, sceneId) {
@@ -450,15 +462,6 @@
       window.localStorage.setItem('webcap.storyboard.sceneView', mode);
       renderScenes();
     }).catch(reportError);
-  }
-
-  function moveFocusedScene(delta) {
-    var order = storyState.story && Array.isArray(storyState.story.sceneOrder) ? storyState.story.sceneOrder : [];
-    var active = ensureActiveScene(order);
-    var index = order.indexOf(active);
-    var next = index + delta;
-    if (index < 0 || next < 0 || next >= order.length) return;
-    setSceneViewMode('focus', order[next]);
   }
 
   function takeMediaUrl(storyId, sceneId, take) {

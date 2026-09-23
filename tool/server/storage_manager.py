@@ -15,7 +15,7 @@ from .training_action import managed_actions, read_action
 
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
-MEASURABLE_AREAS = {"training", "tests", "generate", "storyboard", "runtime"}
+MEASURABLE_AREAS = {"training", "tests", "generate", "storyboard", "set", "runtime"}
 PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard"}
 
 
@@ -233,6 +233,39 @@ def _test_items(cache, folder):
     return rows
 
 
+def _set_items(cache, folder):
+    folder = str(folder or "").strip()
+    if not folder:
+        return []
+    set_path = app_config.safe_join_fs_root(folder)
+    if not set_path.is_dir():
+        return []
+    rows = []
+    known = (
+        ("originals", "Originals", "Reversible source-media safety copies"),
+        ("auto_dataset", "Prepared dataset", "Rebuildable Set preparation"),
+        ("media_metadata.json", "Media metadata", "WebCap analysis cache"),
+        (".webcap_state.json", "Set state", "WebCap authored Set state"),
+    )
+    for item_id, label, kind in known:
+        path = set_path / item_id
+        if not path.exists() or path.is_symlink():
+            continue
+        rows.append(_item(
+            "set",
+            item_id,
+            label,
+            path,
+            folder=folder,
+            kind=kind,
+            status="protected",
+            purgeable=False,
+            protected_reason="Set-owned data is never deleted from Storage Manager.",
+            cache=cache,
+        ))
+    return rows
+
+
 def _runtime_items(cache):
     rows = []
     root = Path(app_config.FS_ROOT)
@@ -279,6 +312,7 @@ def overview(folder=""):
         "tests": _test_items(cache, folder),
         "generate": _generate_items(cache),
         "storyboard": _storyboard_items(cache),
+        "set": _set_items(cache, folder),
         "runtime": _runtime_items(cache),
     }
     categories = [
@@ -289,6 +323,7 @@ def overview(folder=""):
         ),
         _category("generate", "Generations", groups["generate"]),
         _category("storyboard", "Storyboard", groups["storyboard"]),
+        _category("set", "Current Set (protected)", groups["set"], note="Visible for accounting only; Set-owned data is not purgeable here."),
         _category("runtime", "Runtime / Temporary", groups["runtime"]),
     ]
     categories.sort(key=lambda row: (row["bytes"], row["count"]), reverse=True)
@@ -394,6 +429,24 @@ def resolve_item(area, item_id, folder=""):
         path = raw_path.resolve()
         if path.parent != root:
             raise ValueError("Storyboard storage path escaped the managed root.")
+        return path
+    if area == "set":
+        folder = str(folder or "").strip()
+        if not folder:
+            raise ValueError("Current Set is required for Set storage.")
+        allowed = {"originals", "auto_dataset", "media_metadata.json", ".webcap_state.json"}
+        item_name = str(item_id or "").strip()
+        if item_name not in allowed:
+            raise ValueError("Unsupported Set storage item.")
+        set_path = app_config.safe_join_fs_root(folder).resolve()
+        raw_path = set_path / item_name
+        if raw_path.is_symlink():
+            raise ValueError("Set storage path is symlinked.")
+        path = raw_path.resolve()
+        if path.parent != set_path:
+            raise ValueError("Set storage path escaped the current Set.")
+        if not path.exists():
+            raise FileNotFoundError("Set storage item is unavailable.")
         return path
     if area == "runtime":
         return _resolve_runtime(item_id)

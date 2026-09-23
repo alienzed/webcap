@@ -411,8 +411,10 @@
     storyState.storyCollapsed = !!collapsed;
     window.localStorage.setItem('webcap.storyboard.storyCollapsed', storyState.storyCollapsed ? '1' : '0');
     var authoring = el('storyboard-story-authoring');
+    var editor = el('storyboard-editor-content');
     var button = el('storyboard-story-toggle');
     authoring.classList.toggle('hidden', storyState.storyCollapsed);
+    editor.classList.toggle('story-collapsed', storyState.storyCollapsed);
     button.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
     button.textContent = storyState.storyCollapsed ? 'Expand Story' : 'Collapse Story';
   }

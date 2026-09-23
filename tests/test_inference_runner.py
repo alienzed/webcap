@@ -252,7 +252,11 @@ def test_inference_runner_cancels_provider_after_unexpected_post_launch_failure(
 
     monkeypatch.setattr(inference_runner, "_execute_claimed", fail_after_launch)
     cancelled = []
-    monkeypatch.setattr(inference_runtime, "cancel_job", lambda provider_id: cancelled.append(provider_id) or True)
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait",
+        lambda provider_id: cancelled.append(provider_id) or True,
+    )
     monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
     monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
 
@@ -279,7 +283,11 @@ def test_inference_runner_does_not_cancel_provider_already_terminal(inference_ro
 
     monkeypatch.setattr(inference_runner, "_execute_claimed", fail_after_provider_failure)
     cancelled = []
-    monkeypatch.setattr(inference_runtime, "cancel_job", lambda provider_id: cancelled.append(provider_id) or True)
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait",
+        lambda provider_id: cancelled.append(provider_id) or True,
+    )
     monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
     monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
 
@@ -287,4 +295,43 @@ def test_inference_runner_does_not_cancel_provider_already_terminal(inference_ro
 
     assert execution_queue.get_job(queued["id"])["status"] == "failed"
     assert cancelled == []
+
+def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconfirmed(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    execution_queue._resource_owner = inference_runner.GPU_RESERVATION_OWNER
+
+    def fail_after_launch(job_id):
+        execution_queue.mark_running(
+            job_id,
+            details={"providerJobId": "provider-123", "providerStatus": "in_progress"},
+        )
+        raise RuntimeError("provider polling exploded")
+
+    monkeypatch.setattr(inference_runner, "_execute_claimed", fail_after_launch)
+    monkeypatch.setattr(inference_runtime, "cancel_job_and_wait", lambda _provider_id: False)
+
+    inference_runner._advance_queue()
+
+    finished = execution_queue.get_job(queued["id"])
+    snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
+    assert finished["status"] == "failed"
+    assert snapshot["paused"] is True
+    assert "could not be confirmed stopped" in snapshot["pauseReason"]
+    assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
+
+
+def test_cancel_job_and_wait_requires_terminal_provider_state(monkeypatch):
+    states = iter([
+        {"status": "in_progress"},
+        {"status": "cancelled"},
+    ])
+    monkeypatch.setattr(inference_runtime, "cancel_job", lambda _provider_id: True)
+    monkeypatch.setattr(inference_runtime, "read_job", lambda _provider_id: next(states))
+    monkeypatch.setattr(inference_runtime.time, "sleep", lambda _seconds: None)
+
+    assert inference_runtime.cancel_job_and_wait("provider-123", timeout=1) is True
 

@@ -357,3 +357,64 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
     media_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]
     assert media_path.read_bytes() == b"generated-video"
     assert storyboard_generation.generation_status(queued["jobId"])["status"] == "completed"
+
+def test_legacy_storyboard_queue_migration_is_restart_idempotent(storyboard_fs):
+    legacy = execution_queue.enqueue(
+        storyboard_generation.LEGACY_EXECUTION_LANE,
+        {
+            "storyId": "story-1",
+            "sceneId": "scene-1",
+            "settings": {
+                "prompt": "Prompt",
+                "sourcePrompt": "Prompt",
+                "entryState": "",
+                "exitState": "",
+                "wildcardsEnabled": False,
+                "aspectRatio": "4:3 (Standard)",
+                "megapixels": 0.2,
+                "duration": 6,
+                "seed": 1,
+                "seedMode": "fixed",
+                "references": [],
+                "loras": [],
+            },
+        },
+        metadata={"storyId": "story-1", "sceneId": "scene-1"},
+        job_id="legacy-storyboard-job",
+    )
+    inference_runner.enqueue_storyboard(
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "prompt": "Prompt",
+            "sourcePrompt": "Prompt",
+            "settings": {
+                "aspectRatio": "4:3 (Standard)",
+                "megapixels": 0.2,
+                "duration": 6,
+                "seed": 1,
+            },
+            "loras": [],
+            "references": {},
+            "referenceRecords": [],
+            "wildcardsEnabled": False,
+            "entryState": "",
+            "exitState": "",
+            "seedMode": "fixed",
+        },
+        "story-1",
+        "scene-1",
+        migrated_from_job_id=legacy["id"],
+    )
+
+    storyboard_generation.reconcile_startup()
+
+    old = execution_queue.get_job(legacy["id"])
+    assert old["status"] == "cancelled"
+    current = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
+    migrated = [
+        job for job in current["jobs"]
+        if (job.get("metadata") or {}).get("migratedFromJobId") == legacy["id"]
+    ]
+    assert len(migrated) == 1
+

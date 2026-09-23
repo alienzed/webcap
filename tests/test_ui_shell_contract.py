@@ -133,7 +133,7 @@ def test_training_identity_is_owned_by_shell_header():
     assert "surface === 'training'" in shell
     assert "workspaceTitle.textContent = 'Training'" in shell
     assert "entryKind === 'global'" in workspace
-    assert "contextText = entryKind === 'global' ? 'Global'" in shell
+    assert "contextText = getTrainingWorkspaceEntryKind() === 'global'" in shell
 
 
 def test_test_workspace_uses_shell_identity_and_prep_exit():
@@ -512,7 +512,9 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert ".shell-workload-status.is-generating" in css
     assert "color: var(--accent);" in css
     assert "font-size: 12px;" in css
-    assert ".shell-gpu-status .shell-system-disk {" in css
+    assert ".shell-gpu-status .shell-system-gpu," in css
+    assert ".shell-gpu-status .shell-system-disk," in css
+    assert ".shell-gpu-status .shell-system-ram {" in css
     assert "gap: 4px;" in css
     assert "color-mix(in srgb, var(--warning, #b45309) 58%, white)" in css
 

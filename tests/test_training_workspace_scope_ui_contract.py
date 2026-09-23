@@ -280,3 +280,24 @@ def test_training_runner_keeps_its_job_state_training_only():
     assert "trainingWorkspaceState.runnerJobs = Array.isArray(payload.jobs) ? payload.jobs : [];" in script
     assert "trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)" in script
     assert "isTrainingQueueJob" not in script
+
+
+def test_training_presentation_cleans_up_when_leaving_training_surface():
+    workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+
+    start = workspace.index("function syncTrainingWorkspaceUi()")
+    end = workspace.index("window.getTrainingWorkspaceEntryKind", start)
+    block = workspace[start:end]
+    detail_sync = block.index("syncTrainingWorkspaceDetailUi();")
+    console_sync = block.index("syncTrainingConsoleUi();")
+    inactive_guard = block.index("if (!isTrainingWorkspaceActive()) return;")
+    refresh = block.index("refreshTrainingWorkspace();")
+
+    assert -1 not in (detail_sync, console_sync, inactive_guard, refresh)
+    assert detail_sync < inactive_guard
+    assert console_sync < inactive_guard
+    assert inactive_guard < refresh
+    assert "var trainingOutputVisible = active && !isUnavailableSetTraining && detailTab === 'run-log';" in workspace
+    assert "trainingOutputView.classList.toggle('hidden', !trainingOutputVisible);" in workspace
+    assert "editorWrapper.classList.toggle('hidden', active &&" in workspace
+

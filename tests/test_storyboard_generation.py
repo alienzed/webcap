@@ -336,3 +336,28 @@ def test_storyboard_generation_rejects_duplicate_scene_while_running_or_queued(s
     storyboard_generation.start_generation(story["id"], second["id"])
     with pytest.raises(RuntimeError, match="already has a queued Take generation"):
         storyboard_generation.start_generation(story["id"], second["id"])
+
+
+def test_scene_settings_resolve_story_loras_before_queueing(storyboard_fs):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "loras": [
+            {"name": "characters/alice.safetensors", "strength": 0.8},
+            {"name": "styles/film.safetensors", "strength": 0.5},
+        ],
+    })
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "prompt": "Prompt",
+        "storyLoraOverrides": [
+            {"name": "characters/alice.safetensors", "strength": 0.7},
+            {"name": "styles/film.safetensors", "enabled": False},
+        ],
+        "loras": [{"name": "clothing/dress.safetensors", "strength": 0.6}],
+    })
+
+    settings = storyboard_generation._scene_settings(scene, story)
+
+    assert settings["loras"] == [
+        {"name": "characters/alice.safetensors", "strength": 0.7},
+        {"name": "clothing/dress.safetensors", "strength": 0.6},
+    ]

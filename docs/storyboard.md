@@ -132,7 +132,11 @@ Pinned is separate from status because an archived/completed Story may still be 
 
 `style` is the Story's persistent visual/atmosphere block. `invariants` are additional typed facts that should remain stable across independently generated Scenes, such as recurring characters, world rules, or soundtrack language. The Director receives these blocks as compact Story context rather than a long conversation history.
 
-The Story authoring panel is a dedicated, wider middle column between the Story library and Scene workspace, and is explicitly collapsible. On desktop, Story and Scene are independent full-height panes rather than one long document: Story scrolls within its own column, while the focused Scene keeps its header and Takes dock in place around a scrollable authoring body. Scene authoring has two views: a compact **Overview** for navigation and a **Focus** view that edits one Scene at a time. Focus mode bounds prose fields to a readable measure, lets the prompt consume available vertical space, and places Generation plus collapsed Conditioning in a compact inspector beside it. The selected Scene's Takes stay in a compact horizontally scrollable strip at the bottom of that Scene workspace.
+The Story authoring panel is a dedicated, wide middle column between the Story library and Scene workspace, and is explicitly collapsible. The desktop target is a large production workspace: Story uses a comfortable authoring width rather than sidebar proportions, with readable helper text and Concept actions attached directly to the Concept field. Story and Scene are independent full-height panes rather than one long document.
+
+Scene authoring has two centered workspace modes, **Overview** and **Focus**, plus a persistent horizontal Scene progression strip for normal movement through the Story. Focus edits one Scene at a time. The Scene itself uses a large prompt surface beside a fully visible Generation panel; normal settings such as duration, aspect ratio, megapixels, seed, and wildcards are not hidden. Conditioning remains visible as Scene context, while deeper reference editing can still use disclosure. Entry/Exit state are first-class Scene fields; Notes remain optional.
+
+The selected Scene's Takes occupy a substantial bottom evaluation dock. Take cards expand to consume available width up to a sensible maximum and only become horizontally scrollable once there are enough results to require it.
 
 ## Scene model
 

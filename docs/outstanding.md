@@ -5,7 +5,6 @@ Last reviewed: 2026-09-23.
 
 ## Enhancements / Ideas
 
-- **Storage Manager — explicit scan + lightweight usage registration.** Keep ordinary Storage loads cheap, but add a clear **Start scan** action for users who want a current workspace-wide disk picture. The scan may be expensive because it is explicit: recurse only declared WebCap-owned scopes/Set boundaries, do not follow symlinks, expose progress/cancellation, count bytes/files, and use the pass to discover historical distributed Test Sessions. Producer workflows may also opportunistically register only basic usage provenance when they already know it cheaply (producer/item identity, bytes, file count, measurement time/source). These records are reporting hints only; Delete/Purge must continue to re-resolve live ownership and references.
 - **Selected epoch / concept-maturity record.** Allow the user to mark one saved epoch per run/stage as **Selected** after candidate testing. Reuse the existing Candidate Analysis/TensorBoard substrate rather than inventing a second metrics pipeline. Show/store a small derived snapshot that can answer “when did this concept become good enough?”: selected epoch, optimizer step, progress through the planned run, epoch loss, robust/smoothed step-loss context, stable-region/basin context, training time to that point when it can be grounded, and Test rating average/count when available. Surface the selection in Candidate Analysis and Training History so selected runs can later be compared by time/steps/epochs-to-maturity. Keep the user’s selection as the judgment; analytics explain it rather than choosing the winner.
 
 
@@ -60,7 +59,7 @@ Longer-term direction for making WebCap practical outside the current developmen
 ## Completed (2026-09-23)
 
 - The approved training-layout/Resume change is implemented as documented in `stable_set_training_layout_plan.md`.
-- Storage Manager MVP plus the post-MVP hostile-audit hardening are implemented: producer-owned inventory, item-scoped measurement, protected Set accounting, identity-scoped deletion, active/reference checks, H3/staged-LoRA/runtime coverage, and bounded exact-prefix ComfyUI residual detection. The remaining Storage work is the explicit scan/reporting enhancement above, not a safety blocker.
+- Storage Manager MVP, hostile-audit hardening, and explicit **Start scan** reconciliation are implemented: cheap ordinary loads, item-scoped/manual measurement, cancellable workspace scanning, historical Test discovery, byte/file-count provenance, protected Set accounting, identity-scoped deletion, active/reference checks, H3/staged-LoRA/runtime coverage, bounded exact-prefix ComfyUI residual detection, and opportunistic exact Generate usage registration. Scan/cache data remains advisory; deletion always re-resolves live ownership.
 - Storyboard Takes support explicit permanent **Delete Take** alongside the existing reversible Remove/Restore flow. Deletion removes Take media and metadata, requires destructive confirmation, warns when the selected Take will leave the Scene unselected, and refuses deletion while the same media is still a live Scene reference.
 
 ## Backlog (Do Not Implement Yet)

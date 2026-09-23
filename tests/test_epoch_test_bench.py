@@ -1136,6 +1136,7 @@ def test_prepare_then_start_from_session_folder_reuses_same_staged_loras(tmp_pat
             return self.started
 
         def start(self):
+            assert bench._read_status(self.args[1])["status"] == "starting"
             self.started = True
 
     monkeypatch.setattr(bench.threading, "Thread", FakeThread)

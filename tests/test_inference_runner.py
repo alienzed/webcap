@@ -6,6 +6,7 @@ from tool.server import config as app_config
 from tool.server import execution_queue
 from tool.server import generate_generation
 from tool.server import inference_runner
+from tool.server import inference_runtime
 from tool.server import storyboard_generation
 
 
@@ -233,4 +234,56 @@ def test_inference_snapshot_projects_test_rendition_context(inference_root):
     assert job["folder"] == "sets/subject"
     assert job["candidateKind"] == "base"
     assert job["label"] == "Comparison · Base"
+
+def test_inference_runner_cancels_provider_after_unexpected_post_launch_failure(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+
+    def fail_after_launch(job_id):
+        execution_queue.mark_running(
+            job_id,
+            details={"providerJobId": "provider-123", "providerStatus": "in_progress"},
+        )
+        raise RuntimeError("provider polling exploded")
+
+    monkeypatch.setattr(inference_runner, "_execute_claimed", fail_after_launch)
+    cancelled = []
+    monkeypatch.setattr(inference_runtime, "cancel_job", lambda provider_id: cancelled.append(provider_id) or True)
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
+    monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
+
+    inference_runner._advance_queue()
+
+    finished = execution_queue.get_job(queued["id"])
+    assert finished["status"] == "failed"
+    assert cancelled == ["provider-123"]
+
+
+def test_inference_runner_does_not_cancel_provider_already_terminal(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+
+    def fail_after_provider_failure(job_id):
+        execution_queue.mark_running(
+            job_id,
+            details={"providerJobId": "provider-123", "providerStatus": "failed"},
+        )
+        raise RuntimeError("provider failed")
+
+    monkeypatch.setattr(inference_runner, "_execute_claimed", fail_after_provider_failure)
+    cancelled = []
+    monkeypatch.setattr(inference_runtime, "cancel_job", lambda provider_id: cancelled.append(provider_id) or True)
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
+    monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
+
+    inference_runner._advance_queue()
+
+    assert execution_queue.get_job(queued["id"])["status"] == "failed"
+    assert cancelled == []
 

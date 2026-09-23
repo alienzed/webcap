@@ -131,6 +131,22 @@ def _execute_claimed(job_id):
     execution_finish_job(job_id, status="completed", result=result)
 
 
+def _cancel_failed_provider(job):
+    details = job.get("details") if isinstance(job, dict) and isinstance(job.get("details"), dict) else {}
+    provider_job_id = str(details.get("providerJobId") or "").strip()
+    provider_status = str(details.get("providerStatus") or "").strip().lower()
+    if not provider_job_id or provider_status in {"completed", "failed", "cancelled"}:
+        return
+    try:
+        from .inference_runtime import cancel_job
+        cancel_job(provider_job_id)
+    except Exception:
+        _logger.exception(
+            "Could not cancel failed inference provider job %s.",
+            provider_job_id,
+        )
+
+
 def _advance_queue():
     _ensure_execution_reconciled()
     with _dispatch_lock:
@@ -171,6 +187,7 @@ def _advance_queue():
                 if status in {"starting", "running", "stopping"}:
                     execution_finish_job(job_id, status=exc.status, error=str(exc))
             else:
+                _cancel_failed_provider(current)
                 if status in {"starting", "running", "stopping"}:
                     execution_finish_job(job_id, status="failed", error=str(exc))
                 _logger.exception("Queued inference job failed.")

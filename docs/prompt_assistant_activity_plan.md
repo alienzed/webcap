@@ -18,6 +18,8 @@ Make local LLM assistance feel responsive and predictable without adding a secon
 8. Progress is factual phase information, elapsed time, and existing GPU/RAM telemetry. No fake percentage and no claim to expose model thoughts.
 9. The existing synchronous request/response contract remains in place for this pass; no new queue, websocket layer, or token streaming.
 10. Operational failures continue to reach the global Console; local activity UI is additive context.
+11. Generate and Storyboard share one selected Director / Prompt Assistant model preference; feature labels differ, ownership does not.
+12. Model selection never causes speculative loading. The first real LLM task loads on demand, and successful follow-up work reuses the retained model.
 
 ## Phase 1 — retained local model and safe GPU yield
 

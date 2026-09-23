@@ -335,6 +335,8 @@ def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
     assert "overflow-x: auto;" in css
     assert "flex: 1 0 360px;" in css
     assert "grid-template-rows: auto minmax(0, 1fr) auto;" in css
+    assert ".storyboard-take-media {" in css
+    assert "aspect-ratio: auto;" in css
     assert "overflow: hidden;" in css
 
 

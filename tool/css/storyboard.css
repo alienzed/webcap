@@ -1524,6 +1524,7 @@
   position: relative;
   flex: 1 0 360px;
   min-width: 360px;
+  min-height: 0;
   max-width: 620px;
   padding: 9px;
   border-radius: 9px;
@@ -1534,6 +1535,8 @@
 
 .storyboard-take-media {
   position: relative;
+  min-height: 0;
+  aspect-ratio: auto;
 }
 
 .storyboard-take-footer {

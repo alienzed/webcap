@@ -644,7 +644,7 @@ def _scene_for_story(story, scene_id):
 
 
 @_serialized_mutation
-def add_take_upload(story_id, scene_id, filename, stream):
+def add_take_upload(story_id, scene_id, filename, stream, effective_loras=None):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
     source_name = str(filename or "").strip()
@@ -685,7 +685,7 @@ def add_take_upload(story_id, scene_id, filename, stream):
         "seed": scene.get("seed"),
         "seedMode": scene.get("seedMode", "random"),
         "wildcardsEnabled": bool(scene.get("wildcardsEnabled")),
-        "loras": resolve_scene_loras(story, scene),
+        "loras": _normalize_loras(effective_loras) if effective_loras is not None else resolve_scene_loras(story, scene),
         "references": copy.deepcopy(scene.get("references") or []),
         "workflowProfile": None,
         "providerJobId": None,

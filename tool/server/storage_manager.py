@@ -237,6 +237,8 @@ def _storyboard_items(cache):
         except (FileNotFoundError, RuntimeError, ValueError):
             continue
         story_root = root / story_id
+        if story_root.is_symlink() or not story_root.is_dir():
+            continue
         scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
         removed_scenes = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
         for scene_source, scene_map in (("active", scenes), ("removed", removed_scenes)):
@@ -259,8 +261,14 @@ def _storyboard_items(cache):
                             or ".." in relative.parts
                         ):
                             continue
-                        raw_path = story_root / relative
-                        if raw_path.is_symlink() or not raw_path.is_file():
+                        raw_path = story_root
+                        unsafe_path = False
+                        for part in relative.parts:
+                            raw_path = raw_path / part
+                            if raw_path.is_symlink():
+                                unsafe_path = True
+                                break
+                        if unsafe_path or not raw_path.is_file():
                             continue
                         referenced = _storyboard_take_is_referenced(story, take_id, media_path)
                         item_id = story_id + "/" + str(scene_id) + "/" + str(take_id)
@@ -1067,9 +1075,13 @@ def _resolve_storyboard_take(item_id):
         raise RuntimeError("Storyboard Take media path is invalid.")
 
     raw_story_root = storyboard_root() / story_id
-    raw_path = raw_story_root / relative
-    if raw_story_root.is_symlink() or raw_path.is_symlink():
+    if raw_story_root.is_symlink():
         raise ValueError("Storyboard Take storage path is symlinked.")
+    raw_path = raw_story_root
+    for part in relative.parts:
+        raw_path = raw_path / part
+        if raw_path.is_symlink():
+            raise ValueError("Storyboard Take storage path is symlinked.")
     story_root = raw_story_root.resolve()
     path = raw_path.resolve()
     if path == story_root or story_root not in path.parents or not path.is_file():

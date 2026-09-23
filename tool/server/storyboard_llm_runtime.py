@@ -80,7 +80,7 @@ def _director_config():
 
 def _server_url(path):
     settings = _director_config()
-    base = settings["endpoint"] if settings["mode"] == "remote" else "http://" + LLAMA_HOST + ":" + str(settings["port"])
+    base = settings.get("endpoint", "") if settings.get("mode", "local") == "remote" else "http://" + LLAMA_HOST + ":" + str(settings["port"])
     return base.rstrip("/") + "/" + str(path or "").lstrip("/")
 
 
@@ -199,7 +199,7 @@ def _ensure_server():
     global _process, _log_handle, _server_settings_signature
     with _process_lock:
         settings = _director_config()
-        if settings["mode"] == "remote":
+        if settings.get("mode", "local") == "remote":
             if _process is not None:
                 _stop_server_locked()
             try:
@@ -298,7 +298,7 @@ def _normalize_models(payload):
 def list_models(reload=False):
     _ensure_server()
     settings = _director_config()
-    suffix = "?reload=1" if reload and settings["mode"] == "local" else ""
+    suffix = "?reload=1" if reload and settings.get("mode", "local") == "local" else ""
     return _normalize_models(_http_json("/models" + suffix, timeout=10))
 
 
@@ -306,12 +306,12 @@ def status():
     settings = _director_config()
     try:
         models = list_models(reload=True)
-        if settings["mode"] == "remote":
+        if settings.get("mode", "local") == "remote":
             return {
                 "available": True,
                 "serverRunning": True,
                 "runtime": "Remote OpenAI-compatible",
-                "endpoint": settings["endpoint"],
+                "endpoint": settings.get("endpoint", ""),
                 "models": models,
             }
 
@@ -333,8 +333,8 @@ def status():
         return {
             "available": False,
             "serverRunning": False,
-            "runtime": "Remote OpenAI-compatible" if settings["mode"] == "remote" else "llama.cpp",
-            "endpoint": settings["endpoint"] if settings["mode"] == "remote" else "",
+            "runtime": "Remote OpenAI-compatible" if settings.get("mode", "local") == "remote" else "llama.cpp",
+            "endpoint": settings.get("endpoint", "") if settings.get("mode", "local") == "remote" else "",
             "modelsDir": str(settings["models_dir"]) if settings["models_dir"] is not None else "",
             "models": [],
             "error": str(exc),
@@ -474,7 +474,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
             "max_tokens": int(max_tokens or settings["max_tokens"]),
             "temperature": 0.2,
         }
-        if settings["mode"] == "local":
+        if settings.get("mode", "local") == "local":
             payload["reasoning_effort"] = "none"
             payload["chat_template_kwargs"] = {"enable_thinking": False}
         if response_schema is not None:
@@ -486,7 +486,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
                 },
             }
 
-        if settings["mode"] == "remote":
+        if settings.get("mode", "local") == "remote":
             response = _http_json(
                 "/chat/completions",
                 method="POST",

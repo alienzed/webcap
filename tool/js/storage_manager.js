@@ -76,7 +76,7 @@
 
   function allItems() {
     var groups = storageState.payload && storageState.payload.items || {};
-    return ['training', 'tests', 'generate', 'storyboard', 'set', 'runtime'].reduce(function (rows, area) {
+    return ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime'].reduce(function (rows, area) {
       return rows.concat((groups[area] || []).map(function (item) {
         return item;
       }));
@@ -127,7 +127,10 @@
     var html = '<button type="button" class="review-captions-btn storage-open-btn"' + payload + (item.openable ? '' : ' disabled') + '>Open</button>';
     html += '<button type="button" class="review-captions-btn storage-measure-btn"' + payload + '>Measure</button>';
     if (item.purgeable) {
-      var label = item.area === 'storyboard' ? 'Delete Story' : 'Delete';
+      var label = 'Delete';
+      if (item.area === 'storyboard') label = 'Delete Story';
+      else if (item.area === 'staged') label = 'Delete Copy';
+      else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) label = 'Delete Probe';
       html += '<button type="button" class="review-captions-btn storage-delete-btn"' + payload + '>' + label + '</button>';
     }
     return html;
@@ -140,12 +143,13 @@
     var areaLabels = {
       training: 'Training',
       tests: 'Tests',
+      staged: 'Staged Test LoRAs',
       generate: 'Generations',
       storyboard: 'Storyboard',
       set: 'Current Set (protected)',
       runtime: 'Runtime / Temporary'
     };
-    host.innerHTML = ['training', 'tests', 'generate', 'storyboard', 'set', 'runtime'].map(function (area) {
+    host.innerHTML = ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime'].map(function (area) {
       var rows = (groups[area] || []).slice().sort(itemSort);
       var empty = rows.length
         ? ''
@@ -227,8 +231,18 @@
 
   function confirmDelete(item) {
     var sizeText = item.measured ? ' This will reclaim about ' + bytes(item.bytes) + '.' : '';
-    var label = item.area === 'storyboard' ? 'Story' : 'artifact';
-    var consequence = item.area === 'storyboard' ? '\nThis removes the Story metadata, its Takes, and references.' : '';
+    var label = 'artifact';
+    var consequence = '';
+    if (item.area === 'storyboard') {
+      label = 'Story';
+      consequence = '\nThis removes the Story metadata, its Takes, and references.';
+    } else if (item.area === 'staged') {
+      label = 'staged Test LoRA copy';
+      consequence = '\nThe source training epoch is not deleted.';
+    } else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) {
+      label = 'H3 probe';
+      consequence = '\nThis removes the captured probe inputs, logs, and probe results.';
+    }
     return window.confirm('Permanently delete this ' + label + '?\n\n' + item.label + sizeText + consequence + '\n\nThis cannot be undone.');
   }
 

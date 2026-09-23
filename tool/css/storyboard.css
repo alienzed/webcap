@@ -1241,3 +1241,136 @@
     grid-column: 1 / -1;
   }
 }
+
+
+/* Storyboard three-column flow: Stories library -> Story context -> Scene workspace. */
+.storyboard-editor-scroll {
+  display: grid;
+  grid-template-columns: minmax(340px, 410px) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.storyboard-editor-scroll.story-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.storyboard-story-authoring {
+  width: 100%;
+  margin: 0;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  align-self: start;
+}
+
+.storyboard-story-fields {
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 8px;
+}
+
+.storyboard-concept-field,
+.storyboard-style-field,
+.storyboard-tags-field,
+.storyboard-invariants,
+.storyboard-develop-row {
+  grid-column: 1 / -1;
+}
+
+.storyboard-concept-field textarea {
+  min-height: 112px;
+  max-width: none;
+}
+
+.storyboard-style-field textarea {
+  min-height: 88px;
+  max-width: none;
+}
+
+.storyboard-invariants {
+  padding: 8px;
+}
+
+.storyboard-invariants-header {
+  align-items: center;
+}
+
+.storyboard-invariants-header > div {
+  min-width: 0;
+}
+
+.storyboard-invariant-row {
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+}
+
+.storyboard-invariant-row textarea {
+  grid-column: 1 / -1;
+  min-height: 64px;
+}
+
+.storyboard-develop-row {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.storyboard-develop-actions {
+  flex-wrap: wrap;
+}
+
+.storyboard-story-loras {
+  grid-column: 1;
+}
+
+.storyboard-scene-workspace {
+  min-width: 0;
+  width: min(100%, 1400px);
+  justify-self: start;
+}
+
+.storyboard-scenes-heading,
+.storyboard-scenes-list,
+.storyboard-sequence-preview {
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.storyboard-editor-scroll.story-collapsed .storyboard-scene-workspace {
+  justify-self: center;
+}
+
+@media (max-width: 1500px) {
+  .storyboard-editor-scroll {
+    grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1180px) {
+  .storyboard-editor-scroll,
+  .storyboard-editor-scroll.story-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .storyboard-story-authoring,
+  .storyboard-scene-workspace {
+    width: 100%;
+    max-width: 760px;
+    justify-self: center;
+  }
+}
+
+@media (max-width: 760px) {
+  .storyboard-story-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .storyboard-invariant-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .storyboard-invariant-row select,
+  .storyboard-invariant-row input,
+  .storyboard-invariant-row textarea {
+    grid-column: 1 / -1;
+  }
+}

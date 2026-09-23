@@ -289,6 +289,21 @@ def test_storyboard_story_can_collapse_and_supports_structured_invariants():
     assert ".storyboard-invariant-row" in css
 
 
+def test_storyboard_story_context_is_a_collapsible_middle_column():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'class="storyboard-scene-workspace"' in html
+    assert 'id="storyboard-story-authoring"' in html
+    assert "editor.classList.toggle('story-collapsed'" in storyboard
+    assert "grid-template-columns: minmax(340px, 410px) minmax(0, 1fr);" in css
+    assert ".storyboard-editor-scroll.story-collapsed" in css
+    assert ".storyboard-story-authoring" in css
+    assert "grid-template-columns: 1fr;" in css
+    assert ".storyboard-scene-workspace" in css
+
+
 def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

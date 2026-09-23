@@ -1066,19 +1066,29 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
             _atomic_write_json(_status_path(session_directory), current_status)
     except Exception as exc:
         rollback_errors = []
+        rollback_pending = False
         for job_id in queued_ids:
             try:
-                execution_cancel_queued(job_id)
+                queued_job = execution_get_job(job_id)
+                job_status = str(queued_job.get("status") or "")
+                if job_status == "queued":
+                    execution_cancel_queued(job_id)
+                elif job_status in {"starting", "running"}:
+                    execution_request_stop(job_id)
+                    rollback_pending = True
+                elif job_status == "stopping":
+                    rollback_pending = True
             except Exception as rollback_exc:
                 rollback_errors.append((job_id, rollback_exc))
                 _logger.exception("Could not roll back partially queued Test rendition %s.", job_id)
-        if rollback_errors:
+        if rollback_errors or rollback_pending:
             with _status_lock:
                 current_status = _read_status(session_directory) or {}
                 current_status["migrationComplete"] = False
+                current_status["status"] = "stopping" if rollback_pending else str(current_status.get("status") or "queued")
                 current_status["error"] = (
-                    "Test Session enqueue failed and one or more queued renditions could not be rolled back. "
-                    "The Session was preserved for manual recovery."
+                    "Test Session enqueue failed and active or unresolved rendition work remains. "
+                    "The Session was preserved for recovery."
                 )
                 _atomic_write_json(_status_path(session_directory), current_status)
             raise RuntimeError(current_status["error"]) from exc
@@ -1175,17 +1185,28 @@ def reconcile_startup():
                     session_directory, existing_status = existing
                     if not existing_status.get("migrationComplete"):
                         cleanup_failed = False
+                        cleanup_pending = False
                         for child_id in existing_status.get("inferenceJobs") or []:
                             try:
-                                execution_cancel_queued(str(child_id))
+                                child_job = execution_get_job(str(child_id))
+                                child_status = str(child_job.get("status") or "")
+                                if child_status == "queued":
+                                    execution_cancel_queued(str(child_id))
+                                elif child_status in {"starting", "running"}:
+                                    execution_request_stop(str(child_id))
+                                    cleanup_pending = True
+                                elif child_status == "stopping":
+                                    cleanup_pending = True
+                            except FileNotFoundError:
+                                continue
                             except Exception:
                                 cleanup_failed = True
                                 _logger.exception(
-                                    "Could not cancel partially migrated Test rendition %s; preserving Session %s.",
+                                    "Could not stop partially migrated Test rendition %s; preserving Session %s.",
                                     child_id,
                                     session_directory.name,
                                 )
-                        if cleanup_failed:
+                        if cleanup_failed or cleanup_pending:
                             _logger.error(
                                 "Legacy Test migration recovery for %s remains incomplete; Session %s was left intact.",
                                 legacy_job_id,

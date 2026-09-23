@@ -128,21 +128,20 @@
 
   function renderDirectorSelector() {
     var select = el('storyboard-director-model');
-    var status = el('storyboard-director-status');
-    if (!select || !status) return;
+    if (!select) return;
 
     var models = storyState.director.models || [];
     if (!storyState.director.available) {
       select.innerHTML = '<option value="">Director unavailable</option>';
       select.disabled = true;
-      status.textContent = storyState.director.error || '';
+      select.title = storyState.director.error || 'Director unavailable';
       return;
     }
 
     if (!models.length) {
       select.innerHTML = '<option value="">No Director models found</option>';
       select.disabled = true;
-      status.textContent = storyState.director.runtimeLabel || 'No models available.';
+      select.title = 'No Director models available';
       return;
     }
 
@@ -158,7 +157,7 @@
       window.localStorage.setItem('webcap.storyboard.directorModel', selected);
     }
     select.value = selected;
-    status.textContent = storyState.director.runtimeLabel || 'Director';
+    select.title = '';
   }
 
   function refreshDirector() {
@@ -365,6 +364,9 @@
   function setSaveState(text) {
     var node = el('storyboard-save-state');
     if (node) node.textContent = text || '';
+    if (text && typeof reportConsoleInfo === 'function' && text !== 'Saved') {
+      reportConsoleInfo('Storyboard', text);
+    }
   }
 
   function storyTagsText(story) {

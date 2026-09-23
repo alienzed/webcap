@@ -102,7 +102,11 @@ Initial fields:
   "id": "stable-story-id",
   "title": "Storm Hotel",
   "concept": "High-level reminder and grounded overview.",
-  "style": "Persistent atmosphere, cinematic language, era, texture, and visual tone.",
+  "style": "Persistent visual atmosphere, cinematic language, era, texture, and visual tone.",
+  "invariants": [
+    {"kind": "character", "title": "Alice", "text": "Alice keeps the same facial identity, dark bob, and red coat."},
+    {"kind": "sound", "title": "Score", "text": "Sparse analog synth, no vocals."}
+  ],
   "loras": [
     {"name": "character/alice.safetensors", "strength": 0.9}
   ],
@@ -125,6 +129,10 @@ Status is one of:
 - `archived`
 
 Pinned is separate from status because an archived/completed Story may still be worth pinning.
+
+`style` is the Story's persistent visual/atmosphere block. `invariants` are additional typed facts that should remain stable across independently generated Scenes, such as recurring characters, world rules, or soundtrack language. The Director receives these blocks as compact Story context rather than a long conversation history.
+
+The Story authoring panel is explicitly collapsible. Scene authoring has two views: a compact **Overview** for navigation and a **Focus** view that edits one Scene at a time. Focus mode intentionally bounds prose fields to a readable measure instead of stretching prompts across the full monitor width.
 
 ## Scene model
 

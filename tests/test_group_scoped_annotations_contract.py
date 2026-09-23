@@ -104,6 +104,7 @@ def test_prompt_expectations_do_not_merge_all_hair_colours_by_type():
 
 def test_config_sanitizer_preserves_group_scoped_wrappers():
     payload = {
+        "filesystem": {"root": "/tmp/webcap-test", "models": ""},
         "requirements": {
             "termWrappersByGroup": {
                 "Hair": {
@@ -360,7 +361,7 @@ def test_groups_helper_popup_dismisses_when_anchor_moves_and_hide_reviewed_belon
 
     assert 'id="checklist-hide-reviewed-btn"' not in html
     assert 'id="group-workbench-hide-reviewed-btn"' in html
-    groups_title = html.index('class="caption-helper-section-title">Groups')
+    groups_title = html.index('class="caption-helper-section-title">Manage Groups')
     show_all = html.index('id="group-workbench-show-all-btn"')
     hide_reviewed = html.index('id="group-workbench-hide-reviewed-btn"')
     settings = html.index('id="checklist-settings-btn"')

@@ -58,8 +58,7 @@ def _read_unlocked(action_root, run_id):
             step = int(selected.get("step"))
         except (TypeError, ValueError) as exc:
             raise ValueError("Training run manifest has an invalid selected epoch.") from exc
-        relative = PurePosixPath(str(selected.get("file") or ""))
-        if epoch <= 0 or step < 0 or not relative.parts or relative.is_absolute() or ".." in relative.parts or "\\" in str(relative):
+        if epoch <= 0 or step < 0:
             raise ValueError("Training run manifest has an invalid selected epoch.")
     return payload
 
@@ -92,23 +91,21 @@ def _write_unlocked(action_root, payload):
             pass
 
 
-def select_epoch(action_root, run_id, epoch, step, relative_file):
+def select_epoch(action_root, run_id, epoch, step):
     identity = _validate_run_id(run_id)
     try:
         epoch_number = int(epoch)
         step_number = int(step)
     except (TypeError, ValueError) as exc:
         raise ValueError("Selected epoch and step must be whole numbers.") from exc
-    relative = PurePosixPath(str(relative_file or ""))
-    if epoch_number <= 0 or step_number < 0 or not relative.parts or relative.is_absolute() or ".." in relative.parts or "\\" in str(relative):
-        raise ValueError("Selected artifact path must be relative to the managed training action.")
+    if epoch_number <= 0 or step_number < 0:
+        raise ValueError("Selected epoch and step must be non-negative whole numbers.")
 
     with _manifest_lock:
         payload = _read_unlocked(action_root, identity)
         payload["selected"] = {
             "epoch": epoch_number,
             "step": step_number,
-            "file": relative.as_posix(),
             "selectedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
         _write_unlocked(action_root, payload)

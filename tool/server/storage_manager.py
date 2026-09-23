@@ -97,16 +97,22 @@ def _item(area, item_id, label, path, *, folder="", kind="", status="", purgeabl
 
 def _training_items(cache):
     rows = []
+    references = _training_queue_reference_map()
     for path, data in managed_actions():
         action_id = str(data.get("actionId") or "")
+        refs = references.get(action_id, [])
         rows.append(_item(
             "training",
             action_id,
             data.get("runName") or path.name,
             path,
             kind=data.get("profileLabel") or data.get("profileId") or "Training run",
-            status="managed",
-            purgeable=True,
+            status=("active / queued" if refs else "managed"),
+            purgeable=not refs,
+            protected_reason=(
+                "Referenced by queued or active Training work: " + ", ".join(refs)
+                if refs else ""
+            ),
             meta={
                 "folder": str(data.get("folder") or ""),
                 "profileId": str(data.get("profileId") or ""),
@@ -414,27 +420,36 @@ def open_path(area, item_id, folder=""):
     return resolve_item(area, item_id, folder)
 
 
-def _training_queue_references(action_id):
+def _training_queue_reference_map():
     path = Path(app_config.FS_ROOT) / ".webcap_training" / "queue.json"
     if not path.is_file():
-        return []
+        return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Training queue state is unreadable; refusing Storage deletion.") from exc
+        raise RuntimeError("Training queue state is unreadable; refusing Storage ownership decisions.") from exc
     jobs = payload.get("jobs") if isinstance(payload, dict) else None
     if not isinstance(jobs, list):
-        raise RuntimeError("Training queue state is invalid; refusing Storage deletion.")
-    refs = []
+        raise RuntimeError("Training queue state is invalid; refusing Storage ownership decisions.")
+    references = {}
     for job in jobs:
         if not isinstance(job, dict):
             continue
         status = str(job.get("status") or "")
         if status in {"completed", "finished_early", "failed", "stopped", "interrupted", "cancelled"}:
             continue
-        if str(job.get("actionId") or "") == action_id or str(job.get("resumeActionId") or "") == action_id:
-            refs.append(str(job.get("id") or "unknown"))
-    return refs
+        job_id = str(job.get("id") or "unknown")
+        for key in ("actionId", "resumeActionId"):
+            action_id = str(job.get(key) or "").strip()
+            if action_id:
+                references.setdefault(action_id, [])
+                if job_id not in references[action_id]:
+                    references[action_id].append(job_id)
+    return references
+
+
+def _training_queue_references(action_id):
+    return _training_queue_reference_map().get(str(action_id or ""), [])
 
 
 def purge(area, item_id, folder=""):

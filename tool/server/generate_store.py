@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -9,6 +10,8 @@ from . import config as app_config
 
 
 MANIFEST_NAME = "generation.json"
+
+_logger = logging.getLogger(__name__)
 
 
 def generation_root():
@@ -142,7 +145,10 @@ def persist_result(job_id, request, output_ref, media_bytes, provider_job_id, el
         _atomic_write_json(directory / MANIFEST_NAME, payload)
         return payload
     except Exception:
-        shutil.rmtree(directory, ignore_errors=True)
+        try:
+            shutil.rmtree(directory)
+        except OSError:
+            _logger.exception("Could not clean partial Generate result directory %s.", directory)
         raise
 
 def list_results(limit=100):

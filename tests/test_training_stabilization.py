@@ -1111,10 +1111,11 @@ def test_external_gpu_reservation_blocks_training_queue_launch(monkeypatch):
         "queuePauseReason": "",
         "jobs": [{"id": "queued", "status": "queued", "folder": "sets/subject"}],
     }
-    monkeypatch.setattr(training_runner, "_external_gpu_owner", "test-generations")
+    execution_queue._resource_owner = "test-generations"
     monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("reserved GPU must not launch training"))
 
     training_runner._launch_next_queued_job(state)
+    execution_queue._resource_owner = ""
 
     assert state["activeJobId"] == ""
     assert state["jobs"][0]["status"] == "queued"

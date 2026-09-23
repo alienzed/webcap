@@ -327,6 +327,52 @@ def local_saved_output_path(output_ref):
     return None
 
 
+def cleanup_uploaded_inputs(uploaded_values, output_ref, owned_prefix=""):
+    output_path = local_saved_output_path(output_ref)
+    if output_path is None:
+        return 0
+
+    output_root = None
+    for parent in (output_path.parent,) + tuple(output_path.parents):
+        if parent.name.lower() == "output":
+            output_root = parent
+            break
+    if output_root is None:
+        return 0
+
+    input_root = (output_root.parent / "input").resolve()
+    if not input_root.is_dir():
+        return 0
+
+    prefix = str(owned_prefix or "").replace("\\", "/").strip("/")
+    removed = 0
+    for raw_value in uploaded_values or []:
+        value = str(raw_value or "").replace("\\", "/").strip("/")
+        if not value:
+            continue
+        relative = Path(value)
+        if relative.is_absolute() or ".." in relative.parts:
+            continue
+        if prefix and value != prefix and not value.startswith(prefix + "/"):
+            continue
+        candidate = (input_root / relative).resolve()
+        if candidate != input_root and input_root not in candidate.parents:
+            continue
+        if not candidate.is_file():
+            continue
+        candidate.unlink()
+        removed += 1
+
+        parent = candidate.parent
+        while parent != input_root and input_root in parent.parents:
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
+    return removed
+
+
 def cleanup_saved_output(output_ref):
     if not isinstance(output_ref, dict) or str(output_ref.get("type") or "output") != "output":
         return False

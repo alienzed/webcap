@@ -1716,7 +1716,7 @@ def _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2):
     staged.mkdir()
     candidates = []
     for index in range(candidate_count):
-        candidate = staged / ("epoch" + str(index + 1).padStart(2, "0") + ".safetensors")
+        candidate = staged / ("epoch" + str(index + 1).zfill(2) + ".safetensors")
         candidate.write_bytes(("weights-" + str(index)).encode("utf-8"))
         candidates.append(candidate)
 

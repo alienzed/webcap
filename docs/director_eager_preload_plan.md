@@ -1,6 +1,6 @@
 # Director / Prompt Assistant eager preload plan
 
-Status: implementation branch `ux/director-eager-preload`.
+Status: implemented and audited on `ux/director-eager-preload`.
 
 ## Goal
 
@@ -17,9 +17,9 @@ Hide most local LLM cold-load latency by opportunistically preloading the select
 
 ## Phase 0 - lock-order safety
 
-Training launches while holding its own queue lock and then evicts retained LLM state after reserving the shared GPU. A local Director request can hold the LLM request lock while checking Training availability. To avoid a lock inversion, retained-model eviction must not acquire the LLM request lock after Training / Inference already owns the shared GPU.
+Training launches while holding its own queue lock and then evicts retained LLM state after reserving the shared GPU. A local Director request can hold the LLM request lock while checking Training availability. The prior blocking eviction lock therefore had a lock-inversion risk.
 
-This is safe because once Training or Inference owns the shared GPU, a local Director request cannot enter model execution. An LLM request that has not yet acquired the GPU may fail cleanly and yield to the real workload.
+Retained-model eviction now attempts the LLM request lock non-blockingly. If Director is still finishing, Training / Inference releases its temporary shared-GPU claim and retries on its normal monitor cycle without pausing the queue. Real unload failures still pause the affected queue.
 
 ## Upstream llama.cpp decision
 
@@ -79,3 +79,30 @@ Add focused tests for:
 ## Known bounded worst case
 
 If a real Training / Inference job is submitted after preload has passed its final idle check and begun llama.cpp model loading, that real workload must wait for the in-flight load to finish and release the shared GPU reservation. The current llama.cpp router API does not expose a safe cancellation primitive for an in-progress `/models/load` call. The 1.5-second dwell plus double idle check keeps this window narrow without adding cancellation machinery.
+
+
+## Implementation audit
+
+### Confirmed
+
+- Eager preload is speculative only: it never calls ComfyUI `/free`.
+- Preload uses the existing external GPU reservation contract; launchable Training work blocks it.
+- Active or launchable queued shared Inference work is checked before reservation and again after reservation.
+- Current GPU free memory must be known and exceed the GGUF file size estimate plus 15% model overhead and 4 GiB safety headroom.
+- Unknown model size, unknown GPU memory, insufficient VRAM, remote mode, already-loaded state, or a competing GPU owner all result in a clean skip.
+- Successful preload releases the shared GPU reservation while leaving the local LLM resident.
+- Generate and Storyboard wait 1.5 seconds after model discovery before attempting preload.
+- Leaving either workspace cancels an unstarted preload timer.
+- An in-flight preload is not cancelled; the existing llama.cpp router API does not expose a safe load-cancellation primitive.
+- Changing the selected LLM during an in-flight preload schedules the newly selected model after the current preload finishes.
+- Preload does not set the normal Director busy state; the rest of the screen remains usable.
+- The existing activity card and telemetry polling are reused; no new toast framework or global status system was introduced.
+- No llama.cpp load-mode flag was added. Current default mmap behavior remains unchanged.
+
+### Hostile finding corrected
+
+The merged retained-model handoff from PR #67 had a latent lock inversion: Training could hold its queue lock while waiting for the LLM request lock, while Director held the LLM request lock and asked Training for GPU availability. Eviction now uses a non-blocking request-lock acquisition; busy Director work causes a normal retry rather than a deadlock or queue pause.
+
+### Validation limitation
+
+Focused pytest/UI contract tests were added for preload eligibility, VRAM gating, no-Comfy eviction, retained-model handoff retry behavior, and both workspace dwell triggers. GitHub Actions is still not present on `main` because the CI work remains in PR #63, so this branch cannot execute its test suite through Actions here. Final validation is therefore source/diff based rather than a claimed executed pytest run.

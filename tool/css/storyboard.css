@@ -204,6 +204,12 @@
   gap: 7px;
 }
 
+.storyboard-develop-actions > button {
+  flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
+}
+
 
 
 .storyboard-sequence-preview {

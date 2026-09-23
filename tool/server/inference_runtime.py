@@ -263,33 +263,86 @@ def upload_image(image_path, subfolder, filename=None):
     path = Path(image_path)
     if not path.is_file():
         raise FileNotFoundError("Inference reference image does not exist: " + str(path))
+
     upload_name = str(filename or path.name)
     boundary = "----WebCapInference" + uuid.uuid4().hex
-    parts = [
-        "--" + boundary,
-        'Content-Disposition: form-data; name="image"; filename="' + upload_name.replace('"', "") + '"',
-        "Content-Type: application/octet-stream",
-        "",
-    ]
-    body = "\r\n".join(parts).encode("utf-8") + b"\r\n" + path.read_bytes()
-    body += (
-        "\r\n--" + boundary + "\r\n"
-        'Content-Disposition: form-data; name="subfolder"\r\n\r\n'
-        + str(subfolder)
-        + "\r\n--" + boundary + "--\r\n"
-    ).encode("utf-8")
+    crlf = "\r\n"
+    parts = []
 
-    request = urllib.request.Request(
-        COMFY_BASE_URL + "/upload/image",
-        data=body,
-        headers={"Content-Type": "multipart/form-data; boundary=" + boundary},
-        method="POST",
-    )
+    def field(name, value):
+        parts.append(("--" + boundary + crlf).encode("utf-8"))
+        parts.append(('Content-Disposition: form-data; name="' + name + '"' + crlf + crlf).encode("utf-8"))
+        parts.append(str(value).encode("utf-8"))
+        parts.append(crlf.encode("utf-8"))
+
+    parts.append(("--" + boundary + crlf).encode("utf-8"))
+    parts.append((
+        'Content-Disposition: form-data; name="image"; filename="' + upload_name.replace('"', "") + '"' + crlf
+        + "Content-Type: application/octet-stream" + crlf + crlf
+    ).encode("utf-8"))
+    parts.append(path.read_bytes())
+    parts.append(crlf.encode("utf-8"))
+    field("overwrite", "true")
+    field("type", "input")
+    field("subfolder", subfolder)
+    parts.append(("--" + boundary + "--" + crlf).encode("utf-8"))
+    body = b"".join(parts)
+    content_type = "multipart/form-data; boundary=" + boundary
+
+    curl_path = _windows_curl_path()
+    if curl_path:
+        command = [
+            curl_path,
+            "--silent",
+            "--show-error",
+            "--fail-with-body",
+            "--max-time",
+            "60",
+            "--request",
+            "POST",
+            "--header",
+            "Content-Type: " + content_type,
+            "--data-binary",
+            "@-",
+            COMFY_BASE_URL + "/upload/image",
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                input=body,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=65,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RuntimeError("Could not upload inference reference image to ComfyUI.") from exc
+        if result.returncode != 0:
+            detail = (
+                result.stdout.decode("utf-8", errors="replace").strip()
+                or result.stderr.decode("utf-8", errors="replace").strip()
+            )
+            raise RuntimeError("ComfyUI reference upload failed: " + (detail or "curl.exe failed."))
+        response_body = result.stdout
+    else:
+        request = urllib.request.Request(
+            COMFY_BASE_URL + "/upload/image",
+            data=body,
+            headers={"Content-Type": content_type},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                response_body = response.read()
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise RuntimeError("Could not upload inference reference image to ComfyUI.") from exc
+
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Could not upload inference reference image to ComfyUI.") from exc
-    name = str(payload.get("name") or upload_name).strip()
-    returned_subfolder = str(payload.get("subfolder") or subfolder).strip()
-    return (returned_subfolder.rstrip("/") + "/" + name).lstrip("/")
+        payload = json.loads(response_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("ComfyUI returned invalid reference-upload JSON.") from exc
+    name = str(payload.get("name") or "").strip() if isinstance(payload, dict) else ""
+    returned_subfolder = str(payload.get("subfolder") or "").strip() if isinstance(payload, dict) else ""
+    if not name:
+        raise RuntimeError("ComfyUI did not return the uploaded reference image name.")
+    return (returned_subfolder.rstrip("/\\") + "/" + name) if returned_subfolder else name

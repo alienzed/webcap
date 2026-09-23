@@ -272,7 +272,7 @@ def test_storage_ui_is_isolated_global_activity():
     assert "workspace === 'storage'" in shell
     assert "activity === 'storage'" in shell
     assert "os.walk" not in backend
-    assert 'PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard", "runtime"}' in backend
+    assert 'PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime"}' in backend
     assert '"set": _set_items(cache, folder)' in backend
 
 
@@ -354,3 +354,114 @@ def test_test_purge_rechecks_active_status_at_mutation_time(monkeypatch, tmp_pat
     with pytest.raises(RuntimeError, match="Active Test Session"):
         storage_manager.purge("tests", "session-1", "sets/demo")
     assert session.is_dir()
+
+
+def _staged_copy(root, set_name="demo", filename="demo__epoch10.safetensors"):
+    directory = root / "external-test" / set_name
+    directory.mkdir(parents=True, exist_ok=True)
+    candidate = directory / filename
+    candidate.write_bytes(b"staged")
+    _write_json(candidate.with_suffix(".webcap.json"), {
+        "version": 1,
+        "sourceJobId": "job-source",
+        "sourceRunName": "Demo Run",
+        "sourceRunSequence": "abc123",
+        "sourceEpoch": 10,
+        "sourceFileName": "epoch10.safetensors",
+        "sourceFolder": "sets/demo",
+        "stage": "h3",
+        "runSummary": {},
+    })
+    return candidate
+
+
+def test_staged_test_copy_is_exposed_and_purges_copy_only(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    set_path = tmp_path / "sets" / "demo"
+    set_path.mkdir(parents=True)
+    source = tmp_path / "output" / "runs" / "source" / "epoch10.safetensors"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"source")
+    candidate = _staged_copy(tmp_path)
+
+    monkeypatch.setattr(
+        storage_manager,
+        "test_copy_destination",
+        lambda stage, set_name: (tmp_path / "external-test", [set_name]),
+    )
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {"jobs": []},
+    )
+
+    items = storage_manager.overview("sets/demo")["items"]["staged"]
+    assert len(items) == 1
+    assert items[0]["id"] == "h3/" + candidate.name
+    assert items[0]["purgeable"] is True
+
+    storage_manager.purge("staged", items[0]["id"], "sets/demo")
+
+    assert not candidate.exists()
+    assert not candidate.with_suffix(".webcap.json").exists()
+    assert source.is_file()
+
+
+def test_staged_test_copy_requires_webcap_provenance(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    (tmp_path / "sets" / "demo").mkdir(parents=True)
+    directory = tmp_path / "external-test" / "demo"
+    directory.mkdir(parents=True)
+    unknown = directory / "unknown.safetensors"
+    unknown.write_bytes(b"unknown")
+
+    monkeypatch.setattr(
+        storage_manager,
+        "test_copy_destination",
+        lambda stage, set_name: (tmp_path / "external-test", [set_name]),
+    )
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {"jobs": []},
+    )
+
+    assert storage_manager.overview("sets/demo")["items"]["staged"] == []
+    with pytest.raises(RuntimeError, match="ownership could not be proven"):
+        storage_manager.purge("staged", "h3/unknown.safetensors", "sets/demo")
+    assert unknown.is_file()
+
+
+def test_staged_test_copy_is_protected_while_shared_inference_references_it(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    (tmp_path / "sets" / "demo").mkdir(parents=True)
+    candidate = _staged_copy(tmp_path)
+
+    monkeypatch.setattr(
+        storage_manager,
+        "test_copy_destination",
+        lambda stage, set_name: (tmp_path / "external-test", [set_name]),
+    )
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {
+            "jobs": [{
+                "status": "running",
+                "metadata": {
+                    "client": "test",
+                    "folder": "sets/demo",
+                    "candidateKind": "lora",
+                    "candidateFile": candidate.name,
+                },
+            }],
+        },
+    )
+
+    item = storage_manager.overview("sets/demo")["items"]["staged"][0]
+    assert item["purgeable"] is False
+
+    with pytest.raises(RuntimeError, match="queued or active Test work"):
+        storage_manager.purge("staged", item["id"], "sets/demo")
+    assert candidate.is_file()
+    assert candidate.with_suffix(".webcap.json").is_file()

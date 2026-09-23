@@ -573,11 +573,13 @@ def _resolve_comfy(item_id):
     if raw_side_root.is_symlink() or not raw_side_root.is_dir():
         raise FileNotFoundError("ComfyUI " + side + " root is unavailable.")
     side_root = raw_side_root.resolve()
-    raw_path = side_root / prefix
-    for name in names:
-        raw_path = raw_path / name
+    raw_path = raw_side_root / prefix
     if raw_path.is_symlink():
         raise ValueError("ComfyUI storage path is symlinked.")
+    for name in names:
+        raw_path = raw_path / name
+        if raw_path.is_symlink():
+            raise ValueError("ComfyUI storage path is symlinked.")
     path = raw_path.resolve()
     if not path.is_dir() or side_root not in path.parents:
         raise FileNotFoundError("ComfyUI storage item is unavailable.")
@@ -682,12 +684,17 @@ def _resolve_generate(item_id):
     parts = PurePosixPath(str(item_id or "")).parts
     if len(parts) != 2 or any(part in {"", ".", ".."} for part in parts):
         raise ValueError("Generation storage ID is invalid.")
-    root = (Path(app_config.FS_ROOT) / "output" / "generations").resolve()
-    directory = (root / parts[0] / parts[1]).resolve()
-    if directory.parent.parent != root or directory.is_symlink():
+    raw_root = Path(app_config.FS_ROOT) / "output" / "generations"
+    raw_day = raw_root / parts[0]
+    raw_directory = raw_day / parts[1]
+    if raw_root.is_symlink() or raw_day.is_symlink() or raw_directory.is_symlink():
+        raise ValueError("Generation storage path is symlinked.")
+    root = raw_root.resolve()
+    directory = raw_directory.resolve()
+    if directory.parent.parent != root:
         raise ValueError("Generation storage ID escaped the managed root.")
     manifest = directory / MANIFEST_NAME
-    if not directory.is_dir() or not manifest.is_file():
+    if not directory.is_dir() or manifest.is_symlink() or not manifest.is_file():
         raise FileNotFoundError("Generation result is unavailable.")
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or str(payload.get("jobId") or "") != parts[1]:
@@ -699,11 +706,16 @@ def _resolve_test(folder, session_id):
     folder = str(folder or "").strip()
     if not folder:
         raise ValueError("Current Set is required for Test Session storage.")
-    set_path = app_config.safe_join_fs_root(folder).resolve()
-    root = (set_path / "test-generations").resolve()
-    session = (root / str(session_id or "")).resolve()
+    raw_set_path = app_config.safe_join_fs_root(folder)
+    raw_root = raw_set_path / "test-generations"
+    raw_session = raw_root / str(session_id or "")
+    if raw_root.is_symlink() or raw_session.is_symlink():
+        raise ValueError("Test Session storage path is symlinked.")
+    set_path = raw_set_path.resolve()
+    root = raw_root.resolve()
+    session = raw_session.resolve()
     manifest = session / "test.json"
-    if session.parent != root or session.is_symlink() or manifest.is_symlink() or not manifest.is_file():
+    if root.parent != set_path or session.parent != root or manifest.is_symlink() or not manifest.is_file():
         raise FileNotFoundError("Test Session is unavailable.")
     return session
 
@@ -716,10 +728,11 @@ def _resolve_h3_probe(item_id):
     if not name or Path(name).name != name:
         raise ValueError("H3 probe storage ID is invalid.")
 
-    root = (Path(app_config.FS_ROOT) / ".webcap_training" / "h3-probes").resolve()
-    raw_path = root / name
-    if raw_path.is_symlink():
+    raw_root = Path(app_config.FS_ROOT) / ".webcap_training" / "h3-probes"
+    raw_path = raw_root / name
+    if raw_root.is_symlink() or raw_path.is_symlink():
         raise ValueError("H3 probe storage path is symlinked.")
+    root = raw_root.resolve()
     path = raw_path.resolve()
     if path.parent != root or not path.is_dir():
         raise FileNotFoundError("H3 probe storage item is unavailable.")

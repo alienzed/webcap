@@ -455,7 +455,7 @@ def test_generic_application_modals_close_on_escape_without_feature_inventory():
     advanced = (ROOT / "tool" / "js" / "advanced_mappings_rules.js").read_text(encoding="utf-8")
 
     assert "#app-overlay-root > .modal:not(.hidden)" in shell
-    assert "genericModal.querySelector('[data-close-modal="" in shell
+    assert "genericModal.querySelector('[data-close-modal=\"" in shell
     assert "ensureWorkspaceOverlayChildren" not in checklist
     assert "ensureWorkspaceOverlayChildren" not in advanced
 

@@ -15,6 +15,7 @@ var shellSystemStatusState = {
   pending: false,
   timer: 0,
   gpu: null,
+  ram: null,
   disk: null,
   error: ''
 };
@@ -319,6 +320,24 @@ function renderShellSystemStatus() {
     parts.push('<span class="is-warning" title="' + escapeHtml(gpu.error || 'GPU status unavailable.') + '">GPU unavailable</span>');
   }
 
+  var ram = shellSystemStatusState.ram;
+  if (ram && ram.available) {
+    var ramUsed = formatShellDiskSpace(ram.used);
+    var ramTotal = formatShellDiskSpace(ram.total);
+    var ramFree = formatShellDiskSpace(ram.free);
+    var ramUsedBytes = Number(ram.used);
+    var ramTotalBytes = Number(ram.total);
+    var ramPercent = isFinite(ramUsedBytes) && isFinite(ramTotalBytes) && ramTotalBytes > 0
+      ? Math.round(ramUsedBytes / ramTotalBytes * 100)
+      : null;
+    var ramTitle = 'Physical RAM in use' + (ramFree ? ' · ' + ramFree + ' available' : '');
+    parts.push('<span class="shell-system-ram" title="' + escapeHtml(ramTitle) + '"><strong>RAM</strong> ' +
+      escapeHtml(ramUsed || '—') + ' / ' + escapeHtml(ramTotal || '—') +
+      (ramPercent === null ? '' : ' (' + ramPercent + '%)') + '</span>');
+  } else if (ram && !ram.available) {
+    parts.push('<span class="is-warning" title="' + escapeHtml(ram.error || 'RAM status unavailable.') + '">RAM unavailable</span>');
+  }
+
   var disk = shellSystemStatusState.disk;
   if (disk && disk.available) {
     var freeText = formatShellDiskSpace(disk.free);
@@ -356,13 +375,14 @@ function refreshShellSystemStatus() {
     })
     .then(function (payload) {
       shellSystemStatusState.gpu = payload.gpu || null;
+      shellSystemStatusState.ram = payload.ram || null;
       shellSystemStatusState.disk = payload.disk || null;
       shellSystemStatusState.error = '';
       renderShellSystemStatus();
     })
     .catch(function (err) {
       shellSystemStatusState.error = String(err && err.message ? err.message : err);
-      if (!shellSystemStatusState.gpu && !shellSystemStatusState.disk) {
+      if (!shellSystemStatusState.gpu && !shellSystemStatusState.ram && !shellSystemStatusState.disk) {
         renderShellSystemStatus();
         var host = document.getElementById('shell-gpu-status');
         if (host) {

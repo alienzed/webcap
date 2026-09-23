@@ -84,18 +84,44 @@ def _write_json_atomic(path, payload):
             os.unlink(tmp_name)
 
 
-def _restore_ordered_id(order, item_id, removed):
+def _restore_order_metadata(item):
+    metadata = item.get("_restoreOrder") if isinstance(item.get("_restoreOrder"), dict) else {}
+    return {
+        "index": metadata.get("index", item.get("removedOrderIndex")),
+        "beforeId": str(metadata.get("beforeId", item.get("removedBeforeId")) or ""),
+        "afterId": str(metadata.get("afterId", item.get("removedAfterId")) or ""),
+    }
+
+
+def _restore_ordered_id(order, item_id, removed, active_items):
     restored = list(order or [])
-    before_id = str(removed.get("removedBeforeId") or "")
-    after_id = str(removed.get("removedAfterId") or "")
-    if after_id and after_id in restored:
-        restored.insert(restored.index(after_id), item_id)
-        return restored
+    metadata = _restore_order_metadata(removed)
+    lower_bounds = []
+    upper_bounds = []
+    before_id = metadata["beforeId"]
+    after_id = metadata["afterId"]
     if before_id and before_id in restored:
-        restored.insert(restored.index(before_id) + 1, item_id)
+        lower_bounds.append(restored.index(before_id) + 1)
+    if after_id and after_id in restored:
+        upper_bounds.append(restored.index(after_id))
+
+    for active_id in restored:
+        active = active_items.get(active_id) if isinstance(active_items, dict) else None
+        if not isinstance(active, dict):
+            continue
+        active_metadata = _restore_order_metadata(active)
+        if active_metadata["beforeId"] == item_id:
+            upper_bounds.append(restored.index(active_id))
+        if active_metadata["afterId"] == item_id:
+            lower_bounds.append(restored.index(active_id) + 1)
+
+    lower = max(lower_bounds, default=0)
+    upper = min(upper_bounds, default=len(restored))
+    if lower <= upper and (lower_bounds or upper_bounds):
+        restored.insert(upper if upper_bounds else lower, item_id)
         return restored
     try:
-        index = int(removed.get("removedOrderIndex"))
+        index = int(metadata["index"])
     except (TypeError, ValueError):
         index = len(restored)
     restored.insert(max(0, min(index, len(restored))), item_id)
@@ -267,7 +293,7 @@ def _normalize_scene(scene_id, value, existing=None):
     if megapixels <= 0:
         raise ValueError("Scene megapixels must be greater than zero.")
 
-    return {
+    normalized = {
         "id": scene_id,
         "title": str(value.get("title", current.get("title", "")) or "").strip(),
         "summary": str(value.get("summary", current.get("summary", "")) or "").strip(),
@@ -293,6 +319,9 @@ def _normalize_scene(scene_id, value, existing=None):
         "createdAt": current.get("createdAt") or now,
         "updatedAt": now,
     }
+    if isinstance(current.get("_restoreOrder"), dict):
+        normalized["_restoreOrder"] = copy.deepcopy(current["_restoreOrder"])
+    return normalized
 
 
 def _normalize_story(payload, existing=None, story_id=None):
@@ -623,6 +652,11 @@ def delete_scene(story_id, scene_id):
     scene["removedOrderIndex"] = order_index
     scene["removedBeforeId"] = scene_order[order_index - 1] if order_index > 0 else None
     scene["removedAfterId"] = scene_order[order_index + 1] if order_index + 1 < len(scene_order) else None
+    scene["_restoreOrder"] = {
+        "index": scene["removedOrderIndex"],
+        "beforeId": scene["removedBeforeId"],
+        "afterId": scene["removedAfterId"],
+    }
     removed = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
     removed[scene_id] = scene
     story["removedScenes"] = removed
@@ -643,7 +677,9 @@ def restore_scene(story_id, scene_id):
     restored = dict(scene)
     restored.pop("removedAt", None)
     restored.pop("removedReason", None)
-    story["sceneOrder"] = _restore_ordered_id(story.get("sceneOrder") or [], scene_id, restored)
+    story["sceneOrder"] = _restore_ordered_id(
+        story.get("sceneOrder") or [], scene_id, restored, story.get("scenes") or {}
+    )
     restored.pop("removedOrderIndex", None)
     restored.pop("removedBeforeId", None)
     restored.pop("removedAfterId", None)
@@ -651,6 +687,10 @@ def restore_scene(story_id, scene_id):
     story["scenes"][scene_id] = restored
     del removed[scene_id]
     story["removedScenes"] = removed
+    if not removed:
+        for active_scene in story["scenes"].values():
+            if isinstance(active_scene, dict):
+                active_scene.pop("_restoreOrder", None)
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story
@@ -751,6 +791,11 @@ def remove_take(story_id, scene_id, take_id):
     removed_take["removedOrderIndex"] = order_index
     removed_take["removedBeforeId"] = take_order[order_index - 1] if order_index > 0 else None
     removed_take["removedAfterId"] = take_order[order_index + 1] if order_index + 1 < len(take_order) else None
+    removed_take["_restoreOrder"] = {
+        "index": removed_take["removedOrderIndex"],
+        "beforeId": removed_take["removedBeforeId"],
+        "afterId": removed_take["removedAfterId"],
+    }
     removed = scene.get("removedTakes") if isinstance(scene.get("removedTakes"), dict) else {}
     removed[resolved_take_id] = removed_take
     del takes[resolved_take_id]
@@ -777,7 +822,9 @@ def restore_take(story_id, scene_id, take_id):
 
     restored = dict(take)
     restored.pop("removedAt", None)
-    scene["takeOrder"] = _restore_ordered_id(scene.get("takeOrder") or [], resolved_take_id, restored)
+    scene["takeOrder"] = _restore_ordered_id(
+        scene.get("takeOrder") or [], resolved_take_id, restored, scene.get("takes") or {}
+    )
     restored.pop("removedOrderIndex", None)
     restored.pop("removedBeforeId", None)
     restored.pop("removedAfterId", None)
@@ -786,6 +833,10 @@ def restore_take(story_id, scene_id, take_id):
     del removed[resolved_take_id]
     scene["takes"] = takes
     scene["removedTakes"] = removed
+    if not removed:
+        for active_take in takes.values():
+            if isinstance(active_take, dict):
+                active_take.pop("_restoreOrder", None)
     scene["updatedAt"] = _utc_now()
     story["updatedAt"] = scene["updatedAt"]
     _write_json_atomic(_story_path(story_id), story)

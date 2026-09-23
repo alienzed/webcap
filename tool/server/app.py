@@ -1,3 +1,4 @@
+import ctypes
 import os
 import json
 from flask import Response, stream_with_context
@@ -158,9 +159,53 @@ def fs_root():
     return jsonify({"root": str(app_config.FS_ROOT)})
 
 
+def _system_ram_status():
+    if os.name == "nt":
+        class MEMORYSTATUSEX(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_uint32),
+                ("dwMemoryLoad", ctypes.c_uint32),
+                ("ullTotalPhys", ctypes.c_uint64),
+                ("ullAvailPhys", ctypes.c_uint64),
+                ("ullTotalPageFile", ctypes.c_uint64),
+                ("ullAvailPageFile", ctypes.c_uint64),
+                ("ullTotalVirtual", ctypes.c_uint64),
+                ("ullAvailVirtual", ctypes.c_uint64),
+                ("ullAvailExtendedVirtual", ctypes.c_uint64),
+            ]
+
+        status = MEMORYSTATUSEX()
+        status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        get_memory_status = kernel32.GlobalMemoryStatusEx
+        get_memory_status.argtypes = [ctypes.POINTER(MEMORYSTATUSEX)]
+        get_memory_status.restype = ctypes.c_int
+        if not get_memory_status(ctypes.byref(status)):
+            raise OSError(ctypes.get_last_error(), "GlobalMemoryStatusEx failed.")
+        total = int(status.ullTotalPhys)
+        available = int(status.ullAvailPhys)
+    else:
+        page_size = int(os.sysconf("SC_PAGE_SIZE"))
+        total = page_size * int(os.sysconf("SC_PHYS_PAGES"))
+        available = page_size * int(os.sysconf("SC_AVPHYS_PAGES"))
+
+    if total <= 0 or available < 0 or available > total:
+        raise OSError("System returned invalid physical RAM values.")
+    return {
+        "available": True,
+        "total": total,
+        "used": total - available,
+        "free": available,
+    }
+
+
 @app.route("/fs/system_status", methods=["GET"])
 def fs_system_status():
     gpu_payload, _gpu_status = training_runner_gpu_status_response()
+    try:
+        ram = _system_ram_status()
+    except (OSError, ValueError, AttributeError) as exc:
+        ram = {"available": False, "error": str(exc)}
     try:
         usage = shutil.disk_usage(app_config.FS_ROOT)
         disk = {
@@ -179,6 +224,7 @@ def fs_system_status():
     return jsonify({
         "ok": True,
         "gpu": gpu_payload.get("gpu"),
+        "ram": ram,
         "disk": disk,
     })
 

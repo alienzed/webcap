@@ -31,16 +31,15 @@ def _read_json(path, label):
 
 
 def _reference_roles(scene):
-    roles = []
+    roles = set()
     for reference in scene.get("references") or []:
         if not isinstance(reference, dict):
             continue
         role = _clean(reference.get("role"))
         if role not in {"first_frame", "last_frame"}:
             continue
-        if role not in roles:
-            roles.append(role)
-    return roles
+        roles.add(role)
+    return [role for role in ("first_frame", "last_frame") if role in roles]
 
 
 def _reference_summary(scene):

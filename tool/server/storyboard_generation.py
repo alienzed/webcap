@@ -737,7 +737,9 @@ def _advance_queue():
 
 def _run_generation(job_id, story_id, scene_id, settings):
     try:
-        execution_mark_running(job_id, details={"comfyStatus": "starting"})
+        running_job = execution_mark_running(job_id, details={"comfyStatus": "starting"})
+        if running_job.get("status") == "stopping":
+            raise StoryboardGenerationStopped("stopped", "Storyboard Take generation stopped.")
         filename_prefix = "webcap-storyboard/" + story_id + "/" + scene_id + "/" + job_id + "/render"
         if settings.get("wildcardsEnabled"):
             settings = dict(settings)
@@ -777,12 +779,12 @@ def _run_generation(job_id, story_id, scene_id, settings):
                 "providerJobId": prompt_id,
             },
         )
+        execution_update_job(job_id, details={"comfyStatus": "completed"})
         execution_finish_job(
             job_id,
             status="completed",
             result={"takeId": take["id"]},
         )
-        execution_update_job(job_id, details={"comfyStatus": "completed"})
     except StoryboardGenerationStopped as exc:
         execution_finish_job(job_id, status=exc.status, error=str(exc))
     except Exception as exc:

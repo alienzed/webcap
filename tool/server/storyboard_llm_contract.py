@@ -199,7 +199,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append("[H3 WRITING RULES]\n" + h3_runtime_context)
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
-            "Choose the number of Scenes and each duration yourself from the creative material; use at least two Scenes, "
+            "Choose the number of Scenes and each duration yourself from the creative material. Give each meaningful narrative beat its own generatable Scene; most developed Stories should land around 4 to 8 Scenes, using fewer only when the concept is genuinely very short and more when the narrative requires it. "
             "and keep every Scene between 4 and 15 seconds. Preserve coherent narrative progression, explicit entry/exit "
             "continuity, supplied Story facts, and Story invariants across the sequence. Write a complete model-facing H3 "
             "prompt for every Scene now, not a placeholder. Be creatively useful: invent natural dialogue, performance details, "

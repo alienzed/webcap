@@ -112,3 +112,43 @@ def test_execution_queue_resource_claim_is_exclusive(queue_root):
     assert execution_queue.reserve_resource("takes") is False
     execution_queue.release_resource("takes")
     assert execution_queue.reserve_resource("tests") is True
+
+
+def test_execution_queue_orders_mixed_inference_client_metadata_in_one_lane(queue_root):
+    first = execution_queue.enqueue(
+        "inference",
+        {"request": {"prompt": "portrait"}},
+        metadata={"client": "generate", "label": "Portrait"},
+    )
+    second = execution_queue.enqueue(
+        "inference",
+        {"request": {"prompt": "scene"}},
+        metadata={"client": "storyboard", "sceneId": "scene-2"},
+    )
+    third = execution_queue.enqueue(
+        "inference",
+        {"request": {"prompt": "test"}},
+        metadata={"client": "test", "candidate": "epoch-44"},
+    )
+
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+
+    assert [job["id"] for job in snapshot["jobs"]] == [first["id"], second["id"], third["id"]]
+    assert [job["metadata"]["client"] for job in snapshot["jobs"]] == [
+        "generate",
+        "storyboard",
+        "test",
+    ]
+    assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2, 3]
+
+
+def test_execution_queue_reorders_mixed_inference_client_jobs(queue_root):
+    first = execution_queue.enqueue("inference", {"n": 1}, metadata={"client": "generate"})
+    second = execution_queue.enqueue("inference", {"n": 2}, metadata={"client": "storyboard"})
+    third = execution_queue.enqueue("inference", {"n": 3}, metadata={"client": "test"})
+
+    execution_queue.reorder_job(third["id"], position=0)
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+
+    assert [job["id"] for job in snapshot["jobs"]] == [third["id"], second["id"], first["id"]]
+    assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2, 3]

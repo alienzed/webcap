@@ -298,3 +298,26 @@ def test_generate_execute_cleans_transient_refs_and_captured_provider_output(tmp
     assert cleaned_refs == [{"first_frame": "runtime/frame.png"}]
     assert not Path(output_ref["fullpath"]).exists()
 
+def test_generate_reference_cleanup_route_is_scoped_to_store_helper(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        app_module,
+        "generate_cleanup_references",
+        lambda paths: seen.extend(paths) or len(paths),
+    )
+    client = app_module.app.test_client()
+
+    response = client.post("/fs/generate/reference/cleanup", json={
+        "paths": [
+            ".webcap_runtime/generate-references/ref-1/first.png",
+            ".webcap_runtime/generate-references/ref-2/last.png",
+        ]
+    })
+
+    assert response.status_code == 200
+    assert response.get_json()["removed"] == 2
+    assert seen == [
+        ".webcap_runtime/generate-references/ref-1/first.png",
+        ".webcap_runtime/generate-references/ref-2/last.png",
+    ]
+

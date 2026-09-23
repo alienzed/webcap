@@ -90,6 +90,33 @@ def test_scene_settings_resolve_story_loras_before_queueing(storyboard_fs):
     ]
 
 
+def test_storyboard_request_preserves_full_reference_provenance(storyboard_fs):
+    reference = {
+        "role": "first_frame",
+        "mediaPath": "references/first.png",
+        "source": "take",
+        "sourceTakeId": "take-previous",
+        "frame": "last",
+    }
+    request = storyboard_generation._storyboard_request({
+        "prompt": "Prompt",
+        "sourcePrompt": "Prompt",
+        "wildcardsEnabled": False,
+        "aspectRatio": "4:3 (Standard)",
+        "megapixels": 0.2,
+        "duration": 6,
+        "seed": 1,
+        "seedMode": "fixed",
+        "entryState": "",
+        "exitState": "",
+        "loras": [],
+        "references": [reference],
+    })
+
+    assert request["references"] == {"first_frame": "references/first.png"}
+    assert request["referenceRecords"] == [reference]
+
+
 def test_storyboard_request_rejects_unsupported_guide_frame(storyboard_fs):
     settings = {
         "prompt": "Prompt",

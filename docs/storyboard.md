@@ -351,9 +351,10 @@ Current implementation on the Storyboard branch now includes:
 - first/last frame extraction for video Takes using WebCap's existing ffmpeg frame path
 - a direct previous-selected-Take last-frame -> next-Scene first-frame continuity action
 
+The current slice also supports direct image upload into a Scene's `first_frame` or `last_frame` slot. Uploaded references are copied into the Story's own `references/manual/` area, replace cleanly, and are removed when no longer referenced.
+
 Still to add:
 
-- arbitrary external/manual reference image staging beyond existing Story Takes
 - scene-level generation presets/default inheritance only where the workflow proves it useful
 
 ### Phase 3 - ComfyUI generation adapter
@@ -397,9 +398,10 @@ Remaining provider-facing work:
 
 - arbitrary guide/reference-to-video inputs where the current base-family workflow supports them
 - a separate future Ref2VA adapter only if richer full-reference generation proves worthwhile; do not overload the current FL2VA-family path with Ref2VA semantics
-- reference image selection from WebCap media, Krea outputs, or filesystem
-- cleanup of uploaded temporary ComfyUI input references after a generation is safely captured
+- reference image selection from existing WebCap/Krea media surfaces beyond the implemented direct filesystem upload
 - keep semantic reference roles independent of ComfyUI node IDs
+
+Temporary ComfyUI input-reference copies are now removed after a Take is safely captured when WebCap can verify ComfyUI's local input/output filesystem layout. If that layout is not safely addressable, cleanup is skipped rather than guessing.
 
 ### Phase 5 - LLM-assisted authoring
 
@@ -415,7 +417,7 @@ Current runtime slice:
 - deterministic validation against `docs/storyboard-scene-plan.schema.json` plus app-level validation before any Scene replacement is written;
 - replanning requires explicit confirmation and moves old active Scenes into recoverable `removedScenes` without deleting their Take media;
 - the accepted development plan/model are persisted in Story metadata for provenance;
-- existing `write_prompt` and `refine_prompt` Scene-local contracts remain available;
+- existing `write_prompt` and `refine_prompt` Scene-local contracts remain available, with one-step **Restore Previous** for the last Director prompt edit;
 - thinking disabled for these bounded authoring calls;
 - one Director inference at a time;
 - shared WebCap GPU reservation with explicit model unload after each request;
@@ -452,7 +454,7 @@ Deliberately not implemented yet:
 - transitions, gaps, trims, overlays, or a timeline editor;
 - alternate export profiles;
 - Story search/filter/tag views;
-- richer completion/progress summaries;
+- richer completion/progress summaries beyond the implemented compact Story readiness line;
 - reusable Story/Scene templates.
 
 Do not turn WebCap into a general nonlinear video editor.

@@ -16,6 +16,8 @@ from pathlib import Path
 
 from . import config as app_config
 from .storyboard_store import add_take_upload, finalize_generated_take, load_story, resolve_scene_loras, storyboard_root
+from . import inference_runtime
+from .inference_models import get_inference_model
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     claim_next as execution_claim_next,
@@ -43,8 +45,8 @@ ASPECT_RATIO_OPTIONS = (
     "16:9 (Widescreen)",
     "21:9 (Ultrawide)",
 )
-EXECUTION_LANE = "storyboard-takes"
-GPU_RESERVATION_OWNER = EXECUTION_LANE
+EXECUTION_LANE = "inference"
+LEGACY_EXECUTION_LANE = "storyboard-takes"
 _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _monitor_lock = threading.Lock()
@@ -602,24 +604,6 @@ def _format_comfy_error(job):
     return detail + ((" (" + node + ")") if node else "")
 
 
-class StoryboardGenerationStopped(RuntimeError):
-    def __init__(self, status, message):
-        super().__init__(message)
-        self.status = status
-
-
-def _cancel_comfy_job(prompt_id):
-    job_id = str(prompt_id or "").strip()
-    if not job_id:
-        return False
-    response = _read_json_response(
-        COMFY_BASE_URL + "/api/jobs/" + urllib.parse.quote(job_id, safe="") + "/cancel",
-        method="POST",
-        timeout=5,
-    )
-    return bool(response.get("cancelled")) if isinstance(response, dict) else False
-
-
 def _generation_job(job):
     if not isinstance(job, dict):
         return None
@@ -635,206 +619,207 @@ def _generation_job(job):
         "startedAt": job.get("startedAt"),
         "completedAt": job.get("finishedAt"),
         "queuePosition": int(job.get("queuePosition") or 0),
-        "comfyJobId": details.get("comfyJobId"),
-        "comfyStatus": str(details.get("comfyStatus") or ""),
+        "comfyJobId": details.get("providerJobId"),
+        "comfyStatus": str(details.get("providerStatus") or ""),
         "takeId": result.get("takeId"),
         "requestedAction": str(job.get("requestedAction") or ""),
         "error": str(job.get("error") or ""),
     }
 
 
-def _wait_for_output(prompt_id, job_id):
-    deadline = time.monotonic() + GENERATION_TIMEOUT_SECONDS
-    missing_since = None
-    while True:
-        if time.monotonic() >= deadline:
-            raise RuntimeError("Timed out waiting for ComfyUI to finish this Storyboard generation.")
+def _storyboard_request(settings):
+    source_prompt = str(settings.get("sourcePrompt") or settings.get("prompt") or "").strip()
+    prompt = str(settings.get("prompt") or "").strip()
+    if settings.get("wildcardsEnabled"):
+        prompt = inference_runtime.resolve_wildcard_prompt(source_prompt, settings["seed"])
 
-        queue_job = execution_get_job(job_id)
-        requested_action = str(queue_job.get("requestedAction") or "")
-        if requested_action in ("stop", "cancel"):
-            _cancel_comfy_job(prompt_id)
-            status = "cancelled" if requested_action == "cancel" else "stopped"
-            raise StoryboardGenerationStopped(status, "Storyboard Take generation " + status + ".")
-
-        job = _read_comfy_job(prompt_id)
-        if job is None:
-            if missing_since is None:
-                missing_since = time.monotonic()
-            if time.monotonic() - missing_since >= 10:
-                raise RuntimeError("ComfyUI lost Storyboard job " + prompt_id + "; ComfyUI may have restarted.")
-            time.sleep(2)
+    references = {}
+    for reference in settings.get("references") or []:
+        if not isinstance(reference, dict):
             continue
-        missing_since = None
-        status = str(job.get("status") or "").strip().lower()
-        execution_update_job(job_id, details={"comfyStatus": status})
-        if status in ("pending", "in_progress"):
-            time.sleep(2)
+        role = str(reference.get("role") or "").strip()
+        if role == "guide_frame":
+            raise RuntimeError("Guide-frame references are stored but are not yet supported by the H3 Storyboard generator.")
+        if role not in ("first_frame", "last_frame"):
             continue
-        if status == "failed":
-            raise RuntimeError(_format_comfy_error(job))
-        if status == "cancelled":
-            raise StoryboardGenerationStopped("cancelled", "ComfyUI cancelled this Storyboard generation.")
-        if status == "completed":
-            output = _find_output_ref(job.get("outputs") or {})
-            if not output:
-                raise RuntimeError("ComfyUI completed the Storyboard workflow without an MP4 output.")
-            return output
-        raise RuntimeError("ComfyUI returned unknown Storyboard job status: " + (status or "empty") + ".")
+        references[role] = str(reference.get("mediaPath") or "").strip()
+
+    return {
+        "modelId": "minimax_h3",
+        "mediaKind": "video",
+        "sourcePrompt": source_prompt,
+        "prompt": prompt,
+        "settings": {
+            "aspectRatio": settings["aspectRatio"],
+            "megapixels": settings["megapixels"],
+            "duration": settings["duration"],
+            "seed": settings["seed"],
+        },
+        "loras": copy.deepcopy(settings.get("loras") or []),
+        "references": references,
+        "wildcardsEnabled": bool(settings.get("wildcardsEnabled")),
+        "workflowFile": "minimax_h3_storyboard_api.json",
+        "entryState": str(settings.get("entryState") or ""),
+        "exitState": str(settings.get("exitState") or ""),
+        "seedMode": str(settings.get("seedMode") or ""),
+    }
 
 
-def _download_output(output_ref):
-    query = urllib.parse.urlencode({
-        "filename": output_ref["filename"],
-        "subfolder": output_ref.get("subfolder") or "",
-        "type": output_ref.get("type") or "output",
-    })
-    return _read_bytes(COMFY_BASE_URL + "/view?" + query)
+def execute_inference(job_id, request, context):
+    story_id = str(context.get("storyId") or "").strip()
+    scene_id = str(context.get("sceneId") or "").strip()
+    if not story_id or not scene_id:
+        raise RuntimeError("Storyboard inference is missing its Story or Scene context.")
 
+    model = get_inference_model(request.get("modelId"))
+    template = model.load_template()
+    uploaded = {}
+    for role, relative_path in (request.get("references") or {}).items():
+        source = _resolve_story_reference_path(story_id, relative_path)
+        uploaded[role] = inference_runtime.upload_image(
+            source,
+            "webcap-storyboard/" + story_id + "/" + scene_id + "/" + str(job_id) + "/references",
+            filename=source.name,
+        )
 
-def _start_job_thread(job_id):
-    job = execution_get_job(job_id, include_payload=True)
-    payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
-    story_id = str(payload.get("storyId") or "")
-    scene_id = str(payload.get("sceneId") or "")
-    settings = copy.deepcopy(payload.get("settings") or {})
-    if not story_id or not scene_id or not settings:
-        raise RuntimeError("Storyboard execution job is missing its frozen generation payload.")
-
-    thread = threading.Thread(
-        target=_run_generation,
-        args=(job_id, story_id, scene_id, settings),
-        daemon=True,
-        name="storyboard-generation-" + job_id[:8],
+    filename_prefix = "webcap-storyboard/" + story_id + "/" + scene_id + "/" + str(job_id) + "/render"
+    workflow = model.build_workflow(
+        template,
+        request["prompt"],
+        copy.deepcopy(request["settings"]),
+        copy.deepcopy(request.get("loras") or []),
+        uploaded,
+        filename_prefix,
+        inference_runtime.available_names,
+        inference_runtime.resolve_name,
     )
-    thread.start()
+    provider_job_id = inference_runtime.queue_workflow(workflow)
+    execution_update_job(job_id, details={"providerJobId": provider_job_id, "providerStatus": "pending"})
+    output_ref = inference_runtime.wait_for_output(provider_job_id, job_id, model.find_output_ref)
+    media = inference_runtime.download_output(output_ref)
+
+    _story, take = add_take_upload(
+        story_id,
+        scene_id,
+        output_ref.get("filename") or "render.mp4",
+        io.BytesIO(media),
+        effective_loras=request.get("loras") or [],
+    )
+    _story, take = finalize_generated_take(
+        story_id,
+        scene_id,
+        take["id"],
+        {
+            "prompt": request["prompt"],
+            "entryState": str(context.get("entryState") or ""),
+            "exitState": str(context.get("exitState") or ""),
+            "sourcePrompt": request.get("sourcePrompt") or request["prompt"],
+            "wildcardsEnabled": bool(request.get("wildcardsEnabled")),
+            "durationSeconds": request["settings"]["duration"],
+            "seed": request["settings"]["seed"],
+            "seedMode": str(context.get("seedMode") or ""),
+            "aspectRatio": request["settings"]["aspectRatio"],
+            "megapixels": request["settings"]["megapixels"],
+            "loras": request.get("loras") or [],
+            "references": [
+                {"role": role, "mediaPath": path}
+                for role, path in (request.get("references") or {}).items()
+            ],
+            "workflowProfile": "minimax_h3_storyboard_v1",
+            "providerJobId": provider_job_id,
+        },
+    )
+    execution_update_job(job_id, details={"providerStatus": "completed"})
+    return {"takeId": take["id"]}
 
 
-def _advance_queue():
-    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-    if snapshot.get("paused") or snapshot.get("activeJobId"):
+def _legacy_job_request(job):
+    payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
+    settings = payload.get("settings") if isinstance(payload.get("settings"), dict) else {}
+    story_id = str(payload.get("storyId") or "").strip()
+    scene_id = str(payload.get("sceneId") or "").strip()
+    if not story_id or not scene_id or not settings:
         return None
-    if not any(job.get("status") == "queued" for job in snapshot.get("jobs", [])):
-        _release_gpu()
-        return None
-
-    try:
-        _reserve_gpu()
-    except RuntimeError:
-        return None
-
-    claimed = execution_claim_next(EXECUTION_LANE)
-    if claimed is None:
-        _release_gpu()
-        return None
-
-    job_id = str(claimed.get("id") or "")
-    try:
-        _start_job_thread(job_id)
-    except Exception as exc:
-        execution_finish_job(job_id, status="failed", error=str(exc))
-        _release_gpu()
-        _logger.exception("Could not start queued Storyboard generation job %s.", job_id)
-        return _advance_queue()
-    return _generation_job(execution_get_job(job_id))
+    return story_id, scene_id, _storyboard_request(copy.deepcopy(settings))
 
 
-def _run_generation(job_id, story_id, scene_id, settings):
-    try:
-        running_job = execution_mark_running(job_id, details={"comfyStatus": "starting"})
-        if running_job.get("status") == "stopping":
-            raise StoryboardGenerationStopped("stopped", "Storyboard Take generation stopped.")
-        filename_prefix = "webcap-storyboard/" + story_id + "/" + scene_id + "/" + job_id + "/render"
-        if settings.get("wildcardsEnabled"):
-            settings = dict(settings)
-            settings["prompt"] = _resolve_wildcard_prompt(settings["prompt"], settings["seed"])
-        uploaded_references = _upload_scene_references(story_id, job_id, settings.get("references") or [])
-        workflow = _build_workflow(_load_template(), settings, filename_prefix, uploaded_references=uploaded_references)
-        prompt_id = _queue_workflow(workflow)
-        execution_update_job(job_id, details={"comfyJobId": prompt_id, "comfyStatus": "pending"})
-        output_ref = _wait_for_output(prompt_id, job_id)
-        media = _download_output(output_ref)
+def reconcile_startup():
+    global _startup_reconciled
+    if _startup_reconciled:
+        return
+    with _reconcile_lock:
+        if _startup_reconciled:
+            return
 
-        story, take = add_take_upload(
-            story_id,
-            scene_id,
-            output_ref.get("filename") or "render.mp4",
-            io.BytesIO(media),
-            effective_loras=settings.get("loras") or [],
+        interrupted = execution_recover_lane(
+            LEGACY_EXECUTION_LANE,
+            reason="Legacy Storyboard Take generation was interrupted by a WebCap restart.",
         )
-        story, take = finalize_generated_take(
-            story_id,
-            scene_id,
-            take["id"],
-            {
-                "prompt": settings["prompt"],
-                "entryState": settings["entryState"],
-                "exitState": settings["exitState"],
-                "sourcePrompt": settings["sourcePrompt"],
-                "wildcardsEnabled": settings["wildcardsEnabled"],
-                "durationSeconds": settings["duration"],
-                "seed": settings["seed"],
-                "seedMode": settings["seedMode"],
-                "aspectRatio": settings["aspectRatio"],
-                "megapixels": settings["megapixels"],
-                "loras": settings.get("loras") or [],
-                "references": settings.get("references") or [],
-                "workflowProfile": "minimax_h3_storyboard_v1",
-                "providerJobId": prompt_id,
-            },
-        )
-        execution_update_job(job_id, details={"comfyStatus": "completed"})
-        execution_finish_job(
-            job_id,
-            status="completed",
-            result={"takeId": take["id"]},
-        )
-    except StoryboardGenerationStopped as exc:
-        execution_finish_job(job_id, status=exc.status, error=str(exc))
-    except Exception as exc:
-        _logger.exception("Storyboard generation job %s failed.", job_id)
-        execution_finish_job(job_id, status="failed", error=str(exc))
-    finally:
-        _release_gpu()
-        _advance_queue()
+        for job in interrupted:
+            details = job.get("details") if isinstance(job.get("details"), dict) else {}
+            prompt_id = str(details.get("comfyJobId") or details.get("providerJobId") or "").strip()
+            if prompt_id:
+                try:
+                    inference_runtime.cancel_job(prompt_id)
+                except Exception:
+                    _logger.exception("Could not cancel interrupted legacy Storyboard provider job %s.", prompt_id)
+
+        legacy = execution_lane_snapshot(LEGACY_EXECUTION_LANE, include_terminal=False)
+        for job in legacy.get("jobs", []):
+            if job.get("status") != "queued":
+                continue
+            migrated = _legacy_job_request(execution_get_job(job["id"], include_payload=True))
+            if migrated is None:
+                execution_cancel_queued(job["id"])
+                continue
+            story_id, scene_id, request = migrated
+            from .inference_runner import enqueue_storyboard
+            enqueue_storyboard(request, story_id, scene_id, label="Storyboard Take")
+            execution_cancel_queued(job["id"])
+
+        _startup_reconciled = True
+
+
+def start_observer():
+    reconcile_startup()
 
 
 def start_generation(story_id, scene_id):
-    _ensure_startup_reconciled()
+    reconcile_startup()
     story = load_story(story_id)
     scene_id = str(scene_id or "").strip()
     scene = (story.get("scenes") or {}).get(scene_id)
     if not isinstance(scene, dict):
         raise FileNotFoundError("Scene does not exist.")
-    settings = _scene_settings(scene, story)
 
-    job = execution_enqueue(
-        EXECUTION_LANE,
-        {
-            "storyId": story_id,
-            "sceneId": scene_id,
-            "settings": settings,
-        },
-        metadata={
-            "kind": "storyboard-take",
-            "storyId": story_id,
-            "sceneId": scene_id,
-        },
+    settings = _scene_settings(scene, story)
+    request = _storyboard_request(settings)
+    from .inference_runner import enqueue_storyboard
+    job = enqueue_storyboard(
+        request,
+        story_id,
+        scene_id,
+        label=str(scene.get("title") or "Storyboard Take"),
     )
-    _advance_queue()
-    return _generation_job(execution_get_job(job["id"]))
+    return generation_status(job["jobId"])
 
 
 def generation_status(job_id):
-    _ensure_startup_reconciled()
-    return _generation_job(execution_get_job(str(job_id or "").strip()))
+    reconcile_startup()
+    job = execution_get_job(str(job_id or "").strip())
+    return _generation_job(job)
 
 
 def generation_queue(story_id=""):
-    _ensure_startup_reconciled()
+    reconcile_startup()
     story_id = str(story_id or "").strip()
     snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-    jobs = [_generation_job(job) for job in snapshot.get("jobs", [])]
+    jobs = [
+        _generation_job(job)
+        for job in snapshot.get("jobs", [])
+        if isinstance(job.get("metadata"), dict)
+        and job["metadata"].get("client") == "storyboard"
+    ]
     if story_id:
         jobs = [job for job in jobs if job.get("storyId") == story_id]
     return {
@@ -846,14 +831,10 @@ def generation_queue(story_id=""):
 
 
 def generation_action(operation, job_id="", direction=""):
-    _ensure_startup_reconciled()
+    reconcile_startup()
     operation = str(operation or "").strip()
-    job_id = str(job_id or "").strip()
-    if operation == "cancel":
-        job = execution_cancel_queued(job_id)
-        _advance_queue()
-        return {"job": _generation_job(job)}
-    if operation == "stop":
-        job = execution_request_stop(job_id)
-        return {"job": _generation_job(job)}
-    raise ValueError("Unsupported Storyboard generation action: " + operation)
+    if operation not in {"cancel", "stop"}:
+        raise ValueError("Unsupported Storyboard generation action: " + operation)
+    from .inference_runner import action
+    payload = action(operation, job_id=str(job_id or "").strip(), direction=direction)
+    return {"job": _generation_job(execution_get_job(payload["job"]["jobId"]))}

@@ -488,7 +488,7 @@ def test_cancel_job_and_wait_requires_terminal_provider_state(monkeypatch):
 
     assert inference_runtime.cancel_job_and_wait("provider-123", timeout=1) is True
 
-def test_inference_restart_rediscovers_unresolved_terminal_provider(inference_root, monkeypatch):
+def test_inference_restart_records_unresolved_provider_without_contacting_comfyui(inference_root, monkeypatch):
     queued = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,
         {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
@@ -502,12 +502,56 @@ def test_inference_restart_rediscovers_unresolved_terminal_provider(inference_ro
     execution_queue.finish_job(queued["id"], status="failed", error="polling failed")
 
     inference_runner._startup_reconciled = False
-    monkeypatch.setattr(inference_runtime, "cancel_job_and_wait", lambda _provider_id: False)
+    calls = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait",
+        lambda provider_id: calls.append(provider_id) or False,
+    )
 
     inference_runner.reconcile_startup()
 
     snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
     assert snapshot["paused"] is True
-    assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
+    assert calls == []
+    assert execution_queue.resource_owner() == ""
     with inference_runner._provider_hold_lock:
         assert "provider-still-running" in inference_runner._provider_cleanup_holds
+
+
+def test_inference_monitor_does_not_poll_comfyui_for_pending_cleanup(inference_root, monkeypatch):
+    inference_runner.hold_provider_cleanup(
+        "provider-stale",
+        "Queue paused: stale provider cleanup is pending.",
+    )
+    calls = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "read_job",
+        lambda provider_id: calls.append(provider_id) or {"status": "in_progress"},
+    )
+
+    inference_runner._advance_queue()
+    inference_runner._advance_queue()
+
+    assert calls == []
+    assert execution_queue.resource_owner() == ""
+
+
+def test_inference_resume_checks_pending_cleanup_once(inference_root, monkeypatch):
+    inference_runner.hold_provider_cleanup(
+        "provider-stale",
+        "Queue paused: stale provider cleanup is pending.",
+    )
+    calls = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "read_job",
+        lambda provider_id: calls.append(provider_id) or {"status": "in_progress"},
+    )
+
+    result = inference_runner.action("resume_queue")
+
+    assert calls == ["provider-stale"]
+    assert result["queue"]["paused"] is True
+    assert execution_queue.resource_owner() == ""

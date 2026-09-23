@@ -493,28 +493,28 @@
     return value == null ? fallback : value;
   }
 
-  function loraOptions(selectedName, filterText) {
+  function loraOptions(selectedName) {
     var names = (storyState.generationCapabilities.loras || []).slice();
-    var filter = String(filterText || '').trim().toLowerCase();
-    if (filter) {
-      names = names.filter(function (name) {
-        return String(name || '').toLowerCase().indexOf(filter) !== -1;
-      });
-    }
     if (selectedName && names.indexOf(selectedName) < 0) names.unshift(selectedName);
-    if (!names.length) return '<option value="">No matching LoRAs</option>';
+    if (!names.length) return '<option value="">No selectable LoRAs</option>';
     return names.map(function (name) {
       return '<option value="' + escapeHtml(name) + '"' + (name === selectedName ? ' selected' : '') + '>' +
         escapeHtml(name) + '</option>';
     }).join('');
   }
 
-  function loraRowHtml(lora, filterText) {
+  function loraDatalistOptions() {
+    return (storyState.generationCapabilities.loras || []).map(function (name) {
+      return '<option value="' + escapeHtml(name) + '"></option>';
+    }).join('');
+  }
+
+  function loraRowHtml(lora) {
     lora = lora || {};
     var name = String(lora.name || '');
     var strength = lora.strength == null ? 1 : lora.strength;
     return '<div class="storyboard-lora-row" data-scene-lora-row>' +
-      '<select data-scene-lora-name>' + loraOptions(name, filterText) + '</select>' +
+      '<select data-scene-lora-name>' + loraOptions(name) + '</select>' +
       '<input type="number" step="0.05" data-scene-lora-strength value="' + escapeHtml(strength) + '" aria-label="LoRA strength">' +
       '<button type="button" class="review-captions-btn" data-scene-lora-remove title="Remove LoRA">×</button>' +
     '</div>';
@@ -590,7 +590,7 @@
       var generationRunning = generationJob && generationJob.status === 'running';
       var generationBusy = generationQueued || generationRunning;
       var sceneLoras = Array.isArray(scene.loras) ? scene.loras : [];
-      var loraRowsHtml = sceneLoras.map(function (lora) { return loraRowHtml(lora, ''); }).join('');
+      var loraRowsHtml = sceneLoras.map(loraRowHtml).join('');
       var advancedSummaryParts = [];
       if (seedMode === 'fixed') advancedSummaryParts.push('Fixed seed');
       if (scene.wildcardsEnabled) advancedSummaryParts.push('Wildcards');
@@ -701,9 +701,9 @@
                 '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
                 '<label class="storyboard-inline-check" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
                 '<div class="storyboard-lora-panel">' +
-                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add the selected Scene-specific LoRA."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
-                  '<input type="search" class="storyboard-lora-filter" data-scene-lora-filter placeholder="Filter available LoRAs…" aria-label="Filter available LoRAs">' +
-                  '<select class="storyboard-lora-picker" data-scene-lora-picker aria-label="Available LoRAs">' + loraOptions('', '') + '</select>' +
+                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add the chosen Scene-specific LoRA."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
+                  '<input type="search" class="storyboard-lora-picker" data-scene-lora-picker list="storyboard-lora-options-' + escapeHtml(sceneId) + '" placeholder="Filter / choose LoRA…" aria-label="Filter and choose available LoRA">' +
+                  '<datalist id="storyboard-lora-options-' + escapeHtml(sceneId) + '">' + loraDatalistOptions() + '</datalist>' +
                   '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>' +
                   '<span class="storyboard-reference-empty">' + escapeHtml(loraStatus) + '</span>' +
                 '</div>' +
@@ -1371,15 +1371,6 @@
     });
 
     el('storyboard-scenes-list').addEventListener('input', function (event) {
-      var loraFilter = event.target.closest('[data-scene-lora-filter]');
-      if (loraFilter) {
-        var filterScene = loraFilter.closest('.storyboard-scene[data-scene-id]');
-        if (!filterScene) throw new Error('LoRA filter Scene is missing.');
-        var picker = filterScene.querySelector('[data-scene-lora-picker]');
-        if (!picker) throw new Error('LoRA picker is missing.');
-        picker.innerHTML = loraOptions('', loraFilter.value);
-        return;
-      }
       var loraRow = event.target.closest('[data-scene-lora-row]');
       if (loraRow) {
         var loraScene = loraRow.closest('.storyboard-scene[data-scene-id]');
@@ -1429,9 +1420,14 @@
         if (!list) throw new Error('LoRA list is missing.');
         var picker = addLoraScene.querySelector('[data-scene-lora-picker]');
         if (!picker) throw new Error('LoRA picker is missing.');
-        var selectedName = String(picker.value || '').trim();
+        var typedName = String(picker.value || '').trim();
+        var names = storyState.generationCapabilities.loras || [];
+        var selectedName = names.find(function (name) {
+          return String(name || '').toLowerCase() === typedName.toLowerCase();
+        }) || '';
         if (!selectedName) return;
-        list.insertAdjacentHTML('beforeend', loraRowHtml({ name: selectedName, strength: 1 }, ''));
+        list.insertAdjacentHTML('beforeend', loraRowHtml({ name: selectedName, strength: 1 }));
+        picker.value = '';
         scheduleSceneSave(addLoraScene.dataset.sceneId);
         return;
       }

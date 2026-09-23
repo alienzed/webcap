@@ -228,3 +228,13 @@ def test_storyboard_lora_filter_controls_available_picker():
     assert "picker.innerHTML = loraOptions('', loraFilter.value);" in storyboard
     assert "var selectedName = String(picker.value || '').trim();" in storyboard
     assert "loraRowHtml({ name: selectedName, strength: 1 }, '')" in storyboard
+
+
+def test_storyboard_lora_chooser_is_single_searchable_field():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'data-scene-lora-filter' not in storyboard
+    assert 'data-scene-lora-picker' in storyboard
+    assert 'list="storyboard-lora-options-' in storyboard
+    assert "function loraDatalistOptions()" in storyboard
+    assert "picker.value = '';" in storyboard

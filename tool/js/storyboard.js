@@ -220,7 +220,8 @@
     var detail = el('storyboard-director-activity-detail');
     if (!card || !phase || !detail) throw new Error('Storyboard Director activity markup is missing.');
 
-    var visible = storyState.director.busy || (activity && activity.active);
+    var terminal = activity && ['complete', 'error'].indexOf(String(activity.phase || '')) !== -1;
+    var visible = storyState.director.busy || (activity && activity.active) || terminal;
     card.classList.toggle('hidden', !visible);
     if (!visible) return;
 

@@ -39,7 +39,7 @@ from .storyboard_assembly import current_export as storyboard_current_export, ex
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_llm_runtime import run_contract as storyboard_run_llm_contract, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
-from .generate_store import list_results as generate_list_results, resolve_result_media as generate_resolve_result_media, save_reference as generate_save_reference
+from .generate_store import cleanup_references as generate_cleanup_references, list_results as generate_list_results, resolve_result_media as generate_resolve_result_media, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
 from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, reconcile_startup as reconcile_inference_startup, snapshot as inference_snapshot, start_observer as start_inference_observer
 
@@ -740,6 +740,10 @@ def generate_route():
             label = str(prepared.get("sourcePrompt") or "Generate").replace("\n", " ")[:80]
         return jsonify({"ok": True, "job": enqueue_generate(prepared, label=label)})
     except Exception as exc:
+        try:
+            generate_cleanup_references(data.get("references") or {})
+        except Exception:
+            app.logger.exception("GENERATE REFERENCE CLEANUP FAILED after enqueue error.")
         app.logger.exception("GENERATE ENQUEUE FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 

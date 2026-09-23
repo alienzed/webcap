@@ -553,3 +553,27 @@ def test_delete_take_refuses_media_used_as_live_image_reference(storyboard_fs):
     assert take["id"] in loaded["scenes"][source_scene["id"]]["takes"]
     assert media_path.is_file()
 
+def test_delete_take_rolls_back_metadata_when_media_delete_fails(storyboard_fs, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "take.png", BytesIO(b"image")
+    )
+    media_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]
+    original_unlink = Path.unlink
+
+    def fail_media_unlink(path, *args, **kwargs):
+        if path == media_path:
+            raise OSError("media is locked")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_media_unlink)
+
+    with pytest.raises(OSError, match="media is locked"):
+        storyboard_store.delete_take(story["id"], scene["id"], take["id"])
+
+    loaded = storyboard_store.load_story(story["id"])
+    assert take["id"] in loaded["scenes"][scene["id"]]["takes"]
+    assert take["id"] in loaded["scenes"][scene["id"]]["takeOrder"]
+    assert media_path.is_file()
+

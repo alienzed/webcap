@@ -45,7 +45,7 @@ Candidate Analysis currently provides analyzer suggestions, saved-epoch inspecti
 
 The planned lifecycle is **Suggested candidate -> Saved/Tested epoch -> Selected epoch -> Finalize training -> Archived experiment**. The Selected-epoch contract lives in [webcap-lora-valley-candidate-detection.md](webcap-lora-valley-candidate-detection.md); archive/finalization ownership lives in [storage_manager_plan.md](storage_manager_plan.md).
 
-The durable selection/experiment record should live with the logical run in `webcap-run.json`, not in Set state or `.webcap_training/recent_runs.json`. Training History remains a lightweight recent-work index, while finalized experiment metadata should travel with the archived run.
+The durable selection/experiment record should live inside the trainer timestamp run folder in `webcap-run.json`, because that exact folder is what survives into the user's archive. It should not live in Set state or `.webcap_training/recent_runs.json`. Training History remains a lightweight recent-work index, while finalized experiment metadata should travel with the archived run.
 
 ## Manual command handoff
 

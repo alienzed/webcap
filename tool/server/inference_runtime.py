@@ -110,39 +110,53 @@ def system_stats():
     return _read_json_response(COMFY_BASE_URL + "/system_stats", timeout=3)
 
 
+def _normalize_name(value):
+    return "/".join(
+        segment
+        for segment in str(value or "").replace("\\", "/").split("/")
+        if segment
+    ).casefold()
+
+
 def available_names(node_type, input_name, label):
     payload = _read_json_response(
         COMFY_BASE_URL + "/object_info/" + urllib.parse.quote(str(node_type), safe=""),
         timeout=5,
     )
     node = payload.get(node_type) if isinstance(payload, dict) else None
-    inputs = node.get("input") if isinstance(node, dict) else None
-    required = inputs.get("required") if isinstance(inputs, dict) else None
-    spec = required.get(input_name) if isinstance(required, dict) else None
-    choices = spec[0] if isinstance(spec, list) and spec and isinstance(spec[0], list) else None
-    if not choices:
-        raise RuntimeError("ComfyUI did not report available " + label + " values.")
-    return [str(value) for value in choices]
+    inputs = node.get("input") if isinstance(node, dict) and isinstance(node.get("input"), dict) else {}
+    required = inputs.get("required") if isinstance(inputs.get("required"), dict) else {}
+    optional = inputs.get("optional") if isinstance(inputs.get("optional"), dict) else {}
+    spec = required.get(input_name)
+    if spec is None:
+        spec = optional.get(input_name)
+    choices = spec[0] if isinstance(spec, (list, tuple)) and spec else None
+    if not isinstance(choices, (list, tuple)):
+        raise RuntimeError("ComfyUI did not expose available " + label + " names for " + str(node_type) + ".")
+    names = [str(name) for name in choices if str(name).strip()]
+    if not names:
+        raise RuntimeError("ComfyUI reports no " + label + " files available to " + str(node_type) + ".")
+    return names
 
 
 def resolve_name(configured_name, available, label):
     configured = str(configured_name or "").strip()
-    if not configured:
-        raise ValueError("Configured " + label + " is empty.")
-    if configured in available:
-        return configured
-    normalized = configured.replace("\\", "/").casefold()
-    normalized_matches = [item for item in available if item.replace("\\", "/").casefold() == normalized]
-    if len(normalized_matches) == 1:
-        return normalized_matches[0]
-    display_name = Path(configured.replace("\\", "/")).name or configured
-    basename_matches = [
-        item
-        for item in available
-        if Path(item.replace("\\", "/")).name.casefold() == display_name.casefold()
+    normalized = _normalize_name(configured)
+    records = [
+        (name, _normalize_name(name), Path(str(name).replace("\\", "/")).name.casefold())
+        for name in available
     ]
+    suffix_matches = [
+        name for name, available_normalized, _ in records
+        if normalized == available_normalized or normalized.endswith("/" + available_normalized)
+    ]
+    if len(suffix_matches) == 1:
+        return suffix_matches[0]
+    basename = Path(configured.replace("\\", "/")).name.casefold()
+    basename_matches = [name for name, _, record_basename in records if record_basename == basename]
     if len(basename_matches) == 1:
         return basename_matches[0]
+    display_name = Path(configured.replace("\\", "/")).name or configured
     if not basename_matches:
         raise RuntimeError("ComfyUI cannot see " + label + ": " + display_name)
     raise RuntimeError("ComfyUI " + label + " name is ambiguous: " + display_name)

@@ -85,6 +85,36 @@ def test_training_yields_retained_director_after_reserving_gpu(tmp_path, monkeyp
     execution_queue.release_resource(training_runner.TRAINING_RESOURCE_OWNER)
 
 
+def test_training_defers_without_pausing_if_director_runtime_is_busy(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    execution_queue._resource_owner = ""
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "jobs": [{"id": "job-one", "folder": "sets/subject", "status": "queued"}],
+        "queuePaused": False,
+        "queuePauseReason": "",
+    }
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: (_ for _ in ()).throw(storyboard_llm_runtime.DirectorRuntimeBusy("busy")),
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda *_args: pytest.fail("Training must retry later while Director runtime is busy."),
+    )
+
+    training_runner._launch_next_queued_job(state)
+
+    assert state["queuePaused"] is False
+    assert state["jobs"][0]["status"] == "queued"
+    assert execution_queue.resource_owner() == ""
+
+
 def test_training_pauses_without_launching_if_director_cannot_yield(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     _set(tmp_path)

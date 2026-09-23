@@ -412,6 +412,17 @@ def create_story(payload):
     return story
 
 
+@_serialized_mutation
+def delete_story(story_id):
+    resolved_id = _safe_story_id(story_id)
+    directory = _story_dir(resolved_id)
+    if directory.is_symlink():
+        raise RuntimeError("Storyboard Story folder must not be a symlink.")
+    story = load_story(resolved_id)
+    shutil.rmtree(directory)
+    return story["id"]
+
+
 def load_story(story_id):
     path = _story_path(story_id)
     if not path.is_file():

@@ -277,7 +277,7 @@
   function setDirectorBusy(busy) {
     storyState.director.busy = !!busy;
     setStoryDirectorInputsDisabled(busy);
-    ['storyboard-expand-concept-btn', 'storyboard-develop-btn'].forEach(function (id) {
+    ['storyboard-expand-concept-btn', 'storyboard-develop-btn', 'storyboard-delete-story-btn'].forEach(function (id) {
       var node = el(id);
       if (node) node.disabled = !!busy;
     });
@@ -1388,6 +1388,38 @@
     }).catch(reportError);
   }
 
+  function deleteStory() {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    var title = String(storyState.story.title || 'Untitled Story');
+    if (!window.confirm(
+      'Delete "' + title + '" and permanently remove all of its Scenes, Takes, references, and exports? This cannot be undone.'
+    )) return;
+
+    setSaveState('Deleting...');
+    flushPendingSaves().then(function () {
+      return request({
+        operation: 'delete_story',
+        storyId: storyId
+      });
+    }).then(function () {
+      if (storyState.story && storyState.story.id === storyId) storyState.story = null;
+      storyState.sequenceExport = null;
+      storyState.newTakeCounts = {};
+      storyState.activeSceneId = '';
+      storyState.director.previousPrompts = {};
+      storyState.generationJobs = {};
+      Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
+      syncStoryboardGenerationActivity();
+      return refreshLibrary();
+    }).then(function () {
+      var next = storyState.stories && storyState.stories[0];
+      if (next) return openStory(next.id);
+      renderStory();
+      setSaveState('');
+    }).catch(reportError);
+  }
+
   function storyPayloadFromUi() {
     return {
       title: el('storyboard-story-title').value,
@@ -2169,6 +2201,7 @@
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
 
     el('storyboard-new-btn').onclick = createStory;
+    el('storyboard-delete-story-btn').onclick = deleteStory;
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };

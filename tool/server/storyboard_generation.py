@@ -11,7 +11,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config as app_config
@@ -545,12 +544,61 @@ def _format_comfy_error(job):
     return detail + ((" (" + node + ")") if node else "")
 
 
+class StoryboardGenerationStopped(RuntimeError):
+    def __init__(self, status, message):
+        super().__init__(message)
+        self.status = status
+
+
+def _cancel_comfy_job(prompt_id):
+    job_id = str(prompt_id or "").strip()
+    if not job_id:
+        return False
+    response = _read_json_response(
+        COMFY_BASE_URL + "/api/jobs/" + urllib.parse.quote(job_id, safe="") + "/cancel",
+        method="POST",
+        timeout=5,
+    )
+    return bool(response.get("cancelled")) if isinstance(response, dict) else False
+
+
+def _generation_job(job):
+    if not isinstance(job, dict):
+        return None
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    details = job.get("details") if isinstance(job.get("details"), dict) else {}
+    result = job.get("result") if isinstance(job.get("result"), dict) else {}
+    return {
+        "jobId": str(job.get("id") or ""),
+        "storyId": str(metadata.get("storyId") or ""),
+        "sceneId": str(metadata.get("sceneId") or ""),
+        "status": str(job.get("status") or ""),
+        "queuedAt": job.get("createdAt"),
+        "startedAt": job.get("startedAt"),
+        "completedAt": job.get("finishedAt"),
+        "queuePosition": int(job.get("queuePosition") or 0),
+        "comfyJobId": details.get("comfyJobId"),
+        "comfyStatus": str(details.get("comfyStatus") or ""),
+        "takeId": result.get("takeId"),
+        "requestedAction": str(job.get("requestedAction") or ""),
+        "error": str(job.get("error") or ""),
+    }
+
+
 def _wait_for_output(prompt_id, job_id):
     deadline = time.monotonic() + GENERATION_TIMEOUT_SECONDS
     missing_since = None
     while True:
         if time.monotonic() >= deadline:
             raise RuntimeError("Timed out waiting for ComfyUI to finish this Storyboard generation.")
+
+        queue_job = execution_get_job(job_id)
+        requested_action = str(queue_job.get("requestedAction") or "")
+        if requested_action in ("stop", "cancel"):
+            _cancel_comfy_job(prompt_id)
+            status = "cancelled" if requested_action == "cancel" else "stopped"
+            raise StoryboardGenerationStopped(status, "Storyboard Take generation " + status + ".")
+
         job = _read_comfy_job(prompt_id)
         if job is None:
             if missing_since is None:
@@ -561,14 +609,14 @@ def _wait_for_output(prompt_id, job_id):
             continue
         missing_since = None
         status = str(job.get("status") or "").strip().lower()
-        _update_job(job_id, comfyStatus=status)
+        execution_update_job(job_id, details={"comfyStatus": status})
         if status in ("pending", "in_progress"):
             time.sleep(2)
             continue
         if status == "failed":
             raise RuntimeError(_format_comfy_error(job))
         if status == "cancelled":
-            raise RuntimeError("ComfyUI cancelled this Storyboard generation.")
+            raise StoryboardGenerationStopped("cancelled", "ComfyUI cancelled this Storyboard generation.")
         if status == "completed":
             output = _find_output_ref(job.get("outputs") or {})
             if not output:
@@ -586,35 +634,14 @@ def _download_output(output_ref):
     return _read_bytes(COMFY_BASE_URL + "/view?" + query)
 
 
-def _public_job(job):
-    if not isinstance(job, dict):
-        return None
-    return {key: value for key, value in job.items() if not str(key).startswith("_")}
-
-
-def _refresh_queue_positions_locked():
-    for index, queued_job_id in enumerate(_pending_job_ids, start=1):
-        queued = _jobs.get(queued_job_id)
-        if queued is not None and queued.get("status") == "queued":
-            queued["queuePosition"] = index
-
-
-def _update_job(job_id, **fields):
-    with _lock:
-        current = _jobs.get(job_id)
-        if current is None:
-            return
-        current.update(fields)
-
-
 def _start_job_thread(job_id):
-    with _lock:
-        job = _jobs.get(job_id)
-        if job is None:
-            raise FileNotFoundError("Storyboard generation job does not exist.")
-        story_id = job["storyId"]
-        scene_id = job["sceneId"]
-        settings = copy.deepcopy(job["_settings"])
+    job = execution_get_job(job_id, include_payload=True)
+    payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
+    story_id = str(payload.get("storyId") or "")
+    scene_id = str(payload.get("sceneId") or "")
+    settings = copy.deepcopy(payload.get("settings") or {})
+    if not story_id or not scene_id or not settings:
+        raise RuntimeError("Storyboard execution job is missing its frozen generation payload.")
 
     thread = threading.Thread(
         target=_run_generation,
@@ -625,53 +652,39 @@ def _start_job_thread(job_id):
     thread.start()
 
 
-def _start_next_queued_or_release():
-    global _active_job_id
-    while True:
-        with _lock:
-            next_job_id = None
-            while _pending_job_ids:
-                candidate_id = _pending_job_ids.pop(0)
-                candidate = _jobs.get(candidate_id)
-                if candidate is None or candidate.get("status") != "queued":
-                    continue
-                candidate.update({
-                    "status": "running",
-                    "startedAt": _utc_now(),
-                    "queuePosition": 0,
-                    "comfyStatus": "starting",
-                })
-                _active_job_id = candidate_id
-                next_job_id = candidate_id
-                break
-            _refresh_queue_positions_locked()
+def _advance_queue():
+    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    if snapshot.get("paused") or snapshot.get("activeJobId"):
+        return None
+    if not any(job.get("status") == "queued" for job in snapshot.get("jobs", [])):
+        _release_gpu()
+        return None
 
-        if next_job_id is None:
-            _release_gpu()
-            return
+    try:
+        _reserve_gpu()
+    except RuntimeError:
+        return None
 
-        try:
-            _start_job_thread(next_job_id)
-            return
-        except Exception as exc:
-            app_config.debug_print("[storyboard-generation] COULD NOT START QUEUED JOB:", exc)
-            app_config.debug_traceback()
-            with _lock:
-                failed = _jobs.get(next_job_id)
-                if failed is not None:
-                    failed.update({
-                        "status": "failed",
-                        "completedAt": _utc_now(),
-                        "error": str(exc),
-                        "queuePosition": 0,
-                    })
-                if _active_job_id == next_job_id:
-                    _active_job_id = None
+    claimed = execution_claim_next(EXECUTION_LANE)
+    if claimed is None:
+        _release_gpu()
+        return None
+
+    job_id = str(claimed.get("id") or "")
+    try:
+        _start_job_thread(job_id)
+    except Exception as exc:
+        execution_finish_job(job_id, status="failed", error=str(exc))
+        _release_gpu()
+        app_config.debug_print("[storyboard-generation] COULD NOT START QUEUED JOB:", exc)
+        app_config.debug_traceback()
+        return _advance_queue()
+    return _generation_job(execution_get_job(job_id))
 
 
 def _run_generation(job_id, story_id, scene_id, settings):
-    global _active_job_id
     try:
+        execution_mark_running(job_id, details={"comfyStatus": "starting"})
         filename_prefix = "webcap-storyboard/" + story_id + "/" + scene_id + "/" + job_id + "/render"
         if settings.get("wildcardsEnabled"):
             settings = dict(settings)
@@ -679,7 +692,7 @@ def _run_generation(job_id, story_id, scene_id, settings):
         uploaded_references = _upload_scene_references(story_id, job_id, settings.get("references") or [])
         workflow = _build_workflow(_load_template(), settings, filename_prefix, uploaded_references=uploaded_references)
         prompt_id = _queue_workflow(workflow)
-        _update_job(job_id, comfyJobId=prompt_id, comfyStatus="pending")
+        execution_update_job(job_id, details={"comfyJobId": prompt_id, "comfyStatus": "pending"})
         output_ref = _wait_for_output(prompt_id, job_id)
         media = _download_output(output_ref)
 
@@ -711,102 +724,91 @@ def _run_generation(job_id, story_id, scene_id, settings):
                 "providerJobId": prompt_id,
             },
         )
-        _update_job(
+        execution_finish_job(
             job_id,
             status="completed",
-            completedAt=_utc_now(),
-            takeId=take["id"],
-            comfyStatus="completed",
+            result={"takeId": take["id"]},
         )
+        execution_update_job(job_id, details={"comfyStatus": "completed"})
+    except StoryboardGenerationStopped as exc:
+        execution_finish_job(job_id, status=exc.status, error=str(exc))
     except Exception as exc:
         app_config.debug_print("[storyboard-generation] ERROR:", exc)
         app_config.debug_traceback()
-        _update_job(job_id, status="failed", completedAt=_utc_now(), error=str(exc))
+        execution_finish_job(job_id, status="failed", error=str(exc))
     finally:
-        with _lock:
-            if _active_job_id == job_id:
-                _active_job_id = None
-        _start_next_queued_or_release()
+        _release_gpu()
+        _advance_queue()
 
 
 def start_generation(story_id, scene_id):
-    global _active_job_id
     story = load_story(story_id)
     scene_id = str(scene_id or "").strip()
     scene = (story.get("scenes") or {}).get(scene_id)
     if not isinstance(scene, dict):
         raise FileNotFoundError("Scene does not exist.")
     settings = _scene_settings(scene, story)
-    job_id = str(uuid.uuid4())
 
-    with _lock:
-        active = _jobs.get(_active_job_id) if _active_job_id else None
-        if active is not None and active.get("status") == "running":
-            if active.get("sceneId") == scene_id:
-                raise RuntimeError("This Scene already has a Take generation in progress.")
-            for queued_job_id in _pending_job_ids:
-                queued = _jobs.get(queued_job_id)
-                if queued is not None and queued.get("status") == "queued" and queued.get("sceneId") == scene_id:
-                    raise RuntimeError("This Scene already has a queued Take generation.")
-            _jobs[job_id] = {
-                "jobId": job_id,
-                "storyId": story_id,
-                "sceneId": scene_id,
-                "status": "queued",
-                "queuedAt": _utc_now(),
-                "startedAt": None,
-                "completedAt": None,
-                "queuePosition": len(_pending_job_ids) + 1,
-                "comfyJobId": None,
-                "comfyStatus": "",
-                "takeId": None,
-                "error": "",
-                "_settings": settings,
-            }
-            _pending_job_ids.append(job_id)
-            _refresh_queue_positions_locked()
-            return _public_job(_jobs[job_id])
-
-        _active_job_id = None
-        _reserve_gpu()
-        _jobs[job_id] = {
-            "jobId": job_id,
+    job = execution_enqueue(
+        EXECUTION_LANE,
+        {
             "storyId": story_id,
             "sceneId": scene_id,
-            "status": "running",
-            "queuedAt": _utc_now(),
-            "startedAt": _utc_now(),
-            "completedAt": None,
-            "queuePosition": 0,
-            "comfyJobId": None,
-            "comfyStatus": "starting",
-            "takeId": None,
-            "error": "",
-            "_settings": settings,
-        }
-        _active_job_id = job_id
-
-    try:
-        _start_job_thread(job_id)
-    except Exception:
-        _release_gpu()
-        with _lock:
-            failed = _jobs.get(job_id)
-            if failed is not None:
-                failed.update({
-                    "status": "failed",
-                    "completedAt": _utc_now(),
-                    "error": "Could not start Storyboard generation worker.",
-                })
-            if _active_job_id == job_id:
-                _active_job_id = None
-        raise
-    return _public_job(_jobs[job_id])
+            "settings": settings,
+        },
+        metadata={
+            "kind": "storyboard-take",
+            "storyId": story_id,
+            "sceneId": scene_id,
+        },
+    )
+    _advance_queue()
+    return _generation_job(execution_get_job(job["id"]))
 
 
 def generation_status(job_id):
-    with _lock:
-        job = _jobs.get(str(job_id or "").strip())
-        if job is None:
-            raise FileNotFoundError("Storyboard generation job does not exist.")
-        return _public_job(job)
+    _advance_queue()
+    return _generation_job(execution_get_job(str(job_id or "").strip()))
+
+
+def generation_queue(story_id=""):
+    _advance_queue()
+    story_id = str(story_id or "").strip()
+    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    jobs = [_generation_job(job) for job in snapshot.get("jobs", [])]
+    if story_id:
+        jobs = [job for job in jobs if job.get("storyId") == story_id]
+    return {
+        "paused": bool(snapshot.get("paused")),
+        "pauseReason": str(snapshot.get("pauseReason") or ""),
+        "activeJobId": str(snapshot.get("activeJobId") or ""),
+        "jobs": jobs,
+    }
+
+
+def generation_action(operation, job_id="", direction=""):
+    operation = str(operation or "").strip()
+    job_id = str(job_id or "").strip()
+    if operation == "cancel":
+        job = execution_cancel_queued(job_id)
+        _advance_queue()
+        return {"job": _generation_job(job)}
+    if operation == "stop":
+        job = execution_request_action(job_id, "stop")
+        return {"job": _generation_job(job)}
+    if operation == "pause_queue":
+        snapshot = execution_pause_lane(EXECUTION_LANE)
+        return {"queue": generation_queue(), "paused": bool(snapshot.get("paused"))}
+    if operation == "resume_queue":
+        execution_resume_lane(EXECUTION_LANE)
+        _advance_queue()
+        return {"queue": generation_queue()}
+    if operation == "reorder":
+        snapshot = execution_reorder_job(job_id, direction=direction)
+        return {"queue": {
+            "paused": bool(snapshot.get("paused")),
+            "pauseReason": str(snapshot.get("pauseReason") or ""),
+            "activeJobId": str(snapshot.get("activeJobId") or ""),
+            "jobs": [_generation_job(job) for job in snapshot.get("jobs", []) if job.get("status") not in ("completed", "failed", "cancelled", "stopped", "interrupted")],
+        }}
+    raise ValueError("Unsupported Storyboard generation action: " + operation)

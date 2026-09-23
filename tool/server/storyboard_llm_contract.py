@@ -108,6 +108,22 @@ def _scene_context(scene):
     return "\n".join(lines)
 
 
+def _story_invariants_text(story):
+    lines = []
+    invariants = story.get("invariants") if isinstance(story.get("invariants"), list) else []
+    for item in invariants:
+        if not isinstance(item, dict):
+            continue
+        text = _clean(item.get("text"))
+        if not text:
+            continue
+        kind = _clean(item.get("kind")) or "custom"
+        title = _clean(item.get("title"))
+        label = kind.capitalize() + (": " + title if title else "")
+        lines.append(label + "\n" + text)
+    return "\n\n".join(lines)
+
+
 def _previous_handoff(story, scene_id):
     order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
     if scene_id not in order:
@@ -147,7 +163,10 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append("[CURRENT CONCEPT]\n" + concept)
         style = _clean(story.get("style"))
         if style:
-            blocks.append("[STORY STYLE]\n" + style)
+            blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append(
             "[CURRENT TASK]\nExpand this Story concept into a richer creative overview that can drive later Scene planning. "
             "Develop the narrative arc, important characters, setting, conflict, progression, and ending direction when "
@@ -174,7 +193,10 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append("[STORY CONCEPT]\n" + concept)
         style = _clean(story.get("style"))
         if style:
-            blocks.append("[STORY STYLE]\n" + style)
+            blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 WRITING RULES]\n" + h3_runtime_context)
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
@@ -203,6 +225,7 @@ def build_request(story, scene_id, operation, instruction=""):
         raise FileNotFoundError("Scene does not exist.")
 
     style = _clean(story.get("style"))
+    invariants = _story_invariants_text(story)
     scene_context = _scene_context(scene)
     previous_handoff = _previous_handoff(story, scene_id)
     h3_mode, h3_output = _h3_output_contract(scene)
@@ -211,7 +234,9 @@ def build_request(story, scene_id, operation, instruction=""):
         "[DIRECTOR CONTEXT]\n" + director_context,
     ]
     if style:
-        blocks.append("[STORY STYLE]\n" + style)
+        blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+    if invariants:
+        blocks.append("[STORY INVARIANTS]\n" + invariants)
     if scene_context:
         blocks.append("[SCENE]\n" + scene_context)
     if previous_handoff and not _clean(scene.get("entryState")):

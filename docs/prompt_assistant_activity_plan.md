@@ -1,6 +1,6 @@
 # Prompt Assistant / Director Activity Plan
 
-**Status:** implementation in progress on `ux/prompt-assistant-activity`.
+**Status:** implemented and audited on `ux/prompt-assistant-activity` / PR #67.
 
 ## Goal
 
@@ -72,3 +72,33 @@ Review specifically for:
 - unnecessary new abstractions.
 
 Prefer removing complexity over expanding this design.
+
+
+## Implementation audit
+
+### Confirmed
+
+- Successful local Prompt Assistant / Director calls retain the selected llama.cpp model instead of unloading it after every response.
+- A follow-up request reuses the selected loaded model; switching models explicitly unloads the previous loaded model first.
+- Retaining a model does not retain WebCap's shared GPU reservation after a successful LLM response.
+- Training and shared Inference win the shared GPU reservation before asking the LLM runtime to yield VRAM, preventing a new Director request from racing into the handoff.
+- A failed LLM eviction prevents the competing workload from launching and visibly pauses the affected queue.
+- Remote OpenAI-compatible Director mode never attempts local model eviction.
+- LLM activity is an in-memory read-only snapshot; the fast polling endpoint does not perform llama.cpp model discovery or reload work.
+- The activity lifecycle is serialized with the same re-entrant request lock as the LLM request itself, so a waiting second request cannot overwrite the visible phase of the request currently running.
+- Generate uses Prompt Assistant terminology while Storyboard retains Director terminology.
+- Both screens use a feature-owned, non-modal activity card with truthful lifecycle phase and elapsed time. GPU/VRAM/RAM telemetry is supplemental and best-effort; telemetry failure does not replace the authoritative LLM phase.
+- The existing synchronous request/response architecture remains intact. No additional queue, service layer, event bus, websocket protocol, or token-streaming path was introduced.
+- Existing global Console error reporting remains unchanged.
+
+### Hostile findings corrected during audit
+
+1. **Activity ownership race.** The first implementation set `preparing` before acquiring the request lock, allowing a second waiting LLM request to overwrite the first request's activity. The lifecycle now uses the same re-entrant request lock from `preparing` through completion/error.
+2. **Terminal card vanished immediately.** The first card renderer hid as soon as `active=false`; terminal `complete/error` states now remain visible briefly.
+3. **Telemetry was accidentally authoritative.** A failed system-status request originally collapsed the card to generic `Preparing…`; hardware telemetry is now optional and cannot replace the real LLM phase.
+
+### Validation notes
+
+Focused tests were added/updated for retained-model reuse and switching, failed-request cleanup, local/remote GPU-yield behavior, Training and shared-Inference handoff ordering, queue blocking on failed eviction, activity lifecycle state, and both UI contracts.
+
+This environment could not execute the branch test suite: GitHub Actions is not yet present on `main` (the CI work remains in PR #63), and the local execution environment cannot resolve GitHub for a branch clone. Therefore the final audit is source/diff based; it does not claim an executed pytest or Node run.

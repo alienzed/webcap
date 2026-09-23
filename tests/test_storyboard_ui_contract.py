@@ -238,3 +238,15 @@ def test_storyboard_lora_chooser_is_single_searchable_field():
     assert 'list="storyboard-lora-options-' in storyboard
     assert "function loraDatalistOptions()" in storyboard
     assert "picker.value = '';" in storyboard
+
+
+def test_storyboard_scene_has_dedicated_conditioning_column():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'class="storyboard-scene-conditioning"' in storyboard
+    assert '>Conditioning</div>' in storyboard
+    assert 'class="storyboard-scene-column-heading">Generation</div>' in storyboard
+    assert "Base LoRA active" in storyboard
+    assert ".storyboard-scene-conditioning" in css
+    assert "grid-template-columns: minmax(0, 1fr) minmax(220px, 250px) minmax(280px, 320px);" in css

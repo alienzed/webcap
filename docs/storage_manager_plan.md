@@ -1,6 +1,6 @@
 # Storage Manager Plan
 
-**Status:** MVP implemented on `feature/storage-manager-mvp` / PR #66 and post-MVP ownership hardening completed on `fix/storage-manager-post-mvp-audit`. Focused Storage CI is green. The next product extension is an explicit **Start scan** reconciliation pass plus lightweight producer usage registration; neither is required for deletion safety.
+**Status:** MVP, post-MVP ownership hardening, and the explicit **Start scan** reconciliation slice are implemented on `fix/storage-manager-post-mvp-audit`. Storage now supports cheap ordinary loads, cancellable workspace scans, historical Test discovery, byte/file-count provenance, and opportunistic producer registration where usage is already known cheaply.
 
 **Purpose:** give WebCap one calm, high-level view of the disk space it creates directly or causes external runtimes to create, with safe drill-down, **Open**, and deliberately scoped **Purge / Delete** actions.
 
@@ -48,7 +48,7 @@ The revised invariants are:
 
 **Phase 1 — producer inventory + read-only backend.** Isolated `storage_manager.py`; direct producer enumeration; disk capacity; disposable item-size cache; one-item measurement. No global crawl.
 
-**Phase 2 — Storage activity UI.** Global Storage activity; largest-first rows; stale/not-measured states; item-level Measure; sequential Measure all; Open. No changes inside action screens.
+**Phase 2 — Storage activity UI.** Global Storage activity; largest-first rows; stale/not-measured states; item-level Measure; explicit Start scan; Open. No changes inside action screens.
 
 **Phase 3 — manual derived-artifact deletion.** Identity dispatch re-resolves ownership and calls existing domain deletion semantics or sentinel-validates a managed artifact. No arbitrary delete endpoint.
 
@@ -840,22 +840,22 @@ The original implementation phases are complete in their useful form:
 
 The earlier plan's blanket lifecycle-accounting phase is intentionally **not** a requirement that every workflow synchronously maintains Storage metadata. That would couple unrelated producers to a reporting cache.
 
-### Next extension - Start scan + lightweight usage registration
+### Explicit scan + lightweight usage registration — implemented
 
-Add one explicit **Start scan** operation to Storage.
+Storage now exposes **Start scan** as an explicit, cancellable workspace reconciliation operation. It:
 
-The scanner should:
+- runs only after user action;
+- performs a read-only Set/Test discovery pass while pruning WebCap global/runtime roots from that discovery walk;
+- never follows symlinks;
+- counts bytes and files for resolved managed items;
+- discovers historical/distributed Test Sessions;
+- reports scan phase/progress and supports cancellation;
+- updates the disposable usage cache incrementally as managed items complete;
+- preserves prior measurements when a scan is cancelled or an item cannot be read.
 
-- execute only after user action;
-- receive declared producer scopes/identities rather than arbitrary delete paths;
-- recurse those scopes without following symlinks;
-- count bytes and files;
-- discover historical/distributed Test Sessions that the cheap overview intentionally omits;
-- expose progress and cancellation;
-- update the disposable usage cache incrementally as items complete;
-- keep unreadable/cancelled scopes visibly incomplete.
+The cache stores only producer/item identity, bytes, file count, measurement time/source, plus discovered Set/Test identities. It does not store file inventories or deletion authority.
 
-Separately, producers may opportunistically register the same small usage facts when they already know them cheaply: producer/item identity, bytes, file count, measurement time, and source. This is basic provenance, not a storage database.
+Generate is the first producer to report exact usage opportunistically because result persistence already knows every file it just wrote. Other producers should register usage only where the numbers are already cheap and exact; they should not perform hidden recursive scans merely to keep Storage current.
 
 Deletion remains completely separate: every destructive action still re-resolves current ownership, manifests/sentinels, and active references.
 

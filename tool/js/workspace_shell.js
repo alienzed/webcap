@@ -108,6 +108,7 @@ function normalizeShellRouteWorkspace(value) {
   if (workspace === 'generate') return 'generate';
   if (workspace === 'test') return 'test';
   if (workspace === 'storyboard') return 'storyboard';
+  if (workspace === 'storage') return 'storage';
   if (workspace === 'review') return 'review';
   if (workspace === 'grid') return 'grid';
   return 'prep';
@@ -130,6 +131,7 @@ function currentShellRouteWorkspace() {
   if (navigation.activity === 'generate') return 'generate';
   if (navigation.activity === 'test') return 'test';
   if (navigation.activity === 'storyboard') return 'storyboard';
+  if (navigation.activity === 'storage') return 'storage';
   if (navigation.workspaceRoot === 'training') return 'training';
   if (navigation.workspaceRoot === 'review') return 'review';
   if (navigation.workspaceRoot === 'grid') return 'grid';
@@ -182,6 +184,8 @@ function restoreInitialShellLocationRoute() {
     window.openTestBenchForCurrentFolder();
   } else if (route.workspace === 'storyboard' && typeof window.openStoryboardActivity === 'function') {
     window.openStoryboardActivity();
+  } else if (route.workspace === 'storage' && typeof window.openStorageActivity === 'function') {
+    window.openStorageActivity();
   } else {
     setWorkspaceSurface('default', { skipRemember: true });
   }
@@ -217,19 +221,22 @@ function deriveShellNavigationState() {
   var generateOpen = !!document.querySelector('.generate-workspace:not(.hidden)');
   var testOpen = !!document.querySelector('.test-generations-pane:not(.hidden)');
   var storyboardOpen = !!document.querySelector('.storyboard-workspace:not(.hidden)');
-  var activity = generateOpen ? 'generate' : (storyboardOpen ? 'storyboard' : (testOpen ? 'test' : (surface === 'training' ? 'training' : 'prep')));
-  var workspaceRoot = generateOpen
-    ? 'generate'
-    : (storyboardOpen
-      ? 'storyboard'
-      : (testOpen
-        ? 'test'
-        : (surface === 'training'
-          ? 'training'
-          : (surface === 'reviewOutput'
-            ? 'review'
-            : (surface === 'grid' ? 'grid' : (surface === 'focus' ? 'focus' : (surface === 'configEditor' ? 'config' : 'prep')))))));
-  var contextKind = activity === 'storyboard' || activity === 'generate'
+  var storageOpen = !!document.querySelector('.storage-workspace:not(.hidden)');
+  var activity = storageOpen ? 'storage' : (generateOpen ? 'generate' : (storyboardOpen ? 'storyboard' : (testOpen ? 'test' : (surface === 'training' ? 'training' : 'prep'))));
+  var workspaceRoot = storageOpen
+    ? 'storage'
+    : (generateOpen
+      ? 'generate'
+      : (storyboardOpen
+        ? 'storyboard'
+        : (testOpen
+          ? 'test'
+          : (surface === 'training'
+            ? 'training'
+            : (surface === 'reviewOutput'
+              ? 'review'
+              : (surface === 'grid' ? 'grid' : (surface === 'focus' ? 'focus' : (surface === 'configEditor' ? 'config' : 'prep'))))))));
+  var contextKind = activity === 'storyboard' || activity === 'generate' || activity === 'storage'
     ? 'none'
     : (activity === 'training' && getTrainingWorkspaceEntryKind() === 'global'
       ? 'global'
@@ -471,9 +478,10 @@ function syncApplicationShellContext() {
   var generateOpen = navigation.activity === 'generate';
   var testOpen = navigation.activity === 'test';
   var storyboardOpen = navigation.activity === 'storyboard';
+  var storageOpen = navigation.activity === 'storage';
   var contextText = '';
 
-  if (generateOpen || storyboardOpen) {
+  if (generateOpen || storyboardOpen || storageOpen) {
     contextText = '';
   } else if (testOpen) {
     contextText = folder ? '' : 'Select a set';
@@ -486,7 +494,8 @@ function syncApplicationShellContext() {
   }
 
   if (workspaceTitle) {
-    if (generateOpen) workspaceTitle.textContent = 'Generate';
+    if (storageOpen) workspaceTitle.textContent = 'Storage';
+    else if (generateOpen) workspaceTitle.textContent = 'Generate';
     else if (storyboardOpen) workspaceTitle.textContent = 'Storyboard';
     else if (testOpen) workspaceTitle.textContent = 'Test Generations';
     else if (surface === 'training') workspaceTitle.textContent = 'Training';
@@ -502,9 +511,9 @@ function syncApplicationShellContext() {
     workspaceContext.textContent = contextText;
   }
 
-  var previewContextRelevant = !generateOpen && !testOpen && !storyboardOpen && (surface === 'default' || surface === 'focus');
+  var previewContextRelevant = !generateOpen && !testOpen && !storyboardOpen && !storageOpen && (surface === 'default' || surface === 'focus');
   previewHeader.classList.toggle('shell-context-hidden', !previewContextRelevant);
-  annotationActions.classList.toggle('shell-context-hidden', generateOpen || testOpen || storyboardOpen || surface !== 'default');
+  annotationActions.classList.toggle('shell-context-hidden', generateOpen || testOpen || storyboardOpen || storageOpen || surface !== 'default');
 
   var modelRelevant = navigation.activity === 'training' || navigation.activity === 'test';
   if (modelControl) modelControl.classList.toggle('hidden', !modelRelevant);
@@ -515,7 +524,7 @@ function syncApplicationShellContext() {
   }
 
   if (sidebarToggle) {
-    var sidebarToggleVisible = !generateOpen && !testOpen && !storyboardOpen && (surface === 'default' || surface === 'training');
+    var sidebarToggleVisible = !generateOpen && !testOpen && !storyboardOpen && !storageOpen && (surface === 'default' || surface === 'training');
     sidebarToggle.classList.toggle('hidden', !sidebarToggleVisible);
     if (typeof updateSidebarCollapseUi === 'function') {
       updateSidebarCollapseUi(ui && ui.appEl ? ui.appEl.classList.contains('left-rail-collapsed') : false);
@@ -527,6 +536,7 @@ function syncApplicationShellContext() {
   var trainingBtn = document.getElementById('activity-training-btn');
   var testBtn = document.getElementById('activity-test-btn');
   var storyboardBtn = document.getElementById('activity-storyboard-btn');
+  var storageBtn = document.getElementById('activity-storage-btn');
 
   if (prepBtn) {
     var prepActive = navigation.activity === 'prep';
@@ -558,12 +568,19 @@ function syncApplicationShellContext() {
     storyboardBtn.setAttribute('aria-pressed', storyboardActive ? 'true' : 'false');
     storyboardBtn.setAttribute('aria-current', storyboardActive ? 'page' : 'false');
   }
+  if (storageBtn) {
+    var storageActive = navigation.activity === 'storage';
+    storageBtn.classList.toggle('active', storageActive);
+    storageBtn.setAttribute('aria-pressed', storageActive ? 'true' : 'false');
+    storageBtn.setAttribute('aria-current', storageActive ? 'page' : 'false');
+  }
 }
 
 function openPrepActivity() {
   if (typeof window !== 'undefined' && typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
   if (typeof window !== 'undefined' && typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
+  if (typeof window !== 'undefined' && typeof window.closeStorageActivity === 'function') window.closeStorageActivity();
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
   if (surface === 'grid') {
     closeMediaGridSurface();
@@ -707,6 +724,7 @@ function openTrainingSurface(mode) {
   if (typeof window !== 'undefined' && typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
   if (typeof window !== 'undefined' && typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
+  if (typeof window !== 'undefined' && typeof window.closeStorageActivity === 'function') window.closeStorageActivity();
   if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
     stopFocusedAnnotation();
   }
@@ -847,6 +865,7 @@ function wireWorkspaceHeaderUi() {
       }
       if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
       if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
+      if (typeof window.closeStorageActivity === 'function') window.closeStorageActivity();
       if (typeof window.openTestBenchActivity !== 'function') throw new Error('Test Bench activity is not available.');
       window.openTestBenchActivity();
     };
@@ -859,8 +878,18 @@ function wireWorkspaceHeaderUi() {
         stopFocusedAnnotation();
       }
       if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
+      if (typeof window.closeStorageActivity === 'function') window.closeStorageActivity();
       if (typeof window.openStoryboardActivity !== 'function') throw new Error('Storyboard activity is not available.');
       window.openStoryboardActivity();
+    };
+  }
+  var storageActivityBtn = document.getElementById('activity-storage-btn');
+  if (storageActivityBtn && !storageActivityBtn.__workspaceWired) {
+    storageActivityBtn.__workspaceWired = true;
+    storageActivityBtn.onclick = function () {
+      if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') stopFocusedAnnotation();
+      if (typeof window.openStorageActivity !== 'function') throw new Error('Storage activity is not available.');
+      window.openStorageActivity();
     };
   }
   var configEditorBackBtn = document.getElementById('config-editor-back-btn');

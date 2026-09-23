@@ -111,7 +111,7 @@ def test_legacy_session_status_uses_default_test_model(tmp_path, monkeypatch):
         "results": [],
     })
 
-    status = bench.open_session("set", session.name)
+    status = bench.open_session(tmp_path / "set", session.name)
 
     assert status["modelId"] == bench.get_test_model().PROFILE_ID
 
@@ -470,7 +470,7 @@ def test_historical_running_session_is_marked_interrupted_on_open(tmp_path, monk
         "error": "",
     })
 
-    payload = bench.open_session("set", session.name)
+    payload = bench.open_session(tmp_path / "set", session.name)
 
     assert payload["status"] == "interrupted"
     assert payload["completed"] == 1

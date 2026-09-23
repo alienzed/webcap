@@ -155,6 +155,7 @@ def _storyboard_request(settings):
         },
         "loras": copy.deepcopy(settings.get("loras") or []),
         "references": references,
+        "referenceRecords": copy.deepcopy(settings.get("references") or []),
         "wildcardsEnabled": bool(settings.get("wildcardsEnabled")),
         "workflowFile": "minimax_h3_storyboard_api.json",
         "entryState": str(settings.get("entryState") or ""),
@@ -226,10 +227,7 @@ def execute_inference(job_id, request, context):
             "aspectRatio": request["settings"]["aspectRatio"],
             "megapixels": request["settings"]["megapixels"],
             "loras": request.get("loras") or [],
-            "references": [
-                {"role": role, "mediaPath": path}
-                for role, path in (request.get("references") or {}).items()
-            ],
+            "references": copy.deepcopy(context.get("referenceRecords") or []),
             "workflowProfile": "minimax_h3_storyboard_v1",
             "providerJobId": provider_job_id,
         },
@@ -310,18 +308,24 @@ def reconcile_startup():
             if job.get("status") != "queued":
                 continue
             stored = execution_get_job(job["id"], include_payload=True)
-            migrated = _legacy_job_request(stored)
-            if migrated is None:
-                execution_cancel_queued(job["id"])
+            try:
+                migrated = _legacy_job_request(stored)
+                if migrated is None:
+                    raise RuntimeError("Legacy Storyboard queue job is missing its frozen generation payload.")
+                story_id, scene_id, request = migrated
+                from .inference_runner import enqueue_storyboard
+                enqueue_storyboard(
+                    request,
+                    story_id,
+                    scene_id,
+                    label="Storyboard Take",
+                )
+            except Exception:
+                _logger.exception(
+                    "Could not migrate legacy Storyboard queue job %s; leaving it intact for manual recovery.",
+                    job.get("id"),
+                )
                 continue
-            story_id, scene_id, request = migrated
-            from .inference_runner import enqueue_storyboard
-            enqueue_storyboard(
-                request,
-                story_id,
-                scene_id,
-                label="Storyboard Take",
-            )
             execution_cancel_queued(job["id"])
 
         _startup_reconciled = True

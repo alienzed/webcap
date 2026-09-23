@@ -244,17 +244,46 @@
     });
   }
 
+  function cleanupUploadedReferences(paths) {
+    var values = Array.isArray(paths) ? paths.filter(Boolean) : [];
+    if (!values.length) return Promise.resolve();
+    return postJson('/fs/generate/reference/cleanup', { paths: values }).catch(function (err) {
+      if (typeof window.reportConsoleError === 'function') {
+        window.reportConsoleError(
+          'Generate',
+          'Could not clean abandoned Generate reference uploads: ' +
+            String(err && err.message ? err.message : err)
+        );
+      }
+    });
+  }
+
   function collectReferences() {
     var model = currentModel();
     var references = {};
-    var uploads = [];
-    (model && model.references || []).forEach(function (role) {
+    var uploadedPaths = [];
+    var roles = (model && model.references || []).slice();
+    var chain = Promise.resolve();
+
+    roles.forEach(function (role) {
       var input = el('generate-reference-' + role);
       var file = input && input.files && input.files[0];
       if (!file) return;
-      uploads.push(uploadReference(file).then(function (path) { references[role] = path; }));
+      chain = chain.then(function () {
+        return uploadReference(file).then(function (path) {
+          references[role] = path;
+          uploadedPaths.push(path);
+        });
+      });
     });
-    return Promise.all(uploads).then(function () { return references; });
+
+    return chain.then(function () {
+      return references;
+    }).catch(function (err) {
+      return cleanupUploadedReferences(uploadedPaths).then(function () {
+        throw err;
+      });
+    });
   }
 
   function runGenerate() {

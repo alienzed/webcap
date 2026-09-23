@@ -65,7 +65,7 @@ def test_generate_director_is_a_reversible_prompt_editor():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
     generation = (ROOT / "tool" / "server" / "generate_generation.py").read_text(encoding="utf-8")
 
-    assert ">Expand with Director</button>" in html
+    assert ">Expand Prompt</button>" in html
     assert 'id="generate-director-restore"' in html
     assert "Restore Previous" in html
     assert "Describe what you want — a rough idea or a finished prompt." in html
@@ -80,6 +80,26 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "Storyboard prompt is injected at runtime." in script
     assert "window.localStorage.removeItem(promptStorageKey)" in script
     assert '"defaultPrompt": ""' in generation
+
+def test_generate_prompt_assistant_has_non_modal_live_activity():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert ">Prompt Assistant</label>" in html
+    assert ">Expand Prompt</button>" in html
+    assert ">Refine Prompt</button>" in html
+    assert 'id="generate-director-activity"' in html
+    assert "function refreshDirectorActivity()" in script
+    assert "requestJson('/fs/director/activity')" in script
+    assert "requestJson('/fs/system_status')" in script
+    assert "Loading model…" in script
+    assert "Generating response…" in script
+    assert ".generate-director-activity" in css
+    assert 'position: absolute;' in css
+    assert '@app.route("/fs/director/activity", methods=["GET"])' in app
+
 
 def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")

@@ -231,6 +231,26 @@ def test_storyboard_storage_protects_take_used_as_reference(monkeypatch, tmp_pat
         storage_manager.purge("storyboard", item["id"])
     assert (story_dir / "takes" / "scene-1" / "take-1.mp4").is_file()
 
+
+def test_storyboard_storage_surfaces_but_protects_take_in_removed_scene(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    story_dir = _story(tmp_path)
+    story_path = story_dir / "story.json"
+    story = json.loads(story_path.read_text(encoding="utf-8"))
+    scene = story["scenes"].pop("scene-1")
+    story["sceneOrder"] = []
+    story["removedScenes"] = {"scene-1": scene}
+    _write_json(story_path, story)
+
+    item = storage_manager.overview("")["items"]["storyboard"][0]
+
+    assert item["purgeable"] is False
+    assert "removed Scene" in item["status"]
+    assert "Restore the Scene" in item["protectedReason"]
+    with pytest.raises(RuntimeError, match="Restore the Scene"):
+        storage_manager.purge("storyboard", item["id"])
+    assert (story_dir / "takes" / "scene-1" / "take-1.mp4").is_file()
+
 def test_generate_purge_requires_manifest_ownership(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     directory = _generation(tmp_path)

@@ -73,6 +73,26 @@
     return String(getWorkingModelProfileId() || '');
   }
 
+  function testPromptDraftKey() {
+    var folder = owningSetFolder(launchFolder || (state && state.folder) || '');
+    var modelId = currentTestModelId();
+    if (!folder || !modelId) return '';
+    return 'webcap.test.promptDraft.' + encodeURIComponent(folder) + '.' + encodeURIComponent(modelId);
+  }
+
+  function loadTestPromptDraft() {
+    var key = testPromptDraftKey();
+    if (!key) return null;
+    var value = window.localStorage.getItem(key);
+    return value === null ? null : String(value);
+  }
+
+  function saveTestPromptDraft(prompt) {
+    var key = testPromptDraftKey();
+    if (!key) return;
+    window.localStorage.setItem(key, String(prompt == null ? '' : prompt));
+  }
+
   function savedTestModelState() {
     var modelId = currentTestModelId();
     var byModel = state && state.testGenerationByModel && typeof state.testGenerationByModel === 'object'
@@ -2093,7 +2113,10 @@
     }
     if (seed) seed.value = String(defaults.seed || '');
     if (prompt) {
-      prompt.value = saved.prompt.trim() ? saved.prompt : String(payload.defaultPrompt || '');
+      var draftPrompt = loadTestPromptDraft();
+      prompt.value = draftPrompt !== null
+        ? draftPrompt
+        : (saved.prompt.trim() ? saved.prompt : String(payload.defaultPrompt || ''));
     }
   }
 
@@ -2203,6 +2226,7 @@
     if (!prompt) return showError(new Error('A test prompt is required.'));
     if (declaredSettings.indexOf('aspectRatio') !== -1 && !settings.aspectRatio) return showError(new Error('An aspect ratio is required.'));
     if (declaredSettings.indexOf('dimensions') !== -1 && !settings.dimensions.trim()) return showError(new Error('Dimensions are required.'));
+    saveTestPromptDraft(prompt);
     saveTestBenchState(prompt);
     var runBtn = el('test-generations-run-btn');
     var errorEl = el('test-generations-error');
@@ -2435,6 +2459,7 @@
       }
     };
     el('test-generations-prompt').addEventListener('input', function () {
+      saveTestPromptDraft(this.value);
       saveTestBenchState(this.value);
     });
     ['test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-dimensions'].forEach(function (id) {

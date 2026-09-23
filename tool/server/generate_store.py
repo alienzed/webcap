@@ -116,3 +116,18 @@ def list_results(limit=100):
             found.append(payload)
     found.sort(key=lambda item: int(item.get("createdAt") or 0), reverse=True)
     return found[:max(1, min(int(limit or 100), 500))]
+
+
+def resolve_result_media(relative_path):
+    value = str(relative_path or "").strip()
+    if not value:
+        raise ValueError("Generate media path is empty.")
+    candidate = (Path(app_config.FS_ROOT) / value).resolve()
+    root = generation_root().resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("Generate media path is outside the generation store.") from exc
+    if not candidate.is_file():
+        raise FileNotFoundError("Generated media does not exist.")
+    return candidate

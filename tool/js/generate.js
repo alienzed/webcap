@@ -314,33 +314,83 @@
     }).catch(reportError);
   }
 
+  function resultKey(result) {
+    return String(result && (result.jobId || result.mediaPath || result.manifestPath) || '');
+  }
+
+  function buildResultCard(result) {
+    var card = document.createElement('article');
+    card.className = 'generate-result-card';
+    card.dataset.resultKey = resultKey(result);
+
+    var mediaHost = document.createElement('div');
+    mediaHost.className = 'generate-result-media';
+    var src = '/fs/generate/media?path=' + encodeURIComponent(result.mediaPath || '');
+    if (result.mediaKind === 'video') {
+      var video = document.createElement('video');
+      video.controls = true;
+      video.preload = 'metadata';
+      video.src = src;
+      mediaHost.appendChild(video);
+    } else {
+      var image = document.createElement('img');
+      image.loading = 'lazy';
+      image.src = src;
+      image.alt = '';
+      mediaHost.appendChild(image);
+    }
+
+    var settings = result.settings || {};
+    var summary = [];
+    if (settings.dimensions) summary.push(String(settings.dimensions).trim());
+    if (settings.aspectRatio) summary.push(settings.aspectRatio);
+    if (settings.duration) summary.push(settings.duration + 's');
+    if (result.seed !== undefined && result.seed !== null) summary.push('Seed ' + result.seed);
+
+    var footer = document.createElement('div');
+    footer.className = 'generate-result-footer';
+    var model = document.createElement('strong');
+    model.textContent = String(result.modelId || 'Generated');
+    var details = document.createElement('span');
+    details.textContent = summary.join(' · ');
+    var prompt = document.createElement('p');
+    prompt.title = String(result.resolvedPrompt || '');
+    prompt.textContent = String(result.resolvedPrompt || '');
+
+    footer.appendChild(model);
+    footer.appendChild(details);
+    footer.appendChild(prompt);
+    card.appendChild(mediaHost);
+    card.appendChild(footer);
+    return card;
+  }
+
   function renderResults(results) {
     var host = el('generate-results');
     if (!host) return;
-    if (!results.length) {
-      host.innerHTML = '<div class="generate-results-empty">Generated media will appear here.</div>';
-      return;
+    var items = Array.isArray(results) ? results : [];
+    var cards = host.querySelectorAll('.generate-result-card[data-result-key]');
+    var existingKeys = {};
+    Array.prototype.forEach.call(cards, function (card) {
+      existingKeys[String(card.dataset.resultKey || '')] = true;
+    });
+
+    var empty = host.querySelector('.generate-results-empty');
+    if (items.length && empty) empty.remove();
+
+    items.slice().reverse().forEach(function (result) {
+      var key = resultKey(result);
+      if (!key || existingKeys[key]) return;
+      host.insertBefore(buildResultCard(result), host.firstChild);
+      existingKeys[key] = true;
+    });
+
+    if (!items.length && !host.querySelector('.generate-result-card') && !host.querySelector('.generate-results-empty')) {
+      empty = document.createElement('div');
+      empty.className = 'generate-results-empty';
+      empty.textContent = 'Generated media will appear here.';
+      host.appendChild(empty);
     }
-    host.innerHTML = results.map(function (result) {
-      var src = '/fs/generate/media?path=' + encodeURIComponent(result.mediaPath || '');
-      var media = result.mediaKind === 'video'
-        ? '<video controls preload="metadata" src="' + src + '"></video>'
-        : '<img loading="lazy" src="' + src + '" alt="">';
-      var settings = result.settings || {};
-      var summary = [];
-      if (settings.dimensions) summary.push(String(settings.dimensions).trim());
-      if (settings.aspectRatio) summary.push(settings.aspectRatio);
-      if (settings.duration) summary.push(settings.duration + 's');
-      if (result.seed !== undefined && result.seed !== null) summary.push('Seed ' + result.seed);
-      return '<article class="generate-result-card">' +
-        '<div class="generate-result-media">' + media + '</div>' +
-        '<div class="generate-result-footer">' +
-          '<strong>' + escapeHtml(result.modelId || 'Generated') + '</strong>' +
-          '<span>' + escapeHtml(summary.join(' · ')) + '</span>' +
-          '<p title="' + escapeHtml(result.resolvedPrompt || '') + '">' + escapeHtml(result.resolvedPrompt || '') + '</p>' +
-        '</div>' +
-      '</article>';
-    }).join('');
   }
 
   function refreshResults() {

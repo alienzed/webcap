@@ -171,13 +171,11 @@ def _advance_queue():
         reserved_here = False
         if local_gpu:
             from .execution_queue import resource_owner
-            owner = resource_owner()
-            if owner and owner != GPU_RESERVATION_OWNER:
+            if resource_owner():
                 return None
-            if not owner:
-                if not _reserve_gpu():
-                    return None
-                reserved_here = True
+            if not _reserve_gpu():
+                return None
+            reserved_here = True
 
         claimed = execution_claim_next(EXECUTION_LANE)
         if claimed is None:

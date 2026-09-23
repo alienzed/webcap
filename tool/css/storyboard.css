@@ -631,10 +631,10 @@
   font-size: 11px;
 }
 
-.storyboard-lora-filter {
+.storyboard-lora-filter,
+.storyboard-lora-picker {
   min-width: 0;
-  flex: 1 1 140px;
-  max-width: 240px;
+  width: 100%;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--input-bg, var(--panel));

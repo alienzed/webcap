@@ -531,7 +531,8 @@ def test_media_metadata_flushes_face_focus_incrementally(monkeypatch, tmp_path):
     media_module.update_media_metadata(folder, include_face_focus=True)
     cached = json.loads((folder / "media_metadata.json").read_text(encoding="utf-8"))
 
-    assert cached["one.jpg"]["face_focus"]["bucket"] == "medium"
+    assert calls
+    assert cached[calls[0]]["face_focus"]["bucket"] == "medium"
 
 
 def test_crop_rejects_out_of_bounds_without_changing_file(client, isolated_fs_root):

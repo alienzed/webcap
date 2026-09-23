@@ -188,7 +188,7 @@ def test_training_lifecycle_is_run_setup_training_tests():
     assert ".app.shell-revamp #training-tests-stage::before" in css
     assert "margin-top: 12px;" in css.split(".app.shell-revamp #training-tests-stage {", 1)[1].split("}", 1)[0]
     training_rule = css.split(".app.shell-revamp .training-global-context {", 1)[1].split("}", 1)[0]
-    assert "margin-top: 6px;" in training_rule
+    assert "padding-top: 14px;" in training_rule
 
 
 

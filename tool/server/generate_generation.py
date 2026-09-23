@@ -162,7 +162,10 @@ def execute(job_id, request):
             elapsed_ms,
         )
     finally:
-        cleanup_references(request.get("references") or {})
+        try:
+            cleanup_references(request.get("references") or {})
+        except Exception:
+            _logger.exception("Could not clean transient Generate reference uploads.")
         if output_ref is not None:
             try:
                 inference_runtime.cleanup_saved_output(output_ref)

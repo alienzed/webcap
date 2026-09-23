@@ -289,6 +289,8 @@ def _read_h3_probe_state(probe_path):
         raise RuntimeError("H3 probe ownership seed does not match its directory.")
 
     runtime_path = probe / "runtime.json"
+    if runtime_path.is_symlink():
+        raise RuntimeError("H3 probe runtime state is unsafe.")
     if not runtime_path.exists():
         return {
             "status": "prepared",
@@ -296,7 +298,7 @@ def _read_h3_probe_state(probe_path):
             "protectedReason": "",
             "createdAt": seed.get("createdAt"),
         }
-    if runtime_path.is_symlink() or not runtime_path.is_file():
+    if not runtime_path.is_file():
         raise RuntimeError("H3 probe runtime state is unsafe.")
     try:
         runtime = json.loads(runtime_path.read_text(encoding="utf-8"))

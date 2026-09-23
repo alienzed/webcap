@@ -1754,12 +1754,17 @@
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
-    el('storyboard-scene-prev-btn').onclick = function () { moveFocusedScene(-1); };
-    el('storyboard-scene-next-btn').onclick = function () { moveFocusedScene(1); };
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
-    el('storyboard-add-scene-btn').onclick = addScene;
+    el('storyboard-scene-progression').addEventListener('click', function (event) {
+      var sceneButton = event.target.closest('[data-scene-progress]');
+      if (sceneButton) {
+        setSceneViewMode('focus', sceneButton.dataset.sceneProgress);
+        return;
+      }
+      if (event.target.closest('[data-scene-progress-add]')) addScene();
+    });
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;
       window.localStorage.setItem('webcap.storyboard.directorModel', this.value);

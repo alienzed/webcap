@@ -331,7 +331,7 @@ def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
     assert "function setSceneViewMode(mode, sceneId)" in storyboard
     assert ".storyboard-scene-progress-badge" in css
     assert "grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);" in css
-    assert "min-height: 340px;" in css
+    assert ".storyboard-scenes-list.is-focus {\n  min-height: 0;" in css
     assert "position: sticky;" in css
     assert "overflow-x: auto;" in css
     assert "flex: 1 0 360px;" in css
@@ -368,8 +368,8 @@ def test_storyboard_conditioning_lora_status_and_inherited_rows_render():
 def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    assert "function syncGenerationJobCard(job)" in storyboard
-    assert "syncGenerationJobCard(job);" in storyboard
+    assert "function syncGenerationJobCard(job, card)" in storyboard
+    assert "syncGenerationJobCard(job, card);" in storyboard
     assert "card.querySelector('.storyboard-take-pending-media strong')" in storyboard
     active_block = storyboard.split("if (generationJobIsActive(job)) {", 1)[1].split("return;", 1)[0]
     assert "renderScenes();" not in active_block

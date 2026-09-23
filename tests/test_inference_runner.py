@@ -47,7 +47,7 @@ def test_inference_runner_executes_generate_job_and_finishes_it(inference_root, 
     assert finished["result"]["modelId"] == "minimax_h3"
 
 
-def test_inference_queue_metadata_projects_global_position(inference_root):
+def test_inference_queue_metadata_projects_global_position(inference_root, monkeypatch):\n    monkeypatch.setattr(inference_runner, "ensure_started", lambda: None)
     first = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,
         {"request": {"modelId": "minimax_h3"}},

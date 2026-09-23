@@ -16,6 +16,8 @@ def inference_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
     execution_queue._resource_owner = ""
     inference_runner._startup_reconciled = True
+    with inference_runner._provider_hold_lock:
+        inference_runner._provider_cleanup_holds.clear()
     return tmp_path
 
 
@@ -302,6 +304,11 @@ def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconf
         {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
         metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
     )
+    waiting = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Waiting"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
     execution_queue._resource_owner = inference_runner.GPU_RESERVATION_OWNER
 
     def fail_after_launch(job_id):
@@ -313,6 +320,7 @@ def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconf
 
     monkeypatch.setattr(inference_runner, "_execute_claimed", fail_after_launch)
     monkeypatch.setattr(inference_runtime, "cancel_job_and_wait", lambda _provider_id: False)
+    monkeypatch.setattr(inference_runtime, "read_job", lambda _provider_id: {"status": "in_progress"})
 
     inference_runner._advance_queue()
 
@@ -321,6 +329,12 @@ def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconf
     assert finished["status"] == "failed"
     assert snapshot["paused"] is True
     assert "could not be confirmed stopped" in snapshot["pauseReason"]
+    assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
+
+    execution_queue.resume_lane(inference_runner.EXECUTION_LANE)
+    inference_runner._advance_queue()
+
+    assert execution_queue.get_job(waiting["id"])["status"] == "queued"
     assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
 
 

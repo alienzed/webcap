@@ -459,6 +459,50 @@ def _cleanup_generate_job_references(job_id):
         _logger.exception("Could not clean transient Generate references for job %s.", job_id)
 
 
+def stop_storyboard_jobs(story_id, timeout=15):
+    _ensure_execution_reconciled()
+    story_id = str(story_id or "").strip()
+    if not story_id:
+        raise ValueError("Story ID is required.")
+
+    relevant = [
+        job
+        for job in execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("jobs", [])
+        if isinstance(job.get("metadata"), dict)
+        and job["metadata"].get("client") == "storyboard"
+        and str(job["metadata"].get("storyId") or "") == story_id
+    ]
+    active_ids = []
+    for job in relevant:
+        job_id = str(job.get("id") or "")
+        status = str(job.get("status") or "")
+        if status == "queued":
+            execution_cancel_queued(job_id)
+        elif status in {"starting", "running"}:
+            execution_request_stop(job_id)
+            active_ids.append(job_id)
+        elif status == "stopping":
+            active_ids.append(job_id)
+
+    if not active_ids:
+        return
+
+    deadline = time.monotonic() + max(0.0, float(timeout or 0))
+    pending = set(active_ids)
+    while pending:
+        for job_id in list(pending):
+            status = str(execution_get_job(job_id).get("status") or "")
+            if status in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
+                pending.remove(job_id)
+        if not pending:
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                "Storyboard inference did not stop in time; the Story was not deleted."
+            )
+        time.sleep(0.1)
+
+
 def action(operation, job_id="", direction="", position=None):
     _ensure_execution_reconciled()
     operation = str(operation or "").strip()

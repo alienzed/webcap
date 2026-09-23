@@ -1395,18 +1395,14 @@ def _build_queued_request(
     return request
 
 def _queue_job_payload(job, position=0):
-    payload = {
-        "id": str(job.get("id") or ""),
-        "folder": str(job.get("folder") or ""),
-        "runName": str(job.get("runName") or ""),
-        "modelId": str(job.get("modelId") or ""),
-        "status": "queued",
-        "testTotal": int(job.get("testTotal") or 0),
-        "createdAt": float(job.get("createdAt") or 0),
-    }
+    payload = _execution_job_payload(job)
+    if payload is None:
+        return None
+    payload["status"] = "queued"
     if position:
         payload["queuePosition"] = int(position)
     return payload
+
 
 def _prune_dead_test_workers_locked():
     dead_keys = [key for key, thread in _active_threads.items() if not thread or not thread.is_alive()]
@@ -1415,62 +1411,124 @@ def _prune_dead_test_workers_locked():
         _active_sessions.pop(key, None)
         _stop_requests.discard(key)
 
+
 def _advance_test_queue():
-    global _test_gpu_reserved
+    _ensure_execution_reconciled()
     with _dispatch_lock:
-        last_payload = None
         while True:
-            release_gpu = False
             with _lock:
                 _prune_dead_test_workers_locked()
                 if any(thread and thread.is_alive() for thread in _active_threads.values()):
                     return None
-                if not _pending_tests:
-                    if _test_gpu_reserved:
-                        _test_gpu_reserved = False
-                        release_gpu = True
-                    job = None
-                else:
-                    if not _test_gpu_reserved:
-                        if not _reserve_gpu_for_test_generations():
-                            return None
-                        _test_gpu_reserved = True
-                    job = _pending_tests.pop(0)
-            if job is None:
-                if release_gpu:
+
+            snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+            if snapshot.get("paused") or snapshot.get("activeJobId"):
+                return None
+            queued = [job for job in snapshot.get("jobs", []) if job.get("status") == "queued"]
+            if not queued:
+                if execution_resource_owner() == GPU_RESERVATION_OWNER:
                     _release_gpu_for_test_generations()
-                return last_payload
+                return None
+
+            owner = execution_resource_owner()
+            if owner and owner != GPU_RESERVATION_OWNER:
+                return None
+            reserved_here = False
+            if not owner:
+                if not _reserve_gpu_for_test_generations():
+                    return None
+                reserved_here = True
+
+            claimed = execution_claim_next(EXECUTION_LANE)
+            if claimed is None:
+                if reserved_here:
+                    _release_gpu_for_test_generations()
+                return None
+
+            job_id = str(claimed.get("id") or "")
+            stored = execution_get_job(job_id, include_payload=True)
+            metadata = stored.get("metadata") if isinstance(stored.get("metadata"), dict) else {}
+            request = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
+            folder = str(metadata.get("folder") or "").strip()
             try:
-                folder_path = app_config.safe_join_fs_root(str(job.get("folder") or ""))
-                payload = start_queued(folder_path, job.get("request") or {})
+                folder_path = app_config.safe_join_fs_root(folder)
+                payload = start_queued(folder_path, request, execution_job_id=job_id)
             except Exception as exc:
-                payload = {"status": "failed", "error": str(exc)}
-            last_payload = payload
-            if str((payload or {}).get("status") or "") in ("starting", "running"):
+                execution_finish_job(job_id, status="failed", error=str(exc))
+                _logger.exception("Queued Test Generations job could not start.")
+                continue
+
+            status_value = str((payload or {}).get("status") or "")
+            if status_value in ("starting", "running"):
                 return payload
+            if status_value == "skipped":
+                execution_finish_job(
+                    job_id,
+                    status="completed",
+                    result={"status": "skipped"},
+                )
+                continue
+
+            execution_finish_job(
+                job_id,
+                status="failed",
+                error=str((payload or {}).get("error") or "Test Generations could not start."),
+            )
+
 
 def cancel_queued(folder_path, job_id):
+    _ensure_execution_reconciled()
     folder = _relative_set_folder(folder_path)
     job_id = str(job_id or "").strip()
     if not job_id:
         raise ValueError("Queued Test job ID is required.")
-    removed = None
-    with _lock:
-        for index, job in enumerate(_pending_tests):
-            if str(job.get("id") or "") == job_id and str(job.get("folder") or "") == folder:
-                removed = _pending_tests.pop(index)
-                break
-    if removed is None:
+    job = execution_get_job(job_id)
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    if str(metadata.get("folder") or "") != folder:
         raise FileNotFoundError("Queued Test session was not found.")
+    execution_cancel_queued(job_id)
+    _advance_test_queue()
     return {"operation": "test_queue_cancel", "removed": job_id, "jobs": queued_jobs(folder_path)["jobs"]}
 
+
 def clear_queued(folder_path):
+    _ensure_execution_reconciled()
     folder = _relative_set_folder(folder_path)
-    with _lock:
-        kept = [job for job in _pending_tests if str(job.get("folder") or "") != folder]
-        removed = len(_pending_tests) - len(kept)
-        _pending_tests[:] = kept
-    return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path)["jobs"]}
+    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    matching = [
+        job for job in snapshot.get("jobs", [])
+        if job.get("status") == "queued"
+        and str((job.get("metadata") or {}).get("folder") or "") == folder
+    ]
+    for job in matching:
+        execution_cancel_queued(job.get("id"))
+    _advance_test_queue()
+    return {"operation": "test_queue_clear", "removed": len(matching), "jobs": queued_jobs(folder_path)["jobs"]}
+
+
+def reorder_queued(folder_path, job_id, direction):
+    _ensure_execution_reconciled()
+    folder = _relative_set_folder(folder_path)
+    job = execution_get_job(job_id)
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    if str(metadata.get("folder") or "") != folder:
+        raise FileNotFoundError("Queued Test session was not found.")
+    execution_reorder_job(job_id, direction=str(direction or ""))
+    return {"operation": "test_queue_reorder", "jobs": queued_jobs(folder_path)["jobs"]}
+
+
+def pause_queue(folder_path):
+    _ensure_execution_reconciled()
+    execution_pause_lane(EXECUTION_LANE)
+    return {"operation": "test_queue_pause", "jobs": queued_jobs(folder_path)["jobs"], "paused": True}
+
+
+def resume_queue(folder_path):
+    _ensure_execution_reconciled()
+    execution_resume_lane(EXECUTION_LANE)
+    _advance_test_queue()
+    return {"operation": "test_queue_resume", "jobs": queued_jobs(folder_path)["jobs"], "paused": False}
+
 
 def enqueue(
     folder_path,
@@ -1485,6 +1543,7 @@ def enqueue(
     megapixels=None,
     duration=None,
 ):
+    _ensure_execution_reconciled()
     request = _build_queued_request(
         folder_path,
         prompt,
@@ -1499,57 +1558,46 @@ def enqueue(
         duration=duration,
     )
     folder = _relative_set_folder(folder_path)
-    job = {
-        "id": secrets.token_hex(6),
-        "folder": folder,
-        "runName": str(request.get("name") or ""),
-        "modelId": str(request.get("modelId") or ""),
-        "testTotal": int(request.get("total") or 0),
-        "createdAt": time.time(),
-        "request": request,
-    }
-    with _lock:
-        _prune_dead_test_workers_locked()
-        _pending_tests.append(job)
+    job = execution_enqueue(
+        EXECUTION_LANE,
+        request,
+        metadata={
+            "kind": "test-generation-session",
+            "folder": folder,
+            "runName": str(request.get("name") or ""),
+            "modelId": str(request.get("modelId") or ""),
+            "testTotal": int(request.get("total") or 0),
+        },
+    )
 
-    advance_payload = _advance_test_queue()
-
-    with _lock:
-        _prune_dead_test_workers_locked()
-        still_queued = any(str(item.get("id") or "") == job["id"] for item in _pending_tests)
-        has_active_test = any(thread and thread.is_alive() for thread in _active_threads.values())
-
-    if still_queued and not has_active_test:
-        with _lock:
-            _pending_tests[:] = [item for item in _pending_tests if str(item.get("id") or "") != job["id"]]
-        raise RuntimeError("Pause Training before starting Test Generations.")
-
-    if not still_queued:
-        if isinstance(advance_payload, dict) and str(advance_payload.get("status") or "") == "failed":
-            raise RuntimeError(str(advance_payload.get("error") or "Test Generations could not start."))
-        if (
-            not has_active_test
-            and (
-                not isinstance(advance_payload, dict)
-                or str(advance_payload.get("status") or "") not in ("starting", "running")
-            )
-        ):
-            raise RuntimeError("Test Generations did not start.")
-
+    latest = _advance_test_queue()
+    current = execution_get_job(job["id"])
+    visible = _execution_job_payload(current)
     return {
         "operation": "test_enqueue",
-        "job": _queue_job_payload(job),
-        "queued": still_queued,
-        "latest": None if still_queued else advance_payload,
+        "job": visible,
+        "queued": current.get("status") == "queued",
+        "latest": latest if current.get("status") != "queued" else None,
     }
 
+
 def queued_jobs(folder_path):
+    _ensure_execution_reconciled()
+    _advance_test_queue()
     folder = _relative_set_folder(folder_path)
-    with _lock:
-        jobs = [_queue_job_payload(job, position) for position, job in enumerate(_pending_tests, start=1) if str(job.get("folder") or "") == folder]
+    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    jobs = []
+    for job in snapshot.get("jobs", []):
+        if job.get("status") != "queued":
+            continue
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("folder") or "") != folder:
+            continue
+        jobs.append(_queue_job_payload(job, job.get("queuePosition") or 0))
     return {"operation": "test_queue", "jobs": jobs}
 
-def start_queued(folder_path, request):
+
+def start_queued(folder_path, request, execution_job_id=None):
     request = dict(request or {})
     model = get_test_model(request.get("modelId") or request.get("model"))
     prompt = str(request.get("resolvedPrompt") or "").strip()

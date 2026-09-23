@@ -69,6 +69,7 @@ def test_cleanup_saved_output_does_not_recursive_delete_unknown_provider_tree(mo
     assert not saved.exists()
     assert input_job.is_dir()
     assert (input_job / "keep.png").is_file()
+    assert inference_runtime.known_provider_root() is None
 
 
 def test_local_saved_output_path_remembers_proven_provider_root(monkeypatch, tmp_path):
@@ -105,6 +106,28 @@ def test_known_provider_root_rejects_symlinked_provider(monkeypatch, tmp_path):
     state_path.parent.mkdir(parents=True)
     state_path.write_text(
         '{"version": 1, "root": "' + str(provider_link).replace("\\", "\\\\") + '", "learnedAt": 1}\n',
+        encoding="utf-8",
+    )
+
+    assert inference_runtime.known_provider_root() is None
+
+
+def test_known_provider_root_rejects_symlinked_runtime_state_root(monkeypatch, tmp_path):
+    fs_root = tmp_path / "fs"
+    fs_root.mkdir()
+    monkeypatch.setattr(inference_runtime.app_config, "FS_ROOT", fs_root)
+    provider = tmp_path / "ComfyUI"
+    (provider / "output").mkdir(parents=True)
+    outside = tmp_path / "outside-runtime"
+    outside.mkdir()
+    runtime_link = fs_root / ".webcap_runtime"
+    try:
+        runtime_link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        return
+    state_path = outside / "comfy_provider.json"
+    state_path.write_text(
+        '{"version": 1, "root": "' + str(provider).replace("\\", "\\\\") + '", "learnedAt": 1}\n',
         encoding="utf-8",
     )
 

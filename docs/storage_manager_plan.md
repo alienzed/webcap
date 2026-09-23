@@ -1,6 +1,6 @@
 # Storage Manager Plan
 
-**Status:** MVP, post-MVP ownership hardening, and the explicit **Start scan** reconciliation slice are implemented on `fix/storage-manager-post-mvp-audit`. Storage now supports cheap ordinary loads, cancellable workspace scans, historical Test discovery, byte/file-count provenance, and opportunistic producer registration where usage is already known cheaply.
+**Status:** MVP, post-MVP ownership hardening, explicit **Start scan** reconciliation, focused category navigation, and Storyboard Take-level cleanup are implemented. Storage now supports cheap ordinary loads, cancellable workspace scans, historical Test discovery, byte/file-count provenance, and opportunistic producer registration where usage is already known cheaply.
 
 **Purpose:** give WebCap one calm, high-level view of the disk space it creates directly or causes external runtimes to create, with safe drill-down, **Open**, and deliberately scoped **Purge / Delete** actions.
 
@@ -38,7 +38,7 @@ The revised invariants are:
 
 - **Training:** current managed logical-run directories beneath `output/runs`.
 - **Generate:** manifest-owned results beneath `output/generations`.
-- **Storyboard:** Story folders beneath `output/storyboards`.
+- **Storyboard:** generated Take media beneath Story folders. Whole-Story deletion remains a Storyboard action, not a Storage reclamation action.
 - **Tests:** current-Set Test Sessions only in the first MVP. The category is explicitly marked partial; historical global Test discovery is not performed automatically.
 - **Runtime:** known WebCap runtime roots and H3 probes.
 - **ComfyUI:** exact `webcap-*` provider subtrees only; never arbitrary ComfyUI content.
@@ -443,17 +443,16 @@ Storyboard already has domain-safe operations for:
 
 **Open:** yes.
 
-**Purge:** Storage must call Storyboard semantics rather than deleting folders itself.
+**Purge:** Storage deletes generated Takes through Storyboard's existing `delete_take()` semantics. Whole-Story deletion remains in Storyboard.
 
 Recommended detail view:
 
-- Story total;
-- Takes total;
-- References total;
-- removed-but-not-permanently-deleted Takes as **reclaimable**;
-- largest Takes.
+- generated Takes, largest first;
+- removed-but-not-permanently-deleted Takes as reclaimable when their Scene is active;
+- reference-used Takes as protected;
+- Takes in removed Scenes as visible/measurable but protected until the Scene is restored.
 
-A whole Story contains user-authored intent as well as generated media, so label that destructive action **Delete Story**, not generic Purge.
+A whole Story contains user-authored intent as well as generated media, so Storage does not offer whole-Story deletion. **Delete Story** remains in Storyboard itself.
 
 ### 5.6 Set-generated data
 
@@ -938,7 +937,7 @@ The implemented MVP was reviewed against the hostile-audit invariants and `docs/
 - Training deletion is limited to sentinel-owned managed actions and is blocked when queued/running work references the action.
 - Test deletion reuses the existing Test Session deletion contract.
 - Generate deletion requires a matching `generation.json` manifest before removing the result directory.
-- Story deletion reuses Storyboard's existing stop/delete semantics and the confirmation explicitly states that Story metadata, Takes, and references are removed.
+- Storyboard storage now treats generated Takes as reclaimable units. Whole Stories remain authored objects and are deleted only from Storyboard.
 - Storage does not modify the Training, Test, Generate, or Storyboard activity implementations or DOM ownership.
 - Shared inference cleanup removes exact WebCap-owned Generate/Storyboard ComfyUI input job trees after a durable output has been ingested, while preserving sibling/unknown provider content.
 - Symlink/path-escape cases are refused for managed Storage roots.

@@ -1625,7 +1625,6 @@ def enqueue(
 
 def queued_jobs(folder_path):
     _ensure_execution_reconciled()
-    _advance_test_queue()
     folder = _relative_set_folder(folder_path)
     snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
     jobs = []

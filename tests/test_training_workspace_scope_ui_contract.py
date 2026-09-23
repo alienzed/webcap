@@ -39,7 +39,7 @@ const context = {
   console, Promise
 };
 vm.createContext(context);
-vm.runInContext(section(shell, 'function getTrainingWorkspaceEntryKind()', 'function syncWorkspaceConfigEditorUi()'), context);
+vm.runInContext(section(workspace, 'function getTrainingWorkspaceEntryKind()', 'function syncTrainingWorkspaceDetailUi()'), context);
 context.syncTrainingEntryChrome();
 if (runLogTab.classList.contains('hidden') || !itemTab.classList.contains('hidden') || !context.ui.appEl.classList.contains('sidebar-hidden')) throw new Error('global chrome');
 context.trainingWorkspaceState.entryMode = 'set';
@@ -53,7 +53,7 @@ const refreshContext = Object.assign({}, context, {
   isTrainingWorkspaceActive: () => true,
   refreshTrainingHistory: () => { globalHistory++; return Promise.resolve(); },
   fetchTrainingProfiles: () => { profileCalls++; return new Promise(resolve => { pendingProfileResolve = resolve; }); },
-  syncTrainingModelProfileSelect: () => { modelSync++; }, syncTrainingWorkspaceProfile: () => {},
+  syncWorkingModelProfileSelect: () => { modelSync++; }, syncTrainingWorkspaceProfile: () => {},
   getVisibleMediaSelectionForTraining: () => [], ensureSelectedTrainingSetup: () => Promise.resolve(),
   fetchTrainingWorkspaceConfigFiles: () => Promise.resolve([]), refreshTrainingReview: () => Promise.resolve(),
   resetTrainingRunSetupForFolder: () => {}, syncTrainingWorkflowReadiness: () => {}, buildTrainingReadinessHtml: () => '',
@@ -127,7 +127,7 @@ def test_training_scope_source_contracts_remain_explicit():
     assert "trainingWorkspaceState.historyViewScope === 'set'" in history
     assert "data-training-history-scope" in history
     assert "els.globalContext.classList.toggle('hidden', false)" in workspace
-    assert "entryKind === 'unavailable'" in shell
+    assert "entryKind === 'unavailable'" in workspace
     assert "training-sidebar-collapse-toggle-btn" not in workspace
     assert "trainingWorkspaceState.launchedJobId = payload.job.id;" in runner
     assert "function renderTrainingLaunchStatus()" in runner
@@ -182,7 +182,7 @@ def test_training_lifecycle_is_run_setup_training_tests():
     assert 'Stage LoRAs from run analysis' in html
 
     navigator_rule = css.split(".app.shell-revamp .training-navigator {", 1)[1].split("}", 1)[0]
-    assert "gap: 12px;" in navigator_rule
+    assert "gap: 14px;" in navigator_rule
     assert ".app.shell-revamp #training-candidates-stage" not in css
     assert ".app.shell-revamp #training-tests-stage::before" in css
     assert "margin-top: 12px;" in css.split(".app.shell-revamp #training-tests-stage {", 1)[1].split("}", 1)[0]
@@ -205,7 +205,7 @@ def test_run_setup_is_one_form_without_trained_badge_and_history_is_flat():
     assert '>Training History</button>' in html
 
     fields_rule = css.split(".app.shell-revamp .training-run-layout .training-run-setup-fields {", 1)[1].split("}", 1)[0]
-    assert "grid-template-columns: 150px minmax(0, 1fr);" in fields_rule
+    assert "grid-template-columns: 168px minmax(0, 1fr);" in fields_rule
     assert 'class="training-run-review-row"' in html
     review_row_rule = css.split(".app.shell-revamp .training-run-review-row {", 1)[1].split("}", 1)[0]
     assert "grid-template-columns: minmax(0, 1fr) auto;" in review_row_rule
@@ -228,7 +228,7 @@ def test_run_setup_train_action_is_compact_and_queue_status_lives_in_training():
     assert 'id="training-runner-queue"' in html
 
     button_rule = css.split(".app.shell-revamp .training-run-setup-actions .training-launch-btn {", 1)[1].split("}", 1)[0]
-    assert "min-width: 110px;" in button_rule
+    assert "min-width: 104px;" in button_rule
     assert "min-height: 34px;" in button_rule
     launch = runner[runner.index("function renderTrainingLaunchStatus()"):runner.index("function renderTrainingRunner()")]
     assert "button.textContent = 'Train';" in launch
@@ -273,11 +273,9 @@ def test_model_switch_has_no_removed_trained_status_dependency():
 
 
 
-def test_shared_queue_keeps_training_history_training_only():
+def test_training_runner_keeps_its_job_state_training_only():
     script = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
 
-    assert "var priorTrainingJobsById = {};" in script
-    assert "if (isTrainingQueueJob(job)) priorTrainingJobsById[job.id] = job.status;" in script
-    assert "return isTrainingQueueJob(job) &&" in script
-    assert "Object.keys(priorTrainingJobsById)" in script
-    assert "isTrainingQueueJob(job) && active" in script
+    assert "trainingWorkspaceState.runnerJobs = Array.isArray(payload.jobs) ? payload.jobs : [];" in script
+    assert "trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)" in script
+    assert "isTrainingQueueJob" not in script

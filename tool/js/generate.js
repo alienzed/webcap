@@ -662,7 +662,7 @@
     if (!generateState.director.busy) return Promise.resolve();
     return Promise.all([
       requestJson('/fs/director/activity'),
-      requestJson('/fs/system_status')
+      requestJson('/fs/system_status').catch(function () { return null; })
     ]).then(function (values) {
       renderDirectorActivity(values[0], values[1]);
     }).catch(function () {

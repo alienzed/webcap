@@ -1119,6 +1119,17 @@
   flex: 0 0 auto;
 }
 
+.storyboard-delete-story-btn {
+  color: var(--danger, #f87171);
+}
+
+.storyboard-delete-story-btn:hover,
+.storyboard-delete-story-btn:focus-visible {
+  border-color: color-mix(in srgb, var(--danger, #f87171) 55%, var(--border));
+  background: color-mix(in srgb, var(--panel) 88%, var(--danger, #f87171) 12%);
+  color: var(--danger, #f87171);
+}
+
 .storyboard-story-authoring {
   width: min(100%, 1280px);
   margin-left: auto;

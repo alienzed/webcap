@@ -937,11 +937,6 @@
       var seed = sceneValue(scene, 'seed', '');
       var seedDisplay = seedMode === 'fixed' && seed !== '' && seed != null ? seed : -1;
       var sceneReferences = Array.isArray(scene.references) ? scene.references : [];
-      var continuityConfigured = !!(
-        String(sceneValue(scene, 'entryState', '')).trim() ||
-        String(sceneValue(scene, 'exitState', '')).trim() ||
-        String(sceneValue(scene, 'notes', '')).trim()
-      );
       var takes = scene.takes && typeof scene.takes === 'object' ? scene.takes : {};
       var removedTakes = scene.removedTakes && typeof scene.removedTakes === 'object' ? scene.removedTakes : {};
       var takeOrder = Array.isArray(scene.takeOrder) ? scene.takeOrder : [];
@@ -958,10 +953,6 @@
         return inheritedLoraRowHtml(lora, overrides[String(lora.name || '').toLowerCase()]);
       }).join('');
       var loraRowsHtml = sceneLoras.map(sceneLoraRowHtml).join('');
-      var advancedSummaryParts = [];
-      if (seedMode === 'fixed') advancedSummaryParts.push('Fixed seed');
-      if (scene.wildcardsEnabled) advancedSummaryParts.push('Wildcards');
-      var advancedSummary = advancedSummaryParts.length ? advancedSummaryParts.join(' · ') : 'Optional';
       var baseLoras = storyState.generationCapabilities.baseLoras || [];
       var loraStatusTitle = storyState.generationCapabilities.available
         ? (baseLoras.length ? 'Base: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')

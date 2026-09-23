@@ -1580,6 +1580,7 @@
 
   function deleteStory(storyId, title) {
     if (!storyId) return;
+    var deletedWasOpen = !!(storyState.story && storyState.story.id === storyId);
     title = String(title || 'Untitled Story');
     if (!window.confirm(
       'Delete "' + title + '" and permanently remove all of its Scenes, Takes, references, and exports? This cannot be undone.'
@@ -1592,7 +1593,6 @@
         storyId: storyId
       });
     }).then(function () {
-      var deletedWasOpen = storyState.story && storyState.story.id === storyId;
       if (deletedWasOpen) storyState.story = null;
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};

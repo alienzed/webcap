@@ -171,7 +171,7 @@ def build_request(story, scene_id, operation, instruction=""):
             "[CURRENT TASK]\nExpand this Story concept into a richer creative overview that can drive later Scene planning. "
             "Develop the narrative arc, important characters, setting, conflict, progression, and ending direction when "
             "the seed supports them. Be creatively useful and fill in sensible connective material rather than asking "
-            "questions. Preserve explicit facts from the original concept and supplied style. Do not break the Story into "
+            "questions. Preserve explicit facts from the original concept, supplied visual atmosphere, and Story invariants. Do not break the Story into "
             "Scenes yet and do not write MiniMax H3 prompts. Return only the expanded Story concept as polished prose."
         )
         return {
@@ -208,7 +208,7 @@ def build_request(story, scene_id, operation, instruction=""):
             "markers. Because every Scene is generated independently, repeat enough concrete character identity detail in each "
             "relevant prompt when no LoRA or exact visual reference anchors that identity. Write a complete model-facing H3 "
             "prompt for every Scene now, not a placeholder. Be creatively useful: invent natural dialogue, performance details, "
-            "camera behavior, sound, and music when they improve the Story, while preserving supplied facts. Each Scene prompt "
+            "camera behavior, sound, and music when they improve the Story, while preserving supplied facts and Story invariants. Each Scene prompt "
             "must be independently generatable and follow the supplied H3 base prompt rules. Return only JSON matching the supplied schema."
         )
         return {

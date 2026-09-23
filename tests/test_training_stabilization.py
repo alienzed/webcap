@@ -1121,6 +1121,49 @@ def test_external_gpu_reservation_blocks_training_queue_launch(monkeypatch):
     assert state["jobs"][0]["status"] == "queued"
 
 
+def test_training_claims_shared_gpu_resource_before_launch(monkeypatch):
+    execution_queue._resource_owner = ""
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "queued", "status": "queued", "folder": "sets/subject"}],
+    }
+
+    def fake_launch(job, _folder_path):
+        assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER
+        job["status"] = "starting"
+        return True
+
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda _folder: Path("/tmp/subject"))
+    monkeypatch.setattr(training_runner, "_launch_job", fake_launch)
+
+    training_runner._launch_next_queued_job(state)
+
+    assert state["activeJobId"] == "queued"
+    assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER
+    execution_queue._resource_owner = ""
+
+
+def test_training_releases_shared_gpu_resource_when_no_job_is_active(monkeypatch):
+    execution_queue._resource_owner = training_runner.TRAINING_RESOURCE_OWNER
+    training_runner._startup_reconciled = True
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "Queue paused by the user.",
+        "jobs": [],
+    }
+
+    monkeypatch.setattr(training_runner, "_apply_training_disk_protection", lambda *_args: "safe")
+    training_runner._refresh_state(state)
+
+    assert execution_queue.resource_owner() == ""
+    execution_queue._resource_owner = ""
+
+
 def test_external_gpu_reservation_respects_training_queue_policy(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     execution_queue._resource_owner = ""

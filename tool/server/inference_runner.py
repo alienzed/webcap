@@ -207,13 +207,7 @@ def enqueue_generate(request, label=""):
             "mediaKind": str(request.get("mediaKind") or ""),
         },
     )
-    latest = _advance_queue()
-    current = execution_get_job(job["id"])
-    if current.get("status") == "failed":
-        raise RuntimeError(str(current.get("error") or "Generate could not start."))
-    visible = _job_view(current)
-    visible["latest"] = latest
-    return visible
+    return _job_view(execution_get_job(job["id"]))
 
 
 def snapshot(include_terminal=False):
@@ -236,7 +230,6 @@ def action(operation, job_id="", direction="", position=None):
     job_id = str(job_id or "").strip()
     if operation == "cancel":
         job = execution_cancel_queued(job_id)
-        _advance_queue()
         return {"job": _job_view(job)}
     if operation == "stop":
         return {"job": _job_view(execution_request_stop(job_id))}
@@ -245,7 +238,6 @@ def action(operation, job_id="", direction="", position=None):
         return {"queue": snapshot()}
     if operation == "resume_queue":
         execution_resume_lane(EXECUTION_LANE)
-        _advance_queue()
         return {"queue": snapshot()}
     if operation == "reorder":
         lane = execution_reorder_job(

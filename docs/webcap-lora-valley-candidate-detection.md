@@ -43,10 +43,10 @@ Selection must never be inferred from the detector, test staging, lowest loss, l
 
 Do not store Selected epoch primarily in Set state, Training History, or another global WebCap registry. Sets move independently, recent-history metadata is intentionally lightweight/fickle, and trainer output may later be compacted.
 
-Persist the decision in a small run-owned manifest, proposed as:
+Persist the decision in a small manifest inside the trainer timestamp folder—the exact experiment folder that is retained when a completed run is archived:
 
 ```text
-<logical-run>/
+<trainer-timestamp-run>/
   webcap-run.json
 ```
 
@@ -65,7 +65,7 @@ Initial shape:
 }
 ```
 
-Use relative paths within the logical run. The manifest should stay deliberately small and portable.
+Use relative paths within the trainer timestamp folder. The manifest should stay deliberately small and portable.
 
 Selection should be replaceable: choosing another saved epoch updates the one selected record rather than accumulating competing "winners". Clearing selection should also be explicit.
 

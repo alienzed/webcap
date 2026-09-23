@@ -81,6 +81,17 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "window.localStorage.removeItem(promptStorageKey)" in script
     assert '"defaultPrompt": ""' in generation
 
+def test_generate_prompt_assistant_uses_shared_llm_queue():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert "function queueDirectorRequest(payload)" in script
+    assert "function waitForDirectorJob(job)" in script
+    assert "'/fs/director/job?job='" in script
+    assert "queued: 'Queued…'" in script
+    assert "enqueue_llm(" in app
+
+
 def test_generate_prompt_assistant_has_non_modal_live_activity():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")

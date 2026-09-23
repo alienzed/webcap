@@ -374,6 +374,7 @@ def recent_test_sets(limit=8):
 
 
 def activity_snapshot(folder_path=None):
+    _advance_test_queue()
     active = []
     with _lock:
         dead_keys = []
@@ -1773,6 +1774,7 @@ def prepare(folder_path, model_id=None):
     }
 
 def status(folder_path, model_id=None):
+    _advance_test_queue()
     payload = _visible_status(folder_path, model_id=model_id)
     session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
     if not session_name:

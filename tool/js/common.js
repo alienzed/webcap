@@ -45,6 +45,32 @@ try {
 
 window.setRuntimeAppConfig = setRuntimeAppConfig;
 
+var DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model';
+
+function getSharedDirectorModelPreference(legacyKey) {
+  var selected = '';
+  try {
+    selected = String(window.localStorage.getItem(DIRECTOR_MODEL_STORAGE_KEY) || '').trim();
+    if (!selected && legacyKey) {
+      selected = String(window.localStorage.getItem(String(legacyKey)) || '').trim();
+      if (selected) window.localStorage.setItem(DIRECTOR_MODEL_STORAGE_KEY, selected);
+    }
+  } catch (_err) {}
+  return selected;
+}
+
+function setSharedDirectorModelPreference(modelId) {
+  var selected = String(modelId || '').trim();
+  try {
+    if (selected) window.localStorage.setItem(DIRECTOR_MODEL_STORAGE_KEY, selected);
+    else window.localStorage.removeItem(DIRECTOR_MODEL_STORAGE_KEY);
+  } catch (_err) {}
+  return selected;
+}
+
+window.getSharedDirectorModelPreference = getSharedDirectorModelPreference;
+window.setSharedDirectorModelPreference = setSharedDirectorModelPreference;
+
 function debugLog() {
   if (!DEBUG) return;
   if (arguments.length === 1) {

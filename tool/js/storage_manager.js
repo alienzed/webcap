@@ -77,7 +77,7 @@
 
   function allItems() {
     var groups = storageState.payload && storageState.payload.items || {};
-    return ['training', 'tests', 'generate', 'storyboard', 'runtime'].reduce(function (rows, area) {
+    return ['training', 'tests', 'generate', 'storyboard', 'set', 'runtime'].reduce(function (rows, area) {
       return rows.concat((groups[area] || []).map(function (item) {
         return item;
       }));
@@ -143,9 +143,10 @@
       tests: 'Tests',
       generate: 'Generations',
       storyboard: 'Storyboard',
+      set: 'Current Set (protected)',
       runtime: 'Runtime / Temporary'
     };
-    host.innerHTML = ['training', 'tests', 'generate', 'storyboard', 'runtime'].map(function (area) {
+    host.innerHTML = ['training', 'tests', 'generate', 'storyboard', 'set', 'runtime'].map(function (area) {
       var rows = (groups[area] || []).slice().sort(itemSort);
       var empty = rows.length
         ? ''

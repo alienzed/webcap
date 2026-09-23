@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from tool.server import storage_manager
+from tool.server import generate_store, storage_manager
 from tool.server import app as app_module
 
 
@@ -327,6 +327,36 @@ def test_workspace_scan_discovers_historical_tests_and_records_usage(monkeypatch
     tests_category = next(row for row in payload["categories"] if row["area"] == "tests")
     assert tests_category["complete"] is True
     assert payload["lastScan"]["completedAt"] > 0
+
+
+
+def test_generate_persistence_registers_exact_usage_without_scan(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(generate_store.app_config, "FS_ROOT", tmp_path)
+
+    payload = generate_store.persist_result(
+        "job-usage",
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "prompt": "demo",
+            "settings": {},
+            "loras": [],
+            "references": {},
+        },
+        {"filename": "render.mp4"},
+        b"video-bytes",
+        "provider-1",
+        25,
+    )
+
+    item = storage_manager.overview("")["items"]["generate"][0]
+    assert payload["jobId"] == "job-usage"
+    assert item["measured"] is True
+    assert item["measurementSource"] == "producer"
+    assert item["fileCount"] == 2
+    assert item["bytes"] >= len(b"video-bytes")
+
 
 
 def test_manual_measure_records_file_count_and_source(monkeypatch, tmp_path):

@@ -241,15 +241,24 @@ def test_storage_routes_delegate_only_identity_fields(monkeypatch):
         return {"ok": True, "bytes": 12}
 
     monkeypatch.setattr(app_module, "storage_measure", fake_measure)
+    monkeypatch.setattr(app_module, "storage_start_scan", lambda folder="": {"ok": True, "scan": {"status": "running", "folder": folder}})
+    monkeypatch.setattr(app_module, "storage_scan_status", lambda: {"ok": True, "scan": {"status": "completed"}})
+    monkeypatch.setattr(app_module, "storage_cancel_scan", lambda: {"ok": True, "scan": {"status": "cancelling"}})
     client = app_module.app.test_client()
 
     response = client.get("/fs/storage?folder=sets/demo")
     measured = client.post("/fs/storage/measure", json={"area": "generate", "id": "2026-09-23/job-1", "folder": ""})
+    scan_started = client.post("/fs/storage/scan/start", json={"folder": "sets/demo"})
+    scan_status = client.get("/fs/storage/scan/status")
+    scan_cancelled = client.post("/fs/storage/scan/cancel", json={})
 
     assert response.status_code == 200
     assert response.get_json()["folder"] == "sets/demo"
     assert measured.status_code == 200
     assert seen["measure"] == ("generate", "2026-09-23/job-1", "")
+    assert scan_started.get_json()["scan"]["folder"] == "sets/demo"
+    assert scan_status.get_json()["scan"]["status"] == "completed"
+    assert scan_cancelled.get_json()["scan"]["status"] == "cancelling"
 
 
 def test_storage_ui_is_isolated_global_activity():
@@ -261,11 +270,16 @@ def test_storage_ui_is_isolated_global_activity():
 
     assert 'id="activity-storage-btn"' in html
     assert 'id="storage-workspace"' in html
+    assert 'id="storage-scan-btn"' in html
     assert 'data-workspace-root="storage"' in html
     assert "/static/js/storage_manager.js" in html
     assert "window.openStorageActivity = openStorageActivity" in storage_js
     assert "window.closeStorageActivity = closeStorageActivity" in storage_js
     assert "measurementAge(item.measuredAt)" in storage_js
+    assert "/fs/storage/scan/start" in storage_js
+    assert "/fs/storage/scan/status" in storage_js
+    assert "/fs/storage/scan/cancel" in storage_js
+    assert "Measure all" not in storage_js
     assert "typeof window.reportConsoleError" not in storage_js
     assert "typeof window.closeGenerateActivity" not in storage_js
     assert "This removes the Story metadata, its Takes, and references." in storage_js
@@ -276,6 +290,68 @@ def test_storage_ui_is_isolated_global_activity():
     assert '"set": _set_items(cache, folder)' in backend
     assert '"staged": _staged_items(cache, folder)' in backend
     assert '"comfy": _comfy_items(cache)' in backend
+
+
+
+def test_workspace_scan_discovers_historical_tests_and_records_usage(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    _generation(tmp_path, job_id="job-scan")
+
+    for set_name, session_name in (("alpha", "session-a"), ("beta", "session-b")):
+        set_path = tmp_path / "sets" / set_name
+        session = set_path / "test-generations" / session_name
+        session.mkdir(parents=True)
+        _write_json(set_path / ".webcap_state.json", {"ratings_by_media": {}})
+        _write_json(session / "test.json", {
+            "name": session_name,
+            "status": "completed",
+            "modelId": "minimax_h3",
+            "completed": 1,
+            "failed": 0,
+            "total": 1,
+        })
+        (session / "result.mp4").write_bytes(b"video-" + set_name.encode("utf-8"))
+
+    summary = storage_manager._scan_workspace("", cancel_check=lambda: False, progress=lambda event: None)
+    payload = storage_manager.overview("")
+
+    assert summary["setsDiscovered"] == 2
+    assert summary["testsDiscovered"] == 2
+    assert {(item["folder"], item["id"]) for item in payload["items"]["tests"]} == {
+        ("sets/alpha", "session-a"),
+        ("sets/beta", "session-b"),
+    }
+    assert all(item["measured"] is True for item in payload["items"]["tests"])
+    assert all(item["measurementSource"] == "scan" for item in payload["items"]["tests"])
+    assert all(item["fileCount"] >= 2 for item in payload["items"]["tests"])
+    tests_category = next(row for row in payload["categories"] if row["area"] == "tests")
+    assert tests_category["complete"] is True
+    assert payload["lastScan"]["completedAt"] > 0
+
+
+def test_manual_measure_records_file_count_and_source(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    directory = _generation(tmp_path)
+    (directory / "references").mkdir()
+    (directory / "references" / "frame.png").write_bytes(b"abc")
+
+    measured = storage_manager.measure("generate", "2026-09-23/job-1")
+    item = storage_manager.overview("")["items"]["generate"][0]
+
+    assert measured["source"] == "manual"
+    assert measured["fileCount"] == 3
+    assert item["fileCount"] == 3
+    assert item["measurementSource"] == "manual"
+
+
+def test_workspace_scan_cancellation_is_checked_during_recursive_inspection(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    directory = _generation(tmp_path)
+    (directory / "nested").mkdir()
+    (directory / "nested" / "large.bin").write_bytes(b"x" * 32)
+
+    with pytest.raises(storage_manager._ScanCancelled):
+        storage_manager._safe_recursive_stats(directory, cancel_check=lambda: True)
 
 
 def _h3_probe(root, probe_id="h3-20260923-120000-deadbeef", status="completed"):

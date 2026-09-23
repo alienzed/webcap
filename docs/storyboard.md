@@ -132,7 +132,7 @@ Pinned is separate from status because an archived/completed Story may still be 
 
 `style` is the Story's persistent visual/atmosphere block. `invariants` are additional typed facts that should remain stable across independently generated Scenes, such as recurring characters, world rules, or soundtrack language. The Director receives these blocks as compact Story context rather than a long conversation history.
 
-The Story authoring panel is a dedicated middle column between the Story library and Scene workspace, and is explicitly collapsible. Scene authoring has two views: a compact **Overview** for navigation and a **Focus** view that edits one Scene at a time. Focus mode intentionally bounds prose fields to a readable measure instead of stretching prompts across the full monitor width.
+The Story authoring panel is a dedicated, slightly wider middle column between the Story library and Scene workspace, and is explicitly collapsible. Scene authoring has two views: a compact **Overview** for navigation and a **Focus** view that edits one Scene at a time. Focus mode intentionally bounds prose fields to a readable measure instead of stretching prompts across the full monitor width. Generation and Conditioning share a compact Scene inspector beside the prompt, with Conditioning collapsed by default, while the selected Scene's Takes remain available in a compact horizontally scrollable strip at the bottom of the Scene workspace.
 
 ## Scene model
 

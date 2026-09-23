@@ -297,7 +297,7 @@ def test_storyboard_story_context_is_a_collapsible_middle_column():
     assert 'class="storyboard-scene-workspace"' in html
     assert 'id="storyboard-story-authoring"' in html
     assert "editor.classList.toggle('story-collapsed'" in storyboard
-    assert "grid-template-columns: minmax(340px, 410px) minmax(0, 1fr);" in css
+    assert "grid-template-columns: minmax(390px, 460px) minmax(0, 1fr);" in css
     assert ".storyboard-editor-scroll.story-collapsed" in css
     assert ".storyboard-story-authoring" in css
     assert "grid-template-columns: 1fr;" in css
@@ -316,21 +316,24 @@ def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
     assert "sceneViewMode:" in storyboard
     assert "data-scene-open" in storyboard
     assert "function setSceneViewMode(mode, sceneId)" in storyboard
-    assert "grid-template-columns: minmax(560px, 720px) 220px 300px;" in css
+    assert "grid-template-columns: minmax(540px, 760px) minmax(240px, 280px);" in css
     assert "min-height: 320px;" in css
-    assert "grid-template-columns: repeat(auto-fit, minmax(220px, 280px));" in css
+    assert "position: sticky;" in css
+    assert "overflow-x: auto;" in css
+    assert "flex: 0 0 210px;" in css
 
 
-def test_storyboard_scene_has_dedicated_conditioning_column():
+def test_storyboard_scene_uses_compact_generation_and_conditioning_inspector():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    assert 'class="storyboard-scene-conditioning"' in storyboard
-    assert 'class="storyboard-scene-column-heading">Generation</div>' in storyboard
-    assert 'class="storyboard-scene-column-heading">Conditioning</div>' in storyboard
+    assert 'class="storyboard-scene-inspector"' in storyboard
+    assert 'class="storyboard-inspector-section storyboard-generation-inspector"' in storyboard
+    assert 'class="storyboard-scene-disclosure storyboard-conditioning-details"' in storyboard
+    assert "conditioningSummaryParts" in storyboard
     assert "Base LoRA active" in storyboard
-    assert ".storyboard-scene-conditioning" in css
-    assert "grid-template-columns: minmax(0, 1fr) minmax(220px, 250px) minmax(280px, 320px);" in css
+    assert ".storyboard-scene-inspector" in css
+    assert ".storyboard-conditioning-details" in css
 
 
 

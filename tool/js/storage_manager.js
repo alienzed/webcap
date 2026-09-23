@@ -131,6 +131,7 @@
       if (item.area === 'storyboard') label = 'Delete Story';
       else if (item.area === 'staged') label = 'Delete Copy';
       else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) label = 'Delete Probe';
+      else if (item.area === 'runtime' && String(item.id || '').indexOf('generate-reference/') === 0) label = 'Delete Reference';
       else if (item.area === 'comfy') label = 'Delete Scratch';
       html += '<button type="button" class="review-captions-btn storage-delete-btn"' + payload + '>' + label + '</button>';
     }
@@ -244,6 +245,9 @@
     } else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) {
       label = 'H3 probe';
       consequence = '\nThis removes the captured probe inputs, logs, and probe results.';
+    } else if (item.area === 'runtime' && String(item.id || '').indexOf('generate-reference/') === 0) {
+      label = 'Generate reference bundle';
+      consequence = '\nThis may invalidate that reference in an unsubmitted Generate draft.';
     } else if (item.area === 'comfy') {
       label = 'ComfyUI scratch tree';
       consequence = '\nOnly this exact WebCap-prefixed provider job tree is removed.';

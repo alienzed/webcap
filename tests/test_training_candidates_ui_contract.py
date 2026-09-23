@@ -76,6 +76,14 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "training-candidates-open-generations" in script
     assert "Copy to Test" in script
     assert "Remove from Test" in script
+    assert "Select Epoch" in script
+    assert "Selected · Clear" in script
+    assert "/fs/training_candidates/select" in script
+    assert "/fs/training_candidates/clear_selection" in script
+    assert "data-training-candidate-select-action" in script
+    assert "training-candidates-select-toggle" in script
+    assert "i.selected" in css
+    assert ".training-candidates-epoch-marker.is-selected" in css
     assert "Open Test Folder" not in script
     assert "/fs/training_candidates/open_test" not in script
     assert "inTestFolder" in script

@@ -11,6 +11,7 @@
     sceneSavePromises: {},
     sceneSaveErrors: {},
     generationJobs: {},
+    generationPolls: {},
     sequenceExport: null,
     sceneViewMode: window.localStorage.getItem('webcap.storyboard.sceneView') || 'focus',
     activeSceneId: '',
@@ -1606,16 +1607,36 @@
     return title ? label + ' · ' + title : label;
   }
 
-  function syncGenerationButton(sceneId, job) {
+  function generationJobIsActive(job) {
+    return !!job && ['queued', 'starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
+  }
+
+  function generationJobsForScene(sceneId) {
+    return Object.keys(storyState.generationJobs).map(function (jobId) {
+      return storyState.generationJobs[jobId];
+    }).filter(function (job) {
+      return job && job.sceneId === sceneId && generationJobIsActive(job);
+    }).sort(function (a, b) {
+      return Number(a.queuedAt || 0) - Number(b.queuedAt || 0);
+    });
+  }
+
+  function syncStoryboardGenerationActivity() {
+    var running = Object.keys(storyState.generationJobs).some(function (jobId) {
+      var status = String(storyState.generationJobs[jobId] && storyState.generationJobs[jobId].status || '');
+      return status === 'starting' || status === 'running' || status === 'stopping';
+    });
+    setShellGeneratingActive(running);
+  }
+
+  function syncGenerationButton(sceneId) {
     var root = sceneElement(sceneId);
     if (!root) return;
     var button = root.querySelector('[data-scene-generate]');
     if (!button) return;
-    var queued = !!(job && job.status === 'queued');
-    var running = !!(job && job.status === 'running');
-    button.disabled = queued || running;
-    if (queued) button.textContent = 'Queued…';
-    else button.textContent = running ? 'Generating…' : 'Generate Take';
+    var pending = generationJobsForScene(sceneId).length;
+    button.disabled = false;
+    button.textContent = pending ? 'Generate Another Take' : 'Generate Take';
   }
 
   function reportGenerationStatus(sceneId, job, previousJob) {
@@ -1631,43 +1652,105 @@
         generationConsoleLabel(sceneId),
         'Take generation queued' + (queuePosition ? ' · #' + queuePosition : '') + '.'
       );
+    } else if (job.status === 'starting') {
+      reportConsoleInfo(generationConsoleLabel(sceneId), 'Take generation starting.');
     } else if (job.status === 'running') {
       reportConsoleInfo(generationConsoleLabel(sceneId), 'ComfyUI · ' + String(job.comfyStatus || 'starting'));
+    } else if (job.status === 'stopping') {
+      reportConsoleInfo(generationConsoleLabel(sceneId), 'Take generation stopping.');
     } else if (job.status === 'completed') {
       reportConsoleInfo(generationConsoleLabel(sceneId), 'Take generation completed.');
+    } else if (job.status === 'stopped' || job.status === 'cancelled') {
+      reportConsoleInfo(generationConsoleLabel(sceneId), 'Take generation ' + job.status + '.');
     }
   }
 
-  function pollGeneration(storyId, sceneId, jobId) {
-    window.setTimeout(function () {
+  function clearGenerationPoll(jobId) {
+    var timer = storyState.generationPolls[jobId];
+    if (timer) window.clearTimeout(timer);
+    delete storyState.generationPolls[jobId];
+  }
+
+  function pollGeneration(storyId, jobId) {
+    if (storyState.generationPolls[jobId]) return;
+    storyState.generationPolls[jobId] = window.setTimeout(function () {
+      delete storyState.generationPolls[jobId];
       generationRequest(null, 'job=' + encodeURIComponent(jobId)).then(function (payload) {
         var job = payload.job;
-        var previousJob = storyState.generationJobs[sceneId] || null;
-        storyState.generationJobs[sceneId] = job;
-        syncGenerationButton(sceneId, job);
-        reportGenerationStatus(sceneId, job, previousJob);
-        if (job.status === 'queued' || job.status === 'running') {
-          pollGeneration(storyId, sceneId, jobId);
+        var previousJob = storyState.generationJobs[jobId] || null;
+        storyState.generationJobs[jobId] = job;
+        reportGenerationStatus(job.sceneId, job, previousJob);
+        syncStoryboardGenerationActivity();
+
+        if (generationJobIsActive(job)) {
+          if (storyState.story && storyState.story.id === storyId) renderScenes();
+          pollGeneration(storyId, jobId);
           return;
         }
+
+        delete storyState.generationJobs[jobId];
+        clearGenerationPoll(jobId);
+        syncStoryboardGenerationActivity();
+
         if (job.status === 'failed') {
+          if (storyState.story && storyState.story.id === storyId) renderScenes();
           throw new Error(job.error || 'Storyboard generation failed.');
         }
+
+        if (job.status === 'stopped' || job.status === 'cancelled') {
+          if (storyState.story && storyState.story.id === storyId) renderScenes();
+          return;
+        }
+
         if (job.status === 'completed') {
           if (!storyState.story || storyState.story.id !== storyId) {
             return refreshLibrary();
           }
-          return flushPendingSaves().then(function () {
-            return request(null, 'story=' + encodeURIComponent(storyId));
-          }).then(function (storyPayload) {
+          return request(null, 'story=' + encodeURIComponent(storyId)).then(function (storyPayload) {
             storyState.story = storyPayload.story;
             renderStory();
             setSaveState('Saved');
           });
         }
+
         throw new Error('Storyboard generation returned unknown status: ' + String(job.status || 'empty'));
-      }).catch(reportError);
+      }).catch(function (err) {
+        clearGenerationPoll(jobId);
+        reportError(err);
+      });
     }, 2000);
+  }
+
+  function refreshGenerationQueue(storyId) {
+    Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
+    storyState.generationJobs = {};
+    if (!storyId) {
+      syncStoryboardGenerationActivity();
+      return Promise.resolve();
+    }
+    return generationRequest(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
+      var jobs = payload.queue && Array.isArray(payload.queue.jobs) ? payload.queue.jobs : [];
+      jobs.forEach(function (job) {
+        storyState.generationJobs[job.jobId] = job;
+      });
+      syncStoryboardGenerationActivity();
+      jobs.forEach(function (job) {
+        if (generationJobIsActive(job)) pollGeneration(storyId, job.jobId);
+      });
+      return payload.queue;
+    });
+  }
+
+  function generationAction(operation, jobId) {
+    return generationRequest({ operation: operation, jobId: jobId }).then(function (payload) {
+      if (payload.job) {
+        storyState.generationJobs[payload.job.jobId] = payload.job;
+        reportGenerationStatus(payload.job.sceneId, payload.job, null);
+      }
+      syncStoryboardGenerationActivity();
+      renderScenes();
+      return payload;
+    }).catch(reportError);
   }
 
   function generateScene(sceneId) {
@@ -1679,16 +1762,15 @@
         sceneId: sceneId
       });
     }).then(function (payload) {
-      var previousJob = storyState.generationJobs[sceneId] || null;
-      storyState.generationJobs[sceneId] = payload.job;
-      syncGenerationButton(sceneId, payload.job);
-      reportGenerationStatus(sceneId, payload.job, previousJob);
+      var job = payload.job;
+      var previousJob = storyState.generationJobs[job.jobId] || null;
+      storyState.generationJobs[job.jobId] = job;
+      reportGenerationStatus(sceneId, job, previousJob);
+      syncStoryboardGenerationActivity();
+      renderScenes();
       setSaveState('Saved');
-      pollGeneration(storyState.story.id, sceneId, payload.job.jobId);
-    }).catch(function (err) {
-      syncGenerationButton(sceneId, null);
-      reportError(err);
-    });
+      pollGeneration(storyState.story.id, job.jobId);
+    }).catch(reportError);
   }
 
   function handleSceneInput(event) {

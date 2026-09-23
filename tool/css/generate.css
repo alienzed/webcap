@@ -153,6 +153,7 @@
 }
 
 .generate-director-actions input,
+.generate-prompt-tools select,
 .generate-inspector input,
 .generate-inspector select,
 .generate-lora-picker {

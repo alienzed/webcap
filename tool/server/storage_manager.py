@@ -128,8 +128,23 @@ def _training_items(cache):
     return rows
 
 
+def _active_generate_job_ids():
+    active = set()
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
+    for job in snapshot.get("jobs") or []:
+        if not isinstance(job, dict):
+            continue
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("client") or "") == "generate":
+            job_id = str(job.get("id") or "").strip()
+            if job_id:
+                active.add(job_id)
+    return active
+
+
 def _generate_items(cache):
     root = Path(app_config.FS_ROOT) / "output" / "generations"
+    active_jobs = _active_generate_job_ids()
     rows = []
     if not root.is_dir():
         return rows
@@ -149,14 +164,16 @@ def _generate_items(cache):
             if not isinstance(payload, dict) or str(payload.get("jobId") or "") != directory.name:
                 continue
             item_id = day.name + "/" + directory.name
+            active = directory.name in active_jobs
             rows.append(_item(
                 "generate",
                 item_id,
                 payload.get("sourcePrompt") or payload.get("resolvedPrompt") or directory.name,
                 directory,
                 kind=payload.get("modelId") or "Generation",
-                status="completed",
-                purgeable=True,
+                status=("finalizing" if active else "completed"),
+                purgeable=not active,
+                protected_reason=("Referenced by active Generate work." if active else ""),
                 meta={
                     "jobId": directory.name,
                     "createdAt": payload.get("createdAt"),
@@ -915,6 +932,9 @@ def purge(area, item_id, folder=""):
             pass
     elif area == "generate":
         path = _resolve_generate(item_id)
+        job_id = path.name
+        if job_id in _active_generate_job_ids():
+            raise RuntimeError("Generation result is still referenced by active Generate work.")
         shutil.rmtree(path)
         try:
             path.parent.rmdir()

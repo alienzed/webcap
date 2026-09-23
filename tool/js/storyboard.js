@@ -953,11 +953,6 @@
         return inheritedLoraRowHtml(lora, overrides[String(lora.name || '').toLowerCase()]);
       }).join('');
       var loraRowsHtml = sceneLoras.map(sceneLoraRowHtml).join('');
-      var enabledInheritedCount = storyLoras.filter(function (lora) {
-        var override = overrides[String(lora.name || '').toLowerCase()];
-        return !override || override.enabled !== false;
-      }).length;
-      var effectiveLoraCount = enabledInheritedCount + sceneLoras.length;
       var advancedSummaryParts = [];
       if (seedMode === 'fixed') advancedSummaryParts.push('Fixed seed');
       if (scene.wildcardsEnabled) advancedSummaryParts.push('Wildcards');

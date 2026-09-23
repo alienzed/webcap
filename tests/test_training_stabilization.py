@@ -8,7 +8,7 @@ from PIL import Image
 
 from tool.server import config as app_config
 from tool.server import app as app_module
-from tool.server import execution_queue, run_ops, training_bundle, training_history, training_runner, training_review
+from tool.server import execution_queue, run_ops, storyboard_llm_runtime, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
 from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage, profile_for_mode
@@ -39,6 +39,82 @@ def _fake_runtime(monkeypatch):
     as_wsl = lambda path, distribution="": Path(path).as_posix()
     monkeypatch.setattr(training_runner, "_to_wsl_path", as_wsl)
     monkeypatch.setattr(training_bundle, "to_wsl_path", as_wsl)
+
+
+def test_training_yields_retained_director_after_reserving_gpu(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    calls = []
+    execution_queue._resource_owner = ""
+
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "jobs": [{"id": "job-one", "folder": "sets/subject", "status": "queued"}],
+        "queuePaused": False,
+        "queuePauseReason": "",
+    }
+
+    def reserve(owner):
+        calls.append("reserve")
+        return execution_queue.reserve_resource(owner)
+
+    def release(owner):
+        calls.append("release")
+        execution_queue.release_resource(owner)
+
+    def launch(job, folder_path):
+        assert folder_path == folder
+        calls.append("launch")
+        job["status"] = "starting"
+
+    monkeypatch.setattr(training_runner, "reserve_execution_resource", reserve)
+    monkeypatch.setattr(training_runner, "release_execution_resource", release)
+    monkeypatch.setattr(training_runner, "_launch_job", launch)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: calls.append("yield-director"),
+    )
+
+    training_runner._launch_next_queued_job(state)
+
+    assert calls == ["reserve", "yield-director", "launch"]
+    assert state["activeJobId"] == "job-one"
+    assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER
+    execution_queue.release_resource(training_runner.TRAINING_RESOURCE_OWNER)
+
+
+def test_training_pauses_without_launching_if_director_cannot_yield(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    execution_queue._resource_owner = ""
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "jobs": [{"id": "job-one", "folder": "sets/subject", "status": "queued"}],
+        "queuePaused": False,
+        "queuePauseReason": "",
+    }
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: (_ for _ in ()).throw(RuntimeError("unload failed")),
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "_launch_job",
+        lambda *_args: pytest.fail("Training must not launch until the retained LLM is unloaded."),
+    )
+
+    with pytest.raises(RuntimeError, match="unload failed"):
+        training_runner._launch_next_queued_job(state)
+
+    assert state["queuePaused"] is True
+    assert "could not be unloaded" in state["queuePauseReason"]
+    assert state["jobs"][0]["status"] == "queued"
+    assert execution_queue.resource_owner() == ""
 
 
 def test_canonical_set_tomls_are_materialized_resettable_and_never_mode_duplicated(tmp_path, monkeypatch):

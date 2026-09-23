@@ -176,6 +176,22 @@ def test_training_purge_blocks_nonterminal_queue_reference(monkeypatch, tmp_path
     assert action.is_dir()
 
 
+def test_training_overview_marks_nonterminal_reference_protected(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    action_id = "001-set--abc/001-h3--demo"
+    _training_action(tmp_path, action_id)
+    _write_json(tmp_path / ".webcap_training" / "queue.json", {
+        "version": 3,
+        "jobs": [{"id": "job-live", "actionId": action_id, "status": "running"}],
+    })
+
+    item = storage_manager.overview("")["items"]["training"][0]
+
+    assert item["purgeable"] is False
+    assert item["status"] == "active / queued"
+    assert "job-live" in item["protectedReason"]
+
+
 def test_storage_has_no_path_based_or_set_source_purge(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     source = tmp_path / "sets" / "demo" / "image.png"
@@ -225,6 +241,8 @@ def test_storage_ui_is_isolated_global_activity():
     assert "/static/js/storage_manager.js" in html
     assert "window.openStorageActivity = openStorageActivity" in storage_js
     assert "window.closeStorageActivity = closeStorageActivity" in storage_js
+    assert "measurementAge(item.measuredAt)" in storage_js
+    assert "This removes the Story metadata, its Takes, and references." in storage_js
     assert "workspace === 'storage'" in shell
     assert "activity === 'storage'" in shell
     assert "os.walk" not in backend

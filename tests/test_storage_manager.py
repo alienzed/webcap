@@ -85,7 +85,8 @@ def test_overview_enumerates_known_producer_roots_without_measuring(monkeypatch,
     assert all(item["bytes"] is None for area in ("training", "generate", "storyboard") for item in payload["items"][area])
     tests = next(row for row in payload["categories"] if row["area"] == "tests")
     assert tests["complete"] is False
-    assert "current Set" in tests["note"]
+    assert "Start scan" in tests["note"]
+    assert "workspace-wide Test inventory" in tests["note"]
 
 
 def test_measure_is_item_scoped_and_cached(monkeypatch, tmp_path):

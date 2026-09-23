@@ -2,6 +2,7 @@ import copy
 
 import pytest
 
+from tool.server import execution_queue
 from tool.server import storyboard_generation
 from tool.server import storyboard_store
 
@@ -10,6 +11,8 @@ from tool.server import storyboard_store
 def storyboard_fs(tmp_path, monkeypatch):
     monkeypatch.setattr(storyboard_store.app_config, "FS_ROOT", str(tmp_path))
     monkeypatch.setattr(storyboard_generation.app_config, "FS_ROOT", str(tmp_path))
+    execution_queue._resource_owner = ""
+    storyboard_generation._startup_reconciled = False
     return tmp_path
 
 
@@ -257,7 +260,7 @@ def test_generation_capabilities_exclude_base_h3_lora(monkeypatch):
     }
 
 
-def test_storyboard_generation_queues_other_scenes_with_frozen_settings(storyboard_fs, monkeypatch):
+def test_storyboard_generation_queues_jobs_with_frozen_settings(storyboard_fs, monkeypatch):
     story = storyboard_store.create_story({"title": "Story"})
     story, first = storyboard_store.add_scene(story["id"], {
         "title": "First",
@@ -278,12 +281,13 @@ def test_storyboard_generation_queues_other_scenes_with_frozen_settings(storyboa
         "seed": 22,
     })
 
-    storyboard_generation._jobs.clear()
-    storyboard_generation._pending_job_ids[:] = []
-    storyboard_generation._active_job_id = None
     monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: None)
     monkeypatch.setattr(storyboard_generation, "_release_gpu", lambda: None)
-    monkeypatch.setattr(storyboard_generation, "_start_job_thread", lambda _job_id: None)
+    monkeypatch.setattr(
+        storyboard_generation,
+        "_start_job_thread",
+        lambda job_id: execution_queue.mark_running(job_id),
+    )
 
     active = storyboard_generation.start_generation(story["id"], first["id"])
     queued = storyboard_generation.start_generation(story["id"], second["id"])
@@ -292,50 +296,82 @@ def test_storyboard_generation_queues_other_scenes_with_frozen_settings(storyboa
     assert queued["status"] == "queued"
     assert queued["queuePosition"] == 1
 
-    stored = storyboard_generation._jobs[queued["jobId"]]
-    assert stored["_settings"]["prompt"] == "Second prompt."
-    assert stored["_settings"]["duration"] == 7.0
-    assert stored["_settings"]["seed"] == 22
+    stored = execution_queue.get_job(queued["jobId"], include_payload=True)
+    assert stored["payload"]["settings"]["prompt"] == "Second prompt."
+    assert stored["payload"]["settings"]["duration"] == 7.0
+    assert stored["payload"]["settings"]["seed"] == 22
 
-    story = storyboard_store.update_scene(story["id"], second["id"], {"prompt": "Edited later."})[0]
-    assert storyboard_generation._jobs[queued["jobId"]]["_settings"]["prompt"] == "Second prompt."
+    storyboard_store.update_scene(story["id"], second["id"], {"prompt": "Edited later."})
+    stored_after_edit = execution_queue.get_job(queued["jobId"], include_payload=True)
+    assert stored_after_edit["payload"]["settings"]["prompt"] == "Second prompt."
 
 
-def test_storyboard_generation_rejects_duplicate_scene_while_running_or_queued(storyboard_fs, monkeypatch):
+def test_storyboard_generation_allows_multiple_take_jobs_for_same_scene(storyboard_fs, monkeypatch):
     story = storyboard_store.create_story({"title": "Story"})
-    story, first = storyboard_store.add_scene(story["id"], {
+    story, scene = storyboard_store.add_scene(story["id"], {
         "title": "First",
         "prompt": "First prompt.",
+        "durationSeconds": 6,
+        "aspectRatio": "4:3 (Standard)",
+        "megapixels": 0.2,
+        "seedMode": "random",
+    })
+
+    monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_generation, "_release_gpu", lambda: None)
+    monkeypatch.setattr(
+        storyboard_generation,
+        "_start_job_thread",
+        lambda job_id: execution_queue.mark_running(job_id),
+    )
+
+    first = storyboard_generation.start_generation(story["id"], scene["id"])
+    second = storyboard_generation.start_generation(story["id"], scene["id"])
+    third = storyboard_generation.start_generation(story["id"], scene["id"])
+
+    assert first["status"] == "running"
+    assert second["status"] == "queued"
+    assert second["queuePosition"] == 1
+    assert third["status"] == "queued"
+    assert third["queuePosition"] == 2
+
+    first_payload = execution_queue.get_job(first["jobId"], include_payload=True)["payload"]
+    second_payload = execution_queue.get_job(second["jobId"], include_payload=True)["payload"]
+    third_payload = execution_queue.get_job(third["jobId"], include_payload=True)["payload"]
+    assert len({first_payload["settings"]["seed"], second_payload["settings"]["seed"], third_payload["settings"]["seed"]}) == 3
+
+
+def test_storyboard_generation_queue_exposes_pause_resume_cancel_and_reorder(storyboard_fs, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "prompt": "Prompt.",
         "durationSeconds": 6,
         "aspectRatio": "4:3 (Standard)",
         "megapixels": 0.2,
         "seedMode": "fixed",
         "seed": 1,
     })
-    story, second = storyboard_store.add_scene(story["id"], {
-        "title": "Second",
-        "prompt": "Second prompt.",
-        "durationSeconds": 6,
-        "aspectRatio": "4:3 (Standard)",
-        "megapixels": 0.2,
-        "seedMode": "fixed",
-        "seed": 2,
-    })
 
-    storyboard_generation._jobs.clear()
-    storyboard_generation._pending_job_ids[:] = []
-    storyboard_generation._active_job_id = None
-    monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: (_ for _ in ()).throw(RuntimeError("busy")))
     monkeypatch.setattr(storyboard_generation, "_release_gpu", lambda: None)
-    monkeypatch.setattr(storyboard_generation, "_start_job_thread", lambda _job_id: None)
 
-    storyboard_generation.start_generation(story["id"], first["id"])
-    with pytest.raises(RuntimeError, match="already has a Take generation in progress"):
-        storyboard_generation.start_generation(story["id"], first["id"])
+    first = storyboard_generation.start_generation(story["id"], scene["id"])
+    second = storyboard_generation.start_generation(story["id"], scene["id"])
+    assert first["status"] == "queued"
+    assert second["queuePosition"] == 2
 
-    storyboard_generation.start_generation(story["id"], second["id"])
-    with pytest.raises(RuntimeError, match="already has a queued Take generation"):
-        storyboard_generation.start_generation(story["id"], second["id"])
+    storyboard_generation.generation_action("reorder", second["jobId"], direction="up")
+    queue = storyboard_generation.generation_queue(story["id"])
+    assert [job["jobId"] for job in queue["jobs"]] == [second["jobId"], first["jobId"]]
+
+    storyboard_generation.generation_action("cancel", first["jobId"])
+    queue = storyboard_generation.generation_queue(story["id"])
+    assert [job["jobId"] for job in queue["jobs"]] == [second["jobId"]]
+
+    paused = storyboard_generation.generation_action("pause_queue")
+    assert paused["paused"] is True
+    resumed = storyboard_generation.generation_action("resume_queue")
+    assert resumed["queue"]["paused"] is False
 
 
 def test_scene_settings_resolve_story_loras_before_queueing(storyboard_fs):

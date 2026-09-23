@@ -1046,14 +1046,14 @@
                 '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
             '</div>' +
-            '<details class="storyboard-scene-disclosure storyboard-continuity-details">' +
-              '<summary><span>Continuity &amp; notes</span><span class="storyboard-disclosure-summary-state">' + (continuityConfigured ? 'Configured' : 'Optional') + '</span></summary>' +
+            '<div class="storyboard-scene-handoff-row storyboard-scene-handoff-primary">' +
+              '<label class="storyboard-field"><span>Entry state</span><textarea data-scene-field="entryState" rows="3" placeholder="What must already be true when this Scene begins?">' + escapeHtml(sceneValue(scene, 'entryState', '')) + '</textarea></label>' +
+              '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="3" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
+            '</div>' +
+            '<details class="storyboard-scene-disclosure storyboard-notes-details">' +
+              '<summary><span>Notes</span><span class="storyboard-disclosure-summary-state">' + (String(sceneValue(scene, 'notes', '')).trim() ? 'Added' : 'Optional') + '</span></summary>' +
               '<div class="storyboard-disclosure-body">' +
-                '<div class="storyboard-scene-handoff-row">' +
-                  '<label class="storyboard-field"><span>Entry state</span><textarea data-scene-field="entryState" rows="2" placeholder="What must already be true when this Scene begins?">' + escapeHtml(sceneValue(scene, 'entryState', '')) + '</textarea></label>' +
-                  '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="2" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
-                '</div>' +
-                '<label class="storyboard-field"><span>Notes</span><textarea data-scene-field="notes" rows="2" placeholder="Continuity reminders, corrections, ideas...">' + escapeHtml(sceneValue(scene, 'notes', '')) + '</textarea></label>' +
+                '<label class="storyboard-field"><textarea data-scene-field="notes" rows="3" placeholder="Continuity reminders, corrections, ideas...">' + escapeHtml(sceneValue(scene, 'notes', '')) + '</textarea></label>' +
               '</div>' +
             '</details>' +
           '</div>' +
@@ -1063,26 +1063,21 @@
               '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Generate a new Take from the current saved Scene."' + (generationBusy ? ' disabled' : '') + '>' +
                 (generationQueued ? 'Queued…' : (generationRunning ? 'Generating…' : 'Generate Take')) +
               '</button>' +
-              '<label class="storyboard-field storyboard-generation-duration" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
-              '<details class="storyboard-scene-disclosure storyboard-advanced-details">' +
-                '<summary><span>Generation settings</span><span class="storyboard-disclosure-summary-state">' + escapeHtml(advancedSummary) + '</span></summary>' +
-                '<div class="storyboard-disclosure-body">' +
-                  '<div class="storyboard-scene-meta-row">' +
-                    '<label class="storyboard-field" title="Currently stored per Scene; keep this consistent across a Story unless you intentionally need an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
-                      ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
-                        return '<option value="' + escapeHtml(value) + '"' + (sceneValue(scene, 'aspectRatio', '4:3 (Standard)') === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
-                      }).join('') +
-                    '</select></label>' +
-                    '<label class="storyboard-field" title="Output size target for this Scene. Useful when promoting a shot toward final output."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneValue(scene, 'megapixels', 0.2)) + '"></label>' +
-                  '</div>' +
-                  '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
-                  '<label class="storyboard-inline-check" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
-                '</div>' +
-              '</details>' +
+              '<div class="storyboard-generation-settings">' +
+                '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
+                '<label class="storyboard-field" title="Currently stored per Scene; keep this consistent across a Story unless you intentionally need an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
+                  ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
+                    return '<option value="' + escapeHtml(value) + '"' + (sceneValue(scene, 'aspectRatio', '4:3 (Standard)') === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
+                  }).join('') +
+                '</select></label>' +
+                '<label class="storyboard-field" title="Output size target for this Scene. Useful when promoting a shot toward final output."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneValue(scene, 'megapixels', 0.2)) + '"></label>' +
+                '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
+              '</div>' +
+              '<label class="storyboard-inline-check storyboard-generation-wildcards" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
             '</section>' +
-            '<details class="storyboard-scene-disclosure storyboard-conditioning-details">' +
-              '<summary><span>Conditioning</span><span class="storyboard-disclosure-summary-state">' + escapeHtml(conditioningSummary) + '</span></summary>' +
-              '<div class="storyboard-disclosure-body">' +
+            '<section class="storyboard-inspector-section storyboard-conditioning-panel">' +
+              '<div class="storyboard-inspector-section-heading"><strong>Conditioning</strong><span>' + escapeHtml(conditioningSummary) + '</span></div>' +
+              '<div class="storyboard-conditioning-body">' +
                 '<div class="storyboard-lora-panel">' +
                   '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add the chosen Scene-specific LoRA."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
                   '<div class="storyboard-lora-picker-wrap">' +
@@ -1109,7 +1104,7 @@
                   '</div>' +
                 '</details>' +
               '</div>' +
-            '</details>' +
+            '</section>' +
           '</aside>' +
         '</div>' +
         '<div class="storyboard-takes">' +

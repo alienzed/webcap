@@ -124,27 +124,90 @@ def _normalize_loras(value):
     if value is None:
         return []
     if not isinstance(value, list):
-        raise ValueError("Scene LoRAs must be a list.")
+        raise ValueError("LoRAs must be a list.")
     result = []
     seen = set()
     for item in value:
         if not isinstance(item, dict):
-            raise ValueError("Each Scene LoRA must be an object.")
+            raise ValueError("Each LoRA must be an object.")
         name = str(item.get("name") or "").strip()
         if not name:
             continue
         key = name.casefold()
         if key in seen:
-            raise ValueError("Scene LoRAs must not contain duplicates.")
+            raise ValueError("LoRAs must not contain duplicates.")
         try:
             strength = float(item.get("strength", 1.0))
         except (TypeError, ValueError) as exc:
-            raise ValueError("Scene LoRA strength must be numeric.") from exc
+            raise ValueError("LoRA strength must be numeric.") from exc
         if not (-100.0 < strength < 100.0):
-            raise ValueError("Scene LoRA strength is outside a reasonable range.")
+            raise ValueError("LoRA strength is outside a reasonable range.")
         seen.add(key)
         result.append({"name": name, "strength": strength})
     return result
+
+
+def _normalize_story_lora_overrides(value):
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Story LoRA overrides must be a list.")
+    result = []
+    seen = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("Each Story LoRA override must be an object.")
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen:
+            raise ValueError("Story LoRA overrides must not contain duplicates.")
+        normalized = {"name": name}
+        if "enabled" in item:
+            if not isinstance(item.get("enabled"), bool):
+                raise ValueError("Story LoRA override enabled must be boolean.")
+            normalized["enabled"] = item["enabled"]
+        if "strength" in item and item.get("strength") not in ("", None):
+            try:
+                strength = float(item["strength"])
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Story LoRA override strength must be numeric.") from exc
+            if not (-100.0 < strength < 100.0):
+                raise ValueError("Story LoRA override strength is outside a reasonable range.")
+            normalized["strength"] = strength
+        if len(normalized) > 1:
+            result.append(normalized)
+        seen.add(key)
+    return result
+
+
+def resolve_scene_loras(story, scene):
+    story_loras = _normalize_loras((story or {}).get("loras", []))
+    scene_loras = _normalize_loras((scene or {}).get("loras", []))
+    overrides = {
+        item["name"].casefold(): item
+        for item in _normalize_story_lora_overrides((scene or {}).get("storyLoraOverrides", []))
+    }
+    story_names = {item["name"].casefold() for item in story_loras}
+
+    resolved = []
+    for item in story_loras:
+        override = overrides.get(item["name"].casefold(), {})
+        if override.get("enabled") is False:
+            continue
+        resolved.append({
+            "name": item["name"],
+            "strength": override.get("strength", item["strength"]),
+        })
+
+    for item in scene_loras:
+        if item["name"].casefold() in story_names:
+            raise ValueError(
+                "Scene-specific LoRA duplicates a Story LoRA; use the inherited Story LoRA controls instead."
+            )
+        resolved.append(item)
+    return resolved
 
 
 def _normalize_scene(scene_id, value, existing=None):
@@ -197,6 +260,9 @@ def _normalize_scene(scene_id, value, existing=None):
         "seedMode": seed_mode,
         "wildcardsEnabled": bool(value.get("wildcardsEnabled", current.get("wildcardsEnabled", False))),
         "loras": _normalize_loras(value.get("loras", current.get("loras", []))),
+        "storyLoraOverrides": _normalize_story_lora_overrides(
+            value.get("storyLoraOverrides", current.get("storyLoraOverrides", []))
+        ),
         "references": list(current.get("references") or []),
         "notes": str(value.get("notes", current.get("notes", "")) or ""),
         "takes": dict(current.get("takes") or {}) if isinstance(current.get("takes"), dict) else {},
@@ -231,6 +297,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "concept": str(payload.get("concept", current.get("concept", "")) or ""),
         "previousConcept": current.get("previousConcept") if isinstance(current.get("previousConcept"), str) else None,
         "style": str(payload.get("style", current.get("style", "")) or ""),
+        "loras": _normalize_loras(payload.get("loras", current.get("loras", []))),
         "tags": _normalize_tags(payload.get("tags", current.get("tags", []))),
         "status": status,
         "pinned": bool(payload.get("pinned", current.get("pinned", False))),
@@ -492,6 +559,7 @@ def duplicate_scene(story_id, scene_id):
         "notes": current.get("notes") or "",
     }
     copied["loras"] = copy.deepcopy(current.get("loras") or [])
+    copied["storyLoraOverrides"] = copy.deepcopy(current.get("storyLoraOverrides") or [])
     scene = _normalize_scene(new_id, copied)
     scene["references"] = list(current.get("references") or [])
 
@@ -617,7 +685,7 @@ def add_take_upload(story_id, scene_id, filename, stream):
         "seed": scene.get("seed"),
         "seedMode": scene.get("seedMode", "random"),
         "wildcardsEnabled": bool(scene.get("wildcardsEnabled")),
-        "loras": copy.deepcopy(scene.get("loras") or []),
+        "loras": resolve_scene_loras(story, scene),
         "references": copy.deepcopy(scene.get("references") or []),
         "workflowProfile": None,
         "providerJobId": None,

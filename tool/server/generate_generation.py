@@ -1,5 +1,6 @@
 import copy
 import logging
+import re
 import secrets
 import time
 
@@ -16,7 +17,7 @@ def _new_seed():
 
 
 def _portable_name(value):
-    return str(value or "").replace("\\", "/")
+    return re.sub(r"[\\/]+", "/", str(value or ""))
 
 
 def _public_model(model):
@@ -24,10 +25,10 @@ def _public_model(model):
     available_loras = model.available_lora_names(inference_runtime.available_names)
     resolved = model.resolve_assets(template, inference_runtime.available_names, inference_runtime.resolve_name)
     base_loras = model.base_loras(resolved)
-    base_keys = {str(value).replace("\\", "/").casefold() for value in base_loras}
+    base_keys = {_portable_name(value).casefold() for value in base_loras}
     selectable = [
         value for value in available_loras
-        if str(value).replace("\\", "/").casefold() not in base_keys
+        if _portable_name(value).casefold() not in base_keys
     ]
     selectable = [_portable_name(value) for value in selectable]
     base_loras = [_portable_name(value) for value in base_loras]

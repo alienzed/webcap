@@ -10,7 +10,9 @@ from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
+    pause_lane as execution_pause_lane,
     recover_lane as execution_recover_lane,
+    reserve_resource as execution_reserve_resource,
     update_job as execution_update_job,
 )
 from .inference_models import get_inference_model
@@ -302,8 +304,28 @@ def reconcile_startup():
             ).strip()
             if prompt_id:
                 try:
-                    inference_runtime.cancel_job(prompt_id)
+                    if not inference_runtime.cancel_job_and_wait(prompt_id):
+                        execution_pause_lane(
+                            EXECUTION_LANE,
+                            reason=(
+                                "Queue paused: interrupted legacy Storyboard provider work "
+                                "could not be confirmed stopped after restart."
+                            ),
+                        )
+                        execution_reserve_resource(EXECUTION_LANE)
+                        _logger.error(
+                            "Interrupted legacy Storyboard provider job %s did not confirm cancellation.",
+                            prompt_id,
+                        )
                 except Exception:
+                    execution_pause_lane(
+                        EXECUTION_LANE,
+                        reason=(
+                            "Queue paused: interrupted legacy Storyboard provider work "
+                            "could not be confirmed stopped after restart."
+                        ),
+                    )
+                    execution_reserve_resource(EXECUTION_LANE)
                     _logger.exception(
                         "Could not cancel interrupted legacy Storyboard provider job %s.",
                         prompt_id,

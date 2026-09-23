@@ -495,15 +495,18 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "classList.contains('test-running')" not in shell
     assert "function setShellTrainingActive(active)" in shell
     assert "function setShellTestingActive(active)" in shell
+    assert "function setShellGeneratingActive(active)" in shell
     assert "shell-workload-status is-" in shell
     assert "window.setShellTrainingActive = setShellTrainingActive" in shell
     assert "window.setShellTestingActive = setShellTestingActive" in shell
+    assert "window.setShellGeneratingActive = setShellGeneratingActive" in shell
     assert "window.renderShellSystemStatus" not in shell
     assert "setShellTrainingActive(running);" in runner
     assert "setShellTestingActive(!!active);" in test_bench
     assert "typeof window.renderShellSystemStatus" not in runner
     assert "typeof window.renderShellSystemStatus" not in test_bench
     assert ".shell-workload-status {" in css
+    assert ".shell-workload-status.is-generating" in css
     assert "color: var(--accent);" in css
     assert "font-size: 12px;" in css
     assert ".shell-gpu-status .shell-system-disk {" in css

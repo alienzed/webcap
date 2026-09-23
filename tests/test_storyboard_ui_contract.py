@@ -322,7 +322,13 @@ def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
     assert "data-scene-open" in storyboard
     assert "data-scene-progress" in storyboard
     assert "data-scene-progress-add" in storyboard
+    assert "newTakeCounts:" in storyboard
+    assert "function markSceneNewTake(sceneId)" in storyboard
+    assert "function clearSceneNewTakeCount(sceneId)" in storyboard
+    assert "storyboard-scene-progress-badge" in storyboard
+    assert "markSceneNewTake(job.sceneId);" in storyboard
     assert "function setSceneViewMode(mode, sceneId)" in storyboard
+    assert ".storyboard-scene-progress-badge" in css
     assert "grid-template-columns: minmax(720px, 900px) minmax(360px, 420px);" in css
     assert "min-height: 340px;" in css
     assert "position: sticky;" in css

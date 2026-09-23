@@ -12,6 +12,7 @@
     sceneSaveErrors: {},
     generationJobs: {},
     generationPolls: {},
+    newTakeCounts: {},
     sequenceExport: null,
     sceneViewMode: window.localStorage.getItem('webcap.storyboard.sceneView') || 'focus',
     activeSceneId: '',
@@ -430,6 +431,18 @@
     return storyState.activeSceneId;
   }
 
+  function clearSceneNewTakeCount(sceneId) {
+    if (!sceneId) return;
+    delete storyState.newTakeCounts[sceneId];
+  }
+
+  function markSceneNewTake(sceneId) {
+    if (!sceneId || !storyState.story) return;
+    if (storyState.sceneViewMode === 'focus' && storyState.activeSceneId === sceneId) return;
+    storyState.newTakeCounts[sceneId] = Number(storyState.newTakeCounts[sceneId] || 0) + 1;
+    renderSceneProgression(storyState.story.sceneOrder || []);
+  }
+
   function renderSceneProgression(order) {
     var host = el('storyboard-scene-progression');
     if (!host || !storyState.story) return;
@@ -438,8 +451,11 @@
     var active = ensureActiveScene(order);
     host.innerHTML = order.map(function (sceneId, index) {
       var scene = scenes[sceneId] || {};
+      var newTakeCount = Number(storyState.newTakeCounts[sceneId] || 0);
       return '<button type="button" class="storyboard-scene-progress-step' + (sceneId === active ? ' active' : '') + '" data-scene-progress="' + escapeHtml(sceneId) + '">' +
-        '<span>Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
+        '<span class="storyboard-scene-progress-kicker">Scene ' + String(index + 1).padStart(2, '0') +
+          (newTakeCount ? '<span class="storyboard-scene-progress-badge" title="' + String(newTakeCount) + ' new Take' + (newTakeCount === 1 ? '' : 's') + '">' + String(newTakeCount) + '</span>' : '') +
+        '</span>' +
         '<strong>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
       '</button>';
     }).join('') +
@@ -460,6 +476,10 @@
     return flushPendingSaves().then(function () {
       storyState.sceneViewMode = mode;
       if (sceneId) storyState.activeSceneId = sceneId;
+      if (mode === 'focus') {
+        var order = storyState.story && Array.isArray(storyState.story.sceneOrder) ? storyState.story.sceneOrder : [];
+        clearSceneNewTakeCount(ensureActiveScene(order));
+      }
       window.localStorage.setItem('webcap.storyboard.sceneView', mode);
       renderScenes();
     }).catch(reportError);
@@ -1243,6 +1263,7 @@
     }).then(function (payload) {
       storyState.story = payload.story;
       storyState.sequenceExport = null;
+      storyState.newTakeCounts = {};
       return refreshGenerationQueue(storyId);
     }).then(function () {
       renderStory();
@@ -1260,6 +1281,7 @@
     }).then(function (payload) {
       storyState.story = payload.story;
       storyState.sequenceExport = null;
+      storyState.newTakeCounts = {};
       storyState.generationJobs = {};
       Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
       syncStoryboardGenerationActivity();
@@ -1877,6 +1899,7 @@
           }
           return request(null, 'story=' + encodeURIComponent(storyId)).then(function (storyPayload) {
             mergeFetchedSceneTakeState(storyId, job.sceneId, storyPayload.story);
+            markSceneNewTake(job.sceneId);
             setSaveState('Saved');
           });
         }

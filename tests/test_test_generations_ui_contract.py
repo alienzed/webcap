@@ -843,3 +843,15 @@ def test_test_session_polling_preserves_session_row_identity():
     assert "function placeRow(target, row, index)" in renderer
     assert "host.innerHTML = ''" not in renderer
 
+def test_test_prompt_draft_survives_prepare_and_template_fallback():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "function testPromptDraftKey()" in script
+    assert "webcap.test.promptDraft." in script
+    assert "function loadTestPromptDraft()" in script
+    assert "function saveTestPromptDraft(prompt)" in script
+    assert "var draftPrompt = loadTestPromptDraft();" in script
+    assert "prompt.value = draftPrompt !== null" in script
+    assert "saveTestPromptDraft(this.value);" in script
+    assert "saveTestPromptDraft(prompt);" in script
+

@@ -208,16 +208,19 @@ def test_develop_story_h3_rules_do_not_conflict_with_structured_creative_task():
     assert "Return only the final H3 model-facing prompt." not in prompt
 
 
-def test_develop_story_requires_stable_recurring_character_identity():
-    story = _story()
-    story["concept"] = (
-        "A baby is born, grows up, goes to school, falls in love, marries, grows old, "
-        "and ends in a grave marked Well that was fast."
-    )
+def test_character_continuity_is_authoritative_without_lora_or_media_reasoning():
+    prompt = storyboard_llm_contract.build_request(_story(), "", "develop_story")["prompt"]
 
-    prompt = storyboard_llm_contract.build_request(story, "", "develop_story")["prompt"]
+    assert prompt.count("RECURRING CHARACTERS STAY THE SAME PEOPLE.") == 1
+    assert "Preserve established identity across independent Scenes." in prompt
+    assert "ethnicity/heritage" not in prompt
+    assert "no LoRA" not in prompt
+    assert "LoRA or exact" not in prompt
 
-    assert "Establish recurring characters as stable people" in prompt
-    assert "age the same person" in prompt
-    assert "ethnicity/heritage" in prompt
-    assert "repeat enough concrete character identity detail" in prompt
+
+def test_scene_local_prompt_does_not_solicit_unsolicited_advice():
+    prompt = storyboard_llm_contract.build_request(_story(), "scene-2", "write_prompt")["prompt"]
+
+    assert "recommend a natural Scene split" not in prompt
+    assert "state the missing fact" not in prompt
+    assert "Do not add unsolicited advice or commentary." in prompt

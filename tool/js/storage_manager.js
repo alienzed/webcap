@@ -6,7 +6,8 @@
     loading: false,
     payload: null,
     scan: null,
-    scanPollTimer: null
+    scanPollTimer: null,
+    activeArea: ''
   };
 
   function el(id) { return document.getElementById(id); }
@@ -113,13 +114,14 @@
       var complete = category.complete !== false;
       var sizeText = category.measuredCount ? bytes(category.bytes) : 'Not measured';
       var note = category.note ? '<span class="storage-category-note">' + escapeHtml(category.note) + '</span>' : '';
-      return '<div class="storage-category-row" data-storage-area="' + escapeHtml(category.area) + '">' +
-        '<div class="storage-category-main"><strong>' + escapeHtml(category.label) + '</strong>' +
+      return '<button type="button" class="storage-category-row" data-storage-area="' + escapeHtml(category.area) + '">' +
+        '<span class="storage-category-main"><strong>' + escapeHtml(category.label) + '</strong>' +
         '<span>' + category.count + ' item' + (category.count === 1 ? '' : 's') +
-        (complete ? '' : ' · partial inventory') + '</span>' + note + '</div>' +
-        '<div class="storage-category-size">' + escapeHtml(sizeText) +
-        '<span>' + category.measuredCount + '/' + category.count + ' measured</span></div>' +
-      '</div>';
+        (complete ? '' : ' · partial inventory') + '</span>' + note + '</span>' +
+        '<span class="storage-category-size">' + escapeHtml(sizeText) +
+        '<span>' + category.measuredCount + '/' + category.count + ' measured</span></span>' +
+        '<span class="storage-category-chevron" aria-hidden="true">›</span>' +
+      '</button>';
     }).join('');
   }
 
@@ -129,7 +131,7 @@
     html += '<button type="button" class="review-captions-btn storage-measure-btn"' + payload + '>Measure</button>';
     if (item.purgeable) {
       var label = 'Delete';
-      if (item.area === 'storyboard') label = 'Delete Story';
+      if (item.area === 'storyboard') label = 'Delete Take';
       else if (item.area === 'staged') label = 'Delete Copy';
       else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) label = 'Delete Probe';
       else if (item.area === 'runtime' && String(item.id || '').indexOf('generate-reference/') === 0) label = 'Delete Reference';
@@ -141,6 +143,7 @@
 
   function renderItems() {
     var host = el('storage-items');
+    var categoriesHost = el('storage-category-list');
     if (!host) return;
     var groups = storageState.payload && storageState.payload.items || {};
     var areaLabels = {
@@ -148,41 +151,50 @@
       tests: 'Tests',
       staged: 'Staged Test LoRAs',
       generate: 'Generations',
-      storyboard: 'Storyboard',
-      set: 'Current Set (protected)',
+      storyboard: 'Storyboard Takes',
+      set: 'Set Data (protected)',
       runtime: 'Runtime / Temporary',
       comfy: 'ComfyUI Scratch'
     };
-    host.innerHTML = ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].map(function (area) {
-      var rows = (groups[area] || []).slice().sort(itemSort);
-      var empty = rows.length
-        ? ''
-        : '<div class="storage-empty">' + (area === 'tests'
-          ? (storageState.payload && storageState.payload.lastScan
-            ? 'No Test Sessions were found in the last completed workspace scan.'
-            : 'No Test Sessions are visible yet. Start scan to discover historical Tests across Sets.')
-          : 'No managed items found.') + '</div>';
-      var body = rows.map(function (item) {
-        var measured = item.measured ? bytes(item.bytes) : 'Not measured';
-        var age = item.measured ? measurementAge(item.measuredAt) : '';
-        var fileCount = item.measured && item.fileCount != null ? Number(item.fileCount) : null;
-        var fileText = fileCount == null ? '' : fileCount + ' file' + (fileCount === 1 ? '' : 's');
-        var secondary = [item.kind, item.status, fileText, age].filter(Boolean).join(' · ');
-        var reason = item.protectedReason ? '<span class="storage-item-reason">' + escapeHtml(item.protectedReason) + '</span>' : '';
-        return '<article class="storage-item-row">' +
-          '<div class="storage-item-copy"><strong title="' + escapeHtml(item.label) + '">' + escapeHtml(item.label) + '</strong>' +
-          '<span>' + escapeHtml(secondary) + '</span>' + reason + '</div>' +
-          '<div class="storage-item-size">' + escapeHtml(measured) + '</div>' +
-          '<div class="storage-item-actions">' + actionButtons(item) + '</div>' +
-        '</article>';
-      }).join('');
-      return '<section class="storage-section" data-storage-section="' + area + '">' +
-        '<header><strong>' + areaLabels[area] + '</strong><span>' + rows.length + ' item' + (rows.length === 1 ? '' : 's') + '</span></header>' +
-        body + empty +
-      '</section>';
+    var area = String(storageState.activeArea || '');
+    if (categoriesHost) categoriesHost.classList.toggle('hidden', !!area);
+    if (!area) {
+      host.innerHTML = '';
+      return;
+    }
+    var rows = (groups[area] || []).slice().sort(itemSort);
+    var empty = rows.length
+      ? ''
+      : '<div class="storage-empty">' + (area === 'tests'
+        ? (storageState.payload && storageState.payload.lastScan
+          ? 'No Test Sessions were found in the last completed workspace scan.'
+          : 'No Test Sessions are visible yet. Start scan to discover historical Tests across Sets.')
+        : 'No managed items found.') + '</div>';
+    var body = rows.map(function (item) {
+      var measured = item.measured ? bytes(item.bytes) : 'Not measured';
+      var age = item.measured ? measurementAge(item.measuredAt) : '';
+      var fileCount = item.measured && item.fileCount != null ? Number(item.fileCount) : null;
+      var fileText = fileCount == null ? '' : fileCount + ' file' + (fileCount === 1 ? '' : 's');
+      var secondary = [item.kind, item.status, fileText, age].filter(Boolean).join(' · ');
+      var reason = item.protectedReason ? '<span class="storage-item-reason">' + escapeHtml(item.protectedReason) + '</span>' : '';
+      return '<article class="storage-item-row">' +
+        '<div class="storage-item-copy"><strong title="' + escapeHtml(item.label) + '">' + escapeHtml(item.label) + '</strong>' +
+        '<span>' + escapeHtml(secondary) + '</span>' + reason + '</div>' +
+        '<div class="storage-item-size">' + escapeHtml(measured) + '</div>' +
+        '<div class="storage-item-actions">' + actionButtons(item) + '</div>' +
+      '</article>';
     }).join('');
+    host.innerHTML =
+      '<section class="storage-detail">' +
+        '<header class="storage-detail-header">' +
+          '<button type="button" class="review-captions-btn storage-overview-back">‹ Overview</button>' +
+          '<div><strong>' + escapeHtml(areaLabels[area] || area) + '</strong><span>' + rows.length + ' item' + (rows.length === 1 ? '' : 's') + ' · largest first</span></div>' +
+        '</header>' +
+        '<section class="storage-section" data-storage-section="' + escapeHtml(area) + '">' +
+          body + empty +
+        '</section>' +
+      '</section>';
   }
-
 
   function scanIsActive() {
     var status = String(storageState.scan && storageState.scan.status || '');
@@ -318,8 +330,9 @@
     var label = 'artifact';
     var consequence = '';
     if (item.area === 'storyboard') {
-      label = 'Story';
-      consequence = '\nThis removes the Story metadata, its Takes, and references.';
+      label = 'Storyboard Take';
+      consequence = '\nThis removes only this generated Take. The Story and other Takes remain.';
+      if (item.meta && item.meta.selected) consequence += '\nThis Take is currently selected for its Scene.';
     } else if (item.area === 'staged') {
       label = 'staged Test LoRA copy';
       consequence = '\nThe source training epoch is not deleted.';
@@ -343,6 +356,17 @@
   }
 
   function handleClick(event) {
+    var category = event.target.closest('button[data-storage-area]');
+    if (category) {
+      storageState.activeArea = category.getAttribute('data-storage-area') || '';
+      render();
+      return;
+    }
+    if (event.target.closest('.storage-overview-back')) {
+      storageState.activeArea = '';
+      render();
+      return;
+    }
     var button = event.target.closest('button[data-area][data-id]');
     if (!button) return;
     var area = button.getAttribute('data-area') || '';
@@ -378,6 +402,7 @@
     window.closeTestBenchActivity();
     window.closeStoryboardActivity();
     storageState.open = true;
+    storageState.activeArea = '';
     frame.classList.add('workspace-storage-open');
     workspace.classList.remove('hidden');
     window.syncApplicationShellContext();

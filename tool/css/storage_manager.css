@@ -111,11 +111,30 @@
 }
 
 .storage-category-row {
+  width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  align-items: center;
   gap: 20px;
   padding: 12px 14px;
+  border: 0;
   border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.storage-category-row:hover,
+.storage-category-row:focus-visible {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.storage-category-chevron {
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
 }
 
 .storage-category-row:last-child {
@@ -142,6 +161,27 @@
 .storage-sections {
   display: grid;
   gap: 14px;
+}
+
+.storage-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.storage-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.storage-detail-header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.storage-detail-header > div > span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .storage-section {

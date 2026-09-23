@@ -1,4 +1,4 @@
-"""Durable run-owned metadata for one managed training action."""
+"""Durable metadata stored inside one trainer timestamp run folder."""
 
 import json
 import os
@@ -13,14 +13,14 @@ MANIFEST_VERSION = 1
 _manifest_lock = threading.RLock()
 
 
-def _manifest_path(action_root):
-    return Path(action_root) / MANIFEST_FILE_NAME
+def _manifest_path(run_dir):
+    return Path(run_dir) / MANIFEST_FILE_NAME
 
 
-def _validate_root(action_root):
-    root = Path(action_root)
+def _validate_root(run_dir):
+    root = Path(run_dir)
     if not root.is_dir() or root.is_symlink():
-        raise ValueError("Training action directory is unavailable.")
+        raise ValueError("Trainer run directory is unavailable.")
     return root
 
 
@@ -32,8 +32,8 @@ def _validate_run_id(run_id):
     return value
 
 
-def _read_unlocked(action_root, run_id):
-    root = _validate_root(action_root)
+def _read_unlocked(run_dir, run_id):
+    root = _validate_root(run_dir)
     identity = _validate_run_id(run_id)
     path = _manifest_path(root)
     if not path.exists():
@@ -48,7 +48,7 @@ def _read_unlocked(action_root, run_id):
         raise ValueError("Unsupported training run manifest: " + str(path))
     recorded = str(payload.get("runId") or "").strip()
     if recorded != identity:
-        raise ValueError("Training run manifest identity does not match its managed action.")
+        raise ValueError("Training run manifest identity does not match its recorded training experiment.")
     selected = payload.get("selected")
     if selected is not None:
         if not isinstance(selected, dict):
@@ -63,19 +63,19 @@ def _read_unlocked(action_root, run_id):
     return payload
 
 
-def read_run_manifest(action_root, run_id):
+def read_run_manifest(run_dir, run_id):
     with _manifest_lock:
-        return dict(_read_unlocked(action_root, run_id))
+        return dict(_read_unlocked(run_dir, run_id))
 
 
-def selected_epoch(action_root, run_id):
+def selected_epoch(run_dir, run_id):
     with _manifest_lock:
-        selected = _read_unlocked(action_root, run_id).get("selected")
+        selected = _read_unlocked(run_dir, run_id).get("selected")
         return dict(selected) if isinstance(selected, dict) else None
 
 
-def _write_unlocked(action_root, payload):
-    root = _validate_root(action_root)
+def _write_unlocked(run_dir, payload):
+    root = _validate_root(run_dir)
     target = _manifest_path(root)
     temporary = target.with_name("." + target.name + "." + str(os.getpid()) + "." + uuid.uuid4().hex + ".tmp")
     try:
@@ -91,7 +91,7 @@ def _write_unlocked(action_root, payload):
             pass
 
 
-def select_epoch(action_root, run_id, epoch, step):
+def select_epoch(run_dir, run_id, epoch, step):
     identity = _validate_run_id(run_id)
     try:
         epoch_number = int(epoch)
@@ -102,22 +102,22 @@ def select_epoch(action_root, run_id, epoch, step):
         raise ValueError("Selected epoch and step must be non-negative whole numbers.")
 
     with _manifest_lock:
-        payload = _read_unlocked(action_root, identity)
+        payload = _read_unlocked(run_dir, identity)
         payload["selected"] = {
             "epoch": epoch_number,
             "step": step_number,
             "selectedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
-        _write_unlocked(action_root, payload)
+        _write_unlocked(run_dir, payload)
         return dict(payload["selected"])
 
 
-def clear_selected_epoch(action_root, run_id):
+def clear_selected_epoch(run_dir, run_id):
     identity = _validate_run_id(run_id)
     with _manifest_lock:
-        payload = _read_unlocked(action_root, identity)
+        payload = _read_unlocked(run_dir, identity)
         if "selected" not in payload:
             return None
         payload.pop("selected", None)
-        _write_unlocked(action_root, payload)
+        _write_unlocked(run_dir, payload)
         return None

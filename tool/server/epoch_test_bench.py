@@ -1716,8 +1716,6 @@ def start_queued(folder_path, request, execution_job_id=None):
         payload.update(normalized_settings)
         payload["includeBase"] = include_base
         payload["total"] = len(loras) + (1 if include_base else 0)
-        payload["status"] = "running"
-        _atomic_write_json(_status_path(session_directory), payload)
         if execution_job_id:
             execution_mark_running(
                 execution_job_id,
@@ -1737,6 +1735,12 @@ def start_queued(folder_path, request, execution_job_id=None):
             _active_sessions[folder_key] = session_directory
             _active_threads[folder_key] = thread
             thread.start()
+        with _status_lock:
+            live_status = _read_status(session_directory) or {}
+            if str(live_status.get("status") or "") == "starting":
+                live_status["status"] = "running"
+                _atomic_write_json(_status_path(session_directory), live_status)
+            payload = live_status or payload
         return payload
     except Exception as exc:
         payload["status"] = "failed"

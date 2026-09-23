@@ -126,7 +126,12 @@
     if (el('generate-seed')) el('generate-seed').value = '-1';
 
     var prompt = el('generate-prompt');
-    var savedPrompt = window.localStorage.getItem('webcap.generate.prompt.' + model.id);
+    var promptStorageKey = 'webcap.generate.prompt.' + model.id;
+    var savedPrompt = window.localStorage.getItem(promptStorageKey);
+    if (savedPrompt === 'Storyboard prompt is injected at runtime.') {
+      window.localStorage.removeItem(promptStorageKey);
+      savedPrompt = null;
+    }
     if (prompt && (!prompt.value.trim() || prompt.dataset.modelId !== model.id)) {
       prompt.value = savedPrompt !== null ? savedPrompt : String(model.defaultPrompt || '');
       prompt.dataset.modelId = model.id;

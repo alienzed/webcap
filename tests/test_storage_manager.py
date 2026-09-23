@@ -121,6 +121,35 @@ def test_measure_refuses_symlinked_root(monkeypatch, tmp_path):
         storage_manager.measure("generate", "2026-09-23/job-1")
 
 
+def test_storyboard_measure_refuses_symlinked_story(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    outside = tmp_path / "outside-story"
+    outside.mkdir()
+    _write_json(outside / "story.json", {
+        "id": "story-demo",
+        "title": "Outside",
+        "concept": "",
+        "tags": [],
+        "status": "active",
+        "pinned": False,
+        "createdAt": "2026-09-23T00:00:00+00:00",
+        "updatedAt": "2026-09-23T00:00:00+00:00",
+        "sceneOrder": [],
+        "scenes": {},
+        "removedScenes": {},
+    })
+    root = tmp_path / "output" / "storyboards"
+    root.mkdir(parents=True)
+    link = root / "story-demo"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("Symlink creation is unavailable on this platform.")
+
+    with pytest.raises(ValueError, match="symlinked"):
+        storage_manager.measure("storyboard", "story-demo")
+
+
 def test_generate_purge_requires_manifest_ownership(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     directory = _generation(tmp_path)

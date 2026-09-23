@@ -623,7 +623,8 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
     })
     assert managed_response.status_code == 200
     managed_text = managed_response.data.decode("utf-8")
-    assert "--resume_from_checkpoint /wsl" + managed_run.as_posix() in managed_text
+    expected_managed_resume = managed_run.as_posix() if managed_run.as_posix().startswith("/") else "/wsl" + managed_run.as_posix()
+    assert "--resume_from_checkpoint " + expected_managed_resume in managed_text
     assert "--reset_dataloader" not in managed_text
     assert "--cache_only" not in managed_text
     assert "--trust_cache" not in managed_text

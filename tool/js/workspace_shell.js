@@ -254,7 +254,8 @@ function formatShellDiskSpace(value) {
 var shellWorkloadState = {
   trainingActive: false,
   testingActive: false,
-  generatingActive: false
+  generatingActive: false,
+  inferenceActive: false
 };
 
 function getShellWorkloadStatus() {
@@ -264,7 +265,7 @@ function getShellWorkloadStatus() {
   if (shellWorkloadState.testingActive) {
     return { key: 'testing', label: 'Testing' };
   }
-  if (shellWorkloadState.generatingActive) {
+  if (shellWorkloadState.generatingActive || shellWorkloadState.inferenceActive) {
     return { key: 'generating', label: 'Generating' };
   }
   return { key: 'idle', label: 'Idle' };
@@ -282,6 +283,11 @@ function setShellTestingActive(active) {
 
 function setShellGeneratingActive(active) {
   shellWorkloadState.generatingActive = !!active;
+  renderShellSystemStatus();
+}
+
+function setShellInferenceActive(active) {
+  shellWorkloadState.inferenceActive = !!active;
   renderShellSystemStatus();
 }
 

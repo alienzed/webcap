@@ -26,6 +26,7 @@ from .execution_queue import (
     pause_lane as execution_pause_lane,
     request_action as execution_request_action,
     reorder_job as execution_reorder_job,
+    recover_lane as execution_recover_lane,
     resume_lane as execution_resume_lane,
     update_job as execution_update_job,
 )
@@ -46,6 +47,22 @@ ASPECT_RATIO_OPTIONS = (
 )
 EXECUTION_LANE = "storyboard-takes"
 GPU_RESERVATION_OWNER = EXECUTION_LANE
+_reconcile_lock = threading.Lock()
+_startup_reconciled = False
+
+
+def _ensure_startup_reconciled():
+    global _startup_reconciled
+    if _startup_reconciled:
+        return
+    with _reconcile_lock:
+        if _startup_reconciled:
+            return
+        execution_recover_lane(
+            EXECUTION_LANE,
+            reason="Storyboard Take generation was interrupted by a WebCap restart.",
+        )
+        _startup_reconciled = True
 
 
 def _reserve_gpu():
@@ -742,6 +759,7 @@ def _run_generation(job_id, story_id, scene_id, settings):
 
 
 def start_generation(story_id, scene_id):
+    _ensure_startup_reconciled()
     story = load_story(story_id)
     scene_id = str(scene_id or "").strip()
     scene = (story.get("scenes") or {}).get(scene_id)
@@ -767,11 +785,13 @@ def start_generation(story_id, scene_id):
 
 
 def generation_status(job_id):
+    _ensure_startup_reconciled()
     _advance_queue()
     return _generation_job(execution_get_job(str(job_id or "").strip()))
 
 
 def generation_queue(story_id=""):
+    _ensure_startup_reconciled()
     _advance_queue()
     story_id = str(story_id or "").strip()
     snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
@@ -787,6 +807,7 @@ def generation_queue(story_id=""):
 
 
 def generation_action(operation, job_id="", direction=""):
+    _ensure_startup_reconciled()
     operation = str(operation or "").strip()
     job_id = str(job_id or "").strip()
     if operation == "cancel":

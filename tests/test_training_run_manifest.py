@@ -20,11 +20,10 @@ def test_selected_epoch_manifest_is_created_replaced_and_cleared(tmp_path):
     assert training_run_manifest.selected_epoch(run, "001-subject/001-h3") is None
 
     selected = training_run_manifest.select_epoch(
-        run, "001-subject/001-h3", 12, 2400, "epoch12/adapter.safetensors"
+        run, "001-subject/001-h3", 12, 2400
     )
     assert selected["epoch"] == 12
     assert selected["step"] == 2400
-    assert selected["file"] == "epoch12/adapter.safetensors"
     assert selected["selectedAt"].endswith("Z")
 
     manifest = json.loads((run / "webcap-run.json").read_text(encoding="utf-8"))
@@ -33,7 +32,7 @@ def test_selected_epoch_manifest_is_created_replaced_and_cleared(tmp_path):
     assert manifest["selected"]["epoch"] == 12
 
     replacement = training_run_manifest.select_epoch(
-        run, "001-subject/001-h3", 18, 3600, "epoch18/adapter.safetensors"
+        run, "001-subject/001-h3", 18, 3600
     )
     assert replacement["epoch"] == 18
     assert training_run_manifest.selected_epoch(run, "001-subject/001-h3")["epoch"] == 18
@@ -56,8 +55,6 @@ def test_manifest_refuses_wrong_identity_and_unsafe_selected_paths(tmp_path):
         training_run_manifest.selected_epoch(run, "001-subject/001-h3")
 
     (run / "webcap-run.json").unlink()
-    with pytest.raises(ValueError, match="relative"):
-        training_run_manifest.select_epoch(run, "001-subject/001-h3", 12, 2400, "../escape.safetensors")
 
 
 def test_manifest_refuses_invalid_existing_json_without_overwriting(tmp_path):
@@ -68,6 +65,6 @@ def test_manifest_refuses_invalid_existing_json_without_overwriting(tmp_path):
     before = path.read_bytes()
 
     with pytest.raises(ValueError, match="left unchanged"):
-        training_run_manifest.select_epoch(run, "001-subject/001-h3", 12, 2400, "epoch12/adapter.safetensors")
+        training_run_manifest.select_epoch(run, "001-subject/001-h3", 12, 2400)
 
     assert path.read_bytes() == before

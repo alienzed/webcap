@@ -1,6 +1,8 @@
 # WebCap: LoRA Candidate Analysis
 
-Candidates is a manual, read-only inspection of one recorded run. Multiscale Loss Basins is the default whenever the modal opens, and selection is not saved to application settings. Analysis version 13 identifies the selected algorithm explicitly.
+Candidates is a manual inspection of one recorded run. Multiscale Loss Basins is the default whenever the modal opens, and detector/display choices are not durable training decisions. Analysis version 13 identifies the selected algorithm explicitly.
+
+Candidate Analysis currently suggests regions/epochs, describes saved artifacts, and can stage a saved epoch into Test Generations. It does **not** currently persist a human decision that one epoch is the chosen release/final training result.
 
 ## Available detectors
 
@@ -17,6 +19,66 @@ The candidate chart is display-only. It retains raw step loss as the faint refer
 
 The server reads TensorBoard `train/loss` and `train/epoch_loss`, normalizes finite scalar events with latest-wall-time deduplication, and maps detailed samples to completed epochs using completion wall times. Open-epoch samples are excluded. TensorBoard reading, epoch metadata, artifact lookup, explicit dispatch, and response assembly stay in `training_candidates.py`; mathematical detectors stay in their versioned modules. Unknown algorithm IDs fail visibly.
 
-## Read-only guarantee
+## Current mutation boundary
 
-Analysis never writes, copies, moves, stages, renames, caches, or deletes run files. Saved artifacts are descriptive only. Synthetic fixtures establish algorithm behavior, not which algorithm is best for a real training run.
+The analysis itself never rewrites detector data or run artifacts. Saved artifacts are descriptive. The surrounding Candidate Analysis workflow may explicitly copy/remove an already-saved epoch to/from the configured Test folder, but that is staging for evaluation, not a durable selection decision.
+
+Synthetic fixtures establish algorithm behavior, not which algorithm is best for a real training run.
+
+## Planned durable Selected epoch
+
+The next training-lifecycle slice should add one explicit, human-owned decision: **Selected epoch**. "Release" may be used as UI wording later, but the durable concept is selection rather than another analyzer score.
+
+Keep the states distinct:
+
+1. **Suggested candidate** — analyzer output; recomputable and advisory.
+2. **Saved epoch** — a checkpoint artifact physically exists.
+3. **In Test Folder** — a saved artifact has been staged for evaluation.
+4. **Selected epoch** — the user has confirmed this epoch as the chosen result of the run.
+5. **Archived experiment** — the completed run has been finalized into long-term compact storage.
+
+Selection must never be inferred from the detector, test staging, lowest loss, latest saved epoch, or filename. It is an explicit user action.
+
+### Persistence ownership
+
+Do not store Selected epoch primarily in Set state, Training History, or another global WebCap registry. Sets move independently, recent-history metadata is intentionally lightweight/fickle, and trainer output may later be compacted.
+
+Persist the decision in a small run-owned manifest, proposed as:
+
+```text
+<logical-run>/
+  webcap-run.json
+```
+
+Initial shape:
+
+```json
+{
+  "schemaVersion": 1,
+  "runId": "...",
+  "selected": {
+    "epoch": 44,
+    "step": 8920,
+    "file": "epoch44/adapter.safetensors",
+    "selectedAt": "..."
+  }
+}
+```
+
+Use relative paths within the logical run. The manifest should stay deliberately small and portable.
+
+Selection should be replaceable: choosing another saved epoch updates the one selected record rather than accumulating competing "winners". Clearing selection should also be explicit.
+
+### Candidate Analysis behavior
+
+Candidate Analysis is the natural place to make or change the selection because it already owns the curve, saved-epoch markers, and Test staging controls.
+
+A selected epoch should be visually distinct from:
+
+- analyzer suggestions;
+- merely saved epochs;
+- epochs currently staged for Test.
+
+Selection does not itself copy, move, delete, or archive any files. It records the human conclusion only.
+
+The archive/finalization lifecycle that consumes this selection is documented in [storage_manager_plan.md](storage_manager_plan.md).

@@ -97,8 +97,12 @@ def _ensure_monitor_started():
         _monitor_thread.start()
 
 
-def start_observer():
+def reconcile_startup():
     _ensure_startup_reconciled()
+
+
+def start_observer():
+    reconcile_startup()
     _ensure_monitor_started()
 
 

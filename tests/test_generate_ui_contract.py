@@ -72,6 +72,9 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "Valid work queues even while Training owns the GPU." not in html
     assert "<strong>Setup</strong>" in html
     assert "<strong>Output</strong>" in html
+    assert 'id="generate-status" class="generate-status-badge hidden"' in html
+    assert ".generate-status-badge" in css
+    assert ".generate-status-badge.is-error" in css
 
     assert "previousPrompt: null" in script
     assert "function restoreDirectorPrompt()" in script
@@ -79,6 +82,12 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "generateState.director.previousPrompt = null;" in script
     assert "Storyboard prompt is injected at runtime." in script
     assert "window.localStorage.removeItem(promptStorageKey)" in script
+    assert "function reportError(err, uiMessage)" in script
+    assert "if (uiMessage) setStatus(uiMessage, 'error');" in script
+    assert "if (status) status.textContent = message;" not in script
+    assert "function conciseGenerateError(err, fallback)" in script
+    assert "return 'ComfyUI unavailable';" in script
+    assert "status.title = tone === 'error' ? 'See Console for details.' : '';" in script
     assert '"defaultPrompt": ""' in generation
 
 def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():

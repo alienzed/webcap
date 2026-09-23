@@ -585,7 +585,7 @@ All current `tests/test_storyboard_generation.py` behavior remains covered:
 
 # Phase 6 - Migrate Test Generations
 
-**Branch status:** implemented on `feature/unified-inference-tests`; pending validation/merge.
+**Status:** implemented and merged.
 
 ## Goal
 
@@ -683,6 +683,8 @@ From Test activity:
 
 # Phase 8 - Hardening and cleanup
 
+**Branch status:** in progress on `refactor/unified-inference-hardening`.
+
 ## Goal
 
 Delete obsolete paths only after all clients are migrated and verify restart/error behavior across the combined system.
@@ -740,8 +742,8 @@ Implemented product capabilities include:
 The remaining work is intentionally ordered as follows:
 
 1. **Storyboard Takes -> common `inference` lane:** implemented and merged.
-2. **Test Generations -> common `inference` lane:** implemented on the current migration branch with one job per Base/candidate rendition and Session-owned aggregation.
-3. **Harden and clean up the unified inference path.** Remove obsolete per-client scheduler/transport duplication only after both migrations are proven.
+2. **Test Generations -> common `inference` lane:** implemented and merged with one job per Base/candidate rendition and Session-owned aggregation.
+3. **Harden and clean up the unified inference path:** in progress; remove the obsolete Test scheduler/transport paths and retain only migration compatibility plus domain-owned Session/result behavior. Remove obsolete per-client scheduler/transport duplication only after both migrations are proven.
 4. **Apply the small Generate IA/UX polish pass.** Treat Director as a prompt-editing tool, clarify rough-idea vs finished-prompt authoring, add one-step restore after Director edits, improve Setup/Conditioning hierarchy, and keep GPU/queue messaging contextual.
 5. **Finish explicit Take deletion.** Keep reversible Remove/Restore semantics, but add the separately confirmed destructive Delete Take action tracked in `docs/outstanding.md`.
 

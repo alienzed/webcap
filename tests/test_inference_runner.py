@@ -86,6 +86,25 @@ def test_inference_yields_retained_director_after_reserving_gpu(inference_root, 
     assert execution_queue.get_job(queued["jobId"])["status"] == "completed"
 
 
+def test_inference_defers_without_pausing_if_director_runtime_is_busy(inference_root, monkeypatch):
+    queued = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
+    )
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: (_ for _ in ()).throw(storyboard_llm_runtime.DirectorRuntimeBusy("busy")),
+    )
+
+    assert inference_runner._advance_queue() is None
+
+    lane = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE, include_terminal=False)
+    assert lane["paused"] is False
+    assert execution_queue.get_job(queued["jobId"])["status"] == "queued"
+    assert execution_queue.resource_owner() == ""
+
+
 def test_inference_pauses_without_claiming_if_director_cannot_yield(inference_root, monkeypatch):
     queued = inference_runner.enqueue_generate(
         {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}

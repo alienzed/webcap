@@ -65,15 +65,14 @@
 
 .storyboard-story-row {
   width: 100%;
-  display: block;
-  padding: 12px 13px;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
   margin-bottom: 6px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: var(--text);
-  text-align: left;
-  cursor: pointer;
 }
 
 .storyboard-story-row:hover {
@@ -85,15 +84,94 @@
   background: var(--panel-soft);
 }
 
-.storyboard-story-row strong,
-.storyboard-story-row span {
+.storyboard-story-open {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 12px 8px 12px 13px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.storyboard-story-open strong,
+.storyboard-story-open span {
   display: block;
 }
 
-.storyboard-story-row span {
+.storyboard-story-open span {
   margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.storyboard-story-menu {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+  margin-right: 6px;
+}
+
+.storyboard-story-menu > summary {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.storyboard-story-menu > summary:hover,
+.storyboard-story-menu[open] > summary {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.storyboard-story-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.storyboard-story-menu-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 150px;
+  display: none;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, .28);
+}
+
+.storyboard-story-menu[open] .storyboard-story-menu-popover {
+  display: grid;
+}
+
+.storyboard-story-menu-popover button {
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.storyboard-story-menu-popover button:hover {
+  background: var(--hover);
+}
+
+.storyboard-story-menu-popover button.danger {
+  color: #e89494;
 }
 
 .storyboard-editor {

@@ -787,22 +787,17 @@ def _candidate_epoch_step(analysis, epoch):
 
 def select_candidate_epoch(folder, job_id, epoch):
     raw_run_path, run = _candidate_run_snapshot(folder, job_id)
-    source = _candidate_safetensors_path(folder, job_id, epoch)
+    _candidate_safetensors_path(folder, job_id, epoch)
     run_dir = host_path_for_training_path(raw_run_path)
     if not run_dir.is_dir() or run_dir.is_symlink():
         raise FileNotFoundError("Recorded training run directory is unavailable.")
     analysis = _analyze_run_directory(run_dir, algorithm="v5")
     step = _candidate_epoch_step(analysis, epoch)
     resolved_run = run_dir.resolve(strict=True)
-    source_path = source.resolve(strict=True)
-    try:
-        relative = source_path.relative_to(resolved_run).as_posix()
-    except ValueError as exc:
-        raise RuntimeError("Selected epoch artifact is outside the recorded training run.") from exc
     identity = _candidate_manifest_id(run)
     if not identity:
         raise RuntimeError("Recorded training job has no managed action identity for durable selection.")
-    selected = _select_epoch(resolved_run, identity, int(epoch), step, relative)
+    selected = _select_epoch(resolved_run, identity, int(epoch), step)
     return {"selected": selected}
 
 

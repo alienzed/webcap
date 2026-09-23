@@ -1,3 +1,4 @@
+from pathlib import Path
 from io import BytesIO
 
 from tool.server import app as app_module
@@ -224,4 +225,76 @@ def test_generate_result_owns_reference_copy_before_transient_cleanup(tmp_path, 
     assert removed == 1
     assert not source.exists()
     assert durable_reference.read_bytes() == b"reference"
+
+def test_generate_execute_cleans_transient_refs_and_captured_provider_output(tmp_path, monkeypatch):
+    class FakeModel:
+        def load_template(self):
+            return {}
+
+        def build_workflow(
+            self,
+            template,
+            prompt,
+            settings,
+            loras,
+            uploaded,
+            filename_prefix,
+            available_names,
+            resolve_name,
+        ):
+            assert uploaded == {"first_frame": "uploaded/frame.png"}
+            return {"workflow": True}
+
+        def find_output_ref(self, outputs):
+            return outputs
+
+    reference = tmp_path / "frame.png"
+    reference.write_bytes(b"reference")
+    output_ref = {
+        "filename": "render.mp4",
+        "type": "output",
+        "fullpath": str(tmp_path / "comfy-render.mp4"),
+    }
+    Path(output_ref["fullpath"]).write_bytes(b"provider-video")
+
+    monkeypatch.setattr(generate_generation, "get_inference_model", lambda _model_id: FakeModel())
+    monkeypatch.setattr(generate_generation, "resolve_reference_path", lambda _path: reference)
+    monkeypatch.setattr(
+        generate_generation.inference_runtime,
+        "upload_image",
+        lambda *_args, **_kwargs: "uploaded/frame.png",
+    )
+    monkeypatch.setattr(generate_generation.inference_runtime, "available_names", lambda *_args: [])
+    monkeypatch.setattr(generate_generation.inference_runtime, "resolve_name", lambda value, *_args: value)
+    monkeypatch.setattr(generate_generation.inference_runtime, "queue_workflow", lambda _workflow: "provider-1")
+    monkeypatch.setattr(
+        generate_generation.inference_runtime,
+        "wait_for_output",
+        lambda *_args: output_ref,
+    )
+    monkeypatch.setattr(generate_generation.inference_runtime, "download_output", lambda _ref: b"video")
+    monkeypatch.setattr(generate_generation, "execution_update_job", lambda *_args, **_kwargs: None)
+    cleaned_refs = []
+    monkeypatch.setattr(
+        generate_generation,
+        "cleanup_references",
+        lambda references: cleaned_refs.append(dict(references)),
+    )
+    monkeypatch.setattr(
+        generate_generation,
+        "persist_result",
+        lambda *args, **kwargs: {"jobId": "job-1", "mediaPath": "output/generations/result.mp4"},
+    )
+
+    result = generate_generation.execute("job-1", {
+        "modelId": "minimax_h3",
+        "prompt": "Prompt",
+        "settings": {"seed": 7},
+        "loras": [],
+        "references": {"first_frame": "runtime/frame.png"},
+    })
+
+    assert result["jobId"] == "job-1"
+    assert cleaned_refs == [{"first_frame": "runtime/frame.png"}]
+    assert not Path(output_ref["fullpath"]).exists()
 

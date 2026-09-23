@@ -474,7 +474,7 @@ Prepared/rebuildable dataset material. Current training architecture captures it
 
 - Surface size.
 - **Open**.
-- Candidate for explicit **Delete prepared dataset** after verifying no remaining supported workflow consumes it.
+- Protected from Storage deletion because it is Set-owned. Rebuildability does not override the Set-file invariant.
 
 #### metadata/state/captions/TOMLs
 
@@ -773,7 +773,7 @@ Delete only completed/inactive exact probe directories.
 ### Set data
 
 - originals -> protected/open only;
-- auto_dataset -> explicit rebuildable-data cleanup once verified;
+- auto_dataset -> protected/open only because it is Set-owned;
 - captions/state/TOMLs -> protected.
 
 ### ComfyUI scratch
@@ -861,8 +861,7 @@ Add domain-backed cleanup for:
 - Generate results;
 - Storyboard Takes / Stories using existing semantics;
 - completed H3 probes;
-- WebCap-owned copied Test LoRAs;
-- verified rebuildable `auto_dataset/`.
+- WebCap-owned copied Test LoRAs.
 
 Show space-to-reclaim before confirmation.
 
@@ -999,8 +998,8 @@ A full-suite run against the current `main` baseline reported the already-known 
 
 - Global Test history remains incomplete because Test Sessions are distributed beneath Sets and WebCap has no cheap global Test index. Storage clearly labels Tests as **current Set / partial inventory** rather than performing a hidden `os.walk(FS_ROOT)`.
 - H3 probe directories are surfaced and measurable. A matching app-owned `seed.json` is required for ownership; running/stopping probes remain protected, while prepared or terminal probes may be explicitly deleted from Storage.
-- Configured external staged-Test LoRA roots are not globally inventoried yet. Any future support must identify WebCap-owned copies through their provenance sidecars rather than treating an external directory as ours.
-- ComfyUI scratch cleanup is completion-time lifecycle cleanup first. Jobs that fail before WebCap ever obtains a provider output path may still require a future exact-root residual-reconciliation mechanism; Storage must not guess the ComfyUI filesystem root.
+- Configured external staged-Test roots are intentionally not scanned globally. Storage inspects only configured per-stage destinations for the current Set and exposes only copies with a matching WebCap provenance sidecar.
+- ComfyUI scratch cleanup remains completion-time lifecycle cleanup first. Storage learns the provider root only from a real local ComfyUI output path, then performs bounded direct enumeration under exact `webcap-generate`, `webcap-storyboard`, and `webcap-tests` prefixes. A first-ever job that fails before WebCap sees any local provider output cannot safely teach that root and remains the one residual-discovery limitation.
 - Malformed producer manifests are not automatically purged. Ownership must remain provable before deletion.
 
 These boundaries are intentional safety limits, not reasons to add a generic filesystem scanner.
@@ -1015,7 +1014,9 @@ A second pass after PR #66 tightened the implementation without changing any Act
 - Test Session deletion now re-reads the session manifest at mutation time and refuses active statuses even if the Storage screen was rendered from older state.
 - H3 probe directories now use their app-written `seed.json` plus optional `runtime.json` as ownership/state sentinels. Prepared and terminal probes are manually purgeable; running/stopping probes are protected.
 - Runtime purge remains identity-scoped. The generic Generate reference store is still lifecycle-managed and explicitly rejected by the purge endpoint.
+- WebCap-owned staged Test LoRA copies are surfaced from current-Set configured destinations only when their provenance sidecar proves ownership; shared inference references protect them at mutation time.
+- A proven ComfyUI provider root is persisted only after WebCap resolves a real saved provider output. Storage then surfaces exact WebCap-prefixed input/output job trees without scanning arbitrary provider content; active shared-inference identities remain protected.
 - Storage frontend dependencies on app-owned Console and shell functions now fail loudly rather than silently skipping required behavior.
-- Malformed or ownership-ambiguous probe directories are not made deletable merely because they sit under the probe root.
+- Generate/Test/Runtime/Comfy resolvers reject symlink/path-escape cases before destructive mutation; malformed or ownership-ambiguous artifacts are not made deletable merely because of proximity.
 
-Remaining North Star gap: ComfyUI scratch is automatically cleaned when WebCap has an exact provider output path, but residual scratch that predates that path (or survives an early provider failure) still lacks a durable provider-root identity that Storage can safely inventory. The next improvement should persist exact provider-owned cleanup identities as part of inference lifecycle state rather than teaching Storage to scan arbitrary ComfyUI directories.
+Remaining North Star gap: if the very first ComfyUI job fails before WebCap ever receives a local provider output path, there is still no safe provider-root identity to inspect. Storage deliberately does not guess or scan for it. Once any valid local provider output has established the root, subsequent exact WebCap-prefixed residuals—including input-only leftovers—are visible and manually reclaimable.

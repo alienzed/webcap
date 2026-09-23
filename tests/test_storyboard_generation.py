@@ -317,6 +317,8 @@ def test_storyboard_generation_allows_multiple_take_jobs_for_same_scene(storyboa
         "seedMode": "random",
     })
 
+    seeds = iter([101, 202, 303])
+    monkeypatch.setattr(storyboard_generation.secrets, "randbelow", lambda _limit: next(seeds))
     monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: None)
     monkeypatch.setattr(storyboard_generation, "_release_gpu", lambda: None)
     monkeypatch.setattr(

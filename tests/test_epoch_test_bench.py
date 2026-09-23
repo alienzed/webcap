@@ -1879,6 +1879,7 @@ def test_missing_candidate_rendition_skips_without_failure_card(tmp_path, monkey
     session = bench._session_directory(tmp_path, payload["latest"]["session"])
     child_id = bench._read_status(session)["inferenceJobs"][0]
     candidates[0].unlink()
+    monkeypatch.setattr(bench.app_config, "safe_join_fs_root", lambda _folder: tmp_path)
 
     stored = execution_queue.get_job(child_id, include_payload=True)
     context = stored["payload"]["clientContext"]

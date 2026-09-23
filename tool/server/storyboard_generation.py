@@ -49,74 +49,7 @@ EXECUTION_LANE = "inference"
 LEGACY_EXECUTION_LANE = "storyboard-takes"
 _reconcile_lock = threading.Lock()
 _startup_reconciled = False
-_monitor_lock = threading.Lock()
-_monitor_thread = None
 _logger = logging.getLogger(__name__)
-
-
-def _ensure_startup_reconciled():
-    global _startup_reconciled
-    if _startup_reconciled:
-        return
-    with _reconcile_lock:
-        if _startup_reconciled:
-            return
-        interrupted = execution_recover_lane(
-            EXECUTION_LANE,
-            reason="Storyboard Take generation was interrupted by a WebCap restart.",
-        )
-        for job in interrupted:
-            details = job.get("details") if isinstance(job.get("details"), dict) else {}
-            prompt_id = str(details.get("comfyJobId") or "").strip()
-            if not prompt_id:
-                continue
-            try:
-                _cancel_comfy_job(prompt_id)
-            except Exception:
-                _logger.exception("Could not cancel interrupted Storyboard ComfyUI job %s.", prompt_id)
-        _startup_reconciled = True
-
-
-def _monitor_loop():
-    while True:
-        try:
-            _advance_queue()
-        except Exception:
-            _logger.exception("Storyboard generation queue monitor failed.")
-        time.sleep(2)
-
-
-def _ensure_monitor_started():
-    global _monitor_thread
-    with _monitor_lock:
-        if _monitor_thread and _monitor_thread.is_alive():
-            return
-        _monitor_thread = threading.Thread(
-            target=_monitor_loop,
-            name="webcap-storyboard-generation-queue",
-            daemon=True,
-        )
-        _monitor_thread.start()
-
-
-def reconcile_startup():
-    _ensure_startup_reconciled()
-
-
-def start_observer():
-    reconcile_startup()
-    _ensure_monitor_started()
-
-
-def _reserve_gpu():
-    from .training_runner import reserve_gpu_for_external_work
-    if not reserve_gpu_for_external_work(GPU_RESERVATION_OWNER):
-        raise RuntimeError("GPU is busy with Training, Test Generations, or another Storyboard generation.")
-
-
-def _release_gpu():
-    from .training_runner import release_gpu_for_external_work
-    release_gpu_for_external_work(GPU_RESERVATION_OWNER)
 
 
 def _windows_curl_path():

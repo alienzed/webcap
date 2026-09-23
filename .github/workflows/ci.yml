@@ -29,7 +29,20 @@ jobs:
           node-version: "22"
 
       - name: Prepare CI config
-        run: cp tool/config.example.json tool/config.json
+        run: |
+          cp tool/config.example.json tool/config.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("tool/config.json")
+          config = json.loads(path.read_text(encoding="utf-8"))
+          config["filesystem"]["root"] = "/tmp/webcap-fs"
+          config["filesystem"]["models"] = "/tmp/webcap-models"
+          path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+          Path("/tmp/webcap-fs").mkdir(parents=True, exist_ok=True)
+          Path("/tmp/webcap-models").mkdir(parents=True, exist_ok=True)
+          PY
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y ffmpeg

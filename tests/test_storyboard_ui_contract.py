@@ -249,21 +249,14 @@ def test_storyboard_director_has_non_modal_live_activity():
     assert "position: absolute;" in css
 
 
-def test_storyboard_eager_preloads_director_after_workspace_dwell():
+def test_storyboard_uses_shared_director_preference_without_eager_preload():
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
-
-    assert "open: false" in storyboard
-    assert "preloadTimer: 0" in storyboard
-    assert "preloading: false" in storyboard
-    assert "function scheduleDirectorPreload()" in storyboard
-    assert "function preloadDirectorModel()" in storyboard
-    assert "}, 1500);" in storyboard
-    assert "fetch('/fs/director/preload'," in storyboard
-    assert "refreshDirector().then(function () { scheduleDirectorPreload(); });" in storyboard
-    assert "cancelDirectorPreloadTimer();" in storyboard
-    assert "storyState.director.busy || storyState.director.preloading" in storyboard
-    assert '@app.route("/fs/director/preload", methods=["POST"])' in app
+    assert "DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model'" in common
+    assert "getSharedDirectorModelPreference('webcap.storyboard.directorModel')" in storyboard
+    assert "setSharedDirectorModelPreference(this.value)" in storyboard
+    assert "scheduleDirectorPreload" not in storyboard
+    assert "preloadDirectorModel" not in storyboard
 
 
 def test_storyboard_take_generation_uses_global_console_and_visible_pending_cards():

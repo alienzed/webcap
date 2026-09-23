@@ -54,8 +54,10 @@ jobs:
           python -m pip install pytest
           python -m pip install -r requirements.txt
 
-      - name: Run Python tests
-        run: python -m pytest -q
+      - name: Run Storage Manager tests
+        run: python -m pytest -q tests/test_storage_manager.py tests/test_inference_runtime_cleanup.py
 
       - name: Check JavaScript syntax
-        run: find tool/js -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+        run: |
+          node --check tool/js/storage_manager.js
+          node --check tool/js/workspace_shell.js

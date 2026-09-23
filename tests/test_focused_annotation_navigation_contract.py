@@ -134,7 +134,7 @@ def test_focus_shell_identity_and_activity_exit_preserve_real_focus_cleanup():
     shell = _read("tool/js/workspace_shell.js")
     focus = _read("tool/js/focused_annotation.js")
 
-    assert "surface === 'focus' ? 'Focus'" in shell
+    assert "workspaceTitle.textContent = 'Focus'" in shell
     assert "prepSidebarToggle.classList.toggle('hidden', !!testOpen || surface !== 'default');" in shell
     assert "surface === 'focus'" in shell
     assert "stopFocusedAnnotation();" in shell

@@ -112,21 +112,16 @@ def test_generate_prompt_assistant_has_non_modal_live_activity():
     assert '@app.route("/fs/director/activity", methods=["GET"])' in app
 
 
-def test_generate_eager_preloads_prompt_assistant_after_workspace_dwell():
+def test_generate_uses_shared_director_preference_without_eager_preload():
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
-
-    assert "preloadTimer: 0" in script
-    assert "preloading: false" in script
-    assert "function scheduleDirectorPreload()" in script
-    assert "function preloadDirectorModel()" in script
-    assert "setTimeout(function () {" in script
-    assert "}, 1500);" in script
-    assert "postJson('/fs/director/preload', { model: requestedModel })" in script
-    assert "refreshDirector().then(function () { scheduleDirectorPreload(); })" in script
-    assert "cancelDirectorPreloadTimer();" in script
-    assert "generateState.director.busy || generateState.director.preloading" in script
-    assert '@app.route("/fs/director/preload", methods=["POST"])' in app
+    assert "DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model'" in common
+    assert "getSharedDirectorModelPreference('webcap.generate.directorModel')" in script
+    assert "setSharedDirectorModelPreference(this.value)" in script
+    assert "scheduleDirectorPreload" not in script
+    assert "preloadDirectorModel" not in script
+    assert '@app.route("/fs/director/preload"' not in app
 
 
 def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():

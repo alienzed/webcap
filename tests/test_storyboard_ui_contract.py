@@ -215,9 +215,10 @@ def test_storyboard_takes_can_be_named_and_loras_filtered():
     assert 'if operation == "label_take":' in app
     assert "def label_take(" in store
     assert "takeMetaLabel(take)" in storyboard
-    assert "data-scene-lora-filter" in storyboard
-    assert "function loraOptions(selectedName, filterText, excludedNames)" in storyboard
-    assert ".storyboard-lora-filter" in css
+    assert "data-scene-lora-picker" in storyboard
+    assert "function loraOptions(selectedName)" in storyboard
+    assert "function loraDatalistOptions()" in storyboard
+    assert ".storyboard-lora-picker" in css
 
 
 def test_storyboard_story_loras_are_inherited_and_overridable_in_scenes():
@@ -228,6 +229,8 @@ def test_storyboard_story_loras_are_inherited_and_overridable_in_scenes():
 
     assert 'id="storyboard-story-lora-list"' in html
     assert 'id="storyboard-story-lora-add"' in html
+    assert 'id="storyboard-story-lora-picker"' in html
+    assert 'id="storyboard-story-lora-options"' in html
     assert "storyLoraOverrides" in storyboard
     assert "data-story-lora-inherited-row" in storyboard
     assert "data-story-lora-enabled" in storyboard
@@ -254,11 +257,12 @@ def test_storyboard_director_settings_support_remote_openai_compatible_endpoint(
     assert '"/chat/completions"' in runtime
 
 
-def test_storyboard_lora_filter_controls_available_picker():
+
+def test_storyboard_lora_chooser_is_single_searchable_field():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    assert "data-scene-lora-filter" in storyboard
-    assert "data-scene-lora-picker" in storyboard
-    assert "picker.innerHTML = loraOptions('', loraFilter.value" in storyboard
-    assert "var selectedName = String(picker.value || '').trim();" in storyboard
-    assert "sceneLoraRowHtml({ name: selectedName, strength: 1 }, '', storyLorasFromUi())" in storyboard
+    assert 'data-scene-lora-filter' not in storyboard
+    assert 'data-scene-lora-picker' in storyboard
+    assert 'list="storyboard-lora-options-' in storyboard
+    assert "function loraDatalistOptions()" in storyboard
+    assert "picker.value = '';" in storyboard

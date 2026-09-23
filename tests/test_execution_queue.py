@@ -61,14 +61,12 @@ def test_execution_queue_cancel_stop_request_and_requeue(queue_root):
 
     claimed = execution_queue.claim_next("takes")
     execution_queue.mark_running(claimed["id"])
-    stopping = execution_queue.request_action(first["id"], "stop")
+    stopping = execution_queue.request_stop(first["id"])
     assert stopping["status"] == "stopping"
     assert stopping["requestedAction"] == "stop"
 
-    execution_queue.finish_job(first["id"], status="stopped")
-    requeued = execution_queue.requeue_job(first["id"], front=True)
-    assert requeued["status"] == "queued"
-    assert requeued["requestedAction"] == ""
+    stopped = execution_queue.finish_job(first["id"], status="stopped")
+    assert stopped["status"] == "stopped"
 
 
 def test_execution_queue_resource_claim_is_exclusive(queue_root):

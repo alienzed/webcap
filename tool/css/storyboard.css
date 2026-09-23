@@ -17,7 +17,7 @@
 .app-frame.workspace-storyboard-open > .storyboard-workspace {
   display: grid;
   grid-area: workspace;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 255px minmax(0, 1fr);
 }
 
 .storyboard-library {
@@ -55,19 +55,19 @@
 }
 
 .storyboard-list-section-title {
-  margin: 10px 6px 5px;
+  margin: 12px 7px 6px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 750;
   text-transform: uppercase;
-  letter-spacing: .04em;
+  letter-spacing: .05em;
 }
 
 .storyboard-story-row {
   width: 100%;
   display: block;
-  padding: 9px 10px;
-  margin-bottom: 4px;
+  padding: 12px 13px;
+  margin-bottom: 6px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -91,9 +91,9 @@
 }
 
 .storyboard-story-row span {
-  margin-top: 3px;
+  margin-top: 4px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .storyboard-editor {
@@ -183,9 +183,10 @@
 }
 
 .storyboard-story-loras-header span {
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .storyboard-field {
@@ -195,10 +196,11 @@
   gap: 5px;
 }
 
-.storyboard-field > span {
+.storyboard-field > span,
+.storyboard-field-header > span {
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .storyboard-field input,
@@ -206,12 +208,14 @@
 .storyboard-field select {
   width: 100%;
   min-width: 0;
+  min-height: 38px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--input-bg, var(--panel));
   color: var(--text);
-  padding: 7px 8px;
+  padding: 9px 10px;
   font: inherit;
+  font-size: 14px;
 }
 
 .storyboard-field textarea {
@@ -1341,7 +1345,7 @@
 /* Storyboard three-column flow: Stories library -> Story context -> Scene workspace. */
 .storyboard-editor-scroll {
   display: grid;
-  grid-template-columns: minmax(420px, 500px) minmax(0, 1fr);
+  grid-template-columns: minmax(580px, 640px) minmax(0, 1fr);
   align-items: stretch;
   gap: 0;
   padding: 0;
@@ -1356,18 +1360,18 @@
   min-height: 0;
   margin: 0;
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 16px;
   align-content: start;
   align-self: stretch;
   overflow: auto;
-  padding: 14px;
+  padding: 20px 22px 28px;
   border-right: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 90%, black 10%);
 }
 
 .storyboard-story-fields {
-  grid-template-columns: minmax(0, 1fr) 120px;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 12px;
 }
 
 .storyboard-concept-field,
@@ -1379,17 +1383,17 @@
 }
 
 .storyboard-concept-field textarea {
-  min-height: 112px;
+  min-height: 170px;
   max-width: none;
 }
 
 .storyboard-style-field textarea {
-  min-height: 88px;
+  min-height: 120px;
   max-width: none;
 }
 
 .storyboard-invariants {
-  padding: 8px;
+  padding: 14px;
 }
 
 .storyboard-invariants-header {
@@ -1406,17 +1410,33 @@
 
 .storyboard-invariant-row textarea {
   grid-column: 1 / -1;
-  min-height: 64px;
+  min-height: 78px;
 }
 
 .storyboard-develop-row {
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  flex-direction: row;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 
-.storyboard-develop-actions {
-  flex-wrap: wrap;
+.storyboard-develop-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.storyboard-develop-copy strong {
+  font-size: 15px;
+}
+
+.storyboard-develop-row.has-scenes .storyboard-primary-btn {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
 }
 
 .storyboard-story-loras {
@@ -1429,7 +1449,7 @@
   width: 100%;
   max-width: none;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   justify-self: stretch;
   overflow: hidden;
   padding: 14px 18px 0;
@@ -1448,9 +1468,9 @@
   justify-self: stretch;
 }
 
-@media (max-width: 1500px) {
+@media (max-width: 1700px) {
   .storyboard-editor-scroll {
-    grid-template-columns: minmax(380px, 440px) minmax(0, 1fr);
+    grid-template-columns: minmax(500px, 560px) minmax(0, 1fr);
   }
 }
 

@@ -217,7 +217,7 @@ def test_storyboard_takes_can_be_named_and_loras_filtered():
     assert "takeMetaLabel(take)" in storyboard
     assert "data-scene-lora-picker" in storyboard
     assert "function loraOptions(selectedName)" in storyboard
-    assert "function loraDatalistOptions()" in storyboard
+    assert "function loraNamesMatching(query, excludedNames)" in storyboard
     assert ".storyboard-lora-picker" in css
 
 
@@ -230,7 +230,6 @@ def test_storyboard_story_loras_are_inherited_and_overridable_in_scenes():
     assert 'id="storyboard-story-lora-list"' in html
     assert 'id="storyboard-story-lora-add"' in html
     assert 'id="storyboard-story-lora-picker"' in html
-    assert 'id="storyboard-story-lora-options"' in html
     assert "storyLoraOverrides" in storyboard
     assert "data-story-lora-inherited-row" in storyboard
     assert "data-story-lora-enabled" in storyboard

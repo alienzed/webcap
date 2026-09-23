@@ -17,13 +17,17 @@ LLAMA_HOST = "127.0.0.1"
 DEFAULT_PORT = 8189
 DEFAULT_CONTEXT_SIZE = 16384
 DEFAULT_MAX_TOKENS = 8192
-GPU_RESERVATION_OWNER = "storyboard-director"
+GPU_RESERVATION_OWNER = "llm"
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 PRELOAD_VRAM_HEADROOM_MIB = 4096
 PRELOAD_MODEL_OVERHEAD_RATIO = 1.15
 
 
 class DirectorRuntimeBusy(RuntimeError):
+    pass
+
+
+class DirectorGpuHoldRequired(RuntimeError):
     pass
 
 
@@ -118,6 +122,10 @@ def _director_config():
         "context_size": context_size,
         "max_tokens": max_tokens,
     }
+
+
+def uses_local_gpu():
+    return _director_config().get("mode", "local") == "local"
 
 
 def _server_url(path):
@@ -558,6 +566,17 @@ def _inference_has_launchable_work():
     return any(str(job.get("status") or "") == "queued" for job in current.get("jobs", []))
 
 
+def _llm_has_launchable_work():
+    from .execution_queue import lane_snapshot
+
+    current = lane_snapshot("llm", include_terminal=False)
+    if current.get("activeJobId"):
+        return True
+    if current.get("paused"):
+        return False
+    return any(str(job.get("status") or "") == "queued" for job in current.get("jobs", []))
+
+
 def _try_reserve_gpu():
     from .training_runner import reserve_gpu_for_external_work
     return reserve_gpu_for_external_work(GPU_RESERVATION_OWNER)
@@ -602,6 +621,8 @@ def preload_model(model_id):
             return {"loaded": False, "reason": "already_loaded", "model": model["id"]}
         if _inference_has_launchable_work():
             return {"loaded": False, "reason": "inference_waiting", "model": model["id"]}
+        if _llm_has_launchable_work():
+            return {"loaded": False, "reason": "llm_waiting", "model": model["id"]}
         if not _try_reserve_gpu():
             return {"loaded": False, "reason": "gpu_busy", "model": model["id"]}
 
@@ -609,6 +630,8 @@ def preload_model(model_id):
         try:
             if _inference_has_launchable_work():
                 return {"loaded": False, "reason": "inference_waiting", "model": model["id"]}
+            if _llm_has_launchable_work():
+                return {"loaded": False, "reason": "llm_waiting", "model": model["id"]}
 
             free_mib = _gpu_free_mib()
             required_mib = _preload_required_mib(model)
@@ -646,7 +669,7 @@ def preload_model(model_id):
                         stop_server()
                     else:
                         release_safe = False
-                        error = RuntimeError(
+                        error = DirectorGpuHoldRequired(
                             "Prompt Assistant / Director preload failed and WebCap could not confirm that the model "
                             "was unloaded from an external llama.cpp router. The GPU reservation is being kept to "
                             "avoid colliding with Training or generation work."
@@ -659,7 +682,7 @@ def preload_model(model_id):
                 _release_gpu()
 
 
-def chat(model_id, messages, response_schema=None, max_tokens=None):
+def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved=False):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Storyboard Director messages are required.")
 
@@ -696,7 +719,8 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
             )
             return _completion_result(response, model_id)
 
-        _reserve_gpu()
+        if not gpu_reserved:
+            _reserve_gpu()
         completed = False
         cleanup_safe = True
         try:
@@ -724,14 +748,14 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
                         stop_server()
                     else:
                         cleanup_safe = False
-                        cleanup_error = RuntimeError(
+                        cleanup_error = DirectorGpuHoldRequired(
                             "Storyboard Director could not confirm that the selected model was unloaded "
                             "from an external llama.cpp router after a failed request. The GPU reservation is being kept "
                             "to avoid colliding with Training or generation work. Stop/unload that router model, then "
                             "restart WebCap before using GPU work again."
                         )
                         cleanup_error.__cause__ = exc
-            if cleanup_safe:
+            if cleanup_safe and not gpu_reserved:
                 _release_gpu()
             if cleanup_error is not None:
                 raise cleanup_error
@@ -758,7 +782,7 @@ def _completion_result(response, model_id):
     }
 
 
-def run_contract(model_id, contract):
+def run_contract(model_id, contract, gpu_reserved=False):
     if not isinstance(contract, dict):
         raise ValueError("Storyboard Director contract must be an object.")
     prompt = str(contract.get("prompt") or "").strip()
@@ -769,10 +793,15 @@ def run_contract(model_id, contract):
     with _request_lock:
         _set_activity("preparing", model_id=model_id, operation=operation, active=True, error="")
         try:
+            chat_kwargs = {
+                "response_schema": contract.get("response_schema"),
+            }
+            if gpu_reserved:
+                chat_kwargs["gpu_reserved"] = True
             result = chat(
                 model_id,
                 [{"role": "user", "content": prompt}],
-                response_schema=contract.get("response_schema"),
+                **chat_kwargs,
             )
             if contract.get("output") == "json":
                 try:

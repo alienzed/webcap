@@ -1208,6 +1208,8 @@
     }).then(function (payload) {
       storyState.story = payload.story;
       storyState.sequenceExport = null;
+      return refreshGenerationQueue(storyId);
+    }).then(function () {
       renderStory();
       setSaveState('Saved');
       return refreshSequenceExport(storyId);
@@ -1223,6 +1225,9 @@
     }).then(function (payload) {
       storyState.story = payload.story;
       storyState.sequenceExport = null;
+      storyState.generationJobs = {};
+      Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
+      syncStoryboardGenerationActivity();
       return refreshLibrary().then(function () {
         renderStory();
         setSaveState('Saved');
@@ -1652,16 +1657,6 @@
     setShellGeneratingActive(running);
   }
 
-  function syncGenerationButton(sceneId) {
-    var root = sceneElement(sceneId);
-    if (!root) return;
-    var button = root.querySelector('[data-scene-generate]');
-    if (!button) return;
-    var pending = generationJobsForScene(sceneId).length;
-    button.disabled = false;
-    button.textContent = pending ? 'Generate Another Take' : 'Generate Take';
-  }
-
   function reportGenerationStatus(sceneId, job, previousJob) {
     if (!job) return;
     var currentKey = String(job.status || '') + '|' + String(job.comfyStatus || '');
@@ -1839,8 +1834,9 @@
     refreshGenerationCapabilities();
     refreshLibrary().then(function () {
       if (storyState.story) {
-        renderStory();
-        return;
+        return refreshGenerationQueue(storyState.story.id).then(function () {
+          renderStory();
+        });
       }
       var first = storyState.stories && storyState.stories[0];
       if (first) openStory(first.id);
@@ -2067,6 +2063,11 @@
         var generateSceneRoot = generate.closest('.storyboard-scene[data-scene-id]');
         if (!generateSceneRoot) throw new Error('Generation Scene is missing.');
         generateScene(generateSceneRoot.dataset.sceneId);
+        return;
+      }
+      var executionAction = event.target.closest('[data-generation-action]');
+      if (executionAction) {
+        generationAction(executionAction.dataset.generationAction, executionAction.dataset.jobId);
         return;
       }
       var takeAction = event.target.closest('[data-take-action]');

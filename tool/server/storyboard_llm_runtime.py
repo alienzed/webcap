@@ -24,7 +24,42 @@ _process = None
 _log_handle = None
 _server_settings_signature = None
 _process_lock = threading.RLock()
-_request_lock = threading.Lock()
+_request_lock = threading.RLock()
+_activity_lock = threading.Lock()
+_activity = {
+    "active": False,
+    "phase": "idle",
+    "model": "",
+    "operation": "",
+    "startedAt": None,
+    "updatedAt": time.time(),
+    "error": "",
+}
+
+
+def _set_activity(phase, model_id=None, operation=None, active=None, error=None):
+    now = time.time()
+    with _activity_lock:
+        if active is True and not _activity["active"]:
+            _activity["startedAt"] = now
+        if active is False:
+            _activity["active"] = False
+        elif active is True:
+            _activity["active"] = True
+        _activity["phase"] = str(phase or "idle")
+        if model_id is not None:
+            _activity["model"] = str(model_id or "")
+        if operation is not None:
+            _activity["operation"] = str(operation or "")
+        if error is not None:
+            _activity["error"] = str(error or "")
+        _activity["updatedAt"] = now
+
+
+def activity_status():
+    with _activity_lock:
+        return dict(_activity)
+
 
 
 def _director_config():
@@ -459,6 +494,47 @@ def _model_status(model_id):
     return ""
 
 
+def _ensure_local_model_loaded(model_id):
+    models = list_models(reload=False)
+    selected = next((model for model in models if model["id"] == model_id), None)
+    if selected is None:
+        raise FileNotFoundError("Storyboard Director model is not available from the active runtime: " + model_id)
+    if selected["status"] == "loaded":
+        return False
+
+    _set_activity("loading_model", model_id=model_id)
+    for model in models:
+        if model["id"] == model_id or model["status"] == "unloaded":
+            continue
+        _unload_model(model["id"])
+
+    _load_model(model_id)
+    return True
+
+
+def release_loaded_model_for_gpu_work():
+    settings = _director_config()
+    if settings.get("mode", "local") == "remote":
+        return False
+
+    with _request_lock:
+        process = _process
+        if process is not None and process.poll() is not None:
+            stop_server()
+            return False
+        if process is None and not _health_ok():
+            return False
+
+        models = _normalize_models(_http_json("/models", timeout=5))
+        released = False
+        for model in models:
+            if model["status"] == "unloaded":
+                continue
+            _unload_model(model["id"])
+            released = True
+        return released
+
+
 def chat(model_id, messages, response_schema=None, max_tokens=None):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Storyboard Director messages are required.")
@@ -487,6 +563,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
             }
 
         if settings.get("mode", "local") == "remote":
+            _set_activity("generating", model_id=model_id)
             response = _http_json(
                 "/chat/completions",
                 method="POST",
@@ -496,22 +573,25 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
             return _completion_result(response, model_id)
 
         _reserve_gpu()
-        load_attempted = False
+        completed = False
         cleanup_safe = True
         try:
+            _set_activity("freeing_comfy", model_id=model_id)
             _free_comfy_models()
-            load_attempted = True
-            _load_model(model_id)
+            _ensure_local_model_loaded(model_id)
+            _set_activity("generating", model_id=model_id)
             response = _http_json(
                 "/v1/chat/completions",
                 method="POST",
                 payload=payload,
                 timeout=10 * 60,
             )
-            return _completion_result(response, model_id)
+            result = _completion_result(response, model_id)
+            completed = True
+            return result
         finally:
             cleanup_error = None
-            if load_attempted:
+            if not completed:
                 try:
                     if _model_status(model_id) != "unloaded":
                         _unload_model(model_id)
@@ -522,8 +602,8 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
                         cleanup_safe = False
                         cleanup_error = RuntimeError(
                             "Storyboard Director could not confirm that the selected model was unloaded "
-                            "from an external llama.cpp router. The GPU reservation is being kept to avoid "
-                            "colliding with Training or generation work. Stop/unload that router model, then "
+                            "from an external llama.cpp router after a failed request. The GPU reservation is being kept "
+                            "to avoid colliding with Training or generation work. Stop/unload that router model, then "
                             "restart WebCap before using GPU work again."
                         )
                         cleanup_error.__cause__ = exc
@@ -560,20 +640,29 @@ def run_contract(model_id, contract):
     prompt = str(contract.get("prompt") or "").strip()
     if not prompt:
         raise ValueError("Storyboard Director contract prompt is empty.")
-    result = chat(
-        model_id,
-        [{"role": "user", "content": prompt}],
-        response_schema=contract.get("response_schema"),
-    )
-    if contract.get("output") == "json":
+
+    operation = str(contract.get("operation") or "").strip()
+    with _request_lock:
+        _set_activity("preparing", model_id=model_id, operation=operation, active=True, error="")
         try:
-            data = json.loads(result["text"])
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise RuntimeError("Storyboard Director returned invalid structured JSON.") from exc
-        if not isinstance(data, dict):
-            raise RuntimeError("Storyboard Director structured output must be a JSON object.")
-        result["data"] = data
-    return result
+            result = chat(
+                model_id,
+                [{"role": "user", "content": prompt}],
+                response_schema=contract.get("response_schema"),
+            )
+            if contract.get("output") == "json":
+                try:
+                    data = json.loads(result["text"])
+                except (TypeError, json.JSONDecodeError) as exc:
+                    raise RuntimeError("Storyboard Director returned invalid structured JSON.") from exc
+                if not isinstance(data, dict):
+                    raise RuntimeError("Storyboard Director structured output must be a JSON object.")
+                result["data"] = data
+            _set_activity("complete", model_id=model_id, operation=operation, active=False)
+            return result
+        except Exception as exc:
+            _set_activity("error", model_id=model_id, operation=operation, active=False, error=str(exc))
+            raise
 
 
 atexit.register(stop_server)

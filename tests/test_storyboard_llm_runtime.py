@@ -43,16 +43,18 @@ def test_normalize_models_exposes_local_gguf_identity_and_status():
     assert models[0]["status"] == "loaded"
 
 
-def test_chat_uses_selected_model_disables_thinking_and_releases_gpu(monkeypatch):
+def test_chat_uses_selected_model_disables_thinking_retains_model_and_releases_gpu(monkeypatch):
     calls = []
 
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: calls.append("server"))
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
     monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: calls.append("reserve"))
     monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: calls.append("free-comfy"))
-    monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: calls.append("load:" + model_id))
-    monkeypatch.setattr(storyboard_llm_runtime, "_model_status", lambda model_id: "loaded")
-    monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append("unload:" + model_id))
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_ensure_local_model_loaded",
+        lambda model_id: calls.append("ensure:" + model_id),
+    )
     monkeypatch.setattr(storyboard_llm_runtime, "_release_gpu", lambda: calls.append("release"))
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -93,11 +95,43 @@ def test_chat_uses_selected_model_disables_thinking_and_releases_gpu(monkeypatch
         "server",
         "reserve",
         "free-comfy",
-        "load:qwen-large",
-        "unload:qwen-large",
+        "ensure:qwen-large",
         "release",
     ]
 
+
+def test_ensure_local_model_loaded_reuses_loaded_selection(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "list_models",
+        lambda reload=False: [
+            {"id": "qwen-large", "status": "loaded"},
+            {"id": "qwen-small", "status": "unloaded"},
+        ],
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: calls.append("load:" + model_id))
+    monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append("unload:" + model_id))
+
+    assert storyboard_llm_runtime._ensure_local_model_loaded("qwen-large") is False
+    assert calls == []
+
+
+def test_ensure_local_model_loaded_switches_models(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "list_models",
+        lambda reload=False: [
+            {"id": "qwen-large", "status": "loaded"},
+            {"id": "qwen-small", "status": "unloaded"},
+        ],
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: calls.append("load:" + model_id))
+    monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append("unload:" + model_id))
+
+    assert storyboard_llm_runtime._ensure_local_model_loaded("qwen-small") is True
+    assert calls == ["unload:qwen-large", "load:qwen-small"]
 
 def test_chat_stops_owned_router_if_model_cannot_be_confirmed_unloaded(monkeypatch):
     calls = []
@@ -108,7 +142,7 @@ def test_chat_stops_owned_router_if_model_cannot_be_confirmed_unloaded(monkeypat
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
     monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
-    monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_status", lambda model_id: "loaded")
     monkeypatch.setattr(storyboard_llm_runtime, "_release_gpu", lambda: calls.append("release"))
     monkeypatch.setattr(storyboard_llm_runtime, "stop_server", lambda: calls.append("stop"))
@@ -126,7 +160,7 @@ def test_chat_stops_owned_router_if_model_cannot_be_confirmed_unloaded(monkeypat
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "_http_json",
-        lambda *args, **kwargs: {"choices": [{"message": {"content": "prompt"}}]},
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("completion failed")),
     )
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -134,12 +168,12 @@ def test_chat_stops_owned_router_if_model_cannot_be_confirmed_unloaded(monkeypat
         lambda _model_id: (_ for _ in ()).throw(RuntimeError("still loaded")),
     )
 
-    result = storyboard_llm_runtime.chat(
-        "qwen-large",
-        [{"role": "user", "content": "Write."}],
-    )
+    with pytest.raises(RuntimeError, match="completion failed"):
+        storyboard_llm_runtime.chat(
+            "qwen-large",
+            [{"role": "user", "content": "Write."}],
+        )
 
-    assert result["text"] == "prompt"
     assert calls == ["stop", "release"]
 
 
@@ -151,7 +185,7 @@ def test_chat_keeps_gpu_reserved_if_external_router_cannot_unload(monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
     monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: calls.append("reserve"))
     monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
-    monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_status", lambda model_id: "loaded")
     monkeypatch.setattr(storyboard_llm_runtime, "_release_gpu", lambda: calls.append("release"))
     monkeypatch.setattr(
@@ -168,7 +202,7 @@ def test_chat_keeps_gpu_reserved_if_external_router_cannot_unload(monkeypatch):
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "_http_json",
-        lambda *args, **kwargs: {"choices": [{"message": {"content": "prompt"}}]},
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("completion failed")),
     )
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -183,6 +217,71 @@ def test_chat_keeps_gpu_reserved_if_external_router_cannot_unload(monkeypatch):
         )
 
     assert calls == ["reserve"]
+
+
+def test_release_loaded_model_for_gpu_work_unloads_local_model(monkeypatch):
+    calls = []
+
+    class FakeProcess:
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_process", FakeProcess())
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "local"},
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda *args, **kwargs: {
+            "data": [{"id": "qwen-large", "path": "/qwen.gguf", "status": {"value": "loaded"}}]
+        },
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append(model_id))
+
+    assert storyboard_llm_runtime.release_loaded_model_for_gpu_work() is True
+    assert calls == ["qwen-large"]
+
+
+def test_release_loaded_model_for_gpu_work_is_noop_for_remote_mode(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "remote"},
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_health_ok",
+        lambda: pytest.fail("Remote mode must not inspect a local llama.cpp runtime."),
+    )
+
+    assert storyboard_llm_runtime.release_loaded_model_for_gpu_work() is False
+
+
+def test_run_contract_exposes_lifecycle_activity(monkeypatch):
+    observed = {}
+
+    def fake_chat(model_id, messages, response_schema=None, max_tokens=None):
+        observed.update(storyboard_llm_runtime.activity_status())
+        return {"text": "prompt", "model": model_id}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "chat", fake_chat)
+
+    result = storyboard_llm_runtime.run_contract(
+        "qwen-large",
+        {"operation": "refine_prompt", "prompt": "Refine me.", "output": "text"},
+    )
+
+    assert result["text"] == "prompt"
+    assert observed["active"] is True
+    assert observed["phase"] == "preparing"
+    assert observed["model"] == "qwen-large"
+    assert observed["operation"] == "refine_prompt"
+    final = storyboard_llm_runtime.activity_status()
+    assert final["active"] is False
+    assert final["phase"] == "complete"
 
 
 def test_run_contract_requires_prompt(monkeypatch):
@@ -307,7 +406,7 @@ def test_chat_wraps_json_schema_for_llama_cpp(monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
     monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
-    monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_status", lambda model_id: "unloaded")
     monkeypatch.setattr(storyboard_llm_runtime, "_release_gpu", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: {

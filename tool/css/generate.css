@@ -387,3 +387,32 @@
     border-top: 1px solid var(--border);
   }
 }
+
+
+.generate-prompt-panel {
+  position: relative;
+}
+
+.generate-director-activity {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 8;
+  width: min(320px, calc(100% - 36px));
+  display: grid;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .22);
+}
+
+.generate-director-activity strong {
+  font-size: 13px;
+}
+
+.generate-director-activity span {
+  color: var(--muted);
+  font-size: 12px;
+}

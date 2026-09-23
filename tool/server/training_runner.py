@@ -1648,6 +1648,17 @@ def _launch_next_queued_job(state):
     if not owner and not reserve_execution_resource(TRAINING_RESOURCE_OWNER):
         return
 
+    try:
+        from .storyboard_llm_runtime import release_loaded_model_for_gpu_work
+        release_loaded_model_for_gpu_work()
+    except Exception as exc:
+        release_execution_resource(TRAINING_RESOURCE_OWNER)
+        state["queuePaused"] = True
+        state["queuePauseReason"] = (
+            "Queue paused: retained Prompt Assistant / Director model could not be unloaded: " + str(exc)
+        )
+        raise
+
     state["activeJobId"] = ""
     for job in queued_jobs:
         folder_path = app_config.safe_join_fs_root(job["folder"])

@@ -1925,3 +1925,32 @@
     grid-column: 1 / -1;
   }
 }
+
+
+.storyboard-editor {
+  position: relative;
+}
+
+.storyboard-director-activity {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 40;
+  width: min(320px, calc(100% - 36px));
+  display: grid;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .22);
+}
+
+.storyboard-director-activity strong {
+  font-size: 13px;
+}
+
+.storyboard-director-activity span {
+  color: var(--muted);
+  font-size: 12px;
+}

@@ -195,6 +195,22 @@ def test_storyboard_director_actions_share_one_busy_state_and_concept_restore():
     assert "operation: 'restore_previous_concept'" in storyboard
 
 
+def test_storyboard_director_has_non_modal_live_activity():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-director-activity"' in html
+    assert "<strong>Director</strong>" in html
+    assert "function refreshDirectorActivity()" in storyboard
+    assert "directorActivityRequest('/fs/director/activity')" in storyboard
+    assert "directorActivityRequest('/fs/system_status')" in storyboard
+    assert "Loading model…" in storyboard
+    assert "Generating response…" in storyboard
+    assert ".storyboard-director-activity" in css
+    assert "position: absolute;" in css
+
+
 def test_storyboard_take_generation_uses_global_console_and_visible_pending_cards():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")

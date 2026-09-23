@@ -44,6 +44,28 @@ def test_story_create_list_and_reload(storyboard_fs):
     assert storyboard_store.list_stories()[0]["title"] == "Storm Hotel"
 
 
+def test_delete_story_permanently_removes_complete_story_directory(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Disposable Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "take.mp4", BytesIO(b"video")
+    )
+    story_dir = storyboard_fs / "output" / "storyboards" / story["id"]
+    (story_dir / "references" / "manual").mkdir(parents=True)
+    (story_dir / "references" / "manual" / "reference.png").write_bytes(b"reference")
+    (story_dir / "exports").mkdir()
+    (story_dir / "exports" / "selected-sequence.mp4").write_bytes(b"export")
+    assert (story_dir / take["mediaPath"]).is_file()
+
+    deleted_id = storyboard_store.delete_story(story["id"])
+
+    assert deleted_id == story["id"]
+    assert not story_dir.exists()
+    assert storyboard_store.list_stories() == []
+    with pytest.raises(FileNotFoundError):
+        storyboard_store.load_story(story["id"])
+
+
 def test_story_scene_lifecycle(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, first = storyboard_store.add_scene(story["id"], {
@@ -633,4 +655,3 @@ def test_take_reference_replaces_and_cleans_manual_upload(storyboard_fs):
 
     assert reference["source"] == "take"
     assert not uploaded_path.exists()
-

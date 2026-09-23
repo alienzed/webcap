@@ -1030,6 +1030,8 @@ def list_sessions(folder_path):
             "completed": int(payload.get("completed") or 0),
             "failed": int(payload.get("failed") or 0),
             "total": int(payload.get("total") or 0),
+            "queued": int(payload.get("queued") or 0),
+            "running": int(payload.get("running") or 0),
             "unrated": unrated,
             "resultFolder": str(payload.get("resultFolder") or ""),
         })
@@ -2028,6 +2030,8 @@ def _sync_inference_session(session_directory):
     visible = dict(status)
     visible["completed"] = completed
     visible["failed"] = failed
+    visible["queued"] = len(queued)
+    visible["running"] = 1 if active is not None else 0
     visible["session"] = Path(session_directory).name
     visible["resultFolder"] = visible.get("resultFolder") or _relative_to_fs_root(session_directory)
 

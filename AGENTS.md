@@ -9,7 +9,7 @@ WebCap is a local-first media curation, captioning, and dataset-prep app.
 
 Core product values:
 
-- explicit, reversible mutations
+- explicit, reversible mutations for source Set media and user-authored Set state
 - fast iteration on real working sets
 - minimal UI clutter
 - visible state and visible failures
@@ -90,10 +90,11 @@ Silent failure is worse than a visible breakage in this project. â€œFail loudlyâ
 
 ## Mutation Safety
 
-All destructive or lossy actions must be explicit and reversible.
+Destructive or lossy mutations of source Set media and user-authored Set state must be explicit and reversible.
 
-- Preserve originals when the workflow depends on reversibility.
-- Require clear user intent for destructive actions.
+- Preserve originals when the Set workflow depends on reversibility.
+- Generated inference artifacts (including Generate results, Storyboard Takes, and Test results) are derived material and may support explicit permanent deletion; do not force a trash/restore layer onto them unless the workflow needs one.
+- Require clear user intent for every destructive action, and make permanently destructive inference-artifact actions visibly distinct from reversible Remove/Restore actions.
 - Construct mutation arguments explicitly in code.
 - Do not introduce arbitrary code execution paths.
 

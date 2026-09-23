@@ -81,3 +81,30 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "window.localStorage.removeItem(promptStorageKey)" in script
     assert '"defaultPrompt": ""' in generation
 
+def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "trackedJobIds: loadTrackedGenerateJobs()" in script
+    assert "function refreshTrackedGenerateJobs()" in script
+    assert "requestJson('/fs/inference?job=' + encodeURIComponent(jobId))" in script
+    assert "reportError(new Error(" in script
+    assert "webcap.generate.trackedJobs" in script
+
+    queue_start = script.index("function renderQueue()")
+    queue_end = script.index("function refreshQueue()", queue_start)
+    queue_code = script[queue_start:queue_end]
+    assert "dataset.inferenceJobId" in queue_code
+    assert "host.querySelectorAll('.generate-queue-row[data-inference-job-id]')" in queue_code
+    assert "syncQueueRow(row, job)" in queue_code
+    assert "host.innerHTML = jobs.map" not in queue_code
+
+def test_generate_partial_reference_uploads_have_a_cleanup_path():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert "function cleanupUploadedReferences(paths)" in script
+    assert "postJson('/fs/generate/reference/cleanup'" in script
+    assert "uploadedPaths.push(path)" in script
+    assert "cleanupUploadedReferences(uploadedPaths)" in script
+    assert '@app.route("/fs/generate/reference/cleanup", methods=["POST"])' in app
+

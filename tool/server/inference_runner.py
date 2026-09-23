@@ -15,6 +15,7 @@ from .execution_queue import (
     recover_lane as execution_recover_lane,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
+    reserve_resource as execution_reserve_resource,
     resource_owner as execution_resource_owner,
     resume_lane as execution_resume_lane,
 )
@@ -28,6 +29,8 @@ _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _monitor_lock = threading.Lock()
 _monitor_thread = None
+_provider_hold_lock = threading.Lock()
+_provider_cleanup_holds = set()
 _logger = logging.getLogger(__name__)
 
 
@@ -39,6 +42,58 @@ def _reserve_gpu():
 def _release_gpu():
     from .training_runner import release_gpu_for_external_work
     release_gpu_for_external_work(GPU_RESERVATION_OWNER)
+
+
+def hold_provider_cleanup(provider_job_id, reason):
+    provider_job_id = str(provider_job_id or "").strip()
+    if not provider_job_id:
+        return
+    with _provider_hold_lock:
+        _provider_cleanup_holds.add(provider_job_id)
+    execution_pause_lane(EXECUTION_LANE, reason=str(reason or "Queue paused for provider cleanup."))
+    if not execution_resource_owner():
+        execution_reserve_resource(GPU_RESERVATION_OWNER)
+
+
+def _reconcile_provider_cleanup_holds():
+    with _provider_hold_lock:
+        pending = list(_provider_cleanup_holds)
+    if not pending:
+        return True
+
+    from . import inference_runtime
+    unresolved = []
+    for provider_job_id in pending:
+        try:
+            job = inference_runtime.read_job(provider_job_id)
+        except Exception:
+            _logger.exception(
+                "Could not verify held inference provider job %s.",
+                provider_job_id,
+            )
+            unresolved.append(provider_job_id)
+            continue
+        status = str(job.get("status") or "").strip().lower() if isinstance(job, dict) else ""
+        if job is not None and status not in {"completed", "failed", "cancelled"}:
+            unresolved.append(provider_job_id)
+
+    with _provider_hold_lock:
+        _provider_cleanup_holds.intersection_update(unresolved)
+        remaining = bool(_provider_cleanup_holds)
+    if remaining:
+        current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+        if not current.get("paused"):
+            execution_pause_lane(
+                EXECUTION_LANE,
+                reason="Queue paused: unresolved ComfyUI provider cleanup must finish before inference can resume.",
+            )
+        if not execution_resource_owner():
+            execution_reserve_resource(GPU_RESERVATION_OWNER)
+        return False
+
+    if execution_resource_owner() == GPU_RESERVATION_OWNER:
+        _release_gpu()
+    return True
 
 
 def _job_view(job):
@@ -79,6 +134,16 @@ def _ensure_execution_reconciled():
     with _reconcile_lock:
         if _startup_reconciled:
             return
+        prior = execution_lane_snapshot(EXECUTION_LANE, include_terminal=True)
+        unresolved_terminal_provider_ids = {
+            str((job.get("details") or {}).get("providerJobId") or "").strip()
+            for job in prior.get("jobs", [])
+            if str(job.get("status") or "") in {"failed", "interrupted", "cancelled", "stopped"}
+            and isinstance(job.get("details"), dict)
+            and str((job.get("details") or {}).get("providerJobId") or "").strip()
+            and str((job.get("details") or {}).get("providerStatus") or "").strip().lower()
+                not in {"completed", "failed", "cancelled"}
+        }
         interrupted = execution_recover_lane(
             EXECUTION_LANE,
             reason="Inference was interrupted by a WebCap restart.",
@@ -89,10 +154,48 @@ def _ensure_execution_reconciled():
             if not prompt_id:
                 continue
             try:
-                from .inference_runtime import cancel_job
-                cancel_job(prompt_id)
+                from .inference_runtime import cancel_job_and_wait
+                if not cancel_job_and_wait(prompt_id):
+                    hold_provider_cleanup(
+                        prompt_id,
+                        "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
+                    )
+                    _logger.error(
+                        "Interrupted inference provider job %s did not confirm cancellation.",
+                        prompt_id,
+                    )
             except Exception:
+                hold_provider_cleanup(
+                    prompt_id,
+                    "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
+                )
                 _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
+        interrupted_provider_ids = {
+            str((job.get("details") or {}).get("providerJobId") or "").strip()
+            for job in interrupted
+            if isinstance(job.get("details"), dict)
+        }
+        for prompt_id in unresolved_terminal_provider_ids - interrupted_provider_ids:
+            try:
+                from .inference_runtime import cancel_job_and_wait
+                if not cancel_job_and_wait(prompt_id):
+                    hold_provider_cleanup(
+                        prompt_id,
+                        "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",
+                    )
+                    _logger.error(
+                        "Prior terminal inference provider job %s did not confirm cancellation.",
+                        prompt_id,
+                    )
+            except Exception:
+                hold_provider_cleanup(
+                    prompt_id,
+                    "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",
+                )
+                _logger.exception(
+                    "Could not verify prior terminal inference provider job %s.",
+                    prompt_id,
+                )
         _startup_reconciled = True
 
 
@@ -112,6 +215,7 @@ def _execute_claimed(job_id):
     running = execution_mark_running(job_id, details={"providerStatus": "starting"})
     if str(running.get("status") or "") == "stopping":
         execution_finish_job(job_id, status="stopped", error="Inference stopped before provider launch.")
+        _cleanup_generate_job_references(job_id)
         return
 
     if client == "generate":
@@ -136,20 +240,28 @@ def _cancel_failed_provider(job):
     provider_job_id = str(details.get("providerJobId") or "").strip()
     provider_status = str(details.get("providerStatus") or "").strip().lower()
     if not provider_job_id or provider_status in {"completed", "failed", "cancelled"}:
-        return
+        return True
     try:
-        from .inference_runtime import cancel_job
-        cancel_job(provider_job_id)
-    except Exception:
-        _logger.exception(
-            "Could not cancel failed inference provider job %s.",
+        from .inference_runtime import cancel_job_and_wait
+        if cancel_job_and_wait(provider_job_id):
+            return True
+        _logger.error(
+            "Inference provider job %s did not confirm cancellation; retaining the GPU reservation.",
             provider_job_id,
         )
+    except Exception:
+        _logger.exception(
+            "Could not confirm cancellation of failed inference provider job %s.",
+            provider_job_id,
+        )
+    return False
 
 
 def _advance_queue():
     _ensure_execution_reconciled()
     with _dispatch_lock:
+        if not _reconcile_provider_cleanup_holds():
+            return None
         snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
         if snapshot.get("paused") or snapshot.get("activeJobId"):
             return None
@@ -177,6 +289,7 @@ def _advance_queue():
             return None
 
         job_id = str(claimed.get("id") or "")
+        release_gpu = True
         try:
             _execute_claimed(job_id)
         except Exception as exc:
@@ -187,12 +300,24 @@ def _advance_queue():
                 if status in {"starting", "running", "stopping"}:
                     execution_finish_job(job_id, status=exc.status, error=str(exc))
             else:
-                _cancel_failed_provider(current)
+                release_gpu = _cancel_failed_provider(current)
+                if not release_gpu:
+                    provider_job_id = str(
+                        (current.get("details") or {}).get("providerJobId") or ""
+                    )
+                    hold_provider_cleanup(
+                        provider_job_id,
+                        (
+                            "Queue paused: ComfyUI provider work could not be confirmed stopped after an inference failure. "
+                            "Resolve the provider job before resuming."
+                        ),
+                    )
                 if status in {"starting", "running", "stopping"}:
                     execution_finish_job(job_id, status="failed", error=str(exc))
                 _logger.exception("Queued inference job failed.")
         finally:
-            if execution_resource_owner() == GPU_RESERVATION_OWNER:
+            _cleanup_generate_job_references(job_id)
+            if release_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
         return _job_view(execution_get_job(job_id))
 
@@ -317,12 +442,30 @@ def job_status(job_id):
     return _job_view(execution_get_job(str(job_id or "").strip()))
 
 
+def _cleanup_generate_job_references(job_id):
+    try:
+        stored = execution_get_job(str(job_id or "").strip(), include_payload=True)
+    except FileNotFoundError:
+        return
+    metadata = stored.get("metadata") if isinstance(stored.get("metadata"), dict) else {}
+    if metadata.get("client") != "generate":
+        return
+    payload = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
+    request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+    try:
+        from .generate_store import cleanup_references
+        cleanup_references(request.get("references") or {})
+    except Exception:
+        _logger.exception("Could not clean transient Generate references for job %s.", job_id)
+
+
 def action(operation, job_id="", direction="", position=None):
     _ensure_execution_reconciled()
     operation = str(operation or "").strip()
     job_id = str(job_id or "").strip()
     if operation == "cancel":
         job = execution_cancel_queued(job_id)
+        _cleanup_generate_job_references(job_id)
         return {"job": _job_view(job)}
     if operation == "stop":
         return {"job": _job_view(execution_request_stop(job_id))}

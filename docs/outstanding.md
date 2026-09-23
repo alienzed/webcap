@@ -1,5 +1,5 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-09-06.
+Last reviewed: 2026-09-23.
 
 > Training note: [Training Stabilization](training_stabilization.md) is the current authority for training behavior and deployment. Older profile, immutable-bundle, transcoding, preflight, recovery, and automatic-permission notes below are historical only where they conflict.
 

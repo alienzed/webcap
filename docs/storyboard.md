@@ -381,8 +381,9 @@ The current slice now also includes Scene LoRA discovery/selection:
 
 Still to add after real usage validates this slice:
 
-- guide/reference-to-video roles beyond H3's first/last-frame image-to-video sockets;
-- cleanup of temporary ComfyUI output after the Take copy is confirmed.
+- guide/reference-to-video roles beyond H3's first/last-frame image-to-video sockets.
+
+Successful Take capture now removes the owned ComfyUI output when the provider exposes a local saved-output path; the durable Story Take remains canonical.
 
 Stop/cancel, restart reconciliation, multiple queued Takes, and shared GPU arbitration are already provided through the common inference path.
 

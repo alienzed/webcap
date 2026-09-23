@@ -1,7 +1,9 @@
+from pathlib import Path
 from io import BytesIO
 
 from tool.server import app as app_module
 from tool.server import generate_generation
+from tool.server import generate_store
 
 
 def test_generate_enqueue_is_global_and_uses_frozen_prepared_request(monkeypatch):
@@ -160,3 +162,162 @@ def test_generate_capabilities_publishes_portable_lora_names(monkeypatch):
 
     assert payload["loras"] == ["mh3/candidate.safetensors"]
     assert payload["baseLoras"] == ["mh3/base.safetensors"]
+
+def test_generate_enqueue_failure_cleans_uploaded_references(monkeypatch):
+    cleaned = []
+    monkeypatch.setattr(
+        app_module,
+        "prepare_generate_request",
+        lambda _data: (_ for _ in ()).throw(ValueError("bad request")),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "generate_cleanup_references",
+        lambda references: cleaned.append(dict(references)),
+    )
+    client = app_module.app.test_client()
+
+    response = client.post("/fs/generate", json={
+        "modelId": "minimax_h3",
+        "prompt": "idea",
+        "references": {"first_frame": ".webcap_runtime/generate-references/ref-1/frame.png"},
+    })
+
+    assert response.status_code == 400
+    assert cleaned == [{
+        "first_frame": ".webcap_runtime/generate-references/ref-1/frame.png"
+    }]
+
+
+def test_generate_result_owns_reference_copy_before_transient_cleanup(tmp_path, monkeypatch):
+    monkeypatch.setattr(generate_store.app_config, "FS_ROOT", tmp_path)
+    source_dir = generate_store.reference_root() / "ref-1"
+    source_dir.mkdir(parents=True)
+    source = source_dir / "frame.png"
+    source.write_bytes(b"reference")
+    relative_source = str(source.relative_to(tmp_path)).replace("\\", "/")
+
+    payload = generate_store.persist_result(
+        "job-1",
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "sourcePrompt": "idea",
+            "prompt": "resolved",
+            "settings": {"seed": 7},
+            "loras": [],
+            "references": {"first_frame": relative_source},
+            "wildcardsEnabled": False,
+            "workflowFile": "workflow.json",
+        },
+        {"filename": "render.mp4", "type": "output"},
+        b"video",
+        "provider-1",
+        123,
+    )
+    durable_reference = tmp_path / payload["references"]["first_frame"]
+
+    assert durable_reference.read_bytes() == b"reference"
+    assert payload["references"]["first_frame"] != relative_source
+
+    removed = generate_store.cleanup_references({"first_frame": relative_source})
+
+    assert removed == 1
+    assert not source.exists()
+    assert durable_reference.read_bytes() == b"reference"
+
+def test_generate_execute_cleans_transient_refs_and_captured_provider_output(tmp_path, monkeypatch):
+    class FakeModel:
+        def load_template(self):
+            return {}
+
+        def build_workflow(
+            self,
+            template,
+            prompt,
+            settings,
+            loras,
+            uploaded,
+            filename_prefix,
+            available_names,
+            resolve_name,
+        ):
+            assert uploaded == {"first_frame": "uploaded/frame.png"}
+            return {"workflow": True}
+
+        def find_output_ref(self, outputs):
+            return outputs
+
+    reference = tmp_path / "frame.png"
+    reference.write_bytes(b"reference")
+    output_ref = {
+        "filename": "render.mp4",
+        "type": "output",
+        "fullpath": str(tmp_path / "comfy-render.mp4"),
+    }
+    Path(output_ref["fullpath"]).write_bytes(b"provider-video")
+
+    monkeypatch.setattr(generate_generation, "get_inference_model", lambda _model_id: FakeModel())
+    monkeypatch.setattr(generate_generation, "resolve_reference_path", lambda _path: reference)
+    monkeypatch.setattr(
+        generate_generation.inference_runtime,
+        "upload_image",
+        lambda *_args, **_kwargs: "uploaded/frame.png",
+    )
+    monkeypatch.setattr(generate_generation.inference_runtime, "available_names", lambda *_args: [])
+    monkeypatch.setattr(generate_generation.inference_runtime, "resolve_name", lambda value, *_args: value)
+    monkeypatch.setattr(generate_generation.inference_runtime, "queue_workflow", lambda _workflow: "provider-1")
+    monkeypatch.setattr(
+        generate_generation.inference_runtime,
+        "wait_for_output",
+        lambda *_args: output_ref,
+    )
+    monkeypatch.setattr(generate_generation.inference_runtime, "download_output", lambda _ref: b"video")
+    monkeypatch.setattr(generate_generation, "execution_update_job", lambda *_args, **_kwargs: None)
+    cleaned_refs = []
+    monkeypatch.setattr(
+        generate_generation,
+        "cleanup_references",
+        lambda references: cleaned_refs.append(dict(references)),
+    )
+    monkeypatch.setattr(
+        generate_generation,
+        "persist_result",
+        lambda *args, **kwargs: {"jobId": "job-1", "mediaPath": "output/generations/result.mp4"},
+    )
+
+    result = generate_generation.execute("job-1", {
+        "modelId": "minimax_h3",
+        "prompt": "Prompt",
+        "settings": {"seed": 7},
+        "loras": [],
+        "references": {"first_frame": "runtime/frame.png"},
+    })
+
+    assert result["jobId"] == "job-1"
+    assert cleaned_refs == [{"first_frame": "runtime/frame.png"}]
+    assert not Path(output_ref["fullpath"]).exists()
+
+def test_generate_reference_cleanup_route_is_scoped_to_store_helper(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        app_module,
+        "generate_cleanup_references",
+        lambda paths: seen.extend(paths) or len(paths),
+    )
+    client = app_module.app.test_client()
+
+    response = client.post("/fs/generate/reference/cleanup", json={
+        "paths": [
+            ".webcap_runtime/generate-references/ref-1/first.png",
+            ".webcap_runtime/generate-references/ref-2/last.png",
+        ]
+    })
+
+    assert response.status_code == 200
+    assert response.get_json()["removed"] == 2
+    assert seen == [
+        ".webcap_runtime/generate-references/ref-1/first.png",
+        ".webcap_runtime/generate-references/ref-2/last.png",
+    ]
+

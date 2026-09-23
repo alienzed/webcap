@@ -578,3 +578,39 @@ def test_delete_take_rolls_back_metadata_when_media_delete_fails(storyboard_fs, 
     assert take["id"] in loaded["scenes"][scene["id"]]["takeOrder"]
     assert media_path.is_file()
 
+def test_uploaded_scene_reference_is_story_owned_and_replaces_cleanly(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+
+    story, first = storyboard_store.set_scene_reference_upload(
+        story["id"], scene["id"], "first_frame", "first.png", BytesIO(b"first")
+    )
+    first_path = storyboard_fs / "output" / "storyboards" / story["id"] / first["mediaPath"]
+    assert first["source"] == "upload"
+    assert first["sourceFilename"] == "first.png"
+    assert first_path.read_bytes() == b"first"
+
+    story, second = storyboard_store.set_scene_reference_upload(
+        story["id"], scene["id"], "first_frame", "second.webp", BytesIO(b"second")
+    )
+    second_path = storyboard_fs / "output" / "storyboards" / story["id"] / second["mediaPath"]
+    assert not first_path.exists()
+    assert second_path.read_bytes() == b"second"
+    assert [
+        item["role"] for item in story["scenes"][scene["id"]]["references"]
+    ] == ["first_frame"]
+
+    cleared = storyboard_store.clear_scene_reference(story["id"], scene["id"], "first_frame")
+    assert cleared["scenes"][scene["id"]]["references"] == []
+    assert not second_path.exists()
+
+
+def test_uploaded_scene_reference_rejects_video(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+
+    with pytest.raises(ValueError, match="must be an image"):
+        storyboard_store.set_scene_reference_upload(
+            story["id"], scene["id"], "first_frame", "clip.mp4", BytesIO(b"video")
+        )
+

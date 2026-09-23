@@ -28,7 +28,6 @@ As of the start of this work:
   - reorder/requeue;
   - restart reconciliation;
   - global execution-resource ownership.
-- Storyboard Takes are already migrated to that substrate through the `storyboard-takes` lane.
 - Storyboard Takes use the shared substrate through the `storyboard-takes` lane and a Storyboard-owned observer/dispatcher.
 - Test Generations now also uses the shared substrate through the `test-generations` lane. Its previous in-memory pending queue has already been removed; a Test-owned observer pumps durable queued Sessions.
 - Startup reconciliation for Storyboard and Test inference is explicit and runs before their observers start.

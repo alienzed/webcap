@@ -19,7 +19,9 @@ from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
+    pause_lane as execution_pause_lane,
     recover_lane as execution_recover_lane,
+    reserve_resource as execution_reserve_resource,
     request_stop as execution_request_stop,
     update_job as execution_update_job,
 )
@@ -1116,8 +1118,28 @@ def reconcile_startup():
             if prompt_id:
                 try:
                     from . import inference_runtime
-                    inference_runtime.cancel_job(prompt_id)
+                    if not inference_runtime.cancel_job_and_wait(prompt_id):
+                        execution_pause_lane(
+                            SHARED_EXECUTION_LANE,
+                            reason=(
+                                "Queue paused: interrupted legacy Test provider work "
+                                "could not be confirmed stopped after restart."
+                            ),
+                        )
+                        execution_reserve_resource(SHARED_EXECUTION_LANE)
+                        _logger.error(
+                            "Interrupted legacy Test provider job %s did not confirm cancellation.",
+                            prompt_id,
+                        )
                 except Exception:
+                    execution_pause_lane(
+                        SHARED_EXECUTION_LANE,
+                        reason=(
+                            "Queue paused: interrupted legacy Test provider work "
+                            "could not be confirmed stopped after restart."
+                        ),
+                    )
+                    execution_reserve_resource(SHARED_EXECUTION_LANE)
                     _logger.exception("Could not cancel interrupted legacy Test provider job %s.", prompt_id)
             folder = str(metadata.get("folder") or "").strip()
             session_name = str(details.get("session") or "").strip()

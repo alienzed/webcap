@@ -100,6 +100,8 @@ def test_server_startup_keeps_inference_dormant():
     assert "reconcile_storyboard_generation_startup()" not in startup
     assert "reconcile_inference_startup()" not in startup
     assert "start_inference_observer()" not in startup
+    assert "reconcile_llm_startup()" not in startup
+    assert "start_llm_observer()" not in startup
 
 
 def test_execution_queue_resource_claim_is_exclusive(queue_root):

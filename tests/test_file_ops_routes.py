@@ -1658,4 +1658,4 @@ def test_create_set_from_results_blocks_existing_destination(tmp_path, monkeypat
 
 
 def test_manual_training_path_conversion_preserves_existing_wsl_path():
-    assert run_ops_module._to_wsl_path("/mnt/w/training/output/runs/035-wan/minimax-h3", "Ubuntu_W") == "/mnt/w/training/output/runs/035-wan/minimax-h3"
+    assert run_ops_module.to_wsl_path("/mnt/w/training/output/runs/035-wan/minimax-h3", "Ubuntu_W") == "/mnt/w/training/output/runs/035-wan/minimax-h3"

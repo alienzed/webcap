@@ -192,6 +192,30 @@ def test_training_overview_marks_nonterminal_reference_protected(monkeypatch, tm
     assert "job-live" in item["protectedReason"]
 
 
+def test_current_set_storage_is_visible_but_never_purgeable(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    set_path = tmp_path / "sets" / "demo"
+    (set_path / "originals").mkdir(parents=True)
+    (set_path / "originals" / "image.png").write_bytes(b"original")
+    (set_path / "auto_dataset").mkdir()
+    (set_path / "auto_dataset" / "copy.png").write_bytes(b"copy")
+    _write_json(set_path / "media_metadata.json", {"image.png": {"size": 8}})
+    _write_json(set_path / ".webcap_state.json", {"ratings_by_media": {}})
+
+    payload = storage_manager.overview("sets/demo")
+    items = payload["items"]["set"]
+
+    assert {item["id"] for item in items} == {
+        "originals", "auto_dataset", "media_metadata.json", ".webcap_state.json"
+    }
+    assert all(item["purgeable"] is False for item in items)
+    measured = storage_manager.measure("set", "originals", "sets/demo")
+    assert measured["bytes"] == len(b"original")
+    with pytest.raises(ValueError):
+        storage_manager.purge("set", "originals", "sets/demo")
+    assert (set_path / "originals" / "image.png").is_file()
+
+
 def test_storage_has_no_path_based_or_set_source_purge(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     source = tmp_path / "sets" / "demo" / "image.png"
@@ -247,3 +271,4 @@ def test_storage_ui_is_isolated_global_activity():
     assert "activity === 'storage'" in shell
     assert "os.walk" not in backend
     assert 'PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard"}' in backend
+    assert '"set": _set_items(cache, folder)' in backend

@@ -283,8 +283,12 @@ def _advance_queue():
             reserved_here = True
 
         try:
-            from .storyboard_llm_runtime import release_loaded_model_for_gpu_work
+            from .storyboard_llm_runtime import DirectorRuntimeBusy, release_loaded_model_for_gpu_work
             release_loaded_model_for_gpu_work()
+        except DirectorRuntimeBusy:
+            if reserved_here and execution_resource_owner() == GPU_RESERVATION_OWNER:
+                _release_gpu()
+            return None
         except Exception as exc:
             if reserved_here and execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()

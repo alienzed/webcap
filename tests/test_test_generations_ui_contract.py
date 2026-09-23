@@ -76,7 +76,7 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert "String(failure.error || 'Generation failed.')" in script
     assert "(results.length + failures.length) < total" in script
     assert "host.innerHTML = html" not in script
-    assert "Previews appear as each LoRA finishes." in script
+    assert "pendingPlaceholder.textContent = 'Generating…';" in script
     assert "settings: settings" in script
     assert "var declaredSettings = prepared && Array.isArray(prepared.settings)" in script
     assert "test-generations-dimensions" in script

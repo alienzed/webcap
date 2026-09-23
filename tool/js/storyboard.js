@@ -865,10 +865,22 @@
         var meta = [];
         if (story.status && story.status !== 'active') meta.push(story.status);
         meta.push(String(Number(story.sceneCount || 0)) + ' scene' + (Number(story.sceneCount || 0) === 1 ? '' : 's'));
-        return '<button type="button" class="storyboard-story-row' + (active ? ' active' : '') + '" data-story-id="' + escapeHtml(story.id) + '">' +
-          '<strong>' + escapeHtml(story.title || 'Untitled Story') + '</strong>' +
-          '<span>' + escapeHtml(meta.join(' · ')) + '</span>' +
-          '</button>';
+        return '<div class="storyboard-story-row' + (active ? ' active' : '') + '" data-story-id="' + escapeHtml(story.id) + '">' +
+          '<button type="button" class="storyboard-story-open" data-story-open>' +
+            '<strong>' + escapeHtml(story.title || 'Untitled Story') + '</strong>' +
+            '<span>' + escapeHtml(meta.join(' · ')) + '</span>' +
+          '</button>' +
+          '<details class="storyboard-story-menu">' +
+            '<summary aria-label="Story actions">⋯</summary>' +
+            '<div class="storyboard-story-menu-popover">' +
+              '<button type="button" data-story-action="duplicate">Duplicate</button>' +
+              '<button type="button" data-story-action="pin">' + (story.pinned ? 'Unpin' : 'Pin') + '</button>' +
+              '<button type="button" data-story-action="archive">' + (story.status === 'archived' ? 'Restore' : 'Archive') + '</button>' +
+              '<button type="button" data-story-action="export">Export</button>' +
+              '<button type="button" class="danger" data-story-action="delete">Delete…</button>' +
+            '</div>' +
+          '</details>' +
+        '</div>';
       }).join('');
     }
 
@@ -1566,10 +1578,9 @@
     }).catch(reportError);
   }
 
-  function deleteStory() {
-    if (!storyState.story) return;
-    var storyId = storyState.story.id;
-    var title = String(storyState.story.title || 'Untitled Story');
+  function deleteStory(storyId, title) {
+    if (!storyId) return;
+    title = String(title || 'Untitled Story');
     if (!window.confirm(
       'Delete "' + title + '" and permanently remove all of its Scenes, Takes, references, and exports? This cannot be undone.'
     )) return;
@@ -1581,7 +1592,8 @@
         storyId: storyId
       });
     }).then(function () {
-      if (storyState.story && storyState.story.id === storyId) storyState.story = null;
+      var deletedWasOpen = storyState.story && storyState.story.id === storyId;
+      if (deletedWasOpen) storyState.story = null;
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};
       storyState.activeSceneId = '';
@@ -1591,10 +1603,87 @@
       syncStoryboardGenerationActivity();
       return refreshLibrary();
     }).then(function () {
+      if (!deletedWasOpen) {
+        renderLibrary();
+        setSaveState('');
+        return;
+      }
       var next = storyState.stories && storyState.stories[0];
       if (next) return openStory(next.id);
       renderStory();
       setSaveState('');
+    }).catch(reportError);
+  }
+
+  function libraryStory(storyId) {
+    return (storyState.stories || []).find(function (story) { return story.id === storyId; }) || null;
+  }
+
+  function updateStoryFromLibrary(storyId, changes) {
+    return request(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
+      var story = payload.story;
+      var next = {
+        title: story.title || '',
+        concept: story.concept || '',
+        style: story.style || '',
+        invariants: story.invariants || [],
+        loras: story.loras || [],
+        tags: story.tags || [],
+        status: story.status || 'active',
+        pinned: !!story.pinned
+      };
+      Object.keys(changes || {}).forEach(function (key) { next[key] = changes[key]; });
+      return request({ operation: 'update_story', storyId: storyId, story: next });
+    }).then(function (payload) {
+      if (storyState.story && storyState.story.id === storyId) storyState.story = payload.story;
+      return refreshLibrary().then(function () {
+        renderStory();
+        return payload.story;
+      });
+    });
+  }
+
+  function duplicateStory(storyId) {
+    setSaveState('Duplicating...');
+    return flushPendingSaves().then(function () {
+      return request({ operation: 'duplicate_story', storyId: storyId });
+    }).then(function (payload) {
+      return refreshLibrary().then(function () {
+        setSaveState('Saved');
+        return openStory(payload.story.id);
+      });
+    }).catch(reportError);
+  }
+
+  function toggleStoryPin(storyId) {
+    var story = libraryStory(storyId);
+    if (!story) return;
+    setSaveState(story.pinned ? 'Unpinning...' : 'Pinning...');
+    updateStoryFromLibrary(storyId, { pinned: !story.pinned }).then(function () {
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
+  function toggleStoryArchive(storyId) {
+    var story = libraryStory(storyId);
+    if (!story) return;
+    var archived = story.status === 'archived';
+    setSaveState(archived ? 'Restoring...' : 'Archiving...');
+    updateStoryFromLibrary(storyId, { status: archived ? 'active' : 'archived' }).then(function () {
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
+  function exportStory(storyId) {
+    setSaveState('Exporting sequence...');
+    flushPendingSaves().then(function () {
+      return assemblyRequest({ storyId: storyId });
+    }).then(function (payload) {
+      if (storyState.story && storyState.story.id === storyId) {
+        storyState.sequenceExport = payload.export || null;
+        renderSequencePreview();
+      }
+      setSaveState('Saved');
     }).catch(reportError);
   }
 
@@ -2382,7 +2471,6 @@
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
 
     el('storyboard-new-btn').onclick = createStory;
-    el('storyboard-delete-story-btn').onclick = deleteStory;
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
@@ -2409,7 +2497,22 @@
 
     el('storyboard-library-list').onclick = function (event) {
       var row = event.target.closest('[data-story-id]');
-      if (row) openStory(row.dataset.storyId);
+      if (!row) return;
+      var storyId = row.dataset.storyId;
+      var actionButton = event.target.closest('[data-story-action]');
+      if (actionButton) {
+        var story = libraryStory(storyId);
+        var action = actionButton.dataset.storyAction;
+        var menu = actionButton.closest('details');
+        if (menu) menu.open = false;
+        if (action === 'duplicate') duplicateStory(storyId);
+        else if (action === 'pin') toggleStoryPin(storyId);
+        else if (action === 'archive') toggleStoryArchive(storyId);
+        else if (action === 'export') exportStory(storyId);
+        else if (action === 'delete') deleteStory(storyId, story && story.title);
+        return;
+      }
+      if (event.target.closest('[data-story-open]')) openStory(storyId);
     };
 
     ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style', 'storyboard-story-tags'].forEach(function (id) {

@@ -1188,6 +1188,7 @@ def _run_batch(
     template=None,
     include_base=True,
     model=None,
+    execution_job_id=None,
 ):
     selected_model = model or get_test_model()
     status_file = _status_path(session_directory)
@@ -1319,6 +1320,28 @@ def _run_batch(
             status["error"] = str(exc)
             _atomic_write_json(status_file, status)
     finally:
+        final_status = _read_status(session_directory) or {}
+        if execution_job_id:
+            status_value = str(final_status.get("status") or "")
+            if status_value == "complete":
+                execution_finish_job(
+                    execution_job_id,
+                    status="completed",
+                    result={"session": Path(session_directory).name},
+                )
+            elif status_value == "stopped":
+                execution_finish_job(
+                    execution_job_id,
+                    status="stopped",
+                    result={"session": Path(session_directory).name},
+                )
+            else:
+                execution_finish_job(
+                    execution_job_id,
+                    status="failed",
+                    result={"session": Path(session_directory).name},
+                    error=str(final_status.get("error") or "Test Generations batch failed."),
+                )
         with _lock:
             _active_threads.pop(folder_key, None)
             _active_sessions.pop(folder_key, None)
@@ -1677,9 +1700,17 @@ def start_queued(folder_path, request, execution_job_id=None):
         payload["total"] = len(loras) + (1 if include_base else 0)
         payload["status"] = "running"
         _atomic_write_json(_status_path(session_directory), payload)
+        if execution_job_id:
+            execution_mark_running(
+                execution_job_id,
+                details={
+                    "session": session_directory.name,
+                    "resultFolder": _relative_to_fs_root(session_directory),
+                },
+            )
         thread = threading.Thread(
             target=_run_batch,
-            args=(folder_key, session_directory, loras, prompt, normalized_settings, template, include_base, model),
+            args=(folder_key, session_directory, loras, prompt, normalized_settings, template, include_base, model, execution_job_id),
             name="webcap-test-generations-" + model.SESSION_SLUG,
             daemon=True,
         )

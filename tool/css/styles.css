@@ -2993,7 +2993,7 @@ iframe {
 .test-generations-results {
   display: grid;
   flex: 1 1 0;
-  grid-template-columns: repeat(auto-fill, 330px);
+  grid-template-columns: repeat(auto-fill, 500px);
   grid-auto-rows: max-content;
   align-content: start;
   justify-content: start;

@@ -8,16 +8,14 @@
     lorasByModel: {},
     director: {
       models: [],
-      modelId: window.localStorage.getItem('webcap.generate.directorModel') || '',
+      modelId: '',
       available: false,
       busy: false,
       previousPrompt: null,
       status: '',
       activityTimer: 0,
       activityStartedAt: 0,
-      activityHistory: [],
-      preloadTimer: 0,
-      preloading: false
+      activityHistory: []
     },
     queue: { jobs: [], paused: false },
     trackedJobIds: loadTrackedGenerateJobs(),
@@ -749,7 +747,7 @@
   }
 
   function directorActivityActive() {
-    return generateState.director.busy || generateState.director.preloading;
+    return generateState.director.busy;
   }
 
   function refreshDirectorActivity() {
@@ -821,6 +819,7 @@
       ? generateState.director.modelId
       : String((generateState.director.models[0] || {}).id || '');
     generateState.director.modelId = chosen;
+    if (chosen) setSharedDirectorModelPreference(chosen);
     select.value = chosen;
     select.disabled = generateState.director.busy || !chosen;
     expand.disabled = generateState.director.busy || !chosen;
@@ -839,53 +838,6 @@
       generateState.director.available = false;
       renderDirector();
       reportError(err);
-    });
-  }
-
-  function cancelDirectorPreloadTimer() {
-    if (generateState.director.preloadTimer) clearTimeout(generateState.director.preloadTimer);
-    generateState.director.preloadTimer = 0;
-  }
-
-  function selectedDirectorModel() {
-    return (generateState.director.models || []).find(function (model) {
-      return model.id === generateState.director.modelId;
-    }) || null;
-  }
-
-  function scheduleDirectorPreload() {
-    cancelDirectorPreloadTimer();
-    var model = selectedDirectorModel();
-    if (!generateState.open || generateState.director.busy || generateState.director.preloading ||
-        !generateState.director.available || !model || model.status === 'loaded') return;
-    generateState.director.preloadTimer = setTimeout(function () {
-      generateState.director.preloadTimer = 0;
-      preloadDirectorModel();
-    }, 1500);
-  }
-
-  function reportDirectorPreloadError(err) {
-    var message = String(err && err.message ? err.message : err);
-    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Prompt Assistant preload', message);
-    else console.error('[Prompt Assistant preload]', err);
-  }
-
-  function preloadDirectorModel() {
-    var model = selectedDirectorModel();
-    if (!generateState.open || generateState.director.busy || generateState.director.preloading ||
-        !model || model.status === 'loaded') return Promise.resolve();
-
-    var requestedModel = model.id;
-    generateState.director.preloading = true;
-    startDirectorActivity();
-    return postJson('/fs/director/preload', { model: requestedModel }).catch(function (err) {
-      reportDirectorPreloadError(err);
-    }).then(function () {
-      generateState.director.preloading = false;
-      finishDirectorActivity();
-      return refreshDirector();
-    }).then(function () {
-      if (generateState.director.modelId !== requestedModel) scheduleDirectorPreload();
     });
   }
 
@@ -976,13 +928,14 @@
     if (typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
     if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
     generateState.open = true;
+    generateState.director.modelId = getSharedDirectorModelPreference('webcap.generate.directorModel');
     frame.classList.add('workspace-generate-open');
     workspace.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     Promise.all([
       refreshCapabilities(),
-      refreshDirector().then(function () { scheduleDirectorPreload(); }),
+      refreshDirector(),
       refreshQueue(),
       refreshTrackedGenerateJobs(),
       refreshResults()
@@ -994,7 +947,6 @@
     var frame = el('app-frame');
     var workspace = el('generate-workspace');
     generateState.open = false;
-    cancelDirectorPreloadTimer();
     if (workspace) workspace.classList.add('hidden');
     if (frame) frame.classList.remove('workspace-generate-open');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
@@ -1035,9 +987,8 @@
     el('generate-director-model').addEventListener('change', function () {
       generateState.director.modelId = this.value;
       setDirectorStatus('');
-      window.localStorage.setItem('webcap.generate.directorModel', this.value);
+      setSharedDirectorModelPreference(this.value);
       renderDirector();
-      scheduleDirectorPreload();
     });
     el('generate-queue-pause').onclick = function () {
       queueAction(generateState.queue.paused ? 'resume_queue' : 'pause_queue');

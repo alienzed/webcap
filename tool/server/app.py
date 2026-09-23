@@ -37,7 +37,7 @@ from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
-from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, preload_model as storyboard_director_preload_model, status as storyboard_director_status
+from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .generate_store import cleanup_references as generate_cleanup_references, list_results as generate_list_results, resolve_result_media as generate_resolve_result_media, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
@@ -763,19 +763,6 @@ def director_job_route():
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         app.logger.exception("DIRECTOR QUEUE ACTION FAILED: %s", exc)
-        return jsonify({"ok": False, "error": str(exc)}), 400
-
-
-@app.route("/fs/director/preload", methods=["POST"])
-def director_preload_route():
-    data = request.get_json(silent=True) or {}
-    try:
-        return jsonify({
-            "ok": True,
-            **storyboard_director_preload_model(str(data.get("model") or "").strip()),
-        })
-    except Exception as exc:
-        app.logger.exception("DIRECTOR PRELOAD FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

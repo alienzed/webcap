@@ -3,12 +3,12 @@ import logging
 import secrets
 import time
 
-_logger = logging.getLogger(__name__)
-
 from . import inference_runtime
 from .generate_store import cleanup_references, persist_result, resolve_reference_path
 from .execution_queue import update_job as execution_update_job
 from .inference_models import get_inference_model, public_models
+
+_logger = logging.getLogger(__name__)
 
 
 def _new_seed():

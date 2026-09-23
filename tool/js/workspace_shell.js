@@ -845,6 +845,7 @@ function wireWorkspaceHeaderUi() {
     generateActivityBtn.__workspaceWired = true;
     generateActivityBtn.onclick = function () {
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') stopFocusedAnnotation();
+      if (typeof window.closeStorageActivity === 'function') window.closeStorageActivity();
       if (typeof window.openGenerateActivity !== 'function') throw new Error('Generate activity is not available.');
       window.openGenerateActivity();
     };

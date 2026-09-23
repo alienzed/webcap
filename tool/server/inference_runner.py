@@ -3,7 +3,6 @@ import logging
 import threading
 import time
 
-from . import config as app_config
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     claim_next as execution_claim_next,
@@ -14,7 +13,6 @@ from .execution_queue import (
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
     recover_lane as execution_recover_lane,
-    release_resource as execution_release_resource,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
     resource_owner as execution_resource_owner,

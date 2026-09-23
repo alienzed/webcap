@@ -31,7 +31,7 @@ from .execution_queue import (
     pause_lane as execution_pause_lane,
     recover_lane as execution_recover_lane,
     reorder_job as execution_reorder_job,
-    request_action as execution_request_action,
+    request_stop as execution_request_stop,
     resource_owner as execution_resource_owner,
     resume_lane as execution_resume_lane,
     update_job as execution_update_job,
@@ -1825,7 +1825,7 @@ def stop(folder_path):
     metadata = active_job.get("metadata") if isinstance(active_job, dict) and isinstance(active_job.get("metadata"), dict) else {}
     if not active_job or str(metadata.get("folder") or "") != folder:
         raise RuntimeError("Active Test Generations execution job is missing.")
-    execution_request_action(active_id, "stop")
+    execution_request_stop(active_id)
 
     with _status_lock:
         status = _read_status(session_directory) or {}

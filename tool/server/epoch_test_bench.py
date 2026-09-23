@@ -765,7 +765,7 @@ def _download_output(output_ref):
 def _download_video(video_ref):
     return _download_output(video_ref)
 
-def _move_saved_output(output_ref, destination, filename_prefix=None):
+def _move_saved_output(output_ref, destination, filename_prefix=None, download_bytes=None):
     if str(output_ref.get("type") or "") != "output":
         raise RuntimeError("ComfyUI Test output was not saved to the output directory.")
     target = Path(destination)
@@ -774,7 +774,8 @@ def _move_saved_output(output_ref, destination, filename_prefix=None):
 
     raw_path = str(output_ref.get("fullpath") or "").strip()
     if not raw_path:
-        target.write_bytes(_download_output(output_ref))
+        downloader = download_bytes or _download_output
+        target.write_bytes(downloader(output_ref))
         if not target.is_file():
             raise RuntimeError("Saved ComfyUI Test output was not copied into the Test session.")
         return target
@@ -1030,6 +1031,8 @@ def list_sessions(folder_path):
             "completed": int(payload.get("completed") or 0),
             "failed": int(payload.get("failed") or 0),
             "total": int(payload.get("total") or 0),
+            "queued": int(payload.get("queued") or 0),
+            "running": int(payload.get("running") or 0),
             "unrated": unrated,
             "resultFolder": str(payload.get("resultFolder") or ""),
         })
@@ -1773,7 +1776,8 @@ def prepare(folder_path, model_id=None):
     setting_options = {}
     prepare_warnings = []
     try:
-        setting_options = model.setting_options(template, _available_comfy_names)
+        from . import inference_runtime
+        setting_options = model.setting_options(template, inference_runtime.available_names)
     except (ConnectionError, RuntimeError) as exc:
         prepare_warnings.append(
             "Could not load optional Test setting choices from ComfyUI: " + str(exc)
@@ -1859,7 +1863,8 @@ def handle_request(folder_path, mode, selection_criteria=None):
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return rating_summary(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_stop":
-        return stop(folder_path)
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return stop(folder_path, session_name=criteria.get("session"))
     if operation == "test_remove_candidate":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return remove_candidate(
@@ -1884,3 +1889,865 @@ def handle_request(folder_path, mode, selection_criteria=None):
             model_id=criteria.get("modelId"),
         )
     raise ValueError("Unsupported Test Generations operation: " + operation)
+
+# Shared inference migration -------------------------------------------------
+
+_legacy_visible_session_status = _visible_session_status
+_legacy_activity_snapshot = activity_snapshot
+_legacy_stop = stop
+_legacy_delete_session = delete_session
+_legacy_remove_candidate_from_session = _remove_candidate_from_session
+
+LEGACY_EXECUTION_LANE = EXECUTION_LANE
+SHARED_EXECUTION_LANE = "inference"
+
+
+def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
+                           selected_files=None, include_base=True, model_id=None,
+                           aspect_ratio=None, megapixels=None, duration=None):
+    from . import inference_runtime
+
+    model = get_test_model(model_id)
+    prompt = str(prompt or "").strip()
+    if not prompt:
+        raise ValueError("A test prompt is required.")
+    test_directory = _test_directory(folder_path, model)
+    loras = _selected_lora_files(test_directory, selected_files=selected_files)
+    if not loras:
+        raise ValueError("The Test folder contains no .safetensors files.")
+    session_name = str(name or "").strip()
+    if len(session_name) > 120:
+        raise ValueError("Test session name must be 120 characters or fewer.")
+
+    requested_settings = dict(settings) if isinstance(settings, dict) else {}
+    legacy = {
+        "aspectRatio": aspect_ratio,
+        "megapixels": megapixels,
+        "duration": duration,
+        "seed": seed,
+    }
+    for key, value in legacy.items():
+        if key not in requested_settings and value is not None:
+            requested_settings[key] = value
+
+    template = model.load_template()
+    normalized_settings = model.normalize_settings(template, _new_session_seed, requested_settings)
+    resolved_prompt = inference_runtime.resolve_wildcard_prompt(prompt, normalized_settings["seed"])
+    request = {
+        "modelId": model.PROFILE_ID,
+        "mediaKind": model.MEDIA_KIND,
+        "name": session_name,
+        "sourcePrompt": prompt,
+        "prompt": resolved_prompt,
+        "settings": dict(normalized_settings),
+        "workflow": copy.deepcopy(template),
+    }
+    request.update(_workflow_evidence(model, template))
+    return request, loras, include_base is not False
+
+
+def _session_job_records(status):
+    job_ids = status.get("inferenceJobs") if isinstance(status.get("inferenceJobs"), list) else []
+    return [execution_get_job(str(job_id)) for job_id in job_ids if str(job_id or "").strip()]
+
+
+def _job_candidate_identity(job):
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    kind = str(metadata.get("candidateKind") or "")
+    candidate_file = str(metadata.get("candidateFile") or "")
+    label = "Base" if kind == "base" else (candidate_file or str(metadata.get("label") or ""))
+    return kind, candidate_file, label
+
+
+def _session_has_nonterminal_jobs(session_directory):
+    status = _read_status(session_directory) or {}
+    if not status.get("inferenceJobs"):
+        return False
+    return any(
+        str(job.get("status") or "") in {"queued", "starting", "running", "stopping"}
+        for job in _session_job_records(status)
+    )
+
+
+def _sync_inference_session(session_directory):
+    status = _read_status(session_directory) or {}
+    if not isinstance(status.get("inferenceJobs"), list):
+        return _session_status(session_directory)
+
+    jobs = _session_job_records(status)
+    results = status.get("results") if isinstance(status.get("results"), list) else []
+    failures = status.get("failures") if isinstance(status.get("failures"), list) else []
+    result_job_ids = {
+        str(item.get("jobId") or "") for item in results if isinstance(item, dict)
+    }
+    failure_job_ids = {
+        str(item.get("jobId") or "") for item in failures if isinstance(item, dict)
+    }
+    skipped_job_ids = set(str(value) for value in (status.get("skippedJobIds") or []))
+    cancelled_job_ids = set(str(value) for value in (status.get("cancelledJobIds") or []))
+    changed = False
+
+    stopping_session = str(status.get("status") or "") in {"stopping", "stopped"}
+    for job in jobs:
+        job_id = str(job.get("id") or "")
+        job_status = str(job.get("status") or "")
+        if (
+            job_status in {"failed", "interrupted"}
+            and job_id not in result_job_ids
+            and job_id not in failure_job_ids
+        ):
+            _kind, candidate_file, label = _job_candidate_identity(job)
+            failures.append({
+                "jobId": job_id,
+                "sourceLoRA": label or candidate_file or "Generation",
+                "candidateFile": candidate_file,
+                "error": str(job.get("error") or "Test generation failed."),
+                "elapsedMs": 0,
+            })
+            failure_job_ids.add(job_id)
+            changed = True
+        if (
+            job_status in {"cancelled", "stopped"}
+            and not stopping_session
+            and job_id not in cancelled_job_ids
+        ):
+            cancelled_job_ids.add(job_id)
+            status["total"] = max(0, int(status.get("total") or 0) - 1)
+            changed = True
+
+    if changed:
+        status["failures"] = failures
+        status["failed"] = len(failures)
+        status["cancelledJobIds"] = sorted(cancelled_job_ids)
+        status["skippedJobIds"] = sorted(skipped_job_ids)
+        _atomic_write_json(_status_path(session_directory), status)
+
+    active = next(
+        (
+            job for job in jobs
+            if str(job.get("status") or "") in {"starting", "running", "stopping"}
+        ),
+        None,
+    )
+    queued = [job for job in jobs if str(job.get("status") or "") == "queued"]
+    completed = len(status.get("results") if isinstance(status.get("results"), list) else [])
+    failed = len(status.get("failures") if isinstance(status.get("failures"), list) else [])
+    visible = dict(status)
+    visible["completed"] = completed
+    visible["failed"] = failed
+    visible["queued"] = len(queued)
+    visible["running"] = 1 if active is not None else 0
+    visible["session"] = Path(session_directory).name
+    visible["resultFolder"] = visible.get("resultFolder") or _relative_to_fs_root(session_directory)
+
+    if active is not None:
+        metadata = active.get("metadata") if isinstance(active.get("metadata"), dict) else {}
+        details = active.get("details") if isinstance(active.get("details"), dict) else {}
+        visible["status"] = "stopping" if stopping_session or str(active.get("status") or "") == "stopping" else "running"
+        visible["current"] = str(metadata.get("label") or metadata.get("candidateFile") or "Generation")
+        started_at = float(active.get("startedAt") or 0)
+        visible["candidateStartedAt"] = int(started_at * 1000) if started_at else None
+        visible["comfyJobId"] = str(details.get("providerJobId") or "")
+        visible["comfyStatus"] = str(details.get("providerStatus") or "")
+        return visible
+
+    visible["current"] = ""
+    visible["comfyJobId"] = ""
+    visible["comfyStatus"] = ""
+    visible["candidateStartedAt"] = None
+
+    if stopping_session:
+        terminal_status = "stopped"
+    elif queued:
+        terminal_status = "running" if (completed or failed) else "queued"
+    else:
+        terminal_status = "complete"
+
+    visible["status"] = terminal_status
+    if terminal_status in {"complete", "stopped"} and str(status.get("status") or "") != terminal_status:
+        status["status"] = terminal_status
+        status["current"] = ""
+        status["completed"] = completed
+        status["failed"] = failed
+        status["comfyJobId"] = ""
+        status["comfyStatus"] = ""
+        _atomic_write_json(_status_path(session_directory), status)
+    return visible
+
+
+def _record_skipped_inference(session_directory, job_id):
+    with _status_lock:
+        status = _read_status(session_directory) or {}
+        skipped = set(str(value) for value in (status.get("skippedJobIds") or []))
+        if job_id not in skipped:
+            skipped.add(job_id)
+            status["skippedJobIds"] = sorted(skipped)
+            status["total"] = max(0, int(status.get("total") or 0) - 1)
+            _atomic_write_json(_status_path(session_directory), status)
+
+
+def _record_failed_inference(session_directory, job_id, candidate_label, candidate_file, exc, elapsed_ms):
+    with _status_lock:
+        status = _read_status(session_directory) or {}
+        failures = status.get("failures") if isinstance(status.get("failures"), list) else []
+        if any(str(item.get("jobId") or "") == job_id for item in failures if isinstance(item, dict)):
+            return
+        failure = {
+            "jobId": job_id,
+            "sourceLoRA": candidate_label,
+            "error": str(exc),
+            "elapsedMs": int(elapsed_ms or 0),
+        }
+        if candidate_file:
+            failure["candidateFile"] = candidate_file
+        failures.append(failure)
+        status["failures"] = failures
+        status["failed"] = len(failures)
+        status["current"] = ""
+        status["error"] = ""
+        _atomic_write_json(_status_path(session_directory), status)
+
+
+def execute_inference(job_id, request, context):
+    from . import inference_runtime
+
+    folder = str(context.get("folder") or "").strip()
+    session_id = str(context.get("sessionId") or "").strip()
+    candidate_kind = str(context.get("candidateKind") or "").strip()
+    candidate_file = str(context.get("candidateFile") or "").strip()
+    candidate_label = str(context.get("candidateLabel") or "").strip() or (
+        "Base" if candidate_kind == "base" else candidate_file
+    )
+    if not folder or not session_id or candidate_kind not in {"base", "lora"}:
+        raise RuntimeError("Test inference is missing its Session candidate context.")
+
+    folder_path = app_config.safe_join_fs_root(folder)
+    session_directory = _session_directory(folder_path, session_id)
+    model = get_test_model(request.get("modelId"))
+    lora_file = None
+    if candidate_kind == "lora":
+        lora_file = _test_directory(folder_path, model) / candidate_file
+        if not lora_file.is_file():
+            _logger.warning("Queued Test skipped removed staged LoRA: %s", candidate_file)
+            _record_skipped_inference(session_directory, str(job_id))
+            return {"status": "skipped", "session": session_id, "candidateFile": candidate_file}
+
+    started = time.monotonic()
+    media_path = None
+    caption_path = None
+    try:
+        frozen_template = request.get("workflow")
+        if not isinstance(frozen_template, dict):
+            raise ValueError("Test inference job has no frozen workflow.")
+        evidence = _workflow_evidence(model, frozen_template)
+        if str(request.get("workflowFile") or "") != evidence["workflowFile"]:
+            raise ValueError("Test inference workflow identity does not match the selected model.")
+        if str(request.get("workflowSha256") or "") != evidence["workflowSha256"]:
+            raise ValueError("Test inference workflow fingerprint is invalid.")
+
+        inference_runtime.system_stats()
+        template = model.resolve_assets(
+            copy.deepcopy(frozen_template),
+            inference_runtime.available_names,
+            inference_runtime.resolve_name,
+        )
+        settings = model.normalize_settings(
+            template,
+            _new_session_seed,
+            dict(request.get("settings") or {}),
+        )
+        prompt = str(request.get("prompt") or "").strip()
+        if not prompt:
+            raise ValueError("Test inference job has no resolved prompt.")
+
+        comfy_lora_name = None
+        if lora_file is not None:
+            comfy_lora_name = inference_runtime.resolve_name(
+                str(lora_file),
+                model.available_lora_names(inference_runtime.available_names),
+                "staged LoRA",
+            )
+
+        output_prefix = _candidate_output_prefix(
+            session_directory,
+            int(context.get("candidateIndex") or 1),
+            {"kind": candidate_kind, "label": candidate_label},
+        )
+        workflow = model.build_workflow(
+            template,
+            prompt,
+            comfy_lora_name,
+            settings=settings,
+            filename_prefix=output_prefix,
+        )
+        provider_job_id = inference_runtime.queue_workflow(workflow)
+        execution_update_job(
+            str(job_id),
+            details={
+                "providerJobId": provider_job_id,
+                "providerStatus": "pending",
+                "session": session_id,
+                "resultFolder": _relative_to_fs_root(session_directory),
+            },
+        )
+        with _status_lock:
+            status_payload = _read_status(session_directory) or {}
+            status_payload["status"] = "running"
+            status_payload["current"] = candidate_label
+            status_payload["candidateStartedAt"] = int(time.time() * 1000)
+            status_payload["comfyJobId"] = provider_job_id
+            status_payload["comfyStatus"] = "pending"
+            _atomic_write_json(_status_path(session_directory), status_payload)
+
+        output_ref = inference_runtime.wait_for_output(
+            provider_job_id,
+            str(job_id),
+            model.find_output_ref,
+        )
+        output_extension = Path(str(output_ref.get("filename") or "")).suffix
+        if not output_extension:
+            raise RuntimeError("ComfyUI Test output has no file extension.")
+        media_path, caption_path = _result_paths(
+            session_directory,
+            lora_file,
+            stem_override="base" if candidate_kind == "base" else None,
+            extension=output_extension,
+        )
+        _move_saved_output(
+            output_ref,
+            media_path,
+            filename_prefix=output_prefix,
+            download_bytes=inference_runtime.download_output,
+        )
+        caption_path.write_text(prompt, encoding="utf-8")
+
+        result = {
+            "jobId": str(job_id),
+            "kind": candidate_kind,
+            "sourceLoRA": candidate_label,
+            "mediaFile": media_path.name,
+            "mediaKind": model.MEDIA_KIND,
+            "prompt": prompt,
+            "seed": model.workflow_seed(workflow),
+            "elapsedMs": _candidate_elapsed_ms(started),
+        }
+        if candidate_kind == "lora":
+            result["candidateFile"] = candidate_file
+            provenance = _staged_lora_provenance(lora_file)
+            if provenance:
+                result["provenance"] = provenance
+
+        with _status_lock:
+            status_payload = _read_status(session_directory) or {}
+            results = status_payload.get("results") if isinstance(status_payload.get("results"), list) else []
+            if not any(str(item.get("jobId") or "") == str(job_id) for item in results if isinstance(item, dict)):
+                results.append(result)
+            status_payload["results"] = results
+            status_payload["completed"] = len(results)
+            status_payload["current"] = ""
+            status_payload["comfyStatus"] = "completed"
+            _atomic_write_json(_status_path(session_directory), status_payload)
+        return {"status": "completed", "session": session_id, "mediaFile": media_path.name}
+    except inference_runtime.InferenceStopped:
+        raise
+    except Exception as exc:
+        for owned_path in (caption_path, media_path):
+            if owned_path and Path(owned_path).is_file():
+                Path(owned_path).unlink()
+        _record_failed_inference(
+            session_directory,
+            str(job_id),
+            candidate_label,
+            candidate_file,
+            exc,
+            _candidate_elapsed_ms(started),
+        )
+        raise
+
+
+def _enqueue_frozen_test_request(folder_path, request, loras, include_base, legacy_job_id=""):
+    from .inference_runner import enqueue_test
+
+    model = get_test_model(request.get("modelId"))
+    session_directory = _new_session_directory(folder_path, model=model)
+    folder = _relative_set_folder(folder_path)
+    candidates = []
+    if include_base:
+        candidates.append({"kind": "base", "label": "Base", "file": ""})
+    candidates.extend(
+        {"kind": "lora", "label": path.name, "file": path.name}
+        for path in loras
+    )
+    payload = {
+        "status": "queued",
+        "modelId": model.PROFILE_ID,
+        "mediaKind": model.MEDIA_KIND,
+        "session": session_directory.name,
+        "name": str(request.get("name") or ""),
+        "sourcePrompt": str(request.get("sourcePrompt") or ""),
+        "resolvedPrompt": str(request.get("prompt") or ""),
+        "prompt": str(request.get("prompt") or ""),
+        "total": len(candidates),
+        "completed": 0,
+        "failed": 0,
+        "failures": [],
+        "current": "",
+        "error": "",
+        "startedAt": int(time.time() * 1000),
+        "candidateStartedAt": None,
+        "comfyJobId": "",
+        "comfyStatus": "",
+        "comfyLastContactAt": None,
+        "settings": dict(request.get("settings") or {}),
+        "workflowFile": str(request.get("workflowFile") or ""),
+        "workflowSha256": str(request.get("workflowSha256") or ""),
+        "includeBase": bool(include_base),
+        "results": [],
+        "resultFolder": _relative_to_fs_root(session_directory),
+        "inferenceJobs": [],
+        "legacyJobId": str(legacy_job_id or ""),
+        "migrationComplete": False,
+    }
+    payload.update(payload["settings"])
+    _atomic_write_json(_status_path(session_directory), payload)
+
+    queued_ids = []
+    try:
+        for index, candidate in enumerate(candidates, start=1):
+            label_root = str(request.get("name") or "").strip() or session_directory.name
+            label = label_root + " · " + candidate["label"]
+            job = enqueue_test(
+                request,
+                {
+                    "folder": folder,
+                    "sessionId": session_directory.name,
+                    "candidateKind": candidate["kind"],
+                    "candidateFile": candidate["file"],
+                    "candidateLabel": candidate["label"],
+                    "candidateIndex": index,
+                },
+                label=label,
+            )
+            queued_ids.append(job["jobId"])
+            payload["inferenceJobs"] = list(queued_ids)
+            _atomic_write_json(_status_path(session_directory), payload)
+        payload["migrationComplete"] = True
+        _atomic_write_json(_status_path(session_directory), payload)
+    except Exception:
+        for job_id in queued_ids:
+            try:
+                execution_cancel_queued(job_id)
+            except Exception:
+                _logger.exception("Could not roll back partially queued Test rendition %s.", job_id)
+        shutil.rmtree(session_directory, ignore_errors=True)
+        raise
+    return _sync_inference_session(session_directory)
+
+
+def _find_legacy_migration_session(folder_path, legacy_job_id):
+    root = _session_root(folder_path)
+    if not root.is_dir():
+        return None
+    for session in root.iterdir():
+        if not session.is_dir():
+            continue
+        status_payload = _read_status(session) or {}
+        if str(status_payload.get("legacyJobId") or "") == str(legacy_job_id or ""):
+            return session, status_payload
+    return None
+
+
+def reconcile_startup():
+    global _startup_reconciled
+    if _startup_reconciled:
+        return
+    with _reconcile_lock:
+        if _startup_reconciled:
+            return
+
+        interrupted = execution_recover_lane(
+            LEGACY_EXECUTION_LANE,
+            reason="Legacy Test Generations execution was interrupted by a WebCap restart.",
+        )
+        for job in interrupted:
+            metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+            details = job.get("details") if isinstance(job.get("details"), dict) else {}
+            prompt_id = str(details.get("comfyJobId") or details.get("providerJobId") or "").strip()
+            if prompt_id:
+                try:
+                    from . import inference_runtime
+                    inference_runtime.cancel_job(prompt_id)
+                except Exception:
+                    _logger.exception("Could not cancel interrupted legacy Test provider job %s.", prompt_id)
+            folder = str(metadata.get("folder") or "").strip()
+            session_name = str(details.get("session") or "").strip()
+            if folder and session_name:
+                try:
+                    session_directory = _session_directory(app_config.safe_join_fs_root(folder), session_name)
+                    with _status_lock:
+                        legacy_status = _read_status(session_directory) or {}
+                        legacy_status["status"] = "failed"
+                        legacy_status["current"] = ""
+                        legacy_status["error"] = "Test Generations execution was interrupted by a WebCap restart."
+                        _atomic_write_json(_status_path(session_directory), legacy_status)
+                except (FileNotFoundError, ValueError):
+                    pass
+
+        legacy = execution_lane_snapshot(LEGACY_EXECUTION_LANE, include_terminal=False)
+        for job in legacy.get("jobs", []):
+            if str(job.get("status") or "") != "queued":
+                continue
+            legacy_job_id = str(job.get("id") or "")
+            stored = execution_get_job(legacy_job_id, include_payload=True)
+            metadata = stored.get("metadata") if isinstance(stored.get("metadata"), dict) else {}
+            request = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
+            folder = str(metadata.get("folder") or "").strip()
+            if not folder or not request:
+                _logger.error("Legacy Test queue job %s is missing its frozen request.", legacy_job_id)
+                continue
+            try:
+                folder_path = app_config.safe_join_fs_root(folder)
+                existing = _find_legacy_migration_session(folder_path, legacy_job_id)
+                if existing:
+                    session_directory, existing_status = existing
+                    if not existing_status.get("migrationComplete"):
+                        for child_id in existing_status.get("inferenceJobs") or []:
+                            try:
+                                execution_cancel_queued(str(child_id))
+                            except Exception:
+                                pass
+                        shutil.rmtree(session_directory, ignore_errors=True)
+                    else:
+                        execution_cancel_queued(legacy_job_id)
+                        continue
+
+                model = get_test_model(request.get("modelId") or request.get("model"))
+                selected = _selected_lora_files(
+                    _test_directory(folder_path, model),
+                    selected_files=request.get("selectedFiles"),
+                )
+                _enqueue_frozen_test_request(
+                    folder_path,
+                    {
+                        "modelId": model.PROFILE_ID,
+                        "mediaKind": model.MEDIA_KIND,
+                        "name": str(request.get("name") or ""),
+                        "sourcePrompt": str(request.get("sourcePrompt") or ""),
+                        "prompt": str(request.get("resolvedPrompt") or ""),
+                        "settings": dict(request.get("settings") or {}),
+                        "workflow": copy.deepcopy(request.get("workflow") or {}),
+                        "workflowFile": str(request.get("workflowFile") or ""),
+                        "workflowSha256": str(request.get("workflowSha256") or ""),
+                    },
+                    [path for path in selected if path.is_file()],
+                    request.get("includeBase") is not False,
+                    legacy_job_id=legacy_job_id,
+                )
+                execution_cancel_queued(legacy_job_id)
+            except Exception:
+                _logger.exception(
+                    "Could not migrate legacy Test queue job %s; leaving it intact for manual recovery.",
+                    legacy_job_id,
+                )
+        _startup_reconciled = True
+
+
+def start_observer():
+    reconcile_startup()
+
+
+def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
+            include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None):
+    reconcile_startup()
+    request, loras, include_base = _new_inference_request(
+        folder_path,
+        prompt,
+        settings=settings,
+        seed=seed,
+        name=name,
+        selected_files=selected_files,
+        include_base=include_base,
+        model_id=model_id,
+        aspect_ratio=aspect_ratio,
+        megapixels=megapixels,
+        duration=duration,
+    )
+    latest = _enqueue_frozen_test_request(folder_path, request, loras, include_base)
+    return {
+        "operation": "test_enqueue",
+        "job": {
+            "id": latest["session"],
+            "folder": _relative_set_folder(folder_path),
+            "runName": str(latest.get("name") or ""),
+            "modelId": str(latest.get("modelId") or ""),
+            "status": str(latest.get("status") or ""),
+            "testTotal": int(latest.get("total") or 0),
+            "createdAt": float(latest.get("startedAt") or 0) / 1000,
+            "queuePosition": min(
+                [
+                    int(job.get("queuePosition") or 0)
+                    for job in _session_job_records(_read_status(_session_directory(folder_path, latest["session"])) or {})
+                    if str(job.get("status") or "") == "queued"
+                ] or [0]
+            ),
+        },
+        "queued": latest.get("status") == "queued",
+        "latest": latest,
+    }
+
+
+def queued_jobs(folder_path):
+    reconcile_startup()
+    root = _session_root(folder_path)
+    if not root.is_dir():
+        return {"operation": "test_queue", "jobs": []}
+    jobs = []
+    for session_directory in sorted(
+        [path for path in root.iterdir() if path.is_dir() and (path / "test.json").is_file()],
+        key=lambda path: path.name.lower(),
+    ):
+        visible = _sync_inference_session(session_directory)
+        if not visible or visible.get("status") != "queued":
+            continue
+        child_jobs = _session_job_records(_read_status(session_directory) or {})
+        positions = [
+            int(job.get("queuePosition") or 0)
+            for job in child_jobs
+            if str(job.get("status") or "") == "queued" and int(job.get("queuePosition") or 0) > 0
+        ]
+        jobs.append({
+            "id": session_directory.name,
+            "folder": _relative_set_folder(folder_path),
+            "runName": str(visible.get("name") or ""),
+            "modelId": str(visible.get("modelId") or ""),
+            "status": "queued",
+            "testTotal": int(visible.get("total") or 0),
+            "createdAt": float(visible.get("startedAt") or 0) / 1000,
+            "queuePosition": min(positions) if positions else 0,
+        })
+    jobs.sort(key=lambda item: (int(item.get("queuePosition") or 0) or 10 ** 9, item["createdAt"]))
+    return {"operation": "test_queue", "jobs": jobs}
+
+
+def cancel_queued(folder_path, job_id):
+    reconcile_startup()
+    session_directory = _session_directory(folder_path, str(job_id or "").strip())
+    visible = _sync_inference_session(session_directory)
+    if visible.get("status") != "queued":
+        raise RuntimeError("Only a fully queued Test session can be cancelled here.")
+    status_payload = _read_status(session_directory) or {}
+    for child in _session_job_records(status_payload):
+        if str(child.get("status") or "") == "queued":
+            execution_cancel_queued(str(child.get("id") or ""))
+    shutil.rmtree(session_directory)
+    return {"operation": "test_queue_cancel", "removed": str(job_id), "jobs": queued_jobs(folder_path)["jobs"]}
+
+
+def clear_queued(folder_path):
+    removed = 0
+    for job in list(queued_jobs(folder_path)["jobs"]):
+        cancel_queued(folder_path, job["id"])
+        removed += 1
+    return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path)["jobs"]}
+
+
+def _visible_session_status(folder_path, session_directory):
+    status_payload = _read_status(session_directory) or {}
+    if isinstance(status_payload.get("inferenceJobs"), list):
+        return _sync_inference_session(session_directory)
+    return _legacy_visible_session_status(folder_path, session_directory)
+
+
+def list_sessions(folder_path):
+    root = _session_root(folder_path)
+    if not root.is_dir():
+        return []
+    sessions = []
+    for session in sorted(
+        [path for path in root.iterdir() if path.is_dir() and (path / "test.json").is_file()],
+        key=lambda path: path.name.lower(),
+        reverse=True,
+    ):
+        payload = _visible_session_status(folder_path, session)
+        if not payload or payload.get("status") == "queued":
+            continue
+        results = payload.get("results") if isinstance(payload.get("results"), list) else []
+        ratings = _session_rating_map(session)
+        unrated = sum(
+            1 for result in results
+            if isinstance(result, dict) and _result_media_file(result)
+            and _result_media_file(result) not in ratings
+        )
+        sessions.append({
+            "session": session.name,
+            "name": str(payload.get("name") or ""),
+            "modelId": str(payload.get("modelId") or payload.get("model") or ""),
+            "status": str(payload.get("status") or ""),
+            "startedAt": int(payload.get("startedAt") or 0),
+            "candidateStartedAt": int(payload.get("candidateStartedAt") or 0),
+            "completed": int(payload.get("completed") or 0),
+            "failed": int(payload.get("failed") or 0),
+            "total": int(payload.get("total") or 0),
+            "queued": int(payload.get("queued") or 0),
+            "running": int(payload.get("running") or 0),
+            "unrated": unrated,
+            "resultFolder": str(payload.get("resultFolder") or ""),
+        })
+    return sessions
+
+
+def _latest_status(folder_path, model_id=None):
+    root = _session_root(folder_path)
+    if not root.is_dir():
+        return {"status": "idle"}
+    selected_model = str(model_id or "").strip()
+    sessions = sorted(
+        [path for path in root.iterdir() if path.is_dir() and (path / "test.json").is_file()],
+        key=lambda path: path.name.lower(),
+        reverse=True,
+    )
+    payloads = []
+    for session in sessions:
+        payload = _visible_session_status(folder_path, session)
+        if not payload:
+            continue
+        if selected_model and str(payload.get("modelId") or payload.get("model") or "") != selected_model:
+            continue
+        payloads.append(payload)
+    for payload in payloads:
+        if payload.get("status") in {"running", "stopping"}:
+            return payload
+    return payloads[0] if payloads else {"status": "idle"}
+
+
+def _visible_status(folder_path, model_id=None):
+    return _latest_status(folder_path, model_id=model_id)
+
+
+def status(folder_path, model_id=None):
+    payload = _visible_status(folder_path, model_id=model_id)
+    session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
+    if not session_name:
+        return payload
+    return _with_session_ratings(_session_directory(folder_path, session_name), payload)
+
+
+def stop(folder_path, session_name=None):
+    reconcile_startup()
+    session_id = str(session_name or "").strip()
+    if session_id:
+        session_directory = _session_directory(folder_path, session_id)
+        payload = _visible_session_status(folder_path, session_directory)
+    else:
+        payload = _latest_status(folder_path)
+        session_id = str(payload.get("session") or "").strip()
+        session_directory = _session_directory(folder_path, session_id) if session_id else None
+    if not session_id or session_directory is None or payload.get("status") not in {"running", "stopping"}:
+        raise RuntimeError("No active Test Generations session to stop.")
+    status_payload = _read_status(session_directory) or {}
+    if not isinstance(status_payload.get("inferenceJobs"), list):
+        return _legacy_stop(folder_path)
+    status_payload["status"] = "stopping"
+    _atomic_write_json(_status_path(session_directory), status_payload)
+
+    for job in _session_job_records(status_payload):
+        job_status = str(job.get("status") or "")
+        job_id = str(job.get("id") or "")
+        if job_status == "queued":
+            execution_cancel_queued(job_id)
+        elif job_status in {"starting", "running"}:
+            execution_request_stop(job_id)
+    return _sync_inference_session(session_directory)
+
+
+def delete_session(folder_path, session_name):
+    session = _session_directory(folder_path, session_name)
+    session_payload = _read_status(session) or {}
+    if not isinstance(session_payload.get("inferenceJobs"), list):
+        return _legacy_delete_session(folder_path, session_name)
+    if _session_has_nonterminal_jobs(session):
+        raise RuntimeError("Cannot delete an active Test Generations session. Stop it first.")
+    session_status = _read_status(session) or {}
+    model_id = str(session_status.get("modelId") or session_status.get("model") or get_test_model().PROFILE_ID)
+    shutil.rmtree(session)
+    return {
+        "operation": "test_delete_session",
+        "deleted": session.name,
+        "modelId": model_id,
+        "sessions": list_sessions(folder_path),
+        "latest": _latest_status(folder_path, model_id=model_id),
+    }
+
+
+def _remove_candidate_from_session(folder_path, session_name, candidate_name):
+    session = _session_directory(folder_path, session_name)
+    session_payload = _read_status(session) or {}
+    if not isinstance(session_payload.get("inferenceJobs"), list):
+        return _legacy_remove_candidate_from_session(folder_path, session_name, candidate_name)
+    if _session_has_nonterminal_jobs(session):
+        raise RuntimeError("Cannot remove results from an active Test Generations session. Stop it first.")
+
+    status_payload = _read_status(session) or {}
+    results = status_payload.get("results") if isinstance(status_payload.get("results"), list) else []
+    failures = status_payload.get("failures") if isinstance(status_payload.get("failures"), list) else []
+    removed_results = [
+        result for result in results
+        if isinstance(result, dict)
+        and str(result.get("candidateFile") or result.get("sourceLoRA") or "") == candidate_name
+    ]
+    removed_failures = [
+        failure for failure in failures
+        if isinstance(failure, dict)
+        and str(failure.get("candidateFile") or failure.get("sourceLoRA") or "") == candidate_name
+    ]
+    for result in removed_results:
+        output_name = _result_media_file(result)
+        if output_name:
+            for path in (
+                _session_result_path(session, output_name),
+                _session_result_path(session, Path(output_name).with_suffix(".txt").name),
+            ):
+                if path.is_file():
+                    path.unlink()
+    if removed_results or removed_failures:
+        status_payload["results"] = [item for item in results if item not in removed_results]
+        status_payload["failures"] = [item for item in failures if item not in removed_failures]
+        status_payload["completed"] = max(0, int(status_payload.get("completed") or 0) - len(removed_results))
+        status_payload["failed"] = max(0, int(status_payload.get("failed") or 0) - len(removed_failures))
+        status_payload["total"] = max(
+            0,
+            int(status_payload.get("total") or 0) - len(removed_results) - len(removed_failures),
+        )
+        _atomic_write_json(_status_path(session), status_payload)
+    return _visible_session_status(folder_path, session)
+
+
+def activity_snapshot(folder_path=None):
+    legacy = _legacy_activity_snapshot(folder_path)
+    active = list(legacy.get("active") or [])
+    snapshot = execution_lane_snapshot(SHARED_EXECUTION_LANE, include_terminal=False)
+    seen = set()
+    for job in snapshot.get("jobs", []):
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if metadata.get("client") != "test" or str(job.get("status") or "") not in {"starting", "running", "stopping"}:
+            continue
+        key = (str(metadata.get("folder") or ""), str(metadata.get("sessionId") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            set_folder = app_config.safe_join_fs_root(key[0])
+            session_directory = _session_directory(set_folder, key[1])
+            visible = _sync_inference_session(session_directory)
+        except Exception:
+            continue
+        active.append({
+            "folder": key[0],
+            "session": key[1],
+            "status": str(visible.get("status") or "running"),
+            "completed": int(visible.get("completed") or 0),
+            "total": int(visible.get("total") or 0),
+        })
+    current = test_presence(folder_path) if folder_path is not None else None
+    return {"active": active, "current": current, "recent": recent_test_sets()}
+

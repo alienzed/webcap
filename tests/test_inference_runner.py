@@ -166,3 +166,71 @@ def test_inference_snapshot_projects_storyboard_context(inference_root):
     assert job["sceneId"] == "scene-1"
     assert job["label"] == "Scene 1"
 
+def test_inference_runner_executes_claimed_test_rendition(inference_root, monkeypatch):
+    queued = inference_runner.enqueue_test(
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "prompt": "Prompt",
+            "settings": {"seed": 7},
+        },
+        {
+            "folder": "sets/subject",
+            "sessionId": "session-1",
+            "candidateKind": "lora",
+            "candidateFile": "epoch20.safetensors",
+            "candidateLabel": "epoch20.safetensors",
+            "candidateIndex": 2,
+        },
+        label="Clothing · epoch20.safetensors",
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+
+    captured = {}
+    monkeypatch.setattr(
+        epoch_test_bench,
+        "execute_inference",
+        lambda job_id, request, context: captured.update({
+            "jobId": job_id,
+            "request": request,
+            "context": context,
+        }) or {"status": "completed", "session": "session-1", "mediaFile": "epoch20.mp4"},
+    )
+
+    inference_runner._execute_claimed(queued["jobId"])
+
+    finished = execution_queue.get_job(queued["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["result"]["session"] == "session-1"
+    assert captured["context"]["candidateFile"] == "epoch20.safetensors"
+    assert captured["request"]["prompt"] == "Prompt"
+
+
+def test_inference_snapshot_projects_test_rendition_context(inference_root):
+    queued = inference_runner.enqueue_test(
+        {
+            "modelId": "krea2_raw",
+            "mediaKind": "image",
+            "prompt": "Prompt",
+        },
+        {
+            "folder": "sets/subject",
+            "sessionId": "session-1",
+            "candidateKind": "base",
+            "candidateFile": "",
+            "candidateLabel": "Base",
+            "candidateIndex": 1,
+        },
+        label="Comparison · Base",
+    )
+
+    job = next(
+        item for item in inference_runner.snapshot()["jobs"]
+        if item["jobId"] == queued["jobId"]
+    )
+    assert job["client"] == "test"
+    assert job["sessionId"] == "session-1"
+    assert job["folder"] == "sets/subject"
+    assert job["candidateKind"] == "base"
+    assert job["label"] == "Comparison · Base"
+

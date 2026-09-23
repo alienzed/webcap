@@ -821,3 +821,14 @@ def test_test_generations_sidebar_is_collapsible_like_media_rail():
     assert ".test-generations-body.test-generations-rail-collapsed {" in css
     assert ".test-generations-body.test-generations-rail-collapsed .test-generations-rail {" in css
     assert ".test-generations-rail-toggle-btn {" in css
+
+def test_test_sessions_project_shared_child_progress_and_targeted_stop():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "var queued = Number(session && session.queued || 0);" in script
+    assert "var running = Number(session && session.running || 0);" in script
+    assert "' complete'" in script
+    assert "' · ' + running + ' running'" in script
+    assert "' · ' + queued + ' queued'" in script
+    assert "request('test_stop', { session: String(stopBtn && stopBtn.dataset.sessionStop || '') })" in script
+

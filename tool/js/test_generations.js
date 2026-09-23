@@ -480,7 +480,11 @@
     var completed = Number(session && session.completed || 0);
     var total = Number(session && session.total || 0);
     var failed = Number(session && session.failed || 0);
-    var text = String(session && session.status || '') + ' · ' + completed + ' / ' + total +
+    var queued = Number(session && session.queued || 0);
+    var running = Number(session && session.running || 0);
+    var text = String(session && session.status || '') + ' · ' + completed + ' / ' + total + ' complete' +
+      (running ? ' · ' + running + ' running' : '') +
+      (queued ? ' · ' + queued + ' queued' : '') +
       (failed ? ' · ' + failed + ' failed' : '');
     var startedAt = Number(session && (session.candidateStartedAt || session.startedAt) || 0);
     if (startedAt && session && (session.status === 'running' || session.status === 'stopping')) {
@@ -2148,7 +2152,7 @@
 
   function stopRun(stopBtn) {
     if (stopBtn) stopBtn.disabled = true;
-    request('test_stop').then(function (status) {
+    request('test_stop', { session: String(stopBtn && stopBtn.dataset.sessionStop || '') }).then(function (status) {
       syncActiveRunControls(status);
       refreshActivityButton();
       if (!currentSession || currentSession === String(status && status.session || '')) renderStatus(status);

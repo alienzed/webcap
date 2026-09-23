@@ -52,7 +52,7 @@ def test_execution_queue_pause_resume_claim_and_reorder(queue_root):
     assert next_job["id"] == third["id"]
 
 
-def test_execution_queue_cancel_stop_request_and_requeue(queue_root):
+def test_execution_queue_cancel_and_stop_transitions(queue_root):
     first = execution_queue.enqueue("takes", {"n": 1})
     second = execution_queue.enqueue("takes", {"n": 2})
 
@@ -67,6 +67,43 @@ def test_execution_queue_cancel_stop_request_and_requeue(queue_root):
 
     stopped = execution_queue.finish_job(first["id"], status="stopped")
     assert stopped["status"] == "stopped"
+
+
+def test_execution_queue_stop_request_survives_late_running_transition(queue_root):
+    job = execution_queue.enqueue("takes", {"n": 1})
+    execution_queue.claim_next("takes")
+    execution_queue.request_stop(job["id"])
+
+    running = execution_queue.mark_running(job["id"], details={"phase": "late-start"})
+
+    assert running["status"] == "stopping"
+    assert running["requestedAction"] == "stop"
+    stopped = execution_queue.finish_job(job["id"], status="stopped")
+    assert stopped["status"] == "stopped"
+
+
+def test_execution_queue_terminal_jobs_reject_runtime_updates(queue_root):
+    job = execution_queue.enqueue("takes", {"n": 1})
+    execution_queue.claim_next("takes")
+    execution_queue.finish_job(job["id"], status="completed")
+
+    with pytest.raises(ValueError, match="already finished"):
+        execution_queue.update_job(job["id"], {"phase": "too-late"})
+
+
+def test_execution_queue_startup_reconciliation_precedes_monitors():
+    app_source = (Path(__file__).parents[1] / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    startup = app_source.split('if __name__ == "__main__":', 1)[1]
+
+    test_reconcile = startup.index("reconcile_test_generations_startup()")
+    storyboard_reconcile = startup.index("reconcile_storyboard_generation_startup()")
+    training_observer = startup.index("start_training_runner_observer()")
+    test_observer = startup.index("start_test_generations_observer()")
+    storyboard_observer = startup.index("start_storyboard_generation_observer()")
+
+    assert test_reconcile < training_observer
+    assert storyboard_reconcile < training_observer
+    assert training_observer < test_observer < storyboard_observer
 
 
 def test_execution_queue_resource_claim_is_exclusive(queue_root):

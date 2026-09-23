@@ -881,7 +881,10 @@ def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeyp
     assert payload["files"] == [other.name]
 
 
-def test_stop_marks_active_session_stopping_and_cancels_its_comfy_job(tmp_path, monkeypatch):
+def test_stop_marks_active_session_and_execution_job_stopping(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    bench._startup_reconciled = True
+
     class ActiveThread:
         def is_alive(self):
             return True
@@ -894,6 +897,14 @@ def test_stop_marks_active_session_stopping_and_cancels_its_comfy_job(tmp_path, 
         "current": "epoch10.safetensors",
         "comfyJobId": prompt_id,
     })
+    queued = execution_queue.enqueue(
+        bench.EXECUTION_LANE,
+        {},
+        metadata={"folder": "", "runName": "Active", "modelId": "h3", "testTotal": 1},
+    )
+    execution_queue.claim_next(bench.EXECUTION_LANE)
+    execution_queue.mark_running(queued["id"])
+
     folder_key = str(tmp_path.resolve())
     monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
     monkeypatch.setattr(bench, "_active_sessions", {folder_key: session})
@@ -906,6 +917,9 @@ def test_stop_marks_active_session_stopping_and_cancels_its_comfy_job(tmp_path, 
     assert status["status"] == "stopping"
     assert folder_key in bench._stop_requests
     assert cancelled == [prompt_id]
+    execution_job = execution_queue.get_job(queued["id"])
+    assert execution_job["status"] == "stopping"
+    assert execution_job["requestedAction"] == "stop"
 
 
 def test_stopped_batch_preserves_session_after_worker_exit(tmp_path, monkeypatch):

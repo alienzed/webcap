@@ -3,7 +3,9 @@ import os
 import re
 import shutil
 import tempfile
+import threading
 import time
+import uuid
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
@@ -24,6 +26,14 @@ PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "run
 ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
 ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
 GENERATE_REFERENCE_TOKEN_RE = re.compile(r"^[0-9]+-[0-9a-f]{12}$")
+_CACHE_LOCK = threading.RLock()
+_SCAN_LOCK = threading.Lock()
+_SCAN_STATE = None
+_SCAN_CANCEL = None
+
+
+class _ScanCancelled(RuntimeError):
+    pass
 
 
 def _cache_path():
@@ -78,7 +88,17 @@ def _cached_measurement(cache, area, item_id, folder=""):
         return None
     if size < 0 or measured_at <= 0:
         return None
-    return {"bytes": size, "measuredAt": measured_at}
+    result = {"bytes": size, "measuredAt": measured_at}
+    try:
+        file_count = int(row.get("fileCount"))
+    except (TypeError, ValueError):
+        file_count = None
+    if file_count is not None and file_count >= 0:
+        result["fileCount"] = file_count
+    source = str(row.get("source") or "").strip()
+    if source:
+        result["source"] = source
+    return result
 
 
 def _item(area, item_id, label, path, *, folder="", kind="", status="", purgeable=False, protected_reason="", meta=None, cache=None):
@@ -95,6 +115,8 @@ def _item(area, item_id, label, path, *, folder="", kind="", status="", purgeabl
         "measured": measurement is not None,
         "bytes": measurement["bytes"] if measurement else None,
         "measuredAt": measurement["measuredAt"] if measurement else None,
+        "fileCount": measurement.get("fileCount") if measurement else None,
+        "measurementSource": measurement.get("source") if measurement else "",
         "openable": Path(path).exists(),
     }
     if isinstance(meta, dict):
@@ -223,16 +245,35 @@ def _read_test_session_manifest(session_path):
     return payload
 
 
-def _test_items(cache, folder):
-    folder = str(folder or "").strip()
-    if not folder:
-        return []
+
+def _discovered_set_folders(cache, current_folder=""):
+    folders = []
+    seen = set()
+
+    def add(value):
+        normalized = _normalized_folder_key(value)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            folders.append(normalized)
+
+    add(current_folder)
+    discoveries = cache.get("discoveries") if isinstance(cache, dict) else {}
+    if isinstance(discoveries, dict):
+        for value in discoveries.get("sets") or []:
+            add(value)
+        for row in discoveries.get("tests") or []:
+            if isinstance(row, dict):
+                add(row.get("folder"))
+    return folders
+
+
+def _test_items_for_folder(cache, folder, qualify_label=False):
     set_path = app_config.safe_join_fs_root(folder)
     if not set_path.is_dir():
         return []
     rows = []
     root = set_path / "test-generations"
-    if not root.is_dir():
+    if root.is_symlink() or not root.is_dir():
         return rows
     for path in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower(), reverse=True):
         if not path.is_dir() or path.is_symlink():
@@ -244,10 +285,13 @@ def _test_items(cache, folder):
         session_id = path.name
         status = str(session.get("status") or "")
         active = status in ACTIVE_TEST_STATUSES
+        label = str(session.get("name") or session_id)
+        if qualify_label:
+            label += " · " + folder
         rows.append(_item(
             "tests",
             session_id,
-            session.get("name") or session_id,
+            label,
             path,
             folder=folder,
             kind=session.get("modelId") or session.get("model") or "Test Session",
@@ -255,6 +299,7 @@ def _test_items(cache, folder):
             purgeable=not active,
             protected_reason=("Active Test Session; stop it before deletion." if active else ""),
             meta={
+                "set": folder,
                 "completed": int(session.get("completed") or 0),
                 "failed": int(session.get("failed") or 0),
                 "total": int(session.get("total") or 0),
@@ -264,6 +309,17 @@ def _test_items(cache, folder):
         ))
     return rows
 
+
+def _test_items(cache, folder):
+    folders = _discovered_set_folders(cache, folder)
+    qualify = len(folders) > 1
+    rows = []
+    for set_folder in folders:
+        try:
+            rows.extend(_test_items_for_folder(cache, set_folder, qualify_label=qualify))
+        except (FileNotFoundError, RuntimeError, ValueError):
+            continue
+    return rows
 
 def _normalized_folder_key(value):
     return str(value or "").strip().replace("\\", "/").strip("/")
@@ -361,38 +417,41 @@ def _staged_items(cache, folder):
     return rows
 
 
+
 def _set_items(cache, folder):
-    folder = str(folder or "").strip()
-    if not folder:
-        return []
-    set_path = app_config.safe_join_fs_root(folder)
-    if not set_path.is_dir():
-        return []
+    folders = _discovered_set_folders(cache, folder)
     rows = []
+    qualify = len(folders) > 1
     known = (
         ("originals", "Originals", "Reversible source-media safety copies"),
         ("auto_dataset", "Prepared dataset", "Rebuildable Set preparation"),
         ("media_metadata.json", "Media metadata", "WebCap analysis cache"),
         (".webcap_state.json", "Set state", "WebCap authored Set state"),
     )
-    for item_id, label, kind in known:
-        path = set_path / item_id
-        if not path.exists() or path.is_symlink():
+    for set_folder in folders:
+        try:
+            set_path = app_config.safe_join_fs_root(set_folder)
+        except ValueError:
             continue
-        rows.append(_item(
-            "set",
-            item_id,
-            label,
-            path,
-            folder=folder,
-            kind=kind,
-            status="protected",
-            purgeable=False,
-            protected_reason="Set-owned data is never deleted from Storage Manager.",
-            cache=cache,
-        ))
+        if not set_path.is_dir():
+            continue
+        for item_id, label, kind in known:
+            path = set_path / item_id
+            if not path.exists() or path.is_symlink():
+                continue
+            rows.append(_item(
+                "set",
+                item_id,
+                ((set_path.name + " / " + label) if qualify else label),
+                path,
+                folder=set_folder,
+                kind=kind,
+                status="protected",
+                purgeable=False,
+                protected_reason="Set-owned data is never deleted from Storage Manager.",
+                cache=cache,
+            ))
     return rows
-
 
 def _read_h3_probe_state(probe_path):
     probe = Path(probe_path)
@@ -658,6 +717,12 @@ def _comfy_identity_active(family, names):
     return True
 
 
+
+def _scan_cache_complete(cache):
+    last_scan = cache.get("lastScan") if isinstance(cache, dict) else {}
+    return bool(isinstance(last_scan, dict) and float(last_scan.get("completedAt") or 0) > 0)
+
+
 def _category(area, label, items, complete=True, note=""):
     measured = [item for item in items if item.get("measured")]
     return {
@@ -674,6 +739,7 @@ def _category(area, label, items, complete=True, note=""):
 def overview(folder=""):
     usage = shutil.disk_usage(app_config.FS_ROOT)
     cache = _read_cache()
+    scan_complete = _scan_cache_complete(cache)
     groups = {
         "training": _training_items(cache),
         "tests": _test_items(cache, folder),
@@ -687,8 +753,12 @@ def overview(folder=""):
     categories = [
         _category("training", "Training", groups["training"]),
         _category(
-            "tests", "Tests", groups["tests"], complete=False,
-            note=("Showing the current Set only; WebCap does not perform a global Test Session crawl.")
+            "tests", "Tests", groups["tests"], complete=scan_complete,
+            note=(
+                "Workspace Test inventory from the last completed scan."
+                if scan_complete else
+                "Current/discovered Tests only; Start scan for a workspace-wide Test inventory."
+            )
         ),
         _category(
             "staged", "Staged Test LoRAs", groups["staged"], complete=False,
@@ -696,7 +766,11 @@ def overview(folder=""):
         ),
         _category("generate", "Generations", groups["generate"]),
         _category("storyboard", "Storyboard", groups["storyboard"]),
-        _category("set", "Current Set (protected)", groups["set"], note="Visible for accounting only; Set-owned data is not purgeable here."),
+        _category(
+            "set", ("Set Data (protected)" if scan_complete else "Current Set (protected)"),
+            groups["set"], complete=scan_complete,
+            note="Visible for accounting only; Set-owned data is not purgeable here."
+        ),
         _category("runtime", "Runtime / Temporary", groups["runtime"]),
         _category(
             "comfy", "ComfyUI Scratch", groups["comfy"],
@@ -713,33 +787,58 @@ def overview(folder=""):
             "free": int(usage.free),
         },
         "folder": str(folder or ""),
+        "lastScan": cache.get("lastScan") if isinstance(cache.get("lastScan"), dict) else None,
         "categories": categories,
         "items": groups,
     }
 
 
-def _safe_recursive_size(path):
+def _safe_recursive_stats(path, cancel_check=None, progress=None):
     root = Path(path)
     if not root.exists():
         raise FileNotFoundError("Storage item no longer exists.")
     if root.is_symlink():
         raise RuntimeError("Storage Manager will not measure symlinked roots.")
+    cancel_check = cancel_check or (lambda: False)
+    progress = progress or (lambda event: None)
+    if cancel_check():
+        raise _ScanCancelled("Storage scan cancelled.")
     if root.is_file():
-        return root.stat().st_size
+        size = int(root.stat().st_size)
+        progress({"filesDelta": 1, "bytesDelta": size})
+        return size, 1, 0
+
     total = 0
+    file_count = 0
+    directory_count = 0
     stack = [root]
     while stack:
+        if cancel_check():
+            raise _ScanCancelled("Storage scan cancelled.")
         directory = stack.pop()
+        local_files = 0
+        local_bytes = 0
+        directory_count += 1
         with os.scandir(directory) as entries:
             for entry in entries:
+                if cancel_check():
+                    raise _ScanCancelled("Storage scan cancelled.")
                 if entry.is_symlink():
                     continue
                 if entry.is_file(follow_symlinks=False):
-                    total += entry.stat(follow_symlinks=False).st_size
+                    size = int(entry.stat(follow_symlinks=False).st_size)
+                    total += size
+                    file_count += 1
+                    local_files += 1
+                    local_bytes += size
                 elif entry.is_dir(follow_symlinks=False):
                     stack.append(Path(entry.path))
-    return total
+        progress({"directoriesDelta": 1, "filesDelta": local_files, "bytesDelta": local_bytes})
+    return total, file_count, directory_count
 
+
+def _safe_recursive_size(path):
+    return _safe_recursive_stats(path)[0]
 
 def _resolve_generate(item_id):
     parts = PurePosixPath(str(item_id or "")).parts
@@ -904,20 +1003,328 @@ def resolve_item(area, item_id, folder=""):
     raise ValueError("Unsupported Storage area.")
 
 
+
+def register_usage(area, item_id, folder="", bytes_used=0, file_count=0, source="producer", measured_at=None):
+    area = str(area or "").strip()
+    if area not in MEASURABLE_AREAS:
+        raise ValueError("Unsupported Storage measurement area.")
+    try:
+        size = int(bytes_used)
+        count = int(file_count)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Storage usage must use whole-number byte and file counts.") from exc
+    if size < 0 or count < 0:
+        raise ValueError("Storage usage cannot be negative.")
+    source = str(source or "producer").strip() or "producer"
+    if source not in {"producer", "manual", "scan"}:
+        raise ValueError("Storage usage source is invalid.")
+    timestamp = float(measured_at if measured_at is not None else time.time())
+    if timestamp <= 0:
+        raise ValueError("Storage usage timestamp is invalid.")
+
+    with _CACHE_LOCK:
+        cache = _read_cache()
+        cache.setdefault("items", {})[_cache_key(area, item_id, folder)] = {
+            "bytes": size,
+            "fileCount": count,
+            "measuredAt": timestamp,
+            "source": source,
+        }
+        _write_cache(cache)
+    return {
+        "ok": True,
+        "area": area,
+        "id": item_id,
+        "folder": folder,
+        "bytes": size,
+        "fileCount": count,
+        "measuredAt": timestamp,
+        "source": source,
+    }
+
+
 def measure(area, item_id, folder=""):
     if area not in MEASURABLE_AREAS:
         raise ValueError("Unsupported Storage measurement area.")
     path = resolve_item(area, item_id, folder)
-    size = _safe_recursive_size(path)
-    measured_at = time.time()
-    cache = _read_cache()
-    items = cache.setdefault("items", {})
-    items[_cache_key(area, item_id, folder)] = {
-        "bytes": int(size),
-        "measuredAt": measured_at,
+    size, file_count, _directory_count = _safe_recursive_stats(path)
+    return register_usage(
+        area,
+        item_id,
+        folder,
+        bytes_used=size,
+        file_count=file_count,
+        source="manual",
+    )
+
+
+def _scan_cancelled(cancel_check):
+    if cancel_check and cancel_check():
+        raise _ScanCancelled("Storage scan cancelled.")
+
+
+def _discover_workspace_sets(cancel_check=None, progress=None):
+    cancel_check = cancel_check or (lambda: False)
+    progress = progress or (lambda event: None)
+    root = Path(app_config.FS_ROOT)
+    if not root.is_dir():
+        raise FileNotFoundError("Storage root is unavailable.")
+    if root.is_symlink():
+        raise RuntimeError("Storage Manager will not scan a symlinked filesystem root.")
+
+    sets = set()
+    tests = set()
+    stack = [root]
+    root_pruned = {"output", ".webcap", ".webcap_training", ".webcap_runtime"}
+    generated_children = {"test-generations", "originals", "auto_dataset"}
+
+    while stack:
+        _scan_cancelled(cancel_check)
+        directory = stack.pop()
+        try:
+            entries = list(os.scandir(directory))
+        except OSError as exc:
+            progress({"errorsDelta": 1, "current": "Unreadable folder: " + directory.name, "lastError": str(exc)})
+            continue
+
+        progress({"directoriesDelta": 1, "current": "Inspecting " + str(directory)})
+        by_name = {entry.name: entry for entry in entries}
+        if directory != root:
+            relative = directory.relative_to(root).as_posix()
+            test_entry = by_name.get("test-generations")
+            is_set = (
+                ".webcap_state.json" in by_name
+                or "media_metadata.json" in by_name
+                or (
+                    test_entry is not None
+                    and not test_entry.is_symlink()
+                    and test_entry.is_dir(follow_symlinks=False)
+                )
+            )
+            if is_set:
+                sets.add(relative)
+
+            if test_entry is not None and not test_entry.is_symlink() and test_entry.is_dir(follow_symlinks=False):
+                try:
+                    with os.scandir(test_entry.path) as sessions:
+                        for session_entry in sessions:
+                            _scan_cancelled(cancel_check)
+                            if session_entry.is_symlink() or not session_entry.is_dir(follow_symlinks=False):
+                                continue
+                            manifest = Path(session_entry.path) / "test.json"
+                            if manifest.is_symlink() or not manifest.is_file():
+                                continue
+                            try:
+                                payload = json.loads(manifest.read_text(encoding="utf-8"))
+                            except (OSError, json.JSONDecodeError):
+                                progress({"errorsDelta": 1, "lastError": "Unreadable Test Session manifest."})
+                                continue
+                            if isinstance(payload, dict):
+                                tests.add((relative, session_entry.name))
+                except OSError as exc:
+                    progress({"errorsDelta": 1, "lastError": str(exc)})
+
+        for entry in entries:
+            if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
+                continue
+            if directory == root and entry.name in root_pruned:
+                continue
+            if entry.name in generated_children:
+                continue
+            stack.append(Path(entry.path))
+
+    progress({
+        "setsDiscovered": len(sets),
+        "testsDiscovered": len(tests),
+        "current": "Discovered " + str(len(sets)) + " Set(s) and " + str(len(tests)) + " Test Session(s).",
+    })
+    return sorted(sets), sorted(tests)
+
+
+def _persist_scan_discoveries(sets, tests):
+    with _CACHE_LOCK:
+        cache = _read_cache()
+        cache["discoveries"] = {
+            "sets": list(sets),
+            "tests": [{"folder": folder, "id": session_id} for folder, session_id in tests],
+        }
+        _write_cache(cache)
+
+
+def _scan_workspace(folder="", cancel_check=None, progress=None):
+    cancel_check = cancel_check or (lambda: False)
+    progress = progress or (lambda event: None)
+    progress({"phase": "discovering", "current": "Discovering WebCap Sets and historical Test Sessions…"})
+    sets, tests = _discover_workspace_sets(cancel_check=cancel_check, progress=progress)
+    _scan_cancelled(cancel_check)
+    _persist_scan_discoveries(sets, tests)
+
+    payload = overview(folder)
+    items = []
+    seen = set()
+    for area_rows in payload.get("items", {}).values():
+        for item in area_rows or []:
+            key = (str(item.get("area") or ""), str(item.get("folder") or ""), str(item.get("id") or ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(item)
+
+    progress({"phase": "measuring", "itemsTotal": len(items), "current": "Measuring managed artifacts…"})
+    measured = 0
+    scan_errors = 0
+    for item in items:
+        _scan_cancelled(cancel_check)
+        area = str(item.get("area") or "")
+        item_id = str(item.get("id") or "")
+        item_folder = str(item.get("folder") or "")
+        progress({"current": str(item.get("label") or item_id)})
+        try:
+            path = resolve_item(area, item_id, item_folder)
+            size, file_count, _directory_count = _safe_recursive_stats(
+                path,
+                cancel_check=cancel_check,
+                progress=progress,
+            )
+            register_usage(area, item_id, item_folder, bytes_used=size, file_count=file_count, source="scan")
+            measured += 1
+            progress({"itemsMeasured": measured})
+        except _ScanCancelled:
+            raise
+        except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
+            scan_errors += 1
+            progress({"errorsDelta": 1, "lastError": str(exc)})
+
+    summary = {
+        "completedAt": time.time(),
+        "setsDiscovered": len(sets),
+        "testsDiscovered": len(tests),
+        "itemsMeasured": measured,
+        "itemsTotal": len(items),
+        "errors": scan_errors,
     }
-    _write_cache(cache)
-    return {"ok": True, "area": area, "id": item_id, "folder": folder, "bytes": int(size), "measuredAt": measured_at}
+    with _CACHE_LOCK:
+        cache = _read_cache()
+        cache["lastScan"] = summary
+        _write_cache(cache)
+    return summary
+
+
+def _scan_state_update(scan_id, event):
+    global _SCAN_STATE
+    event = event if isinstance(event, dict) else {}
+    with _SCAN_LOCK:
+        if not isinstance(_SCAN_STATE, dict) or _SCAN_STATE.get("id") != scan_id:
+            return
+        for source_key, target_key in (
+            ("directoriesDelta", "directoriesScanned"),
+            ("filesDelta", "filesScanned"),
+            ("bytesDelta", "bytesScanned"),
+            ("errorsDelta", "errors"),
+        ):
+            if source_key in event:
+                _SCAN_STATE[target_key] = int(_SCAN_STATE.get(target_key) or 0) + int(event.get(source_key) or 0)
+        for key in (
+            "phase", "current", "itemsMeasured", "itemsTotal", "setsDiscovered",
+            "testsDiscovered", "lastError",
+        ):
+            if key in event:
+                _SCAN_STATE[key] = event[key]
+
+
+def _scan_worker(scan_id, folder, cancel_event):
+    global _SCAN_STATE
+    try:
+        summary = _scan_workspace(
+            folder,
+            cancel_check=cancel_event.is_set,
+            progress=lambda event: _scan_state_update(scan_id, event),
+        )
+        with _SCAN_LOCK:
+            if isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("id") == scan_id:
+                _SCAN_STATE.update(summary)
+                _SCAN_STATE["status"] = "completed"
+                _SCAN_STATE["phase"] = "complete"
+                _SCAN_STATE["current"] = ""
+                _SCAN_STATE["finishedAt"] = time.time()
+    except _ScanCancelled:
+        with _SCAN_LOCK:
+            if isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("id") == scan_id:
+                _SCAN_STATE["status"] = "cancelled"
+                _SCAN_STATE["phase"] = "cancelled"
+                _SCAN_STATE["current"] = ""
+                _SCAN_STATE["finishedAt"] = time.time()
+    except Exception as exc:
+        with _SCAN_LOCK:
+            if isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("id") == scan_id:
+                _SCAN_STATE["status"] = "failed"
+                _SCAN_STATE["phase"] = "failed"
+                _SCAN_STATE["error"] = str(exc)
+                _SCAN_STATE["finishedAt"] = time.time()
+
+
+def scan_status():
+    with _SCAN_LOCK:
+        state = dict(_SCAN_STATE) if isinstance(_SCAN_STATE, dict) else None
+    if state is None:
+        cache = _read_cache()
+        return {"ok": True, "scan": {"status": "idle", "lastScan": cache.get("lastScan")}}
+    return {"ok": True, "scan": state}
+
+
+def start_scan(folder=""):
+    global _SCAN_STATE, _SCAN_CANCEL
+    with _SCAN_LOCK:
+        if isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("status") in {"running", "cancelling"}:
+            return {"ok": True, "scan": dict(_SCAN_STATE)}
+        scan_id = uuid.uuid4().hex
+        cancel_event = threading.Event()
+        _SCAN_CANCEL = cancel_event
+        _SCAN_STATE = {
+            "id": scan_id,
+            "status": "running",
+            "phase": "starting",
+            "folder": str(folder or ""),
+            "startedAt": time.time(),
+            "finishedAt": None,
+            "current": "",
+            "directoriesScanned": 0,
+            "filesScanned": 0,
+            "bytesScanned": 0,
+            "itemsMeasured": 0,
+            "itemsTotal": 0,
+            "setsDiscovered": 0,
+            "testsDiscovered": 0,
+            "errors": 0,
+            "lastError": "",
+            "error": "",
+        }
+        state = dict(_SCAN_STATE)
+    threading.Thread(
+        target=_scan_worker,
+        args=(scan_id, str(folder or ""), cancel_event),
+        name="webcap-storage-scan",
+        daemon=True,
+    ).start()
+    return {"ok": True, "scan": state}
+
+
+def cancel_scan():
+    global _SCAN_STATE
+    with _SCAN_LOCK:
+        active = isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("status") in {"running", "cancelling"}
+        if active:
+            if _SCAN_CANCEL is not None:
+                _SCAN_CANCEL.set()
+            _SCAN_STATE["status"] = "cancelling"
+            _SCAN_STATE["phase"] = "cancelling"
+            state = dict(_SCAN_STATE)
+        else:
+            state = dict(_SCAN_STATE) if isinstance(_SCAN_STATE, dict) else None
+    if state is not None:
+        return {"ok": True, "scan": state}
+    cache = _read_cache()
+    return {"ok": True, "scan": {"status": "idle", "lastScan": cache.get("lastScan")}}
 
 
 def open_path(area, item_id, folder=""):
@@ -1025,7 +1432,8 @@ def purge(area, item_id, folder=""):
             raise RuntimeError("ComfyUI scratch is referenced by queued or active inference work.")
         shutil.rmtree(path)
 
-    cache = _read_cache()
-    cache.get("items", {}).pop(_cache_key(area, item_id, folder), None)
-    _write_cache(cache)
+    with _CACHE_LOCK:
+        cache = _read_cache()
+        cache.get("items", {}).pop(_cache_key(area, item_id, folder), None)
+        _write_cache(cache)
     return {"ok": True, "area": area, "id": item_id, "folder": folder}

@@ -1,6 +1,7 @@
 import copy
 import io
 import json
+import logging
 import os
 import re
 import secrets
@@ -23,11 +24,8 @@ from .execution_queue import (
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
-    pause_lane as execution_pause_lane,
     request_stop as execution_request_stop,
-    reorder_job as execution_reorder_job,
     recover_lane as execution_recover_lane,
-    resume_lane as execution_resume_lane,
     update_job as execution_update_job,
 )
 
@@ -51,6 +49,7 @@ _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _monitor_lock = threading.Lock()
 _monitor_thread = None
+_logger = logging.getLogger(__name__)
 
 
 def _ensure_startup_reconciled():
@@ -60,10 +59,19 @@ def _ensure_startup_reconciled():
     with _reconcile_lock:
         if _startup_reconciled:
             return
-        execution_recover_lane(
+        interrupted = execution_recover_lane(
             EXECUTION_LANE,
             reason="Storyboard Take generation was interrupted by a WebCap restart.",
         )
+        for job in interrupted:
+            details = job.get("details") if isinstance(job.get("details"), dict) else {}
+            prompt_id = str(details.get("comfyJobId") or "").strip()
+            if not prompt_id:
+                continue
+            try:
+                _cancel_comfy_job(prompt_id)
+            except Exception:
+                _logger.exception("Could not cancel interrupted Storyboard ComfyUI job %s.", prompt_id)
         _startup_reconciled = True
 
 
@@ -72,8 +80,7 @@ def _monitor_loop():
         try:
             _advance_queue()
         except Exception:
-            app_config.debug_print("[storyboard-generation] queue monitor failed")
-            app_config.debug_traceback()
+            _logger.exception("Storyboard generation queue monitor failed.")
         time.sleep(2)
 
 
@@ -723,8 +730,7 @@ def _advance_queue():
     except Exception as exc:
         execution_finish_job(job_id, status="failed", error=str(exc))
         _release_gpu()
-        app_config.debug_print("[storyboard-generation] COULD NOT START QUEUED JOB:", exc)
-        app_config.debug_traceback()
+        _logger.exception("Could not start queued Storyboard generation job %s.", job_id)
         return _advance_queue()
     return _generation_job(execution_get_job(job_id))
 
@@ -780,8 +786,7 @@ def _run_generation(job_id, story_id, scene_id, settings):
     except StoryboardGenerationStopped as exc:
         execution_finish_job(job_id, status=exc.status, error=str(exc))
     except Exception as exc:
-        app_config.debug_print("[storyboard-generation] ERROR:", exc)
-        app_config.debug_traceback()
+        _logger.exception("Storyboard generation job %s failed.", job_id)
         execution_finish_job(job_id, status="failed", error=str(exc))
     finally:
         _release_gpu()
@@ -847,19 +852,4 @@ def generation_action(operation, job_id="", direction=""):
     if operation == "stop":
         job = execution_request_stop(job_id)
         return {"job": _generation_job(job)}
-    if operation == "pause_queue":
-        snapshot = execution_pause_lane(EXECUTION_LANE)
-        return {"queue": generation_queue(), "paused": bool(snapshot.get("paused"))}
-    if operation == "resume_queue":
-        execution_resume_lane(EXECUTION_LANE)
-        _advance_queue()
-        return {"queue": generation_queue()}
-    if operation == "reorder":
-        snapshot = execution_reorder_job(job_id, direction=direction)
-        return {"queue": {
-            "paused": bool(snapshot.get("paused")),
-            "pauseReason": str(snapshot.get("pauseReason") or ""),
-            "activeJobId": str(snapshot.get("activeJobId") or ""),
-            "jobs": [_generation_job(job) for job in snapshot.get("jobs", []) if job.get("status") not in ("completed", "failed", "cancelled", "stopped", "interrupted")],
-        }}
     raise ValueError("Unsupported Storyboard generation action: " + operation)

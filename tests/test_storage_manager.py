@@ -580,3 +580,101 @@ def test_generate_purge_rechecks_active_shared_inference_job(monkeypatch, tmp_pa
     with pytest.raises(RuntimeError, match="active Generate work"):
         storage_manager.purge("generate", "2026-09-23/job-live")
     assert directory.is_dir()
+
+
+def _generate_reference(root, token="1790180000000-abcdef123456"):
+    directory = root / ".webcap_runtime" / "generate-references" / token
+    directory.mkdir(parents=True)
+    (directory / "reference.png").write_bytes(b"reference")
+    return directory
+
+
+def test_generate_reference_bundle_is_manually_purgeable_when_unreferenced(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    reference = _generate_reference(tmp_path)
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {"jobs": []},
+    )
+
+    item = next(
+        row for row in storage_manager.overview("")["items"]["runtime"]
+        if row["id"].startswith("generate-reference/")
+    )
+    assert item["purgeable"] is True
+    assert item["status"] == "draft / residual"
+
+    storage_manager.purge("runtime", item["id"])
+
+    assert not reference.exists()
+
+
+def test_generate_reference_bundle_is_protected_while_queued(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    token = "1790180000000-abcdef123456"
+    reference = _generate_reference(tmp_path, token)
+    job = {
+        "id": "job-live",
+        "status": "queued",
+        "metadata": {"client": "generate"},
+    }
+    stored = {
+        **job,
+        "payload": {
+            "request": {
+                "references": {
+                    "first": ".webcap_runtime/generate-references/" + token + "/reference.png"
+                }
+            }
+        },
+    }
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {"jobs": [job]},
+    )
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_get_job",
+        lambda job_id, include_payload=False: stored if include_payload else job,
+    )
+
+    item = next(
+        row for row in storage_manager.overview("")["items"]["runtime"]
+        if row["id"] == "generate-reference/" + token
+    )
+    assert item["purgeable"] is False
+    assert "active Generate work" in item["protectedReason"]
+
+    with pytest.raises(RuntimeError, match="queued or active Generate work"):
+        storage_manager.purge("runtime", item["id"])
+    assert reference.is_dir()
+
+
+def test_generate_reference_bundle_refuses_unknown_or_symlinked_tokens(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    root = tmp_path / ".webcap_runtime" / "generate-references"
+    root.mkdir(parents=True)
+    unknown = root / "not-a-webcap-token"
+    unknown.mkdir()
+    outside = tmp_path / "outside-reference"
+    outside.mkdir()
+    link = root / "1790180000000-abcdef123456"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("Symlink creation is unavailable on this platform.")
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {"jobs": []},
+    )
+
+    runtime_ids = {row["id"] for row in storage_manager.overview("")["items"]["runtime"]}
+    assert "generate-reference/not-a-webcap-token" not in runtime_ids
+    assert "generate-reference/1790180000000-abcdef123456" not in runtime_ids
+
+    with pytest.raises(ValueError, match="symlinked"):
+        storage_manager.purge("runtime", "generate-reference/1790180000000-abcdef123456")
+    assert outside.is_dir()

@@ -56,6 +56,9 @@ def _job_view(job):
         "storyId": str(metadata.get("storyId") or ""),
         "sceneId": str(metadata.get("sceneId") or ""),
         "sessionId": str(metadata.get("sessionId") or ""),
+        "folder": str(metadata.get("folder") or ""),
+        "candidateKind": str(metadata.get("candidateKind") or ""),
+        "candidateFile": str(metadata.get("candidateFile") or ""),
         "status": str(job.get("status") or ""),
         "queuePosition": int(job.get("queuePosition") or 0),
         "createdAt": job.get("createdAt"),
@@ -116,6 +119,10 @@ def _execute_claimed(job_id):
         result = execute(job_id, request)
     elif client == "storyboard":
         from .storyboard_generation import execute_inference
+        context = payload.get("clientContext") if isinstance(payload.get("clientContext"), dict) else {}
+        result = execute_inference(job_id, request, context)
+    elif client == "test":
+        from .epoch_test_bench import execute_inference
         context = payload.get("clientContext") if isinstance(payload.get("clientContext"), dict) else {}
         result = execute_inference(job_id, request, context)
     else:
@@ -246,6 +253,34 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
             "storyId": story_id,
             "sceneId": scene_id,
             "migratedFromJobId": str(migrated_from_job_id or ""),
+        },
+    )
+    return _job_view(execution_get_job(job["id"]))
+
+
+def enqueue_test(request, context, label=""):
+    _ensure_execution_reconciled()
+    context = copy.deepcopy(context) if isinstance(context, dict) else {}
+    folder = str(context.get("folder") or "").strip()
+    session_id = str(context.get("sessionId") or "").strip()
+    candidate_kind = str(context.get("candidateKind") or "").strip()
+    if not folder or not session_id or candidate_kind not in {"base", "lora"}:
+        raise ValueError("Test inference requires folder, session, and candidate context.")
+    job = execution_enqueue(
+        EXECUTION_LANE,
+        {
+            "request": copy.deepcopy(request),
+            "clientContext": context,
+        },
+        metadata={
+            "client": "test",
+            "label": str(label or "Test"),
+            "modelId": str(request.get("modelId") or ""),
+            "mediaKind": str(request.get("mediaKind") or ""),
+            "folder": folder,
+            "sessionId": session_id,
+            "candidateKind": candidate_kind,
+            "candidateFile": str(context.get("candidateFile") or ""),
         },
     )
     return _job_view(execution_get_job(job["id"]))

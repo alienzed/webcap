@@ -765,7 +765,7 @@ def _download_output(output_ref):
 def _download_video(video_ref):
     return _download_output(video_ref)
 
-def _move_saved_output(output_ref, destination, filename_prefix=None):
+def _move_saved_output(output_ref, destination, filename_prefix=None, download_bytes=None):
     if str(output_ref.get("type") or "") != "output":
         raise RuntimeError("ComfyUI Test output was not saved to the output directory.")
     target = Path(destination)
@@ -774,7 +774,8 @@ def _move_saved_output(output_ref, destination, filename_prefix=None):
 
     raw_path = str(output_ref.get("fullpath") or "").strip()
     if not raw_path:
-        target.write_bytes(_download_output(output_ref))
+        downloader = download_bytes or _download_output
+        target.write_bytes(downloader(output_ref))
         if not target.is_file():
             raise RuntimeError("Saved ComfyUI Test output was not copied into the Test session.")
         return target
@@ -1954,7 +1955,7 @@ def _job_candidate_identity(job):
     metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
     kind = str(metadata.get("candidateKind") or "")
     candidate_file = str(metadata.get("candidateFile") or "")
-    label = str(metadata.get("label") or "")
+    label = "Base" if kind == "base" else (candidate_file or str(metadata.get("label") or ""))
     return kind, candidate_file, label
 
 
@@ -1976,9 +1977,6 @@ def _sync_inference_session(session_directory):
     jobs = _session_job_records(status)
     results = status.get("results") if isinstance(status.get("results"), list) else []
     failures = status.get("failures") if isinstance(status.get("failures"), list) else []
-    result_job_ids = {
-        str(item.get("jobId") or "") for item in results if isinstance(item, dict)
-    }
     failure_job_ids = {
         str(item.get("jobId") or "") for item in failures if isinstance(item, dict)
     }
@@ -2204,7 +2202,12 @@ def execute_inference(job_id, request, context):
             stem_override="base" if candidate_kind == "base" else None,
             extension=output_extension,
         )
-        media_path.write_bytes(inference_runtime.download_output(output_ref))
+        _move_saved_output(
+            output_ref,
+            media_path,
+            filename_prefix=output_prefix,
+            download_bytes=inference_runtime.download_output,
+        )
         caption_path.write_text(prompt, encoding="utf-8")
 
         result = {
@@ -2574,6 +2577,8 @@ def list_sessions(folder_path):
             "completed": int(payload.get("completed") or 0),
             "failed": int(payload.get("failed") or 0),
             "total": int(payload.get("total") or 0),
+            "queued": int(payload.get("queued") or 0),
+            "running": int(payload.get("running") or 0),
             "unrated": unrated,
             "resultFolder": str(payload.get("resultFolder") or ""),
         })

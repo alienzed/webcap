@@ -30,7 +30,9 @@
       busy: false,
       runtimeLabel: '',
       error: '',
-      previousPrompts: {}
+      previousPrompts: {},
+      activityTimer: 0,
+      activityStartedAt: 0
     }
   };
 
@@ -179,6 +181,110 @@
     });
   }
 
+  function directorActivityRequest(url) {
+    return fetch(url).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body || body.ok === false) {
+          throw new Error((body && body.error) || 'Director activity request failed.');
+        }
+        return body;
+      });
+    });
+  }
+
+  function directorPhaseLabel(phase) {
+    var labels = {
+      preparing: 'Preparing…',
+      freeing_comfy: 'Preparing GPU…',
+      loading_model: 'Loading model…',
+      generating: 'Generating response…',
+      complete: 'Complete',
+      error: 'Failed'
+    };
+    return labels[String(phase || '')] || 'Working…';
+  }
+
+  function directorMemoryGiB(mib) {
+    var value = Number(mib);
+    return isFinite(value) && value >= 0 ? (value / 1024).toFixed(1) + ' GiB' : '';
+  }
+
+  function directorBytesGiB(bytes) {
+    var value = Number(bytes);
+    return isFinite(value) && value >= 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
+  }
+
+  function renderDirectorActivity(activity, system) {
+    var card = el('storyboard-director-activity');
+    var phase = el('storyboard-director-activity-phase');
+    var detail = el('storyboard-director-activity-detail');
+    if (!card || !phase || !detail) throw new Error('Storyboard Director activity markup is missing.');
+
+    var visible = storyState.director.busy || (activity && activity.active);
+    card.classList.toggle('hidden', !visible);
+    if (!visible) return;
+
+    phase.textContent = directorPhaseLabel(activity && activity.phase);
+    var startedAt = Number(activity && activity.startedAt) || storyState.director.activityStartedAt;
+    var parts = [];
+    if (startedAt) parts.push(Math.max(0, Math.round(Date.now() / 1000 - startedAt)) + 's elapsed');
+
+    var gpu = system && system.gpu;
+    var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
+    if (primary) {
+      var utilization = Number(primary.utilization);
+      if (isFinite(utilization)) parts.push('GPU ' + Math.round(utilization) + '%');
+      var used = directorMemoryGiB(primary.memoryUsed);
+      var total = directorMemoryGiB(primary.memoryTotal);
+      if (used && total) parts.push('VRAM ' + used + ' / ' + total);
+    }
+
+    var ram = system && system.ram;
+    if (ram && ram.available) {
+      var ramUsed = directorBytesGiB(ram.used);
+      var ramTotal = directorBytesGiB(ram.total);
+      if (ramUsed && ramTotal) parts.push('RAM ' + ramUsed + ' / ' + ramTotal);
+    }
+    detail.textContent = parts.join(' · ');
+  }
+
+  function refreshDirectorActivity() {
+    if (!storyState.director.busy) return Promise.resolve();
+    return Promise.all([
+      directorActivityRequest('/fs/director/activity'),
+      directorActivityRequest('/fs/system_status')
+    ]).then(function (values) {
+      renderDirectorActivity(values[0], values[1]);
+    }).catch(function () {
+      renderDirectorActivity({ phase: 'preparing', active: true }, null);
+    }).then(function () {
+      if (!storyState.director.busy) return;
+      if (storyState.director.activityTimer) clearTimeout(storyState.director.activityTimer);
+      storyState.director.activityTimer = setTimeout(refreshDirectorActivity, 1500);
+    });
+  }
+
+  function startDirectorActivity() {
+    storyState.director.activityStartedAt = Date.now() / 1000;
+    renderDirectorActivity({ phase: 'preparing', active: true, startedAt: storyState.director.activityStartedAt }, null);
+    refreshDirectorActivity();
+  }
+
+  function finishDirectorActivity() {
+    if (storyState.director.activityTimer) clearTimeout(storyState.director.activityTimer);
+    storyState.director.activityTimer = 0;
+    directorActivityRequest('/fs/director/activity').then(function (activity) {
+      renderDirectorActivity(activity, null);
+    }).catch(function () {
+      renderDirectorActivity({ phase: 'complete', active: false }, null);
+    }).then(function () {
+      setTimeout(function () {
+        var card = el('storyboard-director-activity');
+        if (!storyState.director.busy && card) card.classList.add('hidden');
+      }, 2200);
+    });
+  }
+
   function updateSceneDirectorStatus(sceneId, text) {
     var root = sceneElement(sceneId);
     var node = root && root.querySelector('[data-director-status]');
@@ -234,6 +340,7 @@
 
     setDirectorBusy(true);
     updateSceneDirectorStatus(sceneId, 'Director working…');
+    startDirectorActivity();
     flushPendingSaves().then(function () {
       return directorRequest({
         storyId: storyState.story.id,
@@ -256,6 +363,7 @@
       reportError(err);
     }).finally(function () {
       setDirectorBusy(false);
+      finishDirectorActivity();
     });
   }
 
@@ -306,6 +414,7 @@
     var storyId = storyState.story.id;
     setDirectorBusy(true);
     setDevelopStatus('Director is expanding the concept…');
+    startDirectorActivity();
     flushPendingSaves().then(function () {
       return directorRequest({
         storyId: storyId,
@@ -324,6 +433,7 @@
       reportError(err);
     }).finally(function () {
       setDirectorBusy(false);
+      finishDirectorActivity();
     });
   }
 
@@ -370,6 +480,7 @@
 
     setDirectorBusy(true);
     setDevelopStatus('Director is developing the Story…');
+    startDirectorActivity();
     flushPendingSaves().then(function () {
       return directorRequest({
         storyId: storyId,
@@ -391,6 +502,7 @@
       reportError(err);
     }).finally(function () {
       setDirectorBusy(false);
+      finishDirectorActivity();
     });
   }
 

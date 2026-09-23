@@ -37,7 +37,7 @@ def _fake_runtime(monkeypatch):
         "wslDistribution": "", "cwd": "/tmp", "activate": "",
     })
     as_wsl = lambda path, distribution="": Path(path).as_posix()
-    monkeypatch.setattr(training_runner, "to_wsl_path", as_wsl)
+    monkeypatch.setattr(training_runner, "_to_wsl_path", as_wsl)
     monkeypatch.setattr(training_bundle, "to_wsl_path", as_wsl)
 
 

@@ -419,3 +419,68 @@ def test_legacy_storyboard_queue_migration_is_restart_idempotent(storyboard_fs):
     ]
     assert len(migrated) == 1
 
+def test_storyboard_generation_cleans_owned_comfy_reference_inputs_after_capture(storyboard_fs, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Scene",
+        "prompt": "A woman enters an empty studio.",
+        "durationSeconds": 6,
+        "aspectRatio": "16:9 (Widescreen)",
+        "megapixels": 0.3,
+        "seedMode": "fixed",
+        "seed": 77,
+    })
+    story, reference = storyboard_store.set_scene_reference_upload(
+        story["id"], scene["id"], "first_frame", "first.png", __import__("io").BytesIO(b"image")
+    )
+
+    class FakeModel:
+        def load_template(self):
+            return {}
+
+        def build_workflow(
+            self,
+            template,
+            prompt,
+            settings,
+            loras,
+            uploaded,
+            prefix,
+            available_names,
+            resolve_name,
+        ):
+            assert uploaded["first_frame"].endswith("/first.png")
+            return {"workflow": True}
+
+        def find_output_ref(self, outputs):
+            return outputs
+
+    monkeypatch.setattr(storyboard_generation, "get_inference_model", lambda _model_id: FakeModel())
+    monkeypatch.setattr(storyboard_generation.inference_runtime, "upload_image", lambda _path, subfolder, filename=None: subfolder + "/" + str(filename))
+    monkeypatch.setattr(storyboard_generation.inference_runtime, "available_names", lambda *_args: [])
+    monkeypatch.setattr(storyboard_generation.inference_runtime, "resolve_name", lambda value, *_args: value)
+    monkeypatch.setattr(storyboard_generation.inference_runtime, "queue_workflow", lambda _workflow: "comfy-123")
+    output_ref = {"filename": "render.mp4", "subfolder": "webcap-storyboard", "type": "output"}
+    monkeypatch.setattr(storyboard_generation.inference_runtime, "wait_for_output", lambda *_args: output_ref)
+    monkeypatch.setattr(storyboard_generation.inference_runtime, "download_output", lambda _ref: b"video")
+    cleaned = []
+    monkeypatch.setattr(
+        storyboard_generation.inference_runtime,
+        "cleanup_uploaded_inputs",
+        lambda uploaded, output, owned_prefix="": cleaned.append((list(uploaded), output, owned_prefix)) or 1,
+    )
+    monkeypatch.setattr(storyboard_generation.inference_runtime, "cleanup_saved_output", lambda _ref: True)
+
+    queued = storyboard_generation.start_generation(story["id"], scene["id"])
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    inference_runner._execute_claimed(queued["jobId"])
+
+    assert len(cleaned) == 1
+    uploaded, captured_output, owned_prefix = cleaned[0]
+    assert uploaded[0].endswith("/first.png")
+    assert captured_output == output_ref
+    assert owned_prefix == (
+        "webcap-storyboard/" + story["id"] + "/" + scene["id"] + "/" +
+        queued["jobId"] + "/references"
+    )
+

@@ -24,7 +24,7 @@ from .execution_queue import (
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
-    request_action as execution_request_action,
+    request_stop as execution_request_stop,
     reorder_job as execution_reorder_job,
     recover_lane as execution_recover_lane,
     resume_lane as execution_resume_lane,
@@ -845,7 +845,7 @@ def generation_action(operation, job_id="", direction=""):
         _advance_queue()
         return {"job": _generation_job(job)}
     if operation == "stop":
-        job = execution_request_action(job_id, "stop")
+        job = execution_request_stop(job_id)
         return {"job": _generation_job(job)}
     if operation == "pause_queue":
         snapshot = execution_pause_lane(EXECUTION_LANE)

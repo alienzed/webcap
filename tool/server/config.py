@@ -269,9 +269,16 @@ def validate_config_payload(payload):
         director = {}
     if not isinstance(director, dict):
         raise ValueError("Config.storyboard.director must be an object when provided.")
+    mode = str(director.get("mode") or "local").strip().lower()
+    if mode not in {"local", "remote"}:
+        raise ValueError("Config.storyboard.director.mode must be local or remote.")
     normalized_director = {
+        "mode": mode,
+        "endpoint": str(director.get("endpoint") or "").strip(),
         "llama_server": str(director.get("llama_server") or "").strip(),
     }
+    if mode == "remote" and not normalized_director["endpoint"]:
+        raise ValueError("Config.storyboard.director.endpoint is required in remote mode.")
     for key, default, minimum, maximum in (
         ("port", 8189, 1, 65535),
         ("context_size", 8192, 1024, 1048576),

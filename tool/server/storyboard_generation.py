@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config as app_config
-from .storyboard_store import add_take_upload, finalize_generated_take, load_story, storyboard_root
+from .storyboard_store import add_take_upload, finalize_generated_take, load_story, resolve_scene_loras, storyboard_root
 
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
@@ -368,7 +368,7 @@ def generation_capabilities():
     return {"loras": selectable, "baseLoras": base_loras}
 
 
-def _scene_settings(scene):
+def _scene_settings(scene, story=None):
     prompt = str(scene.get("prompt") or "").strip()
     if not prompt:
         raise ValueError("Scene generation prompt is empty.")
@@ -408,7 +408,7 @@ def _scene_settings(scene):
         "seed": seed,
         "seedMode": seed_mode,
         "references": copy.deepcopy(scene.get("references") or []),
-        "loras": copy.deepcopy(scene.get("loras") or []),
+        "loras": resolve_scene_loras(story or {}, scene),
     }
 
 
@@ -681,6 +681,7 @@ def _run_generation(job_id, story_id, scene_id, settings):
             scene_id,
             output_ref.get("filename") or "render.mp4",
             io.BytesIO(media),
+            effective_loras=settings.get("loras") or [],
         )
         story, take = finalize_generated_take(
             story_id,
@@ -728,7 +729,7 @@ def start_generation(story_id, scene_id):
     scene = (story.get("scenes") or {}).get(scene_id)
     if not isinstance(scene, dict):
         raise FileNotFoundError("Scene does not exist.")
-    settings = _scene_settings(scene)
+    settings = _scene_settings(scene, story)
     job_id = str(uuid.uuid4())
 
     with _lock:

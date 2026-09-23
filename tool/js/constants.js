@@ -138,6 +138,8 @@ ui = {
   appSettingsStatusEl: document.getElementById('app-settings-status'),
   appSettingsRootEl: document.getElementById('app-settings-filesystem-root'),
   appSettingsModelsEl: document.getElementById('app-settings-filesystem-models'),
+  appSettingsStoryboardDirectorModeEl: document.getElementById('app-settings-storyboard-director-mode'),
+  appSettingsStoryboardEndpointEl: document.getElementById('app-settings-storyboard-endpoint'),
   appSettingsStoryboardLlamaServerEl: document.getElementById('app-settings-storyboard-llama-server'),
   appSettingsStoryboardPortEl: document.getElementById('app-settings-storyboard-port'),
   appSettingsStoryboardContextSizeEl: document.getElementById('app-settings-storyboard-context-size'),

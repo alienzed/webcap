@@ -103,6 +103,8 @@
   "debug": true,
   "storyboard": {
     "director": {
+      "mode": "local",
+      "endpoint": "",
       "llama_server": "",
       "port": 8189,
       "context_size": 8192,

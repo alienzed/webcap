@@ -71,6 +71,8 @@ function normalizeAppConfigShape(cfg) {
       return String(profileId || '').trim().toLowerCase();
     });
   }
+  if (out.storyboard.director.mode !== 'remote') out.storyboard.director.mode = 'local';
+  if (typeof out.storyboard.director.endpoint !== 'string') out.storyboard.director.endpoint = '';
   if (typeof out.storyboard.director.llama_server !== 'string') out.storyboard.director.llama_server = '';
   if (!Number.isInteger(out.storyboard.director.port)) out.storyboard.director.port = 8189;
   if (!Number.isInteger(out.storyboard.director.context_size)) out.storyboard.director.context_size = 8192;
@@ -124,6 +126,8 @@ function fillAppSettingsForm(cfg) {
     var el = ui[profile.uiKey];
     if (el) el.checked = c.training.enabled_profiles.indexOf(profile.id) !== -1;
   });
+  if (ui.appSettingsStoryboardDirectorModeEl) ui.appSettingsStoryboardDirectorModeEl.value = c.storyboard.director.mode || 'local';
+  if (ui.appSettingsStoryboardEndpointEl) ui.appSettingsStoryboardEndpointEl.value = c.storyboard.director.endpoint || '';
   if (ui.appSettingsStoryboardLlamaServerEl) ui.appSettingsStoryboardLlamaServerEl.value = c.storyboard.director.llama_server || '';
   if (ui.appSettingsStoryboardPortEl) ui.appSettingsStoryboardPortEl.value = c.storyboard.director.port;
   if (ui.appSettingsStoryboardContextSizeEl) ui.appSettingsStoryboardContextSizeEl.value = c.storyboard.director.context_size;
@@ -158,6 +162,8 @@ function collectAppSettingsFormConfig() {
     var el = ui[profile.uiKey];
     return !!(el && el.checked);
   }).map(function (profile) { return profile.id; });
+  base.storyboard.director.mode = ui.appSettingsStoryboardDirectorModeEl ? ui.appSettingsStoryboardDirectorModeEl.value : 'local';
+  base.storyboard.director.endpoint = ui.appSettingsStoryboardEndpointEl ? ui.appSettingsStoryboardEndpointEl.value : '';
   base.storyboard.director.llama_server = ui.appSettingsStoryboardLlamaServerEl ? ui.appSettingsStoryboardLlamaServerEl.value : '';
   base.storyboard.director.port = Number(ui.appSettingsStoryboardPortEl ? ui.appSettingsStoryboardPortEl.value : 8189);
   base.storyboard.director.context_size = Number(ui.appSettingsStoryboardContextSizeEl ? ui.appSettingsStoryboardContextSizeEl.value : 8192);
@@ -516,6 +522,8 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingProfileKrea2El,
     ui.appSettingsTrainingProfileWan21El,
     ui.appSettingsTrainingProfileH3El,
+    ui.appSettingsStoryboardDirectorModeEl,
+    ui.appSettingsStoryboardEndpointEl,
     ui.appSettingsStoryboardLlamaServerEl,
     ui.appSettingsStoryboardPortEl,
     ui.appSettingsStoryboardContextSizeEl,

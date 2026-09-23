@@ -33,32 +33,45 @@ def _director_config():
     director = storyboard.get("director")
     director = director if isinstance(director, dict) else {}
 
-    models_root = str(app_config.config.get("filesystem", {}).get("models") or "").strip()
-    if not models_root:
-        raise ValueError("WebCap Model Root is required for Storyboard Director model discovery.")
-    if models_root.startswith("/"):
-        models_dir = Path(models_root) / "text_encoders"
-    else:
-        from .training_runtime import to_wsl_path
-        distribution = str(app_config.config.get("training", {}).get("wsl_distribution") or "").strip()
-        windows_models_dir = str(PureWindowsPath(models_root) / "text_encoders")
-        models_dir = Path(to_wsl_path(windows_models_dir, distribution=distribution))
-
+    mode = str(director.get("mode") or "local").strip().lower()
+    endpoint = str(director.get("endpoint") or "").strip().rstrip("/")
     executable = str(director.get("llama_server") or "").strip()
     port = int(director.get("port") or DEFAULT_PORT)
     context_size = int(director.get("context_size") or DEFAULT_CONTEXT_SIZE)
     max_tokens = int(director.get("max_tokens") or DEFAULT_MAX_TOKENS)
 
-    if port <= 0 or port > 65535:
-        raise ValueError("Storyboard Director llama.cpp port must be between 1 and 65535.")
-    if context_size < 1024:
-        raise ValueError("Storyboard Director context_size must be at least 1024.")
+    if mode not in {"local", "remote"}:
+        raise ValueError("Storyboard Director mode must be local or remote.")
     if max_tokens <= 0:
         raise ValueError("Storyboard Director max_tokens must be greater than zero.")
 
+    models_dir = None
+    if mode == "remote":
+        if not endpoint:
+            raise ValueError("Storyboard Director remote endpoint is required.")
+        if not endpoint.startswith(("http://", "https://")):
+            raise ValueError("Storyboard Director remote endpoint must start with http:// or https://.")
+    else:
+        models_root = str(app_config.config.get("filesystem", {}).get("models") or "").strip()
+        if not models_root:
+            raise ValueError("WebCap Model Root is required for local Storyboard Director model discovery.")
+        if models_root.startswith("/"):
+            models_dir = Path(models_root) / "text_encoders"
+        else:
+            from .training_runtime import to_wsl_path
+            distribution = str(app_config.config.get("training", {}).get("wsl_distribution") or "").strip()
+            windows_models_dir = str(PureWindowsPath(models_root) / "text_encoders")
+            models_dir = Path(to_wsl_path(windows_models_dir, distribution=distribution))
+        if port <= 0 or port > 65535:
+            raise ValueError("Storyboard Director llama.cpp port must be between 1 and 65535.")
+        if context_size < 1024:
+            raise ValueError("Storyboard Director context_size must be at least 1024.")
+
     return {
+        "mode": mode,
+        "endpoint": endpoint,
         "llama_server": executable,
-        "models_dir": models_dir.expanduser(),
+        "models_dir": models_dir.expanduser() if models_dir is not None else None,
         "port": port,
         "context_size": context_size,
         "max_tokens": max_tokens,
@@ -67,7 +80,8 @@ def _director_config():
 
 def _server_url(path):
     settings = _director_config()
-    return "http://" + LLAMA_HOST + ":" + str(settings["port"]) + path
+    base = settings.get("endpoint", "") if settings.get("mode", "local") == "remote" else "http://" + LLAMA_HOST + ":" + str(settings["port"])
+    return base.rstrip("/") + "/" + str(path or "").lstrip("/")
 
 
 def _runtime_dir():
@@ -120,15 +134,15 @@ def _http_json(path, method="GET", payload=None, timeout=30):
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read()
     except urllib.error.HTTPError as exc:
-        raise RuntimeError("llama.cpp request failed: " + _decode_error_body(exc)) from exc
+        raise RuntimeError("Storyboard Director endpoint request failed: " + _decode_error_body(exc)) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise ConnectionError("Could not connect to WebCap's llama.cpp Director runtime.") from exc
+        raise ConnectionError("Could not connect to the configured Storyboard Director endpoint.") from exc
     if not body:
         return {}
     try:
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError("llama.cpp returned invalid JSON.") from exc
+        raise RuntimeError("Storyboard Director endpoint returned invalid JSON.") from exc
 
 
 def _health_ok():
@@ -185,6 +199,15 @@ def _ensure_server():
     global _process, _log_handle, _server_settings_signature
     with _process_lock:
         settings = _director_config()
+        if settings.get("mode", "local") == "remote":
+            if _process is not None:
+                _stop_server_locked()
+            try:
+                _normalize_models(_http_json("/models", timeout=10))
+            except Exception as exc:
+                raise ConnectionError("Could not connect to the configured remote Storyboard Director endpoint.") from exc
+            return
+
         desired_signature = _server_signature(settings)
 
         if _process is not None and _process.poll() is None:
@@ -252,7 +275,7 @@ def _ensure_server():
 def _normalize_models(payload):
     raw_models = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(raw_models, list):
-        raise RuntimeError("llama.cpp did not return a model list.")
+        raise RuntimeError("Storyboard Director endpoint did not return a model list.")
     models = []
     for entry in raw_models:
         if not isinstance(entry, dict):
@@ -266,7 +289,7 @@ def _normalize_models(payload):
             "id": model_id,
             "label": Path(path or model_id).name,
             "path": path,
-            "status": str(status.get("value") or "unloaded"),
+            "status": str(status.get("value") or ("remote" if not path else "unloaded")),
         })
     models.sort(key=lambda model: model["label"].casefold())
     return models
@@ -274,7 +297,8 @@ def _normalize_models(payload):
 
 def list_models(reload=False):
     _ensure_server()
-    suffix = "?reload=1" if reload else ""
+    settings = _director_config()
+    suffix = "?reload=1" if reload and settings.get("mode", "local") == "local" else ""
     return _normalize_models(_http_json("/models" + suffix, timeout=10))
 
 
@@ -282,6 +306,15 @@ def status():
     settings = _director_config()
     try:
         models = list_models(reload=True)
+        if settings.get("mode", "local") == "remote":
+            return {
+                "available": True,
+                "serverRunning": True,
+                "runtime": "Remote OpenAI-compatible",
+                "endpoint": settings.get("endpoint", ""),
+                "models": models,
+            }
+
         executable = ""
         try:
             executable = _resolve_executable()
@@ -291,6 +324,7 @@ def status():
         return {
             "available": True,
             "serverRunning": True,
+            "runtime": "llama.cpp",
             "executable": executable,
             "modelsDir": str(settings["models_dir"]),
             "models": models,
@@ -299,7 +333,9 @@ def status():
         return {
             "available": False,
             "serverRunning": False,
-            "modelsDir": str(settings["models_dir"]),
+            "runtime": "Remote OpenAI-compatible" if settings.get("mode", "local") == "remote" else "llama.cpp",
+            "endpoint": settings.get("endpoint", "") if settings.get("mode", "local") == "remote" else "",
+            "modelsDir": str(settings["models_dir"]) if settings["models_dir"] is not None else "",
             "models": [],
             "error": str(exc),
         }
@@ -313,7 +349,7 @@ def _model_record(model_id):
     for model in models:
         if model["id"] == model_id:
             return model
-    raise FileNotFoundError("Storyboard Director model is not available to llama.cpp: " + model_id)
+    raise FileNotFoundError("Storyboard Director model is not available from the active runtime: " + model_id)
 
 
 def _wait_for_model(model_id, wanted, timeout=180):
@@ -430,6 +466,35 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
     with _request_lock:
         _ensure_server()
         _model_record(model_id)
+        settings = _director_config()
+        payload = {
+            "model": model_id,
+            "messages": messages,
+            "stream": False,
+            "max_tokens": int(max_tokens or settings["max_tokens"]),
+            "temperature": 0.2,
+        }
+        if settings.get("mode", "local") == "local":
+            payload["reasoning_effort"] = "none"
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
+        if response_schema is not None:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "storyboard_response",
+                    "schema": response_schema,
+                },
+            }
+
+        if settings.get("mode", "local") == "remote":
+            response = _http_json(
+                "/chat/completions",
+                method="POST",
+                payload=payload,
+                timeout=10 * 60,
+            )
+            return _completion_result(response, model_id)
+
         _reserve_gpu()
         load_attempted = False
         cleanup_safe = True
@@ -437,43 +502,13 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
             _free_comfy_models()
             load_attempted = True
             _load_model(model_id)
-
-            settings = _director_config()
-            payload = {
-                "model": model_id,
-                "messages": messages,
-                "stream": False,
-                "max_tokens": int(max_tokens or settings["max_tokens"]),
-                "temperature": 0.2,
-                "reasoning_effort": "none",
-                "chat_template_kwargs": {"enable_thinking": False},
-            }
-            if response_schema is not None:
-                payload["response_format"] = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "storyboard_response",
-                        "schema": response_schema,
-                    },
-                }
-
             response = _http_json(
                 "/v1/chat/completions",
                 method="POST",
                 payload=payload,
                 timeout=10 * 60,
             )
-            choices = response.get("choices") if isinstance(response, dict) else None
-            message = choices[0].get("message") if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
-            content = str(message.get("content") or "").strip() if isinstance(message, dict) else ""
-            if not content:
-                raise RuntimeError("llama.cpp returned an empty Director response.")
-            return {
-                "text": content,
-                "model": model_id,
-                "usage": response.get("usage") if isinstance(response, dict) else None,
-                "timings": response.get("timings") if isinstance(response, dict) else None,
-            }
+            return _completion_result(response, model_id)
         finally:
             cleanup_error = None
             if load_attempted:
@@ -498,6 +533,20 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
                 raise cleanup_error
 
 
+def _completion_result(response, model_id):
+    choices = response.get("choices") if isinstance(response, dict) else None
+    message = choices[0].get("message") if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
+    content = str(message.get("content") or "").strip() if isinstance(message, dict) else ""
+    if not content:
+        raise RuntimeError("Storyboard Director returned an empty response.")
+    return {
+        "text": content,
+        "model": model_id,
+        "usage": response.get("usage") if isinstance(response, dict) else None,
+        "timings": response.get("timings") if isinstance(response, dict) else None,
+    }
+
+
 def run_contract(model_id, contract):
     if not isinstance(contract, dict):
         raise ValueError("Storyboard Director contract must be an object.")
@@ -513,7 +562,7 @@ def run_contract(model_id, contract):
         try:
             data = json.loads(result["text"])
         except (TypeError, json.JSONDecodeError) as exc:
-            raise RuntimeError("llama.cpp returned invalid structured Director JSON.") from exc
+            raise RuntimeError("Storyboard Director returned invalid structured JSON.") from exc
         if not isinstance(data, dict):
             raise RuntimeError("Storyboard Director structured output must be a JSON object.")
         result["data"] = data

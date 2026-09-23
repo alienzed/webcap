@@ -614,3 +614,23 @@ def test_uploaded_scene_reference_rejects_video(storyboard_fs):
             story["id"], scene["id"], "first_frame", "clip.mp4", BytesIO(b"video")
         )
 
+def test_take_reference_replaces_and_cleans_manual_upload(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, source_scene = storyboard_store.add_scene(story["id"], {"title": "Source"})
+    story, target_scene = storyboard_store.add_scene(story["id"], {"title": "Target"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], source_scene["id"], "source.png", BytesIO(b"take")
+    )
+    story, uploaded = storyboard_store.set_scene_reference_upload(
+        story["id"], target_scene["id"], "first_frame", "manual.png", BytesIO(b"manual")
+    )
+    uploaded_path = storyboard_fs / "output" / "storyboards" / story["id"] / uploaded["mediaPath"]
+    assert uploaded_path.is_file()
+
+    story, reference = storyboard_store.set_scene_reference_from_take(
+        story["id"], target_scene["id"], "first_frame", source_scene["id"], take["id"], "last"
+    )
+
+    assert reference["source"] == "take"
+    assert not uploaded_path.exists()
+

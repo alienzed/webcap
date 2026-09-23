@@ -765,8 +765,16 @@ def remove_candidate_epoch_from_test_response(folder, job_id, epoch):
     except (RuntimeError, ValueError, OSError) as exc:
         return {"ok": False, "error": str(exc)}, 400
 
+def _candidate_manifest_id(run):
+    action_id = str(run.get("actionId") or "").strip()
+    if not action_id:
+        return ""
+    return action_id
+
+
 def _candidate_selected_epoch(run_dir, run):
-    return _selected_epoch(run_dir, str(run.get("actionId") or ""))
+    identity = _candidate_manifest_id(run)
+    return _selected_epoch(run_dir, identity) if identity else None
 
 
 def _candidate_epoch_step(analysis, epoch):
@@ -791,7 +799,10 @@ def select_candidate_epoch(folder, job_id, epoch):
         relative = source_path.relative_to(resolved_run).as_posix()
     except ValueError as exc:
         raise RuntimeError("Selected epoch artifact is outside the recorded training run.") from exc
-    selected = _select_epoch(resolved_run, str(run.get("actionId") or ""), int(epoch), step, relative)
+    identity = _candidate_manifest_id(run)
+    if not identity:
+        raise RuntimeError("Recorded training job has no managed action identity for durable selection.")
+    selected = _select_epoch(resolved_run, identity, int(epoch), step, relative)
     return {"selected": selected}
 
 
@@ -811,7 +822,10 @@ def clear_candidate_epoch_selection(folder, job_id):
     run_dir = host_path_for_training_path(raw_run_path)
     if not run_dir.is_dir() or run_dir.is_symlink():
         raise FileNotFoundError("Recorded training run directory is unavailable.")
-    _clear_selected_epoch(run_dir.resolve(strict=True), str(run.get("actionId") or ""))
+    identity = _candidate_manifest_id(run)
+    if not identity:
+        return {"selected": None}
+    _clear_selected_epoch(run_dir.resolve(strict=True), identity)
     return {"selected": None}
 
 

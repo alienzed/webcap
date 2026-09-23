@@ -54,6 +54,8 @@ _stop_requests = set()
 _recent_sets_cache = {"expires": 0.0, "items": []}
 _reconcile_lock = threading.Lock()
 _startup_reconciled = False
+_monitor_lock = threading.Lock()
+_monitor_thread = None
 _logger = logging.getLogger(__name__)
 
 
@@ -103,6 +105,33 @@ def _ensure_execution_reconciled():
                     status["error"] = "Test Generations execution was interrupted by a WebCap restart."
                     _atomic_write_json(_status_path(session_directory), status)
         _startup_reconciled = True
+
+
+def _monitor_loop():
+    while True:
+        try:
+            _advance_test_queue()
+        except Exception:
+            _logger.exception("Test Generations queue monitor failed.")
+        time.sleep(2)
+
+
+def _ensure_monitor_started():
+    global _monitor_thread
+    with _monitor_lock:
+        if _monitor_thread and _monitor_thread.is_alive():
+            return
+        _monitor_thread = threading.Thread(
+            target=_monitor_loop,
+            name="webcap-test-generations-queue",
+            daemon=True,
+        )
+        _monitor_thread.start()
+
+
+def start_observer():
+    _ensure_execution_reconciled()
+    _ensure_monitor_started()
 
 
 def _reserve_gpu_for_test_generations():
@@ -374,7 +403,6 @@ def recent_test_sets(limit=8):
 
 
 def activity_snapshot(folder_path=None):
-    _advance_test_queue()
     active = []
     with _lock:
         dead_keys = []
@@ -1774,7 +1802,6 @@ def prepare(folder_path, model_id=None):
     }
 
 def status(folder_path, model_id=None):
-    _advance_test_queue()
     payload = _visible_status(folder_path, model_id=model_id)
     session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
     if not session_name:

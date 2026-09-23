@@ -1929,6 +1929,10 @@
   line-height: 1;
 }
 
+.app.shell-revamp:not(.workspace-surface-training) .training-runner-output-view {
+  display: none !important;
+}
+
 .app.shell-revamp.workspace-surface-training:not(.training-config-selected) .editor-wrapper {
   display: none !important;
 }

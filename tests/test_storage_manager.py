@@ -52,7 +52,10 @@ def _generation(root, day="2026-09-23", job_id="job-1"):
 
 def _story(root, story_id="story-demo"):
     directory = root / "output" / "storyboards" / story_id
-    (directory / "takes").mkdir(parents=True)
+    take_dir = directory / "takes" / "scene-1"
+    take_dir.mkdir(parents=True)
+    take_path = take_dir / "take-1.mp4"
+    take_path.write_bytes(b"take-video")
     _write_json(directory / "story.json", {
         "id": story_id,
         "title": "Demo Story",
@@ -62,8 +65,27 @@ def _story(root, story_id="story-demo"):
         "pinned": False,
         "createdAt": "2026-09-23T00:00:00+00:00",
         "updatedAt": "2026-09-23T00:00:00+00:00",
-        "sceneOrder": [],
-        "scenes": {},
+        "sceneOrder": ["scene-1"],
+        "scenes": {
+            "scene-1": {
+                "id": "scene-1",
+                "title": "Opening",
+                "references": [],
+                "takes": {
+                    "take-1": {
+                        "id": "take-1",
+                        "sceneId": "scene-1",
+                        "createdAt": "2026-09-23T00:00:00+00:00",
+                        "mediaPath": "takes/scene-1/take-1.mp4",
+                        "label": "",
+                        "rating": None,
+                    }
+                },
+                "removedTakes": {},
+                "takeOrder": ["take-1"],
+                "selectedTakeId": "take-1",
+            }
+        },
         "removedScenes": {},
     })
     return directory
@@ -126,6 +148,8 @@ def test_storyboard_measure_refuses_symlinked_story(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     outside = tmp_path / "outside-story"
     outside.mkdir()
+    (outside / "takes" / "scene-1").mkdir(parents=True)
+    (outside / "takes" / "scene-1" / "take-1.mp4").write_bytes(b"outside")
     _write_json(outside / "story.json", {
         "id": "story-demo",
         "title": "Outside",
@@ -135,8 +159,22 @@ def test_storyboard_measure_refuses_symlinked_story(monkeypatch, tmp_path):
         "pinned": False,
         "createdAt": "2026-09-23T00:00:00+00:00",
         "updatedAt": "2026-09-23T00:00:00+00:00",
-        "sceneOrder": [],
-        "scenes": {},
+        "sceneOrder": ["scene-1"],
+        "scenes": {
+            "scene-1": {
+                "id": "scene-1",
+                "references": [],
+                "takes": {
+                    "take-1": {
+                        "id": "take-1",
+                        "sceneId": "scene-1",
+                        "mediaPath": "takes/scene-1/take-1.mp4",
+                    }
+                },
+                "removedTakes": {},
+                "takeOrder": ["take-1"],
+            }
+        },
         "removedScenes": {},
     })
     root = tmp_path / "output" / "storyboards"
@@ -148,8 +186,50 @@ def test_storyboard_measure_refuses_symlinked_story(monkeypatch, tmp_path):
         pytest.skip("Symlink creation is unavailable on this platform.")
 
     with pytest.raises(ValueError, match="symlinked"):
-        storage_manager.measure("storyboard", "story-demo")
+        storage_manager.measure("storyboard", "story-demo/scene-1/take-1")
 
+
+
+def test_storyboard_storage_deletes_take_not_story(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    story_dir = _story(tmp_path)
+
+    item = storage_manager.overview("")["items"]["storyboard"][0]
+
+    assert item["id"] == "story-demo/scene-1/take-1"
+    assert item["kind"] == "Generated Take"
+    assert item["purgeable"] is True
+    storage_manager.purge("storyboard", item["id"])
+
+    assert story_dir.is_dir()
+    assert (story_dir / "story.json").is_file()
+    assert not (story_dir / "takes" / "scene-1" / "take-1.mp4").exists()
+    story = json.loads((story_dir / "story.json").read_text(encoding="utf-8"))
+    assert story["scenes"]["scene-1"]["takes"] == {}
+
+
+def test_storyboard_storage_protects_take_used_as_reference(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    story_dir = _story(tmp_path)
+    story_path = story_dir / "story.json"
+    story = json.loads(story_path.read_text(encoding="utf-8"))
+    story["scenes"]["scene-1"]["references"] = [{
+        "role": "first_frame",
+        "source": "take",
+        "sourceSceneId": "scene-1",
+        "sourceTakeId": "take-1",
+        "frame": "first",
+        "mediaPath": "takes/scene-1/take-1.mp4",
+    }]
+    _write_json(story_path, story)
+
+    item = storage_manager.overview("")["items"]["storyboard"][0]
+
+    assert item["purgeable"] is False
+    assert "Scene reference" in item["protectedReason"]
+    with pytest.raises(RuntimeError, match="used as a Scene reference"):
+        storage_manager.purge("storyboard", item["id"])
+    assert (story_dir / "takes" / "scene-1" / "take-1.mp4").is_file()
 
 def test_generate_purge_requires_manifest_ownership(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
@@ -281,6 +361,10 @@ def test_storage_ui_is_isolated_global_activity():
     assert "/fs/storage/scan/status" in storage_js
     assert "/fs/storage/scan/cancel" in storage_js
     assert "Measure all" not in storage_js
+    assert "storageState.activeArea" in storage_js
+    assert "storage-overview-back" in storage_js
+    assert "Delete Take" in storage_js
+    assert "Delete Story" not in storage_js
     assert "typeof window.reportConsoleError" not in storage_js
     assert "typeof window.closeGenerateActivity" not in storage_js
     assert "This removes the Story metadata, its Takes, and references." in storage_js

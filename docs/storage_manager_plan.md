@@ -998,9 +998,24 @@ A full-suite run against the current `main` baseline reported the already-known 
 ### Deliberate MVP boundaries
 
 - Global Test history remains incomplete because Test Sessions are distributed beneath Sets and WebCap has no cheap global Test index. Storage clearly labels Tests as **current Set / partial inventory** rather than performing a hidden `os.walk(FS_ROOT)`.
-- H3 probe directories are surfaced and measurable but remain protected in this MVP until inactive/terminal probe ownership is made explicit enough for deletion.
+- H3 probe directories are surfaced and measurable. A matching app-owned `seed.json` is required for ownership; running/stopping probes remain protected, while prepared or terminal probes may be explicitly deleted from Storage.
 - Configured external staged-Test LoRA roots are not globally inventoried yet. Any future support must identify WebCap-owned copies through their provenance sidecars rather than treating an external directory as ours.
 - ComfyUI scratch cleanup is completion-time lifecycle cleanup first. Jobs that fail before WebCap ever obtains a provider output path may still require a future exact-root residual-reconciliation mechanism; Storage must not guess the ComfyUI filesystem root.
 - Malformed producer manifests are not automatically purged. Ownership must remain provable before deletion.
 
 These boundaries are intentional safety limits, not reasons to add a generic filesystem scanner.
+
+
+---
+
+## Post-MVP hostile-audit follow-up
+
+A second pass after PR #66 tightened the implementation without changing any Action screen or workflow ownership:
+
+- Test Session deletion now re-reads the session manifest at mutation time and refuses active statuses even if the Storage screen was rendered from older state.
+- H3 probe directories now use their app-written `seed.json` plus optional `runtime.json` as ownership/state sentinels. Prepared and terminal probes are manually purgeable; running/stopping probes are protected.
+- Runtime purge remains identity-scoped. The generic Generate reference store is still lifecycle-managed and explicitly rejected by the purge endpoint.
+- Storage frontend dependencies on app-owned Console and shell functions now fail loudly rather than silently skipping required behavior.
+- Malformed or ownership-ambiguous probe directories are not made deletable merely because they sit under the probe root.
+
+Remaining North Star gap: ComfyUI scratch is automatically cleaned when WebCap has an exact provider output path, but residual scratch that predates that path (or survives an early provider failure) still lacks a durable provider-root identity that Storage can safely inventory. The next improvement should persist exact provider-owned cleanup identities as part of inference lifecycle state rather than teaching Storage to scan arbitrary ComfyUI directories.

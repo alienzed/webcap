@@ -3,7 +3,8 @@ import secrets
 import time
 
 from . import inference_runtime
-from .generate_store import persist_result, resolve_reference_path\nfrom .execution_queue import update_job as execution_update_job
+from .generate_store import persist_result, resolve_reference_path
+from .execution_queue import update_job as execution_update_job
 from .inference_models import get_inference_model, public_models
 
 

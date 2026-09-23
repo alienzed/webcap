@@ -111,6 +111,20 @@ def test_storyboard_story_library_owns_management_actions():
     assert "shutil.rmtree(directory)" in store
 
 
+
+def test_storyboard_story_action_menu_escapes_library_scroll_clipping():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert "function positionStoryActionMenu(menu)" in storyboard
+    assert "getBoundingClientRect()" in storyboard
+    assert "closeStoryActionMenus(storyMenu)" in storyboard
+    assert "storyLibraryList.addEventListener('scroll'" in storyboard
+    popover_rule = css.split(".storyboard-story-menu-popover {", 1)[1].split("}", 1)[0]
+    assert "position: fixed;" in popover_rule
+    assert "z-index: 200;" in popover_rule
+
+
 def test_storyboard_scene_removal_is_recoverable():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")

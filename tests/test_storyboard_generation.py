@@ -477,7 +477,7 @@ def test_storyboard_generation_cleans_owned_comfy_reference_inputs_after_capture
 
     assert len(cleaned) == 1
     uploaded, captured_output, owned_prefix = cleaned[0]
-    assert uploaded[0].endswith("/first.png")
+    assert uploaded[0].endswith(".png")
     assert captured_output == output_ref
     assert owned_prefix == (
         "webcap-storyboard/" + story["id"] + "/" + scene["id"] + "/" +

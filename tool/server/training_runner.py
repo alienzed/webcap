@@ -766,7 +766,7 @@ def remove_candidate_epoch_from_test_response(folder, job_id, epoch):
         return {"ok": False, "error": str(exc)}, 400
 
 def _candidate_selected_epoch(run_dir, run):
-    return _selected_epoch(run_dir, str(run.get("id") or ""))
+    return _selected_epoch(run_dir, str(run.get("actionId") or ""))
 
 
 def _candidate_epoch_step(analysis, epoch):
@@ -791,7 +791,7 @@ def select_candidate_epoch(folder, job_id, epoch):
         relative = source_path.relative_to(resolved_run).as_posix()
     except ValueError as exc:
         raise RuntimeError("Selected epoch artifact is outside the recorded training run.") from exc
-    selected = _select_epoch(resolved_run, str(run.get("id") or ""), int(epoch), step, relative)
+    selected = _select_epoch(resolved_run, str(run.get("actionId") or ""), int(epoch), step, relative)
     return {"selected": selected}
 
 
@@ -811,7 +811,7 @@ def clear_candidate_epoch_selection(folder, job_id):
     run_dir = host_path_for_training_path(raw_run_path)
     if not run_dir.is_dir() or run_dir.is_symlink():
         raise FileNotFoundError("Recorded training run directory is unavailable.")
-    _clear_selected_epoch(run_dir.resolve(strict=True), str(run.get("id") or ""))
+    _clear_selected_epoch(run_dir.resolve(strict=True), str(run.get("actionId") or ""))
     return {"selected": None}
 
 

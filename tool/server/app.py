@@ -36,6 +36,10 @@ from .storyboard_generation import generation_action as storyboard_generation_ac
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_llm_runtime import run_contract as storyboard_run_llm_contract, status as storyboard_director_status
+from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
+from .generate_store import list_results as generate_list_results, resolve_result_media as generate_resolve_result_media, save_reference as generate_save_reference
+from .generation_director_contract import build_request as generate_build_director_request
+from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, snapshot as inference_snapshot
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -632,6 +636,112 @@ def storyboard_take_upload_route():
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         app.logger.exception("STORYBOARD TAKE UPLOAD FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/capabilities", methods=["GET"])
+def generate_capabilities_route():
+    try:
+        return jsonify({"ok": True, **generate_capabilities()})
+    except Exception as exc:
+        app.logger.exception("GENERATE CAPABILITIES FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/results", methods=["GET"])
+def generate_results_route():
+    try:
+        return jsonify({"ok": True, "results": generate_list_results(request.args.get("limit", 100))})
+    except Exception as exc:
+        app.logger.exception("GENERATE RESULTS FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/media", methods=["GET"])
+def generate_media_route():
+    try:
+        media_path = generate_resolve_result_media(request.args.get("path", ""))
+        return send_from_directory(str(media_path.parent), media_path.name)
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/reference", methods=["POST"])
+def generate_reference_route():
+    try:
+        upload = request.files.get("file")
+        if upload is None or not upload.filename:
+            raise ValueError("Generate reference file is required.")
+        return jsonify({"ok": True, "reference": generate_save_reference(upload)})
+    except Exception as exc:
+        app.logger.exception("GENERATE REFERENCE UPLOAD FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate", methods=["POST"])
+def generate_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        prepared = prepare_generate_request(data)
+        label = str(data.get("label") or "").strip()
+        if not label:
+            label = str(prepared.get("sourcePrompt") or "Generate").replace("\n", " ")[:80]
+        return jsonify({"ok": True, "job": enqueue_generate(prepared, label=label)})
+    except Exception as exc:
+        app.logger.exception("GENERATE ENQUEUE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/inference", methods=["GET", "POST"])
+def inference_route():
+    try:
+        if request.method == "GET":
+            job_id = str(request.args.get("job") or "").strip()
+            if job_id:
+                return jsonify({"ok": True, "job": inference_job_status(job_id)})
+            return jsonify({"ok": True, "queue": inference_snapshot(include_terminal=False)})
+        data = request.get_json(silent=True) or {}
+        return jsonify({
+            "ok": True,
+            **inference_action(
+                str(data.get("operation") or "").strip(),
+                job_id=str(data.get("jobId") or "").strip(),
+                direction=str(data.get("direction") or "").strip(),
+                position=data.get("position"),
+            ),
+        })
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("INFERENCE QUEUE ACTION FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/director", methods=["GET", "POST"])
+def generate_director_route():
+    try:
+        if request.method == "GET":
+            return jsonify({"ok": True, **storyboard_director_status()})
+        data = request.get_json(silent=True) or {}
+        contract = generate_build_director_request(
+            str(data.get("modelId") or "").strip(),
+            str(data.get("operation") or "").strip(),
+            prompt=data.get("prompt") or "",
+            instruction=data.get("instruction") or "",
+            settings=data.get("settings"),
+        )
+        result = storyboard_run_llm_contract(str(data.get("directorModel") or "").strip(), contract)
+        return jsonify({
+            "ok": True,
+            "result": result["text"],
+            "model": result["model"],
+            "usage": result.get("usage"),
+            "timings": result.get("timings"),
+        })
+    except Exception as exc:
+        app.logger.exception("GENERATE DIRECTOR FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

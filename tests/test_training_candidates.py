@@ -827,6 +827,7 @@ def test_candidate_selection_persists_with_trainer_timestamp_run_and_replaces_cl
         "outputRunPath": str(run),
         "status": "completed",
         "stages": "h3",
+        "actionId": "001-subject/001-h3",
     }]}), encoding="utf-8")
 
     monkeypatch.setattr(app_config, "FS_ROOT", root)

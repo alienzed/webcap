@@ -1,12 +1,59 @@
 # Storage Manager Plan
 
-**Status:** proposed implementation plan; no behavior implemented by this document.
+**Status:** implementation in progress on `feature/storage-manager-mvp`; this document is the governing design and audit record.
 
 **Purpose:** give WebCap one calm, high-level view of the disk space it creates directly or causes external runtimes to create, with safe drill-down, **Open**, and deliberately scoped **Purge / Delete** actions.
 
 This plan follows `AGENTS.md`: file-based ownership stays explicit, destructive actions stay deliberate, generated inference artifacts may be permanently deleted, source Set media/state remains protected, and the smallest useful implementation is preferred over a generic storage framework.
 
 The historical precursor is the removed `docs/training_artifact_cleanup.md` around commits `d99517d7` / `40dbd16`. That work established the important idea that WebCap should know the ownership boundary of artifacts it creates before it attempts cleanup.
+
+---
+
+## 0. Hostile audit and revised invariants
+
+The first draft had several unacceptable failure modes:
+
+- category-level recursive measurement could still become a disguised whole-area `du`;
+- "generated" was too broad a deletion criterion;
+- Test results are distributed beneath Sets, so a complete global count would require an index or an explicit discovery pass;
+- category totals could hide stale or unknown item measurements;
+- authored/safety Set data was too close to reclaimable artifacts conceptually;
+- ComfyUI scratch cleanup was framed too much as Storage work instead of inference lifecycle work.
+
+The revised invariants are:
+
+1. **No automatic recursive walk of `FS_ROOT`.** Opening Storage uses known producer roots, direct-child enumeration, disk capacity, and cached item measurements.
+2. **Measurement is item-scoped.** One request measures one positively owned unit. **Measure all** sequences those bounded requests rather than issuing one monolithic server scan.
+3. **Deletion is identity-scoped, never path-scoped.** The browser sends a producer area and domain ID; the backend re-resolves ownership immediately before mutation.
+4. **Set source/authored files are undeletable from Storage.** Media, captions, Set state, `originals/`, and user-authored Set configuration are not purge targets.
+5. **Derived artifacts require manual deletion.** Training/Diffusion-Pipe outputs, Test Sessions, Generate results, Storyboard material, completed probes, staged Test copies, and other positively owned derived output may be deleted only through an explicit user action and confirmation.
+6. **ComfyUI scratch is lifecycle-managed.** Exact WebCap-prefixed provider inputs/outputs should be removed automatically once safely ingested or conclusively abandoned; Storage surfaces leftovers when automatic cleanup cannot be proven.
+7. **Unknown is not zero and not ours.** Missing measurement remains **Not measured**; unknown/external files never become reclaimable merely because of proximity.
+8. **Active/reference safety wins.** Active or referenced units remain protected.
+9. **Storage owns no other activity UI.** Implementation stays in Storage files plus minimal shell/route wiring; domain operations are reused without changing their screens.
+
+### MVP producer inventory
+
+- **Training:** current managed logical-run directories beneath `output/runs`.
+- **Generate:** manifest-owned results beneath `output/generations`.
+- **Storyboard:** Story folders beneath `output/storyboards`.
+- **Tests:** current-Set Test Sessions only in the first MVP. The category is explicitly marked partial; historical global Test discovery is not performed automatically.
+- **Runtime:** known WebCap runtime roots and H3 probes.
+- **ComfyUI:** exact `webcap-*` provider subtrees only; never arbitrary ComfyUI content.
+- **Set data:** protected context only; no source/authored Set deletion.
+
+### Safe implementation phases
+
+**Phase 1 — producer inventory + read-only backend.** Isolated `storage_manager.py`; direct producer enumeration; disk capacity; disposable item-size cache; one-item measurement. No global crawl.
+
+**Phase 2 — Storage activity UI.** Global Storage activity; largest-first rows; stale/not-measured states; item-level Measure; sequential Measure all; Open. No changes inside action screens.
+
+**Phase 3 — manual derived-artifact deletion.** Identity dispatch re-resolves ownership and calls existing domain deletion semantics or sentinel-validates a managed artifact. No arbitrary delete endpoint.
+
+**Phase 4 — ComfyUI lifecycle hygiene.** Successful ingestion/abandonment removes exact WebCap-owned provider files/directories. Storage remains the audit/recovery surface, not the primary cleanup mechanism.
+
+**Phase 5 — hostile implementation audit / North Star pass.** Re-test ownership, active/reference protection, symlink/path escape, shell isolation, and operational clarity; remove accidental complexity.
 
 ---
 

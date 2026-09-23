@@ -57,7 +57,7 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert 'id="test-generations-pane"' in html
     assert "test-generations-modal" not in script
     assert "el('test-generations-workspace')" in script
-    assert "training-tests-actions" in script
+    assert "test-generations-run-btn" in script
     assert ".training-run-setup-actions" not in script
     assert "document.querySelector('.editor-surface')" not in script
     assert "test-generations-active" not in script
@@ -114,7 +114,7 @@ def test_test_generation_previews_keep_stable_width_and_natural_height():
 
     results_rule = css.split(".test-generations-results {", 1)[1].split("}", 1)[0]
     assert "display: grid;" in results_rule
-    assert "grid-template-columns: repeat(auto-fill, 280px);" in results_rule
+    assert "grid-template-columns: repeat(auto-fill, 330px);" in results_rule
     assert "justify-content: start;" in results_rule
     assert "flex: 1 1 0;" in results_rule
     assert "grid-auto-rows: max-content;" in results_rule
@@ -184,7 +184,7 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "button.disabled = false;" in script
     assert "queueCancel.disabled = false;" in script
     assert "row.dataset.sessionName = name;" in script
-    assert "row.dataset.queueJobId = String(job.id || '');" in script
+    assert "row.dataset.queueJobId = jobId;" in script
     assert "openSession(row.dataset.sessionName);" in script
     assert "open.dataset.sessionFolderOpen = resultFolder;" in script
     assert "rate.dataset.sessionRate = resultFolder;" in script
@@ -205,11 +205,11 @@ def test_session_list_groups_running_queue_then_finished():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     block = script.split("function renderSessions(sessions, queuedJobs)", 1)[1].split("function refreshSessions()", 1)[0]
 
-    assert "appendGroup('Running', activeItems.length, 'is-running')" in block
-    assert "appendGroup('Queued', queued.length, 'is-queued')" in block
-    assert "appendGroup('Finished', historyItems.length, 'is-history')" in block
-    assert block.index("appendGroup('Running'") < block.index("appendGroup('Queued'")
-    assert block.index("appendGroup('Queued'") < block.index("appendGroup('Completed'")
+    assert "ensureGroup('running', 'Running', activeItems.length, 'is-running')" in block
+    assert "ensureGroup('queued', 'Queued', queued.length, 'is-queued')" in block
+    assert "ensureGroup('history', 'Finished', historyItems.length, 'is-history')" in block
+    assert block.index("ensureGroup('running'") < block.index("ensureGroup('queued'")
+    assert block.index("ensureGroup('queued'") < block.index("ensureGroup('history'")
 
 
 def test_running_session_progress_uses_processed_over_total_and_updates_live():
@@ -237,7 +237,7 @@ def test_active_session_row_uses_live_polled_progress():
 
     assert "function sessionStatusText(session)" in script
     assert "function syncVisibleSessionProgress(status)" in script
-    assert "meta.textContent = sessionStatusText(session);" in script
+    assert "meta.textContent = sessionStatusText(status);" in script
     render_block = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
     assert "syncVisibleSessionProgress(status || {});" in render_block
 
@@ -306,11 +306,10 @@ def test_test_bench_activity_rail_and_live_session_contract():
     controls_block = script.split("function syncActiveRunControls(status)", 1)[1].split("function renderStatus(status)", 1)[0]
     assert "runBtn.disabled = active" not in controls_block
     assert "runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;" in controls_block
-    assert 'id="test-generations-stop-btn"' in html
-    assert "function syncActiveTestCard(status)" in script
-    assert "el('test-generations-stop-btn').onclick = function () { stopRun(this); };" in script
-    assert "dataset.sessionStop = name;" not in script
-    assert "data-session-stop" not in script
+    assert 'id="test-generations-stop-btn"' not in html
+    assert "function syncActiveTestCard(status)" not in script
+    assert "stop.dataset.sessionStop = name;" in script
+    assert "request('test_stop', { session: String(stopBtn && stopBtn.dataset.sessionStop || '') })" in script
     assert ".disabled = !!disabled" not in controls_block
 
     assert "if (!currentSession || currentSession === activeSession)" in script
@@ -337,30 +336,30 @@ def test_test_polling_keeps_active_worker_status_separate_from_selected_preview(
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
 
-    assert "syncActiveTestCard(status);" in poll
+    assert "syncActiveRunControls(status);" in poll
     assert "if (!currentSession || currentSession === activeSession)" in poll
     assert "else if (selectedWasLive)" in poll
     assert "renderStatus(selectedStatus);" in poll
 
 
-def test_active_test_card_is_separate_from_selected_session_results():
+def test_active_test_state_lives_in_stable_session_rows_separate_from_selected_results():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
-    assert 'id="test-generations-active"' in html
-    assert 'id="test-generations-active-progress"' in html
-    assert 'id="test-generations-active-current"' in html
-    assert 'id="test-generations-active-meta"' in html
-    assert "syncActiveTestCard(status);" in script
+    assert 'id="test-generations-active"' not in html
+    assert "function syncVisibleSessionProgress(status)" in script
+    assert "row.dataset.sessionName = name;" in script
+    assert "stop.dataset.sessionStop = name;" in script
     poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
-    assert "syncActiveTestCard(status);" in poll
+    assert "var activeSession = String(status && status.session || '');" in poll
+    assert "if (!currentSession || currentSession === activeSession)" in poll
+    assert "else if (selectedWasLive)" in poll
     render = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
-    assert "syncActiveTestCard" not in render
+    assert "syncVisibleSessionProgress(status || {});" in render
     assert "statusEl.textContent = live ? '' : statusText(status);" in render
-    assert ".test-generations-active {" in css
+    assert ".test-generations-session-progress" in css
     assert ".test-generations-stop-btn {" in css
-    assert "min-height: 160px;" in css
 
 
 def test_live_test_status_surfaces_comfy_job_progress_and_errors_to_console():
@@ -448,7 +447,7 @@ def test_test_result_stars_are_shared_by_grid_and_compare():
     assert "if (!opts.failed)" in script
 
     footer_block = script.split("function buildResultFooter(result, options)", 1)[1].split("function formatTestVideoTime", 1)[0]
-    assert "copy.appendChild(rating);" in footer_block
+    assert "secondaryRow.appendChild(rating);" in footer_block
 
     grid_handler = script.split("el('test-generations-results').onclick", 1)[1].split("el('test-generations-compare').onclick", 1)[0]
     compare_handler = script.split("el('test-generations-compare').onclick", 1)[1].split("el('test-generations-prompt').addEventListener", 1)[0]
@@ -502,8 +501,10 @@ def test_compare_polling_preserves_video_elements_and_refreshes_navigation_only(
     assert "existingPrevious.disabled = compareIndex <= 0;" in compare_block
     assert "existingNext.disabled = compareIndex >= results.length - 2;" in compare_block
     assert "existingPosition.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);" in compare_block
-    assert compare_block.index("existingNext.disabled = compareIndex >= results.length - 2;") < compare_block.index("return;")
-    assert compare_block.index("return;") < compare_block.index("host.innerHTML = '';")
+    stable_branch = compare_block.index("if (String(host.dataset.compareKey || '') === compareKey")
+    rebuild = compare_block.index("host.innerHTML = '';")
+    assert stable_branch < compare_block.index("existingNext.disabled = compareIndex >= results.length - 2;", stable_branch)
+    assert compare_block.index("return;", stable_branch) < rebuild
     assert "if (resultsView === 'compare') renderCompare(status || {});" in script
 
 
@@ -522,7 +523,8 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
-    assert "Next run" in script
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    assert "Next run" in html
     assert "test-generations-session-meta" in script
     assert "test-generations-session-info-btn" in script
     assert "test-generations-session-details" in script
@@ -575,8 +577,8 @@ def test_test_identity_is_owned_by_shell_header():
     assert "test-generations-close-btn" not in script
     assert "test-generations-header" not in script
     assert ".test-generations-header" not in css
-    assert "test-generations-form-title" in script
-    assert "? 'Test Generations'" in shell
+    assert "test-generations-form-title" not in script
+    assert "workspaceTitle.textContent = 'Test Generations'" in shell
     assert "window.closeTestBenchActivity" in shell
 
 def test_test_generations_canonicalizes_session_paths_to_owning_set():
@@ -622,7 +624,8 @@ def test_test_workspace_markup_is_static_and_behavior_only_binds_it():
 
     assert html.count('id="test-generations-pane"') == 1
     assert html.count('id="test-generations-run-btn"') == 1
-    assert "document.createElement('section')" not in script
+    assert "document.createElement('section')" in script
+    assert "group.dataset.sessionGroup = key;" in script
     assert "node.innerHTML = [" not in script
     assert "workspace.appendChild(node)" not in script
     assert "function bindUi()" in script
@@ -687,8 +690,8 @@ def test_saved_test_history_does_not_require_external_staging_folder():
     assert "except ValueError:" in prepare
     assert "loras = []" in prepare
     assert '"sessions": list_sessions(folder_path)' in prepare
-    start_start = backend.index("def start_queued(folder_path")
-    assert "_test_directory(folder_path, model)" in backend[start_start:]
+    enqueue_start = backend.index("def enqueue(folder_path")
+    assert "_test_directory(folder_path, model)" in backend[backend.index("def _new_inference_request("):enqueue_start]
     assert 'operation == "test_start"' not in backend
 
 def test_test_generations_rate_items_reuses_unrated_single_item_review():
@@ -724,7 +727,7 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "dataset.candidateSelect" in script
     assert "selectedFiles: selectedFiles" in script
     assert "selectedFiles: selectedCandidateFiles()" in script
-    assert "Array.isArray(state.testGenerationSettings.selectedFiles)" in script
+    assert "Array.isArray(savedSettings.selectedFiles)" in script
     assert "selectedCandidates = new Set(savedSelection === null ? files : savedSelection);" in script
     assert 'id="test-generations-master-select"' in html
     assert 'id="test-generations-select-all-btn"' not in html
@@ -770,15 +773,15 @@ def test_test_generations_queue_contract():
     assert "def queued_jobs(" in backend
     assert "def cancel_queued(" in backend
     assert "def clear_queued(" in backend
-    assert "def start_queued(" in backend
+    assert "def start_queued(" not in backend
     assert 'operation == "test_enqueue"' in backend
     assert 'operation == "test_queue"' in backend
     assert 'operation == "test_queue_cancel"' in backend
     assert 'operation == "test_queue_clear"' in backend
-    assert "EXECUTION_LANE = \"test-generations\"" in backend
-    assert "execution_enqueue(" in backend
-    assert "execution_claim_next(" in backend
-    assert "_reserve_gpu_for_test_generations" in backend
+    assert 'SHARED_EXECUTION_LANE = "inference"' in backend
+    assert "inferenceJobs" in backend
+    assert "execution_lane_snapshot(SHARED_EXECUTION_LANE" in backend
+    assert "_reserve_gpu_for_test_generations" not in backend
     assert "_queue_retry" not in backend
     assert "Pause Training before starting Test Generations." not in backend
     assert "enqueue_test_response" not in backend

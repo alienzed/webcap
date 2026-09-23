@@ -142,7 +142,21 @@ def persist_result(job_id, request, output_ref, media_bytes, provider_job_id, el
             "mediaPath": relative_media,
             "manifestPath": relative_manifest,
         }
-        _atomic_write_json(directory / MANIFEST_NAME, payload)
+        manifest_path = directory / MANIFEST_NAME
+        _atomic_write_json(manifest_path, payload)
+        try:
+            from .storage_manager import register_usage
+            owned_files = [media_path, manifest_path]
+            owned_files.extend(root / relative for relative in persisted_references.values())
+            register_usage(
+                "generate",
+                day + "/" + str(job_id),
+                bytes_used=sum(int(path.stat().st_size) for path in owned_files),
+                file_count=len(owned_files),
+                source="producer",
+            )
+        except Exception as exc:
+            _logger.warning("Could not register Generate storage usage: %s", exc)
         return payload
     except Exception:
         try:

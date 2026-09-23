@@ -5,7 +5,7 @@ Last reviewed: 2026-09-23.
 
 ## Enhancements / Ideas
 
-- The approved training-layout/Resume change is implemented as documented in `stable_set_training_layout_plan.md`.
+- **Selected epoch / concept-maturity record.** Allow the user to mark one saved epoch per run/stage as **Selected** after candidate testing. Reuse the existing Candidate Analysis/TensorBoard substrate rather than inventing a second metrics pipeline. Show/store a small derived snapshot that can answer “when did this concept become good enough?”: selected epoch, optimizer step, progress through the planned run, epoch loss, robust/smoothed step-loss context, stable-region/basin context, training time to that point when it can be grounded, and Test rating average/count when available. Surface the selection in Candidate Analysis and Training History so selected runs can later be compared by time/steps/epochs-to-maturity. Keep the user’s selection as the judgment; analytics explain it rather than choosing the winner.
 
 
 ## Parked Design Notes (Not Current Backlog)
@@ -58,10 +58,11 @@ Longer-term direction for making WebCap practical outside the current developmen
 
 ## Completed (2026-09-23)
 
+- The approved training-layout/Resume change is implemented as documented in `stable_set_training_layout_plan.md`.
+- Storage Manager MVP, hostile-audit hardening, and explicit **Start scan** reconciliation are implemented: cheap ordinary loads, item-scoped/manual measurement, cancellable workspace scanning, historical Test discovery, byte/file-count provenance, protected Set accounting, identity-scoped deletion, active/reference checks, H3/staged-LoRA/runtime coverage, bounded exact-prefix ComfyUI residual detection, and opportunistic exact Generate usage registration. Scan/cache data remains advisory; deletion always re-resolves live ownership.
 - Storyboard Takes support explicit permanent **Delete Take** alongside the existing reversible Remove/Restore flow. Deletion removes Take media and metadata, requires destructive confirmation, warns when the selected Take will leave the Scene unselected, and refuses deletion while the same media is still a live Scene reference.
 
 ## Backlog (Do Not Implement Yet)
-- Before revisiting storage management, inspect the removed `docs/training_artifact_cleanup.md` in commit `40dbd16` and its action-directory layout. Do not reinvent it or introduce automatic deletion without a new, explicit retention/recovery design.
 - Optional model-native video FPS normalization during training capture/materialization: an advanced, default-off per-run option that converts only isolated capture media to Wan 16 fps or MiniMax H3 24 fps while preserving duration and audio. Keep reusable set-folder media model-neutral; see `training_profiles.md`.
 - Sometimes I want to bump the running training, test/start another, right now I have to Pause, reorder the queue and Resume, which is fine, but in this case what would be cool would be to like, with one button, swap the running process with the one below it. Is this a diminishing returns kind of feature where I just accept Pause, wait, reorder, resume? maybe just the reorder button for the first queued item gets enabled and triggers that swap?
 - Background captured-run preparation before training. A Train request should persist an immutable preparation intent immediately, then show a distinct `preparing` queue state while a single, low-priority background worker builds the captured bundle (metadata scan, copy/transcode, captions, configs, manifests). Preparation must not claim the active GPU-training slot or block normal UI/API operations, but it should be serialized by default to avoid competing disk/CPU/WSL I/O with interactive work. Snapshot the selected files, fallback captions, config/model/stage, and source fingerprints at submission; fail visibly if source inputs change before or during capture rather than creating an ambiguous bundle. Support cancel/reorder/restart reconciliation and clean up incomplete bundle directories; only a fully materialized immutable bundle becomes `queued` and eligible to launch in FIFO order. Expose explicit phase/progress (`scanning`, `copying`, `transcoding`, `writing configs`, `ready`) and preserve a completed bundle exactly as today.

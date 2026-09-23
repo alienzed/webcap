@@ -1,6 +1,6 @@
 # Storage Manager Plan
 
-**Status:** MVP implemented on `feature/storage-manager-mvp` / PR #66; this document is the governing design and audit record.
+**Status:** MVP, post-MVP ownership hardening, and the explicit **Start scan** reconciliation slice are implemented on `fix/storage-manager-post-mvp-audit`. Storage now supports cheap ordinary loads, cancellable workspace scans, historical Test discovery, byte/file-count provenance, and opportunistic producer registration where usage is already known cheaply.
 
 **Purpose:** give WebCap one calm, high-level view of the disk space it creates directly or causes external runtimes to create, with safe drill-down, **Open**, and deliberately scoped **Purge / Delete** actions.
 
@@ -23,15 +23,16 @@ The first draft had several unacceptable failure modes:
 
 The revised invariants are:
 
-1. **No automatic recursive walk of `FS_ROOT`.** Opening Storage uses known producer roots, direct-child enumeration, disk capacity, and cached item measurements.
-2. **Measurement is item-scoped.** One request measures one positively owned unit. **Measure all** sequences those bounded requests rather than issuing one monolithic server scan.
-3. **Deletion is identity-scoped, never path-scoped.** The browser sends a producer area and domain ID; the backend re-resolves ownership immediately before mutation.
-4. **Set source/authored files are undeletable from Storage.** Media, captions, Set state, `originals/`, and user-authored Set configuration are not purge targets.
-5. **Derived artifacts require manual deletion.** Training/Diffusion-Pipe outputs, Test Sessions, Generate results, Storyboard material, completed probes, staged Test copies, and other positively owned derived output may be deleted only through an explicit user action and confirmation.
-6. **ComfyUI scratch is lifecycle-managed.** Exact WebCap-prefixed provider inputs/outputs should be removed automatically once safely ingested or conclusively abandoned; Storage surfaces leftovers when automatic cleanup cannot be proven.
-7. **Unknown is not zero and not ours.** Missing measurement remains **Not measured**; unknown/external files never become reclaimable merely because of proximity.
-8. **Active/reference safety wins.** Active or referenced units remain protected.
-9. **Storage owns no other activity UI.** Implementation stays in Storage files plus minimal shell/route wiring; domain operations are reused without changing their screens.
+1. **No automatic recursive walk of `FS_ROOT`.** Opening Storage uses known producer roots, direct-child enumeration, disk capacity, and cached item measurements. Expensive discovery happens only after an explicit user action.
+2. **Inspection is not ownership.** Item measurements, producer-reported usage, and an explicit **Start scan** may populate advisory size/file-count facts, but none of those records grant delete authority.
+3. **Explicit scanning may be expensive.** When the user chooses **Start scan**, Storage may recursively inspect only declared WebCap-owned scopes, with progress/cancellation, unreadable-path reporting, and no symlink following. This is the appropriate path for reconciling historical/distributed artifacts such as Test Sessions.
+4. **Deletion is identity-scoped, never path-scoped.** The browser sends a producer area and domain ID; the backend re-resolves ownership immediately before mutation.
+5. **Set source/authored files are undeletable from Storage.** Media, captions, Set state, `originals/`, and user-authored Set configuration are not purge targets.
+6. **Derived artifacts require manual deletion.** Training/Diffusion-Pipe outputs, Test Sessions, Generate results, Storyboard material, completed probes, staged Test copies, and other positively owned derived output may be deleted only through an explicit user action and confirmation.
+7. **ComfyUI scratch is lifecycle-managed.** Exact WebCap-prefixed provider inputs/outputs should be removed automatically once safely ingested or conclusively abandoned; Storage surfaces leftovers when automatic cleanup cannot be proven.
+8. **Unknown is not zero and not ours.** Missing measurement remains **Not measured**; unknown/external files never become reclaimable merely because of proximity.
+9. **Active/reference safety wins.** Active or referenced units remain protected.
+10. **Storage owns no other activity UI.** Implementation stays in Storage files plus minimal shell/route wiring; domain operations are reused without changing their screens.
 
 ### MVP producer inventory
 
@@ -47,7 +48,7 @@ The revised invariants are:
 
 **Phase 1 — producer inventory + read-only backend.** Isolated `storage_manager.py`; direct producer enumeration; disk capacity; disposable item-size cache; one-item measurement. No global crawl.
 
-**Phase 2 — Storage activity UI.** Global Storage activity; largest-first rows; stale/not-measured states; item-level Measure; sequential Measure all; Open. No changes inside action screens.
+**Phase 2 — Storage activity UI.** Global Storage activity; largest-first rows; stale/not-measured states; item-level Measure; explicit Start scan; Open. No changes inside action screens.
 
 **Phase 3 — manual derived-artifact deletion.** Identity dispatch re-resolves ownership and calls existing domain deletion semantics or sentinel-validates a managed artifact. No arbitrary delete endpoint.
 
@@ -172,9 +173,21 @@ A row should generally represent the domain object the user already understands:
 
 **Opening Storage Manager must never recursively walk the entire filesystem root.**
 
-In particular, do not reuse the broad `os.walk(FS_ROOT)` pattern currently used by Test Generations recent-set discovery.
+That is an automatic-load rule, not a ban on disk scanning. A clearly explicit **Start scan** action is the correct place for expensive reconciliation when the user wants a trustworthy workspace-wide answer.
 
-Directory size is not cheaply available from normal filesystem metadata on all supported platforms, so the UI must be honest about when a size is measured versus cached.
+Do not reuse a blind `os.walk(FS_ROOT)` as the abstraction. The scan should execute an inspection plan made from known producer scopes and Set boundaries, so WebCap can deliberately inspect what it owns without turning discovery into deletion authority.
+
+Directory size is not cheaply available from normal filesystem metadata on all supported platforms, so the UI must be honest about when a size is producer-reported, scanned, cached, or not measured.
+
+### Inspection abstraction
+
+Keep three concerns separate:
+
+1. **Producer registration — cheap hints.** Appropriate workflows may record a tiny usage snapshot at natural lifecycle boundaries: producer/domain identity, logical item identity, bytes, file count, measurement time, and whether the value came from the producer or a scan. Do not store file inventories, arbitrary filesystem paths, content hashes, or another shadow metadata model.
+2. **Start scan — authoritative observation of current disk use.** A user-triggered scan may recurse inside declared WebCap-owned roots, discover distributed historical artifacts, count files/bytes, and refresh the usage cache. It must expose progress, support cancellation, refuse symlink traversal, and report unreadable scopes rather than silently treating them as empty.
+3. **Domain resolvers — mutation authority.** Open/Delete/Purge continue to re-resolve the domain identity against current manifests/sentinels and active references. Neither producer registration nor scan results authorize deletion.
+
+This means the usage cache is an accelerator and reporting surface, while the filesystem plus producer contracts remain truth.
 
 Use three levels of accounting.
 
@@ -204,22 +217,23 @@ Examples:
 
 These routines should understand only their domain's owned layout.
 
-### Level C - explicit recursive measurement
+### Level C - explicit Start scan / recursive reconciliation
 
-Training output can contain trainer-created nested checkpoint state whose exact size cannot be inferred safely without walking it.
+Some storage cannot be described accurately without walking nested content: trainer checkpoints are one example, and historical Set-local Test Sessions are another.
 
-For that case:
+For those cases:
 
 - do **not** scan on app startup;
 - do **not** scan on every Storage open;
-- expose **Measure Training** / **Refresh sizes**;
-- scan one known logical-run root at a time;
+- expose one understandable **Start scan** action for a workspace reconciliation pass;
+- build the scan from declared producer scopes rather than an arbitrary delete-capable filesystem walker;
+- recursively count bytes/files only inside those scopes;
+- discover historical/distributed Test Sessions during this explicit pass;
 - show progress and allow cancellation;
-- cache the result and measurement timestamp.
+- cache each completed item result and its measurement timestamp/source;
+- leave prior cached values intact for items whose scan is cancelled or fails.
 
-The same explicit scan may be used once to discover legacy / distributed Set-local Test data when no index exists.
-
-A user-requested measurement is allowed to be expensive. An ordinary page load is not.
+A user-requested scan is allowed to be expensive. An ordinary page load is not.
 
 ---
 
@@ -246,12 +260,12 @@ Suggested information:
     "tests": {"bytes": 0, "measuredAt": "..."}
   },
   "items": {
-    "training:<actionId>": {"bytes": 0, "measuredAt": "..."}
+    "training:<actionId>": {"bytes": 0, "fileCount": 0, "measuredAt": "...", "source": "scan"}
   }
 }
 ```
 
-Do not put path authority, retention rules, or deletion permission in this file.
+Do not put file inventories, arbitrary path authority, retention rules, or deletion permission in this file. A stable producer/item identity is enough provenance; deletion must always re-resolve the live domain object.
 
 ### Keep the cache fresh at natural lifecycle moments
 
@@ -474,7 +488,7 @@ Prepared/rebuildable dataset material. Current training architecture captures it
 
 - Surface size.
 - **Open**.
-- Candidate for explicit **Delete prepared dataset** after verifying no remaining supported workflow consumes it.
+- Protected from Storage deletion because it is Set-owned. Rebuildability does not override the Set-file invariant.
 
 #### metadata/state/captions/TOMLs
 
@@ -773,7 +787,7 @@ Delete only completed/inactive exact probe directories.
 ### Set data
 
 - originals -> protected/open only;
-- auto_dataset -> explicit rebuildable-data cleanup once verified;
+- auto_dataset -> protected/open only because it is Set-owned;
 - captions/state/TOMLs -> protected.
 
 ### ComfyUI scratch
@@ -811,93 +825,39 @@ Do not overclaim.
 
 ---
 
-## 12. Phased implementation
+## 12. Implementation status and next extension
 
-### Phase 0 - inventory and tests
+### Completed foundation
 
-Before UI work:
+The original implementation phases are complete in their useful form:
 
-- codify the ownership map above in tests;
-- identify every WebCap-owned root and external prefix;
-- verify no additional large producer is missing;
-- verify exact active-job/reference checks needed by each purge candidate;
-- preserve the historical storage-cleanup design constraints.
+- producer-owned inventory and a read-only Storage activity;
+- item-scoped measurement with cached timestamps;
+- identity-scoped manual deletion for safe derived artifacts;
+- Training/Test/Generate/Storyboard/H3/staged-LoRA ownership checks;
+- exact WebCap-prefixed ComfyUI lifecycle cleanup plus residual surfacing;
+- hostile-audit hardening for active/reference races, symlink/path escape, and shell isolation.
 
-No mutations.
+The earlier plan's blanket lifecycle-accounting phase is intentionally **not** a requirement that every workflow synchronously maintains Storage metadata. That would couple unrelated producers to a reporting cache.
 
-### Phase 1 - Storage activity, read-only
+### Explicit scan + lightweight usage registration — implemented
 
-Build the Storage activity with:
+Storage now exposes **Start scan** as an explicit, cancellable workspace reconciliation operation. It:
 
-- filesystem free/total;
-- known areas;
-- cached/cheap sizes;
-- Open;
-- Details;
-- explicit Measure for expensive scopes;
-- size-descending detail rows.
+- runs only after user action;
+- performs a read-only Set/Test discovery pass while pruning WebCap global/runtime roots from that discovery walk;
+- never follows symlinks;
+- counts bytes and files for resolved managed items;
+- discovers historical/distributed Test Sessions;
+- reports scan phase/progress and supports cancellation;
+- updates the disposable usage cache incrementally as managed items complete;
+- preserves prior measurements when a scan is cancelled or an item cannot be read.
 
-No purge yet except perhaps linking to already-existing domain delete actions if doing so requires no new backend mutation.
+The cache stores only producer/item identity, bytes, file count, measurement time/source, plus discovered Set/Test identities. It does not store file inventories or deletion authority.
 
-Success criterion: the screen tells the user where WebCap's space is going without causing a global recursive walk.
+Generate is the first producer to report exact usage opportunistically because result persistence already knows every file it just wrote. Other producers should register usage only where the numbers are already cheap and exact; they should not perform hidden recursive scans merely to keep Storage current.
 
-### Phase 2 - cheap lifecycle accounting
-
-Update size cache at natural terminal/delete events:
-
-- Generate;
-- Test Sessions;
-- Storyboard Takes/Stories;
-- H3 probes;
-- Training terminal run-local measurement.
-
-This makes normal Storage loads increasingly accurate without recurring scans.
-
-### Phase 3 - safe derived-artifact purge
-
-Add domain-backed cleanup for:
-
-- Test Sessions;
-- Generate results;
-- Storyboard Takes / Stories using existing semantics;
-- completed H3 probes;
-- WebCap-owned copied Test LoRAs;
-- verified rebuildable `auto_dataset/`.
-
-Show space-to-reclaim before confirmation.
-
-### Phase 4 - Training cleanup
-
-Only after a focused Training retention/reference design.
-
-Use logical-run ownership from `training_action.py`; do not revive the old cleanup design literally.
-
-Decide separately whether v1 Training cleanup supports:
-
-- whole logical-run deletion only;
-- captured-input/cache deletion;
-- selected epochs/checkpoints.
-
-Prefer one coarse, understandable operation over many partially safe ones.
-
-### Phase 5 - provider scratch hygiene
-
-Unify exact-prefix ComfyUI cleanup for Generate, Storyboard, and Tests.
-
-Completion cleanup is primary.
-
-Then add bounded residual detection for WebCap-prefixed provider directories so Storage can expose:
-
-```text
-Runtime / Temporary
-  Generate references                0 B
-  ComfyUI WebCap leftovers         3.2 GB    reclaimable
-  H3 probes                        6.7 GB
-```
-
-Only after exact ownership is proven should residual cleanup become automatic.
-
----
+Deletion remains completely separate: every destructive action still re-resolves current ownership, manifests/sentinels, and active references.
 
 ## 13. Tests required
 
@@ -998,9 +958,26 @@ A full-suite run against the current `main` baseline reported the already-known 
 ### Deliberate MVP boundaries
 
 - Global Test history remains incomplete because Test Sessions are distributed beneath Sets and WebCap has no cheap global Test index. Storage clearly labels Tests as **current Set / partial inventory** rather than performing a hidden `os.walk(FS_ROOT)`.
-- H3 probe directories are surfaced and measurable but remain protected in this MVP until inactive/terminal probe ownership is made explicit enough for deletion.
-- Configured external staged-Test LoRA roots are not globally inventoried yet. Any future support must identify WebCap-owned copies through their provenance sidecars rather than treating an external directory as ours.
-- ComfyUI scratch cleanup is completion-time lifecycle cleanup first. Jobs that fail before WebCap ever obtains a provider output path may still require a future exact-root residual-reconciliation mechanism; Storage must not guess the ComfyUI filesystem root.
+- H3 probe directories are surfaced and measurable. A matching app-owned `seed.json` is required for ownership; running/stopping probes remain protected, while prepared or terminal probes may be explicitly deleted from Storage.
+- Configured external staged-Test roots are intentionally not scanned globally. Storage inspects only configured per-stage destinations for the current Set and exposes only copies with a matching WebCap provenance sidecar.
+- ComfyUI scratch cleanup remains completion-time lifecycle cleanup first. Storage learns the provider root only from a real local ComfyUI output path, then performs bounded direct enumeration under exact `webcap-generate`, `webcap-storyboard`, and `webcap-tests` prefixes. A first-ever job that fails before WebCap sees any local provider output cannot safely teach that root and remains the one residual-discovery limitation.
 - Malformed producer manifests are not automatically purged. Ownership must remain provable before deletion.
 
 These boundaries are intentional safety limits, not reasons to add a generic filesystem scanner.
+
+
+---
+
+## Post-MVP hostile-audit follow-up
+
+A second pass after PR #66 tightened the implementation without changing any Action screen or workflow ownership:
+
+- Test Session deletion now re-reads the session manifest at mutation time and refuses active statuses even if the Storage screen was rendered from older state.
+- H3 probe directories now use their app-written `seed.json` plus optional `runtime.json` as ownership/state sentinels. Prepared and terminal probes are manually purgeable; running/stopping probes are protected.
+- Runtime purge remains identity-scoped. Generate reference uploads are surfaced as individual WebCap token directories: queued/active references are protected, while inactive draft/residual bundles can be manually deleted with an explicit warning that an unsubmitted draft may lose the reference.
+- WebCap-owned staged Test LoRA copies are surfaced from current-Set configured destinations only when their provenance sidecar proves ownership; shared inference references protect them at mutation time.
+- A proven ComfyUI provider root is persisted only after WebCap resolves a real saved provider output. Storage then surfaces exact WebCap-prefixed input/output job trees without scanning arbitrary provider content; active shared-inference identities remain protected.
+- Storage frontend dependencies on app-owned Console and shell functions now fail loudly rather than silently skipping required behavior.
+- Generate/Test/Runtime/Comfy resolvers reject symlink/path-escape cases before destructive mutation; malformed or ownership-ambiguous artifacts are not made deletable merely because of proximity.
+
+Remaining North Star gap: if the very first ComfyUI job fails before WebCap ever receives a local provider output path, there is still no safe provider-root identity to inspect. Storage deliberately does not guess or scan for it. Once any valid local provider output has established the root, subsequent exact WebCap-prefixed residuals—including input-only leftovers—are visible and manually reclaimable.

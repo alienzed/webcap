@@ -1,22 +1,39 @@
 import json
 import os
+import re
 import shutil
 import tempfile
+import threading
 import time
+import uuid
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .epoch_test_bench import delete_session
 from .generate_store import MANIFEST_NAME
+from .execution_queue import get_job as execution_get_job, lane_snapshot as execution_lane_snapshot
+from . import inference_runtime
 from .inference_runner import stop_storyboard_jobs
 from .storyboard_store import delete_story, list_stories, storyboard_root
 from .training_action import managed_actions, read_action
+from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
 
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
-MEASURABLE_AREAS = {"training", "tests", "generate", "storyboard", "set", "runtime"}
-PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard"}
+MEASURABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy"}
+PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}
+ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
+ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
+GENERATE_REFERENCE_TOKEN_RE = re.compile(r"^[0-9]+-[0-9a-f]{12}$")
+_CACHE_LOCK = threading.RLock()
+_SCAN_LOCK = threading.Lock()
+_SCAN_STATE = None
+_SCAN_CANCEL = None
+
+
+class _ScanCancelled(RuntimeError):
+    pass
 
 
 def _cache_path():
@@ -71,7 +88,17 @@ def _cached_measurement(cache, area, item_id, folder=""):
         return None
     if size < 0 or measured_at <= 0:
         return None
-    return {"bytes": size, "measuredAt": measured_at}
+    result = {"bytes": size, "measuredAt": measured_at}
+    try:
+        file_count = int(row.get("fileCount"))
+    except (TypeError, ValueError):
+        file_count = None
+    if file_count is not None and file_count >= 0:
+        result["fileCount"] = file_count
+    source = str(row.get("source") or "").strip()
+    if source:
+        result["source"] = source
+    return result
 
 
 def _item(area, item_id, label, path, *, folder="", kind="", status="", purgeable=False, protected_reason="", meta=None, cache=None):
@@ -88,6 +115,8 @@ def _item(area, item_id, label, path, *, folder="", kind="", status="", purgeabl
         "measured": measurement is not None,
         "bytes": measurement["bytes"] if measurement else None,
         "measuredAt": measurement["measuredAt"] if measurement else None,
+        "fileCount": measurement.get("fileCount") if measurement else None,
+        "measurementSource": measurement.get("source") if measurement else "",
         "openable": Path(path).exists(),
     }
     if isinstance(meta, dict):
@@ -123,8 +152,23 @@ def _training_items(cache):
     return rows
 
 
+def _active_generate_job_ids():
+    active = set()
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
+    for job in snapshot.get("jobs") or []:
+        if not isinstance(job, dict):
+            continue
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("client") or "") == "generate":
+            job_id = str(job.get("id") or "").strip()
+            if job_id:
+                active.add(job_id)
+    return active
+
+
 def _generate_items(cache):
     root = Path(app_config.FS_ROOT) / "output" / "generations"
+    active_jobs = _active_generate_job_ids()
     rows = []
     if not root.is_dir():
         return rows
@@ -144,14 +188,16 @@ def _generate_items(cache):
             if not isinstance(payload, dict) or str(payload.get("jobId") or "") != directory.name:
                 continue
             item_id = day.name + "/" + directory.name
+            active = directory.name in active_jobs
             rows.append(_item(
                 "generate",
                 item_id,
                 payload.get("sourcePrompt") or payload.get("resolvedPrompt") or directory.name,
                 directory,
                 kind=payload.get("modelId") or "Generation",
-                status="completed",
-                purgeable=True,
+                status=("finalizing" if active else "completed"),
+                purgeable=not active,
+                protected_reason=("Referenced by active Generate work." if active else ""),
                 meta={
                     "jobId": directory.name,
                     "createdAt": payload.get("createdAt"),
@@ -186,36 +232,66 @@ def _storyboard_items(cache):
     return rows
 
 
-def _test_items(cache, folder):
-    folder = str(folder or "").strip()
-    if not folder:
-        return []
+def _read_test_session_manifest(session_path):
+    manifest = Path(session_path) / "test.json"
+    if manifest.is_symlink() or not manifest.is_file():
+        raise FileNotFoundError("Test Session manifest is unavailable.")
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Test Session manifest is unreadable; refusing Storage ownership decisions.") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("Test Session manifest is invalid; refusing Storage ownership decisions.")
+    return payload
+
+
+
+def _discovered_set_folders(cache, current_folder=""):
+    folders = []
+    seen = set()
+
+    def add(value):
+        normalized = _normalized_folder_key(value)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            folders.append(normalized)
+
+    add(current_folder)
+    discoveries = cache.get("discoveries") if isinstance(cache, dict) else {}
+    if isinstance(discoveries, dict):
+        for value in discoveries.get("sets") or []:
+            add(value)
+        for row in discoveries.get("tests") or []:
+            if isinstance(row, dict):
+                add(row.get("folder"))
+    return folders
+
+
+def _test_items_for_folder(cache, folder, qualify_label=False):
     set_path = app_config.safe_join_fs_root(folder)
     if not set_path.is_dir():
         return []
     rows = []
     root = set_path / "test-generations"
-    if not root.is_dir():
+    if root.is_symlink() or not root.is_dir():
         return rows
     for path in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower(), reverse=True):
         if not path.is_dir() or path.is_symlink():
             continue
-        manifest = path / "test.json"
-        if not manifest.is_file():
-            continue
         try:
-            session = json.loads(manifest.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(session, dict):
+            session = _read_test_session_manifest(path)
+        except (FileNotFoundError, RuntimeError):
             continue
         session_id = path.name
         status = str(session.get("status") or "")
-        active = status in {"queued", "starting", "running", "stopping"}
+        active = status in ACTIVE_TEST_STATUSES
+        label = str(session.get("name") or session_id)
+        if qualify_label:
+            label += " · " + folder
         rows.append(_item(
             "tests",
             session_id,
-            session.get("name") or session_id,
+            label,
             path,
             folder=folder,
             kind=session.get("modelId") or session.get("model") or "Test Session",
@@ -223,6 +299,7 @@ def _test_items(cache, folder):
             purgeable=not active,
             protected_reason=("Active Test Session; stop it before deletion." if active else ""),
             meta={
+                "set": folder,
                 "completed": int(session.get("completed") or 0),
                 "failed": int(session.get("failed") or 0),
                 "total": int(session.get("total") or 0),
@@ -233,62 +310,417 @@ def _test_items(cache, folder):
     return rows
 
 
-def _set_items(cache, folder):
+def _test_items(cache, folder):
+    folders = _discovered_set_folders(cache, folder)
+    qualify = len(folders) > 1
+    rows = []
+    for set_folder in folders:
+        try:
+            rows.extend(_test_items_for_folder(cache, set_folder, qualify_label=qualify))
+        except (FileNotFoundError, RuntimeError, ValueError):
+            continue
+    return rows
+
+def _normalized_folder_key(value):
+    return str(value or "").strip().replace("\\", "/").strip("/")
+
+
+def _active_staged_test_candidates(folder):
+    folder_key = _normalized_folder_key(folder)
+    active = set()
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
+    for job in snapshot.get("jobs") or []:
+        if not isinstance(job, dict):
+            continue
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("client") or "") != "test":
+            continue
+        if _normalized_folder_key(metadata.get("folder")) != folder_key:
+            continue
+        if str(metadata.get("candidateKind") or "") != "lora":
+            continue
+        candidate = str(metadata.get("candidateFile") or "").strip()
+        if candidate:
+            active.add(candidate)
+    return active
+
+
+def _read_staged_provenance(candidate, stage, folder):
+    path = Path(candidate)
+    sidecar = path.with_suffix(".webcap.json")
+    if path.is_symlink() or not path.is_file() or sidecar.is_symlink() or not sidecar.is_file():
+        return None
+    try:
+        payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        return None
+    if str(payload.get("stage") or "").strip().lower() != str(stage or "").strip().lower():
+        return None
+    if _normalized_folder_key(payload.get("sourceFolder")) != _normalized_folder_key(folder):
+        return None
+    if not str(payload.get("sourceJobId") or "").strip():
+        return None
+    try:
+        source_epoch = int(payload.get("sourceEpoch"))
+    except (TypeError, ValueError):
+        return None
+    if source_epoch < 0 or not str(payload.get("sourceFileName") or "").strip():
+        return None
+    return payload
+
+
+def _staged_items(cache, folder):
     folder = str(folder or "").strip()
     if not folder:
         return []
     set_path = app_config.safe_join_fs_root(folder)
     if not set_path.is_dir():
         return []
+
+    active_candidates = _active_staged_test_candidates(folder)
     rows = []
+    for stage, stage_label in TEST_COPY_STAGE_LABELS.items():
+        try:
+            root, parts = test_copy_destination(stage, set_path.name)
+        except (FileNotFoundError, RuntimeError, ValueError):
+            continue
+        directory = root.joinpath(*parts)
+        if directory.is_symlink() or not directory.is_dir():
+            continue
+        for candidate in sorted(directory.iterdir(), key=lambda path: path.name.lower()):
+            if candidate.suffix.lower() != ".safetensors":
+                continue
+            provenance = _read_staged_provenance(candidate, stage, folder)
+            if provenance is None:
+                continue
+            active = candidate.name in active_candidates
+            rows.append(_item(
+                "staged",
+                stage + "/" + candidate.name,
+                candidate.name,
+                candidate,
+                folder=folder,
+                kind=stage_label + " staged Test LoRA",
+                status=("in active Test queue" if active else "staged copy"),
+                purgeable=not active,
+                protected_reason=("Referenced by queued or active Test work." if active else ""),
+                meta={
+                    "stage": stage,
+                    "sourceJobId": provenance.get("sourceJobId"),
+                    "sourceEpoch": provenance.get("sourceEpoch"),
+                    "sourceRunName": provenance.get("sourceRunName"),
+                },
+                cache=cache,
+            ))
+    return rows
+
+
+
+def _set_items(cache, folder):
+    folders = _discovered_set_folders(cache, folder)
+    rows = []
+    qualify = len(folders) > 1
     known = (
         ("originals", "Originals", "Reversible source-media safety copies"),
         ("auto_dataset", "Prepared dataset", "Rebuildable Set preparation"),
         ("media_metadata.json", "Media metadata", "WebCap analysis cache"),
         (".webcap_state.json", "Set state", "WebCap authored Set state"),
     )
-    for item_id, label, kind in known:
-        path = set_path / item_id
-        if not path.exists() or path.is_symlink():
+    for set_folder in folders:
+        try:
+            set_path = app_config.safe_join_fs_root(set_folder)
+        except ValueError:
             continue
-        rows.append(_item(
-            "set",
-            item_id,
-            label,
-            path,
-            folder=folder,
-            kind=kind,
-            status="protected",
-            purgeable=False,
-            protected_reason="Set-owned data is never deleted from Storage Manager.",
-            cache=cache,
-        ))
+        if not set_path.is_dir():
+            continue
+        for item_id, label, kind in known:
+            path = set_path / item_id
+            if not path.exists() or path.is_symlink():
+                continue
+            rows.append(_item(
+                "set",
+                item_id,
+                ((set_path.name + " / " + label) if qualify else label),
+                path,
+                folder=set_folder,
+                kind=kind,
+                status="protected",
+                purgeable=False,
+                protected_reason="Set-owned data is never deleted from Storage Manager.",
+                cache=cache,
+            ))
     return rows
+
+def _read_h3_probe_state(probe_path):
+    probe = Path(probe_path)
+    seed_path = probe / "seed.json"
+    if seed_path.is_symlink() or not seed_path.is_file():
+        raise RuntimeError("H3 probe ownership seed is unavailable.")
+    try:
+        seed = json.loads(seed_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("H3 probe ownership seed is unreadable.") from exc
+    if not isinstance(seed, dict) or str(seed.get("id") or "") != probe.name:
+        raise RuntimeError("H3 probe ownership seed does not match its directory.")
+
+    runtime_path = probe / "runtime.json"
+    if runtime_path.is_symlink():
+        raise RuntimeError("H3 probe runtime state is unsafe.")
+    if not runtime_path.exists():
+        return {
+            "status": "prepared",
+            "purgeable": True,
+            "protectedReason": "",
+            "createdAt": seed.get("createdAt"),
+        }
+    if not runtime_path.is_file():
+        raise RuntimeError("H3 probe runtime state is unsafe.")
+    try:
+        runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("H3 probe runtime state is unreadable.") from exc
+    if not isinstance(runtime, dict) or str(runtime.get("probeId") or "") != probe.name:
+        raise RuntimeError("H3 probe runtime state does not match its directory.")
+
+    status = str(runtime.get("status") or "").strip().lower()
+    if not status:
+        raise RuntimeError("H3 probe runtime state has no status.")
+    active = status in ACTIVE_H3_PROBE_STATUSES
+    return {
+        "status": status,
+        "purgeable": not active,
+        "protectedReason": ("Active H3 probe; stop it before deletion." if active else ""),
+        "createdAt": seed.get("createdAt"),
+    }
+
+
+def _active_generate_reference_tokens():
+    active = set()
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
+    for job in snapshot.get("jobs") or []:
+        if not isinstance(job, dict):
+            continue
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("client") or "") != "generate":
+            continue
+        job_id = str(job.get("id") or "").strip()
+        if not job_id:
+            continue
+        try:
+            stored = execution_get_job(job_id, include_payload=True)
+        except FileNotFoundError:
+            continue
+        payload = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
+        request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+        references = request.get("references") if isinstance(request.get("references"), dict) else {}
+        for raw_path in references.values():
+            parts = PurePosixPath(str(raw_path or "").replace("\\", "/")).parts
+            if (
+                len(parts) >= 4
+                and parts[0] == ".webcap_runtime"
+                and parts[1] == "generate-references"
+                and GENERATE_REFERENCE_TOKEN_RE.fullmatch(parts[2])
+            ):
+                active.add(parts[2])
+    return active
 
 
 def _runtime_items(cache):
     rows = []
     root = Path(app_config.FS_ROOT)
     reference_root = root / ".webcap_runtime" / "generate-references"
-    if reference_root.exists():
-        rows.append(_item(
-            "runtime", "generate-references", "Generate references", reference_root,
-            kind="Transient references", status="runtime", purgeable=False,
-            protected_reason="Transient references are lifecycle-managed, not manually purged here.",
-            cache=cache,
-        ))
+    active_reference_tokens = _active_generate_reference_tokens()
+    if reference_root.is_dir() and not reference_root.is_symlink():
+        for reference in sorted(reference_root.iterdir(), key=lambda path: path.name, reverse=True):
+            if (
+                not reference.is_dir()
+                or reference.is_symlink()
+                or not GENERATE_REFERENCE_TOKEN_RE.fullmatch(reference.name)
+            ):
+                continue
+            active = reference.name in active_reference_tokens
+            rows.append(_item(
+                "runtime", "generate-reference/" + reference.name, reference.name, reference,
+                kind="Generate reference bundle",
+                status=("queued / active" if active else "draft / residual"),
+                purgeable=not active,
+                protected_reason=("Referenced by queued or active Generate work." if active else ""),
+                cache=cache,
+            ))
     probes_root = root / ".webcap_training" / "h3-probes"
     if probes_root.is_dir():
         for probe in sorted(probes_root.iterdir(), key=lambda p: p.name, reverse=True):
             if not probe.is_dir() or probe.is_symlink():
                 continue
+            try:
+                probe_state = _read_h3_probe_state(probe)
+            except RuntimeError:
+                continue
             rows.append(_item(
                 "runtime", "h3-probe/" + probe.name, probe.name, probe,
-                kind="H3 probe", status="calibration", purgeable=False,
-                protected_reason="Probe deletion is not enabled in the MVP.",
+                kind="H3 probe", status=probe_state["status"], purgeable=probe_state["purgeable"],
+                protected_reason=probe_state["protectedReason"],
+                meta={"createdAt": probe_state.get("createdAt")},
                 cache=cache,
             ))
     return rows
+
+
+def _safe_directories(path):
+    root = Path(path)
+    if root.is_symlink() or not root.is_dir():
+        return []
+    return [
+        child for child in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower())
+        if child.is_dir() and not child.is_symlink()
+    ]
+
+
+def _comfy_active_identities():
+    active = {
+        "generate": set(),
+        "storyboard": set(),
+        "tests": set(),
+    }
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
+    for job in snapshot.get("jobs") or []:
+        if not isinstance(job, dict):
+            continue
+        job_id = str(job.get("id") or "").strip()
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        client = str(metadata.get("client") or "").strip()
+        if client == "generate" and job_id:
+            active["generate"].add(job_id)
+        elif client == "storyboard" and job_id:
+            story_id = str(metadata.get("storyId") or "").strip()
+            scene_id = str(metadata.get("sceneId") or "").strip()
+            if story_id and scene_id:
+                active["storyboard"].add((story_id, scene_id, job_id))
+        elif client == "test":
+            session_id = str(metadata.get("sessionId") or "").strip()
+            if session_id:
+                active["tests"].add(session_id)
+    return active
+
+
+def _comfy_items(cache):
+    provider_root = inference_runtime.known_provider_root()
+    if provider_root is None:
+        return []
+
+    active = _comfy_active_identities()
+    rows = []
+    for side in ("input", "output"):
+        side_root = provider_root / side
+        if side_root.is_symlink() or not side_root.is_dir():
+            continue
+        generate_root = side_root / "webcap-generate"
+        for job_root in _safe_directories(generate_root):
+            job_id = job_root.name
+            is_active = job_id in active["generate"]
+            rows.append(_item(
+                "comfy",
+                side + "/generate/" + job_id,
+                "Generate " + job_id,
+                job_root,
+                kind="ComfyUI " + side + " scratch",
+                status=("active provider work" if is_active else "residual scratch"),
+                purgeable=not is_active,
+                protected_reason=("Referenced by queued or active Generate work." if is_active else ""),
+                cache=cache,
+            ))
+
+        storyboard_root_path = side_root / "webcap-storyboard"
+        for story_root_path in _safe_directories(storyboard_root_path):
+            for scene_root in _safe_directories(story_root_path):
+                for job_root in _safe_directories(scene_root):
+                    identity = (story_root_path.name, scene_root.name, job_root.name)
+                    is_active = identity in active["storyboard"]
+                    rows.append(_item(
+                        "comfy",
+                        side + "/storyboard/" + "/".join(identity),
+                        "Storyboard " + story_root_path.name + " / " + scene_root.name + " / " + job_root.name,
+                        job_root,
+                        kind="ComfyUI " + side + " scratch",
+                        status=("active provider work" if is_active else "residual scratch"),
+                        purgeable=not is_active,
+                        protected_reason=("Referenced by queued or active Storyboard work." if is_active else ""),
+                        cache=cache,
+                    ))
+
+        tests_root = side_root / "webcap-tests"
+        for session_root in _safe_directories(tests_root):
+            for candidate_root in _safe_directories(session_root):
+                is_active = session_root.name in active["tests"]
+                rows.append(_item(
+                    "comfy",
+                    side + "/tests/" + session_root.name + "/" + candidate_root.name,
+                    "Tests " + session_root.name + " / " + candidate_root.name,
+                    candidate_root,
+                    kind="ComfyUI " + side + " scratch",
+                    status=("active provider work" if is_active else "residual scratch"),
+                    purgeable=not is_active,
+                    protected_reason=("Referenced by queued or active Test work." if is_active else ""),
+                    cache=cache,
+                ))
+    return rows
+
+
+def _resolve_comfy(item_id):
+    provider_root = inference_runtime.known_provider_root()
+    if provider_root is None:
+        raise FileNotFoundError("ComfyUI provider root is not known yet.")
+
+    parts = PurePosixPath(str(item_id or "")).parts
+    if len(parts) < 3 or parts[0] not in {"input", "output"}:
+        raise ValueError("ComfyUI storage ID is invalid.")
+    side, family = parts[0], parts[1]
+    names = parts[2:]
+    expected = {
+        "generate": (1, "webcap-generate"),
+        "storyboard": (3, "webcap-storyboard"),
+        "tests": (2, "webcap-tests"),
+    }
+    if family not in expected:
+        raise ValueError("ComfyUI storage family is invalid.")
+    count, prefix = expected[family]
+    if len(names) != count or any(not name or Path(name).name != name for name in names):
+        raise ValueError("ComfyUI storage identity is invalid.")
+
+    raw_side_root = provider_root / side
+    if raw_side_root.is_symlink() or not raw_side_root.is_dir():
+        raise FileNotFoundError("ComfyUI " + side + " root is unavailable.")
+    side_root = raw_side_root.resolve()
+    raw_path = raw_side_root / prefix
+    if raw_path.is_symlink():
+        raise ValueError("ComfyUI storage path is symlinked.")
+    for name in names:
+        raw_path = raw_path / name
+        if raw_path.is_symlink():
+            raise ValueError("ComfyUI storage path is symlinked.")
+    path = raw_path.resolve()
+    if not path.is_dir() or side_root not in path.parents:
+        raise FileNotFoundError("ComfyUI storage item is unavailable.")
+    return path, family, tuple(names)
+
+
+def _comfy_identity_active(family, names):
+    active = _comfy_active_identities()
+    if family == "generate":
+        return names[0] in active["generate"]
+    if family == "storyboard":
+        return tuple(names) in active["storyboard"]
+    if family == "tests":
+        return names[0] in active["tests"]
+    return True
+
+
+
+def _scan_cache_complete(cache):
+    last_scan = cache.get("lastScan") if isinstance(cache, dict) else {}
+    return bool(isinstance(last_scan, dict) and float(last_scan.get("completedAt") or 0) > 0)
 
 
 def _category(area, label, items, complete=True, note=""):
@@ -307,24 +739,43 @@ def _category(area, label, items, complete=True, note=""):
 def overview(folder=""):
     usage = shutil.disk_usage(app_config.FS_ROOT)
     cache = _read_cache()
+    scan_complete = _scan_cache_complete(cache)
     groups = {
         "training": _training_items(cache),
         "tests": _test_items(cache, folder),
+        "staged": _staged_items(cache, folder),
         "generate": _generate_items(cache),
         "storyboard": _storyboard_items(cache),
         "set": _set_items(cache, folder),
         "runtime": _runtime_items(cache),
+        "comfy": _comfy_items(cache),
     }
     categories = [
         _category("training", "Training", groups["training"]),
         _category(
-            "tests", "Tests", groups["tests"], complete=False,
-            note=("Showing the current Set only; WebCap does not perform a global Test Session crawl.")
+            "tests", "Tests", groups["tests"], complete=scan_complete,
+            note=(
+                "Workspace Test inventory from the last completed scan."
+                if scan_complete else
+                "Current/discovered Tests only; Start scan for a workspace-wide Test inventory."
+            )
+        ),
+        _category(
+            "staged", "Staged Test LoRAs", groups["staged"], complete=False,
+            note=("Showing WebCap-owned staged copies for the current Set in configured Test roots only.")
         ),
         _category("generate", "Generations", groups["generate"]),
         _category("storyboard", "Storyboard", groups["storyboard"]),
-        _category("set", "Current Set (protected)", groups["set"], note="Visible for accounting only; Set-owned data is not purgeable here."),
+        _category(
+            "set", ("Set Data (protected)" if scan_complete else "Current Set (protected)"),
+            groups["set"], complete=scan_complete,
+            note="Visible for accounting only; Set-owned data is not purgeable here."
+        ),
         _category("runtime", "Runtime / Temporary", groups["runtime"]),
+        _category(
+            "comfy", "ComfyUI Scratch", groups["comfy"],
+            note=("Exact WebCap-prefixed job trees only; the provider root is learned from a real ComfyUI output path.")
+        ),
     ]
     categories.sort(key=lambda row: (row["bytes"], row["count"]), reverse=True)
     return {
@@ -336,44 +787,74 @@ def overview(folder=""):
             "free": int(usage.free),
         },
         "folder": str(folder or ""),
+        "lastScan": cache.get("lastScan") if isinstance(cache.get("lastScan"), dict) else None,
         "categories": categories,
         "items": groups,
     }
 
 
-def _safe_recursive_size(path):
+def _safe_recursive_stats(path, cancel_check=None, progress=None):
     root = Path(path)
     if not root.exists():
         raise FileNotFoundError("Storage item no longer exists.")
     if root.is_symlink():
         raise RuntimeError("Storage Manager will not measure symlinked roots.")
+    cancel_check = cancel_check or (lambda: False)
+    progress = progress or (lambda event: None)
+    if cancel_check():
+        raise _ScanCancelled("Storage scan cancelled.")
     if root.is_file():
-        return root.stat().st_size
+        size = int(root.stat().st_size)
+        progress({"filesDelta": 1, "bytesDelta": size})
+        return size, 1, 0
+
     total = 0
+    file_count = 0
+    directory_count = 0
     stack = [root]
     while stack:
+        if cancel_check():
+            raise _ScanCancelled("Storage scan cancelled.")
         directory = stack.pop()
+        local_files = 0
+        local_bytes = 0
+        directory_count += 1
         with os.scandir(directory) as entries:
             for entry in entries:
+                if cancel_check():
+                    raise _ScanCancelled("Storage scan cancelled.")
                 if entry.is_symlink():
                     continue
                 if entry.is_file(follow_symlinks=False):
-                    total += entry.stat(follow_symlinks=False).st_size
+                    size = int(entry.stat(follow_symlinks=False).st_size)
+                    total += size
+                    file_count += 1
+                    local_files += 1
+                    local_bytes += size
                 elif entry.is_dir(follow_symlinks=False):
                     stack.append(Path(entry.path))
-    return total
+        progress({"directoriesDelta": 1, "filesDelta": local_files, "bytesDelta": local_bytes})
+    return total, file_count, directory_count
 
+
+def _safe_recursive_size(path):
+    return _safe_recursive_stats(path)[0]
 
 def _resolve_generate(item_id):
     parts = PurePosixPath(str(item_id or "")).parts
     if len(parts) != 2 or any(part in {"", ".", ".."} for part in parts):
         raise ValueError("Generation storage ID is invalid.")
-    root = (Path(app_config.FS_ROOT) / "output" / "generations").resolve()
-    directory = (root / parts[0] / parts[1]).resolve()
-    if directory.parent.parent != root or directory.is_symlink():
+    raw_root = Path(app_config.FS_ROOT) / "output" / "generations"
+    raw_day = raw_root / parts[0]
+    raw_directory = raw_day / parts[1]
+    if raw_root.is_symlink() or raw_day.is_symlink() or raw_directory.is_symlink():
+        raise ValueError("Generation storage path is symlinked.")
+    root = raw_root.resolve()
+    directory = raw_directory.resolve()
+    if directory.parent.parent != root:
         raise ValueError("Generation storage ID escaped the managed root.")
     manifest = directory / MANIFEST_NAME
-    if not directory.is_dir() or not manifest.is_file():
+    if not directory.is_dir() or manifest.is_symlink() or not manifest.is_file():
         raise FileNotFoundError("Generation result is unavailable.")
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or str(payload.get("jobId") or "") != parts[1]:
@@ -385,27 +866,92 @@ def _resolve_test(folder, session_id):
     folder = str(folder or "").strip()
     if not folder:
         raise ValueError("Current Set is required for Test Session storage.")
-    set_path = app_config.safe_join_fs_root(folder).resolve()
-    root = (set_path / "test-generations").resolve()
-    session = (root / str(session_id or "")).resolve()
-    if session.parent != root or session.is_symlink() or not (session / "test.json").is_file():
+    raw_set_path = app_config.safe_join_fs_root(folder)
+    raw_root = raw_set_path / "test-generations"
+    raw_session = raw_root / str(session_id or "")
+    if raw_root.is_symlink() or raw_session.is_symlink():
+        raise ValueError("Test Session storage path is symlinked.")
+    set_path = raw_set_path.resolve()
+    root = raw_root.resolve()
+    session = raw_session.resolve()
+    manifest = session / "test.json"
+    if root.parent != set_path or session.parent != root or manifest.is_symlink() or not manifest.is_file():
         raise FileNotFoundError("Test Session is unavailable.")
     return session
+
+
+def _resolve_h3_probe(item_id):
+    value = str(item_id or "")
+    if not value.startswith("h3-probe/"):
+        raise ValueError("H3 probe storage ID is invalid.")
+    name = value.split("/", 1)[1]
+    if not name or Path(name).name != name:
+        raise ValueError("H3 probe storage ID is invalid.")
+
+    raw_root = Path(app_config.FS_ROOT) / ".webcap_training" / "h3-probes"
+    raw_path = raw_root / name
+    if raw_root.is_symlink() or raw_path.is_symlink():
+        raise ValueError("H3 probe storage path is symlinked.")
+    root = raw_root.resolve()
+    path = raw_path.resolve()
+    if path.parent != root or not path.is_dir():
+        raise FileNotFoundError("H3 probe storage item is unavailable.")
+    return path, _read_h3_probe_state(path)
+
+
+def _resolve_staged(folder, item_id):
+    folder = str(folder or "").strip()
+    if not folder:
+        raise ValueError("Current Set is required for staged Test storage.")
+    parts = PurePosixPath(str(item_id or "")).parts
+    if len(parts) != 2:
+        raise ValueError("Staged Test storage ID is invalid.")
+    stage, filename = parts
+    if stage not in TEST_COPY_STAGE_LABELS:
+        raise ValueError("Staged Test storage stage is invalid.")
+    if not filename or Path(filename).name != filename or not filename.lower().endswith(".safetensors"):
+        raise ValueError("Staged Test storage filename is invalid.")
+
+    set_path = app_config.safe_join_fs_root(folder)
+    if not set_path.is_dir():
+        raise FileNotFoundError("Current Set is unavailable.")
+    root, destination_parts = test_copy_destination(stage, set_path.name)
+    directory = root.joinpath(*destination_parts)
+    if directory.is_symlink() or not directory.is_dir():
+        raise FileNotFoundError("Configured staged Test directory is unavailable.")
+    candidate = directory / filename
+    provenance = _read_staged_provenance(candidate, stage, folder)
+    if provenance is None:
+        raise RuntimeError("Staged Test artifact ownership could not be proven.")
+    return candidate, candidate.with_suffix(".webcap.json"), provenance
+
+
+def _resolve_generate_reference(item_id):
+    value = str(item_id or "")
+    if not value.startswith("generate-reference/"):
+        raise ValueError("Generate reference storage ID is invalid.")
+    token = value.split("/", 1)[1]
+    if not GENERATE_REFERENCE_TOKEN_RE.fullmatch(token):
+        raise ValueError("Generate reference storage ID is invalid.")
+
+    raw_root = Path(app_config.FS_ROOT) / ".webcap_runtime" / "generate-references"
+    raw_path = raw_root / token
+    if raw_root.is_symlink() or raw_path.is_symlink():
+        raise ValueError("Generate reference storage path is symlinked.")
+    root = raw_root.resolve()
+    path = raw_path.resolve()
+    if path.parent != root or not path.is_dir():
+        raise FileNotFoundError("Generate reference bundle is unavailable.")
+    return path, token
 
 
 def _resolve_runtime(item_id):
     root = Path(app_config.FS_ROOT).resolve()
     value = str(item_id or "")
-    if value == "generate-references":
-        return root / ".webcap_runtime" / "generate-references"
+    if value.startswith("generate-reference/"):
+        return _resolve_generate_reference(value)[0]
     if value.startswith("h3-probe/"):
-        name = value.split("/", 1)[1]
-        if not name or Path(name).name != name:
-            raise ValueError("H3 probe storage ID is invalid.")
-        path = root / ".webcap_training" / "h3-probes" / name
-        if path.is_symlink():
-            raise ValueError("H3 probe storage path is symlinked.")
-        return path
+        return _resolve_h3_probe(value)[0]
     raise ValueError("Runtime storage ID is invalid.")
 
 
@@ -415,6 +961,8 @@ def resolve_item(area, item_id, folder=""):
         return read_action(item_id)[0]
     if area == "tests":
         return _resolve_test(folder, item_id)
+    if area == "staged":
+        return _resolve_staged(folder, item_id)[0]
     if area == "generate":
         return _resolve_generate(item_id)
     if area == "storyboard":
@@ -450,23 +998,333 @@ def resolve_item(area, item_id, folder=""):
         return path
     if area == "runtime":
         return _resolve_runtime(item_id)
+    if area == "comfy":
+        return _resolve_comfy(item_id)[0]
     raise ValueError("Unsupported Storage area.")
+
+
+
+def register_usage(area, item_id, folder="", bytes_used=0, file_count=0, source="producer", measured_at=None):
+    area = str(area or "").strip()
+    if area not in MEASURABLE_AREAS:
+        raise ValueError("Unsupported Storage measurement area.")
+    try:
+        size = int(bytes_used)
+        count = int(file_count)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Storage usage must use whole-number byte and file counts.") from exc
+    if size < 0 or count < 0:
+        raise ValueError("Storage usage cannot be negative.")
+    source = str(source or "producer").strip() or "producer"
+    if source not in {"producer", "manual", "scan"}:
+        raise ValueError("Storage usage source is invalid.")
+    timestamp = float(measured_at if measured_at is not None else time.time())
+    if timestamp <= 0:
+        raise ValueError("Storage usage timestamp is invalid.")
+
+    with _CACHE_LOCK:
+        cache = _read_cache()
+        cache.setdefault("items", {})[_cache_key(area, item_id, folder)] = {
+            "bytes": size,
+            "fileCount": count,
+            "measuredAt": timestamp,
+            "source": source,
+        }
+        _write_cache(cache)
+    return {
+        "ok": True,
+        "area": area,
+        "id": item_id,
+        "folder": folder,
+        "bytes": size,
+        "fileCount": count,
+        "measuredAt": timestamp,
+        "source": source,
+    }
 
 
 def measure(area, item_id, folder=""):
     if area not in MEASURABLE_AREAS:
         raise ValueError("Unsupported Storage measurement area.")
     path = resolve_item(area, item_id, folder)
-    size = _safe_recursive_size(path)
-    measured_at = time.time()
-    cache = _read_cache()
-    items = cache.setdefault("items", {})
-    items[_cache_key(area, item_id, folder)] = {
-        "bytes": int(size),
-        "measuredAt": measured_at,
+    size, file_count, _directory_count = _safe_recursive_stats(path)
+    return register_usage(
+        area,
+        item_id,
+        folder,
+        bytes_used=size,
+        file_count=file_count,
+        source="manual",
+    )
+
+
+def _scan_cancelled(cancel_check):
+    if cancel_check and cancel_check():
+        raise _ScanCancelled("Storage scan cancelled.")
+
+
+def _discover_workspace_sets(cancel_check=None, progress=None):
+    cancel_check = cancel_check or (lambda: False)
+    progress = progress or (lambda event: None)
+    root = Path(app_config.FS_ROOT)
+    if not root.is_dir():
+        raise FileNotFoundError("Storage root is unavailable.")
+    if root.is_symlink():
+        raise RuntimeError("Storage Manager will not scan a symlinked filesystem root.")
+
+    sets = set()
+    tests = set()
+    stack = [root]
+    root_pruned = {"output", ".webcap", ".webcap_training", ".webcap_runtime"}
+    generated_children = {"test-generations", "originals", "auto_dataset"}
+
+    while stack:
+        _scan_cancelled(cancel_check)
+        directory = stack.pop()
+        try:
+            entries = list(os.scandir(directory))
+        except OSError as exc:
+            progress({"errorsDelta": 1, "current": "Unreadable folder: " + directory.name, "lastError": str(exc)})
+            continue
+
+        progress({"directoriesDelta": 1, "current": "Inspecting " + str(directory)})
+        by_name = {entry.name: entry for entry in entries}
+        if directory != root:
+            relative = directory.relative_to(root).as_posix()
+            test_entry = by_name.get("test-generations")
+            is_set = (
+                ".webcap_state.json" in by_name
+                or "media_metadata.json" in by_name
+                or (
+                    test_entry is not None
+                    and not test_entry.is_symlink()
+                    and test_entry.is_dir(follow_symlinks=False)
+                )
+            )
+            if is_set:
+                sets.add(relative)
+
+            if test_entry is not None and not test_entry.is_symlink() and test_entry.is_dir(follow_symlinks=False):
+                try:
+                    with os.scandir(test_entry.path) as sessions:
+                        for session_entry in sessions:
+                            _scan_cancelled(cancel_check)
+                            if session_entry.is_symlink() or not session_entry.is_dir(follow_symlinks=False):
+                                continue
+                            manifest = Path(session_entry.path) / "test.json"
+                            if manifest.is_symlink() or not manifest.is_file():
+                                continue
+                            try:
+                                payload = json.loads(manifest.read_text(encoding="utf-8"))
+                            except (OSError, json.JSONDecodeError):
+                                progress({"errorsDelta": 1, "lastError": "Unreadable Test Session manifest."})
+                                continue
+                            if isinstance(payload, dict):
+                                tests.add((relative, session_entry.name))
+                except OSError as exc:
+                    progress({"errorsDelta": 1, "lastError": str(exc)})
+
+        for entry in entries:
+            if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
+                continue
+            if directory == root and entry.name in root_pruned:
+                continue
+            if entry.name in generated_children:
+                continue
+            stack.append(Path(entry.path))
+
+    progress({
+        "setsDiscovered": len(sets),
+        "testsDiscovered": len(tests),
+        "current": "Discovered " + str(len(sets)) + " Set(s) and " + str(len(tests)) + " Test Session(s).",
+    })
+    return sorted(sets), sorted(tests)
+
+
+def _persist_scan_discoveries(sets, tests):
+    with _CACHE_LOCK:
+        cache = _read_cache()
+        cache["discoveries"] = {
+            "sets": list(sets),
+            "tests": [{"folder": folder, "id": session_id} for folder, session_id in tests],
+        }
+        _write_cache(cache)
+
+
+def _scan_workspace(folder="", cancel_check=None, progress=None):
+    cancel_check = cancel_check or (lambda: False)
+    progress = progress or (lambda event: None)
+    progress({"phase": "discovering", "current": "Discovering WebCap Sets and historical Test Sessions…"})
+    sets, tests = _discover_workspace_sets(cancel_check=cancel_check, progress=progress)
+    _scan_cancelled(cancel_check)
+    _persist_scan_discoveries(sets, tests)
+
+    payload = overview(folder)
+    items = []
+    seen = set()
+    for area_rows in payload.get("items", {}).values():
+        for item in area_rows or []:
+            key = (str(item.get("area") or ""), str(item.get("folder") or ""), str(item.get("id") or ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(item)
+
+    progress({"phase": "measuring", "itemsTotal": len(items), "current": "Measuring managed artifacts…"})
+    measured = 0
+    scan_errors = 0
+    for item in items:
+        _scan_cancelled(cancel_check)
+        area = str(item.get("area") or "")
+        item_id = str(item.get("id") or "")
+        item_folder = str(item.get("folder") or "")
+        progress({"current": str(item.get("label") or item_id)})
+        try:
+            path = resolve_item(area, item_id, item_folder)
+            size, file_count, _directory_count = _safe_recursive_stats(
+                path,
+                cancel_check=cancel_check,
+                progress=progress,
+            )
+            register_usage(area, item_id, item_folder, bytes_used=size, file_count=file_count, source="scan")
+            measured += 1
+            progress({"itemsMeasured": measured})
+        except _ScanCancelled:
+            raise
+        except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
+            scan_errors += 1
+            progress({"errorsDelta": 1, "lastError": str(exc)})
+
+    summary = {
+        "completedAt": time.time(),
+        "setsDiscovered": len(sets),
+        "testsDiscovered": len(tests),
+        "itemsMeasured": measured,
+        "itemsTotal": len(items),
+        "errors": scan_errors,
     }
-    _write_cache(cache)
-    return {"ok": True, "area": area, "id": item_id, "folder": folder, "bytes": int(size), "measuredAt": measured_at}
+    with _CACHE_LOCK:
+        cache = _read_cache()
+        cache["lastScan"] = summary
+        _write_cache(cache)
+    return summary
+
+
+def _scan_state_update(scan_id, event):
+    global _SCAN_STATE
+    event = event if isinstance(event, dict) else {}
+    with _SCAN_LOCK:
+        if not isinstance(_SCAN_STATE, dict) or _SCAN_STATE.get("id") != scan_id:
+            return
+        for source_key, target_key in (
+            ("directoriesDelta", "directoriesScanned"),
+            ("filesDelta", "filesScanned"),
+            ("bytesDelta", "bytesScanned"),
+            ("errorsDelta", "errors"),
+        ):
+            if source_key in event:
+                _SCAN_STATE[target_key] = int(_SCAN_STATE.get(target_key) or 0) + int(event.get(source_key) or 0)
+        for key in (
+            "phase", "current", "itemsMeasured", "itemsTotal", "setsDiscovered",
+            "testsDiscovered", "lastError",
+        ):
+            if key in event:
+                _SCAN_STATE[key] = event[key]
+
+
+def _scan_worker(scan_id, folder, cancel_event):
+    global _SCAN_STATE
+    try:
+        summary = _scan_workspace(
+            folder,
+            cancel_check=cancel_event.is_set,
+            progress=lambda event: _scan_state_update(scan_id, event),
+        )
+        with _SCAN_LOCK:
+            if isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("id") == scan_id:
+                _SCAN_STATE.update(summary)
+                _SCAN_STATE["status"] = "completed"
+                _SCAN_STATE["phase"] = "complete"
+                _SCAN_STATE["current"] = ""
+                _SCAN_STATE["finishedAt"] = time.time()
+    except _ScanCancelled:
+        with _SCAN_LOCK:
+            if isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("id") == scan_id:
+                _SCAN_STATE["status"] = "cancelled"
+                _SCAN_STATE["phase"] = "cancelled"
+                _SCAN_STATE["current"] = ""
+                _SCAN_STATE["finishedAt"] = time.time()
+    except Exception as exc:
+        with _SCAN_LOCK:
+            if isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("id") == scan_id:
+                _SCAN_STATE["status"] = "failed"
+                _SCAN_STATE["phase"] = "failed"
+                _SCAN_STATE["error"] = str(exc)
+                _SCAN_STATE["finishedAt"] = time.time()
+
+
+def scan_status():
+    with _SCAN_LOCK:
+        state = dict(_SCAN_STATE) if isinstance(_SCAN_STATE, dict) else None
+    if state is None:
+        cache = _read_cache()
+        return {"ok": True, "scan": {"status": "idle", "lastScan": cache.get("lastScan")}}
+    return {"ok": True, "scan": state}
+
+
+def start_scan(folder=""):
+    global _SCAN_STATE, _SCAN_CANCEL
+    with _SCAN_LOCK:
+        if isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("status") in {"running", "cancelling"}:
+            return {"ok": True, "scan": dict(_SCAN_STATE)}
+        scan_id = uuid.uuid4().hex
+        cancel_event = threading.Event()
+        _SCAN_CANCEL = cancel_event
+        _SCAN_STATE = {
+            "id": scan_id,
+            "status": "running",
+            "phase": "starting",
+            "folder": str(folder or ""),
+            "startedAt": time.time(),
+            "finishedAt": None,
+            "current": "",
+            "directoriesScanned": 0,
+            "filesScanned": 0,
+            "bytesScanned": 0,
+            "itemsMeasured": 0,
+            "itemsTotal": 0,
+            "setsDiscovered": 0,
+            "testsDiscovered": 0,
+            "errors": 0,
+            "lastError": "",
+            "error": "",
+        }
+        state = dict(_SCAN_STATE)
+    threading.Thread(
+        target=_scan_worker,
+        args=(scan_id, str(folder or ""), cancel_event),
+        name="webcap-storage-scan",
+        daemon=True,
+    ).start()
+    return {"ok": True, "scan": state}
+
+
+def cancel_scan():
+    global _SCAN_STATE
+    with _SCAN_LOCK:
+        active = isinstance(_SCAN_STATE, dict) and _SCAN_STATE.get("status") in {"running", "cancelling"}
+        if active:
+            if _SCAN_CANCEL is not None:
+                _SCAN_CANCEL.set()
+            _SCAN_STATE["status"] = "cancelling"
+            _SCAN_STATE["phase"] = "cancelling"
+            state = dict(_SCAN_STATE)
+        else:
+            state = dict(_SCAN_STATE) if isinstance(_SCAN_STATE, dict) else None
+    if state is not None:
+        return {"ok": True, "scan": state}
+    cache = _read_cache()
+    return {"ok": True, "scan": {"status": "idle", "lastScan": cache.get("lastScan")}}
 
 
 def open_path(area, item_id, folder=""):
@@ -523,10 +1381,27 @@ def purge(area, item_id, folder=""):
         except OSError:
             pass
     elif area == "tests":
+        session = _resolve_test(folder, item_id)
+        session_payload = _read_test_session_manifest(session)
+        status = str(session_payload.get("status") or "").strip().lower()
+        if status in ACTIVE_TEST_STATUSES:
+            raise RuntimeError("Active Test Session; stop it before deletion.")
         set_path = app_config.safe_join_fs_root(folder)
         delete_session(set_path, item_id)
+    elif area == "staged":
+        candidate, sidecar, _provenance = _resolve_staged(folder, item_id)
+        if candidate.name in _active_staged_test_candidates(folder):
+            raise RuntimeError("Staged Test artifact is referenced by queued or active Test work.")
+        candidate.unlink()
+        try:
+            sidecar.unlink()
+        except FileNotFoundError:
+            pass
     elif area == "generate":
         path = _resolve_generate(item_id)
+        job_id = path.name
+        if job_id in _active_generate_job_ids():
+            raise RuntimeError("Generation result is still referenced by active Generate work.")
         shutil.rmtree(path)
         try:
             path.parent.rmdir()
@@ -537,8 +1412,28 @@ def purge(area, item_id, folder=""):
         resolve_item("storyboard", story_id)
         stop_storyboard_jobs(story_id)
         delete_story(story_id)
+    elif area == "runtime":
+        value = str(item_id or "")
+        if value.startswith("generate-reference/"):
+            path, token = _resolve_generate_reference(value)
+            if token in _active_generate_reference_tokens():
+                raise RuntimeError("Generate reference bundle is referenced by queued or active Generate work.")
+            shutil.rmtree(path)
+        elif value.startswith("h3-probe/"):
+            path, probe_state = _resolve_h3_probe(value)
+            if not probe_state.get("purgeable"):
+                raise RuntimeError(probe_state.get("protectedReason") or "H3 probe is not safe to delete.")
+            shutil.rmtree(path)
+        else:
+            raise ValueError("This Runtime storage item cannot be purged manually.")
+    elif area == "comfy":
+        path, family, names = _resolve_comfy(item_id)
+        if _comfy_identity_active(family, names):
+            raise RuntimeError("ComfyUI scratch is referenced by queued or active inference work.")
+        shutil.rmtree(path)
 
-    cache = _read_cache()
-    cache.get("items", {}).pop(_cache_key(area, item_id, folder), None)
-    _write_cache(cache)
+    with _CACHE_LOCK:
+        cache = _read_cache()
+        cache.get("items", {}).pop(_cache_key(area, item_id, folder), None)
+        _write_cache(cache)
     return {"ok": True, "area": area, "id": item_id, "folder": folder}

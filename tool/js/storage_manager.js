@@ -4,8 +4,9 @@
   var storageState = {
     open: false,
     loading: false,
-    measuring: false,
-    payload: null
+    payload: null,
+    scan: null,
+    scanPollTimer: null
   };
 
   function el(id) { return document.getElementById(id); }
@@ -33,8 +34,7 @@
     var message = String(err && err.message ? err.message : err || 'Storage request failed.');
     var status = el('storage-status');
     if (status) status.textContent = message;
-    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Storage', message);
-    else console.error('[Storage]', err);
+    window.reportConsoleError('Storage', message);
   }
 
   function bytes(value) {
@@ -77,7 +77,7 @@
 
   function allItems() {
     var groups = storageState.payload && storageState.payload.items || {};
-    return ['training', 'tests', 'generate', 'storyboard', 'set', 'runtime'].reduce(function (rows, area) {
+    return ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].reduce(function (rows, area) {
       return rows.concat((groups[area] || []).map(function (item) {
         return item;
       }));
@@ -128,7 +128,12 @@
     var html = '<button type="button" class="review-captions-btn storage-open-btn"' + payload + (item.openable ? '' : ' disabled') + '>Open</button>';
     html += '<button type="button" class="review-captions-btn storage-measure-btn"' + payload + '>Measure</button>';
     if (item.purgeable) {
-      var label = item.area === 'storyboard' ? 'Delete Story' : 'Delete';
+      var label = 'Delete';
+      if (item.area === 'storyboard') label = 'Delete Story';
+      else if (item.area === 'staged') label = 'Delete Copy';
+      else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) label = 'Delete Probe';
+      else if (item.area === 'runtime' && String(item.id || '').indexOf('generate-reference/') === 0) label = 'Delete Reference';
+      else if (item.area === 'comfy') label = 'Delete Scratch';
       html += '<button type="button" class="review-captions-btn storage-delete-btn"' + payload + '>' + label + '</button>';
     }
     return html;
@@ -141,22 +146,28 @@
     var areaLabels = {
       training: 'Training',
       tests: 'Tests',
+      staged: 'Staged Test LoRAs',
       generate: 'Generations',
       storyboard: 'Storyboard',
       set: 'Current Set (protected)',
-      runtime: 'Runtime / Temporary'
+      runtime: 'Runtime / Temporary',
+      comfy: 'ComfyUI Scratch'
     };
-    host.innerHTML = ['training', 'tests', 'generate', 'storyboard', 'set', 'runtime'].map(function (area) {
+    host.innerHTML = ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].map(function (area) {
       var rows = (groups[area] || []).slice().sort(itemSort);
       var empty = rows.length
         ? ''
         : '<div class="storage-empty">' + (area === 'tests'
-          ? 'No Test Sessions are visible for the current Set. Historical Tests are not globally scanned.'
+          ? (storageState.payload && storageState.payload.lastScan
+            ? 'No Test Sessions were found in the last completed workspace scan.'
+            : 'No Test Sessions are visible yet. Start scan to discover historical Tests across Sets.')
           : 'No managed items found.') + '</div>';
       var body = rows.map(function (item) {
         var measured = item.measured ? bytes(item.bytes) : 'Not measured';
         var age = item.measured ? measurementAge(item.measuredAt) : '';
-        var secondary = [item.kind, item.status, age].filter(Boolean).join(' · ');
+        var fileCount = item.measured && item.fileCount != null ? Number(item.fileCount) : null;
+        var fileText = fileCount == null ? '' : fileCount + ' file' + (fileCount === 1 ? '' : 's');
+        var secondary = [item.kind, item.status, fileText, age].filter(Boolean).join(' · ');
         var reason = item.protectedReason ? '<span class="storage-item-reason">' + escapeHtml(item.protectedReason) + '</span>' : '';
         return '<article class="storage-item-row">' +
           '<div class="storage-item-copy"><strong title="' + escapeHtml(item.label) + '">' + escapeHtml(item.label) + '</strong>' +
@@ -172,16 +183,66 @@
     }).join('');
   }
 
+
+  function scanIsActive() {
+    var status = String(storageState.scan && storageState.scan.status || '');
+    return status === 'running' || status === 'cancelling';
+  }
+
+  function scanStatusText() {
+    var scan = storageState.scan || {};
+    var status = String(scan.status || '');
+    if (status === 'running' || status === 'cancelling') {
+      var phase = status === 'cancelling'
+        ? 'Cancelling scan…'
+        : (scan.phase === 'discovering' ? 'Discovering Sets and Tests…' : 'Scanning managed artifacts…');
+      var parts = [phase];
+      if (scan.current) parts.push(String(scan.current));
+      if (Number(scan.directoriesScanned || 0)) parts.push(Number(scan.directoriesScanned) + ' folders');
+      if (Number(scan.filesScanned || 0)) parts.push(Number(scan.filesScanned) + ' files');
+      if (Number(scan.bytesScanned || 0)) parts.push(bytes(scan.bytesScanned) + ' inspected');
+      if (Number(scan.itemsTotal || 0)) {
+        parts.push(Number(scan.itemsMeasured || 0) + '/' + Number(scan.itemsTotal) + ' managed items measured');
+      }
+      return parts.join(' · ');
+    }
+    if (status === 'completed') {
+      return 'Scan complete · ' + Number(scan.itemsMeasured || 0) + ' managed items measured · ' +
+        Number(scan.testsDiscovered || 0) + ' Test Session' + (Number(scan.testsDiscovered || 0) === 1 ? '' : 's') +
+        ' discovered' + (Number(scan.errors || 0) ? ' · ' + Number(scan.errors) + ' issue(s)' : '');
+    }
+    if (status === 'cancelled') {
+      return 'Scan cancelled. Completed measurements were kept; workspace discovery remains partial.';
+    }
+    if (status === 'failed') {
+      return 'Scan failed: ' + String(scan.error || scan.lastError || 'unknown error');
+    }
+    var lastScan = storageState.payload && storageState.payload.lastScan;
+    if (lastScan && lastScan.completedAt) {
+      return 'Last workspace scan ' + measurementAge(lastScan.completedAt).replace(/^measured /, '') +
+        ' · ' + Number(lastScan.itemsMeasured || 0) + ' managed items measured.';
+    }
+    return 'Opening Storage is cheap. Start scan when you want a current workspace-wide disk inventory.';
+  }
+
+  function syncScanButton() {
+    var button = el('storage-scan-btn');
+    if (!button) return;
+    var active = scanIsActive();
+    button.textContent = active ? (String(storageState.scan.status) === 'cancelling' ? 'Cancelling…' : 'Cancel scan') : 'Start scan';
+    button.disabled = String(storageState.scan && storageState.scan.status || '') === 'cancelling';
+    button.title = active
+      ? 'Stop the current disk inspection after the current filesystem operation.'
+      : 'Inspect WebCap-owned storage scopes and discover historical Test Sessions.';
+  }
+
   function render() {
     renderDisk();
     renderCategories();
     renderItems();
+    syncScanButton();
     var status = el('storage-status');
-    if (status) {
-      status.textContent = storageState.measuring
-        ? 'Measuring managed artifacts…'
-        : 'Sizes are measured on demand; opening Storage does not recursively scan the workspace.';
-    }
+    if (status) status.textContent = scanStatusText();
   }
 
   function refresh() {
@@ -205,31 +266,73 @@
     });
   }
 
-  function measureAll() {
-    if (storageState.measuring) return;
-    var items = allItems();
-    storageState.measuring = true;
-    render();
 
-    var sequence = Promise.resolve();
-    items.forEach(function (item) {
-      sequence = sequence.then(function () {
-        if (!storageState.measuring || !storageState.open) return;
-        return measureOne(item).catch(function (err) {
-          reportError(err);
-        });
-      });
+  function stopScanPolling() {
+    if (storageState.scanPollTimer) {
+      window.clearTimeout(storageState.scanPollTimer);
+      storageState.scanPollTimer = null;
+    }
+  }
+
+  function scheduleScanPoll() {
+    stopScanPolling();
+    if (!storageState.open || !scanIsActive()) return;
+    storageState.scanPollTimer = window.setTimeout(refreshScanStatus, 750);
+  }
+
+  function refreshScanStatus() {
+    if (!storageState.open) return Promise.resolve();
+    var wasActive = scanIsActive();
+    return requestJson('/fs/storage/scan/status').then(function (payload) {
+      storageState.scan = payload.scan || { status: 'idle' };
+      render();
+      if (scanIsActive()) {
+        scheduleScanPoll();
+      } else {
+        stopScanPolling();
+        if (wasActive) return refresh();
+      }
+    }).catch(function (err) {
+      stopScanPolling();
+      reportError(err);
     });
-    sequence.then(function () {
-      storageState.measuring = false;
-      return refresh();
-    });
+  }
+
+  function startOrCancelScan() {
+    if (scanIsActive()) {
+      return postJson('/fs/storage/scan/cancel', {}).then(function (payload) {
+        storageState.scan = payload.scan || storageState.scan;
+        render();
+        scheduleScanPoll();
+      }).catch(reportError);
+    }
+    return postJson('/fs/storage/scan/start', { folder: currentFolder() }).then(function (payload) {
+      storageState.scan = payload.scan || { status: 'running' };
+      render();
+      scheduleScanPoll();
+    }).catch(reportError);
   }
 
   function confirmDelete(item) {
     var sizeText = item.measured ? ' This will reclaim about ' + bytes(item.bytes) + '.' : '';
-    var label = item.area === 'storyboard' ? 'Story' : 'artifact';
-    var consequence = item.area === 'storyboard' ? '\nThis removes the Story metadata, its Takes, and references.' : '';
+    var label = 'artifact';
+    var consequence = '';
+    if (item.area === 'storyboard') {
+      label = 'Story';
+      consequence = '\nThis removes the Story metadata, its Takes, and references.';
+    } else if (item.area === 'staged') {
+      label = 'staged Test LoRA copy';
+      consequence = '\nThe source training epoch is not deleted.';
+    } else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) {
+      label = 'H3 probe';
+      consequence = '\nThis removes the captured probe inputs, logs, and probe results.';
+    } else if (item.area === 'runtime' && String(item.id || '').indexOf('generate-reference/') === 0) {
+      label = 'Generate reference bundle';
+      consequence = '\nThis may invalidate that reference in an unsubmitted Generate draft.';
+    } else if (item.area === 'comfy') {
+      label = 'ComfyUI scratch tree';
+      consequence = '\nOnly this exact WebCap-prefixed provider job tree is removed.';
+    }
     return window.confirm('Permanently delete this ' + label + '?\n\n' + item.label + sizeText + consequence + '\n\nThis cannot be undone.');
   }
 
@@ -271,22 +374,23 @@
     var frame = el('app-frame');
     var workspace = el('storage-workspace');
     if (!frame || !workspace) throw new Error('Storage workspace markup is missing.');
-    if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
-    if (typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
-    if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
+    window.closeGenerateActivity();
+    window.closeTestBenchActivity();
+    window.closeStoryboardActivity();
     storageState.open = true;
     frame.classList.add('workspace-storage-open');
     workspace.classList.remove('hidden');
-    if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
-    if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+    window.syncApplicationShellContext();
+    window.syncShellLocationRoute();
     refresh();
+    refreshScanStatus();
   }
 
   function closeStorageActivity() {
     var frame = el('app-frame');
     var workspace = el('storage-workspace');
     storageState.open = false;
-    storageState.measuring = false;
+    stopScanPolling();
     if (workspace) workspace.classList.add('hidden');
     if (frame) frame.classList.remove('workspace-storage-open');
   }
@@ -296,7 +400,7 @@
     if (!workspace) throw new Error('Storage workspace markup is missing.');
     workspace.addEventListener('click', handleClick);
     el('storage-refresh-btn').onclick = refresh;
-    el('storage-measure-all-btn').onclick = measureAll;
+    el('storage-scan-btn').onclick = startOrCancelScan;
   }
 
   bindUi();

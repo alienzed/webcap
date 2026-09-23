@@ -569,6 +569,12 @@
       group.className = 'test-generations-session-group ' + className;
       group.querySelector('[data-session-group-title]').textContent = label;
       group.querySelector('[data-session-group-count]').textContent = String(count);
+
+      var order = { running: 0, queued: 1, history: 2 };
+      var groups = host.querySelectorAll('[data-session-group]');
+      var expected = groups[order[key]] || null;
+      if (expected !== group) host.insertBefore(group, expected);
+
       return group.querySelector('[data-session-group-list]');
     }
 

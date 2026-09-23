@@ -132,7 +132,7 @@ def test_training_identity_is_owned_by_shell_header():
     assert 'id="training-sidebar-collapse-toggle-btn"' not in html
     assert "surface === 'training'" in shell
     assert "workspaceTitle.textContent = 'Training'" in shell
-    assert "entryKind === 'global'" in shell
+    assert "entryKind === 'global'" in workspace
     assert "contextText = entryKind === 'global' ? 'Global'" in shell
 
 
@@ -169,7 +169,8 @@ def test_grid_identity_and_prep_exit_are_owned_by_shell_without_removing_local_b
 
     assert "surface === 'grid'" in shell
     assert "workspaceTitle.textContent = 'Grid'" in shell
-    assert "normalizeWorkspaceSurface(workspaceState.surface) === 'grid'" in shell
+    assert "if (surface === 'grid')" in shell
+    assert "closeMediaGridSurface();" in shell
     assert "closeMediaGridSurface();" in shell
     assert 'id="media-grid-surface-close-btn"' in html
 
@@ -207,7 +208,7 @@ def test_focus_uses_shell_identity_but_keeps_local_cleanup_exit():
 
     assert "surface === 'focus'" in shell
     assert "workspaceTitle.textContent = 'Focus'" in shell
-    assert "sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');" in shell
+    assert "sidebarToggleVisible = !generateOpen && !testOpen && !storyboardOpen && (surface === 'default' || surface === 'training');" in shell
     assert "stopFocusedAnnotation();" in shell
     assert "function mediaGridLeaveForWorkspaceTransition()" in grid
     assert "mediaGridHideSurfaceShell();" in grid

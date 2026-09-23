@@ -1519,6 +1519,10 @@
   margin-top: 8px;
 }
 
+.storyboard-take-pending-footer {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .storyboard-take-identity {
   grid-column: auto;
 }

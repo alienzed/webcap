@@ -39,6 +39,14 @@ Wan2.2 High and Low are independent run choices. Every separate Train action cre
 - Resume applies the selected Run setup learning rate as `force_constant_lr` in the captured config so the chosen LR is effective after checkpoint restore.
 - Test Generations has its own FIFO/session flow and GPU reservation. Test jobs are not Training Queue jobs and do not appear in Training History.
 
+## Candidate selection and finalization roadmap
+
+Candidate Analysis currently provides analyzer suggestions, saved-epoch inspection, curve review, and explicit Test-folder staging. It does **not** yet persist a human-selected final/release epoch.
+
+The planned lifecycle is **Suggested candidate -> Saved/Tested epoch -> Selected epoch -> Finalize training -> Archived experiment**. The Selected-epoch contract lives in [webcap-lora-valley-candidate-detection.md](webcap-lora-valley-candidate-detection.md); archive/finalization ownership lives in [storage_manager_plan.md](storage_manager_plan.md).
+
+The durable selection/experiment record should live inside the trainer timestamp run folder in `webcap-run.json`, because that exact folder is what survives into the user's archive. The selection records epoch/step knowledge independently of checkpoint retention; the long-term archive may keep only TensorBoard logs plus this JSON after epoch/checkpoint cleanup. It should not live in Set state or `.webcap_training/recent_runs.json`. Training History remains a lightweight recent-work index, while finalized experiment metadata should travel with the archived run.
+
 ## Manual command handoff
 
 `Generate & Copy Manual Command` uses the same bundle materializer as managed training, so the command is self-contained. It never starts a process.

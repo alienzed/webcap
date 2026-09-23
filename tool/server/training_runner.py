@@ -47,6 +47,7 @@ from .training_runtime import (
     wsl_executable as _wsl_executable,
 )
 from .training_candidates import ALGORITHMS as _candidate_algorithms, analyze_run_directory as _analyze_run_directory
+from .training_run_manifest import clear_selected_epoch as _clear_selected_epoch, select_epoch as _select_epoch, selected_epoch as _selected_epoch
 from .execution_queue import reserve_resource as reserve_execution_resource, release_resource as release_execution_resource, resource_owner as execution_resource_owner
 
 
@@ -793,6 +794,76 @@ def remove_candidate_epoch_from_test_response(folder, job_id, epoch):
     except (RuntimeError, ValueError, OSError) as exc:
         return {"ok": False, "error": str(exc)}, 400
 
+def _candidate_manifest_id(run):
+    action_id = str(run.get("actionId") or "").strip()
+    if not action_id:
+        return ""
+    return action_id
+
+
+def _candidate_selected_epoch(run_dir, run):
+    identity = _candidate_manifest_id(run)
+    return _selected_epoch(run_dir, identity) if identity else None
+
+
+def _candidate_epoch_step(analysis, epoch):
+    wanted = int(epoch)
+    for point in analysis.get("epochLossPoints") or []:
+        if int(point.get("epoch") or 0) == wanted:
+            return int(point.get("step") or 0)
+    raise ValueError("Selected epoch has no completed TensorBoard epoch point.")
+
+
+def select_candidate_epoch(folder, job_id, epoch):
+    raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    _candidate_safetensors_path(folder, job_id, epoch)
+    run_dir = host_path_for_training_path(raw_run_path)
+    if not run_dir.is_dir() or run_dir.is_symlink():
+        raise FileNotFoundError("Recorded training run directory is unavailable.")
+    analysis = _analyze_run_directory(run_dir, algorithm="v5")
+    step = _candidate_epoch_step(analysis, epoch)
+    resolved_run = run_dir.resolve(strict=True)
+    identity = _candidate_manifest_id(run)
+    if not identity:
+        raise RuntimeError("Recorded training job has no managed action identity for durable selection.")
+    selected = _select_epoch(resolved_run, identity, int(epoch), step)
+    return {"selected": selected}
+
+
+def select_candidate_epoch_response(folder, job_id, epoch):
+    try:
+        return {"ok": True, **select_candidate_epoch(folder, job_id, epoch)}, 200
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    except (RuntimeError, ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+
+def clear_candidate_epoch_selection(folder, job_id):
+    raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    run_dir = host_path_for_training_path(raw_run_path)
+    if not run_dir.is_dir() or run_dir.is_symlink():
+        raise FileNotFoundError("Recorded training run directory is unavailable.")
+    identity = _candidate_manifest_id(run)
+    if not identity:
+        return {"selected": None}
+    _clear_selected_epoch(run_dir.resolve(strict=True), identity)
+    return {"selected": None}
+
+
+def clear_candidate_epoch_selection_response(folder, job_id):
+    try:
+        return {"ok": True, **clear_candidate_epoch_selection(folder, job_id)}, 200
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    except (RuntimeError, ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+
 def candidate_analysis_response(folder, job_id, algorithm="v5"):
     """Analyze one recorded run without accepting a client filesystem path."""
     if algorithm not in _candidate_algorithms:
@@ -811,6 +882,7 @@ def candidate_analysis_response(folder, job_id, algorithm="v5"):
             raise FileNotFoundError("Recorded training run directory is unavailable.")
         analysis = _analyze_run_directory(run_dir, algorithm=algorithm)
         _annotate_candidate_test_folder_status(run, analysis)
+        analysis["selected"] = _candidate_selected_epoch(run_dir, run)
     except (OSError, RuntimeError, ValueError) as exc:
         return {"ok": False, "error": str(exc)}, 422
     return {"ok": True, "run": run, "analysis": analysis}, 200

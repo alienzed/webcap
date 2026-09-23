@@ -483,7 +483,7 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "function syncTrainingWorkspaceDetailUi()" in training
     assert "function syncTrainingEntryChrome()" in training
     assert "setShellTrainingActive(running);" in runner
-    assert "renderShellSystemStatus()" in runner
+    assert "renderShellSystemStatus()" not in runner
     assert "function refreshShellSystemStatus()" in shell
     assert "fetch('/fs/system_status')" in shell
     assert 'route("/fs/system_status"' in app

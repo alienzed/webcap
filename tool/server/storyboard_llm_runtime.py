@@ -25,6 +25,41 @@ _log_handle = None
 _server_settings_signature = None
 _process_lock = threading.RLock()
 _request_lock = threading.Lock()
+_activity_lock = threading.Lock()
+_activity = {
+    "active": False,
+    "phase": "idle",
+    "model": "",
+    "operation": "",
+    "startedAt": None,
+    "updatedAt": time.time(),
+    "error": "",
+}
+
+
+def _set_activity(phase, model_id=None, operation=None, active=None, error=None):
+    now = time.time()
+    with _activity_lock:
+        if active is True and not _activity["active"]:
+            _activity["startedAt"] = now
+        if active is False:
+            _activity["active"] = False
+        elif active is True:
+            _activity["active"] = True
+        _activity["phase"] = str(phase or "idle")
+        if model_id is not None:
+            _activity["model"] = str(model_id or "")
+        if operation is not None:
+            _activity["operation"] = str(operation or "")
+        if error is not None:
+            _activity["error"] = str(error or "")
+        _activity["updatedAt"] = now
+
+
+def activity_status():
+    with _activity_lock:
+        return dict(_activity)
+
 
 
 def _director_config():
@@ -467,6 +502,7 @@ def _ensure_local_model_loaded(model_id):
     if selected["status"] == "loaded":
         return False
 
+    _set_activity("loading_model", model_id=model_id)
     for model in models:
         if model["id"] == model_id or model["status"] == "unloaded":
             continue
@@ -527,6 +563,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
             }
 
         if settings.get("mode", "local") == "remote":
+            _set_activity("generating", model_id=model_id)
             response = _http_json(
                 "/chat/completions",
                 method="POST",
@@ -539,8 +576,10 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
         completed = False
         cleanup_safe = True
         try:
+            _set_activity("freeing_comfy", model_id=model_id)
             _free_comfy_models()
             _ensure_local_model_loaded(model_id)
+            _set_activity("generating", model_id=model_id)
             response = _http_json(
                 "/v1/chat/completions",
                 method="POST",
@@ -601,20 +640,28 @@ def run_contract(model_id, contract):
     prompt = str(contract.get("prompt") or "").strip()
     if not prompt:
         raise ValueError("Storyboard Director contract prompt is empty.")
-    result = chat(
-        model_id,
-        [{"role": "user", "content": prompt}],
-        response_schema=contract.get("response_schema"),
-    )
-    if contract.get("output") == "json":
-        try:
-            data = json.loads(result["text"])
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise RuntimeError("Storyboard Director returned invalid structured JSON.") from exc
-        if not isinstance(data, dict):
-            raise RuntimeError("Storyboard Director structured output must be a JSON object.")
-        result["data"] = data
-    return result
+
+    operation = str(contract.get("operation") or "").strip()
+    _set_activity("preparing", model_id=model_id, operation=operation, active=True, error="")
+    try:
+        result = chat(
+            model_id,
+            [{"role": "user", "content": prompt}],
+            response_schema=contract.get("response_schema"),
+        )
+        if contract.get("output") == "json":
+            try:
+                data = json.loads(result["text"])
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise RuntimeError("Storyboard Director returned invalid structured JSON.") from exc
+            if not isinstance(data, dict):
+                raise RuntimeError("Storyboard Director structured output must be a JSON object.")
+            result["data"] = data
+        _set_activity("complete", model_id=model_id, operation=operation, active=False)
+        return result
+    except Exception as exc:
+        _set_activity("error", model_id=model_id, operation=operation, active=False, error=str(exc))
+        raise
 
 
 atexit.register(stop_server)

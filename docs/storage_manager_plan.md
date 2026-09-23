@@ -359,9 +359,8 @@ trainer-output-root/
   archive/
     <finalized trainer timestamp run>/
       webcap-run.json
-      selected checkpoint / LoRA
       TensorBoard event files
-      retained training config/evidence
+      webcap-run.json
 ```
 
 The archive should be self-describing. The run-owned `webcap-run.json` begins life with Selected-epoch knowledge and is enriched during finalization with the durable experiment snapshot.
@@ -373,7 +372,7 @@ Useful durable fields include:
 - base model/profile;
 - learning rate, rank, dropout, configured epochs/repeats;
 - dataset identity snapshot: Set ID/name if available, item count, and an existing cheap fingerprint only if WebCap already has one;
-- selected epoch, optimizer step, relative selected-artifact path, selection time;
+- selected epoch, optimizer step, and selection time;
 - cumulative active training time when known;
 - retained TensorBoard/config locations;
 - compact summary metrics that are cheap and stable enough to help compare maturation between runs.
@@ -393,12 +392,10 @@ Before finalizing:
 
 Finalization should then:
 
-1. preserve the Selected artifact and the evidence needed for later analysis/comparison;
-2. retain TensorBoard event data;
-3. retain the relevant config/run metadata;
-4. prune intermediate checkpoints/resumable bulk according to an explicit retention contract;
-5. write/enrich `webcap-run.json` using relative paths;
-6. move the trainer timestamp folder from `runs/` to sibling `archive/`; the WebCap action/capture wrapper is not copied as part of this archive operation.
+1. retain the TensorBoard event data needed for later curve comparison;
+2. retain/write the compact `webcap-run.json` experiment record, including Selected epoch/step;
+3. prune epoch/checkpoint folders and other resumable bulk according to the explicit archive retention contract;
+4. move the trainer timestamp folder from `runs/` to sibling `archive/`; the WebCap action/capture wrapper is not copied as part of this archive operation.
 
 A same-filesystem atomic rename is preferred. Cross-filesystem finalization must use copy -> verify -> commit/remove semantics rather than assuming `rename()` always works. Partial finalization must remain recoverable and must not leave two apparently authoritative experiment copies.
 

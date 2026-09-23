@@ -775,10 +775,12 @@ def test_test_generations_queue_contract():
     assert 'operation == "test_queue"' in backend
     assert 'operation == "test_queue_cancel"' in backend
     assert 'operation == "test_queue_clear"' in backend
-    assert "_pending_tests = []" in backend
+    assert "EXECUTION_LANE = \"test-generations\"" in backend
+    assert "execution_enqueue(" in backend
+    assert "execution_claim_next(" in backend
     assert "_reserve_gpu_for_test_generations" in backend
     assert "_queue_retry" not in backend
-    assert "Pause Training before starting Test Generations." in backend
+    assert "Pause Training before starting Test Generations." not in backend
     assert "enqueue_test_response" not in backend
 
 

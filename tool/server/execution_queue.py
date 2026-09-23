@@ -249,14 +249,6 @@ def claim_next(lane_name):
 
 
 def mark_running(job_id, details=None):
-    return update_job(job_id, status="running", details=details)
-
-
-def mark_stopping(job_id, details=None):
-    return update_job(job_id, status="stopping", details=details)
-
-
-def update_job(job_id, status=None, details=None, metadata=None, result=None, error=None):
     now = time.time()
     with _lock:
         state = _read_state()
@@ -264,26 +256,33 @@ def update_job(job_id, status=None, details=None, metadata=None, result=None, er
         if job is None:
             raise FileNotFoundError("Execution queue job does not exist.")
         lane = _lane(state, lane_name)
-        if status is not None:
-            status = str(status)
-            if status not in QUEUE_STATUSES | ACTIVE_STATUSES | TERMINAL_STATUSES:
-                raise ValueError("Unsupported execution queue status: " + status)
-            job["status"] = status
-            if status in TERMINAL_STATUSES:
-                job["finishedAt"] = now
-                if lane.get("activeJobId") == job["id"]:
-                    lane["activeJobId"] = ""
+        if lane.get("activeJobId") != job["id"]:
+            raise RuntimeError("Execution queue job is not the active job for its lane.")
+        if job.get("status") == "stopping":
+            return _public_job(job)
+        if job.get("status") not in {"starting", "running"}:
+            raise ValueError("Only a starting execution job can become running.")
+        job["status"] = "running"
         if isinstance(details, dict):
             job.setdefault("details", {}).update(copy.deepcopy(details))
-        if isinstance(metadata, dict):
-            job.setdefault("metadata", {}).update(copy.deepcopy(metadata))
-        if isinstance(result, dict):
-            job.setdefault("result", {}).update(copy.deepcopy(result))
-        if error is not None:
-            job["error"] = str(error or "")
         job["updatedAt"] = now
-        _prune_terminal(lane)
-        _refresh_positions(lane)
+        _write_state(state)
+        return _public_job(job)
+
+
+def update_job(job_id, details):
+    if not isinstance(details, dict):
+        raise ValueError("Execution queue job details must be an object.")
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        _lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        if job.get("status") in TERMINAL_STATUSES:
+            raise ValueError("Execution queue job is already finished.")
+        job.setdefault("details", {}).update(copy.deepcopy(details))
+        job["updatedAt"] = now
         _write_state(state)
         return _public_job(job)
 
@@ -291,60 +290,64 @@ def update_job(job_id, status=None, details=None, metadata=None, result=None, er
 def finish_job(job_id, status="completed", result=None, error=""):
     if status not in TERMINAL_STATUSES:
         raise ValueError("Execution queue finish status must be terminal.")
-    return update_job(job_id, status=status, result=result, error=error)
-
-
-def request_action(job_id, action):
-    action = str(action or "").strip().lower()
-    if action not in {"pause", "stop", "cancel"}:
-        raise ValueError("Unsupported execution queue action: " + action)
     now = time.time()
     with _lock:
         state = _read_state()
         lane_name, job = _find_job(state, job_id)
         if job is None:
             raise FileNotFoundError("Execution queue job does not exist.")
-        if job.get("status") in TERMINAL_STATUSES:
-            raise ValueError("Execution queue job is already finished.")
-        if action == "cancel" and job.get("status") == "queued":
-            job["status"] = "cancelled"
-            job["finishedAt"] = now
-            job["requestedAction"] = ""
-        else:
-            job["requestedAction"] = action
-            if action in {"stop", "cancel"} and job.get("status") in ACTIVE_STATUSES:
-                job["status"] = "stopping"
-        job["updatedAt"] = now
+        if job.get("status") not in ACTIVE_STATUSES:
+            raise ValueError("Only an active execution job can be finished.")
         lane = _lane(state, lane_name)
-        if job.get("status") in TERMINAL_STATUSES and lane.get("activeJobId") == job["id"]:
+        job["status"] = status
+        job["finishedAt"] = now
+        job["updatedAt"] = now
+        job["error"] = str(error or "")
+        if isinstance(result, dict):
+            job.setdefault("result", {}).update(copy.deepcopy(result))
+        if lane.get("activeJobId") == job["id"]:
             lane["activeJobId"] = ""
+        _prune_terminal(lane)
         _refresh_positions(lane)
         _write_state(state)
         return _public_job(job)
 
 
-def clear_requested_action(job_id):
+def request_stop(job_id):
     now = time.time()
     with _lock:
         state = _read_state()
-        _lane_name, job = _find_job(state, job_id)
+        lane_name, job = _find_job(state, job_id)
         if job is None:
             raise FileNotFoundError("Execution queue job does not exist.")
-        job["requestedAction"] = ""
+        if job.get("status") not in ACTIVE_STATUSES:
+            raise ValueError("Only active execution jobs can be stopped.")
+        job["requestedAction"] = "stop"
+        job["status"] = "stopping"
         job["updatedAt"] = now
+        lane = _lane(state, lane_name)
+        _refresh_positions(lane)
         _write_state(state)
         return _public_job(job)
 
 
 def cancel_queued(job_id):
+    now = time.time()
     with _lock:
         state = _read_state()
         lane_name, job = _find_job(state, job_id)
         if job is None:
             raise FileNotFoundError("Execution queue job does not exist.")
         if job.get("status") != "queued":
-            raise ValueError("Only queued execution jobs can be cancelled directly.")
-    return finish_job(job_id, status="cancelled")
+            raise ValueError("Only queued execution jobs can be cancelled.")
+        lane = _lane(state, lane_name)
+        job["status"] = "cancelled"
+        job["finishedAt"] = now
+        job["updatedAt"] = now
+        job["requestedAction"] = ""
+        _refresh_positions(lane)
+        _write_state(state)
+        return _public_job(job)
 
 
 def reorder_job(job_id, direction=None, position=None):
@@ -383,37 +386,6 @@ def reorder_job(job_id, direction=None, position=None):
         return lane_snapshot(lane_name)
 
 
-def requeue_job(job_id, front=False, payload=None, metadata=None):
-    now = time.time()
-    with _lock:
-        state = _read_state()
-        lane_name, job = _find_job(state, job_id)
-        if job is None:
-            raise FileNotFoundError("Execution queue job does not exist.")
-        lane = _lane(state, lane_name)
-        if lane.get("activeJobId") == job["id"]:
-            lane["activeJobId"] = ""
-        job["status"] = "queued"
-        job["startedAt"] = None
-        job["finishedAt"] = None
-        job["error"] = ""
-        job["details"] = {}
-        job["result"] = {}
-        job["requestedAction"] = ""
-        if payload is not None:
-            job["payload"] = copy.deepcopy(payload)
-        if isinstance(metadata, dict):
-            job.setdefault("metadata", {}).update(copy.deepcopy(metadata))
-        job["updatedAt"] = now
-        if front:
-            lane["jobs"].remove(job)
-            first_queued = next((idx for idx, item in enumerate(lane["jobs"]) if item.get("status") == "queued"), len(lane["jobs"]))
-            lane["jobs"].insert(first_queued, job)
-        _refresh_positions(lane)
-        _write_state(state)
-        return _public_job(job)
-
-
 def recover_lane(lane_name, reason="Execution was interrupted by a WebCap restart."):
     now = time.time()
     with _lock:
@@ -432,19 +404,3 @@ def recover_lane(lane_name, reason="Execution was interrupted by a WebCap restar
         _write_state(state)
     release_resource(lane_name)
     return changed
-
-
-def has_queued_work(lane_name):
-    with _lock:
-        state = _read_state()
-        lane = _lane(state, lane_name, create=False)
-        if not lane or lane.get("paused"):
-            return False
-        return any(job.get("status") == "queued" for job in lane.get("jobs", []))
-
-
-def has_active_work(lane_name):
-    with _lock:
-        state = _read_state()
-        lane = _lane(state, lane_name, create=False)
-        return bool(lane and lane.get("activeJobId"))

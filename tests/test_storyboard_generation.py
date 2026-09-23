@@ -338,7 +338,7 @@ def test_storyboard_generation_allows_multiple_take_jobs_for_same_scene(storyboa
     assert len({first_payload["settings"]["seed"], second_payload["settings"]["seed"], third_payload["settings"]["seed"]}) == 3
 
 
-def test_storyboard_generation_queue_exposes_pause_resume_cancel_and_reorder(storyboard_fs, monkeypatch):
+def test_storyboard_generation_exposes_only_used_cancel_and_stop_actions(storyboard_fs, monkeypatch):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {
         "prompt": "Prompt.",
@@ -349,26 +349,26 @@ def test_storyboard_generation_queue_exposes_pause_resume_cancel_and_reorder(sto
         "seed": 1,
     })
 
-    monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: (_ for _ in ()).throw(RuntimeError("busy")))
+    monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: None)
     monkeypatch.setattr(storyboard_generation, "_release_gpu", lambda: None)
+    monkeypatch.setattr(
+        storyboard_generation,
+        "_start_job_thread",
+        lambda job_id: execution_queue.mark_running(job_id),
+    )
 
-    first = storyboard_generation.start_generation(story["id"], scene["id"])
-    second = storyboard_generation.start_generation(story["id"], scene["id"])
-    assert first["status"] == "queued"
-    assert second["queuePosition"] == 2
+    active = storyboard_generation.start_generation(story["id"], scene["id"])
+    queued = storyboard_generation.start_generation(story["id"], scene["id"])
 
-    storyboard_generation.generation_action("reorder", second["jobId"], direction="up")
-    queue = storyboard_generation.generation_queue(story["id"])
-    assert [job["jobId"] for job in queue["jobs"]] == [second["jobId"], first["jobId"]]
+    stopped = storyboard_generation.generation_action("stop", active["jobId"])
+    assert stopped["job"]["status"] == "stopping"
+    assert stopped["job"]["requestedAction"] == "stop"
 
-    storyboard_generation.generation_action("cancel", first["jobId"])
-    queue = storyboard_generation.generation_queue(story["id"])
-    assert [job["jobId"] for job in queue["jobs"]] == [second["jobId"]]
+    cancelled = storyboard_generation.generation_action("cancel", queued["jobId"])
+    assert cancelled["job"]["status"] == "cancelled"
 
-    paused = storyboard_generation.generation_action("pause_queue")
-    assert paused["paused"] is True
-    resumed = storyboard_generation.generation_action("resume_queue")
-    assert resumed["queue"]["paused"] is False
+    with pytest.raises(ValueError, match="Unsupported Storyboard generation action"):
+        storyboard_generation.generation_action("pause_queue")
 
 
 def test_scene_settings_resolve_story_loras_before_queueing(storyboard_fs):

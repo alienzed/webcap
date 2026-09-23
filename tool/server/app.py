@@ -25,6 +25,8 @@ from .training_setup import ensure_training_setup
 from .epoch_test_bench import (
     activity_snapshot as test_generations_activity_snapshot,
     handle_request as handle_epoch_test_bench_request,
+    reconcile_startup as reconcile_test_generations_startup,
+    start_observer as start_test_generations_observer,
     supported_models as test_generations_supported_models,
 )
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
@@ -32,7 +34,7 @@ from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_concept_expansion as storyboard_apply_concept_expansion, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, duplicate_scene as storyboard_duplicate_scene, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_previous_concept as storyboard_restore_previous_concept, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, update_scene as storyboard_update_scene, update_story as storyboard_update_story
-from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
+from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, reconcile_startup as reconcile_storyboard_generation_startup, start_generation as storyboard_start_generation, start_observer as start_storyboard_generation_observer
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_llm_runtime import run_contract as storyboard_run_llm_contract, status as storyboard_director_status
@@ -1441,7 +1443,11 @@ def open_in_vscode():
     return open_in_vscode_response(rel_path)
     
 if __name__ == "__main__":
+    reconcile_test_generations_startup()
+    reconcile_storyboard_generation_startup()
     start_training_runner_observer()
+    start_test_generations_observer()
+    start_storyboard_generation_observer()
     # Only bind to localhost for desktop/offline use.
     # Disable Flask debug mode for a production-like local runtime.
     app.run(host="127.0.0.1", port=4200, debug=False)

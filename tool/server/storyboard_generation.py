@@ -1,6 +1,7 @@
 import copy
 import io
 import json
+import logging
 import os
 import re
 import secrets
@@ -23,11 +24,8 @@ from .execution_queue import (
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
-    pause_lane as execution_pause_lane,
-    request_action as execution_request_action,
-    reorder_job as execution_reorder_job,
+    request_stop as execution_request_stop,
     recover_lane as execution_recover_lane,
-    resume_lane as execution_resume_lane,
     update_job as execution_update_job,
 )
 
@@ -49,6 +47,9 @@ EXECUTION_LANE = "storyboard-takes"
 GPU_RESERVATION_OWNER = EXECUTION_LANE
 _reconcile_lock = threading.Lock()
 _startup_reconciled = False
+_monitor_lock = threading.Lock()
+_monitor_thread = None
+_logger = logging.getLogger(__name__)
 
 
 def _ensure_startup_reconciled():
@@ -58,11 +59,51 @@ def _ensure_startup_reconciled():
     with _reconcile_lock:
         if _startup_reconciled:
             return
-        execution_recover_lane(
+        interrupted = execution_recover_lane(
             EXECUTION_LANE,
             reason="Storyboard Take generation was interrupted by a WebCap restart.",
         )
+        for job in interrupted:
+            details = job.get("details") if isinstance(job.get("details"), dict) else {}
+            prompt_id = str(details.get("comfyJobId") or "").strip()
+            if not prompt_id:
+                continue
+            try:
+                _cancel_comfy_job(prompt_id)
+            except Exception:
+                _logger.exception("Could not cancel interrupted Storyboard ComfyUI job %s.", prompt_id)
         _startup_reconciled = True
+
+
+def _monitor_loop():
+    while True:
+        try:
+            _advance_queue()
+        except Exception:
+            _logger.exception("Storyboard generation queue monitor failed.")
+        time.sleep(2)
+
+
+def _ensure_monitor_started():
+    global _monitor_thread
+    with _monitor_lock:
+        if _monitor_thread and _monitor_thread.is_alive():
+            return
+        _monitor_thread = threading.Thread(
+            target=_monitor_loop,
+            name="webcap-storyboard-generation-queue",
+            daemon=True,
+        )
+        _monitor_thread.start()
+
+
+def reconcile_startup():
+    _ensure_startup_reconciled()
+
+
+def start_observer():
+    reconcile_startup()
+    _ensure_monitor_started()
 
 
 def _reserve_gpu():
@@ -693,15 +734,16 @@ def _advance_queue():
     except Exception as exc:
         execution_finish_job(job_id, status="failed", error=str(exc))
         _release_gpu()
-        app_config.debug_print("[storyboard-generation] COULD NOT START QUEUED JOB:", exc)
-        app_config.debug_traceback()
+        _logger.exception("Could not start queued Storyboard generation job %s.", job_id)
         return _advance_queue()
     return _generation_job(execution_get_job(job_id))
 
 
 def _run_generation(job_id, story_id, scene_id, settings):
     try:
-        execution_mark_running(job_id, details={"comfyStatus": "starting"})
+        running_job = execution_mark_running(job_id, details={"comfyStatus": "starting"})
+        if running_job.get("status") == "stopping":
+            raise StoryboardGenerationStopped("stopped", "Storyboard Take generation stopped.")
         filename_prefix = "webcap-storyboard/" + story_id + "/" + scene_id + "/" + job_id + "/render"
         if settings.get("wildcardsEnabled"):
             settings = dict(settings)
@@ -741,17 +783,16 @@ def _run_generation(job_id, story_id, scene_id, settings):
                 "providerJobId": prompt_id,
             },
         )
+        execution_update_job(job_id, details={"comfyStatus": "completed"})
         execution_finish_job(
             job_id,
             status="completed",
             result={"takeId": take["id"]},
         )
-        execution_update_job(job_id, details={"comfyStatus": "completed"})
     except StoryboardGenerationStopped as exc:
         execution_finish_job(job_id, status=exc.status, error=str(exc))
     except Exception as exc:
-        app_config.debug_print("[storyboard-generation] ERROR:", exc)
-        app_config.debug_traceback()
+        _logger.exception("Storyboard generation job %s failed.", job_id)
         execution_finish_job(job_id, status="failed", error=str(exc))
     finally:
         _release_gpu()
@@ -786,13 +827,11 @@ def start_generation(story_id, scene_id):
 
 def generation_status(job_id):
     _ensure_startup_reconciled()
-    _advance_queue()
     return _generation_job(execution_get_job(str(job_id or "").strip()))
 
 
 def generation_queue(story_id=""):
     _ensure_startup_reconciled()
-    _advance_queue()
     story_id = str(story_id or "").strip()
     snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
     jobs = [_generation_job(job) for job in snapshot.get("jobs", [])]
@@ -815,21 +854,6 @@ def generation_action(operation, job_id="", direction=""):
         _advance_queue()
         return {"job": _generation_job(job)}
     if operation == "stop":
-        job = execution_request_action(job_id, "stop")
+        job = execution_request_stop(job_id)
         return {"job": _generation_job(job)}
-    if operation == "pause_queue":
-        snapshot = execution_pause_lane(EXECUTION_LANE)
-        return {"queue": generation_queue(), "paused": bool(snapshot.get("paused"))}
-    if operation == "resume_queue":
-        execution_resume_lane(EXECUTION_LANE)
-        _advance_queue()
-        return {"queue": generation_queue()}
-    if operation == "reorder":
-        snapshot = execution_reorder_job(job_id, direction=direction)
-        return {"queue": {
-            "paused": bool(snapshot.get("paused")),
-            "pauseReason": str(snapshot.get("pauseReason") or ""),
-            "activeJobId": str(snapshot.get("activeJobId") or ""),
-            "jobs": [_generation_job(job) for job in snapshot.get("jobs", []) if job.get("status") not in ("completed", "failed", "cancelled", "stopped", "interrupted")],
-        }}
     raise ValueError("Unsupported Storyboard generation action: " + operation)

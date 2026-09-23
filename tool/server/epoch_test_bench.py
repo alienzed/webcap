@@ -20,13 +20,27 @@ from . import config as app_config
 from .folder_state_store import read_folder_state
 from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import test_copy_path
+from .execution_queue import (
+    cancel_queued as execution_cancel_queued,
+    claim_next as execution_claim_next,
+    enqueue as execution_enqueue,
+    finish_job as execution_finish_job,
+    get_job as execution_get_job,
+    lane_snapshot as execution_lane_snapshot,
+    mark_running as execution_mark_running,
+    recover_lane as execution_recover_lane,
+    request_stop as execution_request_stop,
+    resource_owner as execution_resource_owner,
+    update_job as execution_update_job,
+)
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 TEMPLATE_PATH = get_test_model().TEMPLATE_PATH
 TEST_RESULTS_DIR = "test-generations"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
 COMFY_JOB_MISSING_GRACE_SECONDS = 10
-GPU_RESERVATION_OWNER = "test-generations"
+EXECUTION_LANE = "test-generations"
+GPU_RESERVATION_OWNER = EXECUTION_LANE
 TEST_ASPECT_RATIO_OPTIONS = tuple(getattr(get_test_model(), "ASPECT_RATIO_OPTIONS", ()))
 _lock = threading.Lock()
 _status_lock = threading.Lock()
@@ -35,9 +49,96 @@ _active_threads = {}
 _active_sessions = {}
 _stop_requests = set()
 _recent_sets_cache = {"expires": 0.0, "items": []}
-_pending_tests = []
-_test_gpu_reserved = False
+_reconcile_lock = threading.Lock()
+_startup_reconciled = False
+_monitor_lock = threading.Lock()
+_monitor_thread = None
 _logger = logging.getLogger(__name__)
+
+
+def _execution_job_payload(job):
+    if not isinstance(job, dict):
+        return None
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    return {
+        "id": str(job.get("id") or ""),
+        "folder": str(metadata.get("folder") or ""),
+        "runName": str(metadata.get("runName") or ""),
+        "modelId": str(metadata.get("modelId") or ""),
+        "status": str(job.get("status") or ""),
+        "testTotal": int(metadata.get("testTotal") or 0),
+        "createdAt": float(job.get("createdAt") or 0),
+        "queuePosition": int(job.get("queuePosition") or 0),
+    }
+
+
+def _ensure_execution_reconciled():
+    global _startup_reconciled
+    if _startup_reconciled:
+        return
+    with _reconcile_lock:
+        if _startup_reconciled:
+            return
+        interrupted = execution_recover_lane(
+            EXECUTION_LANE,
+            reason="Test Generations execution was interrupted by a WebCap restart.",
+        )
+        for job in interrupted:
+            metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+            details = job.get("details") if isinstance(job.get("details"), dict) else {}
+            prompt_id = str(details.get("comfyJobId") or "").strip()
+            if prompt_id:
+                try:
+                    _cancel_comfy_job(prompt_id)
+                except Exception:
+                    _logger.exception("Could not cancel interrupted Test Generations ComfyUI job %s.", prompt_id)
+            folder = str(metadata.get("folder") or "").strip()
+            session_name = str(details.get("session") or "").strip()
+            if not folder or not session_name:
+                continue
+            try:
+                session_directory = _session_directory(app_config.safe_join_fs_root(folder), session_name)
+            except (FileNotFoundError, ValueError):
+                continue
+            with _status_lock:
+                status = _read_status(session_directory) or {}
+                if str(status.get("status") or "") in ("starting", "running", "stopping"):
+                    status["status"] = "failed"
+                    status["current"] = ""
+                    status["error"] = "Test Generations execution was interrupted by a WebCap restart."
+                    _atomic_write_json(_status_path(session_directory), status)
+        _startup_reconciled = True
+
+
+def _monitor_loop():
+    while True:
+        try:
+            _advance_test_queue()
+        except Exception:
+            _logger.exception("Test Generations queue monitor failed.")
+        time.sleep(2)
+
+
+def _ensure_monitor_started():
+    global _monitor_thread
+    with _monitor_lock:
+        if _monitor_thread and _monitor_thread.is_alive():
+            return
+        _monitor_thread = threading.Thread(
+            target=_monitor_loop,
+            name="webcap-test-generations-queue",
+            daemon=True,
+        )
+        _monitor_thread.start()
+
+
+def reconcile_startup():
+    _ensure_execution_reconciled()
+
+
+def start_observer():
+    reconcile_startup()
+    _ensure_monitor_started()
 
 
 def _reserve_gpu_for_test_generations():
@@ -1123,6 +1224,7 @@ def _run_batch(
     template=None,
     include_base=True,
     model=None,
+    execution_job_id=None,
 ):
     selected_model = model or get_test_model()
     status_file = _status_path(session_directory)
@@ -1168,6 +1270,11 @@ def _run_batch(
                     filename_prefix=output_prefix,
                 )
                 prompt_id = _queue_workflow(workflow)
+                if execution_job_id:
+                    execution_update_job(
+                        execution_job_id,
+                        details={"comfyJobId": prompt_id, "comfyStatus": "pending"},
+                    )
                 _update_live_comfy_status(
                     session_directory,
                     comfyJobId=prompt_id,
@@ -1214,6 +1321,8 @@ def _run_batch(
                     status["current"] = ""
                     status["comfyStatus"] = "completed"
                     _atomic_write_json(status_file, status)
+                if execution_job_id:
+                    execution_update_job(execution_job_id, details={"comfyStatus": "completed"})
             except Exception as exc:
                 for owned_path in (caption_path, media_path):
                     if owned_path and Path(owned_path).is_file():
@@ -1239,6 +1348,8 @@ def _run_batch(
                     status["error"] = ""
                     status["comfyStatus"] = "failed"
                     _atomic_write_json(status_file, status)
+                if execution_job_id:
+                    execution_update_job(execution_job_id, details={"comfyStatus": "failed"})
 
         with _status_lock:
             status = _read_status(session_directory) or {}
@@ -1254,6 +1365,28 @@ def _run_batch(
             status["error"] = str(exc)
             _atomic_write_json(status_file, status)
     finally:
+        final_status = _read_status(session_directory) or {}
+        if execution_job_id:
+            status_value = str(final_status.get("status") or "")
+            if status_value == "complete":
+                execution_finish_job(
+                    execution_job_id,
+                    status="completed",
+                    result={"session": Path(session_directory).name},
+                )
+            elif status_value == "stopped":
+                execution_finish_job(
+                    execution_job_id,
+                    status="stopped",
+                    result={"session": Path(session_directory).name},
+                )
+            else:
+                execution_finish_job(
+                    execution_job_id,
+                    status="failed",
+                    result={"session": Path(session_directory).name},
+                    error=str(final_status.get("error") or "Test Generations batch failed."),
+                )
         with _lock:
             _active_threads.pop(folder_key, None)
             _active_sessions.pop(folder_key, None)
@@ -1330,18 +1463,14 @@ def _build_queued_request(
     return request
 
 def _queue_job_payload(job, position=0):
-    payload = {
-        "id": str(job.get("id") or ""),
-        "folder": str(job.get("folder") or ""),
-        "runName": str(job.get("runName") or ""),
-        "modelId": str(job.get("modelId") or ""),
-        "status": "queued",
-        "testTotal": int(job.get("testTotal") or 0),
-        "createdAt": float(job.get("createdAt") or 0),
-    }
+    payload = _execution_job_payload(job)
+    if payload is None:
+        return None
+    payload["status"] = "queued"
     if position:
         payload["queuePosition"] = int(position)
     return payload
+
 
 def _prune_dead_test_workers_locked():
     dead_keys = [key for key, thread in _active_threads.items() if not thread or not thread.is_alive()]
@@ -1350,62 +1479,100 @@ def _prune_dead_test_workers_locked():
         _active_sessions.pop(key, None)
         _stop_requests.discard(key)
 
+
 def _advance_test_queue():
-    global _test_gpu_reserved
+    _ensure_execution_reconciled()
     with _dispatch_lock:
-        last_payload = None
         while True:
-            release_gpu = False
             with _lock:
                 _prune_dead_test_workers_locked()
                 if any(thread and thread.is_alive() for thread in _active_threads.values()):
                     return None
-                if not _pending_tests:
-                    if _test_gpu_reserved:
-                        _test_gpu_reserved = False
-                        release_gpu = True
-                    job = None
-                else:
-                    if not _test_gpu_reserved:
-                        if not _reserve_gpu_for_test_generations():
-                            return None
-                        _test_gpu_reserved = True
-                    job = _pending_tests.pop(0)
-            if job is None:
-                if release_gpu:
+
+            snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+            if snapshot.get("paused") or snapshot.get("activeJobId"):
+                return None
+            queued = [job for job in snapshot.get("jobs", []) if job.get("status") == "queued"]
+            if not queued:
+                if execution_resource_owner() == GPU_RESERVATION_OWNER:
                     _release_gpu_for_test_generations()
-                return last_payload
+                return None
+
+            owner = execution_resource_owner()
+            if owner and owner != GPU_RESERVATION_OWNER:
+                return None
+            reserved_here = False
+            if not owner:
+                if not _reserve_gpu_for_test_generations():
+                    return None
+                reserved_here = True
+
+            claimed = execution_claim_next(EXECUTION_LANE)
+            if claimed is None:
+                if reserved_here:
+                    _release_gpu_for_test_generations()
+                return None
+
+            job_id = str(claimed.get("id") or "")
+            stored = execution_get_job(job_id, include_payload=True)
+            metadata = stored.get("metadata") if isinstance(stored.get("metadata"), dict) else {}
+            request = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
+            folder = str(metadata.get("folder") or "").strip()
             try:
-                folder_path = app_config.safe_join_fs_root(str(job.get("folder") or ""))
-                payload = start_queued(folder_path, job.get("request") or {})
+                folder_path = app_config.safe_join_fs_root(folder)
+                payload = start_queued(folder_path, request, execution_job_id=job_id)
             except Exception as exc:
-                payload = {"status": "failed", "error": str(exc)}
-            last_payload = payload
-            if str((payload or {}).get("status") or "") in ("starting", "running"):
+                execution_finish_job(job_id, status="failed", error=str(exc))
+                _logger.exception("Queued Test Generations job could not start.")
+                continue
+
+            status_value = str((payload or {}).get("status") or "")
+            if status_value in ("starting", "running"):
                 return payload
+            if status_value == "skipped":
+                execution_finish_job(
+                    job_id,
+                    status="completed",
+                    result={"status": "skipped"},
+                )
+                continue
+
+            execution_finish_job(
+                job_id,
+                status="failed",
+                error=str((payload or {}).get("error") or "Test Generations could not start."),
+            )
+
 
 def cancel_queued(folder_path, job_id):
+    _ensure_execution_reconciled()
     folder = _relative_set_folder(folder_path)
     job_id = str(job_id or "").strip()
     if not job_id:
         raise ValueError("Queued Test job ID is required.")
-    removed = None
-    with _lock:
-        for index, job in enumerate(_pending_tests):
-            if str(job.get("id") or "") == job_id and str(job.get("folder") or "") == folder:
-                removed = _pending_tests.pop(index)
-                break
-    if removed is None:
+    job = execution_get_job(job_id)
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    if str(metadata.get("folder") or "") != folder:
         raise FileNotFoundError("Queued Test session was not found.")
+    execution_cancel_queued(job_id)
+    _advance_test_queue()
     return {"operation": "test_queue_cancel", "removed": job_id, "jobs": queued_jobs(folder_path)["jobs"]}
 
+
 def clear_queued(folder_path):
+    _ensure_execution_reconciled()
     folder = _relative_set_folder(folder_path)
-    with _lock:
-        kept = [job for job in _pending_tests if str(job.get("folder") or "") != folder]
-        removed = len(_pending_tests) - len(kept)
-        _pending_tests[:] = kept
-    return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path)["jobs"]}
+    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    matching = [
+        job for job in snapshot.get("jobs", [])
+        if job.get("status") == "queued"
+        and str((job.get("metadata") or {}).get("folder") or "") == folder
+    ]
+    for job in matching:
+        execution_cancel_queued(job.get("id"))
+    _advance_test_queue()
+    return {"operation": "test_queue_clear", "removed": len(matching), "jobs": queued_jobs(folder_path)["jobs"]}
+
 
 def enqueue(
     folder_path,
@@ -1420,6 +1587,7 @@ def enqueue(
     megapixels=None,
     duration=None,
 ):
+    _ensure_execution_reconciled()
     request = _build_queued_request(
         folder_path,
         prompt,
@@ -1434,57 +1602,47 @@ def enqueue(
         duration=duration,
     )
     folder = _relative_set_folder(folder_path)
-    job = {
-        "id": secrets.token_hex(6),
-        "folder": folder,
-        "runName": str(request.get("name") or ""),
-        "modelId": str(request.get("modelId") or ""),
-        "testTotal": int(request.get("total") or 0),
-        "createdAt": time.time(),
-        "request": request,
-    }
-    with _lock:
-        _prune_dead_test_workers_locked()
-        _pending_tests.append(job)
+    job = execution_enqueue(
+        EXECUTION_LANE,
+        request,
+        metadata={
+            "kind": "test-generation-session",
+            "folder": folder,
+            "runName": str(request.get("name") or ""),
+            "modelId": str(request.get("modelId") or ""),
+            "testTotal": int(request.get("total") or 0),
+        },
+    )
 
-    advance_payload = _advance_test_queue()
-
-    with _lock:
-        _prune_dead_test_workers_locked()
-        still_queued = any(str(item.get("id") or "") == job["id"] for item in _pending_tests)
-        has_active_test = any(thread and thread.is_alive() for thread in _active_threads.values())
-
-    if still_queued and not has_active_test:
-        with _lock:
-            _pending_tests[:] = [item for item in _pending_tests if str(item.get("id") or "") != job["id"]]
-        raise RuntimeError("Pause Training before starting Test Generations.")
-
-    if not still_queued:
-        if isinstance(advance_payload, dict) and str(advance_payload.get("status") or "") == "failed":
-            raise RuntimeError(str(advance_payload.get("error") or "Test Generations could not start."))
-        if (
-            not has_active_test
-            and (
-                not isinstance(advance_payload, dict)
-                or str(advance_payload.get("status") or "") not in ("starting", "running")
-            )
-        ):
-            raise RuntimeError("Test Generations did not start.")
-
+    latest = _advance_test_queue()
+    current = execution_get_job(job["id"])
+    if current.get("status") == "failed":
+        raise RuntimeError(str(current.get("error") or "Test Generations could not start."))
+    visible = _execution_job_payload(current)
     return {
         "operation": "test_enqueue",
-        "job": _queue_job_payload(job),
-        "queued": still_queued,
-        "latest": None if still_queued else advance_payload,
+        "job": visible,
+        "queued": current.get("status") == "queued",
+        "latest": latest if current.get("status") != "queued" else None,
     }
 
+
 def queued_jobs(folder_path):
+    _ensure_execution_reconciled()
     folder = _relative_set_folder(folder_path)
-    with _lock:
-        jobs = [_queue_job_payload(job, position) for position, job in enumerate(_pending_tests, start=1) if str(job.get("folder") or "") == folder]
+    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    jobs = []
+    for job in snapshot.get("jobs", []):
+        if job.get("status") != "queued":
+            continue
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("folder") or "") != folder:
+            continue
+        jobs.append(_queue_job_payload(job, job.get("queuePosition") or 0))
     return {"operation": "test_queue", "jobs": jobs}
 
-def start_queued(folder_path, request):
+
+def start_queued(folder_path, request, execution_job_id=None):
     request = dict(request or {})
     model = get_test_model(request.get("modelId") or request.get("model"))
     prompt = str(request.get("resolvedPrompt") or "").strip()
@@ -1562,11 +1720,17 @@ def start_queued(folder_path, request):
         payload.update(normalized_settings)
         payload["includeBase"] = include_base
         payload["total"] = len(loras) + (1 if include_base else 0)
-        payload["status"] = "running"
-        _atomic_write_json(_status_path(session_directory), payload)
+        if execution_job_id:
+            execution_mark_running(
+                execution_job_id,
+                details={
+                    "session": session_directory.name,
+                    "resultFolder": _relative_to_fs_root(session_directory),
+                },
+            )
         thread = threading.Thread(
             target=_run_batch,
-            args=(folder_key, session_directory, loras, prompt, normalized_settings, template, include_base, model),
+            args=(folder_key, session_directory, loras, prompt, normalized_settings, template, include_base, model, execution_job_id),
             name="webcap-test-generations-" + model.SESSION_SLUG,
             daemon=True,
         )
@@ -1575,6 +1739,12 @@ def start_queued(folder_path, request):
             _active_sessions[folder_key] = session_directory
             _active_threads[folder_key] = thread
             thread.start()
+        with _status_lock:
+            live_status = _read_status(session_directory) or {}
+            if str(live_status.get("status") or "") == "starting":
+                live_status["status"] = "running"
+                _atomic_write_json(_status_path(session_directory), live_status)
+            payload = live_status or payload
         return payload
     except Exception as exc:
         payload["status"] = "failed"
@@ -1634,13 +1804,24 @@ def status(folder_path, model_id=None):
     return _with_session_ratings(_session_directory(folder_path, session_name), payload)
 
 def stop(folder_path):
+    _ensure_execution_reconciled()
     folder_key = _folder_key(folder_path)
+    folder = _relative_set_folder(folder_path)
     with _lock:
         thread = _active_threads.get(folder_key)
         session_directory = _active_sessions.get(folder_key)
         if not thread or not thread.is_alive() or not session_directory:
             raise RuntimeError("No active Test Generations batch to stop.")
         _stop_requests.add(folder_key)
+
+    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    active_id = str(snapshot.get("activeJobId") or "")
+    active_job = execution_get_job(active_id) if active_id else None
+    metadata = active_job.get("metadata") if isinstance(active_job, dict) and isinstance(active_job.get("metadata"), dict) else {}
+    if not active_job or str(metadata.get("folder") or "") != folder:
+        raise RuntimeError("Active Test Generations execution job is missing.")
+    execution_request_stop(active_id)
+
     with _status_lock:
         status = _read_status(session_directory) or {}
         status["status"] = "stopping"

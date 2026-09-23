@@ -36,7 +36,9 @@ Storyboard must remain consistent with WebCap's existing storage philosophy.
 - Stories are folders.
 - Durable Story/Scene metadata is human-readable JSON.
 - Generated media lives in predictable folders beneath the Story.
+- Every durable Story-owned artifact lives beneath the Story folder; provider/runtime scratch does not.
 - A Story folder can be copied, backed up, inspected, or repaired independently of WebCap.
+- Deleting a Story is an explicit permanent operation that stops Story-bound inference first, then removes the complete Story folder.
 - Derived indexes/caches may be added later only if they can be regenerated from the Story folders.
 
 Initial root:

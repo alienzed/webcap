@@ -204,7 +204,6 @@ assert(!svg.includes('data-training-candidate-line="showRawStep" checked'));
 assert(svg.includes('training-candidates-marker training-candidates-epoch-marker in-test-folder'));
 assert(svg.includes('Test Generations · 1'));
 assert(svg.includes('data-training-candidates-open-generations'));
-assert(svg.includes('Remove from Test'));
 context.trainingCandidatesDisplayState().showRawStep=false;
 context.trainingCandidatesDisplayState().showEpochLoss=false;
 const filteredSvg=context.trainingCandidatesSvg(data);

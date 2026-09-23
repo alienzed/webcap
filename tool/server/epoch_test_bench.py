@@ -28,12 +28,9 @@ from .execution_queue import (
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
-    pause_lane as execution_pause_lane,
     recover_lane as execution_recover_lane,
-    reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
     resource_owner as execution_resource_owner,
-    resume_lane as execution_resume_lane,
     update_job as execution_update_job,
 )
 
@@ -89,6 +86,12 @@ def _ensure_execution_reconciled():
         for job in interrupted:
             metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
             details = job.get("details") if isinstance(job.get("details"), dict) else {}
+            prompt_id = str(details.get("comfyJobId") or "").strip()
+            if prompt_id:
+                try:
+                    _cancel_comfy_job(prompt_id)
+                except Exception:
+                    _logger.exception("Could not cancel interrupted Test Generations ComfyUI job %s.", prompt_id)
             folder = str(metadata.get("folder") or "").strip()
             session_name = str(details.get("session") or "").strip()
             if not folder or not session_name:
@@ -1263,6 +1266,11 @@ def _run_batch(
                     filename_prefix=output_prefix,
                 )
                 prompt_id = _queue_workflow(workflow)
+                if execution_job_id:
+                    execution_update_job(
+                        execution_job_id,
+                        details={"comfyJobId": prompt_id, "comfyStatus": "pending"},
+                    )
                 _update_live_comfy_status(
                     session_directory,
                     comfyJobId=prompt_id,
@@ -1309,6 +1317,8 @@ def _run_batch(
                     status["current"] = ""
                     status["comfyStatus"] = "completed"
                     _atomic_write_json(status_file, status)
+                if execution_job_id:
+                    execution_update_job(execution_job_id, details={"comfyStatus": "completed"})
             except Exception as exc:
                 for owned_path in (caption_path, media_path):
                     if owned_path and Path(owned_path).is_file():
@@ -1334,6 +1344,8 @@ def _run_batch(
                     status["error"] = ""
                     status["comfyStatus"] = "failed"
                     _atomic_write_json(status_file, status)
+                if execution_job_id:
+                    execution_update_job(execution_job_id, details={"comfyStatus": "failed"})
 
         with _status_lock:
             status = _read_status(session_directory) or {}
@@ -1556,30 +1568,6 @@ def clear_queued(folder_path):
         execution_cancel_queued(job.get("id"))
     _advance_test_queue()
     return {"operation": "test_queue_clear", "removed": len(matching), "jobs": queued_jobs(folder_path)["jobs"]}
-
-
-def reorder_queued(folder_path, job_id, direction):
-    _ensure_execution_reconciled()
-    folder = _relative_set_folder(folder_path)
-    job = execution_get_job(job_id)
-    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
-    if str(metadata.get("folder") or "") != folder:
-        raise FileNotFoundError("Queued Test session was not found.")
-    execution_reorder_job(job_id, direction=str(direction or ""))
-    return {"operation": "test_queue_reorder", "jobs": queued_jobs(folder_path)["jobs"]}
-
-
-def pause_queue(folder_path):
-    _ensure_execution_reconciled()
-    execution_pause_lane(EXECUTION_LANE)
-    return {"operation": "test_queue_pause", "jobs": queued_jobs(folder_path)["jobs"], "paused": True}
-
-
-def resume_queue(folder_path):
-    _ensure_execution_reconciled()
-    execution_resume_lane(EXECUTION_LANE)
-    _advance_test_queue()
-    return {"operation": "test_queue_resume", "jobs": queued_jobs(folder_path)["jobs"], "paused": False}
 
 
 def enqueue(
@@ -1854,13 +1842,6 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return cancel_queued(folder_path, criteria.get("jobId"))
     if operation == "test_queue_clear":
         return clear_queued(folder_path)
-    if operation == "test_queue_reorder":
-        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return reorder_queued(folder_path, criteria.get("jobId"), criteria.get("direction"))
-    if operation == "test_queue_pause":
-        return pause_queue(folder_path)
-    if operation == "test_queue_resume":
-        return resume_queue(folder_path)
     if operation == "test_open_session":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return open_session(folder_path, criteria.get("session"))

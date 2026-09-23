@@ -683,7 +683,7 @@ From Test activity:
 
 # Phase 8 - Hardening and cleanup
 
-**Branch status:** in progress on `refactor/unified-inference-hardening`.
+**Status:** implemented and merged.
 
 ## Goal
 
@@ -743,9 +743,9 @@ The remaining work is intentionally ordered as follows:
 
 1. **Storyboard Takes -> common `inference` lane:** implemented and merged.
 2. **Test Generations -> common `inference` lane:** implemented and merged with one job per Base/candidate rendition and Session-owned aggregation.
-3. **Harden and clean up the unified inference path:** in progress; remove the obsolete Test scheduler/transport paths and retain only migration compatibility plus domain-owned Session/result behavior. Remove obsolete per-client scheduler/transport duplication only after both migrations are proven.
-4. **Apply the small Generate IA/UX polish pass.** Treat Director as a prompt-editing tool, clarify rough-idea vs finished-prompt authoring, add one-step restore after Director edits, improve Setup/Conditioning hierarchy, and keep GPU/queue messaging contextual.
-5. **Finish explicit Take deletion.** Keep reversible Remove/Restore semantics, but add the separately confirmed destructive Delete Take action tracked in `docs/outstanding.md`.
+3. **Harden and clean up the unified inference path:** implemented and merged; obsolete Test scheduler/transport paths were removed while migration compatibility and domain-owned Session/result behavior remain. Remove obsolete per-client scheduler/transport duplication only after both migrations are proven.
+4. **Generate IA/UX polish:** implemented and merged. Director is a prompt-editing tool, rough-idea vs finished-prompt authoring is explicit, one-step restore protects Director edits, Setup/Output/Conditioning hierarchy is clearer, and permanent GPU/queue implementation prose was removed.
+5. **Explicit Take deletion:** implemented on `feature/storyboard-delete-take-v2`, pending validation/merge. Reversible Remove/Restore stays separate from permanently confirmed Delete Take.
 
 Training remains a separate long-running scheduler and shares only GPU resource arbitration.
 

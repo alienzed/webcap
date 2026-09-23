@@ -1,8 +1,14 @@
 # Execution Queue
 
-WebCap has one shared execution-queue substrate for GPU-backed work.
+WebCap has one shared execution-queue substrate for scheduled accelerator-backed work.
 
-The substrate owns durable queue mechanics. Domain code owns execution semantics and result storage. The long-term inference target is one common `inference` lane for Generate, Storyboard Takes, and Test renditions, while Training remains a separate long-running scheduler that shares only the GPU execution resource.
+The substrate owns durable queue mechanics. Domain code owns execution semantics and result storage. WebCap now has three execution classes that share one exclusive local GPU resource:
+
+- `training`: long-running Diffusion-Pipe work with its specialized scheduler;
+- `inference`: short-form ComfyUI work for Generate, Storyboard Takes, and Test renditions;
+- `llm`: serialized Prompt Assistant / Director requests through llama.cpp.
+
+Remote Director endpoints still use the `llm` lane for request serialization but do not reserve the local GPU.
 
 ## Shared contract
 
@@ -109,6 +115,24 @@ Test still owns:
 
 The common inference runner owns scheduling, GPU acquisition/release, provider polling/cancellation, and lifecycle transitions. The full Generation Queue exposes each Test rendition individually, while the Test workspace continues to show the Session as the useful comparison unit.
 
+### LLM
+
+Prompt Assistant and Storyboard Director requests use the common `llm` lane.
+
+The LLM runner owns:
+
+- durable request ordering and queue position;
+- restart reconciliation;
+- local GPU acquisition/release for llama.cpp work;
+- serialization across Generate and Storyboard Director clients;
+- client-specific result finalization before a job becomes terminal.
+
+The Director runtime still owns llama.cpp process/model lifecycle, model loading/unloading, completion transport, structured-output parsing, and safe cleanup when model state cannot be confirmed.
+
+The browser enqueues Director work and polls the durable job instead of keeping one HTTP request open while waiting behind Training or inference.
+
+Preload remains speculative rather than queued work. It must yield to launchable inference or LLM work and may reserve the GPU only when no scheduled workload owns it.
+
 ### Training
 
 Training remains separate because its semantics are materially different:
@@ -124,22 +148,24 @@ Training continues to use its own queue/runner and shares only the global GPU ex
 
 ## Resource arbitration
 
-Only one execution owner may hold the shared GPU resource at a time.
+Only one execution owner may hold the shared local GPU resource at a time.
 
-During migration:
-
-- active Training blocks inference execution;
-- an unpaused queued Training job blocks a new external inference start;
-- paused Training allows inference;
-- queued inference remains durable while Training is busy;
-- an already-running inference job is not preempted;
-- legacy persisted Test queue work is reconciled into the common inference path at startup; new work has no separate Test execution owner.
+- active Training blocks local inference and local LLM execution;
+- an unpaused queued Training job blocks a new external local GPU start;
+- paused Training allows inference or LLM execution;
+- queued inference and queued LLM work remain durable while Training is busy;
+- running work is not preempted;
+- inference and local LLM cannot execute concurrently;
+- remote LLM work does not reserve the local GPU;
+- retained or unsafe provider/model state keeps its resource reservation rather than guessing that the GPU is free.
 
 ## Startup and observers
 
-Durable inference lanes reconcile interrupted active work before their queue observers start.
+Training keeps its always-on observer because it is a long-running scheduler.
 
-Queue reads should not be used as a dispatch mechanism. Background observers are responsible for advancing queued work, so navigating to Media, Storyboard, Test, Generate, or another activity does not determine whether GPU work continues.
+Inference and LLM execution are demand-driven. WebCap startup does not contact ComfyUI or llama.cpp merely because the server is running. Enqueueing work reconciles the relevant durable lane and starts its worker; workers go dormant when their lane is idle or deliberately paused.
+
+Queue reads are passive and must not become a dispatch mechanism. Navigating to Media, captioning, Training, Storyboard, Test, Generate, or another activity does not itself start provider work.
 
 ## UI rule
 

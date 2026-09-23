@@ -91,19 +91,15 @@ def test_execution_queue_terminal_jobs_reject_runtime_updates(queue_root):
         execution_queue.update_job(job["id"], {"phase": "too-late"})
 
 
-def test_execution_queue_startup_reconciliation_precedes_monitors():
+def test_server_startup_keeps_inference_dormant():
     app_source = (Path(__file__).parents[1] / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     startup = app_source.split('if __name__ == "__main__":', 1)[1]
 
-    test_reconcile = startup.index("reconcile_test_generations_startup()")
-    storyboard_reconcile = startup.index("reconcile_storyboard_generation_startup()")
-    training_observer = startup.index("start_training_runner_observer()")
-    test_observer = startup.index("start_test_generations_observer()")
-    storyboard_observer = startup.index("start_storyboard_generation_observer()")
-
-    assert test_reconcile < training_observer
-    assert storyboard_reconcile < training_observer
-    assert training_observer < test_observer < storyboard_observer
+    assert "start_training_runner_observer()" in startup
+    assert "reconcile_test_generations_startup()" not in startup
+    assert "reconcile_storyboard_generation_startup()" not in startup
+    assert "reconcile_inference_startup()" not in startup
+    assert "start_inference_observer()" not in startup
 
 
 def test_execution_queue_resource_claim_is_exclusive(queue_root):

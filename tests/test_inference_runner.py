@@ -22,6 +22,56 @@ def inference_root(tmp_path, monkeypatch):
     return tmp_path
 
 
+def test_inference_enqueue_starts_worker_on_demand(inference_root, monkeypatch):
+    started = []
+    monkeypatch.setattr(
+        inference_runner,
+        "_start_worker_for_requested_inference",
+        lambda: started.append(True),
+    )
+
+    queued = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
+    )
+
+    assert queued["status"] == "queued"
+    assert started == [True]
+
+
+def test_inference_monitor_is_dormant_without_requested_work(inference_root):
+    assert inference_runner._monitor_has_work() is False
+
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    assert inference_runner._monitor_has_work() is True
+
+    execution_queue.pause_lane(inference_runner.EXECUTION_LANE)
+    assert inference_runner._monitor_has_work() is False
+
+    execution_queue.cancel_queued(queued["id"])
+    execution_queue.resume_lane(inference_runner.EXECUTION_LANE)
+    assert inference_runner._monitor_has_work() is False
+
+
+def test_inference_snapshot_is_passive_and_does_not_reconcile_provider(inference_root, monkeypatch):
+    inference_runner._startup_reconciled = False
+    touched = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait",
+        lambda provider_id: touched.append(provider_id) or True,
+    )
+
+    snapshot = inference_runner.snapshot(include_terminal=False)
+
+    assert snapshot["activeJobId"] == ""
+    assert touched == []
+    assert inference_runner._startup_reconciled is False
+
+
 def test_inference_runner_executes_claimed_generate_job(inference_root, monkeypatch):
     queued = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,

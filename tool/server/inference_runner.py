@@ -338,12 +338,30 @@ def _advance_queue():
         return _job_view(execution_get_job(job_id))
 
 
+def _monitor_has_work():
+    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    if snapshot.get("activeJobId"):
+        return True
+    with _provider_hold_lock:
+        if _provider_cleanup_holds:
+            return True
+    if snapshot.get("paused"):
+        return False
+    return any(str(job.get("status") or "") == "queued" for job in snapshot.get("jobs", []))
+
+
 def _monitor_loop():
+    global _monitor_thread
     while True:
         try:
             _advance_queue()
         except Exception:
             _logger.exception("Inference queue monitor failed.")
+
+        with _monitor_lock:
+            if not _monitor_has_work():
+                _monitor_thread = None
+                return
         time.sleep(2)
 
 
@@ -365,6 +383,10 @@ def start_observer():
     _ensure_monitor_started()
 
 
+def _start_worker_for_requested_inference():
+    _ensure_monitor_started()
+
+
 def enqueue_generate(request, label=""):
     _ensure_execution_reconciled()
     job = execution_enqueue(
@@ -377,6 +399,7 @@ def enqueue_generate(request, label=""):
             "mediaKind": str(request.get("mediaKind") or ""),
         },
     )
+    _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
 
@@ -413,6 +436,7 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
             "migratedFromJobId": str(migrated_from_job_id or ""),
         },
     )
+    _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
 
@@ -441,6 +465,7 @@ def enqueue_test(request, context, label=""):
             "candidateFile": str(context.get("candidateFile") or ""),
         },
     )
+    _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
 
@@ -534,6 +559,7 @@ def action(operation, job_id="", direction="", position=None):
         return {"queue": snapshot()}
     if operation == "resume_queue":
         execution_resume_lane(EXECUTION_LANE)
+        _start_worker_for_requested_inference()
         return {"queue": snapshot()}
     if operation == "reorder":
         lane = execution_reorder_job(

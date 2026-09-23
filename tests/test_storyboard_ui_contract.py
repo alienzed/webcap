@@ -43,7 +43,6 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert 'id="storyboard-sequence-preview"' in html
     assert 'id="storyboard-story-tags"' in html
     assert 'id="storyboard-story-status"' in html
-    assert 'id="storyboard-story-pinned"' in html
     assert "Generation prompt" in storyboard
     assert "durationSeconds" in storyboard
     assert "seedMode" in storyboard
@@ -86,18 +85,28 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "fetch('/fs/storyboard'" not in storyboard  # request helper builds the URL once.
 
 
-def test_storyboard_story_deletion_is_explicit_and_permanent():
+def test_storyboard_story_library_owns_management_actions():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
 
-    assert 'id="storyboard-delete-story-btn"' in html
-    assert "function deleteStory()" in storyboard
+    assert 'id="storyboard-delete-story-btn"' not in html
+    assert 'id="storyboard-story-pinned"' not in html
+    assert 'data-story-action="duplicate"' in storyboard
+    assert 'data-story-action="pin"' in storyboard
+    assert 'data-story-action="archive"' in storyboard
+    assert 'data-story-action="export"' in storyboard
+    assert 'data-story-action="delete"' in storyboard
+    assert "function duplicateStory(storyId)" in storyboard
+    assert "function deleteStory(storyId, title)" in storyboard
     assert "This cannot be undone." in storyboard
+    assert "operation: 'duplicate_story'" in storyboard
     assert "operation: 'delete_story'" in storyboard
+    assert 'if operation == "duplicate_story":' in app
     assert 'if operation == "delete_story":' in app
     assert "stop_storyboard_jobs(story_id)" in app
+    assert "def duplicate_story(story_id):" in store
     assert "def delete_story(story_id):" in store
     assert "shutil.rmtree(directory)" in store
 

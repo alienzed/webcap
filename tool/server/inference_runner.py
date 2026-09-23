@@ -128,6 +128,7 @@ def _execute_claimed(job_id):
     running = execution_mark_running(job_id, details={"providerStatus": "starting"})
     if str(running.get("status") or "") == "stopping":
         execution_finish_job(job_id, status="stopped", error="Inference stopped before provider launch.")
+        _cleanup_generate_job_references(job_id)
         return
 
     if client == "generate":
@@ -223,6 +224,7 @@ def _advance_queue():
                     execution_finish_job(job_id, status="failed", error=str(exc))
                 _logger.exception("Queued inference job failed.")
         finally:
+            _cleanup_generate_job_references(job_id)
             if release_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
         return _job_view(execution_get_job(job_id))
@@ -348,12 +350,30 @@ def job_status(job_id):
     return _job_view(execution_get_job(str(job_id or "").strip()))
 
 
+def _cleanup_generate_job_references(job_id):
+    try:
+        stored = execution_get_job(str(job_id or "").strip(), include_payload=True)
+    except FileNotFoundError:
+        return
+    metadata = stored.get("metadata") if isinstance(stored.get("metadata"), dict) else {}
+    if metadata.get("client") != "generate":
+        return
+    payload = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
+    request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+    try:
+        from .generate_store import cleanup_references
+        cleanup_references(request.get("references") or {})
+    except Exception:
+        _logger.exception("Could not clean transient Generate references for job %s.", job_id)
+
+
 def action(operation, job_id="", direction="", position=None):
     _ensure_execution_reconciled()
     operation = str(operation or "").strip()
     job_id = str(job_id or "").strip()
     if operation == "cancel":
         job = execution_cancel_queued(job_id)
+        _cleanup_generate_job_references(job_id)
         return {"job": _job_view(job)}
     if operation == "stop":
         return {"job": _job_view(execution_request_stop(job_id))}

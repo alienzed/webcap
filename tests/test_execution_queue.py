@@ -97,13 +97,14 @@ def test_execution_queue_startup_reconciliation_precedes_monitors():
 
     test_reconcile = startup.index("reconcile_test_generations_startup()")
     storyboard_reconcile = startup.index("reconcile_storyboard_generation_startup()")
+    inference_reconcile = startup.index("reconcile_inference_startup()")
     training_observer = startup.index("start_training_runner_observer()")
-    test_observer = startup.index("start_test_generations_observer()")
-    storyboard_observer = startup.index("start_storyboard_generation_observer()")
+    inference_observer = startup.index("start_inference_observer()")
 
     assert test_reconcile < training_observer
     assert storyboard_reconcile < training_observer
-    assert training_observer < test_observer < storyboard_observer
+    assert inference_reconcile < training_observer
+    assert training_observer < inference_observer
 
 
 def test_execution_queue_resource_claim_is_exclusive(queue_root):

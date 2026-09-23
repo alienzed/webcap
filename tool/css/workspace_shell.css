@@ -33,7 +33,8 @@
 .app-frame.shell-immersive > .app,
 .app-frame.shell-immersive > .generate-workspace,
 .app-frame.shell-immersive > .test-generations-workspace,
-.app-frame.shell-immersive > .storyboard-workspace {
+.app-frame.shell-immersive > .storyboard-workspace,
+.app-frame.shell-immersive > .storage-workspace {
   grid-area: workspace;
 }
 

@@ -5,6 +5,13 @@ from pathlib import Path
 import pytest
 
 from tool.server import epoch_test_bench as bench
+from tool.server import execution_queue
+
+
+def configure_execution_queue(monkeypatch, tmp_path):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    execution_queue._resource_owner = ""
+    bench._startup_reconciled = False
 
 
 def patch_default_test_model(monkeypatch, template=None, settings=None):

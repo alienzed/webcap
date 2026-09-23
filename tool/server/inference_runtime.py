@@ -6,7 +6,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from . import config as app_config
 from .execution_queue import get_job as execution_get_job, update_job as execution_update_job
@@ -304,14 +304,34 @@ def download_output(output_ref):
     return _read_bytes(COMFY_BASE_URL + "/view?" + query)
 
 
+def local_saved_output_path(output_ref):
+    if not isinstance(output_ref, dict):
+        return None
+    raw_path = str(output_ref.get("fullpath") or "").strip()
+    if not raw_path:
+        return None
+
+    direct = Path(raw_path)
+    if direct.is_file():
+        return direct
+
+    windows_path = PureWindowsPath(raw_path)
+    drive = str(windows_path.drive or "").rstrip(":")
+    if len(drive) == 1 and drive.isalpha():
+        parts = windows_path.parts[1:]
+        candidate = Path("/mnt") / drive.lower()
+        for part in parts:
+            candidate = candidate / part
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def cleanup_saved_output(output_ref):
     if not isinstance(output_ref, dict) or str(output_ref.get("type") or "output") != "output":
         return False
-    fullpath = str(output_ref.get("fullpath") or "").strip()
-    if not fullpath:
-        return False
-    path = Path(fullpath)
-    if not path.is_file():
+    path = local_saved_output_path(output_ref)
+    if path is None:
         return False
     path.unlink()
     return True

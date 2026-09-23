@@ -1859,7 +1859,8 @@ def handle_request(folder_path, mode, selection_criteria=None):
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return rating_summary(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_stop":
-        return stop(folder_path)
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return stop(folder_path, session_name=criteria.get("session"))
     if operation == "test_remove_candidate":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return remove_candidate(
@@ -2610,13 +2611,18 @@ def status(folder_path, model_id=None):
     return _with_session_ratings(_session_directory(folder_path, session_name), payload)
 
 
-def stop(folder_path):
+def stop(folder_path, session_name=None):
     reconcile_startup()
-    payload = _latest_status(folder_path)
-    session_id = str(payload.get("session") or "").strip()
-    if not session_id or payload.get("status") not in {"running", "stopping"}:
+    session_id = str(session_name or "").strip()
+    if session_id:
+        session_directory = _session_directory(folder_path, session_id)
+        payload = _visible_session_status(folder_path, session_directory)
+    else:
+        payload = _latest_status(folder_path)
+        session_id = str(payload.get("session") or "").strip()
+        session_directory = _session_directory(folder_path, session_id) if session_id else None
+    if not session_id or session_directory is None or payload.get("status") not in {"running", "stopping"}:
         raise RuntimeError("No active Test Generations session to stop.")
-    session_directory = _session_directory(folder_path, session_id)
     status_payload = _read_status(session_directory) or {}
     if not isinstance(status_payload.get("inferenceJobs"), list):
         return _legacy_stop(folder_path)

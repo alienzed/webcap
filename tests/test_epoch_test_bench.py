@@ -6,12 +6,15 @@ import pytest
 
 from tool.server import epoch_test_bench as bench
 from tool.server import execution_queue
+from tool.server import inference_runner
+from tool.server import inference_runtime
 
 
 def configure_execution_queue(monkeypatch, tmp_path):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     execution_queue._resource_owner = ""
     bench._startup_reconciled = False
+    inference_runner._startup_reconciled = True
 
 
 def patch_default_test_model(monkeypatch, template=None, settings=None):
@@ -1707,177 +1710,186 @@ def test_queued_request_freezes_workflow_snapshot_for_later_start(tmp_path, monk
 
 
 
-def test_enqueue_reports_live_shared_execution_state_after_dispatch(tmp_path, monkeypatch):
+def _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2):
     configure_execution_queue(monkeypatch, tmp_path)
     staged = tmp_path / "staged"
     staged.mkdir()
-    candidate = staged / "epoch01.safetensors"
-    candidate.write_bytes(b"weights")
+    candidates = []
+    for index in range(candidate_count):
+        candidate = staged / ("epoch" + str(index + 1).padStart(2, "0") + ".safetensors")
+        candidate.write_bytes(("weights-" + str(index)).encode("utf-8"))
+        candidates.append(candidate)
 
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
+    monkeypatch.setattr(
+        bench,
+        "_selected_lora_files",
+        lambda _folder, selected_files=None: [
+            path for path in candidates
+            if selected_files is None or path.name in selected_files
+        ],
+    )
     patch_default_test_model(
         monkeypatch,
-        template={},
-        settings={"seed": 77, "aspectRatio": "1:1 (Square)", "megapixels": 0.2, "duration": 5},
+        template={"template": True},
+        settings={
+            "seed": 77,
+            "aspectRatio": "1:1 (Square)",
+            "megapixels": 0.2,
+            "duration": 5,
+        },
     )
-    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
+    monkeypatch.setattr(
+        inference_runtime,
+        "resolve_wildcard_prompt",
+        lambda prompt, seed: prompt.replace("{place}", "studio") + " #" + str(seed),
+    )
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-
-    def dispatch_first_job():
-        claimed = execution_queue.claim_next(bench.EXECUTION_LANE)
-        execution_queue.mark_running(claimed["id"])
-        return {"status": "running", "session": "session-one"}
-
-    monkeypatch.setattr(bench, "_advance_test_queue", dispatch_first_job)
-
-    payload = bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
-
-    assert payload["queued"] is False
-    assert payload["latest"]["status"] == "running"
-    assert execution_queue.get_job(payload["job"]["id"])["status"] == "running"
+    return staged, candidates
 
 
-def test_enqueue_test_queues_behind_active_test(tmp_path, monkeypatch):
-    configure_execution_queue(monkeypatch, tmp_path)
-    staged = tmp_path / "staged"
-    staged.mkdir()
-    candidate = staged / "epoch01.safetensors"
-    candidate.write_bytes(b"weights")
+def test_enqueue_creates_one_common_inference_job_per_rendition(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
 
-    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
-    patch_default_test_model(
-        monkeypatch,
-        template={},
-        settings={"seed": 77, "aspectRatio": "1:1 (Square)", "megapixels": 0.2, "duration": 5},
+    payload = bench.enqueue(
+        tmp_path,
+        "person in {place}",
+        name="Comparison",
+        selected_files=[path.name for path in candidates],
+        include_base=True,
     )
-    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
-    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-
-    active = execution_queue.enqueue(
-        bench.EXECUTION_LANE,
-        {"resolvedPrompt": "active"},
-        metadata={"folder": "sets/other", "runName": "Active", "modelId": "h3", "testTotal": 1},
-    )
-    execution_queue.claim_next(bench.EXECUTION_LANE)
-    execution_queue.mark_running(active["id"])
-
-    payload = bench.enqueue(tmp_path, "prompt", name="Named", selected_files=[candidate.name])
 
     assert payload["queued"] is True
-    queued = execution_queue.lane_snapshot(bench.EXECUTION_LANE, include_terminal=False)["jobs"]
-    assert [job["metadata"]["runName"] for job in queued if job["status"] == "queued"] == ["Named"]
+    assert payload["latest"]["status"] == "queued"
+    assert payload["latest"]["total"] == 3
+
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    manifest = bench._read_status(session)
+    assert len(manifest["inferenceJobs"]) == 3
+
+    snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE, include_terminal=False)
+    jobs = [
+        job for job in snapshot["jobs"]
+        if (job.get("metadata") or {}).get("client") == "test"
+    ]
+    assert len(jobs) == 3
+    assert [job["metadata"]["candidateKind"] for job in jobs] == ["base", "lora", "lora"]
+    assert [job["queuePosition"] for job in jobs] == [1, 2, 3]
 
 
-def test_first_test_stays_queued_while_gpu_is_unavailable(tmp_path, monkeypatch):
-    configure_execution_queue(monkeypatch, tmp_path)
-    staged = tmp_path / "staged"
-    staged.mkdir()
-    candidate = staged / "epoch01.safetensors"
-    candidate.write_bytes(b"weights")
+def test_test_session_children_share_frozen_prompt_seed_and_workflow(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
 
-    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
-    patch_default_test_model(
-        monkeypatch,
-        template={},
-        settings={"seed": 77, "aspectRatio": "1:1 (Square)", "megapixels": 0.2, "duration": 5},
+    payload = bench.enqueue(
+        tmp_path,
+        "person in {place}",
+        selected_files=[path.name for path in candidates],
+        include_base=True,
     )
-    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
-    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(bench, "_reserve_gpu_for_test_generations", lambda: False)
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    manifest = bench._read_status(session)
+    child_payloads = [
+        execution_queue.get_job(job_id, include_payload=True)["payload"]["request"]
+        for job_id in manifest["inferenceJobs"]
+    ]
 
-    payload = bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
+    assert {item["prompt"] for item in child_payloads} == {"person in studio #77"}
+    assert {item["settings"]["seed"] for item in child_payloads} == {77}
+    assert all(item["workflow"] == {"template": True} for item in child_payloads)
+    assert len({item["workflowSha256"] for item in child_payloads}) == 1
 
-    assert payload["queued"] is True
+
+def test_test_renditions_use_global_inference_positions(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    generate = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "label": "Generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=True,
+    )
+
+    assert execution_queue.get_job(generate["id"])["queuePosition"] == 1
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_jobs = [
+        execution_queue.get_job(job_id)
+        for job_id in bench._read_status(session)["inferenceJobs"]
+    ]
+    assert [job["queuePosition"] for job in child_jobs] == [2, 3]
     queued = bench.queued_jobs(tmp_path)["jobs"]
-    assert [job["id"] for job in queued] == [payload["job"]["id"]]
+    assert queued[0]["queuePosition"] == 2
 
 
-def test_first_test_start_failure_reports_real_error(tmp_path, monkeypatch):
-    configure_execution_queue(monkeypatch, tmp_path)
-    staged = tmp_path / "staged"
-    staged.mkdir()
-    candidate = staged / "epoch01.safetensors"
-    candidate.write_bytes(b"weights")
-
-    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
-    patch_default_test_model(
-        monkeypatch,
-        template={},
-        settings={"seed": 77, "aspectRatio": "1:1 (Square)", "megapixels": 0.2, "duration": 5},
-    )
-    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
-    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(bench, "_reserve_gpu_for_test_generations", lambda: True)
-    monkeypatch.setattr(bench, "start_queued", lambda *_args, **_kwargs: {"status": "failed", "error": "ComfyUI offline"})
-
-    with pytest.raises(RuntimeError, match="ComfyUI offline"):
-        bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
-
-    snapshot = execution_queue.lane_snapshot(bench.EXECUTION_LANE)
-    assert snapshot["jobs"][-1]["status"] == "failed"
-
-
-def test_first_test_returns_direct_start_payload_without_latest_status_lookup(tmp_path, monkeypatch):
-    configure_execution_queue(monkeypatch, tmp_path)
-    staged = tmp_path / "staged"
-    staged.mkdir()
-    candidate = staged / "epoch01.safetensors"
-    candidate.write_bytes(b"weights")
-
-    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_selected_lora_files", lambda _folder, selected_files=None: [candidate])
-    patch_default_test_model(
-        monkeypatch,
-        template={},
-        settings={"seed": 77, "aspectRatio": "1:1 (Square)", "megapixels": 0.2, "duration": 5},
-    )
-    monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
-    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-
-    def dispatch_first_job():
-        claimed = execution_queue.claim_next(bench.EXECUTION_LANE)
-        execution_queue.mark_running(claimed["id"])
-        return {
-            "status": "running",
-            "session": "2026-09-20_0100-h3",
-            "resultFolder": "sets/subject/test-generations/2026-09-20_0100-h3",
-        }
-
-    monkeypatch.setattr(bench, "_advance_test_queue", dispatch_first_job)
-    monkeypatch.setattr(bench, "status", lambda _folder, model_id=None: (_ for _ in ()).throw(AssertionError("enqueue should not call status()")))
-
-    payload = bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
-
-    assert payload["queued"] is False
-    assert payload["latest"]["session"] == "2026-09-20_0100-h3"
-
-
-def test_clear_queued_tests_keeps_other_sets(tmp_path, monkeypatch):
-    configure_execution_queue(monkeypatch, tmp_path)
-    monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    execution_queue.pause_lane(bench.EXECUTION_LANE)
-    execution_queue.enqueue(
-        bench.EXECUTION_LANE,
-        {},
-        metadata={"folder": "sets/subject", "runName": "One", "modelId": "h3", "testTotal": 1},
-        job_id="one",
-    )
-    execution_queue.enqueue(
-        bench.EXECUTION_LANE,
-        {},
-        metadata={"folder": "sets/other", "runName": "Other", "modelId": "h3", "testTotal": 1},
+def test_clear_queued_test_sessions_keeps_other_global_inference(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    other = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "label": "Generate", "modelId": "krea2_raw", "mediaKind": "image"},
         job_id="other",
     )
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=True,
+    )
 
-    payload = bench.clear_queued(tmp_path)
+    cleared = bench.clear_queued(tmp_path)
 
-    assert payload["removed"] == 1
-    remaining = execution_queue.lane_snapshot(bench.EXECUTION_LANE, include_terminal=False)["jobs"]
-    assert [job["id"] for job in remaining] == ["other"]
+    assert cleared["removed"] == 1
+    assert not (bench._session_root(tmp_path) / payload["latest"]["session"]).exists()
+    assert execution_queue.get_job(other["id"])["status"] == "queued"
+
+
+def test_stop_shared_test_session_cancels_pending_children_and_requests_active_stop(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[path.name for path in candidates],
+        include_base=True,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_ids = bench._read_status(session)["inferenceJobs"]
+    claimed = execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    assert claimed["id"] == child_ids[0]
+    execution_queue.mark_running(child_ids[0])
+
+    stopped = bench.stop(tmp_path)
+
+    assert stopped["status"] == "stopping"
+    assert execution_queue.get_job(child_ids[0])["status"] == "stopping"
+    assert [execution_queue.get_job(job_id)["status"] for job_id in child_ids[1:]] == ["cancelled", "cancelled"]
+
+
+def test_missing_candidate_rendition_skips_without_failure_card(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+    candidates[0].unlink()
+
+    stored = execution_queue.get_job(child_id, include_payload=True)
+    context = stored["payload"]["clientContext"]
+    result = bench.execute_inference(child_id, stored["payload"]["request"], context)
+
+    assert result["status"] == "skipped"
+    manifest = bench._read_status(session)
+    assert manifest["total"] == 0
+    assert manifest["failed"] == 0
+    assert manifest["failures"] == []
+
 
 def test_run_batch_advances_local_test_fifo(tmp_path, monkeypatch):
     session = tmp_path / "session"
@@ -1900,24 +1912,21 @@ def test_run_batch_advances_local_test_fifo(tmp_path, monkeypatch):
 
 
 def test_remove_candidate_allows_queued_test_reference(tmp_path, monkeypatch):
-    configure_execution_queue(monkeypatch, tmp_path)
-    staged = tmp_path / "staged"
-    staged.mkdir()
-    candidate = staged / "epoch10.safetensors"
-    candidate.write_bytes(b"weights")
-
-    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    execution_queue.pause_lane(bench.EXECUTION_LANE)
-    execution_queue.enqueue(
-        bench.EXECUTION_LANE,
-        {"selectedFiles": [candidate.name]},
-        metadata={"folder": "sets/subject", "runName": "Queued", "modelId": "h3", "testTotal": 1},
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
     )
 
-    payload = bench.remove_candidate(tmp_path, candidate.name)
+    removed = bench.remove_candidate(tmp_path, candidates[0].name)
 
-    assert payload["removed"] == candidate.name
-    assert not candidate.exists()
+    assert removed["removed"] == candidates[0].name
+    assert not candidates[0].exists()
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    assert bench._read_status(session)["inferenceJobs"]
+
 
 def test_running_test_session_owns_stop_control():
     root = Path(__file__).resolve().parents[1]

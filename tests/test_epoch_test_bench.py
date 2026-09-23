@@ -926,3 +926,70 @@ def test_nonterminal_test_session_fails_loudly_for_missing_execution_record(tmp_
     with pytest.raises(RuntimeError, match="missing active inference job"):
         bench.open_session(tmp_path, session.name)
 
+def test_enqueue_preserves_live_session_state_while_child_jobs_are_added(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
+    original_enqueue = inference_runner.enqueue_test
+    calls = {"count": 0}
+
+    def enqueue_and_start_first(request, context, label=""):
+        job = original_enqueue(request, context, label=label)
+        calls["count"] += 1
+        if calls["count"] == 1:
+            session_root = tmp_path / bench.TEST_RESULTS_DIR
+            session = next(path for path in session_root.iterdir() if path.is_dir())
+            claimed = execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+            assert claimed["id"] == job["jobId"]
+            execution_queue.mark_running(job["jobId"])
+            with bench._status_lock:
+                status = bench._read_status(session) or {}
+                status["status"] = "running"
+                status["current"] = "Base"
+                status["comfyStatus"] = "pending"
+                bench._atomic_write_json(session / "test.json", status)
+        return job
+
+    monkeypatch.setattr(inference_runner, "enqueue_test", enqueue_and_start_first)
+
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[path.name for path in candidates],
+        include_base=True,
+    )
+
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    manifest = bench._read_status(session)
+    assert manifest["status"] == "running"
+    assert manifest["current"] == "Base"
+    assert manifest["comfyStatus"] == "pending"
+    assert len(manifest["inferenceJobs"]) == 3
+    assert manifest["migrationComplete"] is True
+
+
+def test_stop_session_state_cannot_be_reverted_by_provider_start_publication(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(child_id)
+
+    stopped = bench.stop(tmp_path, session_name=session.name)
+    assert stopped["status"] == "stopping"
+
+    with bench._status_lock:
+        status = bench._read_status(session) or {}
+        if str(status.get("status") or "") not in {"stopping", "stopped"}:
+            status["status"] = "running"
+        status["comfyJobId"] = "provider-123"
+        status["comfyStatus"] = "pending"
+        bench._atomic_write_json(session / "test.json", status)
+
+    manifest = bench._read_status(session)
+    assert manifest["status"] == "stopping"
+

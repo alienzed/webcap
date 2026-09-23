@@ -4657,3 +4657,68 @@ html[data-theme="dark"] iframe {
   background: #0f1623;
   border-color: var(--border);
 }
+.director-activity-trend {
+  display: grid;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.director-activity-trend-legend {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.director-activity-trend-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.director-activity-trend-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.director-activity-trend-ram { background: #7db7ff; }
+.director-activity-trend-vram { background: #7dd3c7; }
+
+.director-activity-trend-legend small {
+  margin-left: auto;
+  font-size: 9px;
+}
+
+.director-activity-trend svg {
+  display: block;
+  width: 100%;
+  height: 30px;
+  overflow: visible;
+}
+
+.director-activity-trend-grid,
+.director-activity-trend-ram-line,
+.director-activity-trend-vram-line {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.director-activity-trend-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: .5;
+}
+
+.director-activity-trend-ram-line {
+  stroke: #7db7ff;
+  stroke-width: 1.7;
+}
+
+.director-activity-trend-vram-line {
+  stroke: #7dd3c7;
+  stroke-width: 1.7;
+}

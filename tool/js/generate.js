@@ -15,6 +15,7 @@
       status: '',
       activityTimer: 0,
       activityStartedAt: 0,
+      activityHistory: [],
       preloadTimer: 0,
       preloading: false
     },
@@ -638,6 +639,42 @@
     return isFinite(value) && value >= 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
   }
 
+  function directorTrendPath(history, key) {
+    var path = '';
+    var cutoff = Date.now() - 60000;
+    history.forEach(function (sample, index) {
+      var value = sample[key];
+      if (!isFinite(value)) return;
+      var x = Math.max(0, Math.min(120, (sample.time - cutoff) / 60000 * 120));
+      var y = 28 - Math.max(0, Math.min(100, value)) * 0.26;
+      path += (path ? ' L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+    });
+    return path;
+  }
+
+  function updateDirectorTrend(system) {
+    var graph = el('generate-director-activity-trend');
+    if (!graph) throw new Error('Prompt Assistant memory history markup is missing.');
+    var gpu = system && system.gpu;
+    var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
+    var ram = system && system.ram;
+    var vramPercent = primary ? Number(primary.memoryUsed) / Number(primary.memoryTotal) * 100 : NaN;
+    var ramPercent = ram && ram.available ? Number(ram.used) / Number(ram.total) * 100 : NaN;
+    if (isFinite(vramPercent) && isFinite(ramPercent)) {
+      generateState.director.activityHistory.push({ time: Date.now(), ram: ramPercent, vram: vramPercent });
+      if (generateState.director.activityHistory.length > 40) generateState.director.activityHistory.shift();
+    }
+    var cutoff = Date.now() - 60000;
+    while (generateState.director.activityHistory.length && generateState.director.activityHistory[0].time < cutoff) generateState.director.activityHistory.shift();
+    var history = generateState.director.activityHistory;
+    graph.querySelector('.director-activity-trend-ram-line').setAttribute('d', directorTrendPath(history, 'ram'));
+    graph.querySelector('.director-activity-trend-vram-line').setAttribute('d', directorTrendPath(history, 'vram'));
+    var latest = history[history.length - 1];
+    graph.setAttribute('aria-label', latest
+      ? 'RAM and VRAM use history for the last minute. Latest: RAM ' + Math.round(latest.ram) + '%, VRAM ' + Math.round(latest.vram) + '%. ' + history.length + ' samples.'
+      : 'RAM and VRAM history, waiting for samples');
+  }
+
   function renderDirectorActivity(activity, system) {
     var card = el('generate-director-activity');
     var phase = el('generate-director-activity-phase');
@@ -649,6 +686,7 @@
     card.classList.toggle('hidden', !visible);
     if (!visible) return;
 
+    updateDirectorTrend(system);
     phase.textContent = directorPhaseLabel(activity && activity.phase);
     var startedAt = Number(activity && activity.startedAt) || generateState.director.activityStartedAt;
     var parts = [];
@@ -695,6 +733,7 @@
 
   function startDirectorActivity() {
     generateState.director.activityStartedAt = Date.now() / 1000;
+    generateState.director.activityHistory = [];
     renderDirectorActivity({ phase: 'preparing', active: true, startedAt: generateState.director.activityStartedAt }, null);
     refreshDirectorActivity();
   }

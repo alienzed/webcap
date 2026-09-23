@@ -1,4 +1,5 @@
 import json
+import shutil
 import os
 import subprocess
 import time
@@ -373,13 +374,87 @@ def cleanup_uploaded_inputs(uploaded_values, output_ref, owned_prefix=""):
     return removed
 
 
+def _owned_provider_job_root(output_path):
+    """Return exact WebCap-owned provider job roots inferred from a saved output path."""
+    path = Path(output_path).resolve()
+    output_root = None
+    for parent in (path.parent,) + tuple(path.parents):
+        if parent.name.lower() == "output":
+            output_root = parent.resolve()
+            break
+    if output_root is None:
+        return None
+
+    try:
+        relative = path.relative_to(output_root)
+    except ValueError:
+        return None
+    parts = relative.parts
+    if len(parts) >= 3 and parts[0] == "webcap-generate":
+        owned_parts = parts[:2]
+    elif len(parts) >= 5 and parts[0] == "webcap-storyboard":
+        owned_parts = parts[:4]
+    else:
+        return None
+
+    output_job_root = output_root.joinpath(*owned_parts).resolve()
+    if output_job_root == output_root or output_root not in output_job_root.parents:
+        return None
+    input_root = (output_root.parent / "input").resolve()
+    input_job_root = input_root.joinpath(*owned_parts).resolve()
+    if input_job_root == input_root or input_root not in input_job_root.parents:
+        return None
+    return output_root, output_job_root, input_root, input_job_root
+
+
+def _remove_owned_tree(path, root):
+    path = Path(path)
+    root = Path(root).resolve()
+    if not path.exists():
+        return False
+    if path.is_symlink():
+        raise RuntimeError("Refusing to clean a symlinked ComfyUI WebCap directory.")
+    resolved = path.resolve()
+    if resolved == root or root not in resolved.parents:
+        raise RuntimeError("Refusing to clean a ComfyUI directory outside the owned root.")
+    shutil.rmtree(resolved)
+    parent = resolved.parent
+    while parent != root and root in parent.parents:
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+        parent = parent.parent
+    return True
+
+
 def cleanup_saved_output(output_ref):
     if not isinstance(output_ref, dict) or str(output_ref.get("type") or "output") != "output":
         return False
     path = local_saved_output_path(output_ref)
     if path is None:
         return False
+
+    owned = _owned_provider_job_root(path)
     path.unlink()
+
+    if owned is not None:
+        output_root, output_job_root, input_root, input_job_root = owned
+        if output_job_root.exists():
+            try:
+                output_job_root.rmdir()
+            except OSError:
+                pass
+        if input_job_root.exists():
+            _remove_owned_tree(input_job_root, input_root)
+
+        parent = output_job_root.parent
+        while parent != output_root and output_root in parent.parents:
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
     return True
 
 

@@ -1,0 +1,305 @@
+(function () {
+  'use strict';
+
+  var storageState = {
+    open: false,
+    loading: false,
+    measuring: false,
+    payload: null
+  };
+
+  function el(id) { return document.getElementById(id); }
+
+  function requestJson(url, options) {
+    return fetch(url, options || {}).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error((payload && payload.error) || 'Storage request failed.');
+        }
+        return payload;
+      });
+    });
+  }
+
+  function postJson(url, payload) {
+    return requestJson(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+  }
+
+  function reportError(err) {
+    var message = String(err && err.message ? err.message : err || 'Storage request failed.');
+    var status = el('storage-status');
+    if (status) status.textContent = message;
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Storage', message);
+    else console.error('[Storage]', err);
+  }
+
+  function bytes(value) {
+    var size = Number(value);
+    if (!isFinite(size) || size < 0) return 'Not measured';
+    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var index = 0;
+    while (size >= 1024 && index < units.length - 1) {
+      size /= 1024;
+      index += 1;
+    }
+    var digits = size >= 100 || index === 0 ? 0 : (size >= 10 ? 1 : 2);
+    return size.toFixed(digits) + ' ' + units[index];
+  }
+
+  function measurementAge(value) {
+    var measuredAt = Number(value);
+    if (!isFinite(measuredAt) || measuredAt <= 0) return '';
+    var seconds = Math.max(0, Math.round(Date.now() / 1000 - measuredAt));
+    if (seconds < 60) return 'measured just now';
+    var minutes = Math.round(seconds / 60);
+    if (minutes < 60) return 'measured ' + minutes + 'm ago';
+    var hours = Math.round(minutes / 60);
+    if (hours < 48) return 'measured ' + hours + 'h ago';
+    return 'measured ' + Math.round(hours / 24) + 'd ago';
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function currentFolder() {
+    return String(window.state && window.state.folder || '');
+  }
+
+  function allItems() {
+    var groups = storageState.payload && storageState.payload.items || {};
+    return ['training', 'tests', 'generate', 'storyboard', 'set', 'runtime'].reduce(function (rows, area) {
+      return rows.concat((groups[area] || []).map(function (item) {
+        return item;
+      }));
+    }, []);
+  }
+
+  function itemSort(a, b) {
+    if (!!a.measured !== !!b.measured) return a.measured ? -1 : 1;
+    if (a.measured && b.measured && Number(a.bytes) !== Number(b.bytes)) return Number(b.bytes) - Number(a.bytes);
+    return String(a.label || '').localeCompare(String(b.label || ''));
+  }
+
+  function renderDisk() {
+    var disk = storageState.payload && storageState.payload.disk;
+    var host = el('storage-disk-summary');
+    if (!host || !disk) return;
+    var usedPercent = disk.total > 0 ? Math.max(0, Math.min(100, disk.used / disk.total * 100)) : 0;
+    host.innerHTML =
+      '<div class="storage-capacity-copy">' +
+        '<strong>' + escapeHtml(bytes(disk.free)) + ' free</strong>' +
+        '<span>' + escapeHtml(bytes(disk.used)) + ' used of ' + escapeHtml(bytes(disk.total)) + '</span>' +
+      '</div>' +
+      '<div class="storage-capacity-track" aria-label="' + Math.round(usedPercent) + '% disk used">' +
+        '<span style="width:' + usedPercent.toFixed(2) + '%"></span>' +
+      '</div>';
+  }
+
+  function renderCategories() {
+    var host = el('storage-category-list');
+    if (!host) return;
+    var categories = (storageState.payload && storageState.payload.categories || []).slice();
+    host.innerHTML = categories.map(function (category) {
+      var complete = category.complete !== false;
+      var sizeText = category.measuredCount ? bytes(category.bytes) : 'Not measured';
+      var note = category.note ? '<span class="storage-category-note">' + escapeHtml(category.note) + '</span>' : '';
+      return '<div class="storage-category-row" data-storage-area="' + escapeHtml(category.area) + '">' +
+        '<div class="storage-category-main"><strong>' + escapeHtml(category.label) + '</strong>' +
+        '<span>' + category.count + ' item' + (category.count === 1 ? '' : 's') +
+        (complete ? '' : ' · partial inventory') + '</span>' + note + '</div>' +
+        '<div class="storage-category-size">' + escapeHtml(sizeText) +
+        '<span>' + category.measuredCount + '/' + category.count + ' measured</span></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function actionButtons(item) {
+    var payload = ' data-area="' + escapeHtml(item.area) + '" data-id="' + escapeHtml(item.id) + '" data-folder="' + escapeHtml(item.folder || '') + '"';
+    var html = '<button type="button" class="review-captions-btn storage-open-btn"' + payload + (item.openable ? '' : ' disabled') + '>Open</button>';
+    html += '<button type="button" class="review-captions-btn storage-measure-btn"' + payload + '>Measure</button>';
+    if (item.purgeable) {
+      var label = item.area === 'storyboard' ? 'Delete Story' : 'Delete';
+      html += '<button type="button" class="review-captions-btn storage-delete-btn"' + payload + '>' + label + '</button>';
+    }
+    return html;
+  }
+
+  function renderItems() {
+    var host = el('storage-items');
+    if (!host) return;
+    var groups = storageState.payload && storageState.payload.items || {};
+    var areaLabels = {
+      training: 'Training',
+      tests: 'Tests',
+      generate: 'Generations',
+      storyboard: 'Storyboard',
+      set: 'Current Set (protected)',
+      runtime: 'Runtime / Temporary'
+    };
+    host.innerHTML = ['training', 'tests', 'generate', 'storyboard', 'set', 'runtime'].map(function (area) {
+      var rows = (groups[area] || []).slice().sort(itemSort);
+      var empty = rows.length
+        ? ''
+        : '<div class="storage-empty">' + (area === 'tests'
+          ? 'No Test Sessions are visible for the current Set. Historical Tests are not globally scanned.'
+          : 'No managed items found.') + '</div>';
+      var body = rows.map(function (item) {
+        var measured = item.measured ? bytes(item.bytes) : 'Not measured';
+        var age = item.measured ? measurementAge(item.measuredAt) : '';
+        var secondary = [item.kind, item.status, age].filter(Boolean).join(' · ');
+        var reason = item.protectedReason ? '<span class="storage-item-reason">' + escapeHtml(item.protectedReason) + '</span>' : '';
+        return '<article class="storage-item-row">' +
+          '<div class="storage-item-copy"><strong title="' + escapeHtml(item.label) + '">' + escapeHtml(item.label) + '</strong>' +
+          '<span>' + escapeHtml(secondary) + '</span>' + reason + '</div>' +
+          '<div class="storage-item-size">' + escapeHtml(measured) + '</div>' +
+          '<div class="storage-item-actions">' + actionButtons(item) + '</div>' +
+        '</article>';
+      }).join('');
+      return '<section class="storage-section" data-storage-section="' + area + '">' +
+        '<header><strong>' + areaLabels[area] + '</strong><span>' + rows.length + ' item' + (rows.length === 1 ? '' : 's') + '</span></header>' +
+        body + empty +
+      '</section>';
+    }).join('');
+  }
+
+  function render() {
+    renderDisk();
+    renderCategories();
+    renderItems();
+    var status = el('storage-status');
+    if (status) {
+      status.textContent = storageState.measuring
+        ? 'Measuring managed artifacts…'
+        : 'Sizes are measured on demand; opening Storage does not recursively scan the workspace.';
+    }
+  }
+
+  function refresh() {
+    if (storageState.loading) return Promise.resolve();
+    storageState.loading = true;
+    var folder = currentFolder();
+    var query = folder ? '?folder=' + encodeURIComponent(folder) : '';
+    return requestJson('/fs/storage' + query).then(function (payload) {
+      storageState.payload = payload;
+      render();
+    }).catch(reportError).then(function () {
+      storageState.loading = false;
+    });
+  }
+
+  function measureOne(item) {
+    return postJson('/fs/storage/measure', {
+      area: item.area,
+      id: item.id,
+      folder: item.folder || ''
+    });
+  }
+
+  function measureAll() {
+    if (storageState.measuring) return;
+    var items = allItems();
+    storageState.measuring = true;
+    render();
+
+    var sequence = Promise.resolve();
+    items.forEach(function (item) {
+      sequence = sequence.then(function () {
+        if (!storageState.measuring || !storageState.open) return;
+        return measureOne(item).catch(function (err) {
+          reportError(err);
+        });
+      });
+    });
+    sequence.then(function () {
+      storageState.measuring = false;
+      return refresh();
+    });
+  }
+
+  function confirmDelete(item) {
+    var sizeText = item.measured ? ' This will reclaim about ' + bytes(item.bytes) + '.' : '';
+    var label = item.area === 'storyboard' ? 'Story' : 'artifact';
+    var consequence = item.area === 'storyboard' ? '\nThis removes the Story metadata, its Takes, and references.' : '';
+    return window.confirm('Permanently delete this ' + label + '?\n\n' + item.label + sizeText + consequence + '\n\nThis cannot be undone.');
+  }
+
+  function findItem(area, id, folder) {
+    return allItems().find(function (item) {
+      return item.area === area && item.id === id && String(item.folder || '') === String(folder || '');
+    }) || null;
+  }
+
+  function handleClick(event) {
+    var button = event.target.closest('button[data-area][data-id]');
+    if (!button) return;
+    var area = button.getAttribute('data-area') || '';
+    var id = button.getAttribute('data-id') || '';
+    var folder = button.getAttribute('data-folder') || '';
+    var item = findItem(area, id, folder);
+    if (!item) return;
+
+    if (button.classList.contains('storage-open-btn')) {
+      postJson('/fs/storage/open', { area: area, id: id, folder: folder }).catch(reportError);
+      return;
+    }
+    if (button.classList.contains('storage-measure-btn')) {
+      button.disabled = true;
+      measureOne(item).then(refresh).catch(reportError).then(function () { button.disabled = false; });
+      return;
+    }
+    if (button.classList.contains('storage-delete-btn')) {
+      if (!confirmDelete(item)) return;
+      button.disabled = true;
+      postJson('/fs/storage/purge', { area: area, id: id, folder: folder })
+        .then(refresh)
+        .catch(reportError)
+        .then(function () { button.disabled = false; });
+    }
+  }
+
+  function openStorageActivity() {
+    var frame = el('app-frame');
+    var workspace = el('storage-workspace');
+    if (!frame || !workspace) throw new Error('Storage workspace markup is missing.');
+    if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
+    if (typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
+    if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
+    storageState.open = true;
+    frame.classList.add('workspace-storage-open');
+    workspace.classList.remove('hidden');
+    if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
+    if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+    refresh();
+  }
+
+  function closeStorageActivity() {
+    var frame = el('app-frame');
+    var workspace = el('storage-workspace');
+    storageState.open = false;
+    storageState.measuring = false;
+    if (workspace) workspace.classList.add('hidden');
+    if (frame) frame.classList.remove('workspace-storage-open');
+  }
+
+  function bindUi() {
+    var workspace = el('storage-workspace');
+    if (!workspace) throw new Error('Storage workspace markup is missing.');
+    workspace.addEventListener('click', handleClick);
+    el('storage-refresh-btn').onclick = refresh;
+    el('storage-measure-all-btn').onclick = measureAll;
+  }
+
+  bindUi();
+  window.openStorageActivity = openStorageActivity;
+  window.closeStorageActivity = closeStorageActivity;
+})();

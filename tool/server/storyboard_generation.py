@@ -304,10 +304,20 @@ def reconcile_startup():
                     )
 
         legacy = execution_lane_snapshot(LEGACY_EXECUTION_LANE, include_terminal=False)
+        inference = execution_lane_snapshot(EXECUTION_LANE, include_terminal=True)
+        migrated_legacy_ids = {
+            str((item.get("metadata") or {}).get("migratedFromJobId") or "")
+            for item in inference.get("jobs", [])
+            if isinstance(item.get("metadata"), dict)
+        }
         for job in legacy.get("jobs", []):
             if job.get("status") != "queued":
                 continue
-            stored = execution_get_job(job["id"], include_payload=True)
+            legacy_job_id = str(job.get("id") or "")
+            if legacy_job_id in migrated_legacy_ids:
+                execution_cancel_queued(legacy_job_id)
+                continue
+            stored = execution_get_job(legacy_job_id, include_payload=True)
             try:
                 migrated = _legacy_job_request(stored)
                 if migrated is None:
@@ -319,14 +329,15 @@ def reconcile_startup():
                     story_id,
                     scene_id,
                     label="Storyboard Take",
+                    migrated_from_job_id=legacy_job_id,
                 )
             except Exception:
                 _logger.exception(
                     "Could not migrate legacy Storyboard queue job %s; leaving it intact for manual recovery.",
-                    job.get("id"),
+                    legacy_job_id,
                 )
                 continue
-            execution_cancel_queued(job["id"])
+            execution_cancel_queued(legacy_job_id)
 
         _startup_reconciled = True
 

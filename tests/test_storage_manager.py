@@ -471,6 +471,7 @@ def test_staged_test_copy_is_protected_while_shared_inference_references_it(monk
 
 def test_comfy_scratch_inventory_is_prefix_scoped_and_purgeable(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path / "fs")
+    (tmp_path / "fs").mkdir()
     provider = tmp_path / "ComfyUI"
     generate = provider / "input" / "webcap-generate" / "job-old"
     unknown = provider / "input" / "someone-else" / "job-old"
@@ -500,6 +501,7 @@ def test_comfy_scratch_inventory_is_prefix_scoped_and_purgeable(monkeypatch, tmp
 
 def test_comfy_scratch_rechecks_active_inference_before_purge(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path / "fs")
+    (tmp_path / "fs").mkdir()
     provider = tmp_path / "ComfyUI"
     scratch = provider / "output" / "webcap-generate" / "job-live"
     scratch.mkdir(parents=True)
@@ -530,6 +532,7 @@ def test_comfy_scratch_rechecks_active_inference_before_purge(monkeypatch, tmp_p
 
 def test_comfy_scratch_refuses_symlinked_owned_job_root(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path / "fs")
+    (tmp_path / "fs").mkdir()
     provider = tmp_path / "ComfyUI"
     family = provider / "input" / "webcap-generate"
     family.mkdir(parents=True)

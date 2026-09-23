@@ -266,11 +266,13 @@ def test_storage_ui_is_isolated_global_activity():
     assert "window.openStorageActivity = openStorageActivity" in storage_js
     assert "window.closeStorageActivity = closeStorageActivity" in storage_js
     assert "measurementAge(item.measuredAt)" in storage_js
+    assert "typeof window.reportConsoleError" not in storage_js
+    assert "typeof window.closeGenerateActivity" not in storage_js
     assert "This removes the Story metadata, its Takes, and references." in storage_js
     assert "workspace === 'storage'" in shell
     assert "activity === 'storage'" in shell
     assert "os.walk" not in backend
-    assert 'PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard"}' in backend
+    assert 'PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard", "runtime"}' in backend
     assert '"set": _set_items(cache, folder)' in backend
 
 

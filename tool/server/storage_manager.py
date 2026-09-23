@@ -381,9 +381,13 @@ def resolve_item(area, item_id, folder=""):
         stories = {str(row.get("id") or "") for row in list_stories()}
         if story_id not in stories:
             raise FileNotFoundError("Story is unavailable.")
-        path = (storyboard_root() / story_id).resolve()
-        if path.is_symlink():
+        root = storyboard_root().resolve()
+        raw_path = storyboard_root() / story_id
+        if raw_path.is_symlink():
             raise ValueError("Storyboard storage path is symlinked.")
+        path = raw_path.resolve()
+        if path.parent != root:
+            raise ValueError("Storyboard storage path escaped the managed root.")
         return path
     if area == "runtime":
         return _resolve_runtime(item_id)

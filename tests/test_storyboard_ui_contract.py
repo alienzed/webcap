@@ -373,3 +373,16 @@ def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
     active_block = storyboard.split("if (generationJobIsActive(job)) {", 1)[1].split("return;", 1)[0]
     assert "renderScenes();" not in active_block
 
+def test_storyboard_take_deletion_is_explicit_destructive_and_selected_aware():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert 'data-take-action="delete"' in storyboard
+    assert "function deleteTake(sceneId, takeId)" in storyboard
+    assert "cannot be undone" in storyboard
+    assert "Deleting it will leave the Scene without a selected Take." in storyboard
+    assert "operation: 'delete_take'" in storyboard
+    assert "def delete_take(" in store
+    assert 'if operation == "delete_take":' in app
+

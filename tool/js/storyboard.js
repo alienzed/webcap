@@ -937,6 +937,7 @@
         '</div>' +
         ratingHtml +
         '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
+        '<button type="button" class="review-captions-btn storyboard-take-delete" data-take-action="delete" data-take-id="' + escapeHtml(takeId) + '">Delete</button>' +
       '</div>' +
     '</article>';
   }
@@ -1082,8 +1083,12 @@
         ? '<div class="storyboard-removed-takes"><span>Removed Takes</span>' +
           removedTakeIds.map(function (takeId) {
             var take = removedTakes[takeId] || {};
-            return '<button type="button" class="review-captions-btn" data-take-action="restore" data-take-id="' +
-              escapeHtml(takeId) + '">Restore ' + escapeHtml(take.sourceFilename || takeId) + '</button>';
+            return '<span class="storyboard-removed-take-actions">' +
+              '<button type="button" class="review-captions-btn" data-take-action="restore" data-take-id="' +
+                escapeHtml(takeId) + '">Restore ' + escapeHtml(take.sourceFilename || takeId) + '</button>' +
+              '<button type="button" class="review-captions-btn storyboard-take-delete" data-take-action="delete" data-take-id="' +
+                escapeHtml(takeId) + '">Delete</button>' +
+            '</span>';
           }).join('') + '</div>'
         : '';
       var takesHtml = takeOrder.map(function (takeId, takeIndex) {
@@ -1614,6 +1619,30 @@
     setSaveState('Saving...');
     flushPendingSaves().then(function () { return request({
       operation: 'remove_take',
+      storyId: storyState.story.id,
+      sceneId: sceneId,
+      takeId: takeId
+    }); }).then(function (payload) {
+      storyState.story = payload.story;
+      renderStory();
+      setSaveState('Saved');
+    }).catch(reportError);
+  }
+
+  function deleteTake(sceneId, takeId) {
+    var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
+    var take = scene && scene.takes ? scene.takes[takeId] : null;
+    if (!take && scene && scene.removedTakes) take = scene.removedTakes[takeId];
+    var label = take && (take.label || take.sourceFilename) ? (take.label || take.sourceFilename) : 'this Take';
+    var selected = !!(scene && scene.selectedTakeId === takeId);
+    var message = 'Delete "' + label + '" permanently? This deletes its media and metadata and cannot be undone.';
+    if (selected) {
+      message += '\n\nThis Take is currently selected. Deleting it will leave the Scene without a selected Take.';
+    }
+    if (!window.confirm(message)) return;
+    setSaveState('Deleting...');
+    flushPendingSaves().then(function () { return request({
+      operation: 'delete_take',
       storyId: storyState.story.id,
       sceneId: sceneId,
       takeId: takeId
@@ -2221,6 +2250,7 @@
         if (!takeScene) throw new Error('Take action Scene is missing.');
         if (takeAction.dataset.takeAction === 'select') selectTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
         else if (takeAction.dataset.takeAction === 'remove') removeTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
+        else if (takeAction.dataset.takeAction === 'delete') deleteTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
         else if (takeAction.dataset.takeAction === 'restore') restoreTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
         return;
       }

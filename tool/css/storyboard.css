@@ -1540,9 +1540,13 @@
 }
 
 .storyboard-take-footer {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 10px;
   margin-top: 8px;
+}
+
+.storyboard-take-pending-footer {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .storyboard-take-identity {
@@ -1625,6 +1629,23 @@
   background: color-mix(in srgb, var(--panel) 88%, var(--danger, #f87171) 12%);
   color: var(--danger, #f87171);
   outline: none;
+}
+
+.storyboard-take-delete {
+  color: var(--danger, #f87171);
+}
+
+.storyboard-take-delete:hover,
+.storyboard-take-delete:focus-visible {
+  border-color: color-mix(in srgb, var(--danger, #f87171) 55%, var(--border));
+  background: color-mix(in srgb, var(--panel) 88%, var(--danger, #f87171) 12%);
+  color: var(--danger, #f87171);
+}
+
+.storyboard-removed-take-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 @media (max-width: 1800px) {

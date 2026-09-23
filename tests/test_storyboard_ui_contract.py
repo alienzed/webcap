@@ -72,7 +72,6 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "Entry state" in storyboard
     assert "Exit state" in storyboard
     assert "Notes" in storyboard
-    assert "Continuity &amp; notes" in storyboard
     assert "storyboard-scene-disclosure" in storyboard
     assert "seedMode: randomSeed ? 'random' : 'fixed'" in storyboard
     assert 'data-scene-field="seedMode"' not in storyboard
@@ -302,7 +301,7 @@ def test_storyboard_story_context_is_a_collapsible_middle_column():
     assert 'class="storyboard-scene-workspace"' in html
     assert 'id="storyboard-story-authoring"' in html
     assert "editor.classList.toggle('story-collapsed'" in storyboard
-    assert "grid-template-columns: minmax(420px, 500px) minmax(0, 1fr);" in css
+    assert "grid-template-columns: minmax(580px, 640px) minmax(0, 1fr);" in css
     assert ".storyboard-editor-scroll.story-collapsed" in css
     assert ".storyboard-story-authoring" in css
     assert "grid-template-columns: 1fr;" in css
@@ -316,31 +315,33 @@ def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
 
     assert 'id="storyboard-scenes-overview-btn"' in html
     assert 'id="storyboard-scenes-focus-btn"' in html
-    assert 'id="storyboard-scene-prev-btn"' in html
-    assert 'id="storyboard-scene-next-btn"' in html
+    assert 'id="storyboard-scene-progression"' in html
     assert "sceneViewMode:" in storyboard
     assert "data-scene-open" in storyboard
+    assert "data-scene-progress" in storyboard
+    assert "data-scene-progress-add" in storyboard
     assert "function setSceneViewMode(mode, sceneId)" in storyboard
-    assert "grid-template-columns: minmax(540px, 760px) minmax(240px, 280px);" in css
-    assert "min-height: 320px;" in css
+    assert "grid-template-columns: minmax(720px, 900px) minmax(360px, 420px);" in css
+    assert "min-height: 340px;" in css
     assert "position: sticky;" in css
     assert "overflow-x: auto;" in css
-    assert "flex: 0 0 210px;" in css
+    assert "flex: 1 0 360px;" in css
     assert "grid-template-rows: auto minmax(0, 1fr) auto;" in css
     assert "overflow: hidden;" in css
 
 
-def test_storyboard_scene_uses_compact_generation_and_conditioning_inspector():
+def test_storyboard_scene_uses_large_visible_generation_and_conditioning_inspector():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
     assert 'class="storyboard-scene-inspector"' in storyboard
     assert 'class="storyboard-inspector-section storyboard-generation-inspector"' in storyboard
-    assert 'class="storyboard-scene-disclosure storyboard-conditioning-details"' in storyboard
+    assert 'class="storyboard-generation-settings"' in storyboard
+    assert 'class="storyboard-inspector-section storyboard-conditioning-panel"' in storyboard
     assert "conditioningSummaryParts" in storyboard
     assert "Base LoRA active" in storyboard
-    assert ".storyboard-scene-inspector" in css
-    assert ".storyboard-conditioning-details" in css
+    assert ".storyboard-generation-settings" in css
+    assert ".storyboard-conditioning-panel" in css
 
 
 

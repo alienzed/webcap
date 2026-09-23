@@ -430,17 +430,29 @@
     return storyState.activeSceneId;
   }
 
+  function renderSceneProgression(order) {
+    var host = el('storyboard-scene-progression');
+    if (!host || !storyState.story) return;
+    order = Array.isArray(order) ? order : [];
+    var scenes = storyState.story.scenes || {};
+    var active = ensureActiveScene(order);
+    host.innerHTML = order.map(function (sceneId, index) {
+      var scene = scenes[sceneId] || {};
+      return '<button type="button" class="storyboard-scene-progress-step' + (sceneId === active ? ' active' : '') + '" data-scene-progress="' + escapeHtml(sceneId) + '">' +
+        '<span>Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
+        '<strong>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
+      '</button>';
+    }).join('') +
+      '<button type="button" class="storyboard-scene-progress-add" data-scene-progress-add title="Add Scene" aria-label="Add Scene">+</button>';
+  }
+
   function syncSceneViewControls(order) {
     order = Array.isArray(order) ? order : [];
     if (storyState.sceneViewMode !== 'overview' && storyState.sceneViewMode !== 'focus') storyState.sceneViewMode = 'focus';
-    var active = ensureActiveScene(order);
-    var index = active ? order.indexOf(active) : -1;
+    ensureActiveScene(order);
     el('storyboard-scenes-overview-btn').classList.toggle('active', storyState.sceneViewMode === 'overview');
     el('storyboard-scenes-focus-btn').classList.toggle('active', storyState.sceneViewMode === 'focus');
-    el('storyboard-scene-pager').classList.toggle('hidden', storyState.sceneViewMode !== 'focus' || !order.length);
-    el('storyboard-scene-position').textContent = order.length ? 'Scene ' + String(index + 1) + ' of ' + String(order.length) : '';
-    el('storyboard-scene-prev-btn').disabled = index <= 0;
-    el('storyboard-scene-next-btn').disabled = index < 0 || index >= order.length - 1;
+    renderSceneProgression(order);
   }
 
   function setSceneViewMode(mode, sceneId) {
@@ -451,15 +463,6 @@
       window.localStorage.setItem('webcap.storyboard.sceneView', mode);
       renderScenes();
     }).catch(reportError);
-  }
-
-  function moveFocusedScene(delta) {
-    var order = storyState.story && Array.isArray(storyState.story.sceneOrder) ? storyState.story.sceneOrder : [];
-    var active = ensureActiveScene(order);
-    var index = order.indexOf(active);
-    var next = index + delta;
-    if (index < 0 || next < 0 || next >= order.length) return;
-    setSceneViewMode('focus', order[next]);
   }
 
   function takeMediaUrl(storyId, sceneId, take) {
@@ -938,11 +941,6 @@
       var seed = sceneValue(scene, 'seed', '');
       var seedDisplay = seedMode === 'fixed' && seed !== '' && seed != null ? seed : -1;
       var sceneReferences = Array.isArray(scene.references) ? scene.references : [];
-      var continuityConfigured = !!(
-        String(sceneValue(scene, 'entryState', '')).trim() ||
-        String(sceneValue(scene, 'exitState', '')).trim() ||
-        String(sceneValue(scene, 'notes', '')).trim()
-      );
       var takes = scene.takes && typeof scene.takes === 'object' ? scene.takes : {};
       var removedTakes = scene.removedTakes && typeof scene.removedTakes === 'object' ? scene.removedTakes : {};
       var takeOrder = Array.isArray(scene.takeOrder) ? scene.takeOrder : [];
@@ -956,10 +954,6 @@
         return inheritedLoraRowHtml(lora, overrides[String(lora.name || '').toLowerCase()]);
       }).join('');
       var loraRowsHtml = sceneLoras.map(sceneLoraRowHtml).join('');
-      var advancedSummaryParts = [];
-      if (seedMode === 'fixed') advancedSummaryParts.push('Fixed seed');
-      if (scene.wildcardsEnabled) advancedSummaryParts.push('Wildcards');
-      var advancedSummary = advancedSummaryParts.length ? advancedSummaryParts.join(' · ') : 'Optional';
       var baseLoras = storyState.generationCapabilities.baseLoras || [];
       var loraStatusTitle = storyState.generationCapabilities.available
         ? (baseLoras.length ? 'Base: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
@@ -1042,12 +1036,15 @@
         '<header class="storyboard-scene-header">' +
           '<span class="storyboard-scene-number">Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
           '<input class="storyboard-scene-title" data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title">' +
-          '<div class="storyboard-scene-actions">' +
-            '<button type="button" class="review-captions-btn" data-scene-action="up" title="Move Scene up" aria-label="Move Scene up" ' + (index === 0 ? 'disabled' : '') + '>↑</button>' +
-            '<button type="button" class="review-captions-btn" data-scene-action="down" title="Move Scene down" aria-label="Move Scene down" ' + (index === order.length - 1 ? 'disabled' : '') + '>↓</button>' +
-            '<button type="button" class="review-captions-btn" data-scene-action="duplicate" title="Duplicate this Scene, including its current authoring settings">Duplicate</button>' +
-            '<button type="button" class="review-captions-btn" data-scene-action="delete" title="Remove this Scene; it remains recoverable under Removed Scenes">Remove</button>' +
-          '</div>' +
+          '<details class="storyboard-scene-menu">' +
+            '<summary title="Scene actions" aria-label="Scene actions">•••</summary>' +
+            '<div class="storyboard-scene-menu-popover">' +
+              '<button type="button" data-scene-action="duplicate">Duplicate Scene</button>' +
+              '<button type="button" data-scene-action="up"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
+              '<button type="button" data-scene-action="down"' + (index === order.length - 1 ? ' disabled' : '') + '>Move later</button>' +
+              '<button type="button" class="danger" data-scene-action="delete">Remove Scene</button>' +
+            '</div>' +
+          '</details>' +
         '</header>' +
         '<div class="storyboard-scene-body">' +
           '<div class="storyboard-scene-main">' +
@@ -1064,14 +1061,14 @@
                 '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
             '</div>' +
-            '<details class="storyboard-scene-disclosure storyboard-continuity-details">' +
-              '<summary><span>Continuity &amp; notes</span><span class="storyboard-disclosure-summary-state">' + (continuityConfigured ? 'Configured' : 'Optional') + '</span></summary>' +
+            '<div class="storyboard-scene-handoff-row storyboard-scene-handoff-primary">' +
+              '<label class="storyboard-field"><span>Entry state</span><textarea data-scene-field="entryState" rows="3" placeholder="What must already be true when this Scene begins?">' + escapeHtml(sceneValue(scene, 'entryState', '')) + '</textarea></label>' +
+              '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="3" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
+            '</div>' +
+            '<details class="storyboard-scene-disclosure storyboard-notes-details">' +
+              '<summary><span>Notes</span><span class="storyboard-disclosure-summary-state">' + (String(sceneValue(scene, 'notes', '')).trim() ? 'Added' : 'Optional') + '</span></summary>' +
               '<div class="storyboard-disclosure-body">' +
-                '<div class="storyboard-scene-handoff-row">' +
-                  '<label class="storyboard-field"><span>Entry state</span><textarea data-scene-field="entryState" rows="2" placeholder="What must already be true when this Scene begins?">' + escapeHtml(sceneValue(scene, 'entryState', '')) + '</textarea></label>' +
-                  '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="2" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
-                '</div>' +
-                '<label class="storyboard-field"><span>Notes</span><textarea data-scene-field="notes" rows="2" placeholder="Continuity reminders, corrections, ideas...">' + escapeHtml(sceneValue(scene, 'notes', '')) + '</textarea></label>' +
+                '<label class="storyboard-field"><textarea data-scene-field="notes" rows="3" placeholder="Continuity reminders, corrections, ideas...">' + escapeHtml(sceneValue(scene, 'notes', '')) + '</textarea></label>' +
               '</div>' +
             '</details>' +
           '</div>' +
@@ -1081,26 +1078,21 @@
               '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Queue a new Take from the current saved Scene.">' +
                 (sceneGenerationJobs.length ? 'Generate Another Take' : 'Generate Take') +
               '</button>' +
-              '<label class="storyboard-field storyboard-generation-duration" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
-              '<details class="storyboard-scene-disclosure storyboard-advanced-details">' +
-                '<summary><span>Generation settings</span><span class="storyboard-disclosure-summary-state">' + escapeHtml(advancedSummary) + '</span></summary>' +
-                '<div class="storyboard-disclosure-body">' +
-                  '<div class="storyboard-scene-meta-row">' +
-                    '<label class="storyboard-field" title="Currently stored per Scene; keep this consistent across a Story unless you intentionally need an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
-                      ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
-                        return '<option value="' + escapeHtml(value) + '"' + (sceneValue(scene, 'aspectRatio', '4:3 (Standard)') === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
-                      }).join('') +
-                    '</select></label>' +
-                    '<label class="storyboard-field" title="Output size target for this Scene. Useful when promoting a shot toward final output."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneValue(scene, 'megapixels', 0.2)) + '"></label>' +
-                  '</div>' +
-                  '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
-                  '<label class="storyboard-inline-check" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
-                '</div>' +
-              '</details>' +
+              '<div class="storyboard-generation-settings">' +
+                '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
+                '<label class="storyboard-field" title="Currently stored per Scene; keep this consistent across a Story unless you intentionally need an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
+                  ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
+                    return '<option value="' + escapeHtml(value) + '"' + (sceneValue(scene, 'aspectRatio', '4:3 (Standard)') === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
+                  }).join('') +
+                '</select></label>' +
+                '<label class="storyboard-field" title="Output size target for this Scene. Useful when promoting a shot toward final output."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneValue(scene, 'megapixels', 0.2)) + '"></label>' +
+                '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
+              '</div>' +
+              '<label class="storyboard-inline-check storyboard-generation-wildcards" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
             '</section>' +
-            '<details class="storyboard-scene-disclosure storyboard-conditioning-details">' +
-              '<summary><span>Conditioning</span><span class="storyboard-disclosure-summary-state">' + escapeHtml(conditioningSummary) + '</span></summary>' +
-              '<div class="storyboard-disclosure-body">' +
+            '<section class="storyboard-inspector-section storyboard-conditioning-panel">' +
+              '<div class="storyboard-inspector-section-heading"><strong>Conditioning</strong><span>' + escapeHtml(conditioningSummary) + '</span></div>' +
+              '<div class="storyboard-conditioning-body">' +
                 '<div class="storyboard-lora-panel">' +
                   '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add the chosen Scene-specific LoRA."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
                   '<div class="storyboard-lora-picker-wrap">' +
@@ -1127,7 +1119,7 @@
                   '</div>' +
                 '</details>' +
               '</div>' +
-            '</details>' +
+            '</section>' +
           '</aside>' +
         '</div>' +
         '<div class="storyboard-takes">' +
@@ -1179,7 +1171,11 @@
     el('storyboard-story-pinned').checked = !!storyState.story.pinned;
     var developButton = el('storyboard-develop-btn');
     if (developButton) {
-      developButton.textContent = (storyState.story.sceneOrder || []).length ? 'Develop Again' : 'Develop Story';
+      var hasScenes = (storyState.story.sceneOrder || []).length > 0;
+      developButton.textContent = hasScenes ? 'Re-develop Scenes…' : 'Develop Scenes';
+      developButton.classList.toggle('storyboard-redevelop-btn', hasScenes);
+      var developRow = developButton.closest('.storyboard-develop-row');
+      if (developRow) developRow.classList.toggle('has-scenes', hasScenes);
     }
     var restoreConceptButton = el('storyboard-restore-concept-btn');
     if (restoreConceptButton) {
@@ -1852,12 +1848,17 @@
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
-    el('storyboard-scene-prev-btn').onclick = function () { moveFocusedScene(-1); };
-    el('storyboard-scene-next-btn').onclick = function () { moveFocusedScene(1); };
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
-    el('storyboard-add-scene-btn').onclick = addScene;
+    el('storyboard-scene-progression').addEventListener('click', function (event) {
+      var sceneButton = event.target.closest('[data-scene-progress]');
+      if (sceneButton) {
+        setSceneViewMode('focus', sceneButton.dataset.sceneProgress);
+        return;
+      }
+      if (event.target.closest('[data-scene-progress-add]')) addScene();
+    });
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;
       window.localStorage.setItem('webcap.storyboard.directorModel', this.value);

@@ -312,17 +312,18 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 10px;
+  min-height: 50px;
+  padding: 9px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--panel-soft);
 }
 
 .storyboard-scene-number {
-  min-width: 34px;
+  min-width: 58px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .storyboard-scene-title {
@@ -331,19 +332,72 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   outline: none;
 }
 
-.storyboard-scene-actions {
-  display: inline-flex;
-  gap: 4px;
+.storyboard-scene-menu {
+  position: relative;
 }
 
-.storyboard-scene-actions button {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 7px;
+.storyboard-scene-menu > summary {
+  width: 38px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  cursor: pointer;
+  list-style: none;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.storyboard-scene-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.storyboard-scene-menu-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 5px);
+  right: 0;
+  min-width: 180px;
+  display: none;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, .28);
+}
+
+.storyboard-scene-menu[open] .storyboard-scene-menu-popover {
+  display: grid;
+}
+
+.storyboard-scene-menu-popover button {
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.storyboard-scene-menu-popover button:hover {
+  background: var(--hover);
+}
+
+.storyboard-scene-menu-popover button.danger {
+  color: #e89494;
+}
+
+.storyboard-scene-menu-popover button:disabled {
+  opacity: .4;
+  cursor: default;
 }
 
 .storyboard-scene-body {
@@ -369,12 +423,14 @@
 
 .storyboard-director-actions input {
   min-width: 0;
+  min-height: 38px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--input-bg, var(--panel));
   color: var(--text);
-  padding: 6px 8px;
+  padding: 9px 10px;
   font: inherit;
+  font-size: 14px;
 }
 
 .storyboard-scene-meta-row {
@@ -386,10 +442,10 @@
 .storyboard-inline-check {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 32px;
+  gap: 7px;
+  min-height: 34px;
   color: var(--text);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .storyboard-inline-check input {
@@ -816,10 +872,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .storyboard-prompt-textarea {
@@ -1332,15 +1388,24 @@
 .storyboard-takes {
   position: relative;
   z-index: 8;
+  min-height: 250px;
+  height: min(34vh, 340px);
   margin: 0;
-  padding: 8px 10px 10px;
+  padding: 0 14px 14px;
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 94%, var(--bg));
   box-shadow: 0 -8px 18px rgba(0, 0, 0, .08);
+  display: grid;
+  grid-template-rows: 50px minmax(0, 1fr) auto;
 }
 
 .storyboard-takes-header {
-  margin-bottom: 6px;
+  min-height: 50px;
+  margin: 0;
+}
+
+.storyboard-takes-header strong {
+  font-size: 16px;
 }
 
 .storyboard-takes-header > div {
@@ -1354,8 +1419,9 @@
 }
 
 .storyboard-takes-grid {
+  min-height: 0;
   display: flex;
-  gap: 8px;
+  gap: 16px;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 1px 1px 5px;
@@ -1363,24 +1429,41 @@
 }
 
 .storyboard-take {
-  flex: 0 0 210px;
-  width: 210px;
-  max-width: none;
-  padding: 6px;
+  flex: 1 0 360px;
+  min-width: 360px;
+  max-width: 620px;
+  padding: 9px;
+  border-radius: 9px;
   scroll-snap-align: start;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .storyboard-take-footer {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .storyboard-take-identity {
-  grid-column: 1 / -1;
+  grid-column: auto;
+}
+
+.storyboard-take-identity strong {
+  font-size: 13px;
+}
+
+.storyboard-take-identity span {
+  font-size: 11px;
+}
+
+.storyboard-take-identity input {
+  font-size: 12px;
+  padding: 6px 7px;
 }
 
 .storyboard-take-footer select {
-  min-width: 78px;
+  min-width: 88px;
 }
 
 @media (max-width: 1800px) {

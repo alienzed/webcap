@@ -832,7 +832,7 @@
                   '<select class="storyboard-lora-picker" data-scene-lora-picker aria-label="Available Scene LoRAs">' +
                     loraOptions('', '', storyLoras.map(function (item) { return item.name; })) +
                   '</select>' +
-                  (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Inherited from Story</span><div class="storyboard-lora-list" data-story-lora-inherited-list>' + inheritedLoraRowsHtml + '</div></div>' : '') +
+                  '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Inherited from Story</span><div class="storyboard-lora-list" data-story-lora-inherited-list>' + inheritedLoraRowsHtml + '</div></div>' +
                   '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Scene only</span><div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div></div>' +
                   '<span class="storyboard-reference-empty">' + escapeHtml(loraStatus) + '</span>' +
                 '</div>' +

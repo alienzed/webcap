@@ -681,6 +681,7 @@ def _run_generation(job_id, story_id, scene_id, settings):
             scene_id,
             output_ref.get("filename") or "render.mp4",
             io.BytesIO(media),
+            effective_loras=settings.get("loras") or [],
         )
         story, take = finalize_generated_take(
             story_id,

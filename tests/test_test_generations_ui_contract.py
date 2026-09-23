@@ -72,7 +72,8 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert "pending.querySelector('.test-generations-result-name').textContent" in script
     assert "var failures = status && Array.isArray(status.failures) ? status.failures : [];" in script
     assert "placeholder.textContent = 'Generation failed';" in script
-    assert "detail.textContent = String(failure.error || 'Generation failed.');" in script
+    assert "reportConsoleError(" in script
+    assert "String(failure.error || 'Generation failed.')" in script
     assert "(results.length + failures.length) < total" in script
     assert "host.innerHTML = html" not in script
     assert "Previews appear as each LoRA finishes." in script
@@ -114,7 +115,7 @@ def test_test_generation_previews_keep_stable_width_and_natural_height():
 
     results_rule = css.split(".test-generations-results {", 1)[1].split("}", 1)[0]
     assert "display: grid;" in results_rule
-    assert "grid-template-columns: repeat(auto-fill, 330px);" in results_rule
+    assert "grid-template-columns: repeat(auto-fill, 500px);" in results_rule
     assert "justify-content: start;" in results_rule
     assert "flex: 1 1 0;" in results_rule
     assert "grid-auto-rows: max-content;" in results_rule
@@ -313,7 +314,9 @@ def test_test_bench_activity_rail_and_live_session_contract():
     assert ".disabled = !!disabled" not in controls_block
 
     assert "if (!currentSession || currentSession === activeSession)" in script
-    assert "savedPrompt.trim()" in script
+    assert "function savedTestModelState()" in script
+    assert "function captureTestBenchSave(prompt)" in script
+    assert "state.testGenerationByModel[modelId]" in script
     assert "saveTestBenchState(prompt);" in script
     assert "if (nextSeed) nextSeed.value = String(randomSeed());" in script
 
@@ -545,10 +548,12 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     assert "status.resolvedPrompt || status.prompt" in script
     assert "renderPromptExpectations(resolvedPrompt)" in script
     assert "status.sourcePrompt" in script
-    assert "status.aspectRatio" in script
-    assert "status.megapixels" in script
-    assert "status.duration" in script
-    assert "status.seed" in script
+    assert "var settings = status.settings && typeof status.settings === 'object' ? status.settings : status;" in script
+    assert "settings.aspectRatio" in script
+    assert "settings.megapixels" in script
+    assert "settings.duration" in script
+    assert "settings.dimensions" in script
+    assert "settings.seed" in script
     assert ".test-generations-session-details" in css
     assert ".test-generations-session-info-grid" in css
     assert ".test-generations-session-detail-column" not in css
@@ -745,7 +750,7 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "test-generations-reset-prompt-btn" not in script
     assert "name: name" in script
     assert "candidateScores" in script
-    assert "function openResultsFolder(folder)" in script
+    assert "function openResultsFolder(folder, options)" in script
     assert "setWorkspaceSurface('default')" in script
     assert "refreshCurrentDirectory();" in script
     assert "★ " in script

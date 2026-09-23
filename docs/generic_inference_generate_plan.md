@@ -722,6 +722,31 @@ Only after the above is stable:
 
 ---
 
+# Current status and locked next milestone
+
+As of 2026-09-22, the product-facing Storyboard workflow and the first Generate client are substantially in place.
+
+Implemented product capabilities include:
+
+- Storyboard Director concept expansion and Story-to-Scenes development;
+- focused Scene authoring with continuity fields, Story invariants, Story-wide LoRAs, Scene overrides, references, multiple Takes, Take labels/ratings/selection, and selected-sequence export;
+- standalone Generate with H3/Krea2 controls, LoRAs, references, persistent results/provenance, Director write/refine, and the visual Generation Queue;
+- stable keyed Generate result reconciliation so live polling does not recreate existing media elements or restart playback.
+
+The remaining work is intentionally ordered as follows:
+
+1. **Migrate Storyboard Takes onto the common `inference` lane.** Preserve all Story/Scene/Take semantics and make pending Take queue positions global.
+2. **Migrate Test Generations onto the common `inference` lane.** Preserve Sessions as the Test-owned aggregation while each rendition becomes an ordinary inference job.
+3. **Harden and clean up the unified inference path.** Remove obsolete per-client scheduler/transport duplication only after both migrations are proven.
+4. **Apply the small Generate IA/UX polish pass.** Treat Director as a prompt-editing tool, clarify rough-idea vs finished-prompt authoring, add one-step restore after Director edits, improve Setup/Conditioning hierarchy, and keep GPU/queue messaging contextual.
+5. **Finish explicit Take deletion.** Keep reversible Remove/Restore semantics, but add the separately confirmed destructive Delete Take action tracked in `docs/outstanding.md`.
+
+Training remains a separate long-running scheduler and shares only GPU resource arbitration.
+
+Local Director requests still use the same GPU reservation path as generation. Running local Director concurrently with active generation is not part of this milestone; remote Director remains the current path for that workflow. The Director runtime naming/settings cleanup remains a follow-up refactor, not a blocker for the queue migrations.
+
+---
+
 # Implementation order for this branch
 
 This branch will work through the plan only until Generate is in place:

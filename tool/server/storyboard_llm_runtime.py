@@ -459,6 +459,46 @@ def _model_status(model_id):
     return ""
 
 
+def _ensure_local_model_loaded(model_id):
+    models = list_models(reload=False)
+    selected = next((model for model in models if model["id"] == model_id), None)
+    if selected is None:
+        raise FileNotFoundError("Storyboard Director model is not available from the active runtime: " + model_id)
+    if selected["status"] == "loaded":
+        return False
+
+    for model in models:
+        if model["id"] == model_id or model["status"] == "unloaded":
+            continue
+        _unload_model(model["id"])
+
+    _load_model(model_id)
+    return True
+
+
+def release_loaded_model_for_gpu_work():
+    settings = _director_config()
+    if settings.get("mode", "local") == "remote":
+        return False
+
+    with _request_lock:
+        process = _process
+        if process is not None and process.poll() is not None:
+            stop_server()
+            return False
+        if process is None and not _health_ok():
+            return False
+
+        models = _normalize_models(_http_json("/models", timeout=5))
+        released = False
+        for model in models:
+            if model["status"] == "unloaded":
+                continue
+            _unload_model(model["id"])
+            released = True
+        return released
+
+
 def chat(model_id, messages, response_schema=None, max_tokens=None):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Storyboard Director messages are required.")
@@ -496,22 +536,23 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
             return _completion_result(response, model_id)
 
         _reserve_gpu()
-        load_attempted = False
+        completed = False
         cleanup_safe = True
         try:
             _free_comfy_models()
-            load_attempted = True
-            _load_model(model_id)
+            _ensure_local_model_loaded(model_id)
             response = _http_json(
                 "/v1/chat/completions",
                 method="POST",
                 payload=payload,
                 timeout=10 * 60,
             )
-            return _completion_result(response, model_id)
+            result = _completion_result(response, model_id)
+            completed = True
+            return result
         finally:
             cleanup_error = None
-            if load_attempted:
+            if not completed:
                 try:
                     if _model_status(model_id) != "unloaded":
                         _unload_model(model_id)
@@ -522,8 +563,8 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
                         cleanup_safe = False
                         cleanup_error = RuntimeError(
                             "Storyboard Director could not confirm that the selected model was unloaded "
-                            "from an external llama.cpp router. The GPU reservation is being kept to avoid "
-                            "colliding with Training or generation work. Stop/unload that router model, then "
+                            "from an external llama.cpp router after a failed request. The GPU reservation is being kept "
+                            "to avoid colliding with Training or generation work. Stop/unload that router model, then "
                             "restart WebCap before using GPU work again."
                         )
                         cleanup_error.__cause__ = exc

@@ -46,7 +46,7 @@ See [`docs/training_profiles.md`](docs/training_profiles.md) and [`docs/train.md
 WebCap uses a permanent application shell:
 
 - the left activity rail switches major activities such as Prep, Training, and Test and also owns Console, Settings, Help, and immersive-mode access;
-- the top header shows current folder/set context, the single editable **Base Model** selector where relevant, workspace identity, and persistent workload/system status: **Idle / Training / Testing**, GPU utilization/VRAM, and free disk space;
+- the top header shows current folder/set context, the single editable **Base Model** selector where relevant, workspace identity, and persistent workload/system status: **Idle / Training / Testing / Generating**, GPU utilization/VRAM, and free disk space;
 - transient application status appears as a floating bottom-left shell message;
 - the multiline application console is a separate shell surface and is not the same thing as a Training run log.
 

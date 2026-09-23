@@ -136,9 +136,9 @@
     }
 
     if (!models.length) {
-      select.innerHTML = '<option value="">No GGUF models found</option>';
+      select.innerHTML = '<option value="">No Director models found</option>';
       select.disabled = true;
-      status.textContent = 'Add GGUFs to the Director model folder.';
+      status.textContent = storyState.director.runtimeLabel || 'No models available.';
       return;
     }
 

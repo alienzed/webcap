@@ -281,3 +281,17 @@ def test_shared_queue_keeps_training_history_training_only():
     assert "return isTrainingQueueJob(job) &&" in script
     assert "Object.keys(priorTrainingJobsById)" in script
     assert "isTrainingQueueJob(job) && active" in script
+
+
+def test_training_presentation_is_owned_by_training_surface():
+    workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+
+    assert ".app.shell-revamp:not(.workspace-surface-training) .training-runner-output-view {" in css
+    isolation_rule = css.split(".app.shell-revamp:not(.workspace-surface-training) .training-runner-output-view {", 1)[1].split("}", 1)[0]
+    assert "display: none !important;" in isolation_rule
+    detail_start = workspace.index("function syncTrainingWorkspaceDetailUi()")
+    detail_end = workspace.index("function syncTrainingWorkspaceUi()", detail_start)
+    detail = workspace[detail_start:detail_end]
+    assert "editorWrapper.classList.toggle('hidden'" not in detail
+

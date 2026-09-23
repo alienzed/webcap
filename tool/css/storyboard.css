@@ -440,6 +440,36 @@
 .storyboard-take-identity input { min-width: 0; width: 100%; border: 1px solid var(--border); border-radius: 4px; background: var(--input-bg, var(--panel)); color: var(--text); padding: 4px 5px; font: inherit; font-size: 10px; }
 .storyboard-take-footer select { min-width: 88px; }
 
+.storyboard-take-pending {
+  border-style: dashed;
+}
+
+.storyboard-take-pending-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.storyboard-take-pending-indicator {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: storyboard-take-spin .9s linear infinite;
+}
+
+.storyboard-take-pending-footer {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+@keyframes storyboard-take-spin {
+  to { transform: rotate(360deg); }
+}
+
 
 .storyboard-reference-panel {
   display: flex;

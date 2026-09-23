@@ -201,15 +201,12 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
             "Choose the number of Scenes and each duration yourself from the creative material; use at least two Scenes, "
-            "and keep every Scene between 4 and 15 seconds. Preserve a coherent narrative progression and explicit "
-            "entry/exit continuity. Establish recurring characters as stable people before writing the Scene prompts, and "
-            "preserve their core visual identity across the entire Story. If the Story spans age changes, age the same person "
-            "rather than silently changing ethnicity/heritage, skin tone, facial structure, eye/hair traits, or other identity "
-            "markers. Because every Scene is generated independently, repeat enough concrete character identity detail in each "
-            "relevant prompt when no LoRA or exact visual reference anchors that identity. Write a complete model-facing H3 "
+            "and keep every Scene between 4 and 15 seconds. Preserve coherent narrative progression, explicit entry/exit "
+            "continuity, supplied Story facts, and Story invariants across the sequence. Write a complete model-facing H3 "
             "prompt for every Scene now, not a placeholder. Be creatively useful: invent natural dialogue, performance details, "
-            "camera behavior, sound, and music when they improve the Story, while preserving supplied facts and Story invariants. Each Scene prompt "
-            "must be independently generatable and follow the supplied H3 base prompt rules. Return only JSON matching the supplied schema."
+            "camera behavior, sound, and music when they improve the Story and remain consistent with the supplied material. "
+            "Each Scene prompt must be independently generatable and follow the supplied H3 base prompt rules. "
+            "Return only JSON matching the supplied schema."
         )
         return {
             "operation": operation,

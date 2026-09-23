@@ -25,13 +25,10 @@ def normalize_settings(workflow, new_seed, values=None):
     selected_dimensions = str(selected.get("dimensions") or defaults["dimensions"])
     if not selected_dimensions.strip():
         raise ValueError("Test dimensions are required.")
-    try:
-        seed = selected.get("seed")
-        selected_seed = validate_test_seed(
-            new_seed() if seed is None or str(seed).strip() == "" else seed
-        )
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Test seed must be numeric.") from exc
+    seed = selected.get("seed")
+    selected_seed = validate_test_seed(
+        new_seed() if seed is None or str(seed).strip() == "" else seed
+    )
     return {
         "dimensions": selected_dimensions,
         "seed": selected_seed,

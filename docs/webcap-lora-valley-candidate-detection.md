@@ -59,13 +59,12 @@ Initial shape:
   "selected": {
     "epoch": 44,
     "step": 8920,
-    "file": "epoch44/adapter.safetensors",
     "selectedAt": "..."
   }
 }
 ```
 
-Use relative paths within the trainer timestamp folder. The manifest should stay deliberately small and portable.
+The manifest should stay deliberately small and portable. Selected-epoch knowledge must not depend on retaining the checkpoint file: the archive workflow intentionally allows epoch/checkpoint folders to be removed while preserving the TensorBoard logs and the selection fact.
 
 Selection should be replaceable: choosing another saved epoch updates the one selected record rather than accumulating competing "winners". Clearing selection should also be explicit.
 

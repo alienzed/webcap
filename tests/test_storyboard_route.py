@@ -375,3 +375,34 @@ def test_storyboard_route_can_permanently_delete_take(tmp_path, monkeypatch):
     assert take["id"] not in current["takes"]
     assert not media_path.exists()
 
+def test_storyboard_route_can_upload_scene_reference(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    root.mkdir()
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", str(root))
+    client = app_module.app.test_client()
+
+    story = client.post("/fs/storyboard", json={
+        "operation": "create_story",
+        "story": {"title": "Reference Upload"},
+    }).get_json()["story"]
+    scene = client.post("/fs/storyboard", json={
+        "operation": "add_scene",
+        "storyId": story["id"],
+        "scene": {"title": "Scene"},
+    }).get_json()["scene"]
+
+    response = client.post("/fs/storyboard/reference_upload", data={
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+        "role": "last_frame",
+        "file": (BytesIO(b"image"), "ending.png"),
+    }, content_type="multipart/form-data")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    reference = payload["reference"]
+    assert reference["role"] == "last_frame"
+    assert reference["source"] == "upload"
+    media = root / "output" / "storyboards" / story["id"] / reference["mediaPath"]
+    assert media.read_bytes() == b"image"
+

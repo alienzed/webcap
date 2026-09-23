@@ -1892,6 +1892,65 @@ def test_missing_candidate_rendition_skips_without_failure_card(tmp_path, monkey
     assert manifest["failures"] == []
 
 
+
+def test_shared_test_rendition_executes_with_existing_test_model_semantics(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+    stored = execution_queue.get_job(child_id, include_payload=True)
+
+    model = bench.get_test_model()
+    monkeypatch.setattr(model, "resolve_assets", lambda template, *_args: template)
+    monkeypatch.setattr(model, "available_lora_names", lambda _available_names: [candidates[0].name])
+    monkeypatch.setattr(
+        model,
+        "build_workflow",
+        lambda _template, prompt, lora_name, settings=None, filename_prefix=None, **_kwargs: {
+            "prompt": prompt,
+            "lora": lora_name,
+            "seed": settings["seed"],
+            "prefix": filename_prefix,
+        },
+    )
+    monkeypatch.setattr(model, "find_output_ref", lambda outputs: outputs)
+    monkeypatch.setattr(model, "workflow_seed", lambda workflow: workflow["seed"])
+    monkeypatch.setattr(bench.app_config, "safe_join_fs_root", lambda _folder: tmp_path)
+    monkeypatch.setattr(inference_runtime, "system_stats", lambda: {})
+    monkeypatch.setattr(inference_runtime, "available_names", lambda *_args: [candidates[0].name])
+    monkeypatch.setattr(
+        inference_runtime,
+        "resolve_name",
+        lambda configured, _available, _label: Path(str(configured)).name,
+    )
+    monkeypatch.setattr(inference_runtime, "queue_workflow", lambda _workflow: "provider-1")
+    monkeypatch.setattr(
+        inference_runtime,
+        "wait_for_output",
+        lambda _provider, _job, _finder: {"filename": "render.mp4", "subfolder": "", "type": "output"},
+    )
+    monkeypatch.setattr(inference_runtime, "download_output", lambda _ref: b"video-bytes")
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(child_id)
+
+    result = bench.execute_inference(child_id, stored["payload"]["request"], stored["payload"]["clientContext"])
+
+    assert result["status"] == "completed"
+    manifest = bench._read_status(session)
+    assert manifest["completed"] == 1
+    assert manifest["failed"] == 0
+    assert manifest["results"][0]["candidateFile"] == candidates[0].name
+    assert manifest["results"][0]["seed"] == 77
+    assert (session / manifest["results"][0]["mediaFile"]).read_bytes() == b"video-bytes"
+    assert (session / Path(manifest["results"][0]["mediaFile"]).with_suffix(".txt")).read_text(encoding="utf-8") == "prompt #77"
+
+
+
 def test_run_batch_advances_local_test_fifo(tmp_path, monkeypatch):
     session = tmp_path / "session"
     session.mkdir()

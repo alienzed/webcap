@@ -63,7 +63,7 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "data-reference-previous" in storyboard
     assert "data-reference-apply" in storyboard
     assert "data-scene-generate" in storyboard
-    assert "data-scene-lora-add" in storyboard
+    assert "data-scene-lora-picker" in storyboard
     assert "data-scene-lora-name" in storyboard
     assert "/fs/storyboard/generation/capabilities" in storyboard
     assert "/fs/storyboard/generation" in storyboard
@@ -151,7 +151,7 @@ def test_storyboard_can_develop_concept_directly_into_scenes():
     assert "operation: 'develop_story'" in storyboard
     assert "replaceExisting: hasScenes" in storyboard
     assert "Existing Scenes and Takes will remain recoverable" in storyboard
-    assert "Develop Again" in storyboard
+    assert "Develop Scenes" in storyboard
 
 
 def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
@@ -232,7 +232,8 @@ def test_storyboard_story_loras_are_inherited_and_overridable_in_scenes():
     store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
 
     assert 'id="storyboard-story-lora-list"' in html
-    assert 'id="storyboard-story-lora-add"' in html
+    assert 'id="storyboard-story-lora-picker"' in html
+    assert "data-lora-picker-option" in storyboard
     assert 'id="storyboard-story-lora-picker"' in html
     assert "storyLoraOverrides" in storyboard
     assert "data-story-lora-global-enabled" in storyboard
@@ -329,7 +330,7 @@ def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
     assert "markSceneNewTake(job.sceneId);" in storyboard
     assert "function setSceneViewMode(mode, sceneId)" in storyboard
     assert ".storyboard-scene-progress-badge" in css
-    assert "grid-template-columns: minmax(720px, 900px) minmax(360px, 420px);" in css
+    assert "grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);" in css
     assert "min-height: 340px;" in css
     assert "position: sticky;" in css
     assert "overflow-x: auto;" in css

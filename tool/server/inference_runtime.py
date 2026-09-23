@@ -316,7 +316,10 @@ def _provider_state_path():
 
 def _write_provider_state(root):
     path = _provider_state_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    runtime_root = path.parent
+    if runtime_root.is_symlink():
+        raise OSError("Refusing to write ComfyUI provider state through a symlinked runtime root.")
+    runtime_root.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": COMFY_PROVIDER_STATE_VERSION,
         "root": str(Path(root).resolve()),
@@ -359,7 +362,7 @@ def _remember_provider_root(output_path):
 
 def known_provider_root():
     path = _provider_state_path()
-    if not path.is_file() or path.is_symlink():
+    if path.parent.is_symlink() or not path.is_file() or path.is_symlink():
         return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))

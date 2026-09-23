@@ -1013,7 +1013,7 @@ A second pass after PR #66 tightened the implementation without changing any Act
 
 - Test Session deletion now re-reads the session manifest at mutation time and refuses active statuses even if the Storage screen was rendered from older state.
 - H3 probe directories now use their app-written `seed.json` plus optional `runtime.json` as ownership/state sentinels. Prepared and terminal probes are manually purgeable; running/stopping probes are protected.
-- Runtime purge remains identity-scoped. The generic Generate reference store is still lifecycle-managed and explicitly rejected by the purge endpoint.
+- Runtime purge remains identity-scoped. Generate reference uploads are surfaced as individual WebCap token directories: queued/active references are protected, while inactive draft/residual bundles can be manually deleted with an explicit warning that an unsubmitted draft may lose the reference.
 - WebCap-owned staged Test LoRA copies are surfaced from current-Set configured destinations only when their provenance sidecar proves ownership; shared inference references protect them at mutation time.
 - A proven ComfyUI provider root is persisted only after WebCap resolves a real saved provider output. Storage then surfaces exact WebCap-prefixed input/output job trees without scanning arbitrary provider content; active shared-inference identities remain protected.
 - Storage frontend dependencies on app-owned Console and shell functions now fail loudly rather than silently skipping required behavior.

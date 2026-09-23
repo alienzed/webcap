@@ -130,7 +130,7 @@ def reserve_resource(owner):
         raise ValueError("Execution resource owner is required.")
     global _resource_owner
     with _lock:
-        if _resource_owner and _resource_owner != owner:
+        if _resource_owner:
             return False
         _resource_owner = owner
         return True

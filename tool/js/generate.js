@@ -9,7 +9,9 @@
       models: [],
       modelId: window.localStorage.getItem('webcap.generate.directorModel') || '',
       available: false,
-      busy: false
+      busy: false,
+      previousPrompt: null,
+      status: ''
     },
     queue: { jobs: [], paused: false },
     open: false,
@@ -399,16 +401,30 @@
     }).catch(reportError);
   }
 
+  function setDirectorStatus(message) {
+    generateState.director.status = String(message || '');
+    var status = el('generate-director-status');
+    if (status) status.textContent = generateState.director.status;
+  }
+
   function renderDirector() {
     var select = el('generate-director-model');
     var status = el('generate-director-status');
-    if (!select || !status) return;
+    var restore = el('generate-director-restore');
+    var expand = el('generate-director-write');
+    var refine = el('generate-director-refine');
+    if (!select || !status || !restore || !expand || !refine) return;
+
+    restore.classList.toggle('hidden', generateState.director.previousPrompt === null);
     if (!generateState.director.available) {
       select.innerHTML = '<option value="">Director unavailable</option>';
       select.disabled = true;
-      status.textContent = '';
+      expand.disabled = true;
+      refine.disabled = true;
+      status.textContent = generateState.director.status;
       return;
     }
+
     select.innerHTML = generateState.director.models.map(function (model) {
       return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(model.label || model.id) + '</option>';
     }).join('');
@@ -418,7 +434,10 @@
     generateState.director.modelId = chosen;
     select.value = chosen;
     select.disabled = generateState.director.busy || !chosen;
-    status.textContent = chosen ? 'Ready' : 'No Director models';
+    expand.disabled = generateState.director.busy || !chosen;
+    refine.disabled = generateState.director.busy || !chosen;
+    restore.disabled = generateState.director.busy;
+    status.textContent = chosen ? generateState.director.status : 'No Director models';
   }
 
   function refreshDirector() {
@@ -433,14 +452,26 @@
     });
   }
 
+  function restoreDirectorPrompt() {
+    if (generateState.director.busy || generateState.director.previousPrompt === null) return;
+    var prompt = el('generate-prompt');
+    prompt.value = generateState.director.previousPrompt;
+    generateState.director.previousPrompt = null;
+    window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, prompt.value);
+    setDirectorStatus('Previous prompt restored.');
+    renderDirector();
+  }
+
   function runDirector(operation) {
     if (generateState.director.busy) return;
     if (!generateState.director.modelId) throw new Error('Choose a Director model.');
-    var prompt = String(el('generate-prompt').value || '').trim();
+    var promptNode = el('generate-prompt');
+    var prompt = String(promptNode.value || '').trim();
     var instruction = String(el('generate-director-instruction').value || '').trim();
+    var previousPrompt = promptNode.value;
     generateState.director.busy = true;
+    setDirectorStatus('Director working…');
     renderDirector();
-    el('generate-director-status').textContent = 'Director working…';
     return postJson('/fs/generate/director', {
       operation: operation,
       directorModel: generateState.director.modelId,
@@ -449,11 +480,15 @@
       instruction: instruction,
       settings: collectSettings()
     }).then(function (payload) {
-      el('generate-prompt').value = String(payload.result || '');
-      window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, el('generate-prompt').value);
+      promptNode.value = String(payload.result || '');
+      generateState.director.previousPrompt = previousPrompt;
+      window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, promptNode.value);
       if (operation === 'refine_prompt') el('generate-director-instruction').value = '';
-      el('generate-director-status').textContent = 'Updated with ' + String(payload.model || generateState.director.modelId);
-    }).catch(reportError).then(function () {
+      setDirectorStatus(operation === 'write_prompt' ? 'Prompt expanded.' : 'Prompt refined.');
+    }).catch(function (err) {
+      setDirectorStatus('Director failed.');
+      reportError(err);
+    }).then(function () {
       generateState.director.busy = false;
       renderDirector();
     });
@@ -510,8 +545,11 @@
 
     el('generate-model').addEventListener('change', function () {
       generateState.modelId = this.value;
+      generateState.director.previousPrompt = null;
+      setDirectorStatus('');
       window.localStorage.setItem('webcap.generate.model', this.value);
       renderModelForm();
+      renderDirector();
     });
     el('generate-prompt').addEventListener('input', function () {
       window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, this.value);
@@ -528,9 +566,14 @@
     el('generate-director-refine').onclick = function () {
       try { runDirector('refine_prompt'); } catch (err) { reportError(err); }
     };
+    el('generate-director-restore').onclick = function () {
+      restoreDirectorPrompt();
+    };
     el('generate-director-model').addEventListener('change', function () {
       generateState.director.modelId = this.value;
+      setDirectorStatus('');
       window.localStorage.setItem('webcap.generate.directorModel', this.value);
+      renderDirector();
     });
     el('generate-queue-pause').onclick = function () {
       queueAction(generateState.queue.paused ? 'resume_queue' : 'pause_queue');

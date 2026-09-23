@@ -56,9 +56,9 @@ Longer-term direction for making WebCap practical outside the current developmen
 - **Expand environment diagnostics toward assisted setup.** The existing environment test should eventually be able to identify missing Python/runtime dependencies and, where safe and explicit, install supported versions into the configured training environment/venv. Dependency repair must remain visible and deliberate rather than silently mutating environments.
 - **Document and link the remaining external prerequisites.** Where WebCap cannot or should not automate a requirement, provide direct links and concise setup guidance that bridge the gap between what WebCap provides and what the user must obtain/configure. The existing Hugging Face model links are the pattern to extend.
 
-## Bugs
+## Completed (2026-09-23)
 
-- **Storyboard scene takes cannot currently be deleted.** Takes are generated/derived artifacts and should be deletable, unlike protected source set media. Add an explicit **Delete Take** action with a destructive confirmation. If the take is currently selected/preferred for the scene, the confirmation must say that deleting it will leave the scene without a selected take. Keep the fix minimal: no trash/recycle-bin or retention subsystem.
+- Storyboard Takes support explicit permanent **Delete Take** alongside the existing reversible Remove/Restore flow. Deletion removes Take media and metadata, requires destructive confirmation, warns when the selected Take will leave the Scene unselected, and refuses deletion while the same media is still a live Scene reference.
 
 ## Backlog (Do Not Implement Yet)
 - Before revisiting storage management, inspect the removed `docs/training_artifact_cleanup.md` in commit `40dbd16` and its action-directory layout. Do not reinvent it or introduce automatic deletion without a new, explicit retention/recovery design.

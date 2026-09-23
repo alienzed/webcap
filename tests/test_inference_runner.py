@@ -403,6 +403,57 @@ def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconf
     assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
 
 
+def test_inference_monitor_does_not_poll_comfyui_without_queued_work(inference_root, monkeypatch):
+    execution_queue._resource_owner = inference_runner.GPU_RESERVATION_OWNER
+    inference_runner.hold_provider_cleanup(
+        "provider-stale",
+        "Queue paused: stale provider cleanup is pending.",
+    )
+    execution_queue.resume_lane(inference_runner.EXECUTION_LANE)
+    calls = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "read_job",
+        lambda provider_id: calls.append(provider_id) or {"status": "in_progress"},
+    )
+
+    inference_runner._advance_queue()
+    inference_runner._advance_queue()
+
+    assert calls == []
+    with inference_runner._provider_hold_lock:
+        assert "provider-stale" in inference_runner._provider_cleanup_holds
+
+
+def test_inference_startup_records_cleanup_without_contacting_comfyui(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(
+        queued["id"],
+        details={"providerJobId": "provider-stale", "providerStatus": "in_progress"},
+    )
+
+    inference_runner._startup_reconciled = False
+    calls = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait",
+        lambda provider_id: calls.append(provider_id) or False,
+    )
+
+    inference_runner.reconcile_startup()
+
+    assert calls == []
+    snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
+    assert snapshot["paused"] is True
+    with inference_runner._provider_hold_lock:
+        assert "provider-stale" in inference_runner._provider_cleanup_holds
+
+
 def test_cancel_job_and_wait_requires_terminal_provider_state(monkeypatch):
     states = iter([
         {"status": "in_progress"},

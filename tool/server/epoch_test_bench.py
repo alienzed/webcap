@@ -1977,6 +1977,9 @@ def _sync_inference_session(session_directory):
     jobs = _session_job_records(status)
     results = status.get("results") if isinstance(status.get("results"), list) else []
     failures = status.get("failures") if isinstance(status.get("failures"), list) else []
+    result_job_ids = {
+        str(item.get("jobId") or "") for item in results if isinstance(item, dict)
+    }
     failure_job_ids = {
         str(item.get("jobId") or "") for item in failures if isinstance(item, dict)
     }
@@ -1988,7 +1991,11 @@ def _sync_inference_session(session_directory):
     for job in jobs:
         job_id = str(job.get("id") or "")
         job_status = str(job.get("status") or "")
-        if job_status in {"failed", "interrupted"} and job_id not in failure_job_ids:
+        if (
+            job_status in {"failed", "interrupted"}
+            and job_id not in result_job_ids
+            and job_id not in failure_job_ids
+        ):
             _kind, candidate_file, label = _job_candidate_identity(job)
             failures.append({
                 "jobId": job_id,

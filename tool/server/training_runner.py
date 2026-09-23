@@ -516,7 +516,6 @@ def _candidate_run_snapshot(folder, job_id):
             "runName": str(job.get("runName") or ""),
             "sequence": str(job.get("sequence") or ""),
             "actionId": str(job.get("actionId") or ""),
-            "actionPath": str(job.get("actionPath") or ""),
             "stage": str(job.get("stage") or job.get("stages") or ""),
             "stages": str(job.get("stages") or "").strip().lower(),
             "status": str(job.get("status") or "unknown"),
@@ -766,18 +765,8 @@ def remove_candidate_epoch_from_test_response(folder, job_id, epoch):
     except (RuntimeError, ValueError, OSError) as exc:
         return {"ok": False, "error": str(exc)}, 400
 
-def _candidate_action_root(run):
-    raw = str(run.get("actionPath") or "").strip()
-    if not raw:
-        raise RuntimeError("Recorded training job has no managed action directory.")
-    action_root = Path(raw)
-    if not action_root.is_dir() or action_root.is_symlink():
-        raise FileNotFoundError("Managed training action directory is unavailable.")
-    return action_root
-
-
-def _candidate_selected_epoch(run):
-    return _selected_epoch(_candidate_action_root(run), str(run.get("actionId") or ""))
+def _candidate_selected_epoch(run_dir, run):
+    return _selected_epoch(run_dir, str(run.get("id") or ""))
 
 
 def _candidate_epoch_step(analysis, epoch):
@@ -792,17 +781,17 @@ def select_candidate_epoch(folder, job_id, epoch):
     raw_run_path, run = _candidate_run_snapshot(folder, job_id)
     source = _candidate_safetensors_path(folder, job_id, epoch)
     run_dir = host_path_for_training_path(raw_run_path)
-    if not run_dir.is_dir():
+    if not run_dir.is_dir() or run_dir.is_symlink():
         raise FileNotFoundError("Recorded training run directory is unavailable.")
     analysis = _analyze_run_directory(run_dir, algorithm="v5")
     step = _candidate_epoch_step(analysis, epoch)
-    action_root = _candidate_action_root(run).resolve(strict=True)
+    resolved_run = run_dir.resolve(strict=True)
     source_path = source.resolve(strict=True)
     try:
-        relative = source_path.relative_to(action_root).as_posix()
+        relative = source_path.relative_to(resolved_run).as_posix()
     except ValueError as exc:
-        raise RuntimeError("Selected epoch artifact is outside the managed training action.") from exc
-    selected = _select_epoch(action_root, str(run.get("actionId") or ""), int(epoch), step, relative)
+        raise RuntimeError("Selected epoch artifact is outside the recorded training run.") from exc
+    selected = _select_epoch(resolved_run, str(run.get("id") or ""), int(epoch), step, relative)
     return {"selected": selected}
 
 
@@ -818,8 +807,11 @@ def select_candidate_epoch_response(folder, job_id, epoch):
 
 
 def clear_candidate_epoch_selection(folder, job_id):
-    _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
-    _clear_selected_epoch(_candidate_action_root(run), str(run.get("actionId") or ""))
+    raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    run_dir = host_path_for_training_path(raw_run_path)
+    if not run_dir.is_dir() or run_dir.is_symlink():
+        raise FileNotFoundError("Recorded training run directory is unavailable.")
+    _clear_selected_epoch(run_dir.resolve(strict=True), str(run.get("id") or ""))
     return {"selected": None}
 
 
@@ -852,7 +844,7 @@ def candidate_analysis_response(folder, job_id, algorithm="v5"):
             raise FileNotFoundError("Recorded training run directory is unavailable.")
         analysis = _analyze_run_directory(run_dir, algorithm=algorithm)
         _annotate_candidate_test_folder_status(run, analysis)
-        analysis["selected"] = _candidate_selected_epoch(run)
+        analysis["selected"] = _candidate_selected_epoch(run_dir, run)
     except (OSError, RuntimeError, ValueError) as exc:
         return {"ok": False, "error": str(exc)}, 422
     return {"ok": True, "run": run, "analysis": analysis}, 200

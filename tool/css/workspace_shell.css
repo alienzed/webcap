@@ -306,15 +306,25 @@
   font-weight: 600;
 }
 
-.shell-gpu-status .shell-system-divider {
-  color: var(--border);
+.shell-system-label {
+  color: var(--muted);
+  font-weight: 500;
 }
 
+.shell-gpu-status .shell-system-gpu,
 .shell-gpu-status .shell-system-disk,
 .shell-gpu-status .shell-system-ram {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
+}
+
+.shell-gpu-status .shell-system-divider {
+  color: var(--border);
+}
+
+.shell-system-disk.is-warning .shell-system-value {
+  color: inherit;
 }
 
 .shell-gpu-status .is-warning {

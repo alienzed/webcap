@@ -311,10 +311,13 @@ function renderShellSystemStatus() {
       var utilization = Number(primary.utilization);
       var memoryUsed = formatShellGpuMemory(primary.memoryUsed);
       var memoryTotal = formatShellGpuMemory(primary.memoryTotal);
-      var gpuSummary = 'GPU' +
-        (isFinite(utilization) ? ' ' + Math.round(utilization) + '%' : '') +
-        (memoryUsed && memoryTotal ? ' · VRAM ' + memoryUsed + ' / ' + memoryTotal : '');
-      parts.push('<strong title="Live GPU utilization and VRAM use.">' + escapeHtml(gpuSummary) + '</strong>');
+      var gpuSummary = '<span class="shell-system-label">GPU</span>' +
+        (isFinite(utilization) ? '<strong>' + Math.round(utilization) + '%</strong>' : '') +
+        (memoryUsed && memoryTotal
+          ? '<span class="shell-system-divider" aria-hidden="true">·</span><span class="shell-system-label">VRAM</span><strong>' +
+            escapeHtml(memoryUsed) + ' / ' + escapeHtml(memoryTotal) + '</strong>'
+          : '');
+      parts.push('<span class="shell-system-gpu" title="Live GPU utilization and VRAM use.">' + gpuSummary + '</span>');
     }
   } else if (gpu && !gpu.available) {
     parts.push('<span class="is-warning" title="' + escapeHtml(gpu.error || 'GPU status unavailable.') + '">GPU unavailable</span>');
@@ -331,9 +334,9 @@ function renderShellSystemStatus() {
       ? Math.round(ramUsedBytes / ramTotalBytes * 100)
       : null;
     var ramTitle = 'Physical RAM in use' + (ramFree ? ' · ' + ramFree + ' available' : '');
-    parts.push('<span class="shell-system-ram" title="' + escapeHtml(ramTitle) + '"><strong>RAM</strong> ' +
-      escapeHtml(ramUsed || '—') + ' / ' + escapeHtml(ramTotal || '—') +
-      (ramPercent === null ? '' : ' (' + ramPercent + '%)') + '</span>');
+    parts.push('<span class="shell-system-ram" title="' + escapeHtml(ramTitle) + '"><span class="shell-system-label">RAM</span> ' +
+      '<strong>' + escapeHtml(ramUsed || '—') + ' / ' + escapeHtml(ramTotal || '—') +
+      (ramPercent === null ? '' : ' (' + ramPercent + '%)') + '</strong></span>');
   } else if (ram && !ram.available) {
     parts.push('<span class="is-warning" title="' + escapeHtml(ram.error || 'RAM status unavailable.') + '">RAM unavailable</span>');
   }
@@ -347,7 +350,8 @@ function renderShellSystemStatus() {
     var low = isFinite(free) && isFinite(total) && total > 0 && (free / total) < 0.10;
     var diskTitle = 'Free space on ' + String(disk.path || 'WebCap filesystem') +
       (totalText ? ' · ' + totalText + ' total' : '');
-    parts.push('<span class="shell-system-disk' + (low ? ' is-warning' : '') + '" title="' + escapeHtml(diskTitle) + '"><strong>Disk</strong> ' + escapeHtml(freeText || '—') + ' free</span>');
+    parts.push('<span class="shell-system-disk' + (low ? ' is-warning' : '') + '" title="' + escapeHtml(diskTitle) + '"><span class="shell-system-label">Disk</span> ' +
+      '<strong class="shell-system-value">' + escapeHtml(freeText || '—') + ' free</strong></span>');
   } else if (disk && !disk.available) {
     parts.push('<span class="is-warning" title="' + escapeHtml(disk.error || 'Disk status unavailable.') + '">Disk unavailable</span>');
   }

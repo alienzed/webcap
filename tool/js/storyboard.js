@@ -1158,7 +1158,11 @@
     el('storyboard-story-pinned').checked = !!storyState.story.pinned;
     var developButton = el('storyboard-develop-btn');
     if (developButton) {
-      developButton.textContent = (storyState.story.sceneOrder || []).length ? 'Develop Again' : 'Develop Story';
+      var hasScenes = (storyState.story.sceneOrder || []).length > 0;
+      developButton.textContent = hasScenes ? 'Re-develop Scenes…' : 'Develop Scenes';
+      developButton.classList.toggle('storyboard-redevelop-btn', hasScenes);
+      var developRow = developButton.closest('.storyboard-develop-row');
+      if (developRow) developRow.classList.toggle('has-scenes', hasScenes);
     }
     var restoreConceptButton = el('storyboard-restore-concept-btn');
     if (restoreConceptButton) {

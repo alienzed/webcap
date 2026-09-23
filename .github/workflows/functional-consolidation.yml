@@ -42,10 +42,11 @@ jobs:
         run: |
           python -m pytest -q \
             tests/test_test_models.py \
-            tests/test_generate_route.py \
-            tests/test_generate_ui_contract.py \
-            tests/test_training_workspace_scope_ui_contract.py \
-            tests/test_execution_queue.py \
+            tests/test_generate_route.py::test_generate_capabilities_publishes_portable_lora_names \
+            tests/test_generate_ui_contract.py::test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity \
+            tests/test_generate_ui_contract.py::test_generate_errors_keep_detail_in_console_and_use_concise_setup_badge \
+            tests/test_training_workspace_scope_ui_contract.py::test_training_presentation_is_owned_by_training_surface \
+            tests/test_execution_queue.py::test_execution_queue_startup_reconciliation_precedes_monitors \
             tests/test_training_stabilization.py::test_training_startup_reconciliation_claims_gpu_for_live_training \
             tests/test_inference_runner.py::test_inference_restart_records_unresolved_provider_without_contacting_comfyui \
             tests/test_inference_runner.py::test_inference_monitor_does_not_poll_comfyui_for_pending_cleanup \

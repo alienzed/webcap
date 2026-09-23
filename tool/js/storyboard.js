@@ -502,26 +502,43 @@
     return value == null ? fallback : value;
   }
 
-  function loraOptions(selectedName, filterText, excludedNames) {
-    var excluded = {};
-    (excludedNames || []).forEach(function (name) {
-      excluded[String(name || '').toLowerCase()] = true;
-    });
-    var names = (storyState.generationCapabilities.loras || []).filter(function (name) {
-      return !excluded[String(name || '').toLowerCase()] || name === selectedName;
-    });
-    var filter = String(filterText || '').trim().toLowerCase();
-    if (filter) {
-      names = names.filter(function (name) {
-        return String(name || '').toLowerCase().indexOf(filter) !== -1;
-      });
-    }
+  function loraOptions(selectedName) {
+    var names = (storyState.generationCapabilities.loras || []).slice();
     if (selectedName && names.indexOf(selectedName) < 0) names.unshift(selectedName);
-    if (!names.length) return '<option value="">No matching LoRAs</option>';
+    if (!names.length) return '<option value="">No selectable LoRAs</option>';
     return names.map(function (name) {
       return '<option value="' + escapeHtml(name) + '"' + (name === selectedName ? ' selected' : '') + '>' +
         escapeHtml(name) + '</option>';
     }).join('');
+  }
+
+  function loraDatalistOptions() {
+    return loraDatalistOptionsExcluding([]);
+  }
+
+  function loraDatalistOptionsExcluding(excludedNames) {
+    var excluded = {};
+    (excludedNames || []).forEach(function (name) {
+      excluded[String(name || '').toLowerCase()] = true;
+    });
+    return (storyState.generationCapabilities.loras || []).filter(function (name) {
+      return !excluded[String(name || '').toLowerCase()];
+    }).map(function (name) {
+      return '<option value="' + escapeHtml(name) + '"></option>';
+    }).join('');
+  }
+
+  function availableLoraName(typedName, excludedNames) {
+    var typed = String(typedName || '').trim().toLowerCase();
+    if (!typed) return '';
+    var excluded = {};
+    (excludedNames || []).forEach(function (name) {
+      excluded[String(name || '').toLowerCase()] = true;
+    });
+    return (storyState.generationCapabilities.loras || []).find(function (name) {
+      var key = String(name || '').toLowerCase();
+      return key === typed && !excluded[key];
+    }) || '';
   }
 
   function storyLorasFromUi() {
@@ -535,12 +552,12 @@
     }).filter(function (item) { return !!item.name; });
   }
 
-  function storyLoraRowHtml(lora, filterText) {
+  function storyLoraRowHtml(lora) {
     lora = lora || {};
     var name = String(lora.name || '');
     var strength = lora.strength == null ? 1 : lora.strength;
     return '<div class="storyboard-lora-row" data-story-lora-row>' +
-      '<select data-story-lora-name>' + loraOptions(name, filterText) + '</select>' +
+      '<select data-story-lora-name>' + loraOptions(name) + '</select>' +
       '<input type="number" step="0.05" data-story-lora-strength value="' + escapeHtml(strength) + '" aria-label="Story LoRA strength">' +
       '<button type="button" class="review-captions-btn" data-story-lora-remove title="Remove Story LoRA">×</button>' +
     '</div>';
@@ -550,13 +567,12 @@
     var list = el('storyboard-story-lora-list');
     var status = el('storyboard-story-lora-status');
     if (!list || !status || !storyState.story) return;
-    var filter = el('storyboard-story-lora-filter');
     var loras = Array.isArray(storyState.story.loras) ? storyState.story.loras : [];
-    list.innerHTML = loras.map(function (lora) {
-      return storyLoraRowHtml(lora, '');
-    }).join('');
+    list.innerHTML = loras.map(storyLoraRowHtml).join('');
+    var options = el('storyboard-story-lora-options');
+    if (options) options.innerHTML = loraDatalistOptionsExcluding(loras.map(function (item) { return item.name; }));
     var picker = el('storyboard-story-lora-picker');
-    if (picker) picker.innerHTML = loraOptions('', filter ? filter.value : '', loras.map(function (item) { return item.name; }));
+    if (picker) picker.value = '';
     status.textContent = storyState.generationCapabilities.available
       ? (loras.length ? 'Applied to every Scene by default.' : 'No Story-wide LoRAs.')
       : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
@@ -564,13 +580,12 @@
     if (add) add.disabled = !storyState.generationCapabilities.available || !(storyState.generationCapabilities.loras || []).length;
   }
 
-  function sceneLoraRowHtml(lora, filterText, storyLoras) {
+  function sceneLoraRowHtml(lora) {
     lora = lora || {};
     var name = String(lora.name || '');
     var strength = lora.strength == null ? 1 : lora.strength;
-    var excluded = (storyLoras || []).map(function (item) { return item.name; });
     return '<div class="storyboard-lora-row" data-scene-lora-row>' +
-      '<select data-scene-lora-name>' + loraOptions(name, filterText, excluded) + '</select>' +
+      '<select data-scene-lora-name>' + loraOptions(name) + '</select>' +
       '<input type="number" step="0.05" data-scene-lora-strength value="' + escapeHtml(strength) + '" aria-label="Scene LoRA strength">' +
       '<button type="button" class="review-captions-btn" data-scene-lora-remove title="Remove Scene LoRA">×</button>' +
     '</div>';
@@ -603,6 +618,7 @@
 
   function syncStoryLorasIntoScenes() {
     var storyLoras = storyLorasFromUi();
+    var storyNames = storyLoras.map(function (item) { return item.name; });
     Array.prototype.forEach.call(document.querySelectorAll('.storyboard-scene[data-scene-id]'), function (root) {
       var list = root.querySelector('[data-story-lora-inherited-list]');
       if (!list) return;
@@ -628,9 +644,10 @@
           : (stored[key] || {});
         return inheritedLoraRowHtml(lora, override);
       }).join('');
+      var options = root.querySelector('[data-scene-lora-options]');
+      if (options) options.innerHTML = loraDatalistOptionsExcluding(storyNames);
       var picker = root.querySelector('[data-scene-lora-picker]');
-      var filter = root.querySelector('[data-scene-lora-filter]');
-      if (picker) picker.innerHTML = loraOptions('', filter ? filter.value : '', storyLoras.map(function (item) { return item.name; }));
+      if (picker && availableLoraName(picker.value, storyNames) !== picker.value) picker.value = '';
     });
   }
 

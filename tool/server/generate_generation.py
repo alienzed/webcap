@@ -12,6 +12,10 @@ def _new_seed():
     return secrets.randbelow(2 ** 32)
 
 
+def _portable_name(value):
+    return str(value or "").replace("\\", "/")
+
+
 def _public_model(model):
     template = model.load_template()
     available_loras = model.available_lora_names(inference_runtime.available_names)
@@ -22,6 +26,8 @@ def _public_model(model):
         value for value in available_loras
         if str(value).replace("\\", "/").casefold() not in base_keys
     ]
+    selectable = [_portable_name(value) for value in selectable]
+    base_loras = [_portable_name(value) for value in base_loras]
     selectable.sort(key=lambda value: value.casefold())
     options = model.setting_options(template, inference_runtime.available_names)
     return {
@@ -41,7 +47,22 @@ def _public_model(model):
 
 def capabilities():
     inference_runtime.system_stats()
-    return {"models": [_public_model(model) for model in [get_inference_model(item["id"]) for item in public_models()]]}
+    models = []
+    unavailable_models = []
+    for item in public_models():
+        model = get_inference_model(item["id"])
+        try:
+            models.append(_public_model(model))
+        except Exception as exc:
+            unavailable_models.append({
+                "id": model.PROFILE_ID,
+                "label": str(model.profile["label"]),
+                "error": str(exc),
+            })
+    return {
+        "models": models,
+        "unavailableModels": unavailable_models,
+    }
 
 
 def prepare_request(data):

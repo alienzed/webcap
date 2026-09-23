@@ -3,6 +3,7 @@
 
   var generateState = {
     models: [],
+    unavailableModels: [],
     modelId: window.localStorage.getItem('webcap.generate.model') || '',
     lorasByModel: {},
     director: {
@@ -503,7 +504,21 @@
     setStatus('Loading generation capabilities…');
     return requestJson('/fs/generate/capabilities').then(function (payload) {
       generateState.models = payload.models || [];
+      generateState.unavailableModels = payload.unavailableModels || [];
       populateModelSelector();
+
+      if (!generateState.models.length) {
+        var unavailable = generateState.unavailableModels.map(function (model) {
+          return model.label + ': ' + model.error;
+        }).join(' · ');
+        throw new Error(unavailable || 'No generation models are available.');
+      }
+
+      if (generateState.unavailableModels.length && typeof window.reportConsoleWarning === 'function') {
+        generateState.unavailableModels.forEach(function (model) {
+          window.reportConsoleWarning('Generate', model.label + ' unavailable: ' + model.error);
+        });
+      }
       setStatus('Ready.');
     }).catch(reportError);
   }

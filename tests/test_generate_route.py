@@ -1,6 +1,7 @@
 from io import BytesIO
 
 from tool.server import app as app_module
+from tool.server import generate_generation
 
 
 def test_generate_enqueue_is_global_and_uses_frozen_prepared_request(monkeypatch):
@@ -84,3 +85,78 @@ def test_generate_reference_upload_uses_generate_store(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["reference"]["name"] == "frame.png"
+
+
+def test_generate_capabilities_keeps_healthy_models_when_one_is_unavailable(monkeypatch):
+    class FakeModel:
+        def __init__(self, profile_id, label):
+            self.PROFILE_ID = profile_id
+            self.profile = {"label": label}
+
+    models = {
+        "minimax_h3": FakeModel("minimax_h3", "MiniMax H3"),
+        "krea2": FakeModel("krea2", "Krea2"),
+    }
+    monkeypatch.setattr(generate_generation.inference_runtime, "system_stats", lambda: {})
+    monkeypatch.setattr(
+        generate_generation,
+        "public_models",
+        lambda: [
+            {"id": "minimax_h3", "label": "MiniMax H3"},
+            {"id": "krea2", "label": "Krea2"},
+        ],
+    )
+    monkeypatch.setattr(generate_generation, "get_inference_model", lambda model_id: models[model_id])
+
+    def fake_public_model(model):
+        if model.PROFILE_ID == "krea2":
+            raise RuntimeError("ComfyUI cannot see diffusion model: krea2_raw_bf16.safetensors")
+        return {"id": model.PROFILE_ID, "label": model.profile["label"]}
+
+    monkeypatch.setattr(generate_generation, "_public_model", fake_public_model)
+
+    payload = generate_generation.capabilities()
+
+    assert payload["models"] == [{"id": "minimax_h3", "label": "MiniMax H3"}]
+    assert payload["unavailableModels"] == [{
+        "id": "krea2",
+        "label": "Krea2",
+        "error": "ComfyUI cannot see diffusion model: krea2_raw_bf16.safetensors",
+    }]
+
+
+def test_generate_capabilities_publishes_portable_lora_names(monkeypatch):
+    class FakeModel:
+        PROFILE_ID = "minimax_h3"
+        MEDIA_KIND = "video"
+        settings = ("aspectRatio",)
+        references = ()
+        spec = {"default": True}
+        profile = {"label": "MiniMax H3"}
+
+        def load_template(self):
+            return {}
+
+        def available_lora_names(self, _available_names):
+            return [r"mh3\\candidate.safetensors", r"mh3\\base.safetensors"]
+
+        def resolve_assets(self, template, _available_names, _resolve_name):
+            return template
+
+        def base_loras(self, _workflow):
+            return [r"mh3\\base.safetensors"]
+
+        def setting_options(self, _template, _available_names):
+            return {}
+
+        def normalize_settings(self, _template, _new_seed, _values):
+            return {"aspectRatio": "16:9"}
+
+        def template_settings(self, _template):
+            return {}
+
+    model = FakeModel()
+    payload = generate_generation._public_model(model)
+
+    assert payload["loras"] == ["mh3/candidate.safetensors"]
+    assert payload["baseLoras"] == ["mh3/base.safetensors"]

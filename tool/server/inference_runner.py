@@ -15,7 +15,6 @@ from .execution_queue import (
     recover_lane as execution_recover_lane,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
-    reserve_resource as execution_reserve_resource,
     resource_owner as execution_resource_owner,
     resume_lane as execution_resume_lane,
 )

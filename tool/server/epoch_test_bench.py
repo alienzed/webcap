@@ -245,7 +245,10 @@ def _move_saved_output(output_ref, destination, filename_prefix=None, download_b
         raise FileExistsError("Test result already exists: " + str(target))
 
     raw_path = str(output_ref.get("fullpath") or "").strip()
-    source = Path(raw_path) if raw_path else None
+    source = None
+    if raw_path:
+        from . import inference_runtime
+        source = inference_runtime.local_saved_output_path(output_ref)
     if source is not None and source.is_file():
         source_directory = source.parent
         shutil.move(str(source), str(target))

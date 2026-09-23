@@ -272,3 +272,83 @@ def test_storage_ui_is_isolated_global_activity():
     assert "os.walk" not in backend
     assert 'PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard"}' in backend
     assert '"set": _set_items(cache, folder)' in backend
+
+
+def _h3_probe(root, probe_id="h3-20260923-120000-deadbeef", status="completed"):
+    probe = root / ".webcap_training" / "h3-probes" / probe_id
+    probe.mkdir(parents=True)
+    _write_json(probe / "seed.json", {
+        "version": 1,
+        "id": probe_id,
+        "createdAt": "2026-09-23T12:00:00+00:00",
+    })
+    if status is not None:
+        _write_json(probe / "runtime.json", {
+            "version": 1,
+            "probeId": probe_id,
+            "status": status,
+        })
+    return probe
+
+
+def test_runtime_h3_probe_is_purgeable_only_when_inactive(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    completed = _h3_probe(tmp_path, "h3-completed", "completed")
+    active = _h3_probe(tmp_path, "h3-running", "running")
+
+    items = {item["id"]: item for item in storage_manager.overview("")["items"]["runtime"]}
+
+    assert items["h3-probe/h3-completed"]["purgeable"] is True
+    assert items["h3-probe/h3-completed"]["status"] == "completed"
+    assert items["h3-probe/h3-running"]["purgeable"] is False
+    assert "stop it before deletion" in items["h3-probe/h3-running"]["protectedReason"]
+
+    storage_manager.purge("runtime", "h3-probe/h3-completed")
+    assert not completed.exists()
+
+    with pytest.raises(RuntimeError, match="stop it before deletion"):
+        storage_manager.purge("runtime", "h3-probe/h3-running")
+    assert active.is_dir()
+
+
+def test_runtime_h3_probe_requires_matching_ownership_seed(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    probe = tmp_path / ".webcap_training" / "h3-probes" / "h3-demo"
+    probe.mkdir(parents=True)
+    _write_json(probe / "seed.json", {"version": 1, "id": "someone-else"})
+
+    assert storage_manager.overview("")["items"]["runtime"] == []
+    with pytest.raises(RuntimeError, match="does not match"):
+        storage_manager.purge("runtime", "h3-probe/h3-demo")
+    assert probe.is_dir()
+
+
+def test_test_purge_rechecks_active_status_at_mutation_time(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    set_path = tmp_path / "sets" / "demo"
+    session = set_path / "test-generations" / "session-1"
+    session.mkdir(parents=True)
+    _write_json(session / "test.json", {
+        "name": "Session 1",
+        "status": "completed",
+        "modelId": "minimax_h3",
+        "completed": 1,
+        "failed": 0,
+        "total": 1,
+    })
+
+    item = storage_manager.overview("sets/demo")["items"]["tests"][0]
+    assert item["purgeable"] is True
+
+    _write_json(session / "test.json", {
+        "name": "Session 1",
+        "status": "running",
+        "modelId": "minimax_h3",
+        "completed": 1,
+        "failed": 0,
+        "total": 2,
+    })
+
+    with pytest.raises(RuntimeError, match="Active Test Session"):
+        storage_manager.purge("tests", "session-1", "sets/demo")
+    assert session.is_dir()

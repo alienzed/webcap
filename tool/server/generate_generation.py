@@ -1,9 +1,12 @@
 import copy
+import logging
 import secrets
 import time
 
+_logger = logging.getLogger(__name__)
+
 from . import inference_runtime
-from .generate_store import persist_result, resolve_reference_path
+from .generate_store import cleanup_references, persist_result, resolve_reference_path
 from .execution_queue import update_job as execution_update_job
 from .inference_models import get_inference_model, public_models
 
@@ -124,35 +127,45 @@ def execute(job_id, request):
     template = model.load_template()
     started = time.monotonic()
     uploaded = {}
-    for role, relative_path in (request.get("references") or {}).items():
-        source = resolve_reference_path(relative_path)
-        uploaded[role] = inference_runtime.upload_image(
-            source,
-            "webcap-generate/" + str(job_id) + "/references",
-            filename=source.name,
-        )
+    output_ref = None
+    try:
+        for role, relative_path in (request.get("references") or {}).items():
+            source = resolve_reference_path(relative_path)
+            uploaded[role] = inference_runtime.upload_image(
+                source,
+                "webcap-generate/" + str(job_id) + "/references",
+                filename=source.name,
+            )
 
-    filename_prefix = "webcap-generate/" + str(job_id) + "/render"
-    workflow = model.build_workflow(
-        template,
-        request["prompt"],
-        copy.deepcopy(request["settings"]),
-        copy.deepcopy(request.get("loras") or []),
-        uploaded,
-        filename_prefix,
-        inference_runtime.available_names,
-        inference_runtime.resolve_name,
-    )
-    provider_job_id = inference_runtime.queue_workflow(workflow)
-    execution_update_job(job_id, details={"providerJobId": provider_job_id, "providerStatus": "pending"})
-    output_ref = inference_runtime.wait_for_output(provider_job_id, job_id, model.find_output_ref)
-    media = inference_runtime.download_output(output_ref)
-    elapsed_ms = int((time.monotonic() - started) * 1000)
-    return persist_result(
-        job_id,
-        request,
-        output_ref,
-        media,
-        provider_job_id,
-        elapsed_ms,
-    )
+        filename_prefix = "webcap-generate/" + str(job_id) + "/render"
+        workflow = model.build_workflow(
+            template,
+            request["prompt"],
+            copy.deepcopy(request["settings"]),
+            copy.deepcopy(request.get("loras") or []),
+            uploaded,
+            filename_prefix,
+            inference_runtime.available_names,
+            inference_runtime.resolve_name,
+        )
+        provider_job_id = inference_runtime.queue_workflow(workflow)
+        execution_update_job(job_id, details={"providerJobId": provider_job_id, "providerStatus": "pending"})
+        output_ref = inference_runtime.wait_for_output(provider_job_id, job_id, model.find_output_ref)
+        media = inference_runtime.download_output(output_ref)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        return persist_result(
+            job_id,
+            request,
+            output_ref,
+            media,
+            provider_job_id,
+            elapsed_ms,
+        )
+    finally:
+        cleanup_references(request.get("references") or {})
+        if output_ref is not None:
+            try:
+                inference_runtime.cleanup_saved_output(output_ref)
+            except OSError as exc:
+                _logger.warning("Could not remove captured Generate ComfyUI output: %s", exc)
+

@@ -1035,36 +1035,40 @@
                         <strong>Generate</strong>
                         <span>Standalone image and video inference, independent of Sets and Stories.</span>
                     </div>
-                    <div class="generate-director-tools">
-                        <label for="generate-director-model">Director</label>
-                        <select id="generate-director-model" aria-label="Generate Director model"><option value="">Director unavailable</option></select>
-                        <span id="generate-director-status" class="generate-director-status" aria-live="polite"></span>
-                    </div>
                 </header>
                 <main class="generate-main">
                     <section class="generate-authoring" aria-label="Generation setup">
                         <div class="generate-prompt-panel">
                             <div class="generate-section-heading">
                                 <strong>Prompt</strong>
-                                <button id="generate-director-write" type="button" class="review-captions-btn" title="Turn this idea into a model-ready prompt.">Write with Director</button>
+                                <div class="generate-prompt-tools">
+                                    <label for="generate-director-model">Director</label>
+                                    <select id="generate-director-model" aria-label="Generate Director model"><option value="">Director unavailable</option></select>
+                                    <button id="generate-director-write" type="button" class="review-captions-btn" title="Turn the current idea into a polished model-ready prompt.">Expand with Director</button>
+                                    <button id="generate-director-restore" type="button" class="review-captions-btn hidden">Restore Previous</button>
+                                </div>
                             </div>
-                            <textarea id="generate-prompt" class="generate-prompt" rows="12" placeholder="Describe the image or video you want to generate."></textarea>
+                            <textarea id="generate-prompt" class="generate-prompt" rows="12" placeholder="Describe what you want — a rough idea or a finished prompt."></textarea>
                             <div class="generate-director-actions">
                                 <input id="generate-director-instruction" type="text" placeholder="Tell the Director what to change in this prompt…" aria-label="Director refinement instruction">
                                 <button id="generate-director-refine" type="button" class="review-captions-btn">Refine</button>
                             </div>
+                            <span id="generate-director-status" class="generate-director-status generate-prompt-status" aria-live="polite"></span>
                         </div>
                         <aside class="generate-inspector" aria-label="Generation controls">
-                            <div class="generate-inspector-heading"><strong>Generation</strong><span id="generate-status" aria-live="polite"></span></div>
-                            <label class="generate-field"><span>Base Model</span><select id="generate-model" aria-label="Generate Base Model"></select></label>
-                            <div class="generate-settings-grid">
+                            <div class="generate-inspector-heading"><strong>Setup</strong><span id="generate-status" aria-live="polite"></span></div>
+                            <section class="generate-output-settings">
+                                <div class="generate-conditioning-heading"><strong>Output</strong></div>
+                                <label class="generate-field"><span>Base Model</span><select id="generate-model" aria-label="Generate Base Model"></select></label>
+                                <div class="generate-settings-grid">
                                 <label id="generate-field-aspectRatio" class="generate-field"><span>Aspect ratio</span><select id="generate-aspect"></select></label>
                                 <label id="generate-field-megapixels" class="generate-field"><span>Megapixels</span><input id="generate-megapixels" type="number" min="0.05" step="0.05"></label>
                                 <label id="generate-field-duration" class="generate-field"><span>Duration (s)</span><input id="generate-duration" type="number" min="4" max="15" step="0.1"></label>
                                 <label id="generate-field-dimensions" class="generate-field hidden"><span>Dimensions</span><select id="generate-dimensions"></select></label>
                                 <label id="generate-field-seed" class="generate-field"><span>Seed</span><input id="generate-seed" type="number" min="-1" step="1" value="-1"></label>
-                            </div>
-                            <label class="storyboard-inline-check"><input id="generate-wildcards" type="checkbox"> Resolve wildcard syntax</label>
+                                </div>
+                                <label class="storyboard-inline-check"><input id="generate-wildcards" type="checkbox"> Resolve wildcard syntax</label>
+                            </section>
                             <section class="generate-conditioning">
                                 <div class="generate-conditioning-heading"><strong>LoRAs</strong><span id="generate-base-loras"></span></div>
                                 <div class="generate-lora-picker-row">
@@ -1080,7 +1084,6 @@
                                 <label id="generate-reference-last_frame-field" class="generate-field hidden"><span>Last frame</span><input id="generate-reference-last_frame" type="file" accept="image/*"></label>
                             </section>
                             <div class="generate-run-row">
-                                <span class="generate-director-status">Valid work queues even while Training owns the GPU.</span>
                                 <button id="generate-run-btn" type="button" class="storyboard-primary-btn generate-run-btn">Generate</button>
                             </div>
                         </aside>

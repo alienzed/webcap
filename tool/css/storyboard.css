@@ -1388,7 +1388,7 @@
   align-self: stretch;
   padding: 14px;
   border-right: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-soft) 72%, var(--bg));
+  background: color-mix(in srgb, var(--bg) 90%, black 10%);
 }
 
 .storyboard-scene-workspace {

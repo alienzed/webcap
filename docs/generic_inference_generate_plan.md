@@ -745,7 +745,7 @@ The remaining work is intentionally ordered as follows:
 2. **Test Generations -> common `inference` lane:** implemented and merged with one job per Base/candidate rendition and Session-owned aggregation.
 3. **Harden and clean up the unified inference path:** implemented and merged; obsolete Test scheduler/transport paths were removed while migration compatibility and domain-owned Session/result behavior remain. Remove obsolete per-client scheduler/transport duplication only after both migrations are proven.
 4. **Generate IA/UX polish:** implemented and merged. Director is a prompt-editing tool, rough-idea vs finished-prompt authoring is explicit, one-step restore protects Director edits, Setup/Output/Conditioning hierarchy is clearer, and permanent GPU/queue implementation prose was removed.
-5. **Explicit Take deletion:** implemented on `feature/storyboard-delete-take-v2`, pending validation/merge. Reversible Remove/Restore stays separate from permanently confirmed Delete Take.
+5. **Explicit Take deletion:** implemented and merged. Reversible Remove/Restore stays separate from permanently confirmed Delete Take.
 
 Training remains a separate long-running scheduler and shares only GPU resource arbitration.
 

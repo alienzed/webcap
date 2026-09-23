@@ -3,6 +3,7 @@ import copy
 import pytest
 
 from tool.server import execution_queue
+from tool.server import inference_runner
 from tool.server import storyboard_generation
 from tool.server import storyboard_store
 
@@ -13,6 +14,7 @@ def storyboard_fs(tmp_path, monkeypatch):
     monkeypatch.setattr(storyboard_generation.app_config, "FS_ROOT", str(tmp_path))
     execution_queue._resource_owner = ""
     storyboard_generation._startup_reconciled = False
+    inference_runner._startup_reconciled = True
     return tmp_path
 
 
@@ -112,29 +114,36 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
         "seedMode": "fixed",
         "seed": 77,
     })
-    settings = storyboard_generation._scene_settings(scene)
-    queued = execution_queue.enqueue(
-        storyboard_generation.EXECUTION_LANE,
-        {"storyId": story["id"], "sceneId": scene["id"], "settings": settings},
-        metadata={"kind": "storyboard-take", "storyId": story["id"], "sceneId": scene["id"]},
-        job_id="job-1",
+
+    class FakeModel:
+        def load_template(self):
+            return {}
+
+        def build_workflow(self, template, prompt, settings, loras, uploaded, prefix, available_names, resolve_name):
+            assert prompt == "A woman enters an empty studio."
+            assert settings["duration"] == 6.0
+            assert prefix.startswith("webcap-storyboard/")
+            return {"workflow": True}
+
+        def find_output_ref(self, outputs):
+            return outputs
+
+    monkeypatch.setattr(storyboard_generation, "get_inference_model", lambda _model_id: FakeModel())
+    monkeypatch.setattr(storyboard_generation.inference_runtime, "queue_workflow", lambda _workflow: "comfy-123")
+    monkeypatch.setattr(
+        storyboard_generation.inference_runtime,
+        "wait_for_output",
+        lambda _prompt_id, _job_id, _finder: {
+            "filename": "render.mp4",
+            "subfolder": "webcap-storyboard",
+            "type": "output",
+        },
     )
-    job_id = queued["id"]
-    execution_queue.claim_next(storyboard_generation.EXECUTION_LANE)
-    execution_queue.mark_running(job_id)
+    monkeypatch.setattr(storyboard_generation.inference_runtime, "download_output", lambda _ref: b"generated-video")
 
-    monkeypatch.setattr(storyboard_generation, "_load_template", lambda: {})
-    monkeypatch.setattr(storyboard_generation, "_upload_scene_references", lambda _story_id, _job_id, _refs: {})
-    monkeypatch.setattr(storyboard_generation, "_build_workflow", lambda _template, _settings, _prefix, uploaded_references=None: {"workflow": True})
-    monkeypatch.setattr(storyboard_generation, "_queue_workflow", lambda _workflow: "comfy-123")
-    monkeypatch.setattr(storyboard_generation, "_wait_for_output", lambda _prompt_id, _job_id: {
-        "filename": "render.mp4",
-        "subfolder": "webcap-storyboard",
-        "type": "output",
-    })
-    monkeypatch.setattr(storyboard_generation, "_download_output", lambda _ref: b"generated-video")
-
-    storyboard_generation._run_generation(job_id, story["id"], scene["id"], settings)
+    queued = storyboard_generation.start_generation(story["id"], scene["id"])
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    inference_runner._execute_claimed(queued["jobId"])
 
     loaded = storyboard_store.load_story(story["id"])
     current = loaded["scenes"][scene["id"]]
@@ -154,7 +163,7 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
     assert take["providerJobId"] == "comfy-123"
     media_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]
     assert media_path.read_bytes() == b"generated-video"
-    assert storyboard_generation.generation_status(job_id)["status"] == "completed"
+    assert storyboard_generation.generation_status(queued["jobId"])["status"] == "completed"
 
 
 def test_guide_frame_reference_fails_visibly_before_generation(tmp_path):
@@ -255,7 +264,7 @@ def test_generation_capabilities_exclude_base_h3_lora(monkeypatch):
     }
 
 
-def test_storyboard_generation_queues_jobs_with_frozen_settings(storyboard_fs, monkeypatch):
+def test_storyboard_generation_queues_jobs_with_frozen_settings(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, first = storyboard_store.add_scene(story["id"], {
         "title": "First",
@@ -276,29 +285,49 @@ def test_storyboard_generation_queues_jobs_with_frozen_settings(storyboard_fs, m
         "seed": 22,
     })
 
-    monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: None)
-    monkeypatch.setattr(storyboard_generation, "_release_gpu", lambda: None)
-    monkeypatch.setattr(
-        storyboard_generation,
-        "_start_job_thread",
-        lambda job_id: execution_queue.mark_running(job_id),
-    )
+    first_job = storyboard_generation.start_generation(story["id"], first["id"])
+    second_job = storyboard_generation.start_generation(story["id"], second["id"])
 
-    active = storyboard_generation.start_generation(story["id"], first["id"])
-    queued = storyboard_generation.start_generation(story["id"], second["id"])
+    assert first_job["status"] == "queued"
+    assert first_job["queuePosition"] == 1
+    assert second_job["status"] == "queued"
+    assert second_job["queuePosition"] == 2
 
-    assert active["status"] == "running"
-    assert queued["status"] == "queued"
-    assert queued["queuePosition"] == 1
-
-    stored = execution_queue.get_job(queued["jobId"], include_payload=True)
-    assert stored["payload"]["settings"]["prompt"] == "Second prompt."
-    assert stored["payload"]["settings"]["duration"] == 7.0
-    assert stored["payload"]["settings"]["seed"] == 22
+    stored = execution_queue.get_job(second_job["jobId"], include_payload=True)
+    assert stored["metadata"]["client"] == "storyboard"
+    assert stored["payload"]["request"]["prompt"] == "Second prompt."
+    assert stored["payload"]["request"]["settings"]["duration"] == 7.0
+    assert stored["payload"]["request"]["settings"]["seed"] == 22
 
     storyboard_store.update_scene(story["id"], second["id"], {"prompt": "Edited later."})
-    stored_after_edit = execution_queue.get_job(queued["jobId"], include_payload=True)
-    assert stored_after_edit["payload"]["settings"]["prompt"] == "Second prompt."
+    stored_after_edit = execution_queue.get_job(second_job["jobId"], include_payload=True)
+    assert stored_after_edit["payload"]["request"]["prompt"] == "Second prompt."
+
+
+def test_storyboard_generation_uses_global_inference_queue_positions(storyboard_fs):
+    generate = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "label": "Generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "First",
+        "prompt": "First prompt.",
+        "durationSeconds": 6,
+        "aspectRatio": "4:3 (Standard)",
+        "megapixels": 0.2,
+        "seedMode": "fixed",
+        "seed": 1,
+    })
+
+    take = storyboard_generation.start_generation(story["id"], scene["id"])
+
+    assert execution_queue.get_job(generate["id"])["queuePosition"] == 1
+    assert take["queuePosition"] == 2
+    projected = storyboard_generation.generation_queue(story["id"])
+    assert [job["jobId"] for job in projected["jobs"]] == [take["jobId"]]
+    assert projected["jobs"][0]["queuePosition"] == 2
 
 
 def test_storyboard_generation_allows_multiple_take_jobs_for_same_scene(storyboard_fs, monkeypatch):
@@ -314,31 +343,24 @@ def test_storyboard_generation_allows_multiple_take_jobs_for_same_scene(storyboa
 
     seeds = iter([101, 202, 303])
     monkeypatch.setattr(storyboard_generation.secrets, "randbelow", lambda _limit: next(seeds))
-    monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: None)
-    monkeypatch.setattr(storyboard_generation, "_release_gpu", lambda: None)
-    monkeypatch.setattr(
-        storyboard_generation,
-        "_start_job_thread",
-        lambda job_id: execution_queue.mark_running(job_id),
-    )
 
     first = storyboard_generation.start_generation(story["id"], scene["id"])
     second = storyboard_generation.start_generation(story["id"], scene["id"])
     third = storyboard_generation.start_generation(story["id"], scene["id"])
 
-    assert first["status"] == "running"
-    assert second["status"] == "queued"
-    assert second["queuePosition"] == 1
-    assert third["status"] == "queued"
-    assert third["queuePosition"] == 2
+    assert [first["queuePosition"], second["queuePosition"], third["queuePosition"]] == [1, 2, 3]
 
-    first_payload = execution_queue.get_job(first["jobId"], include_payload=True)["payload"]
-    second_payload = execution_queue.get_job(second["jobId"], include_payload=True)["payload"]
-    third_payload = execution_queue.get_job(third["jobId"], include_payload=True)["payload"]
-    assert len({first_payload["settings"]["seed"], second_payload["settings"]["seed"], third_payload["settings"]["seed"]}) == 3
+    first_payload = execution_queue.get_job(first["jobId"], include_payload=True)["payload"]["request"]
+    second_payload = execution_queue.get_job(second["jobId"], include_payload=True)["payload"]["request"]
+    third_payload = execution_queue.get_job(third["jobId"], include_payload=True)["payload"]["request"]
+    assert len({
+        first_payload["settings"]["seed"],
+        second_payload["settings"]["seed"],
+        third_payload["settings"]["seed"],
+    }) == 3
 
 
-def test_storyboard_generation_exposes_only_used_cancel_and_stop_actions(storyboard_fs, monkeypatch):
+def test_storyboard_generation_exposes_only_used_cancel_and_stop_actions(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {
         "prompt": "Prompt.",
@@ -349,16 +371,10 @@ def test_storyboard_generation_exposes_only_used_cancel_and_stop_actions(storybo
         "seed": 1,
     })
 
-    monkeypatch.setattr(storyboard_generation, "_reserve_gpu", lambda: None)
-    monkeypatch.setattr(storyboard_generation, "_release_gpu", lambda: None)
-    monkeypatch.setattr(
-        storyboard_generation,
-        "_start_job_thread",
-        lambda job_id: execution_queue.mark_running(job_id),
-    )
-
     active = storyboard_generation.start_generation(story["id"], scene["id"])
     queued = storyboard_generation.start_generation(story["id"], scene["id"])
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(active["jobId"])
 
     stopped = storyboard_generation.generation_action("stop", active["jobId"])
     assert stopped["job"]["status"] == "stopping"

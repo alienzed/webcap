@@ -275,7 +275,7 @@ def _ensure_server():
 def _normalize_models(payload):
     raw_models = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(raw_models, list):
-        raise RuntimeError("llama.cpp did not return a model list.")
+        raise RuntimeError("Storyboard Director endpoint did not return a model list.")
     models = []
     for entry in raw_models:
         if not isinstance(entry, dict):
@@ -349,7 +349,7 @@ def _model_record(model_id):
     for model in models:
         if model["id"] == model_id:
             return model
-    raise FileNotFoundError("Storyboard Director model is not available to llama.cpp: " + model_id)
+    raise FileNotFoundError("Storyboard Director model is not available from the active runtime: " + model_id)
 
 
 def _wait_for_model(model_id, wanted, timeout=180):

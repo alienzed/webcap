@@ -1,6 +1,6 @@
 # Storage Manager Plan
 
-**Status:** implementation in progress on `feature/storage-manager-mvp`; this document is the governing design and audit record.
+**Status:** MVP implemented on `feature/storage-manager-mvp` / PR #66; this document is the governing design and audit record.
 
 **Purpose:** give WebCap one calm, high-level view of the disk space it creates directly or causes external runtimes to create, with safe drill-down, **Open**, and deliberately scoped **Purge / Delete** actions.
 
@@ -960,3 +960,47 @@ It is successful when:
 10. Any residual WebCap-owned provider scratch can be identified without scanning arbitrary ComfyUI content.
 
 That gives WebCap the equivalent of an "iPhone Storage" overview without turning every app launch into `du -a`, and it creates a safe foundation for later reclaim operations based on ownership rather than guesses.
+
+
+---
+
+## MVP implementation audit
+
+The implemented MVP was reviewed against the hostile-audit invariants and `docs/north_star_workflow.md`.
+
+### Confirmed
+
+- Opening Storage is read-oriented and performs no recursive walk of `FS_ROOT`.
+- Expensive size calculation is explicit and item-scoped.
+- **Measure all** is a sequence of bounded item measurements rather than one monolithic scan.
+- Storage deletion accepts producer identity only; there is no arbitrary filesystem delete route.
+- Set-owned `originals/`, `auto_dataset/`, `media_metadata.json`, and `.webcap_state.json` are visible but never purgeable from Storage.
+- Training deletion is limited to sentinel-owned managed actions and is blocked when queued/running work references the action.
+- Test deletion reuses the existing Test Session deletion contract.
+- Generate deletion requires a matching `generation.json` manifest before removing the result directory.
+- Story deletion reuses Storyboard's existing stop/delete semantics and the confirmation explicitly states that Story metadata, Takes, and references are removed.
+- Storage does not modify the Training, Test, Generate, or Storyboard activity implementations or DOM ownership.
+- Shared inference cleanup removes exact WebCap-owned Generate/Storyboard ComfyUI input job trees after a durable output has been ingested, while preserving sibling/unknown provider content.
+- Symlink/path-escape cases are refused for managed Storage roots.
+- Measurement timestamps are shown so cached byte counts are not presented as live truth.
+
+### Validation
+
+Focused CI passed:
+
+- `tests/test_storage_manager.py`
+- `tests/test_inference_runtime_cleanup.py`
+- `node --check tool/js/storage_manager.js`
+- `node --check tool/js/workspace_shell.js`
+
+A full-suite run against the current `main` baseline reported the already-known contract drift that PR #63 is repairing; the focused Storage tests did not appear among those failures.
+
+### Deliberate MVP boundaries
+
+- Global Test history remains incomplete because Test Sessions are distributed beneath Sets and WebCap has no cheap global Test index. Storage clearly labels Tests as **current Set / partial inventory** rather than performing a hidden `os.walk(FS_ROOT)`.
+- H3 probe directories are surfaced and measurable but remain protected in this MVP until inactive/terminal probe ownership is made explicit enough for deletion.
+- Configured external staged-Test LoRA roots are not globally inventoried yet. Any future support must identify WebCap-owned copies through their provenance sidecars rather than treating an external directory as ours.
+- ComfyUI scratch cleanup is completion-time lifecycle cleanup first. Jobs that fail before WebCap ever obtains a provider output path may still require a future exact-root residual-reconciliation mechanism; Storage must not guess the ComfyUI filesystem root.
+- Malformed producer manifests are not automatically purged. Ownership must remain provable before deletion.
+
+These boundaries are intentional safety limits, not reasons to add a generic filesystem scanner.

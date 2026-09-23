@@ -120,6 +120,40 @@
     });
   }
 
+  function directorJobRequest(jobId) {
+    return fetch('/fs/director/job?job=' + encodeURIComponent(jobId)).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body || !body.ok || !body.job) {
+          throw new Error((body && body.error) || 'Storyboard Director job request failed.');
+        }
+        return body.job;
+      });
+    });
+  }
+
+  function waitForDirectorJob(job) {
+    if (!job || !job.jobId) throw new Error('Storyboard Director did not return a queued job.');
+    function poll(current) {
+      var status = String(current.status || '');
+      if (status === 'completed') return Promise.resolve(current.result || {});
+      if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
+        throw new Error(current.error || ('Storyboard Director job ' + status + '.'));
+      }
+      if (status === 'queued') {
+        renderDirectorActivity({
+          phase: 'queued',
+          active: true,
+          startedAt: current.createdAt,
+          queuePosition: current.queuePosition || 0
+        }, null);
+      }
+      return new Promise(function (resolve) { setTimeout(resolve, 750); }).then(function () {
+        return directorJobRequest(current.jobId);
+      }).then(poll);
+    }
+    return poll(job);
+  }
+
   function directorRequest(payload) {
     var options = payload
       ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
@@ -128,6 +162,15 @@
       return response.json().then(function (body) {
         if (!response.ok || !body || !body.ok) {
           throw new Error((body && body.error) || 'Storyboard Director request failed.');
+        }
+        if (payload && body.job) {
+          return waitForDirectorJob(body.job).then(function (result) {
+            if (payload.operation !== 'expand_concept' && payload.operation !== 'develop_story') return result;
+            return request(null, 'story=' + encodeURIComponent(payload.storyId)).then(function (storyPayload) {
+              result.story = storyPayload.story;
+              return result;
+            });
+          });
         }
         return body;
       });
@@ -256,6 +299,7 @@
 
   function directorPhaseLabel(phase) {
     var labels = {
+      queued: 'Queued…',
       preparing: 'Preparing…',
       freeing_comfy: 'Preparing GPU…',
       loading_model: 'Loading model…',

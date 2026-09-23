@@ -1,0 +1,162 @@
+from pathlib import Path
+
+import pytest
+
+from tool.server import config as app_config
+from tool.server import execution_queue
+from tool.server import llm_runner
+from tool.server import storyboard_llm_runtime
+from tool.server import storyboard_store
+
+
+@pytest.fixture
+def llm_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
+    execution_queue._resource_owner = ""
+    llm_runner._startup_reconciled = True
+    llm_runner._monitor_thread = None
+    monkeypatch.setattr(llm_runner, "_ensure_monitor_started", lambda: None)
+    return tmp_path
+
+
+def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
+    calls = []
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(
+        llm_runner,
+        "_reserve_gpu",
+        lambda: calls.append("reserve") or execution_queue.reserve_resource("llm"),
+    )
+    monkeypatch.setattr(
+        llm_runner,
+        "_release_gpu",
+        lambda: calls.append("release") or execution_queue.release_resource("llm"),
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda model_id, contract, gpu_reserved=False: {
+            "text": "Expanded prompt",
+            "model": model_id,
+            "usage": {"total_tokens": 12},
+            "timings": {"prompt_ms": 3},
+            "gpu_reserved": gpu_reserved,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+        label="Prompt Assistant",
+    )
+
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["result"]["result"] == "Expanded prompt"
+    assert finished["result"]["model"] == "qwen"
+    assert calls == ["reserve", "release"]
+    assert execution_queue.resource_owner() == ""
+
+
+def test_llm_local_job_waits_while_shared_gpu_is_owned(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    execution_queue._resource_owner = "training"
+
+    job = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+    )
+
+    assert llm_runner._advance_queue() is None
+    assert llm_runner.job_status(job["jobId"])["status"] == "queued"
+    assert execution_queue.resource_owner() == "training"
+
+
+def test_llm_remote_job_does_not_claim_shared_gpu(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        llm_runner,
+        "_reserve_gpu",
+        lambda: pytest.fail("Remote LLM work must not reserve the local GPU."),
+    )
+    monkeypatch.setattr(
+        llm_runner,
+        "_release_gpu",
+        lambda: pytest.fail("Remote LLM work must not release the local GPU."),
+    )
+    captured = {}
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda model_id, contract, gpu_reserved=False: captured.update({
+            "model": model_id,
+            "gpu_reserved": gpu_reserved,
+        }) or {"text": "Remote result", "model": model_id},
+    )
+
+    job = llm_runner.enqueue(
+        "generate",
+        "remote-model",
+        {"operation": "refine_prompt", "prompt": "Refine.", "output": "text"},
+    )
+    llm_runner._advance_queue()
+
+    assert llm_runner.job_status(job["jobId"])["status"] == "completed"
+    assert captured == {"model": "remote-model", "gpu_reserved": False}
+
+
+def test_storyboard_llm_job_applies_expanded_concept_before_completion(llm_root, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story", "concept": "Short concept."})
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "text": "Expanded concept.",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "expand_concept", "prompt": "Expand.", "output": "text"},
+        context={
+            "storyId": story["id"],
+            "operation": "expand_concept",
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["result"]["storyId"] == story["id"]
+    assert finished["result"]["result"] == "Expanded concept."
+    assert storyboard_store.load_story(story["id"])["concept"] == "Expanded concept."
+
+
+def test_llm_restart_marks_only_active_work_interrupted(llm_root):
+    active = execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"prompt": "Active"}},
+        metadata={"client": "generate", "modelId": "qwen"},
+    )
+    queued = execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"prompt": "Queued"}},
+        metadata={"client": "generate", "modelId": "qwen"},
+    )
+    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
+    execution_queue.mark_running(active["id"])
+
+    llm_runner._startup_reconciled = False
+    llm_runner.reconcile_startup()
+
+    assert llm_runner.job_status(active["id"])["status"] == "interrupted"
+    assert llm_runner.job_status(queued["id"])["status"] == "queued"

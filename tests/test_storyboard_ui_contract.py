@@ -204,6 +204,21 @@ def test_storyboard_director_actions_share_one_busy_state_and_concept_restore():
     assert "operation: 'restore_previous_concept'" in storyboard
 
 
+def test_storyboard_director_requests_use_shared_llm_queue():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
+
+    assert "function waitForDirectorJob(job)" in storyboard
+    assert "'/fs/director/job?job='" in storyboard
+    assert "queued: 'Queued…'" in storyboard
+    assert "enqueue_llm(" in app
+    assert '@app.route("/fs/director/job", methods=["GET", "POST"])' in app
+    assert 'EXECUTION_LANE = "llm"' in runner
+    assert '"storyboard"' in runner
+    assert '"generate"' in runner
+
+
 def test_storyboard_director_has_non_modal_live_activity():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

@@ -33,15 +33,16 @@ from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
 from .storage_manager import cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, scan_status as storage_scan_status, start_scan as storage_start_scan
-from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_concept_expansion as storyboard_apply_concept_expansion, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_previous_concept as storyboard_restore_previous_concept, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
+from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_previous_concept as storyboard_restore_previous_concept, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
-from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, preload_model as storyboard_director_preload_model, run_contract as storyboard_run_llm_contract, status as storyboard_director_status
+from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, preload_model as storyboard_director_preload_model, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .generate_store import cleanup_references as generate_cleanup_references, list_results as generate_list_results, resolve_result_media as generate_resolve_result_media, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
 from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, snapshot as inference_snapshot, stop_storyboard_jobs
+from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, snapshot as llm_snapshot
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -711,7 +712,58 @@ def storyboard_generation_route():
 
 @app.route("/fs/director/activity", methods=["GET"])
 def director_activity_route():
-    return jsonify({"ok": True, **storyboard_director_activity_status()})
+    activity = storyboard_director_activity_status()
+    queue = llm_snapshot(include_terminal=False)
+    if not activity.get("active"):
+        active_id = str(queue.get("activeJobId") or "")
+        queued = [job for job in queue.get("jobs", []) if str(job.get("status") or "") == "queued"]
+        if active_id:
+            active = next((job for job in queue.get("jobs", []) if job.get("jobId") == active_id), None)
+            if active:
+                activity = {
+                    **activity,
+                    "active": True,
+                    "phase": "preparing",
+                    "model": active.get("modelId") or "",
+                    "operation": active.get("operation") or "",
+                    "startedAt": active.get("startedAt"),
+                }
+        elif queued:
+            activity = {
+                **activity,
+                "active": True,
+                "phase": "queued",
+                "model": queued[0].get("modelId") or "",
+                "operation": queued[0].get("operation") or "",
+                "startedAt": queued[0].get("createdAt"),
+                "queuePosition": queued[0].get("queuePosition") or 0,
+            }
+    return jsonify({"ok": True, **activity})
+
+
+@app.route("/fs/director/job", methods=["GET", "POST"])
+def director_job_route():
+    try:
+        if request.method == "GET":
+            return jsonify({
+                "ok": True,
+                "job": llm_job_status(str(request.args.get("job") or "").strip()),
+            })
+        data = request.get_json(silent=True) or {}
+        return jsonify({
+            "ok": True,
+            **llm_action(
+                str(data.get("operation") or "").strip(),
+                job_id=str(data.get("jobId") or "").strip(),
+                direction=str(data.get("direction") or "").strip(),
+                position=data.get("position"),
+            ),
+        })
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("DIRECTOR QUEUE ACTION FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.route("/fs/director/preload", methods=["POST"])
@@ -751,39 +803,19 @@ def storyboard_director_route():
             operation,
             instruction=instruction,
         )
-        result = storyboard_run_llm_contract(model_id, contract)
-        if operation == "expand_concept":
-            expanded_story = storyboard_apply_concept_expansion(story_id, result.get("text"))
-            return jsonify({
-                "ok": True,
-                "story": expanded_story,
-                "result": expanded_story["concept"],
-                "model": result["model"],
-                "usage": result.get("usage"),
-                "timings": result.get("timings"),
-            })
-        if operation == "develop_story":
-            developed_story = storyboard_apply_developed_plan(
-                story_id,
-                result.get("data"),
-                model_id=result["model"],
-            )
-            return jsonify({
-                "ok": True,
-                "story": developed_story,
-                "sceneCount": len(developed_story.get("sceneOrder") or []),
-                "model": result["model"],
-                "usage": result.get("usage"),
-                "timings": result.get("timings"),
-            })
-
-        return jsonify({
-            "ok": True,
-            "result": result["text"],
-            "model": result["model"],
-            "usage": result.get("usage"),
-            "timings": result.get("timings"),
-        })
+        job = enqueue_llm(
+            "storyboard",
+            model_id,
+            contract,
+            context={
+                "storyId": story_id,
+                "sceneId": scene_id,
+                "operation": operation,
+                "replaceExisting": replace_existing,
+            },
+            label=("Story: " + operation.replace("_", " ")).strip(),
+        )
+        return jsonify({"ok": True, "job": job}), 202
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
@@ -941,14 +973,14 @@ def generate_director_route():
             instruction=data.get("instruction") or "",
             settings=data.get("settings"),
         )
-        result = storyboard_run_llm_contract(str(data.get("directorModel") or "").strip(), contract)
-        return jsonify({
-            "ok": True,
-            "result": result["text"],
-            "model": result["model"],
-            "usage": result.get("usage"),
-            "timings": result.get("timings"),
-        })
+        job = enqueue_llm(
+            "generate",
+            str(data.get("directorModel") or "").strip(),
+            contract,
+            context={"operation": str(data.get("operation") or "").strip()},
+            label=("Prompt Assistant: " + str(data.get("operation") or "").replace("_", " ")).strip(),
+        )
+        return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:
         app.logger.exception("GENERATE DIRECTOR FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400

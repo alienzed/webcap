@@ -1691,7 +1691,9 @@ def test_queued_request_freezes_workflow_snapshot_for_later_start(tmp_path, monk
     assert started["workflowSha256"] == request["workflowSha256"]
 
 
-def test_concurrent_enqueue_state_after_dispatch_uses_live_worker_not_stale_snapshot(tmp_path, monkeypatch):
+
+def test_enqueue_reports_live_shared_execution_state_after_dispatch(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
     staged = tmp_path / "staged"
     staged.mkdir()
     candidate = staged / "epoch01.safetensors"
@@ -1702,26 +1704,14 @@ def test_concurrent_enqueue_state_after_dispatch_uses_live_worker_not_stale_snap
     patch_default_test_model(
         monkeypatch,
         template={},
-        settings={
-            "seed": 77,
-            "aspectRatio": "1:1 (Square)",
-            "megapixels": 0.2,
-            "duration": 5,
-        },
+        settings={"seed": 77, "aspectRatio": "1:1 (Square)", "megapixels": 0.2, "duration": 5},
     )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(bench, "_pending_tests", [])
-
-    class Live:
-        def is_alive(self):
-            return True
-
-    monkeypatch.setattr(bench, "_active_threads", {})
 
     def dispatch_first_job():
-        bench._pending_tests.pop(0)
-        bench._active_threads["sets/subject"] = Live()
+        claimed = execution_queue.claim_next(bench.EXECUTION_LANE)
+        execution_queue.mark_running(claimed["id"])
         return {"status": "running", "session": "session-one"}
 
     monkeypatch.setattr(bench, "_advance_test_queue", dispatch_first_job)
@@ -1730,9 +1720,11 @@ def test_concurrent_enqueue_state_after_dispatch_uses_live_worker_not_stale_snap
 
     assert payload["queued"] is False
     assert payload["latest"]["status"] == "running"
+    assert execution_queue.get_job(payload["job"]["id"])["status"] == "running"
 
 
 def test_enqueue_test_queues_behind_active_test(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
     staged = tmp_path / "staged"
     staged.mkdir()
     candidate = staged / "epoch01.safetensors"
@@ -1743,26 +1735,28 @@ def test_enqueue_test_queues_behind_active_test(tmp_path, monkeypatch):
     patch_default_test_model(
         monkeypatch,
         template={},
-        settings={
-            "seed": 77,
-            "aspectRatio": "1:1 (Square)",
-            "megapixels": 0.2,
-            "duration": 5,
-        },
+        settings={"seed": 77, "aspectRatio": "1:1 (Square)", "megapixels": 0.2, "duration": 5},
     )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(bench, "_advance_test_queue", lambda: None)
-    monkeypatch.setattr(bench, "_active_threads", {"sets/subject": type("Live", (), {"is_alive": lambda self: True})()})
-    monkeypatch.setattr(bench, "_pending_tests", [])
+
+    active = execution_queue.enqueue(
+        bench.EXECUTION_LANE,
+        {"resolvedPrompt": "active"},
+        metadata={"folder": "sets/other", "runName": "Active", "modelId": "h3", "testTotal": 1},
+    )
+    execution_queue.claim_next(bench.EXECUTION_LANE)
+    execution_queue.mark_running(active["id"])
 
     payload = bench.enqueue(tmp_path, "prompt", name="Named", selected_files=[candidate.name])
 
     assert payload["queued"] is True
-    assert [job["runName"] for job in bench._pending_tests] == ["Named"]
+    queued = execution_queue.lane_snapshot(bench.EXECUTION_LANE, include_terminal=False)["jobs"]
+    assert [job["metadata"]["runName"] for job in queued if job["status"] == "queued"] == ["Named"]
 
 
-def test_first_test_does_not_wait_for_training_queue(tmp_path, monkeypatch):
+def test_first_test_stays_queued_while_gpu_is_unavailable(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
     staged = tmp_path / "staged"
     staged.mkdir()
     candidate = staged / "epoch01.safetensors"
@@ -1773,26 +1767,21 @@ def test_first_test_does_not_wait_for_training_queue(tmp_path, monkeypatch):
     patch_default_test_model(
         monkeypatch,
         template={},
-        settings={
-            "seed": 77,
-            "aspectRatio": "1:1 (Square)",
-            "megapixels": 0.2,
-            "duration": 5,
-        },
+        settings={"seed": 77, "aspectRatio": "1:1 (Square)", "megapixels": 0.2, "duration": 5},
     )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(bench, "_advance_test_queue", lambda: None)
-    monkeypatch.setattr(bench, "_active_threads", {})
-    monkeypatch.setattr(bench, "_pending_tests", [])
+    monkeypatch.setattr(bench, "_reserve_gpu_for_test_generations", lambda: False)
 
-    with pytest.raises(RuntimeError, match="Pause Training"):
-        bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
+    payload = bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
 
-    assert bench._pending_tests == []
+    assert payload["queued"] is True
+    queued = bench.queued_jobs(tmp_path)["jobs"]
+    assert [job["id"] for job in queued] == [payload["job"]["id"]]
 
 
 def test_first_test_start_failure_reports_real_error(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
     staged = tmp_path / "staged"
     staged.mkdir()
     candidate = staged / "epoch01.safetensors"
@@ -1803,31 +1792,22 @@ def test_first_test_start_failure_reports_real_error(tmp_path, monkeypatch):
     patch_default_test_model(
         monkeypatch,
         template={},
-        settings={
-            "seed": 77,
-            "aspectRatio": "1:1 (Square)",
-            "megapixels": 0.2,
-            "duration": 5,
-        },
+        settings={"seed": 77, "aspectRatio": "1:1 (Square)", "megapixels": 0.2, "duration": 5},
     )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(bench, "_active_threads", {})
-    monkeypatch.setattr(bench, "_pending_tests", [])
-
-    def fail_start():
-        bench._pending_tests.clear()
-        return {"status": "failed", "error": "ComfyUI offline"}
-
-    monkeypatch.setattr(bench, "_advance_test_queue", fail_start)
+    monkeypatch.setattr(bench, "_reserve_gpu_for_test_generations", lambda: True)
+    monkeypatch.setattr(bench, "start_queued", lambda *_args, **_kwargs: {"status": "failed", "error": "ComfyUI offline"})
 
     with pytest.raises(RuntimeError, match="ComfyUI offline"):
         bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
 
-    assert bench._pending_tests == []
+    snapshot = execution_queue.lane_snapshot(bench.EXECUTION_LANE)
+    assert snapshot["jobs"][-1]["status"] == "failed"
 
 
 def test_first_test_returns_direct_start_payload_without_latest_status_lookup(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
     staged = tmp_path / "staged"
     staged.mkdir()
     candidate = staged / "epoch01.safetensors"
@@ -1838,22 +1818,21 @@ def test_first_test_returns_direct_start_payload_without_latest_status_lookup(tm
     patch_default_test_model(
         monkeypatch,
         template={},
-        settings={
-            "seed": 77,
-            "aspectRatio": "1:1 (Square)",
-            "megapixels": 0.2,
-            "duration": 5,
-        },
+        settings={"seed": 77, "aspectRatio": "1:1 (Square)", "megapixels": 0.2, "duration": 5},
     )
     monkeypatch.setattr(bench, "_resolve_wildcard_prompt", lambda prompt, seed: prompt)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(bench, "_active_threads", {})
-    monkeypatch.setattr(bench, "_pending_tests", [])
-    monkeypatch.setattr(bench, "_advance_test_queue", lambda: {
-        "status": "running",
-        "session": "2026-09-20_0100-h3",
-        "resultFolder": "sets/subject/test-generations/2026-09-20_0100-h3",
-    })
+
+    def dispatch_first_job():
+        claimed = execution_queue.claim_next(bench.EXECUTION_LANE)
+        execution_queue.mark_running(claimed["id"])
+        return {
+            "status": "running",
+            "session": "2026-09-20_0100-h3",
+            "resultFolder": "sets/subject/test-generations/2026-09-20_0100-h3",
+        }
+
+    monkeypatch.setattr(bench, "_advance_test_queue", dispatch_first_job)
     monkeypatch.setattr(bench, "status", lambda _folder, model_id=None: (_ for _ in ()).throw(AssertionError("enqueue should not call status()")))
 
     payload = bench.enqueue(tmp_path, "prompt", selected_files=[candidate.name])
@@ -1863,17 +1842,27 @@ def test_first_test_returns_direct_start_payload_without_latest_status_lookup(tm
 
 
 def test_clear_queued_tests_keeps_other_sets(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
     monkeypatch.setattr(bench, "_relative_set_folder", lambda _folder: "sets/subject")
-    monkeypatch.setattr(bench, "_pending_tests", [
-        {"id": "one", "folder": "sets/subject", "request": {}},
-        {"id": "other", "folder": "sets/other", "request": {}},
-    ])
+    execution_queue.pause_lane(bench.EXECUTION_LANE)
+    execution_queue.enqueue(
+        bench.EXECUTION_LANE,
+        {},
+        metadata={"folder": "sets/subject", "runName": "One", "modelId": "h3", "testTotal": 1},
+        job_id="one",
+    )
+    execution_queue.enqueue(
+        bench.EXECUTION_LANE,
+        {},
+        metadata={"folder": "sets/other", "runName": "Other", "modelId": "h3", "testTotal": 1},
+        job_id="other",
+    )
 
     payload = bench.clear_queued(tmp_path)
 
     assert payload["removed"] == 1
-    assert [job["id"] for job in bench._pending_tests] == ["other"]
-
+    remaining = execution_queue.lane_snapshot(bench.EXECUTION_LANE, include_terminal=False)["jobs"]
+    assert [job["id"] for job in remaining] == ["other"]
 
 def test_run_batch_advances_local_test_fifo(tmp_path, monkeypatch):
     session = tmp_path / "session"
@@ -1894,24 +1883,26 @@ def test_run_batch_advances_local_test_fifo(tmp_path, monkeypatch):
     assert bench._read_status(session)["status"] == "complete"
 
 
-def test_remove_candidate_allows_local_test_fifo_reference(tmp_path, monkeypatch):
+
+def test_remove_candidate_allows_queued_test_reference(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
     staged = tmp_path / "staged"
     staged.mkdir()
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
 
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_pending_tests", [{
-        "id": "queued-one",
-        "folder": "sets/subject",
-        "request": {"selectedFiles": [candidate.name]},
-    }])
+    execution_queue.pause_lane(bench.EXECUTION_LANE)
+    execution_queue.enqueue(
+        bench.EXECUTION_LANE,
+        {"selectedFiles": [candidate.name]},
+        metadata={"folder": "sets/subject", "runName": "Queued", "modelId": "h3", "testTotal": 1},
+    )
 
     payload = bench.remove_candidate(tmp_path, candidate.name)
 
     assert payload["removed"] == candidate.name
     assert not candidate.exists()
-
 
 def test_running_test_session_owns_stop_control():
     root = Path(__file__).resolve().parents[1]

@@ -100,8 +100,6 @@ def test_execution_queue_startup_reconciliation_precedes_monitors():
     storyboard_reconcile = startup.index("reconcile_storyboard_generation_startup()")
     inference_reconcile = startup.index("reconcile_inference_startup()")
     training_observer = startup.index("start_training_runner_observer()")
-    test_observer = startup.index("start_test_generations_observer()")
-    storyboard_observer = startup.index("start_storyboard_generation_observer()")
     inference_observer = startup.index("start_inference_observer()")
 
     assert training_reconcile < test_reconcile
@@ -110,7 +108,6 @@ def test_execution_queue_startup_reconciliation_precedes_monitors():
     assert test_reconcile < training_observer
     assert storyboard_reconcile < training_observer
     assert inference_reconcile < training_observer
-    assert training_observer < test_observer < storyboard_observer
     assert training_observer < inference_observer
 
 

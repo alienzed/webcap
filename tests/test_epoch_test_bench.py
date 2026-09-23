@@ -259,89 +259,6 @@ def test_sessions_list_open_and_delete_are_scoped_to_current_set(tmp_path):
 
 
 
-def test_start_queued_skips_selected_loras_removed_after_enqueue(tmp_path, monkeypatch):
-    staged = tmp_path / "staged"
-    staged.mkdir()
-    keep = staged / "epoch20.safetensors"
-    removed = staged / "epoch10.safetensors"
-    keep.write_bytes(b"keep")
-    removed.write_bytes(b"remove")
-    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_read_json_response", lambda *_args, **_kwargs: {})
-    template = {
-        "115": {"inputs": {"aspect_ratio": "2:3", "megapixels": 0.2}},
-        "129": {"inputs": {"noise_seed": 123}},
-        "133": {"inputs": {"value": 7}},
-        "146": {"inputs": {"wildcard_text": "x", "populated_text": "x", "mode": "fixed"}},
-        "148": {"inputs": {"lora_name": "x", "strength_model": 0.9, "strength_clip": 1}},
-    }
-    model = patch_default_test_model(
-        monkeypatch,
-        template=template,
-        settings={
-            "seed": 123,
-            "aspectRatio": "2:3",
-            "megapixels": 0.2,
-            "duration": 7,
-        },
-    )
-    monkeypatch.setattr(model, "resolve_assets", lambda selected, *_args: selected)
-    monkeypatch.setattr(bench, "_active_threads", {})
-    monkeypatch.setattr(bench, "_active_sessions", {})
-    monkeypatch.setattr(bench, "_stop_requests", set())
-
-    class FakeThread:
-        def __init__(self, target=None, args=(), **_kwargs):
-            self.args = args
-            self.started = False
-
-        def is_alive(self):
-            return self.started
-
-        def start(self):
-            self.started = True
-
-    threads = []
-    monkeypatch.setattr(bench.threading, "Thread", lambda *args, **kwargs: threads.append(FakeThread(*args, **kwargs)) or threads[-1])
-
-    request = {
-        "resolvedPrompt": "prompt",
-        "sourcePrompt": "prompt",
-        "selectedFiles": [removed.name, keep.name],
-        "includeBase": False,
-        "seed": 123,
-        "aspectRatio": "2:3",
-        "megapixels": 0.2,
-        "duration": 7,
-        "workflow": copy.deepcopy(template),
-        "total": 2,
-    }
-    removed.unlink()
-
-    payload = bench.start_queued(tmp_path, request)
-
-    assert payload["status"] == "running"
-    assert payload["total"] == 1
-    assert [path.name for path in threads[0].args[2]] == [keep.name]
-
-
-def test_start_queued_skips_job_when_all_selected_loras_are_gone_and_base_is_off(tmp_path, monkeypatch):
-    staged = tmp_path / "staged"
-    staged.mkdir()
-    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-
-    payload = bench.start_queued(tmp_path, {
-        "resolvedPrompt": "prompt",
-        "sourcePrompt": "prompt",
-        "selectedFiles": ["epoch10.safetensors"],
-        "includeBase": False,
-        "total": 1,
-    })
-
-    assert payload == {"status": "skipped"}
-    assert not (tmp_path / bench.TEST_RESULTS_DIR).exists()
-
-
 def test_recent_test_sets_exposes_set_level_summary_only(tmp_path, monkeypatch):
     set_folder = tmp_path / "HH4013"
     session = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1300-h3"
@@ -367,47 +284,6 @@ def test_recent_test_sets_exposes_set_level_summary_only(tmp_path, monkeypatch):
     assert "total" not in recent[0]
 
 
-def test_activity_snapshot_exposes_current_set_and_active_run(tmp_path, monkeypatch):
-    set_folder = tmp_path / "HH4013"
-    staged = tmp_path / "staged"
-    session = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1400-h3"
-    staged.mkdir(parents=True)
-    set_folder.mkdir(parents=True, exist_ok=True)
-    session.mkdir(parents=True)
-    (staged / "run__epoch10.safetensors").write_bytes(b"weights")
-    bench._atomic_write_json(session / "test.json", {
-        "status": "running",
-        "completed": 3,
-        "total": 8,
-    })
-
-    class ActiveThread:
-        def is_alive(self):
-            return True
-
-    folder_key = str(set_folder.resolve())
-    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
-    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
-    monkeypatch.setattr(bench, "_active_sessions", {folder_key: session})
-    monkeypatch.setattr(bench, "_stop_requests", set())
-
-    payload = bench.activity_snapshot(set_folder)
-
-    assert payload["current"]["folder"] == "HH4013"
-    assert payload["current"]["stagedCount"] == 1
-    assert payload["current"]["sessionCount"] == 1
-    assert payload["current"]["hasTestData"] is True
-    assert payload["active"] == [{
-        "folder": "HH4013",
-        "session": session.name,
-        "status": "running",
-        "completed": 3,
-        "total": 8,
-    }]
-
-
-
 def test_cleanup_owned_comfy_directory_rejects_unscoped_path(tmp_path):
     unsafe = tmp_path / "output" / "other"
     unsafe.mkdir(parents=True)
@@ -427,28 +303,6 @@ def test_remove_candidate_is_idempotent_when_staged_file_is_already_gone(tmp_pat
 
     assert payload["removed"] == "epoch10.safetensors"
     assert payload["files"] == [other.name]
-
-
-def test_remove_candidate_allows_active_batch(tmp_path, monkeypatch):
-    staged = tmp_path / "staged"
-    staged.mkdir()
-    candidate = staged / "epoch10.safetensors"
-    candidate.write_bytes(b"weights")
-
-    class ActiveThread:
-        def is_alive(self):
-            return True
-
-    folder_key = str(tmp_path.resolve())
-    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_active_threads", {folder_key: ActiveThread()})
-    monkeypatch.setattr(bench, "_active_sessions", {})
-    monkeypatch.setattr(bench, "_stop_requests", set())
-
-    payload = bench.remove_candidate(tmp_path, candidate.name)
-
-    assert payload["removed"] == candidate.name
-    assert not candidate.exists()
 
 
 def test_selected_lora_files_can_focus_next_run(tmp_path):
@@ -655,7 +509,78 @@ def test_remove_candidate_refuses_shared_active_session_result_mutation(tmp_path
     assert candidate.is_file()
 
 
-def test_delete_session_refuses_shared_active_inference(tmp_path):
+def test_activity_snapshot_projects_shared_test_session(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    set_folder = tmp_path / "HH4013"
+    staged = tmp_path / "staged"
+    session = set_folder / bench.TEST_RESULTS_DIR / "session-a"
+    staged.mkdir(parents=True)
+    session.mkdir(parents=True)
+    (staged / "epoch10.safetensors").write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+
+    child = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": bench.get_test_model().PROFILE_ID}},
+        metadata={
+            "client": "test",
+            "folder": "HH4013",
+            "sessionId": session.name,
+            "candidateKind": "base",
+            "label": "Comparison · Base",
+        },
+    )
+    bench._atomic_write_json(session / "test.json", {
+        "status": "queued",
+        "modelId": bench.get_test_model().PROFILE_ID,
+        "inferenceJobs": [child["id"]],
+        "results": [],
+        "failures": [],
+        "completed": 0,
+        "failed": 0,
+        "total": 1,
+    })
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(child["id"])
+
+    payload = bench.activity_snapshot(set_folder)
+
+    assert payload["current"]["folder"] == "HH4013"
+    assert payload["current"]["stagedCount"] == 1
+    assert payload["current"]["hasTestData"] is True
+    assert payload["active"] == [{
+        "folder": "HH4013",
+        "session": session.name,
+        "status": "running",
+        "completed": 0,
+        "total": 1,
+    }]
+
+
+def test_remove_staged_candidate_is_independent_of_other_active_inference(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch10.safetensors"
+    candidate.write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+
+    other = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "label": "Other generation"},
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(other["id"])
+
+    payload = bench.remove_candidate(tmp_path, candidate.name)
+
+    assert payload["removed"] == candidate.name
+    assert not candidate.exists()
+
+
+def test_delete_session_refuses_shared_active_inference(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
     session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
     session.mkdir(parents=True)
     child = execution_queue.enqueue(

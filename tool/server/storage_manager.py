@@ -9,6 +9,7 @@ from . import config as app_config
 from .epoch_test_bench import delete_session
 from .generate_store import MANIFEST_NAME
 from .execution_queue import lane_snapshot as execution_lane_snapshot
+from . import inference_runtime
 from .inference_runner import stop_storyboard_jobs
 from .storyboard_store import delete_story, list_stories, storyboard_root
 from .training_action import managed_actions, read_action
@@ -17,8 +18,8 @@ from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
-MEASURABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "set", "runtime"}
-PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime"}
+MEASURABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy"}
+PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}
 ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
 ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
 
@@ -447,6 +448,150 @@ def _runtime_items(cache):
     return rows
 
 
+def _safe_directories(path):
+    root = Path(path)
+    if root.is_symlink() or not root.is_dir():
+        return []
+    return [
+        child for child in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower())
+        if child.is_dir() and not child.is_symlink()
+    ]
+
+
+def _comfy_active_identities():
+    active = {
+        "generate": set(),
+        "storyboard": set(),
+        "tests": set(),
+    }
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
+    for job in snapshot.get("jobs") or []:
+        if not isinstance(job, dict):
+            continue
+        job_id = str(job.get("id") or "").strip()
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        client = str(metadata.get("client") or "").strip()
+        if client == "generate" and job_id:
+            active["generate"].add(job_id)
+        elif client == "storyboard" and job_id:
+            story_id = str(metadata.get("storyId") or "").strip()
+            scene_id = str(metadata.get("sceneId") or "").strip()
+            if story_id and scene_id:
+                active["storyboard"].add((story_id, scene_id, job_id))
+        elif client == "test":
+            session_id = str(metadata.get("sessionId") or "").strip()
+            if session_id:
+                active["tests"].add(session_id)
+    return active
+
+
+def _comfy_items(cache):
+    provider_root = inference_runtime.known_provider_root()
+    if provider_root is None:
+        return []
+
+    active = _comfy_active_identities()
+    rows = []
+    for side in ("input", "output"):
+        side_root = provider_root / side
+        generate_root = side_root / "webcap-generate"
+        for job_root in _safe_directories(generate_root):
+            job_id = job_root.name
+            is_active = job_id in active["generate"]
+            rows.append(_item(
+                "comfy",
+                side + "/generate/" + job_id,
+                "Generate " + job_id,
+                job_root,
+                kind="ComfyUI " + side + " scratch",
+                status=("active provider work" if is_active else "residual scratch"),
+                purgeable=not is_active,
+                protected_reason=("Referenced by queued or active Generate work." if is_active else ""),
+                cache=cache,
+            ))
+
+        storyboard_root_path = side_root / "webcap-storyboard"
+        for story_root_path in _safe_directories(storyboard_root_path):
+            for scene_root in _safe_directories(story_root_path):
+                for job_root in _safe_directories(scene_root):
+                    identity = (story_root_path.name, scene_root.name, job_root.name)
+                    is_active = identity in active["storyboard"]
+                    rows.append(_item(
+                        "comfy",
+                        side + "/storyboard/" + "/".join(identity),
+                        "Storyboard " + story_root_path.name + " / " + scene_root.name + " / " + job_root.name,
+                        job_root,
+                        kind="ComfyUI " + side + " scratch",
+                        status=("active provider work" if is_active else "residual scratch"),
+                        purgeable=not is_active,
+                        protected_reason=("Referenced by queued or active Storyboard work." if is_active else ""),
+                        cache=cache,
+                    ))
+
+        tests_root = side_root / "webcap-tests"
+        for session_root in _safe_directories(tests_root):
+            for candidate_root in _safe_directories(session_root):
+                is_active = session_root.name in active["tests"]
+                rows.append(_item(
+                    "comfy",
+                    side + "/tests/" + session_root.name + "/" + candidate_root.name,
+                    "Tests " + session_root.name + " / " + candidate_root.name,
+                    candidate_root,
+                    kind="ComfyUI " + side + " scratch",
+                    status=("active provider work" if is_active else "residual scratch"),
+                    purgeable=not is_active,
+                    protected_reason=("Referenced by queued or active Test work." if is_active else ""),
+                    cache=cache,
+                ))
+    return rows
+
+
+def _resolve_comfy(item_id):
+    provider_root = inference_runtime.known_provider_root()
+    if provider_root is None:
+        raise FileNotFoundError("ComfyUI provider root is not known yet.")
+
+    parts = PurePosixPath(str(item_id or "")).parts
+    if len(parts) < 3 or parts[0] not in {"input", "output"}:
+        raise ValueError("ComfyUI storage ID is invalid.")
+    side, family = parts[0], parts[1]
+    names = parts[2:]
+    expected = {
+        "generate": (1, "webcap-generate"),
+        "storyboard": (3, "webcap-storyboard"),
+        "tests": (2, "webcap-tests"),
+    }
+    if family not in expected:
+        raise ValueError("ComfyUI storage family is invalid.")
+    count, prefix = expected[family]
+    if len(names) != count or any(not name or Path(name).name != name for name in names):
+        raise ValueError("ComfyUI storage identity is invalid.")
+
+    side_root = (provider_root / side).resolve()
+    if side_root.is_symlink() or not side_root.is_dir():
+        raise FileNotFoundError("ComfyUI " + side + " root is unavailable.")
+    raw_path = side_root / prefix
+    for name in names:
+        raw_path = raw_path / name
+    if raw_path.is_symlink():
+        raise ValueError("ComfyUI storage path is symlinked.")
+    path = raw_path.resolve()
+    if not path.is_dir() or side_root not in path.parents:
+        raise FileNotFoundError("ComfyUI storage item is unavailable.")
+    return path, family, tuple(names)
+
+
+def _comfy_identity_active(family, names):
+    active = _comfy_active_identities()
+    if family == "generate":
+        return names[0] in active["generate"]
+    if family == "storyboard":
+        return tuple(names) in active["storyboard"]
+    if family == "tests":
+        return names[0] in active["tests"]
+    return True
+
+
 def _category(area, label, items, complete=True, note=""):
     measured = [item for item in items if item.get("measured")]
     return {
@@ -471,6 +616,7 @@ def overview(folder=""):
         "storyboard": _storyboard_items(cache),
         "set": _set_items(cache, folder),
         "runtime": _runtime_items(cache),
+        "comfy": _comfy_items(cache),
     }
     categories = [
         _category("training", "Training", groups["training"]),
@@ -486,6 +632,10 @@ def overview(folder=""):
         _category("storyboard", "Storyboard", groups["storyboard"]),
         _category("set", "Current Set (protected)", groups["set"], note="Visible for accounting only; Set-owned data is not purgeable here."),
         _category("runtime", "Runtime / Temporary", groups["runtime"]),
+        _category(
+            "comfy", "ComfyUI Scratch", groups["comfy"],
+            note=("Exact WebCap-prefixed job trees only; the provider root is learned from a real ComfyUI output path.")
+        ),
     ]
     categories.sort(key=lambda row: (row["bytes"], row["count"]), reverse=True)
     return {
@@ -656,6 +806,8 @@ def resolve_item(area, item_id, folder=""):
         return path
     if area == "runtime":
         return _resolve_runtime(item_id)
+    if area == "comfy":
+        return _resolve_comfy(item_id)[0]
     raise ValueError("Unsupported Storage area.")
 
 
@@ -763,6 +915,11 @@ def purge(area, item_id, folder=""):
         path, probe_state = _resolve_h3_probe(item_id)
         if not probe_state.get("purgeable"):
             raise RuntimeError(probe_state.get("protectedReason") or "H3 probe is not safe to delete.")
+        shutil.rmtree(path)
+    elif area == "comfy":
+        path, family, names = _resolve_comfy(item_id)
+        if _comfy_identity_active(family, names):
+            raise RuntimeError("ComfyUI scratch is referenced by queued or active inference work.")
         shutil.rmtree(path)
 
     cache = _read_cache()

@@ -1773,7 +1773,8 @@ def prepare(folder_path, model_id=None):
     setting_options = {}
     prepare_warnings = []
     try:
-        setting_options = model.setting_options(template, _available_comfy_names)
+        from . import inference_runtime
+        setting_options = model.setting_options(template, inference_runtime.available_names)
     except (ConnectionError, RuntimeError) as exc:
         prepare_warnings.append(
             "Could not load optional Test setting choices from ComfyUI: " + str(exc)

@@ -1118,9 +1118,7 @@
                             <select id="storyboard-director-model" aria-label="Storyboard Director model">
                                 <option value="">Director unavailable</option>
                             </select>
-                            <span id="storyboard-director-status" class="storyboard-save-state" aria-live="polite"></span>
                         </div>
-                        <span id="storyboard-save-state" class="storyboard-save-state" aria-live="polite"></span>
                     </header>
                     <div id="storyboard-editor-empty" class="storyboard-editor-empty">Create or open a Story to begin.</div>
                     <div id="storyboard-editor-content" class="storyboard-editor-scroll hidden">
@@ -1193,7 +1191,10 @@
             <div id="console-panel" class="hidden" aria-hidden="true">
                 <div class="console-panel-header">
                     <strong class="console-panel-title">Console</strong>
-                    <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>
+                    <div class="console-panel-header-actions">
+                        <span id="storyboard-save-state" class="console-panel-status" aria-live="polite"></span>
+                        <button id="console-close-btn" type="button" class="console-panel-close-btn" aria-label="Hide console">x</button>
+                    </div>
                 </div>
                 <div id="console-panel-log" class="console-panel-log" aria-live="polite"></div>
             </div>

@@ -15,8 +15,8 @@ from . import config as app_config
 
 LLAMA_HOST = "127.0.0.1"
 DEFAULT_PORT = 8189
-DEFAULT_CONTEXT_SIZE = 8192
-DEFAULT_MAX_TOKENS = 4096
+DEFAULT_CONTEXT_SIZE = 16384
+DEFAULT_MAX_TOKENS = 8192
 GPU_RESERVATION_OWNER = "storyboard-director"
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 
@@ -535,10 +535,17 @@ def chat(model_id, messages, response_schema=None, max_tokens=None):
 
 def _completion_result(response, model_id):
     choices = response.get("choices") if isinstance(response, dict) else None
-    message = choices[0].get("message") if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
+    choice = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
+    message = choice.get("message") if isinstance(choice, dict) else None
     content = str(message.get("content") or "").strip() if isinstance(message, dict) else ""
     if not content:
         raise RuntimeError("Storyboard Director returned an empty response.")
+    finish_reason = str(choice.get("finish_reason") or "").strip().lower() if isinstance(choice, dict) else ""
+    if finish_reason in {"length", "max_tokens"}:
+        raise RuntimeError(
+            "Storyboard Director output was truncated at the configured token limit. "
+            "Increase App Settings > Storyboard > Max output tokens and try again."
+        )
     return {
         "text": content,
         "model": model_id,

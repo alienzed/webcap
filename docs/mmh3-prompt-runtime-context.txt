@@ -4,9 +4,7 @@ Write one short, independently generatable video Scene.
 
 Describe observable audiovisual content, not plot summary. Use a chronological physical progression that fits the supplied duration.
 
-Preserve supplied Story/Scene facts, entry/exit state, and exact frame anchors. Do not invent dialogue, visible text, characters, props, music, cuts, or Story events unless the current Scene requires them.
-
-For recurring characters, preserve the same visual identity across independent Scenes. If no LoRA or exact character/reference image anchors identity, restate concrete identity cues in the prompt rather than assuming the next generation remembers the previous Scene. Age progression may change age-specific features, but should not randomly change ethnicity/heritage, skin tone, facial structure, eye/hair traits, or other core identity markers.
+Preserve supplied Story/Scene facts, Story invariants, entry/exit state, and exact frame anchors. Do not invent dialogue, visible text, characters, props, music, cuts, or Story events unless the current Scene requires them.
 
 The core output fields are:
 integrated_multimodal_description

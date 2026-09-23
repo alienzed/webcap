@@ -281,8 +281,8 @@ def validate_config_payload(payload):
         raise ValueError("Config.storyboard.director.endpoint is required in remote mode.")
     for key, default, minimum, maximum in (
         ("port", 8189, 1, 65535),
-        ("context_size", 8192, 1024, 1048576),
-        ("max_tokens", 4096, 1, 262144),
+        ("context_size", 16384, 1024, 1048576),
+        ("max_tokens", 8192, 1, 262144),
     ):
         value = director.get(key, default)
         if isinstance(value, bool) or not isinstance(value, int) or value < minimum or value > maximum:

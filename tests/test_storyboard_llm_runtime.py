@@ -3,6 +3,23 @@ import pytest
 from tool.server import storyboard_llm_runtime
 
 
+def test_director_capacity_defaults_leave_room_for_whole_story_output():
+    assert storyboard_llm_runtime.DEFAULT_CONTEXT_SIZE == 16384
+    assert storyboard_llm_runtime.DEFAULT_MAX_TOKENS == 8192
+
+
+def test_completion_result_rejects_token_limit_truncation():
+    response = {
+        "choices": [{
+            "message": {"content": "{\"scenes\": [\"partial\"]}"},
+            "finish_reason": "length",
+        }]
+    }
+
+    with pytest.raises(RuntimeError, match="output was truncated"):
+        storyboard_llm_runtime._completion_result(response, "director")
+
+
 def test_normalize_models_exposes_local_gguf_identity_and_status():
     payload = {
         "data": [

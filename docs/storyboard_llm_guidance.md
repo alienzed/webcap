@@ -56,24 +56,13 @@ If the supplied context is genuinely contradictory, expose the contradiction rat
 
 Continuity must not depend on the model remembering a previous Scene.
 
-When a persistent element is **not** strongly anchored by a LoRA, exact reference image, or other explicit conditioning, repeat enough concrete visual description in each relevant Scene to make the intended continuity reconstructible from that Scene alone.
+Story invariants are the current explicit Story-wide continuity contract. Keep them concise: recurring character identity, durable world facts, persistent visual atmosphere, soundtrack direction, or other facts that should remain available throughout the Story.
 
-This applies especially to:
+Each independently generated Scene should contain enough established information to reconstruct the recurring elements that matter to that Scene. Do not reduce a recurring character or place to a vague "same person" / "same room" reference that an independent generation cannot understand.
 
-- character identity and physical appearance;
-- hairstyle, wardrobe, accessories, and carried objects;
-- recurring locations;
-- room layout, architecture, furnishings, and distinctive props;
-- recurring vehicles or other major objects;
-- persistent weather, time of day, lighting, and color treatment.
+The current Director contract deliberately does **not** inspect LoRA names, strengths, trigger tokens, or media content to decide what description can be omitted. Those are generation/conditioning concerns, not reliable semantic context for the Director today. If explicit semantic conditioning awareness becomes useful later, add it deliberately rather than inferring it from filenames or workflow plumbing.
 
-For example, if a character has no identity LoRA or usable visual reference, do not reduce later prompts to "the woman" or "she." Re-establish the important identity cues: ethnicity/heritage when known or visually established, skin tone, facial structure, eye and hair traits, approximate age, build, clothing, distinctive features, and anything else needed to keep the character visually stable. If the Story advances the same person through childhood, adulthood, and old age, age that same identity rather than allowing unrelated-looking people to replace one another.
-
-Likewise, if a room is recurring without a reference image, restate the major spatial and furnishing anchors rather than merely saying "the same hotel lobby." A later generation cannot be assumed to know what "the same" looked like.
-
-When a LoRA or reference image **does** strongly establish an element, avoid unnecessary repetition. Keep only the descriptors needed to disambiguate the intended subject/reference, preserve Story-specific facts, or specify what changes in the current Scene.
-
-The goal is not maximal verbosity. The goal is to make each Scene independently generatable while preserving the visual constants that matter.
+The goal is not maximal verbosity. The goal is to make each Scene independently generatable while preserving the Story facts and invariants that matter.
 
 ## Scene state, handoff, and duration discipline
 
@@ -354,7 +343,7 @@ Rules:
 - make the smallest coherent revision that satisfies the correction;
 - preserve unrelated details;
 - do not rewrite style, wardrobe, camera, dialogue, or timing merely for variety;
-- if the requested change makes the existing duration implausible, say so or propose a split rather than silently compressing the action.
+- do not add extra Story beats to make an overloaded request fit; keep the revision narrow and preserve the supplied duration.
 
 When the caller asks for the revised H3 prompt, return only the revised prompt.
 
@@ -373,29 +362,18 @@ Look for:
 
 Do not rewrite Scenes automatically unless asked. Report specific conflicts and the Scenes involved.
 
-## Persistent facts, Scene-local facts, and conditioning coverage
+## Persistent facts and Scene-local facts
 
 Do not promote a temporary Scene detail into permanent Story continuity unless WebCap explicitly marks it persistent.
 
 Examples:
 
-- a character's core appearance may be persistent;
-- a coat worn only in one sequence may be Scene-local or sequence-local;
-- a prop picked up in one Scene becomes persistent only while the Story state says it remains carried;
-- lighting caused by a temporary event should not silently become the Story's global lighting style.
+- a character's core appearance may be a Story invariant;
+- a coat worn only in one sequence may be Scene-local;
+- a prop picked up in one Scene remains relevant only while the Story state says it is carried;
+- lighting caused by a temporary event should not silently become the Story's global visual atmosphere.
 
-Conditioning is dimensional rather than all-or-nothing.
-
-A character LoRA may strongly anchor identity while leaving wardrobe, accessories, pose, age presentation, or environment unspecified. A first-frame image may anchor everything visible at the opening instant but not details outside the frame or later state changes. A location reference may anchor furnishings while saying nothing about character identity.
-
-For each important continuity dimension, ask whether it is already covered by:
-
-- an active LoRA;
-- an exact first/last/guide frame;
-- a character/location/style reference;
-- explicit Story/Scene text.
-
-Repeat concrete description for the dimensions that remain uncovered. Do not remove useful wardrobe/location/furnishing detail merely because some other aspect of the Scene is conditioned.
+Keep durable Story facts in the Story concept, visual/atmosphere field, or concise Story invariants. Keep temporary action/state in the Scene. The Director should reason from those semantic fields rather than attempting to infer continuity coverage from LoRA or media configuration.
 
 ## Hard anchors and incompatible requests
 

@@ -272,6 +272,40 @@ def test_storyboard_lora_chooser_is_single_searchable_field():
     assert "picker.value = '';" in storyboard
 
 
+def test_storyboard_story_can_collapse_and_supports_structured_invariants():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-story-toggle"' in html
+    assert 'id="storyboard-story-authoring"' in html
+    assert 'id="storyboard-invariant-add"' in html
+    assert 'id="storyboard-invariants-list"' in html
+    assert "function setStoryCollapsed(collapsed)" in storyboard
+    assert "function storyInvariantsFromUi()" in storyboard
+    assert "data-story-invariant-row" in storyboard
+    assert '"invariants": _normalize_story_invariants' in store
+    assert ".storyboard-invariant-row" in css
+
+
+def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-scenes-overview-btn"' in html
+    assert 'id="storyboard-scenes-focus-btn"' in html
+    assert 'id="storyboard-scene-prev-btn"' in html
+    assert 'id="storyboard-scene-next-btn"' in html
+    assert "sceneViewMode:" in storyboard
+    assert "data-scene-open" in storyboard
+    assert "function setSceneViewMode(mode, sceneId)" in storyboard
+    assert "grid-template-columns: minmax(560px, 720px) 220px 300px;" in css
+    assert "min-height: 320px;" in css
+    assert "grid-template-columns: repeat(auto-fit, minmax(220px, 280px));" in css
+
+
 def test_storyboard_scene_has_dedicated_conditioning_column():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")

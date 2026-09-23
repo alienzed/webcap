@@ -1721,6 +1721,19 @@ def _refresh_state(state):
     _startup_reconciled = True
     _launch_next_queued_job(state)
 
+def reconcile_startup():
+    """Synchronously reconcile persisted Training state before other GPU clients."""
+    global _startup_reconciled
+    if _startup_reconciled:
+        return
+    with _lock:
+        if _startup_reconciled:
+            return
+        state = _read_state()
+        _refresh_state(state)
+        _persist_reconciled_state(state)
+
+
 def _monitor_loop():
     while True:
         try:

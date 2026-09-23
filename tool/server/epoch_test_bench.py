@@ -20,13 +20,30 @@ from . import config as app_config
 from .folder_state_store import read_folder_state
 from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import test_copy_path
+from .execution_queue import (
+    cancel_queued as execution_cancel_queued,
+    claim_next as execution_claim_next,
+    enqueue as execution_enqueue,
+    finish_job as execution_finish_job,
+    get_job as execution_get_job,
+    lane_snapshot as execution_lane_snapshot,
+    mark_running as execution_mark_running,
+    pause_lane as execution_pause_lane,
+    recover_lane as execution_recover_lane,
+    reorder_job as execution_reorder_job,
+    request_action as execution_request_action,
+    resource_owner as execution_resource_owner,
+    resume_lane as execution_resume_lane,
+    update_job as execution_update_job,
+)
 
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 TEMPLATE_PATH = get_test_model().TEMPLATE_PATH
 TEST_RESULTS_DIR = "test-generations"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
 COMFY_JOB_MISSING_GRACE_SECONDS = 10
-GPU_RESERVATION_OWNER = "test-generations"
+EXECUTION_LANE = "test-generations"
+GPU_RESERVATION_OWNER = EXECUTION_LANE
 TEST_ASPECT_RATIO_OPTIONS = tuple(getattr(get_test_model(), "ASPECT_RATIO_OPTIONS", ()))
 _lock = threading.Lock()
 _status_lock = threading.Lock()
@@ -35,8 +52,8 @@ _active_threads = {}
 _active_sessions = {}
 _stop_requests = set()
 _recent_sets_cache = {"expires": 0.0, "items": []}
-_pending_tests = []
-_test_gpu_reserved = False
+_reconcile_lock = threading.Lock()
+_startup_reconciled = False
 _logger = logging.getLogger(__name__)
 
 

@@ -386,3 +386,20 @@ def test_storyboard_take_deletion_is_explicit_destructive_and_selected_aware():
     assert "def delete_take(" in store
     assert 'if operation == "delete_take":' in app
 
+def test_storyboard_roundoff_has_prompt_restore_manual_refs_and_readiness_summary():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-progress-summary"' in html
+    assert "previousPrompts: {}" in script
+    assert "function restoreSceneDirectorPrompt(sceneId)" in script
+    assert 'data-director-restore' in script
+    assert "Restore Previous" in script
+    assert "function uploadSceneReference(sceneId, role, file)" in script
+    assert "'/fs/storyboard/reference_upload'" in script
+    assert 'data-reference-upload' in script
+    assert "function renderStoryReadiness()" in script
+    assert "' needs Take'" in script
+    assert "' needs selection'" in script
+    assert "'s selected'" in script
+

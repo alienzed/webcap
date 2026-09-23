@@ -89,9 +89,25 @@ def _ensure_execution_reconciled():
             if not prompt_id:
                 continue
             try:
-                from .inference_runtime import cancel_job
-                cancel_job(prompt_id)
+                from .inference_runtime import cancel_job_and_wait
+                if not cancel_job_and_wait(prompt_id):
+                    execution_pause_lane(
+                        EXECUTION_LANE,
+                        reason=(
+                            "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart."
+                        ),
+                    )
+                    _logger.error(
+                        "Interrupted inference provider job %s did not confirm cancellation.",
+                        prompt_id,
+                    )
             except Exception:
+                execution_pause_lane(
+                    EXECUTION_LANE,
+                    reason=(
+                        "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart."
+                    ),
+                )
                 _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
         _startup_reconciled = True
 
@@ -136,15 +152,21 @@ def _cancel_failed_provider(job):
     provider_job_id = str(details.get("providerJobId") or "").strip()
     provider_status = str(details.get("providerStatus") or "").strip().lower()
     if not provider_job_id or provider_status in {"completed", "failed", "cancelled"}:
-        return
+        return True
     try:
-        from .inference_runtime import cancel_job
-        cancel_job(provider_job_id)
-    except Exception:
-        _logger.exception(
-            "Could not cancel failed inference provider job %s.",
+        from .inference_runtime import cancel_job_and_wait
+        if cancel_job_and_wait(provider_job_id):
+            return True
+        _logger.error(
+            "Inference provider job %s did not confirm cancellation; retaining the GPU reservation.",
             provider_job_id,
         )
+    except Exception:
+        _logger.exception(
+            "Could not confirm cancellation of failed inference provider job %s.",
+            provider_job_id,
+        )
+    return False
 
 
 def _advance_queue():
@@ -177,6 +199,7 @@ def _advance_queue():
             return None
 
         job_id = str(claimed.get("id") or "")
+        release_gpu = True
         try:
             _execute_claimed(job_id)
         except Exception as exc:
@@ -187,12 +210,20 @@ def _advance_queue():
                 if status in {"starting", "running", "stopping"}:
                     execution_finish_job(job_id, status=exc.status, error=str(exc))
             else:
-                _cancel_failed_provider(current)
+                release_gpu = _cancel_failed_provider(current)
+                if not release_gpu:
+                    execution_pause_lane(
+                        EXECUTION_LANE,
+                        reason=(
+                            "Queue paused: ComfyUI provider work could not be confirmed stopped after an inference failure. "
+                            "Resolve the provider job before resuming."
+                        ),
+                    )
                 if status in {"starting", "running", "stopping"}:
                     execution_finish_job(job_id, status="failed", error=str(exc))
                 _logger.exception("Queued inference job failed.")
         finally:
-            if execution_resource_owner() == GPU_RESERVATION_OWNER:
+            if release_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
         return _job_view(execution_get_job(job_id))
 

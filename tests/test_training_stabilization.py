@@ -1209,6 +1209,28 @@ def test_training_modules_do_not_apply_permissions_repairs():
 
 
 
+def test_training_startup_reconciliation_claims_gpu_for_live_training(monkeypatch):
+    execution_queue._resource_owner = ""
+    training_runner._startup_reconciled = False
+    state = {
+        "version": 3,
+        "activeJobId": "active",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "active", "status": "running", "folder": "sets/subject"}],
+    }
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_refresh_job", lambda _job: {"holdReason": ""})
+    monkeypatch.setattr(training_runner, "_apply_training_disk_protection", lambda *_args: "safe")
+    monkeypatch.setattr(training_runner, "_persist_reconciled_state", lambda _state: None)
+
+    training_runner.reconcile_startup()
+
+    assert training_runner._startup_reconciled is True
+    assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER
+    execution_queue._resource_owner = ""
+
+
 def test_external_gpu_reservation_blocks_training_queue_launch(monkeypatch):
     state = {
         "version": 3,

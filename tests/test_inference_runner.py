@@ -9,6 +9,7 @@ from tool.server import generate_generation
 from tool.server import inference_runner
 from tool.server import inference_runtime
 from tool.server import storyboard_generation
+from tool.server import storyboard_llm_runtime
 
 
 @pytest.fixture
@@ -50,6 +51,60 @@ def test_inference_runner_executes_claimed_generate_job(inference_root, monkeypa
     finished = execution_queue.get_job(queued["id"])
     assert finished["status"] == "completed"
     assert finished["result"]["modelId"] == "minimax_h3"
+
+
+def test_inference_yields_retained_director_after_reserving_gpu(inference_root, monkeypatch):
+    calls = []
+    queued = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
+    )
+
+    def reserve():
+        calls.append("reserve")
+        return execution_queue.reserve_resource(inference_runner.GPU_RESERVATION_OWNER)
+
+    def release():
+        calls.append("release")
+        execution_queue.release_resource(inference_runner.GPU_RESERVATION_OWNER)
+
+    def execute(job_id):
+        calls.append("execute")
+        execution_queue.finish_job(job_id, status="completed")
+
+    monkeypatch.setattr(inference_runner, "_reserve_gpu", reserve)
+    monkeypatch.setattr(inference_runner, "_release_gpu", release)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: calls.append("yield-director"),
+    )
+    monkeypatch.setattr(inference_runner, "_execute_claimed", execute)
+
+    inference_runner._advance_queue()
+
+    assert calls == ["reserve", "yield-director", "execute", "release"]
+    assert execution_queue.get_job(queued["jobId"])["status"] == "completed"
+
+
+def test_inference_pauses_without_claiming_if_director_cannot_yield(inference_root, monkeypatch):
+    queued = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
+    )
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: (_ for _ in ()).throw(RuntimeError("unload failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="unload failed"):
+        inference_runner._advance_queue()
+
+    lane = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE, include_terminal=False)
+    assert lane["paused"] is True
+    assert "could not be unloaded" in lane["pauseReason"]
+    assert execution_queue.get_job(queued["jobId"])["status"] == "queued"
+    assert execution_queue.resource_owner() == ""
 
 
 def test_inference_runner_projects_lane_state_without_dispatch_side_effects(inference_root):

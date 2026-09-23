@@ -882,6 +882,57 @@
     return parts.join(' · ');
   }
 
+  function takeCardHtml(storyId, sceneId, takeId, take, takeIndex, selectedTakeId) {
+    var rating = Math.max(0, Math.min(5, Number(take && take.rating || 0)));
+    var selected = selectedTakeId === takeId;
+    var ratingHtml = '<div class="storyboard-take-rating" aria-label="Rate this Take">';
+    [1, 2, 3, 4, 5].forEach(function (value) {
+      ratingHtml += '<button type="button" class="storyboard-take-star' + (value <= rating ? ' active' : '') +
+        '" data-take-rating="' + escapeHtml(takeId) + '" data-rating-value="' + value +
+        '" title="Rate ' + value + ' star' + (value === 1 ? '' : 's') + '" aria-label="Rate ' + value + ' star' + (value === 1 ? '' : 's') + '">' +
+        (value <= rating ? '★' : '☆') + '</button>';
+    });
+    ratingHtml += '</div>';
+    return '<article class="storyboard-take' + (selected ? ' selected' : '') + '" data-take-id="' + escapeHtml(takeId) + '">' +
+      '<div class="storyboard-take-media">' + takePreviewHtml(storyId, sceneId, take) +
+        '<button type="button" class="storyboard-take-remove" data-take-action="remove" data-take-id="' + escapeHtml(takeId) + '" title="Remove Take" aria-label="Remove Take">×</button>' +
+      '</div>' +
+      '<div class="storyboard-take-footer">' +
+        '<div class="storyboard-take-identity" title="' + escapeHtml(take.sourceFilename || '') + '">' +
+          '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
+          '<span>' + escapeHtml(takeMetaLabel(take)) + '</span>' +
+          '<input type="text" maxlength="120" data-take-label="' + escapeHtml(takeId) + '" value="' + escapeHtml(take.label || '') + '" placeholder="Label this Take…" aria-label="Take label">' +
+        '</div>' +
+        ratingHtml +
+        '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
+      '</div>' +
+    '</article>';
+  }
+
+  function pendingTakeCardHtml(job, takeIndex) {
+    var status = String(job && job.status || '');
+    var queuePosition = Number(job && job.queuePosition || 0);
+    var statusText = status === 'queued'
+      ? ('Queued' + (queuePosition ? ' · #' + queuePosition : ''))
+      : status === 'starting'
+        ? 'Starting…'
+        : status === 'stopping'
+          ? 'Stopping…'
+          : ('Generating…' + (job && job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : ''));
+    var action = status === 'queued'
+      ? '<button type="button" class="review-captions-btn" data-generation-action="cancel" data-job-id="' + escapeHtml(job.jobId) + '">Cancel</button>'
+      : (status === 'starting' || status === 'running')
+        ? '<button type="button" class="review-captions-btn" data-generation-action="stop" data-job-id="' + escapeHtml(job.jobId) + '">Stop</button>'
+        : '';
+    return '<article class="storyboard-take storyboard-take-pending" data-generation-job-id="' + escapeHtml(job.jobId) + '">' +
+      '<div class="storyboard-take-media storyboard-take-pending-media"><div class="storyboard-take-pending-indicator" aria-hidden="true"></div><strong>' + escapeHtml(statusText) + '</strong></div>' +
+      '<div class="storyboard-take-footer storyboard-take-pending-footer">' +
+        '<div class="storyboard-take-identity"><strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong><span>' + escapeHtml(statusText) + '</span></div>' +
+        action +
+      '</div>' +
+    '</article>';
+  }
+
   function activeTakeOptions(story, selectedTakeId) {
     var options = '<option value="">Choose a Take</option>';
     (story.sceneOrder || []).forEach(function (sourceSceneId, sceneIndex) {
@@ -1004,54 +1055,10 @@
         : '';
       var takesHtml = takeOrder.map(function (takeId, takeIndex) {
         var take = takes[takeId];
-        if (!take) return '';
-        var rating = Math.max(0, Math.min(5, Number(take.rating || 0)));
-        var selected = scene.selectedTakeId === takeId;
-        var ratingHtml = '<div class="storyboard-take-rating" aria-label="Rate this Take">';
-        [1, 2, 3, 4, 5].forEach(function (value) {
-          ratingHtml += '<button type="button" class="storyboard-take-star' + (value <= rating ? ' active' : '') +
-            '" data-take-rating="' + escapeHtml(takeId) + '" data-rating-value="' + value +
-            '" title="Rate ' + value + ' star' + (value === 1 ? '' : 's') + '" aria-label="Rate ' + value + ' star' + (value === 1 ? '' : 's') + '">' +
-            (value <= rating ? '★' : '☆') + '</button>';
-        });
-        ratingHtml += '</div>';
-        return '<article class="storyboard-take' + (selected ? ' selected' : '') + '" data-take-id="' + escapeHtml(takeId) + '">' +
-          '<div class="storyboard-take-media">' + takePreviewHtml(story.id, sceneId, take) +
-            '<button type="button" class="storyboard-take-remove" data-take-action="remove" data-take-id="' + escapeHtml(takeId) + '" title="Remove Take" aria-label="Remove Take">×</button>' +
-          '</div>' +
-          '<div class="storyboard-take-footer">' +
-            '<div class="storyboard-take-identity" title="' + escapeHtml(take.sourceFilename || '') + '">' +
-              '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
-              '<span>' + escapeHtml(takeMetaLabel(take)) + '</span>' +
-              '<input type="text" maxlength="120" data-take-label="' + escapeHtml(takeId) + '" value="' + escapeHtml(take.label || '') + '" placeholder="Label this Take…" aria-label="Take label">' +
-            '</div>' +
-            ratingHtml +
-            '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
-          '</div>' +
-        '</article>';
+        return take ? takeCardHtml(story.id, sceneId, takeId, take, takeIndex, scene.selectedTakeId) : '';
       }).join('');
       var pendingTakesHtml = sceneGenerationJobs.map(function (job, pendingIndex) {
-        var status = String(job.status || '');
-        var queuePosition = Number(job.queuePosition || 0);
-        var statusText = status === 'queued'
-          ? ('Queued' + (queuePosition ? ' · #' + queuePosition : ''))
-          : status === 'starting'
-            ? 'Starting…'
-            : status === 'stopping'
-              ? 'Stopping…'
-              : ('Generating…' + (job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : ''));
-        var action = status === 'queued'
-          ? '<button type="button" class="review-captions-btn" data-generation-action="cancel" data-job-id="' + escapeHtml(job.jobId) + '">Cancel</button>'
-          : (status === 'starting' || status === 'running')
-            ? '<button type="button" class="review-captions-btn" data-generation-action="stop" data-job-id="' + escapeHtml(job.jobId) + '">Stop</button>'
-            : '';
-        return '<article class="storyboard-take storyboard-take-pending" data-generation-job-id="' + escapeHtml(job.jobId) + '">' +
-          '<div class="storyboard-take-media storyboard-take-pending-media"><div class="storyboard-take-pending-indicator" aria-hidden="true"></div><strong>' + escapeHtml(statusText) + '</strong></div>' +
-          '<div class="storyboard-take-footer storyboard-take-pending-footer">' +
-            '<div class="storyboard-take-identity"><strong>Take ' + String(takeOrder.length + pendingIndex + 1).padStart(2, '0') + '</strong><span>' + escapeHtml(statusText) + '</span></div>' +
-            action +
-          '</div>' +
-        '</article>';
+        return pendingTakeCardHtml(job, takeOrder.length + pendingIndex);
       }).join('');
       return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<header class="storyboard-scene-header">' +
@@ -1701,9 +1708,85 @@
   }
 
 
-  function syncGenerationJobCard(job) {
+  function sceneTakeCardById(grid, takeId) {
+    return Array.prototype.find.call(grid.querySelectorAll('[data-take-id]'), function (card) {
+      return card.dataset.takeId === takeId;
+    }) || null;
+  }
+
+  function sceneGenerationCardById(grid, jobId) {
+    return Array.prototype.find.call(grid.querySelectorAll('[data-generation-job-id]'), function (card) {
+      return card.dataset.generationJobId === jobId;
+    }) || null;
+  }
+
+  function syncSceneTakeDom(sceneId) {
+    if (!storyState.story || !storyState.story.scenes) return;
+    var root = sceneElement(sceneId);
+    if (!root) return;
+    var grid = root.querySelector('.storyboard-takes-grid');
+    if (!grid) throw new Error('Storyboard Takes grid is missing.');
+
+    var scene = storyState.story.scenes[sceneId] || {};
+    var takes = scene.takes && typeof scene.takes === 'object' ? scene.takes : {};
+    var takeOrder = Array.isArray(scene.takeOrder) ? scene.takeOrder : [];
+    var jobs = generationJobsForScene(sceneId);
+    var activeJobIds = {};
+    var empty = grid.querySelector('.storyboard-takes-empty');
+    if ((takeOrder.length || jobs.length) && empty) empty.remove();
+
+    takeOrder.forEach(function (takeId, takeIndex) {
+      var take = takes[takeId];
+      if (!take || sceneTakeCardById(grid, takeId)) return;
+      var pending = grid.querySelector('[data-generation-job-id]');
+      var html = takeCardHtml(storyState.story.id, sceneId, takeId, take, takeIndex, scene.selectedTakeId);
+      if (pending) pending.insertAdjacentHTML('beforebegin', html);
+      else grid.insertAdjacentHTML('beforeend', html);
+    });
+
+    jobs.forEach(function (job, pendingIndex) {
+      activeJobIds[job.jobId] = true;
+      var card = sceneGenerationCardById(grid, job.jobId);
+      if (!card) {
+        grid.insertAdjacentHTML('beforeend', pendingTakeCardHtml(job, takeOrder.length + pendingIndex));
+        card = sceneGenerationCardById(grid, job.jobId);
+      }
+      syncGenerationJobCard(job, card);
+    });
+
+    Array.prototype.forEach.call(grid.querySelectorAll('[data-generation-job-id]'), function (card) {
+      if (!activeJobIds[card.dataset.generationJobId]) card.remove();
+    });
+
+    if (!grid.querySelector('[data-take-id], [data-generation-job-id]') && !grid.querySelector('.storyboard-takes-empty')) {
+      grid.insertAdjacentHTML('beforeend', '<div class="storyboard-takes-empty">No Takes yet.</div>');
+    }
+
+    var generateButton = root.querySelector('[data-scene-generate]');
+    if (generateButton) generateButton.textContent = (takeOrder.length || jobs.length) ? 'Generate Another Take' : 'Generate Take';
+  }
+
+  function mergeFetchedSceneTakeState(storyId, sceneId, latestStory) {
+    if (!storyState.story || storyState.story.id !== storyId || !latestStory || latestStory.id !== storyId) return;
+    var currentScene = storyState.story.scenes && storyState.story.scenes[sceneId];
+    var latestScene = latestStory.scenes && latestStory.scenes[sceneId];
+    if (!currentScene || !latestScene) return;
+    currentScene.takes = latestScene.takes && typeof latestScene.takes === 'object' ? latestScene.takes : {};
+    currentScene.removedTakes = latestScene.removedTakes && typeof latestScene.removedTakes === 'object' ? latestScene.removedTakes : {};
+    currentScene.takeOrder = Array.isArray(latestScene.takeOrder) ? latestScene.takeOrder : [];
+    currentScene.selectedTakeId = latestScene.selectedTakeId || null;
+    currentScene.updatedAt = latestScene.updatedAt || currentScene.updatedAt;
+    storyState.story.updatedAt = latestStory.updatedAt || storyState.story.updatedAt;
+    syncSceneTakeDom(sceneId);
+  }
+
+  function syncGenerationJobCard(job, card) {
     if (!job) return;
-    var card = document.querySelector('[data-generation-job-id="' + CSS.escape(String(job.jobId || '')) + '"]');
+    if (!card) {
+      var root = sceneElement(job.sceneId);
+      var grid = root && root.querySelector('.storyboard-takes-grid');
+      card = grid && sceneGenerationCardById(grid, String(job.jobId || ''));
+    }
     if (!card) return;
     var status = String(job.status || '');
     var queuePosition = Number(job.queuePosition || 0);
@@ -1758,7 +1841,7 @@
         syncStoryboardGenerationActivity();
 
         if (generationJobIsActive(job)) {
-          if (storyState.story && storyState.story.id === storyId) syncGenerationJobCard(job);
+          if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(job.sceneId);
           pollGeneration(storyId, jobId);
           return;
         }
@@ -1768,12 +1851,12 @@
         syncStoryboardGenerationActivity();
 
         if (job.status === 'failed') {
-          if (storyState.story && storyState.story.id === storyId) renderScenes();
+          if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(job.sceneId);
           throw new Error(job.error || 'Storyboard generation failed.');
         }
 
         if (job.status === 'stopped' || job.status === 'cancelled') {
-          if (storyState.story && storyState.story.id === storyId) renderScenes();
+          if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(job.sceneId);
           return;
         }
 
@@ -1782,8 +1865,7 @@
             return refreshLibrary();
           }
           return request(null, 'story=' + encodeURIComponent(storyId)).then(function (storyPayload) {
-            storyState.story = storyPayload.story;
-            renderStory();
+            mergeFetchedSceneTakeState(storyId, job.sceneId, storyPayload.story);
             setSaveState('Saved');
           });
         }
@@ -1821,9 +1903,10 @@
       if (payload.job) {
         storyState.generationJobs[payload.job.jobId] = payload.job;
         reportGenerationStatus(payload.job.sceneId, payload.job, null);
+        if (!generationJobIsActive(payload.job)) delete storyState.generationJobs[payload.job.jobId];
+        syncSceneTakeDom(payload.job.sceneId);
       }
       syncStoryboardGenerationActivity();
-      renderScenes();
       return payload;
     }).catch(reportError);
   }
@@ -1842,7 +1925,7 @@
       storyState.generationJobs[job.jobId] = job;
       reportGenerationStatus(sceneId, job, previousJob);
       syncStoryboardGenerationActivity();
-      renderScenes();
+      syncSceneTakeDom(sceneId);
       setSaveState('Saved');
       pollGeneration(storyState.story.id, job.jobId);
     }).catch(reportError);

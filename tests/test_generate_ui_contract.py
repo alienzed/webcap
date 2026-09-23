@@ -49,3 +49,14 @@ def test_generate_reuses_concepts_not_storyboard_dom():
     assert "sceneId" not in script
     assert "entryState" not in script
     assert "exitState" not in script
+
+def test_generate_result_polling_preserves_existing_media_nodes():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "function resultKey(result)" in script
+    assert "card.dataset.resultKey = resultKey(result)" in script
+    assert "host.querySelectorAll('.generate-result-card[data-result-key]')" in script
+    assert "if (!key || existingKeys[key]) return;" in script
+    assert "host.insertBefore(buildResultCard(result), host.firstChild)" in script
+    assert "host.innerHTML = results.map" not in script
+

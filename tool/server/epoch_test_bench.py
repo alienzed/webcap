@@ -57,6 +57,54 @@ _startup_reconciled = False
 _logger = logging.getLogger(__name__)
 
 
+def _execution_job_payload(job):
+    if not isinstance(job, dict):
+        return None
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    return {
+        "id": str(job.get("id") or ""),
+        "folder": str(metadata.get("folder") or ""),
+        "runName": str(metadata.get("runName") or ""),
+        "modelId": str(metadata.get("modelId") or ""),
+        "status": str(job.get("status") or ""),
+        "testTotal": int(metadata.get("testTotal") or 0),
+        "createdAt": float(job.get("createdAt") or 0),
+        "queuePosition": int(job.get("queuePosition") or 0),
+    }
+
+
+def _ensure_execution_reconciled():
+    global _startup_reconciled
+    if _startup_reconciled:
+        return
+    with _reconcile_lock:
+        if _startup_reconciled:
+            return
+        interrupted = execution_recover_lane(
+            EXECUTION_LANE,
+            reason="Test Generations execution was interrupted by a WebCap restart.",
+        )
+        for job in interrupted:
+            metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+            details = job.get("details") if isinstance(job.get("details"), dict) else {}
+            folder = str(metadata.get("folder") or "").strip()
+            session_name = str(details.get("session") or "").strip()
+            if not folder or not session_name:
+                continue
+            try:
+                session_directory = _session_directory(app_config.safe_join_fs_root(folder), session_name)
+            except (FileNotFoundError, ValueError):
+                continue
+            with _status_lock:
+                status = _read_status(session_directory) or {}
+                if str(status.get("status") or "") in ("starting", "running", "stopping"):
+                    status["status"] = "failed"
+                    status["current"] = ""
+                    status["error"] = "Test Generations execution was interrupted by a WebCap restart."
+                    _atomic_write_json(_status_path(session_directory), status)
+        _startup_reconciled = True
+
+
 def _reserve_gpu_for_test_generations():
     from .training_runner import reserve_gpu_for_external_work
     return reserve_gpu_for_external_work(GPU_RESERVATION_OWNER)

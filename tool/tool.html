@@ -1049,7 +1049,16 @@
                                 <label class="storyboard-field"><span>Title</span><input id="storyboard-story-title" type="text" maxlength="200"></label>
                                 <label class="storyboard-field"><span>Status</span><select id="storyboard-story-status"><option value="active">Active</option><option value="complete">Complete</option><option value="archived">Archived</option></select></label>
                                 <label class="storyboard-inline-check"><input id="storyboard-story-pinned" type="checkbox"> Pinned</label>
-                                <label class="storyboard-field storyboard-concept-field"><span>Concept / overview</span><textarea id="storyboard-story-concept" rows="4" placeholder="High-level grounded overview of the Story."></textarea></label>
+                                <div class="storyboard-field storyboard-concept-field">
+                                    <div class="storyboard-field-header">
+                                        <span>Concept / overview</span>
+                                        <div class="storyboard-field-actions">
+                                            <button id="storyboard-expand-concept-btn" type="button" class="storyboard-field-action-btn">Expand with Director</button>
+                                            <button id="storyboard-restore-concept-btn" type="button" class="storyboard-field-action-btn hidden">Restore Previous</button>
+                                        </div>
+                                    </div>
+                                    <textarea id="storyboard-story-concept" rows="6" placeholder="High-level grounded overview of the Story."></textarea>
+                                </div>
                                 <label class="storyboard-field storyboard-style-field"><span>Visual / atmosphere</span><textarea id="storyboard-story-style" rows="3" placeholder="Persistent visual language: genre, era, palette, lighting, camera language, texture..."></textarea></label>
                                 <section class="storyboard-invariants" aria-label="Story invariants">
                                     <div class="storyboard-invariants-header">

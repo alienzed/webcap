@@ -1,6 +1,19 @@
 # Director / Prompt Assistant eager preload plan
 
-Status: implemented and audited on `ux/director-eager-preload`.
+Status: retired on 2026-09-23. The implementation was intentionally removed after use showed that model selection must not trigger GPU work.
+
+## Current decision
+
+- Generate and Storyboard share one Director / Prompt Assistant model preference.
+- Opening a workspace, dwelling on it, or changing the selector does **not** load the model.
+- The first real queued LLM task loads the selected model on demand.
+- A successful local LLM request leaves that model loaded for likely follow-up tasks.
+- Training or shared Inference evicts the retained LLM only after it has won the shared GPU reservation.
+- The llama.cpp router may remain running for discovery and request routing without loading a model.
+- WebCap keeps llama.cpp's normal mmap behavior. After a real model unload, the OS page cache may make a later reload memory-backed, but WebCap does not claim unsupported live VRAM-to-RAM model migration.
+
+## Historical implementation
+
 
 ## Goal
 

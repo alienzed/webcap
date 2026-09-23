@@ -101,7 +101,7 @@ def _client_result(client, context, llm_result):
         from .storyboard_store import apply_concept_expansion
         story = apply_concept_expansion(story_id, llm_result.get("text"))
         return {
-            "story": story,
+            "storyId": story["id"],
             "result": story["concept"],
             "model": llm_result["model"],
             "usage": llm_result.get("usage"),
@@ -116,7 +116,7 @@ def _client_result(client, context, llm_result):
             model_id=llm_result["model"],
         )
         return {
-            "story": story,
+            "storyId": story["id"],
             "sceneCount": len(story.get("sceneOrder") or []),
             "model": llm_result["model"],
             "usage": llm_result.get("usage"),
@@ -162,8 +162,6 @@ def _advance_queue():
 
         queued = [job for job in snapshot.get("jobs", []) if job.get("status") == "queued"]
         if not queued:
-            if execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("activeJobId") == "":
-                _release_gpu()
             return None
 
         from .storyboard_llm_runtime import uses_local_gpu

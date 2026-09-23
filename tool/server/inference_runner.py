@@ -342,10 +342,12 @@ def _monitor_has_work():
     snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
     if snapshot.get("activeJobId"):
         return True
-    if any(str(job.get("status") or "") == "queued" for job in snapshot.get("jobs", [])):
-        return True
     with _provider_hold_lock:
-        return bool(_provider_cleanup_holds)
+        if _provider_cleanup_holds:
+            return True
+    if snapshot.get("paused"):
+        return False
+    return any(str(job.get("status") or "") == "queued" for job in snapshot.get("jobs", []))
 
 
 def _monitor_loop():

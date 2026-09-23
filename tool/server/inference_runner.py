@@ -135,7 +135,7 @@ def _dispatch_loop():
             app_config.debug_print("[inference] DISPATCH ERROR:", exc)
             app_config.debug_traceback()
         snapshot = lane_snapshot(EXECUTION_LANE, include_terminal=False)
-        if any(job.get("status") == "queued" for job in snapshot.get("jobs", [])):
+        if not snapshot.get("paused") and any(job.get("status") == "queued" for job in snapshot.get("jobs", [])):
             time.sleep(1)
             _dispatch_event.set()
 

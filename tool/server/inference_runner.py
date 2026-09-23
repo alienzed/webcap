@@ -289,11 +289,11 @@ def _advance_queue():
             from .storyboard_llm_runtime import DirectorRuntimeBusy, release_loaded_model_for_gpu_work
             release_loaded_model_for_gpu_work()
         except DirectorRuntimeBusy:
-            if reserved_here and execution_resource_owner() == GPU_RESERVATION_OWNER:
+            if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
             return None
         except Exception as exc:
-            if reserved_here and execution_resource_owner() == GPU_RESERVATION_OWNER:
+            if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
             execution_pause_lane(
                 EXECUTION_LANE,

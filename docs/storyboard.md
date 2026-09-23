@@ -360,17 +360,16 @@ Still to add:
 
 Goal: generate Takes without coupling Storyboard to Test Generations.
 
-The first usable slice is now implemented with a Storyboard-owned MiniMax H3 path:
+The current usable slice keeps Storyboard ownership of Story/Scene/Take meaning while using WebCap's shared inference runtime:
 
-- a dedicated Storyboard API-format H3 workflow template, separate from Test Generations
-- a dedicated Storyboard ComfyUI transport/worker with no Test Generations state or queue dependency
-- the existing low-level GPU reservation gate is shared so Storyboard cannot collide with active Training or Test generation work; Storyboard still does not consume or mutate those workflows' state
-- manual Scene prompt, duration, aspect ratio, megapixels, wildcard intent, and seed behavior feed the workflow directly
-- ComfyUI model/VAE/turbo-LoRA names are resolved against what the running ComfyUI instance actually exposes
-- generation runs asynchronously; one Storyboard Take runs at a time while other Scene generations may queue with their Scene settings frozen at enqueue time
-- completed MP4 output is copied into the Scene's Take folder
-- the generated Take freezes the actual prompt, source prompt, duration, aspect ratio, megapixels, seed, workflow profile, and provider job ID
-- manual Story/Scene text editing remains the canonical authoring path; an LLM is not required
+- Storyboard freezes the Scene prompt, generation settings, effective Story/Scene LoRAs, and semantic references before enqueue;
+- Storyboard Takes enter the common `inference` lane alongside standalone Generate work, so queue positions are global;
+- the shared inference runner owns scheduling, GPU acquisition/release, ComfyUI transport, provider polling/cancellation, and lifecycle transitions;
+- the shared MiniMax H3 adapter resolves model/VAE/turbo-LoRA assets and binds prompt/settings/first-last frame references;
+- completed MP4 output is copied into the Scene's Take folder;
+- the generated Take freezes the actual prompt, source prompt, duration, aspect ratio, megapixels, seed, workflow profile, LoRAs, references, and provider job ID;
+- pending Take cards remain Storyboard-owned and project the common queue's real global position;
+- manual Story/Scene text editing remains the canonical authoring path; an LLM is not required.
 
 The current slice now also includes Scene LoRA discovery/selection:
 
@@ -382,12 +381,10 @@ The current slice now also includes Scene LoRA discovery/selection:
 
 Still to add after real usage validates this slice:
 
-- guide/reference-to-video roles beyond H3's first/last-frame image-to-video sockets
-- stop/cancel and restart recovery for Storyboard generation jobs
-- bounded same-Scene batch generation if repeated manual Take clicks prove insufficient
-- cleanup of Storyboard-owned temporary ComfyUI output after the Take copy is confirmed
+- guide/reference-to-video roles beyond H3's first/last-frame image-to-video sockets;
+- cleanup of temporary ComfyUI output after the Take copy is confirmed.
 
-Do not extract a shared ComfyUI service from Test Generations merely to reduce duplicated transport code. Revisit sharing only if both consumers have a stable identical lower-level need.
+Stop/cancel, restart reconciliation, multiple queued Takes, and shared GPU arbitration are already provided through the common inference path.
 
 ### Phase 4 - Reference continuity
 

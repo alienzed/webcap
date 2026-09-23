@@ -24,7 +24,7 @@ _process = None
 _log_handle = None
 _server_settings_signature = None
 _process_lock = threading.RLock()
-_request_lock = threading.Lock()
+_request_lock = threading.RLock()
 _activity_lock = threading.Lock()
 _activity = {
     "active": False,
@@ -642,26 +642,27 @@ def run_contract(model_id, contract):
         raise ValueError("Storyboard Director contract prompt is empty.")
 
     operation = str(contract.get("operation") or "").strip()
-    _set_activity("preparing", model_id=model_id, operation=operation, active=True, error="")
-    try:
-        result = chat(
-            model_id,
-            [{"role": "user", "content": prompt}],
-            response_schema=contract.get("response_schema"),
-        )
-        if contract.get("output") == "json":
-            try:
-                data = json.loads(result["text"])
-            except (TypeError, json.JSONDecodeError) as exc:
-                raise RuntimeError("Storyboard Director returned invalid structured JSON.") from exc
-            if not isinstance(data, dict):
-                raise RuntimeError("Storyboard Director structured output must be a JSON object.")
-            result["data"] = data
-        _set_activity("complete", model_id=model_id, operation=operation, active=False)
-        return result
-    except Exception as exc:
-        _set_activity("error", model_id=model_id, operation=operation, active=False, error=str(exc))
-        raise
+    with _request_lock:
+        _set_activity("preparing", model_id=model_id, operation=operation, active=True, error="")
+        try:
+            result = chat(
+                model_id,
+                [{"role": "user", "content": prompt}],
+                response_schema=contract.get("response_schema"),
+            )
+            if contract.get("output") == "json":
+                try:
+                    data = json.loads(result["text"])
+                except (TypeError, json.JSONDecodeError) as exc:
+                    raise RuntimeError("Storyboard Director returned invalid structured JSON.") from exc
+                if not isinstance(data, dict):
+                    raise RuntimeError("Storyboard Director structured output must be a JSON object.")
+                result["data"] = data
+            _set_activity("complete", model_id=model_id, operation=operation, active=False)
+            return result
+        except Exception as exc:
+            _set_activity("error", model_id=model_id, operation=operation, active=False, error=str(exc))
+            raise
 
 
 atexit.register(stop_server)

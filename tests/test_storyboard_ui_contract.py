@@ -217,7 +217,7 @@ def test_storyboard_takes_can_be_named_and_loras_filtered():
     assert "takeMetaLabel(take)" in storyboard
     assert "data-scene-lora-picker" in storyboard
     assert "function loraOptions(selectedName)" in storyboard
-    assert "function loraDatalistOptions()" in storyboard
+    assert "function loraNamesMatching(query, excludedNames)" in storyboard
     assert ".storyboard-lora-picker" in css
 
 
@@ -230,7 +230,6 @@ def test_storyboard_story_loras_are_inherited_and_overridable_in_scenes():
     assert 'id="storyboard-story-lora-list"' in html
     assert 'id="storyboard-story-lora-add"' in html
     assert 'id="storyboard-story-lora-picker"' in html
-    assert 'id="storyboard-story-lora-options"' in html
     assert "storyLoraOverrides" in storyboard
     assert "data-story-lora-inherited-row" in storyboard
     assert "data-story-lora-enabled" in storyboard
@@ -259,12 +258,17 @@ def test_storyboard_director_settings_support_remote_openai_compatible_endpoint(
 
 
 def test_storyboard_lora_chooser_is_single_searchable_field():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     assert 'data-scene-lora-filter' not in storyboard
     assert 'data-scene-lora-picker' in storyboard
-    assert 'list="storyboard-lora-options-' in storyboard
-    assert "function loraDatalistOptions()" in storyboard
+    assert 'data-lora-picker-menu' in storyboard
+    assert 'data-lora-picker-menu' in html
+    assert "function loraNamesMatching(query, excludedNames)" in storyboard
+    assert "key.indexOf(needle) !== -1" in storyboard
+    assert "renderLoraPickerMenu(picker);" in storyboard
+    assert "picker.focus();" in storyboard
     assert "picker.value = '';" in storyboard
 
 
@@ -278,3 +282,14 @@ def test_storyboard_scene_has_dedicated_conditioning_column():
     assert "Base LoRA active" in storyboard
     assert ".storyboard-scene-conditioning" in css
     assert "grid-template-columns: minmax(0, 1fr) minmax(220px, 250px) minmax(280px, 320px);" in css
+
+
+
+def test_storyboard_conditioning_lora_status_and_inherited_rows_render():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "var loraStatusTitle =" in storyboard
+    assert "var loraStatusText =" in storyboard
+    assert 'data-story-lora-inherited-list' in storyboard
+    assert 'class="storyboard-lora-subtitle">Inherited from Story</span>' in storyboard
+    assert 'class="storyboard-lora-subtitle">Scene only</span>' in storyboard

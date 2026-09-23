@@ -282,6 +282,18 @@ def _advance_queue():
                 return None
             reserved_here = True
 
+        try:
+            from .storyboard_llm_runtime import release_loaded_model_for_gpu_work
+            release_loaded_model_for_gpu_work()
+        except Exception as exc:
+            if reserved_here and execution_resource_owner() == GPU_RESERVATION_OWNER:
+                _release_gpu()
+            execution_pause_lane(
+                EXECUTION_LANE,
+                reason="Queue paused: retained Prompt Assistant / Director model could not be unloaded: " + str(exc),
+            )
+            raise
+
         claimed = execution_claim_next(EXECUTION_LANE)
         if claimed is None:
             if reserved_here:

@@ -423,9 +423,10 @@ def _unload_model(model_id):
 
 
 def _reserve_gpu():
-    from .training_runner import reserve_gpu_for_external_work
+    from .training_runner import gpu_reservation_block_reason, reserve_gpu_for_external_work
     if not reserve_gpu_for_external_work(GPU_RESERVATION_OWNER):
-        raise RuntimeError("GPU is busy with Training, Test Generations, Storyboard generation, or another Director request.")
+        reason = gpu_reservation_block_reason(GPU_RESERVATION_OWNER)
+        raise RuntimeError("Storyboard Director could not reserve the shared GPU resource: " + reason)
 
 
 def _release_gpu():

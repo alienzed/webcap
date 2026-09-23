@@ -110,6 +110,35 @@ def reserve_gpu_for_external_work(owner):
     return reserve_execution_resource(owner)
 
 
+def gpu_reservation_block_reason(owner):
+    """Describe the current queue or shared-resource blocker for external GPU work."""
+    owner = str(owner or "").strip()
+    with _lock:
+        state = _read_state()
+        jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
+        active_jobs = [job for job in jobs if job.get("status") in ACTIVE_STATUSES]
+        if active_jobs:
+            labels = [
+                str(job.get("name") or job.get("id") or "unknown")
+                + " (" + str(job.get("status") or "active") + ")"
+                for job in active_jobs
+            ]
+            return "Training has active job(s): " + ", ".join(labels) + "."
+        queued_jobs = [job for job in jobs if job.get("status") in QUEUE_STATUSES]
+        if queued_jobs and not state.get("queuePaused"):
+            return (
+                str(len(queued_jobs))
+                + " Training job(s) are queued and the Training queue is not paused."
+            )
+
+    resource_owner = execution_resource_owner()
+    if resource_owner:
+        if resource_owner == owner:
+            return "another request from this feature already holds the shared GPU reservation."
+        return "the shared GPU reservation is held by " + resource_owner + "."
+    return "the GPU reservation changed while this request was starting."
+
+
 def release_gpu_for_external_work(owner):
     owner = str(owner or "").strip()
     release_execution_resource(owner)

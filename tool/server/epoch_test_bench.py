@@ -1595,6 +1595,8 @@ def enqueue(
 
     latest = _advance_test_queue()
     current = execution_get_job(job["id"])
+    if current.get("status") == "failed":
+        raise RuntimeError(str(current.get("error") or "Test Generations could not start."))
     visible = _execution_job_payload(current)
     return {
         "operation": "test_enqueue",

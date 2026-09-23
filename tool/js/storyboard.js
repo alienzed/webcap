@@ -1763,7 +1763,7 @@
     }
 
     var generateButton = root.querySelector('[data-scene-generate]');
-    if (generateButton) generateButton.textContent = jobs.length ? 'Generate Another Take' : 'Generate Take';
+    if (generateButton) generateButton.textContent = (takeOrder.length || jobs.length) ? 'Generate Another Take' : 'Generate Take';
   }
 
   function mergeFetchedSceneTakeState(storyId, sceneId, latestStory) {

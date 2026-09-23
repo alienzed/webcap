@@ -1102,10 +1102,14 @@
 .storyboard-scene-overview-summary {
   grid-area: summary;
   min-height: 34px;
+  max-height: 34px;
+  display: -webkit-box;
   overflow: hidden;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .storyboard-scene-overview-meta {
@@ -1152,6 +1156,15 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel-soft);
+}
+
+.storyboard-scenes-list.is-focus .storyboard-scene-quick {
+  grid-template-columns: 1fr;
+}
+
+.storyboard-scenes-list.is-focus .storyboard-generate-btn {
+  width: 100%;
+  min-height: 40px;
 }
 
 .storyboard-scenes-list.is-focus .storyboard-lora-panel {

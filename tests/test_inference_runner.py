@@ -6,6 +6,7 @@ from tool.server import config as app_config
 from tool.server import execution_queue
 from tool.server import generate_generation
 from tool.server import inference_runner
+from tool.server import storyboard_generation
 
 
 @pytest.fixture
@@ -83,3 +84,75 @@ def test_inference_runner_honors_stop_requested_during_start(inference_root, mon
     finished = execution_queue.get_job(queued["id"])
     assert finished["status"] == "stopped"
     assert called == []
+
+def test_inference_runner_executes_claimed_storyboard_job(inference_root, monkeypatch):
+    queued = inference_runner.enqueue_storyboard(
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "prompt": "Prompt",
+            "sourcePrompt": "Prompt",
+            "settings": {"aspectRatio": "4:3 (Standard)", "megapixels": 0.2, "duration": 6, "seed": 7},
+            "loras": [],
+            "references": {},
+            "wildcardsEnabled": False,
+            "entryState": "Before",
+            "exitState": "After",
+            "seedMode": "fixed",
+        },
+        "story-1",
+        "scene-1",
+        label="Scene 1",
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+
+    captured = {}
+    monkeypatch.setattr(
+        storyboard_generation,
+        "execute_inference",
+        lambda job_id, request, context: captured.update({
+            "jobId": job_id,
+            "request": request,
+            "context": context,
+        }) or {"takeId": "take-1"},
+    )
+
+    inference_runner._execute_claimed(queued["jobId"])
+
+    finished = execution_queue.get_job(queued["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["result"]["takeId"] == "take-1"
+    assert captured["context"]["storyId"] == "story-1"
+    assert captured["context"]["sceneId"] == "scene-1"
+    assert captured["context"]["entryState"] == "Before"
+    assert captured["request"]["prompt"] == "Prompt"
+
+
+def test_inference_snapshot_projects_storyboard_context(inference_root):
+    queued = inference_runner.enqueue_storyboard(
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "prompt": "Prompt",
+            "sourcePrompt": "Prompt",
+            "settings": {"aspectRatio": "4:3 (Standard)", "megapixels": 0.2, "duration": 6, "seed": 7},
+            "loras": [],
+            "references": {},
+            "wildcardsEnabled": False,
+            "entryState": "",
+            "exitState": "",
+            "seedMode": "fixed",
+        },
+        "story-1",
+        "scene-1",
+        label="Scene 1",
+    )
+
+    snapshot = inference_runner.snapshot()
+
+    job = next(item for item in snapshot["jobs"] if item["jobId"] == queued["jobId"])
+    assert job["client"] == "storyboard"
+    assert job["storyId"] == "story-1"
+    assert job["sceneId"] == "scene-1"
+    assert job["label"] == "Scene 1"
+

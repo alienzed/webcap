@@ -261,13 +261,13 @@
     var jobs = Array.isArray(generateState.queue.jobs) ? generateState.queue.jobs : [];
     if (!jobs.length) {
       host.innerHTML = '<div class="generate-queue-empty">No queued inference.</div>';
-      if (typeof window.setShellGeneratingActive === 'function') window.setShellGeneratingActive(false);
+      if (typeof window.setShellInferenceActive === 'function') window.setShellInferenceActive(false);
       return;
     }
     var running = jobs.some(function (job) {
       return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
     });
-    if (typeof window.setShellGeneratingActive === 'function') window.setShellGeneratingActive(running);
+    if (typeof window.setShellInferenceActive === 'function') window.setShellInferenceActive(running);
 
     host.innerHTML = jobs.map(function (job) {
       var queued = job.status === 'queued';

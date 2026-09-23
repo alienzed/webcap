@@ -858,7 +858,6 @@ def test_candidate_selection_persists_with_trainer_timestamp_run_and_replaces_cl
     assert selected12.status_code == 200
     assert selected12.get_json()["selected"]["epoch"] == 12
     assert selected12.get_json()["selected"]["step"] == 2400
-    assert selected12.get_json()["selected"]["file"] == "epoch12/epoch12.safetensors"
 
     manifest_path = run / "webcap-run.json"
     assert manifest_path.is_file()

@@ -1,0 +1,202 @@
+import json
+from pathlib import Path
+
+import pytest
+
+from tool.server import storage_manager
+from tool.server import app as app_module
+
+
+def _write_json(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _training_action(root, action_id="001-set--abc/001-h3--demo"):
+    action = root / "output" / "runs" / Path(action_id)
+    (action / "captures").mkdir(parents=True)
+    (action / "jobs").mkdir()
+    (action / "output").mkdir()
+    _write_json(action / "action.json", {
+        "version": 2,
+        "actionId": action_id,
+        "runName": "Demo",
+        "folder": "sets/demo",
+        "profileId": "minimax_h3",
+        "profileLabel": "MiniMax H3",
+        "mode": "normal",
+        "requestedStages": ["h3"],
+        "createdAt": 1,
+        "captures": [],
+        "jobs": {"h3": []},
+        "outputs": {"h3": []},
+    })
+    return action
+
+
+def _generation(root, day="2026-09-23", job_id="job-1"):
+    directory = root / "output" / "generations" / day / job_id
+    directory.mkdir(parents=True)
+    (directory / "result.mp4").write_bytes(b"x" * 10)
+    _write_json(directory / "generation.json", {
+        "version": 1,
+        "jobId": job_id,
+        "createdAt": 1,
+        "modelId": "minimax_h3",
+        "mediaKind": "video",
+        "sourcePrompt": "demo",
+        "mediaPath": "output/generations/" + day + "/" + job_id + "/result.mp4",
+    })
+    return directory
+
+
+def _story(root, story_id="story-demo"):
+    directory = root / "output" / "storyboards" / story_id
+    (directory / "takes").mkdir(parents=True)
+    _write_json(directory / "story.json", {
+        "id": story_id,
+        "title": "Demo Story",
+        "concept": "",
+        "tags": [],
+        "status": "active",
+        "pinned": False,
+        "createdAt": "2026-09-23T00:00:00+00:00",
+        "updatedAt": "2026-09-23T00:00:00+00:00",
+        "sceneOrder": [],
+        "scenes": {},
+        "removedScenes": {},
+    })
+    return directory
+
+
+def test_overview_enumerates_known_producer_roots_without_measuring(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    _training_action(tmp_path)
+    _generation(tmp_path)
+    _story(tmp_path)
+
+    payload = storage_manager.overview("")
+
+    assert payload["ok"] is True
+    assert len(payload["items"]["training"]) == 1
+    assert len(payload["items"]["generate"]) == 1
+    assert len(payload["items"]["storyboard"]) == 1
+    assert payload["items"]["tests"] == []
+    assert all(item["bytes"] is None for area in ("training", "generate", "storyboard") for item in payload["items"][area])
+    tests = next(row for row in payload["categories"] if row["area"] == "tests")
+    assert tests["complete"] is False
+    assert "current Set" in tests["note"]
+
+
+def test_measure_is_item_scoped_and_cached(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    directory = _generation(tmp_path)
+    (directory / "references").mkdir()
+    (directory / "references" / "frame.png").write_bytes(b"abc")
+
+    measured = storage_manager.measure("generate", "2026-09-23/job-1")
+    payload = storage_manager.overview("")
+
+    assert measured["bytes"] >= 13
+    item = payload["items"]["generate"][0]
+    assert item["measured"] is True
+    assert item["bytes"] == measured["bytes"]
+    assert (tmp_path / ".webcap" / "storage_usage.json").is_file()
+
+
+def test_measure_refuses_symlinked_root(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "file.bin").write_bytes(b"1234")
+    generated = tmp_path / "output" / "generations" / "2026-09-23"
+    generated.mkdir(parents=True)
+    link = generated / "job-1"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("Symlink creation is unavailable on this platform.")
+
+    with pytest.raises((ValueError, FileNotFoundError)):
+        storage_manager.measure("generate", "2026-09-23/job-1")
+
+
+def test_generate_purge_requires_manifest_ownership(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    directory = _generation(tmp_path)
+    _write_json(directory / "generation.json", {"version": 1, "jobId": "someone-else"})
+
+    with pytest.raises(RuntimeError):
+        storage_manager.purge("generate", "2026-09-23/job-1")
+
+    assert directory.is_dir()
+
+
+def test_training_purge_blocks_nonterminal_queue_reference(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    action_id = "001-set--abc/001-h3--demo"
+    action = _training_action(tmp_path, action_id)
+    _write_json(tmp_path / ".webcap_training" / "queue.json", {
+        "version": 3,
+        "jobs": [{"id": "job-live", "actionId": action_id, "status": "queued"}],
+    })
+
+    with pytest.raises(RuntimeError, match="job-live"):
+        storage_manager.purge("training", action_id)
+
+    assert action.is_dir()
+
+
+def test_storage_has_no_path_based_or_set_source_purge(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    source = tmp_path / "sets" / "demo" / "image.png"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"source")
+
+    with pytest.raises(ValueError):
+        storage_manager.purge("set", "sets/demo/image.png")
+
+    with pytest.raises(ValueError):
+        storage_manager.purge("anything", str(source))
+
+    assert source.is_file()
+
+
+def test_storage_routes_delegate_only_identity_fields(monkeypatch):
+    seen = {}
+
+    monkeypatch.setattr(app_module, "storage_overview", lambda folder="": {"ok": True, "folder": folder, "categories": [], "items": {}})
+
+    def fake_measure(area, item_id, folder=""):
+        seen["measure"] = (area, item_id, folder)
+        return {"ok": True, "bytes": 12}
+
+    monkeypatch.setattr(app_module, "storage_measure", fake_measure)
+    client = app_module.app.test_client()
+
+    response = client.get("/fs/storage?folder=sets/demo")
+    measured = client.post("/fs/storage/measure", json={"area": "generate", "id": "2026-09-23/job-1", "folder": ""})
+
+    assert response.status_code == 200
+    assert response.get_json()["folder"] == "sets/demo"
+    assert measured.status_code == 200
+    assert seen["measure"] == ("generate", "2026-09-23/job-1", "")
+
+
+def test_storage_ui_is_isolated_global_activity():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (root / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    storage_js = (root / "tool" / "js" / "storage_manager.js").read_text(encoding="utf-8")
+    backend = (root / "tool" / "server" / "storage_manager.py").read_text(encoding="utf-8")
+
+    assert 'id="activity-storage-btn"' in html
+    assert 'id="storage-workspace"' in html
+    assert 'data-workspace-root="storage"' in html
+    assert "/static/js/storage_manager.js" in html
+    assert "window.openStorageActivity = openStorageActivity" in storage_js
+    assert "window.closeStorageActivity = closeStorageActivity" in storage_js
+    assert "workspace === 'storage'" in shell
+    assert "activity === 'storage'" in shell
+    assert "os.walk" not in backend
+    assert 'PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard"}' in backend

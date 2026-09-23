@@ -21,10 +21,9 @@ Every lane supports the general queue mechanics that are useful across GPU work:
 
 - enqueue / start
 - pause / resume scheduling
-- stop or cancel requests
+- stop active jobs
 - cancel queued jobs
 - reorder queued jobs
-- requeue jobs
 - restart reconciliation
 - exclusive GPU/resource ownership
 
@@ -52,7 +51,7 @@ The shared lane owns the queued/running state, ordering, persistence, cancellati
 
 Test Generations uses the `test-generations` lane. A queued job freezes the prompt, selected staged LoRAs, model settings, and workflow snapshot; starting the job creates the normal Test Session and hands execution back to the existing batch runner.
 
-The Sessions UI remains intentionally linear. The underlying lane still supports pause/resume, cancellation, and reordering even though the current Test Generations UI only exposes the controls that fit that workflow. Queued Test work may wait behind another GPU owner and is pumped by a small Test-owned observer, so it does not depend on the pane staying open.
+The Sessions UI remains intentionally linear. The shared substrate supports queue mechanics such as pause/resume and reordering, but Test Generations only exposes the controls its current workflow uses. Queued Test work may wait behind another GPU owner and is pumped by a small Test-owned observer, so it does not depend on the pane staying open.
 
 ### Training
 

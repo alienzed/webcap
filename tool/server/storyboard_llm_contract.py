@@ -108,6 +108,22 @@ def _scene_context(scene):
     return "\n".join(lines)
 
 
+def _story_invariants_text(story):
+    lines = []
+    invariants = story.get("invariants") if isinstance(story.get("invariants"), list) else []
+    for item in invariants:
+        if not isinstance(item, dict):
+            continue
+        text = _clean(item.get("text"))
+        if not text:
+            continue
+        kind = _clean(item.get("kind")) or "custom"
+        title = _clean(item.get("title"))
+        label = kind.capitalize() + (": " + title if title else "")
+        lines.append(label + "\n" + text)
+    return "\n\n".join(lines)
+
+
 def _previous_handoff(story, scene_id):
     order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
     if scene_id not in order:
@@ -147,12 +163,15 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append("[CURRENT CONCEPT]\n" + concept)
         style = _clean(story.get("style"))
         if style:
-            blocks.append("[STORY STYLE]\n" + style)
+            blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append(
             "[CURRENT TASK]\nExpand this Story concept into a richer creative overview that can drive later Scene planning. "
             "Develop the narrative arc, important characters, setting, conflict, progression, and ending direction when "
             "the seed supports them. Be creatively useful and fill in sensible connective material rather than asking "
-            "questions. Preserve explicit facts from the original concept and supplied style. Do not break the Story into "
+            "questions. Preserve explicit facts from the original concept, supplied visual atmosphere, and Story invariants. Do not break the Story into "
             "Scenes yet and do not write MiniMax H3 prompts. Return only the expanded Story concept as polished prose."
         )
         return {
@@ -174,7 +193,10 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append("[STORY CONCEPT]\n" + concept)
         style = _clean(story.get("style"))
         if style:
-            blocks.append("[STORY STYLE]\n" + style)
+            blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 WRITING RULES]\n" + h3_runtime_context)
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
@@ -186,7 +208,7 @@ def build_request(story, scene_id, operation, instruction=""):
             "markers. Because every Scene is generated independently, repeat enough concrete character identity detail in each "
             "relevant prompt when no LoRA or exact visual reference anchors that identity. Write a complete model-facing H3 "
             "prompt for every Scene now, not a placeholder. Be creatively useful: invent natural dialogue, performance details, "
-            "camera behavior, sound, and music when they improve the Story, while preserving supplied facts. Each Scene prompt "
+            "camera behavior, sound, and music when they improve the Story, while preserving supplied facts and Story invariants. Each Scene prompt "
             "must be independently generatable and follow the supplied H3 base prompt rules. Return only JSON matching the supplied schema."
         )
         return {
@@ -203,6 +225,7 @@ def build_request(story, scene_id, operation, instruction=""):
         raise FileNotFoundError("Scene does not exist.")
 
     style = _clean(story.get("style"))
+    invariants = _story_invariants_text(story)
     scene_context = _scene_context(scene)
     previous_handoff = _previous_handoff(story, scene_id)
     h3_mode, h3_output = _h3_output_contract(scene)
@@ -211,7 +234,9 @@ def build_request(story, scene_id, operation, instruction=""):
         "[DIRECTOR CONTEXT]\n" + director_context,
     ]
     if style:
-        blocks.append("[STORY STYLE]\n" + style)
+        blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+    if invariants:
+        blocks.append("[STORY INVARIANTS]\n" + invariants)
     if scene_context:
         blocks.append("[SCENE]\n" + scene_context)
     if previous_handoff and not _clean(scene.get("entryState")):

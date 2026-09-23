@@ -933,3 +933,311 @@
     grid-column: 1 / -1;
   }
 }
+
+
+/* Storyboard authoring flow: bounded reading measure, explicit Story collapse, Scene focus. */
+.storyboard-editor-title,
+.storyboard-scenes-actions,
+.storyboard-view-toggle,
+.storyboard-scene-pager {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.storyboard-editor-title {
+  flex: 0 0 auto;
+}
+
+.storyboard-story-authoring {
+  width: min(100%, 1280px);
+  margin-left: auto;
+  margin-right: auto;
+  grid-template-columns: minmax(560px, 880px) minmax(300px, 360px);
+}
+
+.storyboard-scenes-heading,
+.storyboard-scenes-list,
+.storyboard-sequence-preview {
+  width: min(100%, 1400px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.storyboard-story-fields {
+  min-width: 0;
+}
+
+.storyboard-concept-field textarea,
+.storyboard-style-field textarea {
+  max-width: 880px;
+}
+
+.storyboard-invariants {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+
+.storyboard-invariants-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.storyboard-invariants-header strong,
+.storyboard-invariants-header span {
+  display: block;
+}
+
+.storyboard-invariants-header span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.storyboard-invariants-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.storyboard-invariant-row {
+  display: grid;
+  grid-template-columns: 100px minmax(130px, 190px) minmax(260px, 1fr) auto;
+  align-items: start;
+  gap: 6px;
+}
+
+.storyboard-invariant-row select,
+.storyboard-invariant-row input,
+.storyboard-invariant-row textarea {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg, var(--panel));
+  color: var(--text);
+  padding: 6px 7px;
+  font: inherit;
+  font-size: 11px;
+}
+
+.storyboard-invariant-row textarea {
+  min-height: 56px;
+  resize: vertical;
+}
+
+.storyboard-scenes-heading {
+  align-items: center;
+}
+
+.storyboard-scenes-actions {
+  margin-left: auto;
+}
+
+.storyboard-view-toggle .active {
+  background: var(--hover);
+  font-weight: 700;
+}
+
+.storyboard-scene-pager {
+  min-width: 150px;
+  justify-content: center;
+}
+
+.storyboard-scenes-list.is-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 320px));
+  align-items: start;
+  justify-content: start;
+  gap: 9px;
+}
+
+.storyboard-scene-overview-card {
+  min-width: 0;
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "number title"
+    "summary summary"
+    "meta meta";
+  gap: 5px 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.storyboard-scene-overview-card:hover {
+  background: var(--panel-soft);
+}
+
+.storyboard-scene-overview-number {
+  grid-area: number;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.storyboard-scene-overview-card strong {
+  grid-area: title;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storyboard-scene-overview-summary {
+  grid-area: summary;
+  min-height: 34px;
+  max-height: 34px;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.storyboard-scene-overview-meta {
+  grid-area: meta;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.storyboard-scenes-list.is-overview .storyboard-removed-scenes {
+  grid-column: 1 / -1;
+}
+
+.storyboard-scenes-list.is-focus .storyboard-scene {
+  width: 100%;
+}
+
+.storyboard-scenes-list.is-focus .storyboard-scene-body {
+  grid-template-columns: minmax(560px, 720px) 220px 300px;
+  justify-content: start;
+  align-items: start;
+  gap: 14px;
+}
+
+.storyboard-scenes-list.is-focus .storyboard-scene-main {
+  max-width: 720px;
+}
+
+.storyboard-scenes-list.is-focus .storyboard-scene-intent textarea {
+  min-height: 88px;
+}
+
+.storyboard-scenes-list.is-focus .storyboard-prompt-textarea {
+  min-height: 320px;
+  line-height: 1.45;
+}
+
+.storyboard-scenes-list.is-focus .storyboard-director-actions {
+  width: 100%;
+}
+
+.storyboard-scenes-list.is-focus .storyboard-scene-meta,
+.storyboard-scenes-list.is-focus .storyboard-scene-conditioning {
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+
+.storyboard-scenes-list.is-focus .storyboard-scene-quick {
+  grid-template-columns: 1fr;
+}
+
+.storyboard-scenes-list.is-focus .storyboard-generate-btn {
+  width: 100%;
+  min-height: 40px;
+}
+
+.storyboard-scenes-list.is-focus .storyboard-lora-panel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.storyboard-takes {
+  padding: 10px;
+}
+
+.storyboard-takes-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 280px));
+  justify-content: start;
+}
+
+.storyboard-take {
+  width: 100%;
+  max-width: 280px;
+}
+
+@media (max-width: 1500px) {
+  .storyboard-scenes-list.is-focus .storyboard-scene-body {
+    grid-template-columns: minmax(520px, 680px) minmax(220px, 260px);
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene-conditioning {
+    grid-column: 1 / -1;
+    width: min(100%, 680px);
+  }
+}
+
+@media (max-width: 1100px) {
+  .storyboard-story-authoring,
+  .storyboard-scenes-list.is-focus .storyboard-scene-body {
+    grid-template-columns: 1fr;
+  }
+
+  .storyboard-story-authoring,
+  .storyboard-scenes-list.is-focus .storyboard-scene-main,
+  .storyboard-scenes-list.is-focus .storyboard-scene-conditioning {
+    width: 100%;
+    max-width: 760px;
+  }
+
+  .storyboard-invariant-row {
+    grid-template-columns: 110px minmax(140px, 1fr) auto;
+  }
+
+  .storyboard-invariant-row textarea {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .storyboard-scenes-heading,
+  .storyboard-scenes-actions,
+  .storyboard-invariants-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .storyboard-scene-pager {
+    justify-content: flex-start;
+  }
+
+  .storyboard-invariant-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .storyboard-invariant-row input,
+  .storyboard-invariant-row textarea {
+    grid-column: 1 / -1;
+  }
+}

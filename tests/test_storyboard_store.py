@@ -18,12 +18,20 @@ def test_story_create_list_and_reload(storyboard_fs):
         "title": "Storm Hotel",
         "concept": "Arrival during a storm.",
         "style": "Rain-soaked neo-noir horror.",
+        "invariants": [
+            {"kind": "character", "title": "Mara", "text": "Mara keeps the same dark bob and red coat."},
+            {"kind": "sound", "title": "Score", "text": "Low analog synth, no vocals."},
+        ],
         "tags": ["storm", "hotel", "Storm"],
         "pinned": True,
     })
 
     assert story["title"] == "Storm Hotel"
     assert story["style"] == "Rain-soaked neo-noir horror."
+    assert story["invariants"] == [
+        {"kind": "character", "title": "Mara", "text": "Mara keeps the same dark bob and red coat."},
+        {"kind": "sound", "title": "Score", "text": "Low analog synth, no vocals."},
+    ]
     assert story["tags"] == ["storm", "hotel"]
     assert story["status"] == "active"
 

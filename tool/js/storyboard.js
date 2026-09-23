@@ -12,6 +12,9 @@
     sceneSaveErrors: {},
     generationJobs: {},
     sequenceExport: null,
+    sceneViewMode: window.localStorage.getItem('webcap.storyboard.sceneView') || 'focus',
+    activeSceneId: '',
+    storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
     generationCapabilities: {
       loras: [],
       baseLoras: [],
@@ -233,6 +236,10 @@
     ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style'].forEach(function (id) {
       el(id).disabled = !!disabled;
     });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-story-invariant-kind], [data-story-invariant-title], [data-story-invariant-text], [data-story-invariant-remove]'), function (node) {
+      node.disabled = !!disabled;
+    });
+    el('storyboard-invariant-add').disabled = !!disabled;
   }
 
   function setDirectorBusy(busy) {
@@ -361,6 +368,95 @@
 
   function storyTagsText(story) {
     return Array.isArray(story && story.tags) ? story.tags.join(', ') : '';
+  }
+
+  function invariantRowHtml(item) {
+    item = item || {};
+    var kind = String(item.kind || 'custom');
+    var title = String(item.title || '');
+    var text = String(item.text || '');
+    var labels = { visual: 'Visual', character: 'Character', world: 'World', sound: 'Sound', custom: 'Custom' };
+    return '<div class="storyboard-invariant-row" data-story-invariant-row>' +
+      '<select data-story-invariant-kind aria-label="Invariant type">' +
+        Object.keys(labels).map(function (value) {
+          return '<option value="' + value + '"' + (value === kind ? ' selected' : '') + '>' + labels[value] + '</option>';
+        }).join('') +
+      '</select>' +
+      '<input type="text" data-story-invariant-title value="' + escapeHtml(title) + '" placeholder="Name / subject" aria-label="Invariant name">' +
+      '<textarea data-story-invariant-text rows="2" placeholder="What must stay consistent across Scenes?" aria-label="Invariant description">' + escapeHtml(text) + '</textarea>' +
+      '<button type="button" class="review-captions-btn" data-story-invariant-remove title="Remove invariant">×</button>' +
+    '</div>';
+  }
+
+  function storyInvariantsFromUi() {
+    var list = el('storyboard-invariants-list');
+    if (!list) return [];
+    return Array.prototype.map.call(list.querySelectorAll('[data-story-invariant-row]'), function (row) {
+      return {
+        kind: row.querySelector('[data-story-invariant-kind]').value,
+        title: row.querySelector('[data-story-invariant-title]').value,
+        text: row.querySelector('[data-story-invariant-text]').value
+      };
+    }).filter(function (item) { return !!String(item.text || '').trim(); });
+  }
+
+  function renderStoryInvariants() {
+    var list = el('storyboard-invariants-list');
+    if (!list || !storyState.story) return;
+    var invariants = Array.isArray(storyState.story.invariants) ? storyState.story.invariants : [];
+    list.innerHTML = invariants.map(invariantRowHtml).join('');
+  }
+
+  function setStoryCollapsed(collapsed) {
+    storyState.storyCollapsed = !!collapsed;
+    window.localStorage.setItem('webcap.storyboard.storyCollapsed', storyState.storyCollapsed ? '1' : '0');
+    var authoring = el('storyboard-story-authoring');
+    var button = el('storyboard-story-toggle');
+    authoring.classList.toggle('hidden', storyState.storyCollapsed);
+    button.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
+    button.textContent = storyState.storyCollapsed ? 'Expand Story' : 'Collapse Story';
+  }
+
+  function ensureActiveScene(order) {
+    order = Array.isArray(order) ? order : [];
+    if (!order.length) {
+      storyState.activeSceneId = '';
+      return '';
+    }
+    if (order.indexOf(storyState.activeSceneId) < 0) storyState.activeSceneId = order[0];
+    return storyState.activeSceneId;
+  }
+
+  function syncSceneViewControls(order) {
+    order = Array.isArray(order) ? order : [];
+    if (storyState.sceneViewMode !== 'overview' && storyState.sceneViewMode !== 'focus') storyState.sceneViewMode = 'focus';
+    var active = ensureActiveScene(order);
+    var index = active ? order.indexOf(active) : -1;
+    el('storyboard-scenes-overview-btn').classList.toggle('active', storyState.sceneViewMode === 'overview');
+    el('storyboard-scenes-focus-btn').classList.toggle('active', storyState.sceneViewMode === 'focus');
+    el('storyboard-scene-pager').classList.toggle('hidden', storyState.sceneViewMode !== 'focus' || !order.length);
+    el('storyboard-scene-position').textContent = order.length ? 'Scene ' + String(index + 1) + ' of ' + String(order.length) : '';
+    el('storyboard-scene-prev-btn').disabled = index <= 0;
+    el('storyboard-scene-next-btn').disabled = index < 0 || index >= order.length - 1;
+  }
+
+  function setSceneViewMode(mode, sceneId) {
+    if (mode !== 'overview' && mode !== 'focus') throw new Error('Unknown Storyboard Scene view.');
+    return flushPendingSaves().then(function () {
+      storyState.sceneViewMode = mode;
+      if (sceneId) storyState.activeSceneId = sceneId;
+      window.localStorage.setItem('webcap.storyboard.sceneView', mode);
+      renderScenes();
+    }).catch(reportError);
+  }
+
+  function moveFocusedScene(delta) {
+    var order = storyState.story && Array.isArray(storyState.story.sceneOrder) ? storyState.story.sceneOrder : [];
+    var active = ensureActiveScene(order);
+    var index = order.indexOf(active);
+    var next = index + delta;
+    if (index < 0 || next < 0 || next >= order.length) return;
+    setSceneViewMode('focus', order[next]);
   }
 
   function takeMediaUrl(storyId, sceneId, take) {
@@ -795,7 +891,42 @@
     var removedScenes = story.removedScenes || {};
     var storyLoras = Array.isArray(story.loras) ? story.loras : [];
 
-    var activeHtml = order.map(function (sceneId, index) {
+    syncSceneViewControls(order);
+    if (storyState.sceneViewMode === 'overview') {
+      host.classList.remove('is-focus');
+      host.classList.add('is-overview');
+      var overviewHtml = order.map(function (sceneId, index) {
+        var scene = scenes[sceneId] || {};
+        var takeCount = Array.isArray(scene.takeOrder) ? scene.takeOrder.length : 0;
+        return '<button type="button" class="storyboard-scene-overview-card" data-scene-open="' + escapeHtml(sceneId) + '">' +
+          '<span class="storyboard-scene-overview-number">Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
+          '<strong>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
+          '<span class="storyboard-scene-overview-summary">' + escapeHtml(scene.summary || 'No Scene intent yet.') + '</span>' +
+          '<span class="storyboard-scene-overview-meta">' + String(takeCount) + ' Take' + (takeCount === 1 ? '' : 's') + (scene.selectedTakeId ? ' · selected' : '') + '</span>' +
+        '</button>';
+      }).join('');
+      var overviewRemovedIds = Object.keys(removedScenes);
+      if (overviewRemovedIds.length) {
+        overviewHtml += '<section class="storyboard-removed-scenes"><div class="storyboard-list-section-title">Removed Scenes</div>' +
+          overviewRemovedIds.map(function (sceneId) {
+            var scene = removedScenes[sceneId] || {};
+            return '<div class="storyboard-removed-scene" data-removed-scene-id="' + escapeHtml(sceneId) + '">' +
+              '<span>' + escapeHtml(scene.title || 'Untitled Scene') + '</span>' +
+              '<button type="button" class="review-captions-btn" data-restore-scene="' + escapeHtml(sceneId) + '">Restore</button>' +
+            '</div>';
+          }).join('') + '</section>';
+      }
+      host.innerHTML = overviewHtml || '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
+      return;
+    }
+
+    host.classList.remove('is-overview');
+    host.classList.add('is-focus');
+    var focusedSceneId = ensureActiveScene(order);
+    var renderOrder = focusedSceneId ? [focusedSceneId] : [];
+
+    var activeHtml = renderOrder.map(function (sceneId) {
+      var index = order.indexOf(sceneId);
       var scene = scenes[sceneId] || {};
       var seedMode = sceneValue(scene, 'seedMode', 'random');
       var seed = sceneValue(scene, 'seed', '');
@@ -822,15 +953,9 @@
         return inheritedLoraRowHtml(lora, overrides[String(lora.name || '').toLowerCase()]);
       }).join('');
       var loraRowsHtml = sceneLoras.map(sceneLoraRowHtml).join('');
-      var enabledInheritedCount = storyLoras.filter(function (lora) {
-        var override = overrides[String(lora.name || '').toLowerCase()];
-        return !override || override.enabled !== false;
-      }).length;
-      var effectiveLoraCount = enabledInheritedCount + sceneLoras.length;
       var advancedSummaryParts = [];
       if (seedMode === 'fixed') advancedSummaryParts.push('Fixed seed');
       if (scene.wildcardsEnabled) advancedSummaryParts.push('Wildcards');
-      if (effectiveLoraCount) advancedSummaryParts.push(effectiveLoraCount + ' LoRA' + (effectiveLoraCount === 1 ? '' : 's'));
       var advancedSummary = advancedSummaryParts.length ? advancedSummaryParts.join(' · ') : 'Optional';
       var baseLoras = storyState.generationCapabilities.baseLoras || [];
       var loraStatusTitle = storyState.generationCapabilities.available
@@ -951,8 +1076,8 @@
                 '<input type="search" class="storyboard-lora-picker" data-scene-lora-picker autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Filter / choose LoRA…" aria-label="Filter and choose available LoRA">' +
                 '<div class="storyboard-lora-picker-menu hidden" data-lora-picker-menu role="listbox"></div>' +
               '</div>' +
-              '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Inherited from Story</span><div class="storyboard-lora-list" data-story-lora-inherited-list>' + inheritedLoraRowsHtml + '</div></div>' +
-              '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Scene only</span><div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div></div>' +
+              (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Inherited from Story</span><div class="storyboard-lora-list" data-story-lora-inherited-list>' + inheritedLoraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list hidden" data-story-lora-inherited-list></div>') +
+              (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Scene only</span><div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>') +
               '<span class="storyboard-lora-status" title="' + escapeHtml(loraStatusTitle) + '">' + escapeHtml(loraStatusText) + '</span>' +
             '</div>' +
             '<details class="storyboard-scene-disclosure storyboard-reference-details">' +
@@ -1015,6 +1140,7 @@
     el('storyboard-story-title').value = storyState.story.title || '';
     el('storyboard-story-concept').value = storyState.story.concept || '';
     el('storyboard-story-style').value = storyState.story.style || '';
+    renderStoryInvariants();
     el('storyboard-story-tags').value = storyTagsText(storyState.story);
     el('storyboard-story-status').value = storyState.story.status || 'active';
     el('storyboard-story-pinned').checked = !!storyState.story.pinned;
@@ -1026,6 +1152,7 @@
     if (restoreConceptButton) {
       restoreConceptButton.classList.toggle('hidden', typeof storyState.story.previousConcept !== 'string');
     }
+    setStoryCollapsed(storyState.storyCollapsed);
     renderStoryLoras();
     renderScenes();
     setDirectorBusy(storyState.director.busy);
@@ -1058,7 +1185,7 @@
     return flushPendingSaves().then(function () {
       return request({
         operation: 'create_story',
-        story: { title: 'Untitled Story', concept: '', style: '', tags: [], status: 'active', pinned: false }
+        story: { title: 'Untitled Story', concept: '', style: '', invariants: [], tags: [], status: 'active', pinned: false }
       });
     }).then(function (payload) {
       storyState.story = payload.story;
@@ -1075,6 +1202,7 @@
       title: el('storyboard-story-title').value,
       concept: el('storyboard-story-concept').value,
       style: el('storyboard-story-style').value,
+      invariants: storyInvariantsFromUi(),
       loras: storyLorasFromUi(),
       tags: el('storyboard-story-tags').value.split(',').map(function (value) { return value.trim(); }).filter(Boolean),
       status: el('storyboard-story-status').value,
@@ -1234,6 +1362,9 @@
       scene: { title: 'New Scene', durationSeconds: 6, aspectRatio: '4:3 (Standard)', megapixels: 0.2, seedMode: 'random' }
     }); }).then(function (payload) {
       storyState.story = payload.story;
+      storyState.sceneViewMode = 'focus';
+      storyState.activeSceneId = (payload.story.sceneOrder || []).slice(-1)[0] || '';
+      window.localStorage.setItem('webcap.storyboard.sceneView', 'focus');
       renderStory();
       setSaveState('Saved');
       refreshLibrary();
@@ -1270,6 +1401,11 @@
       sceneId: sceneId
     }); }).then(function (payload) {
       storyState.story = payload.story;
+      var duplicatedOrder = payload.story.sceneOrder || [];
+      var sourceIndex = duplicatedOrder.indexOf(sceneId);
+      storyState.sceneViewMode = 'focus';
+      storyState.activeSceneId = duplicatedOrder[sourceIndex + 1] || sceneId;
+      window.localStorage.setItem('webcap.storyboard.sceneView', 'focus');
       renderStory();
       setSaveState('Saved');
       refreshLibrary();
@@ -1603,6 +1739,11 @@
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
 
     el('storyboard-new-btn').onclick = createStory;
+    el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
+    el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
+    el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
+    el('storyboard-scene-prev-btn').onclick = function () { moveFocusedScene(-1); };
+    el('storyboard-scene-next-btn').onclick = function () { moveFocusedScene(1); };
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
@@ -1623,6 +1764,19 @@
 
     ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style', 'storyboard-story-tags'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);
+    });
+    el('storyboard-invariants-list').addEventListener('input', scheduleStorySave);
+    el('storyboard-invariants-list').addEventListener('change', scheduleStorySave);
+    el('storyboard-invariant-add').addEventListener('click', function () {
+      el('storyboard-invariants-list').insertAdjacentHTML('beforeend', invariantRowHtml({ kind: 'character', title: '', text: '' }));
+    });
+    el('storyboard-invariants-list').addEventListener('click', function (event) {
+      var remove = event.target.closest('[data-story-invariant-remove]');
+      if (!remove) return;
+      var row = remove.closest('[data-story-invariant-row]');
+      if (!row) throw new Error('Story invariant row is missing.');
+      row.remove();
+      scheduleStorySave();
     });
     ['storyboard-story-status', 'storyboard-story-pinned'].forEach(function (id) {
       el(id).addEventListener('change', scheduleStorySave);
@@ -1732,6 +1886,11 @@
     });
 
     el('storyboard-scenes-list').addEventListener('click', function (event) {
+      var openScene = event.target.closest('[data-scene-open]');
+      if (openScene) {
+        setSceneViewMode('focus', openScene.dataset.sceneOpen);
+        return;
+      }
       var pickerOption = event.target.closest('[data-lora-picker-option]');
       if (pickerOption) {
         var pickerWrap = pickerOption.closest('.storyboard-lora-picker-wrap');

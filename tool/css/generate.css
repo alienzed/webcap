@@ -1,3 +1,17 @@
+.app-frame.workspace-generate-open > .app {
+  display: none;
+}
+
+.app-frame.workspace-generate-open > .test-generations-workspace,
+.app-frame.workspace-generate-open > .storyboard-workspace {
+  display: none;
+}
+
+.app-frame.workspace-generate-open > .generate-workspace {
+  display: grid;
+  grid-area: workspace;
+}
+
 .generate-workspace {
   min-width: 0;
   min-height: 0;

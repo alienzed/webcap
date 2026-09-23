@@ -81,6 +81,12 @@ def _reconcile_provider_cleanup_holds():
         _provider_cleanup_holds.intersection_update(unresolved)
         remaining = bool(_provider_cleanup_holds)
     if remaining:
+        current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+        if not current.get("paused"):
+            execution_pause_lane(
+                EXECUTION_LANE,
+                reason="Queue paused: unresolved ComfyUI provider cleanup must finish before inference can resume.",
+            )
         if not execution_resource_owner():
             execution_reserve_resource(GPU_RESERVATION_OWNER)
         return False
@@ -128,6 +134,16 @@ def _ensure_execution_reconciled():
     with _reconcile_lock:
         if _startup_reconciled:
             return
+        prior = execution_lane_snapshot(EXECUTION_LANE, include_terminal=True)
+        unresolved_terminal_provider_ids = {
+            str((job.get("details") or {}).get("providerJobId") or "").strip()
+            for job in prior.get("jobs", [])
+            if str(job.get("status") or "") in {"failed", "interrupted", "cancelled", "stopped"}
+            and isinstance(job.get("details"), dict)
+            and str((job.get("details") or {}).get("providerJobId") or "").strip()
+            and str((job.get("details") or {}).get("providerStatus") or "").strip().lower()
+                not in {"completed", "failed", "cancelled"}
+        }
         interrupted = execution_recover_lane(
             EXECUTION_LANE,
             reason="Inference was interrupted by a WebCap restart.",
@@ -154,6 +170,32 @@ def _ensure_execution_reconciled():
                     "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
                 )
                 _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
+        interrupted_provider_ids = {
+            str((job.get("details") or {}).get("providerJobId") or "").strip()
+            for job in interrupted
+            if isinstance(job.get("details"), dict)
+        }
+        for prompt_id in unresolved_terminal_provider_ids - interrupted_provider_ids:
+            try:
+                from .inference_runtime import cancel_job_and_wait
+                if not cancel_job_and_wait(prompt_id):
+                    hold_provider_cleanup(
+                        prompt_id,
+                        "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",
+                    )
+                    _logger.error(
+                        "Prior terminal inference provider job %s did not confirm cancellation.",
+                        prompt_id,
+                    )
+            except Exception:
+                hold_provider_cleanup(
+                    prompt_id,
+                    "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",
+                )
+                _logger.exception(
+                    "Could not verify prior terminal inference provider job %s.",
+                    prompt_id,
+                )
         _startup_reconciled = True
 
 

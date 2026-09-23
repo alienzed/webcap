@@ -222,6 +222,35 @@
   resize: vertical;
 }
 
+
+.storyboard-field-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.storyboard-field-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.storyboard-field-action-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.storyboard-field-action-btn:hover {
+  text-decoration: underline;
+}
+
 .storyboard-concept-field,
 .storyboard-style-field,
 .storyboard-tags-field {
@@ -911,12 +940,12 @@
 .storyboard-scene-disclosure > summary {
   display: flex;
   align-items: center;
-  gap: 7px;
-  min-height: 32px;
-  padding: 7px 8px;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 10px;
   cursor: pointer;
   list-style: none;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -965,7 +994,7 @@
 .storyboard-lora-status {
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1070,9 +1099,10 @@
 }
 
 .storyboard-invariants-header span {
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .storyboard-invariants-list {

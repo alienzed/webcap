@@ -4,8 +4,6 @@ from tool.server import storyboard_llm_runtime
 
 
 
-
-
 def test_director_capacity_defaults_leave_room_for_whole_story_output():
     assert storyboard_llm_runtime.DEFAULT_CONTEXT_SIZE == 16384
     assert storyboard_llm_runtime.DEFAULT_MAX_TOKENS == 8192

@@ -265,7 +265,8 @@ def _storyboard_items(cache):
                         referenced = _storyboard_take_is_referenced(story, take_id, media_path)
                         item_id = story_id + "/" + str(scene_id) + "/" + str(take_id)
                         label = str(take.get("label") or "").strip() or (
-                            str(summary.get("title") or story_id) + " / " + str(scene.get("title") or scene_id)
+                            str(summary.get("title") or story_id) + " / " +
+                            str(scene.get("title") or scene_id) + " / " + str(take_id)
                         )
                         status_parts = []
                         if scene_source == "removed":
@@ -276,6 +277,16 @@ def _storyboard_items(cache):
                             status_parts.append("Take")
                         if referenced:
                             status_parts.append("used as reference")
+                        removed_scene = scene_source == "removed"
+                        protected_reason = ""
+                        if referenced:
+                            protected_reason = (
+                                "Take media is still used as a Scene reference. Clear that reference before deletion."
+                            )
+                        elif removed_scene:
+                            protected_reason = (
+                                "This Take belongs to a removed Scene. Restore the Scene before permanently deleting its Takes."
+                            )
                         rows.append(_item(
                             "storyboard",
                             item_id,
@@ -283,11 +294,8 @@ def _storyboard_items(cache):
                             raw_path,
                             kind="Generated Take",
                             status=" · ".join(status_parts),
-                            purgeable=not referenced,
-                            protected_reason=(
-                                "Take media is still used as a Scene reference. Clear that reference before deletion."
-                                if referenced else ""
-                            ),
+                            purgeable=not referenced and not removed_scene,
+                            protected_reason=protected_reason,
                             meta={
                                 "storyId": story_id,
                                 "storyTitle": str(summary.get("title") or story_id),
@@ -1514,6 +1522,11 @@ def purge(area, item_id, folder=""):
         parts = PurePosixPath(str(item_id or "")).parts
         path, story, _scene, take = _resolve_storyboard_take(item_id)
         story_id, scene_id, take_id = parts
+        removed_scenes = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
+        if scene_id in removed_scenes:
+            raise RuntimeError(
+                "This Take belongs to a removed Scene. Restore the Scene before permanently deleting its Takes."
+            )
         if _storyboard_take_is_referenced(story, take_id, take.get("mediaPath")):
             raise RuntimeError(
                 "Take cannot be deleted while its media is used as a Scene reference. Clear that reference first."

@@ -16,7 +16,7 @@ def test_outer_shell_wraps_existing_workspace_without_replacing_it():
     assert 'class="app shell-revamp workspace-view-single workspace-surface-default"' in html
     assert 'id="sidebar-panel"' in html
     assert 'class="panel preview-panel"' in html
-    assert 'class="panel workbench-panel"' in html
+    assert 'class="panel editor-panel workbench-panel"' in html
     assert 'id="app-overlay-root"' in html
 
 
@@ -86,8 +86,8 @@ def test_shell_header_uses_workspace_first_clickable_breadcrumb_without_parallel
     assert "navigateToDirStackIndex(index);" in shell
     assert "if (index === lastIndex)" in shell
     assert "if (deriveShellNavigationState().activity !== 'prep') openPrepActivity();" in shell
-    assert "? 'Test Generations'" in shell
-    assert "? 'Focus' : 'Prep'" in shell
+    assert "workspaceTitle.textContent = 'Test Generations'" in shell
+    assert "workspaceTitle.textContent = 'Focus'" in shell
     assert ".app-header-breadcrumb-item:hover" in css
     assert "background: transparent;" in css
     assert "window.syncApplicationShellContext = syncApplicationShellContext" in shell
@@ -98,7 +98,7 @@ def test_test_activity_visibility_and_active_state_are_owned_by_new_rail():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert "var activityButton = el('activity-test-btn')" in script
-    assert "activityButton.classList.toggle('hidden', !visible)" in script
+    assert "activityButton.classList.remove('hidden')" in script
     assert "activityButton.classList.toggle('active', isOpen())" in script
 
 
@@ -131,7 +131,7 @@ def test_training_identity_is_owned_by_shell_header():
     assert html.count('id="sidebar-collapse-toggle-btn"') == 1
     assert 'id="training-sidebar-collapse-toggle-btn"' not in html
     assert "surface === 'training'" in shell
-    assert "? 'Training'" in shell
+    assert "workspaceTitle.textContent = 'Training'" in shell
     assert "entryKind === 'global'" in shell
     assert "contextText = entryKind === 'global' ? 'Global'" in shell
 
@@ -140,7 +140,7 @@ def test_test_workspace_uses_shell_identity_and_prep_exit():
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    assert "testOpen ? 'Test Generations'" in shell
+    assert "workspaceTitle.textContent = 'Test Generations'" in shell
     assert "workspaceContextText = 'Generations'" not in shell
     assert "window.closeTestBenchActivity()" in shell
 
@@ -152,7 +152,7 @@ def test_review_identity_is_owned_by_shell_header():
     css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
     assert "surface === 'reviewOutput'" in shell
-    assert "? 'Review Set'" in shell
+    assert "workspaceTitle.textContent = 'Review Set'" in shell
     assert "function getReviewWorkspaceShellContext()" in review
     assert 'class="review-output-surface-title"' not in html
     assert 'id="review-output-summary-folder"' not in html
@@ -168,7 +168,7 @@ def test_grid_identity_and_prep_exit_are_owned_by_shell_without_removing_local_b
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
 
     assert "surface === 'grid'" in shell
-    assert "? 'Grid'" in shell
+    assert "workspaceTitle.textContent = 'Grid'" in shell
     assert "normalizeWorkspaceSurface(workspaceState.surface) === 'grid'" in shell
     assert "closeMediaGridSurface();" in shell
     assert 'id="media-grid-surface-close-btn"' in html
@@ -206,7 +206,7 @@ def test_focus_uses_shell_identity_but_keeps_local_cleanup_exit():
     grid = (ROOT / "tool" / "js" / "media_grid_state.js").read_text(encoding="utf-8")
 
     assert "surface === 'focus'" in shell
-    assert "? 'Focus' : 'Prep'" in shell
+    assert "workspaceTitle.textContent = 'Focus'" in shell
     assert "sidebarToggleVisible = !testOpen && (surface === 'default' || surface === 'training');" in shell
     assert "stopFocusedAnnotation();" in shell
     assert "function mediaGridLeaveForWorkspaceTransition()" in grid
@@ -244,6 +244,7 @@ def test_model_selector_is_single_real_control_in_permanent_header():
     test_bench = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
 
     header_start = html.index('id="app-header-context"')
     workspace_start = html.index('class="app shell-revamp')
@@ -256,7 +257,8 @@ def test_model_selector_is_single_real_control_in_permanent_header():
     assert 'aria-label="Base Model"' in html
     assert "modelRelevant = navigation.activity === 'training' || navigation.activity === 'test'" in shell
     assert "modelControl.classList.toggle('hidden', !modelRelevant)" in shell
-    assert "modelSelect.disabled = navigation.activity === 'test'" in shell
+    assert "modelSelect.disabled = navigation.activity === 'test'" not in shell
+    assert "Select the Base Model for Test Generations" in shell
     assert "modelProfileSelect:" not in training_state
     assert "getWorkingModelProfileSelect()" in training
     assert "syncWorkingModelProfileSelect(folder)" in training
@@ -480,7 +482,7 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "training-config-empty" not in shell
     assert "function syncTrainingWorkspaceDetailUi()" in training
     assert "function syncTrainingEntryChrome()" in training
-    assert "function syncShellTrainingGpuStatus()" in runner
+    assert "setShellTrainingActive(running);" in runner
     assert "renderShellSystemStatus()" in runner
     assert "function refreshShellSystemStatus()" in shell
     assert "fetch('/fs/system_status')" in shell

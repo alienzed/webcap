@@ -560,6 +560,51 @@ def test_chat_wraps_json_schema_for_llama_cpp(monkeypatch):
     }
 
 
+def test_chat_uses_external_llm_gpu_reservation_without_double_claim(monkeypatch):
+    calls = []
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_reserve_gpu",
+        lambda: pytest.fail("Queued LLM execution already owns the GPU."),
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_release_gpu",
+        lambda: pytest.fail("Queued LLM execution owns GPU release."),
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: calls.append("free-comfy"))
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: calls.append("load:" + model_id))
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_status", lambda model_id: "loaded")
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "mode": "local",
+            "llama_server": "",
+            "models_dir": None,
+            "port": 8189,
+            "context_size": 8192,
+            "max_tokens": 4096,
+        },
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda *args, **kwargs: {"choices": [{"message": {"content": "queued response"}}]},
+    )
+
+    result = storyboard_llm_runtime.chat(
+        "qwen",
+        [{"role": "user", "content": "Write."}],
+        gpu_reserved=True,
+    )
+
+    assert result["text"] == "queued response"
+    assert calls == ["free-comfy", "load:qwen"]
+
+
 def test_remote_chat_uses_openai_compatible_endpoint_without_local_gpu_management(monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: calls.append("server"))

@@ -51,8 +51,6 @@ def hold_provider_cleanup(provider_job_id, reason):
     with _provider_hold_lock:
         _provider_cleanup_holds.add(provider_job_id)
     execution_pause_lane(EXECUTION_LANE, reason=str(reason or "Queue paused for provider cleanup."))
-    if not execution_resource_owner():
-        execution_reserve_resource(GPU_RESERVATION_OWNER)
 
 
 def _reconcile_provider_cleanup_holds():
@@ -63,6 +61,7 @@ def _reconcile_provider_cleanup_holds():
 
     from . import inference_runtime
     unresolved = []
+    provider_active = False
     for provider_job_id in pending:
         try:
             job = inference_runtime.read_job(provider_job_id)
@@ -76,6 +75,7 @@ def _reconcile_provider_cleanup_holds():
         status = str(job.get("status") or "").strip().lower() if isinstance(job, dict) else ""
         if job is not None and status not in {"completed", "failed", "cancelled"}:
             unresolved.append(provider_job_id)
+            provider_active = True
 
     with _provider_hold_lock:
         _provider_cleanup_holds.intersection_update(unresolved)
@@ -87,7 +87,7 @@ def _reconcile_provider_cleanup_holds():
                 EXECUTION_LANE,
                 reason="Queue paused: unresolved ComfyUI provider cleanup must finish before inference can resume.",
             )
-        if not execution_resource_owner():
+        if provider_active and not execution_resource_owner():
             execution_reserve_resource(GPU_RESERVATION_OWNER)
         return False
 
@@ -260,8 +260,6 @@ def _cancel_failed_provider(job):
 def _advance_queue():
     _ensure_execution_reconciled()
     with _dispatch_lock:
-        if not _reconcile_provider_cleanup_holds():
-            return None
         snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
         if snapshot.get("paused") or snapshot.get("activeJobId"):
             return None
@@ -274,6 +272,11 @@ def _advance_queue():
 
         owner = execution_resource_owner()
         if owner and owner != GPU_RESERVATION_OWNER:
+            return None
+
+        with _provider_hold_lock:
+            cleanup_pending = bool(_provider_cleanup_holds)
+        if cleanup_pending and not _reconcile_provider_cleanup_holds():
             return None
 
         reserved_here = False
@@ -342,9 +345,6 @@ def _monitor_has_work():
     snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
     if snapshot.get("activeJobId"):
         return True
-    with _provider_hold_lock:
-        if _provider_cleanup_holds:
-            return True
     if snapshot.get("paused"):
         return False
     return any(str(job.get("status") or "") == "queued" for job in snapshot.get("jobs", []))
@@ -558,6 +558,13 @@ def action(operation, job_id="", direction="", position=None):
         execution_pause_lane(EXECUTION_LANE)
         return {"queue": snapshot()}
     if operation == "resume_queue":
+        owner = execution_resource_owner()
+        if owner and owner != GPU_RESERVATION_OWNER:
+            return {"queue": snapshot()}
+        with _provider_hold_lock:
+            cleanup_pending = bool(_provider_cleanup_holds)
+        if cleanup_pending and not _reconcile_provider_cleanup_holds():
+            return {"queue": snapshot()}
         execution_resume_lane(EXECUTION_LANE)
         _start_worker_for_requested_inference()
         return {"queue": snapshot()}

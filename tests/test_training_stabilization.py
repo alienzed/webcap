@@ -37,7 +37,7 @@ def _fake_runtime(monkeypatch):
         "wslDistribution": "", "cwd": "/tmp", "activate": "",
     })
     as_wsl = lambda path, distribution="": Path(path).as_posix()
-    monkeypatch.setattr(training_runner, "_to_wsl_path", as_wsl)
+    monkeypatch.setattr(training_runner, "to_wsl_path", as_wsl)
     monkeypatch.setattr(training_bundle, "to_wsl_path", as_wsl)
 
 
@@ -224,7 +224,7 @@ def test_manual_h3_command_materializes_the_managed_review_into_isolated_directo
     monkeypatch.setattr(run_ops, "training_runtime_settings", lambda _settings: {
         "cwd": "/pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
     })
-    monkeypatch.setattr(run_ops, "_to_wsl_path", lambda path, _distribution="": Path(path).as_posix())
+    monkeypatch.setattr(run_ops, "to_wsl_path", lambda path, _distribution="": Path(path).as_posix())
     monkeypatch.setattr(run_ops, "stream_with_context", lambda generator: generator)
 
     response = run_ops.train_run_response(
@@ -257,7 +257,7 @@ def test_queue_and_manual_pass_the_same_managed_review_to_materialization(tmp_pa
     monkeypatch.setattr(run_ops, "training_runtime_settings", lambda _settings: {
         "cwd": "/pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
     })
-    monkeypatch.setattr(run_ops, "_to_wsl_path", lambda path, _distribution="": Path(path).as_posix())
+    monkeypatch.setattr(run_ops, "to_wsl_path", lambda path, _distribution="": Path(path).as_posix())
 
     manual = run_ops.train_run_response(
         "sets/subject", profile_id=MINIMAX_H3_PROFILE_ID, run_id="train", selected_media=["one.png"],
@@ -610,7 +610,7 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
         "h3SplitCachePhase": False,
     }
     monkeypatch.setattr(run_ops, "training_runtime_settings", lambda _settings: runtime_settings)
-    monkeypatch.setattr(run_ops, "_to_wsl_path", lambda path, _distribution="": "/wsl" + Path(path).as_posix())
+    monkeypatch.setattr(run_ops, "to_wsl_path", lambda path, _distribution="": "/wsl" + Path(path).as_posix())
     monkeypatch.setattr(run_ops, "stream_with_context", lambda generator: generator)
 
     client = app_module.app.test_client()

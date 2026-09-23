@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -8,7 +9,7 @@ from pathlib import Path, PurePosixPath
 from . import config as app_config
 from .epoch_test_bench import delete_session
 from .generate_store import MANIFEST_NAME
-from .execution_queue import lane_snapshot as execution_lane_snapshot
+from .execution_queue import get_job as execution_get_job, lane_snapshot as execution_lane_snapshot
 from . import inference_runtime
 from .inference_runner import stop_storyboard_jobs
 from .storyboard_store import delete_story, list_stories, storyboard_root
@@ -22,6 +23,7 @@ MEASURABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "se
 PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}
 ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
 ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
+GENERATE_REFERENCE_TOKEN_RE = re.compile(r"^[0-9]+-[0-9a-f]{12}$")
 
 
 def _cache_path():
@@ -435,17 +437,59 @@ def _read_h3_probe_state(probe_path):
     }
 
 
+def _active_generate_reference_tokens():
+    active = set()
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
+    for job in snapshot.get("jobs") or []:
+        if not isinstance(job, dict):
+            continue
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("client") or "") != "generate":
+            continue
+        job_id = str(job.get("id") or "").strip()
+        if not job_id:
+            continue
+        try:
+            stored = execution_get_job(job_id, include_payload=True)
+        except FileNotFoundError:
+            continue
+        payload = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
+        request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+        references = request.get("references") if isinstance(request.get("references"), dict) else {}
+        for raw_path in references.values():
+            parts = PurePosixPath(str(raw_path or "").replace("\\", "/")).parts
+            if (
+                len(parts) >= 4
+                and parts[0] == ".webcap_runtime"
+                and parts[1] == "generate-references"
+                and GENERATE_REFERENCE_TOKEN_RE.fullmatch(parts[2])
+            ):
+                active.add(parts[2])
+    return active
+
+
 def _runtime_items(cache):
     rows = []
     root = Path(app_config.FS_ROOT)
     reference_root = root / ".webcap_runtime" / "generate-references"
-    if reference_root.exists():
-        rows.append(_item(
-            "runtime", "generate-references", "Generate references", reference_root,
-            kind="Transient references", status="runtime", purgeable=False,
-            protected_reason="Transient references are lifecycle-managed, not manually purged here.",
-            cache=cache,
-        ))
+    active_reference_tokens = _active_generate_reference_tokens()
+    if reference_root.is_dir() and not reference_root.is_symlink():
+        for reference in sorted(reference_root.iterdir(), key=lambda path: path.name, reverse=True):
+            if (
+                not reference.is_dir()
+                or reference.is_symlink()
+                or not GENERATE_REFERENCE_TOKEN_RE.fullmatch(reference.name)
+            ):
+                continue
+            active = reference.name in active_reference_tokens
+            rows.append(_item(
+                "runtime", "generate-reference/" + reference.name, reference.name, reference,
+                kind="Generate reference bundle",
+                status=("queued / active" if active else "draft / residual"),
+                purgeable=not active,
+                protected_reason=("Referenced by queued or active Generate work." if active else ""),
+                cache=cache,
+            ))
     probes_root = root / ".webcap_training" / "h3-probes"
     if probes_root.is_dir():
         for probe in sorted(probes_root.iterdir(), key=lambda p: p.name, reverse=True):
@@ -783,14 +827,30 @@ def _resolve_staged(folder, item_id):
     return candidate, candidate.with_suffix(".webcap.json"), provenance
 
 
+def _resolve_generate_reference(item_id):
+    value = str(item_id or "")
+    if not value.startswith("generate-reference/"):
+        raise ValueError("Generate reference storage ID is invalid.")
+    token = value.split("/", 1)[1]
+    if not GENERATE_REFERENCE_TOKEN_RE.fullmatch(token):
+        raise ValueError("Generate reference storage ID is invalid.")
+
+    raw_root = Path(app_config.FS_ROOT) / ".webcap_runtime" / "generate-references"
+    raw_path = raw_root / token
+    if raw_root.is_symlink() or raw_path.is_symlink():
+        raise ValueError("Generate reference storage path is symlinked.")
+    root = raw_root.resolve()
+    path = raw_path.resolve()
+    if path.parent != root or not path.is_dir():
+        raise FileNotFoundError("Generate reference bundle is unavailable.")
+    return path, token
+
+
 def _resolve_runtime(item_id):
     root = Path(app_config.FS_ROOT).resolve()
     value = str(item_id or "")
-    if value == "generate-references":
-        path = root / ".webcap_runtime" / "generate-references"
-        if path.is_symlink():
-            raise ValueError("Generate reference storage path is symlinked.")
-        return path
+    if value.startswith("generate-reference/"):
+        return _resolve_generate_reference(value)[0]
     if value.startswith("h3-probe/"):
         return _resolve_h3_probe(value)[0]
     raise ValueError("Runtime storage ID is invalid.")
@@ -946,12 +1006,19 @@ def purge(area, item_id, folder=""):
         stop_storyboard_jobs(story_id)
         delete_story(story_id)
     elif area == "runtime":
-        if not str(item_id or "").startswith("h3-probe/"):
-            raise ValueError("This Runtime storage item is lifecycle-managed and cannot be purged manually.")
-        path, probe_state = _resolve_h3_probe(item_id)
-        if not probe_state.get("purgeable"):
-            raise RuntimeError(probe_state.get("protectedReason") or "H3 probe is not safe to delete.")
-        shutil.rmtree(path)
+        value = str(item_id or "")
+        if value.startswith("generate-reference/"):
+            path, token = _resolve_generate_reference(value)
+            if token in _active_generate_reference_tokens():
+                raise RuntimeError("Generate reference bundle is referenced by queued or active Generate work.")
+            shutil.rmtree(path)
+        elif value.startswith("h3-probe/"):
+            path, probe_state = _resolve_h3_probe(value)
+            if not probe_state.get("purgeable"):
+                raise RuntimeError(probe_state.get("protectedReason") or "H3 probe is not safe to delete.")
+            shutil.rmtree(path)
+        else:
+            raise ValueError("This Runtime storage item cannot be purged manually.")
     elif area == "comfy":
         path, family, names = _resolve_comfy(item_id)
         if _comfy_identity_active(family, names):

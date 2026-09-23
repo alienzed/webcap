@@ -253,7 +253,7 @@
     if (!storyState.director.busy) return Promise.resolve();
     return Promise.all([
       directorActivityRequest('/fs/director/activity'),
-      directorActivityRequest('/fs/system_status')
+      directorActivityRequest('/fs/system_status').catch(function () { return null; })
     ]).then(function (values) {
       renderDirectorActivity(values[0], values[1]);
     }).catch(function () {

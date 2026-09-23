@@ -98,3 +98,13 @@ def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():
     assert "syncQueueRow(row, job)" in queue_code
     assert "host.innerHTML = jobs.map" not in queue_code
 
+def test_generate_partial_reference_uploads_have_a_cleanup_path():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert "function cleanupUploadedReferences(paths)" in script
+    assert "postJson('/fs/generate/reference/cleanup'" in script
+    assert "uploadedPaths.push(path)" in script
+    assert "cleanupUploadedReferences(uploadedPaths)" in script
+    assert '@app.route("/fs/generate/reference/cleanup", methods=["POST"])' in app
+

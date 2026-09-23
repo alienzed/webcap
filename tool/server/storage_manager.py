@@ -8,15 +8,17 @@ from pathlib import Path, PurePosixPath
 from . import config as app_config
 from .epoch_test_bench import delete_session
 from .generate_store import MANIFEST_NAME
+from .execution_queue import lane_snapshot as execution_lane_snapshot
 from .inference_runner import stop_storyboard_jobs
 from .storyboard_store import delete_story, list_stories, storyboard_root
 from .training_action import managed_actions, read_action
+from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
 
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
-MEASURABLE_AREAS = {"training", "tests", "generate", "storyboard", "set", "runtime"}
-PURGEABLE_AREAS = {"training", "tests", "generate", "storyboard", "runtime"}
+MEASURABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "set", "runtime"}
+PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime"}
 ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
 ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
 
@@ -243,6 +245,102 @@ def _test_items(cache, folder):
     return rows
 
 
+def _normalized_folder_key(value):
+    return str(value or "").strip().replace("\\", "/").strip("/")
+
+
+def _active_staged_test_candidates(folder):
+    folder_key = _normalized_folder_key(folder)
+    active = set()
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
+    for job in snapshot.get("jobs") or []:
+        if not isinstance(job, dict):
+            continue
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("client") or "") != "test":
+            continue
+        if _normalized_folder_key(metadata.get("folder")) != folder_key:
+            continue
+        if str(metadata.get("candidateKind") or "") != "lora":
+            continue
+        candidate = str(metadata.get("candidateFile") or "").strip()
+        if candidate:
+            active.add(candidate)
+    return active
+
+
+def _read_staged_provenance(candidate, stage, folder):
+    path = Path(candidate)
+    sidecar = path.with_suffix(".webcap.json")
+    if path.is_symlink() or not path.is_file() or sidecar.is_symlink() or not sidecar.is_file():
+        return None
+    try:
+        payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        return None
+    if str(payload.get("stage") or "").strip().lower() != str(stage or "").strip().lower():
+        return None
+    if _normalized_folder_key(payload.get("sourceFolder")) != _normalized_folder_key(folder):
+        return None
+    if not str(payload.get("sourceJobId") or "").strip():
+        return None
+    try:
+        source_epoch = int(payload.get("sourceEpoch"))
+    except (TypeError, ValueError):
+        return None
+    if source_epoch < 0 or not str(payload.get("sourceFileName") or "").strip():
+        return None
+    return payload
+
+
+def _staged_items(cache, folder):
+    folder = str(folder or "").strip()
+    if not folder:
+        return []
+    set_path = app_config.safe_join_fs_root(folder)
+    if not set_path.is_dir():
+        return []
+
+    active_candidates = _active_staged_test_candidates(folder)
+    rows = []
+    for stage, stage_label in TEST_COPY_STAGE_LABELS.items():
+        try:
+            root, parts = test_copy_destination(stage, set_path.name)
+        except (FileNotFoundError, RuntimeError, ValueError):
+            continue
+        directory = root.joinpath(*parts)
+        if directory.is_symlink() or not directory.is_dir():
+            continue
+        for candidate in sorted(directory.iterdir(), key=lambda path: path.name.lower()):
+            if candidate.suffix.lower() != ".safetensors":
+                continue
+            provenance = _read_staged_provenance(candidate, stage, folder)
+            if provenance is None:
+                continue
+            active = candidate.name in active_candidates
+            rows.append(_item(
+                "staged",
+                stage + "/" + candidate.name,
+                candidate.name,
+                candidate,
+                folder=folder,
+                kind=stage_label + " staged Test LoRA",
+                status=("in active Test queue" if active else "staged copy"),
+                purgeable=not active,
+                protected_reason=("Referenced by queued or active Test work." if active else ""),
+                meta={
+                    "stage": stage,
+                    "sourceJobId": provenance.get("sourceJobId"),
+                    "sourceEpoch": provenance.get("sourceEpoch"),
+                    "sourceRunName": provenance.get("sourceRunName"),
+                },
+                cache=cache,
+            ))
+    return rows
+
+
 def _set_items(cache, folder):
     folder = str(folder or "").strip()
     if not folder:
@@ -368,6 +466,7 @@ def overview(folder=""):
     groups = {
         "training": _training_items(cache),
         "tests": _test_items(cache, folder),
+        "staged": _staged_items(cache, folder),
         "generate": _generate_items(cache),
         "storyboard": _storyboard_items(cache),
         "set": _set_items(cache, folder),
@@ -378,6 +477,10 @@ def overview(folder=""):
         _category(
             "tests", "Tests", groups["tests"], complete=False,
             note=("Showing the current Set only; WebCap does not perform a global Test Session crawl.")
+        ),
+        _category(
+            "staged", "Staged Test LoRAs", groups["staged"], complete=False,
+            note=("Showing WebCap-owned staged copies for the current Set in configured Test roots only.")
         ),
         _category("generate", "Generations", groups["generate"]),
         _category("storyboard", "Storyboard", groups["storyboard"]),
@@ -470,6 +573,33 @@ def _resolve_h3_probe(item_id):
     return path, _read_h3_probe_state(path)
 
 
+def _resolve_staged(folder, item_id):
+    folder = str(folder or "").strip()
+    if not folder:
+        raise ValueError("Current Set is required for staged Test storage.")
+    parts = PurePosixPath(str(item_id or "")).parts
+    if len(parts) != 2:
+        raise ValueError("Staged Test storage ID is invalid.")
+    stage, filename = parts
+    if stage not in TEST_COPY_STAGE_LABELS:
+        raise ValueError("Staged Test storage stage is invalid.")
+    if not filename or Path(filename).name != filename or not filename.lower().endswith(".safetensors"):
+        raise ValueError("Staged Test storage filename is invalid.")
+
+    set_path = app_config.safe_join_fs_root(folder)
+    if not set_path.is_dir():
+        raise FileNotFoundError("Current Set is unavailable.")
+    root, destination_parts = test_copy_destination(stage, set_path.name)
+    directory = root.joinpath(*destination_parts)
+    if directory.is_symlink() or not directory.is_dir():
+        raise FileNotFoundError("Configured staged Test directory is unavailable.")
+    candidate = directory / filename
+    provenance = _read_staged_provenance(candidate, stage, folder)
+    if provenance is None:
+        raise RuntimeError("Staged Test artifact ownership could not be proven.")
+    return candidate, candidate.with_suffix(".webcap.json"), provenance
+
+
 def _resolve_runtime(item_id):
     root = Path(app_config.FS_ROOT).resolve()
     value = str(item_id or "")
@@ -489,6 +619,8 @@ def resolve_item(area, item_id, folder=""):
         return read_action(item_id)[0]
     if area == "tests":
         return _resolve_test(folder, item_id)
+    if area == "staged":
+        return _resolve_staged(folder, item_id)[0]
     if area == "generate":
         return _resolve_generate(item_id)
     if area == "storyboard":
@@ -604,6 +736,15 @@ def purge(area, item_id, folder=""):
             raise RuntimeError("Active Test Session; stop it before deletion.")
         set_path = app_config.safe_join_fs_root(folder)
         delete_session(set_path, item_id)
+    elif area == "staged":
+        candidate, sidecar, _provenance = _resolve_staged(folder, item_id)
+        if candidate.name in _active_staged_test_candidates(folder):
+            raise RuntimeError("Staged Test artifact is referenced by queued or active Test work.")
+        candidate.unlink()
+        try:
+            sidecar.unlink()
+        except FileNotFoundError:
+            pass
     elif area == "generate":
         path = _resolve_generate(item_id)
         shutil.rmtree(path)

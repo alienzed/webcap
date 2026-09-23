@@ -805,3 +805,82 @@ def test_display_centering_spike_rejection_and_density():
     assert abs(crossing - 1000) <= 5
     lookup = {p["step"]: p["loss"] for p in smoothed}
     assert max(abs(lookup[p["step"]] - p["loss"]) for p in reduced) < .03
+
+
+def test_candidate_selection_persists_with_trainer_timestamp_run_and_replaces_cleanly(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    folder = root / "sets" / "subject"
+    run = root / "trainer" / "runs" / "20260923_120000"
+    epoch12 = run / "epoch12"
+    epoch18 = run / "epoch18"
+    folder.mkdir(parents=True)
+    epoch12.mkdir(parents=True)
+    epoch18.mkdir()
+    (epoch12 / "epoch12.safetensors").write_bytes(b"twelve")
+    (epoch18 / "epoch18.safetensors").write_bytes(b"eighteen")
+
+    state_path = root / ".webcap_training" / "queue.json"
+    state_path.parent.mkdir()
+    state_path.write_text(json.dumps({"version": 3, "jobs": [{
+        "id": "job-1",
+        "folder": "sets/subject",
+        "outputRunPath": str(run),
+        "status": "completed",
+        "stages": "h3",
+    }]}), encoding="utf-8")
+
+    monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm="v5": {
+        "analysisVersion": 13,
+        "algorithm": algorithm,
+        "stepLossPoints": [],
+        "smoothedStepLossPoints": [],
+        "epochLossPoints": [
+            {"epoch": 12, "step": 2400, "loss": .20},
+            {"epoch": 18, "step": 3600, "loss": .18},
+        ],
+        "analysisPoints": [],
+        "regions": [],
+        "candidates": [],
+        "savedArtifacts": [
+            {"epoch": 12, "status": "available", "fileName": "epoch12.safetensors"},
+            {"epoch": 18, "status": "available", "fileName": "epoch18.safetensors"},
+        ],
+    })
+    monkeypatch.setattr(training_runner, "_annotate_candidate_test_folder_status", lambda run, analysis: analysis.update({"testFolderStatus": {"state": "absent"}}))
+
+    client = app_module.app.test_client()
+
+    selected12 = client.post("/fs/training_candidates/select", json={
+        "folder": "sets/subject", "jobId": "job-1", "epoch": 12,
+    })
+    assert selected12.status_code == 200
+    assert selected12.get_json()["selected"]["epoch"] == 12
+    assert selected12.get_json()["selected"]["step"] == 2400
+    assert selected12.get_json()["selected"]["file"] == "epoch12/epoch12.safetensors"
+
+    manifest_path = run / "webcap-run.json"
+    assert manifest_path.is_file()
+    assert not (root / "output" / "runs" / "webcap-run.json").exists()
+
+    selected18 = client.post("/fs/training_candidates/select", json={
+        "folder": "sets/subject", "jobId": "job-1", "epoch": 18,
+    })
+    assert selected18.status_code == 200
+    assert selected18.get_json()["selected"]["epoch"] == 18
+
+    analysis = client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1")
+    assert analysis.status_code == 200
+    assert analysis.get_json()["analysis"]["selected"]["epoch"] == 18
+
+    cleared = client.post("/fs/training_candidates/clear_selection", json={
+        "folder": "sets/subject", "jobId": "job-1",
+    })
+    assert cleared.status_code == 200
+    assert cleared.get_json()["selected"] is None
+    assert client.get("/fs/training_candidates?folder=sets%2Fsubject&jobId=job-1").get_json()["analysis"]["selected"] is None
+
+    invalid = client.post("/fs/training_candidates/select", json={
+        "folder": "sets/subject", "jobId": "job-1", "epoch": 18, "path": str(run),
+    })
+    assert invalid.status_code == 400

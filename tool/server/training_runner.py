@@ -57,6 +57,7 @@ ACTIVE_STATUSES = {"starting", "running", "stopping"}
 QUEUE_STATUSES = {"queued"}
 HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped", "interrupted"}
 TERMINAL_STATUSES = HISTORY_STATUSES | {"cancelled"}
+TRAINING_RESOURCE_OWNER = "training"
 _lock = threading.Lock()
 _monitor_lock = threading.Lock()
 _monitor_thread = None
@@ -1634,21 +1635,28 @@ def _refresh_job(job):
 def _launch_next_queued_job(state):
     if state.get("queuePaused"):
         return
-    if execution_resource_owner():
-        return
     if any(job.get("status") in ACTIVE_STATUSES for job in state.get("jobs", [])):
         return
+
+    queued_jobs = [job for job in state.get("jobs", []) if job.get("status") in QUEUE_STATUSES]
+    if not queued_jobs:
+        return
+
+    owner = execution_resource_owner()
+    if owner and owner != TRAINING_RESOURCE_OWNER:
+        return
+    if not owner and not reserve_execution_resource(TRAINING_RESOURCE_OWNER):
+        return
+
     state["activeJobId"] = ""
-    for job in state.get("jobs", []):
-        if job.get("status") not in QUEUE_STATUSES:
-            continue
+    for job in queued_jobs:
         folder_path = app_config.safe_join_fs_root(job["folder"])
         _launch_job(job, folder_path)
         if job.get("status") in ACTIVE_STATUSES:
             state["activeJobId"] = job["id"]
             return
-        if job.get("status") == "failed":
-            continue
+
+    release_execution_resource(TRAINING_RESOURCE_OWNER)
 
 def _refresh_state(state):
     global _startup_reconciled
@@ -1679,6 +1687,17 @@ def _refresh_state(state):
         state["jobs"] = recovered_jobs + [job for job in state["jobs"] if job.get("id") not in recovered_ids]
     active_jobs = [job for job in state.get("jobs", []) if job.get("status") in ACTIVE_STATUSES]
     state["activeJobId"] = active_jobs[0]["id"] if active_jobs else ""
+
+    resource_conflict = ""
+    owner = execution_resource_owner()
+    if active_jobs:
+        if not owner:
+            if not reserve_execution_resource(TRAINING_RESOURCE_OWNER):
+                resource_conflict = "Training is active but the shared GPU resource could not be reserved."
+        elif owner != TRAINING_RESOURCE_OWNER:
+            resource_conflict = "Training is active while the shared GPU resource is owned by " + owner + "."
+    elif owner == TRAINING_RESOURCE_OWNER:
+        release_execution_resource(TRAINING_RESOURCE_OWNER)
     if len(active_jobs) > 1:
         state["runnerNotice"] = (
             str(len(active_jobs)) + " managed runners are active or awaiting confirmation. "
@@ -1686,6 +1705,8 @@ def _refresh_state(state):
         )
     else:
         state.pop("runnerNotice", None)
+    if resource_conflict:
+        _append_runner_notice(state, resource_conflict)
     queued_jobs = [job for job in state.get("jobs", []) if job.get("status") in QUEUE_STATUSES]
     _apply_training_disk_protection(state, active_jobs, queued_jobs)
     if pause_requested:

@@ -17,10 +17,10 @@ def test_selected_epoch_manifest_is_created_replaced_and_cleared(tmp_path):
     first.write_bytes(b"one")
     second.write_bytes(b"two")
 
-    assert training_run_manifest.selected_epoch(run, "job-1") is None
+    assert training_run_manifest.selected_epoch(run, "001-subject/001-h3") is None
 
     selected = training_run_manifest.select_epoch(
-        run, "job-1", 12, 2400, "epoch12/adapter.safetensors"
+        run, "001-subject/001-h3", 12, 2400, "epoch12/adapter.safetensors"
     )
     assert selected["epoch"] == 12
     assert selected["step"] == 2400
@@ -29,19 +29,19 @@ def test_selected_epoch_manifest_is_created_replaced_and_cleared(tmp_path):
 
     manifest = json.loads((run / "webcap-run.json").read_text(encoding="utf-8"))
     assert manifest["schemaVersion"] == 1
-    assert manifest["runId"] == "job-1"
+    assert manifest["runId"] == "001-subject/001-h3"
     assert manifest["selected"]["epoch"] == 12
 
     replacement = training_run_manifest.select_epoch(
-        run, "job-1", 18, 3600, "epoch18/adapter.safetensors"
+        run, "001-subject/001-h3", 18, 3600, "epoch18/adapter.safetensors"
     )
     assert replacement["epoch"] == 18
-    assert training_run_manifest.selected_epoch(run, "job-1")["epoch"] == 18
+    assert training_run_manifest.selected_epoch(run, "001-subject/001-h3")["epoch"] == 18
 
-    assert training_run_manifest.clear_selected_epoch(run, "job-1") is None
+    assert training_run_manifest.clear_selected_epoch(run, "001-subject/001-h3") is None
     cleared = json.loads((run / "webcap-run.json").read_text(encoding="utf-8"))
     assert "selected" not in cleared
-    assert cleared["runId"] == "job-1"
+    assert cleared["runId"] == "001-subject/001-h3"
 
 
 def test_manifest_refuses_wrong_identity_and_unsafe_selected_paths(tmp_path):
@@ -49,15 +49,15 @@ def test_manifest_refuses_wrong_identity_and_unsafe_selected_paths(tmp_path):
     run.mkdir()
     (run / "webcap-run.json").write_text(json.dumps({
         "schemaVersion": 1,
-        "runId": "other-job",
+        "runId": "001-subject/002-h3",
     }), encoding="utf-8")
 
     with pytest.raises(ValueError, match="identity"):
-        training_run_manifest.selected_epoch(run, "job-1")
+        training_run_manifest.selected_epoch(run, "001-subject/001-h3")
 
     (run / "webcap-run.json").unlink()
     with pytest.raises(ValueError, match="relative"):
-        training_run_manifest.select_epoch(run, "job-1", 12, 2400, "../escape.safetensors")
+        training_run_manifest.select_epoch(run, "001-subject/001-h3", 12, 2400, "../escape.safetensors")
 
 
 def test_manifest_refuses_invalid_existing_json_without_overwriting(tmp_path):
@@ -68,6 +68,6 @@ def test_manifest_refuses_invalid_existing_json_without_overwriting(tmp_path):
     before = path.read_bytes()
 
     with pytest.raises(ValueError, match="left unchanged"):
-        training_run_manifest.select_epoch(run, "job-1", 12, 2400, "epoch12/adapter.safetensors")
+        training_run_manifest.select_epoch(run, "001-subject/001-h3", 12, 2400, "epoch12/adapter.safetensors")
 
     assert path.read_bytes() == before

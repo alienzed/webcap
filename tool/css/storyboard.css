@@ -951,7 +951,17 @@
 
 .storyboard-story-authoring {
   width: min(100%, 1280px);
+  margin-left: auto;
+  margin-right: auto;
   grid-template-columns: minmax(560px, 880px) minmax(300px, 360px);
+}
+
+.storyboard-scenes-heading,
+.storyboard-scenes-list,
+.storyboard-sequence-preview {
+  width: min(100%, 1400px);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .storyboard-story-fields {

@@ -13,7 +13,6 @@ from .epoch_test_bench import delete_session
 from .generate_store import MANIFEST_NAME
 from .execution_queue import get_job as execution_get_job, lane_snapshot as execution_lane_snapshot
 from . import inference_runtime
-from .inference_runner import stop_storyboard_jobs
 from .storyboard_store import delete_take, list_stories, load_story, storyboard_root
 from .training_action import managed_actions, read_action
 from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
@@ -839,7 +838,7 @@ def overview(folder=""):
             note=("Showing WebCap-owned staged copies for the current Set in configured Test roots only.")
         ),
         _category("generate", "Generations", groups["generate"]),
-        _category("storyboard", "Storyboard", groups["storyboard"]),
+        _category("storyboard", "Storyboard Takes", groups["storyboard"]),
         _category(
             "set", ("Set Data (protected)" if scan_complete else "Current Set (protected)"),
             groups["set"], complete=scan_complete,
@@ -1029,6 +1028,47 @@ def _resolve_runtime(item_id):
     raise ValueError("Runtime storage ID is invalid.")
 
 
+def _resolve_storyboard_take(item_id):
+    parts = PurePosixPath(str(item_id or "")).parts
+    if len(parts) != 3 or any(not part or Path(part).name != part for part in parts):
+        raise ValueError("Storyboard Take storage ID is invalid.")
+    story_id, scene_id, take_id = parts
+    story = load_story(story_id)
+    scene = None
+    for scene_map in (story.get("scenes"), story.get("removedScenes")):
+        if isinstance(scene_map, dict) and isinstance(scene_map.get(scene_id), dict):
+            scene = scene_map[scene_id]
+            break
+    if scene is None:
+        raise FileNotFoundError("Storyboard Scene is unavailable.")
+
+    take = None
+    for take_map in (
+        scene.get("takes") if isinstance(scene.get("takes"), dict) else {},
+        scene.get("removedTakes") if isinstance(scene.get("removedTakes"), dict) else {},
+    ):
+        if isinstance(take_map.get(take_id), dict):
+            take = take_map[take_id]
+            break
+    if take is None:
+        raise FileNotFoundError("Storyboard Take is unavailable.")
+
+    media_path = str(take.get("mediaPath") or "").strip()
+    relative = Path(media_path)
+    if not media_path or relative.is_absolute() or ".." in relative.parts:
+        raise RuntimeError("Storyboard Take media path is invalid.")
+
+    raw_story_root = storyboard_root() / story_id
+    raw_path = raw_story_root / relative
+    if raw_story_root.is_symlink() or raw_path.is_symlink():
+        raise ValueError("Storyboard Take storage path is symlinked.")
+    story_root = raw_story_root.resolve()
+    path = raw_path.resolve()
+    if path == story_root or story_root not in path.parents or not path.is_file():
+        raise FileNotFoundError("Storyboard Take media is unavailable.")
+    return path, story, scene, take
+
+
 def resolve_item(area, item_id, folder=""):
     area = str(area or "").strip()
     if area == "training":
@@ -1040,40 +1080,7 @@ def resolve_item(area, item_id, folder=""):
     if area == "generate":
         return _resolve_generate(item_id)
     if area == "storyboard":
-        parts = PurePosixPath(str(item_id or "")).parts
-        if len(parts) != 3 or any(not part or Path(part).name != part for part in parts):
-            raise ValueError("Storyboard Take storage ID is invalid.")
-        story_id, scene_id, take_id = parts
-        story = load_story(story_id)
-        scene = None
-        for scene_map in (story.get("scenes"), story.get("removedScenes")):
-            if isinstance(scene_map, dict) and isinstance(scene_map.get(scene_id), dict):
-                scene = scene_map[scene_id]
-                break
-        if scene is None:
-            raise FileNotFoundError("Storyboard Scene is unavailable.")
-        take = None
-        for take_map in (
-            scene.get("takes") if isinstance(scene.get("takes"), dict) else {},
-            scene.get("removedTakes") if isinstance(scene.get("removedTakes"), dict) else {},
-        ):
-            if isinstance(take_map.get(take_id), dict):
-                take = take_map[take_id]
-                break
-        if take is None:
-            raise FileNotFoundError("Storyboard Take is unavailable.")
-        media_path = str(take.get("mediaPath") or "").strip()
-        relative = Path(media_path)
-        if not media_path or relative.is_absolute() or ".." in relative.parts:
-            raise RuntimeError("Storyboard Take media path is invalid.")
-        root = (storyboard_root() / story_id).resolve()
-        raw_path = storyboard_root() / story_id / relative
-        if raw_path.is_symlink():
-            raise ValueError("Storyboard Take storage path is symlinked.")
-        path = raw_path.resolve()
-        if path == root or root not in path.parents or not path.is_file():
-            raise FileNotFoundError("Storyboard Take media is unavailable.")
-        return path
+        return _resolve_storyboard_take(item_id)[0]
     if area == "set":
         folder = str(folder or "").strip()
         if not folder:
@@ -1505,32 +1512,12 @@ def purge(area, item_id, folder=""):
             pass
     elif area == "storyboard":
         parts = PurePosixPath(str(item_id or "")).parts
-        if len(parts) != 3:
-            raise ValueError("Storyboard Take storage ID is invalid.")
+        path, story, _scene, take = _resolve_storyboard_take(item_id)
         story_id, scene_id, take_id = parts
-        resolve_item("storyboard", item_id)
-        story = load_story(story_id)
-        if _storyboard_take_is_referenced(
-            story,
-            take_id,
-            next(
-                (
-                    str(take.get("mediaPath") or "")
-                    for scene_map in (story.get("scenes"), story.get("removedScenes"))
-                    if isinstance(scene_map, dict)
-                    for candidate_scene_id, scene in scene_map.items()
-                    if str(candidate_scene_id) == scene_id and isinstance(scene, dict)
-                    for take_map in (
-                        scene.get("takes") if isinstance(scene.get("takes"), dict) else {},
-                        scene.get("removedTakes") if isinstance(scene.get("removedTakes"), dict) else {},
-                    )
-                    for candidate_take_id, take in take_map.items()
-                    if str(candidate_take_id) == take_id and isinstance(take, dict)
-                ),
-                "",
-            ),
-        ):
-            raise RuntimeError("Take cannot be deleted while its media is used as a Scene reference. Clear that reference first.")
+        if _storyboard_take_is_referenced(story, take_id, take.get("mediaPath")):
+            raise RuntimeError(
+                "Take cannot be deleted while its media is used as a Scene reference. Clear that reference first."
+            )
         delete_take(story_id, scene_id, take_id)
     elif area == "runtime":
         value = str(item_id or "")

@@ -639,7 +639,37 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
 
 def _session_job_records(status):
     job_ids = status.get("inferenceJobs") if isinstance(status.get("inferenceJobs"), list) else []
-    return [execution_get_job(str(job_id)) for job_id in job_ids if str(job_id or "").strip()]
+    results = status.get("results") if isinstance(status.get("results"), list) else []
+    failures = status.get("failures") if isinstance(status.get("failures"), list) else []
+    terminal_job_ids = {
+        str(item.get("jobId") or "")
+        for item in results + failures
+        if isinstance(item, dict) and str(item.get("jobId") or "").strip()
+    }
+    terminal_job_ids.update(
+        str(value)
+        for key in ("skippedJobIds", "cancelledJobIds")
+        for value in (status.get(key) or [])
+        if str(value or "").strip()
+    )
+    session_terminal = str(status.get("status") or "") in {
+        "complete", "stopped", "interrupted", "failed"
+    }
+
+    jobs = []
+    for raw_job_id in job_ids:
+        job_id = str(raw_job_id or "").strip()
+        if not job_id:
+            continue
+        try:
+            jobs.append(execution_get_job(job_id))
+        except FileNotFoundError as exc:
+            if job_id in terminal_job_ids or session_terminal:
+                continue
+            raise RuntimeError(
+                "Test Session references a missing active inference job: " + job_id
+            ) from exc
+    return jobs
 
 
 def _job_candidate_identity(job):

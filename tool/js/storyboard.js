@@ -594,12 +594,14 @@
       var advancedSummaryParts = [];
       if (seedMode === 'fixed') advancedSummaryParts.push('Fixed seed');
       if (scene.wildcardsEnabled) advancedSummaryParts.push('Wildcards');
-      if (sceneLoras.length) advancedSummaryParts.push(sceneLoras.length + ' LoRA' + (sceneLoras.length === 1 ? '' : 's'));
       var advancedSummary = advancedSummaryParts.length ? advancedSummaryParts.join(' · ') : 'Optional';
       var baseLoras = storyState.generationCapabilities.baseLoras || [];
-      var loraStatus = storyState.generationCapabilities.available
+      var loraStatusTitle = storyState.generationCapabilities.available
         ? (baseLoras.length ? 'Base: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
         : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
+      var loraStatusText = storyState.generationCapabilities.available
+        ? (baseLoras.length ? 'Base LoRA active' : 'ComfyUI LoRAs loaded.')
+        : loraStatusTitle;
       var canAddLora = storyState.generationCapabilities.available && (storyState.generationCapabilities.loras || []).length > 0;
       var referencesHtml = sceneReferences.map(function (reference) {
         if (!reference || !reference.role) return '';
@@ -679,6 +681,7 @@
             '</details>' +
           '</div>' +
           '<aside class="storyboard-scene-meta">' +
+            '<div class="storyboard-scene-column-heading">Generation</div>' +
             '<div class="storyboard-scene-quick">' +
               '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
               '<div class="storyboard-generate-panel">' +
@@ -700,15 +703,18 @@
                 '</div>' +
                 '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
                 '<label class="storyboard-inline-check" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
-                '<div class="storyboard-lora-panel">' +
-                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add the chosen Scene-specific LoRA."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
-                  '<input type="search" class="storyboard-lora-picker" data-scene-lora-picker list="storyboard-lora-options-' + escapeHtml(sceneId) + '" placeholder="Filter / choose LoRA…" aria-label="Filter and choose available LoRA">' +
-                  '<datalist id="storyboard-lora-options-' + escapeHtml(sceneId) + '">' + loraDatalistOptions() + '</datalist>' +
-                  '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>' +
-                  '<span class="storyboard-reference-empty">' + escapeHtml(loraStatus) + '</span>' +
-                '</div>' +
               '</div>' +
             '</details>' +
+          '</aside>' +
+          '<aside class="storyboard-scene-conditioning">' +
+            '<div class="storyboard-scene-column-heading">Conditioning</div>' +
+            '<div class="storyboard-lora-panel">' +
+              '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-scene-lora-add title="Add the chosen Scene-specific LoRA."' + (canAddLora ? '' : ' disabled') + '>Add LoRA</button></div>' +
+              '<input type="search" class="storyboard-lora-picker" data-scene-lora-picker list="storyboard-lora-options-' + escapeHtml(sceneId) + '" placeholder="Filter / choose LoRA…" aria-label="Filter and choose available LoRA">' +
+              '<datalist id="storyboard-lora-options-' + escapeHtml(sceneId) + '">' + loraDatalistOptions() + '</datalist>' +
+              '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>' +
+              '<span class="storyboard-lora-status" title="' + escapeHtml(loraStatusTitle) + '">' + escapeHtml(loraStatusText) + '</span>' +
+            '</div>' +
             '<details class="storyboard-scene-disclosure storyboard-reference-details">' +
               '<summary><span>References</span><span class="storyboard-disclosure-summary-state">' + (sceneReferences.length ? sceneReferences.length + ' assigned' : 'None') + '</span></summary>' +
               '<div class="storyboard-disclosure-body">' +

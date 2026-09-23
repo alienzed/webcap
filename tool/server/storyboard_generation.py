@@ -821,13 +821,11 @@ def start_generation(story_id, scene_id):
 
 def generation_status(job_id):
     _ensure_startup_reconciled()
-    _advance_queue()
     return _generation_job(execution_get_job(str(job_id or "").strip()))
 
 
 def generation_queue(story_id=""):
     _ensure_startup_reconciled()
-    _advance_queue()
     story_id = str(story_id or "").strip()
     snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
     jobs = [_generation_job(job) for job in snapshot.get("jobs", [])]

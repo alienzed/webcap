@@ -925,3 +925,4 @@ function clearEditorAndPreview() {
 
 window.setShellTrainingActive = setShellTrainingActive;
 window.setShellTestingActive = setShellTestingActive;
+window.setShellGeneratingActive = setShellGeneratingActive;

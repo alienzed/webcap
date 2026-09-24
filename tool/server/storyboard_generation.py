@@ -101,7 +101,6 @@ def _scene_settings(scene, story=None):
         "exitState": str(scene.get("exitState") or ""),
         "sourcePrompt": source_prompt,
         "sharedContext": shared_context,
-        "wildcardsEnabled": bool(scene.get("wildcardsEnabled")),
         "aspectRatio": aspect_ratio,
         "megapixels": megapixels,
         "duration": duration,
@@ -129,12 +128,6 @@ def _resolve_story_reference_path(story_id, media_path):
 def _storyboard_request(settings):
     source_prompt = str(settings.get("sourcePrompt") or settings.get("prompt") or "").strip()
     prompt = str(settings.get("prompt") or "").strip()
-    if settings.get("wildcardsEnabled"):
-        prompt = inference_runtime.resolve_wildcard_prompt(source_prompt, settings["seed"])
-        shared_context = str(settings.get("sharedContext") or "").strip()
-        if shared_context:
-            from .h3_prompt_contract import inject_shared_context_into_rendered_prompt
-            prompt = inject_shared_context_into_rendered_prompt(prompt, shared_context)
 
     references = {}
     for reference in settings.get("references") or []:
@@ -165,7 +158,6 @@ def _storyboard_request(settings):
         "loras": copy.deepcopy(settings.get("loras") or []),
         "references": references,
         "referenceRecords": copy.deepcopy(settings.get("references") or []),
-        "wildcardsEnabled": bool(settings.get("wildcardsEnabled")),
         "workflowFile": "minimax_h3_storyboard_api.json",
         "entryState": str(settings.get("entryState") or ""),
         "exitState": str(settings.get("exitState") or ""),
@@ -232,7 +224,6 @@ def execute_inference(job_id, request, context):
                 "entryState": str(context.get("entryState") or ""),
                 "exitState": str(context.get("exitState") or ""),
                 "sourcePrompt": request.get("sourcePrompt") or request["prompt"],
-                "wildcardsEnabled": bool(request.get("wildcardsEnabled")),
                 "durationSeconds": request["settings"]["duration"],
                 "seed": request["settings"]["seed"],
                 "seedMode": str(context.get("seedMode") or ""),

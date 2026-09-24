@@ -33,7 +33,8 @@
       previousPrompts: {},
       activityTimer: 0,
       activityStartedAt: 0,
-      activityHistory: []
+      activityHistory: [],
+      activityTarget: null
     }
   };
 
@@ -295,6 +296,57 @@
       : 'RAM and VRAM history, waiting for samples');
   }
 
+  function directorActivityTargetElement() {
+    var target = storyState.director.activityTarget || {};
+    if (target.kind === 'concept') {
+      return el('storyboard-story-concept');
+    }
+    if (target.kind === 'scene-prompt') {
+      var sceneRoot = sceneElement(target.sceneId);
+      return sceneRoot && sceneRoot.querySelector('[data-scene-field="prompt"]');
+    }
+    if (target.kind === 'scenes') {
+      var scenes = el('storyboard-scenes-list');
+      if (scenes && scenes.getBoundingClientRect().height >= 120) return scenes;
+      return document.querySelector('.storyboard-scene-workspace');
+    }
+    return document.querySelector('.storyboard-scene-workspace');
+  }
+
+  function positionDirectorActivity() {
+    var card = el('storyboard-director-activity');
+    var editor = document.querySelector('.storyboard-editor');
+    var target = directorActivityTargetElement();
+    if (!card || !editor || !target || card.classList.contains('hidden')) return;
+
+    var editorRect = editor.getBoundingClientRect();
+    var targetRect = target.getBoundingClientRect();
+    var kind = String((storyState.director.activityTarget || {}).kind || '');
+    var preferredWidth = kind === 'scenes' ? 420 : 380;
+    var targetWidth = Math.max(0, targetRect.width - 24);
+    var editorWidth = Math.max(0, editorRect.width - 24);
+    var width = Math.min(preferredWidth, targetWidth || preferredWidth, editorWidth || preferredWidth);
+    width = Math.max(280, width);
+    if (width > editorWidth && editorWidth > 0) width = editorWidth;
+
+    card.style.width = Math.round(width) + 'px';
+
+    var left = targetRect.right - editorRect.left - width - 12;
+    var top = targetRect.top - editorRect.top + 12;
+    var maxLeft = Math.max(12, editorRect.width - width - 12);
+    left = Math.max(12, Math.min(maxLeft, left));
+
+    card.style.left = Math.round(left) + 'px';
+    card.style.top = Math.round(Math.max(12, top)) + 'px';
+
+    window.requestAnimationFrame(function () {
+      if (card.classList.contains('hidden')) return;
+      var maxTop = Math.max(12, editorRect.height - card.offsetHeight - 12);
+      var currentTop = parseFloat(card.style.top) || 12;
+      card.style.top = Math.round(Math.max(12, Math.min(maxTop, currentTop))) + 'px';
+    });
+  }
+
   function renderDirectorActivity(activity, system) {
     var card = el('storyboard-director-activity');
     var phase = el('storyboard-director-activity-phase');
@@ -306,6 +358,7 @@
     card.classList.toggle('hidden', !visible);
     if (!visible) return;
 
+    positionDirectorActivity();
     updateDirectorTrend(system);
     phase.textContent = directorPhaseLabel(activity && activity.phase);
     var startedAt = Number(activity && activity.startedAt) || storyState.director.activityStartedAt;
@@ -351,7 +404,8 @@
     });
   }
 
-  function startDirectorActivity() {
+  function startDirectorActivity(target) {
+    storyState.director.activityTarget = target || null;
     storyState.director.activityStartedAt = Date.now() / 1000;
     storyState.director.activityHistory = [];
     renderDirectorActivity({ phase: 'preparing', active: true, startedAt: storyState.director.activityStartedAt }, null);
@@ -368,7 +422,10 @@
     }).then(function () {
       setTimeout(function () {
         var card = el('storyboard-director-activity');
-        if (!directorActivityActive() && card) card.classList.add('hidden');
+        if (!directorActivityActive() && card) {
+          card.classList.add('hidden');
+          storyState.director.activityTarget = null;
+        }
       }, 2200);
     });
   }
@@ -428,7 +485,7 @@
 
     setDirectorBusy(true);
     updateSceneDirectorStatus(sceneId, 'Director working…');
-    startDirectorActivity();
+    startDirectorActivity({ kind: 'scene-prompt', sceneId: sceneId });
     flushPendingSaves().then(function () {
       return directorRequest({
         storyId: storyState.story.id,
@@ -502,7 +559,7 @@
     var storyId = storyState.story.id;
     setDirectorBusy(true);
     setDevelopStatus('Director is expanding the concept…');
-    startDirectorActivity();
+    startDirectorActivity({ kind: 'concept' });
     flushPendingSaves().then(function () {
       return directorRequest({
         storyId: storyId,
@@ -568,7 +625,7 @@
 
     setDirectorBusy(true);
     setDevelopStatus('Director is developing the Story…');
-    startDirectorActivity();
+    startDirectorActivity({ kind: 'scenes' });
     flushPendingSaves().then(function () {
       return directorRequest({
         storyId: storyId,
@@ -2601,7 +2658,11 @@
     });
     window.addEventListener('resize', function () {
       closeStoryActionMenus();
+      if (directorActivityActive()) positionDirectorActivity();
     });
+    workspace.addEventListener('scroll', function () {
+      if (directorActivityActive()) positionDirectorActivity();
+    }, true);
 
     ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style', 'storyboard-story-tags'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);

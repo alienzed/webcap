@@ -443,8 +443,9 @@ def _model_file_size(model):
     candidates = []
     raw_path = str(model.get("path") or "").strip()
     if raw_path:
-        candidates.append(Path(raw_path))
+        posix_path = Path(raw_path)
         windows_path = PureWindowsPath(raw_path)
+        candidates.append(posix_path)
         if windows_path.drive:
             try:
                 from .training_runtime import to_wsl_path
@@ -454,6 +455,21 @@ def _model_file_size(model):
                 candidates.append(Path(to_wsl_path(raw_path, distribution=distribution)))
             except Exception:
                 pass
+
+        if models_dir is not None:
+            if not posix_path.is_absolute() and not windows_path.drive:
+                candidates.append(Path(models_dir) / posix_path)
+                if len(windows_path.parts) > 1:
+                    candidates.append(Path(models_dir).joinpath(*windows_path.parts))
+
+            for parts in (posix_path.parts, windows_path.parts):
+                normalized_parts = [str(part).casefold() for part in parts]
+                if "text_encoders" not in normalized_parts:
+                    continue
+                index = normalized_parts.index("text_encoders")
+                relative_parts = parts[index + 1:]
+                if relative_parts:
+                    candidates.append(Path(models_dir).joinpath(*relative_parts))
 
     names = []
     for value in (

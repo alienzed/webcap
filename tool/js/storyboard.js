@@ -1843,7 +1843,7 @@
     if (!selectedName) return;
 
     if (picker.id === 'storyboard-story-lora-picker') {
-      el('storyboard-story-lora-list').insertAdjacentHTML('beforeend', storyLoraRowHtml({ name: selectedName, strength: 1 }));
+      el('storyboard-story-lora-list').insertAdjacentHTML('beforeend', storyLoraRowHtml({ name: selectedName, strength: 0.9 }));
       picker.value = '';
       closeLoraPicker(picker);
       syncStoryLorasIntoScenes();
@@ -1856,7 +1856,7 @@
     if (!scene) throw new Error('LoRA picker Scene is missing.');
     var list = scene.querySelector('[data-scene-lora-list]');
     if (!list) throw new Error('LoRA list is missing.');
-    list.insertAdjacentHTML('beforeend', sceneLoraRowHtml({ name: selectedName, strength: 1 }));
+    list.insertAdjacentHTML('beforeend', sceneLoraRowHtml({ name: selectedName, strength: 0.9 }));
     picker.value = '';
     closeLoraPicker(picker);
     scheduleSceneSave(scene.dataset.sceneId);
@@ -2232,10 +2232,10 @@
       var loraRowsHtml = sceneLoras.map(sceneLoraRowHtml).join('');
       var baseLoras = storyState.generationCapabilities.baseLoras || [];
       var loraStatusTitle = storyState.generationCapabilities.available
-        ? (baseLoras.length ? 'Base: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
+        ? (baseLoras.length ? 'Required Turbo: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
         : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
       var loraStatusText = storyState.generationCapabilities.available
-        ? (baseLoras.length ? 'Base LoRA active' : 'LoRAs ready')
+        ? (baseLoras.length ? 'Turbo active' : 'LoRAs ready')
         : 'LoRAs unavailable';
       var referencesHtml = sceneReferences.map(function (reference) {
         if (!reference || !reference.role) return '';

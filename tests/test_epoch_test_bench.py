@@ -1122,3 +1122,24 @@ def test_direct_test_source_lora_is_read_only_without_webcap_provenance(tmp_path
         bench.remove_candidate(tmp_path, candidate.name, model_id=model.PROFILE_ID, source="manual")
 
     assert candidate.is_file()
+
+
+def test_session_history_is_scoped_by_model_and_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    root = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR
+    for name, model_id in (("h3-session", "minimax_h3"), ("krea-session", "krea2_raw")):
+        session = root / name
+        session.mkdir(parents=True)
+        bench._atomic_write_json(session / "test.json", {
+            "status": "complete",
+            "modelId": model_id,
+            "source": "shared-name",
+            "ownerFolder": "sets/demo",
+            "results": [],
+        })
+
+    h3 = bench.list_sessions(tmp_path, source="shared-name", model_id="minimax_h3")
+    krea = bench.list_sessions(tmp_path, source="shared-name", model_id="krea2_raw")
+
+    assert [item["session"] for item in h3] == ["h3-session"]
+    assert [item["session"] for item in krea] == ["krea-session"]

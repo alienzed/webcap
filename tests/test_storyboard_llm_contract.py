@@ -164,16 +164,17 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
 
     assert request["operation"] == "develop_story"
     assert request["output"] == "json"
-    assert request["response_schema"]["properties"]["scenes"]["minItems"] == 2
+    assert "minItems" not in request["response_schema"]["properties"]["scenes"]
+    assert "maxItems" not in request["response_schema"]["properties"]["scenes"]
     assert "A long concept that should not be sent for a local prompt-writing operation." in prompt
     assert "Rain-soaked neo-noir horror" in prompt
     assert "[STORY INVARIANTS]" in prompt
     assert "Character: Mara" in prompt
     assert "Low analog synth, no vocals." in prompt
     assert "complete model-facing H3 prompt for every Scene now" in prompt
-    assert "approximately 12 Scenes" in prompt
+    assert "Produce exactly 12 Scenes" in prompt
     assert "4 to 8 Scenes" not in prompt
-    assert "at least two Scenes" in prompt
+    assert "at least two Scenes" not in prompt
     assert "between 4 and 15 seconds" in prompt
     assert "invent natural dialogue" in prompt
     assert "EXISTING SECOND PROMPT" not in prompt

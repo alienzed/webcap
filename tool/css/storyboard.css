@@ -2316,7 +2316,7 @@
   margin: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(150px, 42%);
-  grid-template-areas: "label trend" "phase trend" "detail trend";
+  grid-template-areas: "label trend" "phase trend" "detail trend" "load trend";
   align-items: center;
   column-gap: 16px;
   row-gap: 4px;
@@ -2357,6 +2357,7 @@
 }
 
 #storyboard-director-activity-detail { grid-area: detail; }
+#storyboard-director-model-load { grid-area: load; }
 #storyboard-director-activity-trend { grid-area: trend; }
 
 #storyboard-director-activity-trend svg {
@@ -2367,7 +2368,7 @@
   .storyboard-director-activity {
     width: min(340px, calc(100% - 24px));
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "label" "phase" "detail" "trend";
+    grid-template-areas: "label" "phase" "detail" "load" "trend";
     row-gap: 5px;
   }
 
@@ -2466,11 +2467,12 @@
 
 .storyboard-director-activity.is-field-overlay {
   grid-template-columns: minmax(150px, .55fr) minmax(0, 1.45fr);
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     "label trend"
     "phase trend"
-    "detail trend";
+    "detail trend"
+    "load trend";
   align-items: stretch;
   padding: 10px 12px;
   overflow: hidden;
@@ -2496,11 +2498,12 @@
 @media (max-width: 760px) {
   .storyboard-director-activity.is-field-overlay {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto minmax(72px, 1fr);
+    grid-template-rows: auto auto auto auto minmax(72px, 1fr);
     grid-template-areas:
       "label"
       "phase"
       "detail"
+      "load"
       "trend";
   }
 }

@@ -301,25 +301,68 @@ def _relative_to_fs_root(path):
 
 
 def _session_root(folder_path):
+    """Legacy per-set Test Session root."""
     return _owning_set_directory(folder_path) / TEST_RESULTS_DIR
+
+
+def _central_session_root():
+    root = Path(app_config.FS_ROOT) / ".webcap" / TEST_RESULTS_DIR
+    if root.is_symlink():
+        raise RuntimeError("Central Test Session storage cannot be symlinked.")
+    return root
+
+
+def _session_roots(folder_path):
+    roots = [_central_session_root(), _session_root(folder_path)]
+    unique = []
+    seen = set()
+    for root in roots:
+        key = str(Path(root).absolute())
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(Path(root))
+    return unique
+
+
+def _session_directories(folder_path):
+    sessions = []
+    seen_names = set()
+    for root in _session_roots(folder_path):
+        if not root.is_dir() or root.is_symlink():
+            continue
+        for session in root.iterdir():
+            if (
+                session.name in seen_names
+                or session.is_symlink()
+                or not session.is_dir()
+                or not (session / "test.json").is_file()
+            ):
+                continue
+            seen_names.add(session.name)
+            sessions.append(session)
+    return sessions
 
 
 def _session_directory(folder_path, session_name):
     name = str(session_name or "").strip()
     if not name or name in (".", "..") or "/" in name or "\\" in name:
         raise ValueError("A valid Test session name is required.")
-    root = _session_root(folder_path).resolve()
-    session = (root / name).resolve()
-    if session.parent != root:
-        raise ValueError("Test session path escaped the current set.")
-    if not session.is_dir() or not (session / "test.json").is_file():
-        raise FileNotFoundError("Test session does not exist: " + name)
-    return session
+    for raw_root in _session_roots(folder_path):
+        if raw_root.is_symlink():
+            continue
+        root = raw_root.resolve()
+        session = (root / name).resolve()
+        if session.parent != root:
+            continue
+        if session.is_dir() and not session.is_symlink() and (session / "test.json").is_file():
+            return session
+    raise FileNotFoundError("Test session does not exist: " + name)
 
 
 def _new_session_directory(folder_path, model=None):
     selected_model = model or get_test_model()
-    root = _session_root(folder_path)
+    root = _central_session_root()
     root.mkdir(parents=True, exist_ok=True)
     base = datetime.now().strftime("%Y-%m-%d_%H%M-") + selected_model.SESSION_SLUG
     candidate = root / base
@@ -411,15 +454,10 @@ def _session_matches_source(payload, folder_path, source):
 
 
 def _candidate_rating_scores(folder_path, model_id=None, source=None):
-    root = _session_root(folder_path)
-    if not root.is_dir():
-        return {}
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
     totals = {}
-    for session in root.iterdir():
-        if not session.is_dir() or not (session / "test.json").is_file():
-            continue
+    for session in _session_directories(folder_path):
         payload = _read_status(session) or {}
         if not _session_matches_source(payload, folder_path, source):
             continue
@@ -1148,12 +1186,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
 
 
 def _find_legacy_migration_session(folder_path, legacy_job_id):
-    root = _session_root(folder_path)
-    if not root.is_dir():
-        return None
-    for session in root.iterdir():
-        if not session.is_dir():
-            continue
+    for session in _session_directories(folder_path):
         status_payload = _read_status(session) or {}
         if str(status_payload.get("legacyJobId") or "") == str(legacy_job_id or ""):
             return session, status_payload
@@ -1342,12 +1375,9 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
 
 def queued_jobs(folder_path, source=None):
     reconcile_startup()
-    root = _session_root(folder_path)
-    if not root.is_dir():
-        return {"operation": "test_queue", "jobs": []}
     jobs = []
     for session_directory in sorted(
-        [path for path in root.iterdir() if path.is_dir() and (path / "test.json").is_file()],
+        _session_directories(folder_path),
         key=lambda path: path.name.lower(),
     ):
         visible = _sync_inference_session(session_directory)
@@ -1407,12 +1437,9 @@ def _visible_session_status(folder_path, session_directory):
 
 
 def list_sessions(folder_path, source=None):
-    root = _session_root(folder_path)
-    if not root.is_dir():
-        return []
     sessions = []
     for session in sorted(
-        [path for path in root.iterdir() if path.is_dir() and (path / "test.json").is_file()],
+        _session_directories(folder_path),
         key=lambda path: path.name.lower(),
         reverse=True,
     ):
@@ -1446,12 +1473,9 @@ def list_sessions(folder_path, source=None):
 
 
 def _latest_status(folder_path, model_id=None, source=None):
-    root = _session_root(folder_path)
-    if not root.is_dir():
-        return {"status": "idle"}
     selected_model = str(model_id or "").strip()
     sessions = sorted(
-        [path for path in root.iterdir() if path.is_dir() and (path / "test.json").is_file()],
+        _session_directories(folder_path),
         key=lambda path: path.name.lower(),
         reverse=True,
     )

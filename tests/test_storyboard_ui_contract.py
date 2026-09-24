@@ -435,8 +435,29 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
     assert 'id="inference-queue-rail-btn"' in html
     assert "storyboard-scene-progress-work" in storyboard
     assert "generationJobsForScene(sceneId)" in storyboard
+    assert "button.setAttribute('aria-pressed', active ? 'true' : 'false');" in storyboard
+    assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);" in css
+    assert ".storyboard-view-toggle .review-captions-btn.active" in css
+    assert "box-shadow: inset 0 -2px 0 var(--accent);" in css
     assert ".storyboard-story-panel-heading" in css
     assert ".storyboard-scene-progress-work" in css
+
+
+def test_storyboard_scene_title_lives_in_main_form_and_story_switch_reopens_context():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    header_block = storyboard.split("'<header class=\"storyboard-scene-header\">'", 1)[1].split("'</header>'", 1)[0]
+    scene_main = storyboard.split("'<div class=\"storyboard-scene-main\">'", 1)[1].split("'<div class=\"storyboard-prompt-block\">'", 1)[0]
+
+    assert 'data-scene-field="title"' not in header_block
+    assert 'storyboard-scene-title-field' in scene_main
+    assert '<span>Title</span><input data-scene-field="title"' in scene_main
+    assert '<span>Scene intent</span>' in scene_main
+    assert "var previousStoryId = storyState.story && storyState.story.id;" in storyboard
+    assert "if (previousStoryId !== payload.story.id && storyState.storyCollapsed) setStoryCollapsed(false);" in storyboard
+    assert "if (storyState.storyCollapsed) setStoryCollapsed(false);" in storyboard
+    assert ".storyboard-scene-title-field input" in css
 
 
 def test_storyboard_story_can_collapse_and_supports_structured_invariants():

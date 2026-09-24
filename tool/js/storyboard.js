@@ -926,16 +926,20 @@
           promptDirectorJobId: String(payload.jobId || '')
         }
       }).then(function (saved) {
-        if (storyState.story && storyState.story.id === storyId && storyState.story.scenes && saved.scene) {
+        var stillViewingOrigin = !!(
+          storyState.story
+          && String(storyState.story.id || '') === String(storyId)
+        );
+        if (stillViewingOrigin && storyState.story.scenes && saved.scene) {
           storyState.story.scenes[sceneId] = saved.scene;
           if (saved.story && saved.story.updatedAt) storyState.story.updatedAt = saved.story.updatedAt;
+          var currentRoot = sceneElement(sceneId);
+          var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
+          if (currentPrompt) currentPrompt.value = generatedPrompt;
+          syncSceneDirectorRestore(sceneId);
+          updateSceneDirectorStatus(sceneId, 'Generated with ' + String(payload.model || modelId));
+          setSaveState('Saved');
         }
-        var currentRoot = sceneElement(sceneId);
-        var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
-        if (currentPrompt) currentPrompt.value = generatedPrompt;
-        syncSceneDirectorRestore(sceneId);
-        updateSceneDirectorStatus(sceneId, 'Generated with ' + String(payload.model || modelId));
-        setSaveState('Saved');
         return refreshLibrary().then(function () {
           return consumeDirectorJob(payload.jobId);
         });

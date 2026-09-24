@@ -541,13 +541,34 @@
     return storyState.director.busy;
   }
 
+  function directorActivityForCurrentRun(activity) {
+    if (!activity) return activity;
+
+    var localStartedAt = Number(storyState.director.activityStartedAt) || 0;
+    var phase = String(activity.phase || '');
+    var terminal = ['complete', 'error'].indexOf(phase) !== -1;
+    if (!localStartedAt || !terminal) return activity;
+
+    var activityTime = Math.max(
+      Number(activity.startedAt) || 0,
+      Number(activity.updatedAt) || 0
+    );
+    if (activityTime >= localStartedAt) return activity;
+
+    return {
+      phase: 'preparing',
+      active: true,
+      startedAt: localStartedAt
+    };
+  }
+
   function refreshDirectorActivity() {
     if (!directorActivityActive()) return Promise.resolve();
     return Promise.all([
       directorActivityRequest('/fs/director/activity'),
       directorActivityRequest('/fs/system_status').catch(function () { return null; })
     ]).then(function (values) {
-      renderDirectorActivity(values[0], values[1]);
+      renderDirectorActivity(directorActivityForCurrentRun(values[0]), values[1]);
     }).catch(function () {
       renderDirectorActivity({ phase: 'preparing', active: true }, null);
     }).then(function () {
@@ -577,9 +598,22 @@
       return;
     }
     directorActivityRequest('/fs/director/activity').then(function (activity) {
-      renderDirectorActivity(activity, null);
+      var localStartedAt = Number(storyState.director.activityStartedAt) || 0;
+      var phase = String(activity && activity.phase || '');
+      var terminal = ['complete', 'error'].indexOf(phase) !== -1;
+      var activityTime = Math.max(
+        Number(activity && activity.startedAt) || 0,
+        Number(activity && activity.updatedAt) || 0
+      );
+      if (terminal && (!localStartedAt || activityTime >= localStartedAt)) {
+        renderDirectorActivity(activity, null);
+        return;
+      }
+      var staleCard = el('storyboard-director-activity');
+      if (staleCard) staleCard.classList.add('hidden');
     }).catch(function () {
-      renderDirectorActivity({ phase: 'complete', active: false }, null);
+      var card = el('storyboard-director-activity');
+      if (card) card.classList.add('hidden');
     }).then(function () {
       setTimeout(function () {
         var card = el('storyboard-director-activity');

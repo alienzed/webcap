@@ -147,18 +147,17 @@ def _shared_context_index(plan):
     return index
 
 
-def _inject_shared_context(prompt_data, refs, context_index):
+def inject_shared_context_text(prompt_data, shared_context_text):
     if not isinstance(prompt_data, dict):
         raise ValueError("MiniMax H3 structured output must be an object.")
     copied = copy.deepcopy(prompt_data)
     integrated = _clean_field(copied, "integrated_multimodal_description")
-    lines = []
-    for context_id in refs or []:
-        item = context_index.get(str(context_id or "").strip())
-        if item is None:
-            continue
-        lines.append(item["label"] + ": " + item["description"])
-    if not lines:
+    continuity_text = " ".join(
+        line.strip()
+        for line in str(shared_context_text or "").splitlines()
+        if line.strip()
+    )
+    if not continuity_text:
         return copied
 
     prefix = "[Shot 1]"
@@ -166,9 +165,19 @@ def _inject_shared_context(prompt_data, refs, context_index):
         remainder = integrated[len(prefix):].lstrip()
     else:
         remainder = integrated
-    continuity = "Continuity anchors — " + " ".join(lines)
+    continuity = "Continuity anchors — " + continuity_text
     copied["integrated_multimodal_description"] = prefix + " " + continuity + (" " + remainder if remainder else "")
     return copied
+
+
+def _inject_shared_context(prompt_data, refs, context_index):
+    lines = []
+    for context_id in refs or []:
+        item = context_index.get(str(context_id or "").strip())
+        if item is None:
+            continue
+        lines.append(item["label"] + ": " + item["description"])
+    return inject_shared_context_text(prompt_data, "\n".join(lines))
 
 
 def render_story_plan_prompts(plan):

@@ -479,6 +479,9 @@ function syncApplicationShellContext() {
   var testOpen = navigation.activity === 'test';
   var storyboardOpen = navigation.activity === 'storyboard';
   var storageOpen = navigation.activity === 'storage';
+  if (typeof window.syncInferenceQueueSurface === 'function') {
+    window.syncInferenceQueueSurface(navigation.activity);
+  }
   var contextText = '';
 
   if (generateOpen || storyboardOpen || storageOpen) {

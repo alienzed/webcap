@@ -107,8 +107,8 @@
       "endpoint": "",
       "llama_server": "",
       "port": 8189,
-      "context_size": 16384,
-      "max_tokens": 8192
+      "context_size": null,
+      "max_tokens": null
     }
   }
 }

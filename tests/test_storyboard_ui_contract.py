@@ -456,6 +456,28 @@ def test_storyboard_lora_chooser_is_single_searchable_field():
     assert "picker.value = '';" in storyboard
 
 
+def test_storyboard_director_activity_stays_scoped_to_origin_story():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    target_block = storyboard.split("function directorActivityTargetElement()", 1)[1].split("function positionDirectorActivity()", 1)[0]
+    assert "targetStoryId && targetStoryId !== currentStoryId" in target_block
+    assert "return null;" in target_block
+    assert "var detachedTarget = !!kind && !target;" in storyboard
+    assert "if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();" in storyboard
+
+
+def test_director_model_load_meter_stays_visible_when_size_is_unavailable():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    generate = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    for script in (storyboard, generate):
+        assert "Model size unavailable" in script
+        assert "Waiting for memory sample…" in script
+        loading_block = script.split("function updateDirectorModelLoad(activity, system)", 1)[1].split("function directorTrendPath", 1)[0]
+        assert "meter.classList.remove('hidden');" in loading_block
+        assert "if (!isFinite(modelSizeBytes) || modelSizeBytes <= 0)" in loading_block
+
+
 def test_storyboard_director_activity_floats_over_context_without_reflow():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")

@@ -172,6 +172,10 @@ Queue reads are passive and must not become a dispatch mechanism. Navigating to 
 
 Shared scheduling does not imply one monolithic workflow UI.
 
+The permanent shell also exposes a read-only **Activity** drawer. Activity is a projection over domain-owned state: it shows what is running now, a bounded list of recently finished managed work, and compact queue summaries. It does not own scheduling, result state, or a second history database. Inference and LLM lanes retain a small bounded terminal receipt history so completed work remains visible after the owning client consumes its delivery receipt; Training and Storage continue to provide their own existing history/scan state.
+
+The Activity drawer and Inference Queue drawer are sibling global surfaces: Activity answers **what is happening / what just finished**, while Inference Queue answers **what is scheduled and in what order**.
+
 - Generate exposes the full Generation Queue.
 - Storyboard projects its work as pending Take cards.
 - Test projects its work as Session progress/results.

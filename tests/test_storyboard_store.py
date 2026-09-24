@@ -1138,3 +1138,28 @@ def test_scene_repair_allows_later_valid_patch_after_malformed_duplicate_candida
     assert scene_count == 1
     assert field_count == 1
     assert repaired["scenes"][scene["id"]]["summary"] == "Valid repair survives."
+
+def test_scene_refine_completion_is_persisted_only_for_successful_refine(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"prompt": "Original prompt."})
+
+    _, refined = storyboard_store.apply_director_prompt(
+        story["id"],
+        scene["id"],
+        "Refined prompt.",
+        model_id="director.gguf",
+        job_id="job-refine",
+        operation="refine_prompt",
+    )
+    assert refined["refineComplete"] is True
+    assert storyboard_store.load_story(story["id"])["scenes"][scene["id"]]["refineComplete"] is True
+
+    _, rewritten = storyboard_store.apply_director_prompt(
+        story["id"],
+        scene["id"],
+        "Rewritten prompt.",
+        model_id="director.gguf",
+        job_id="job-write",
+        operation="write_prompt",
+    )
+    assert rewritten["refineComplete"] is False

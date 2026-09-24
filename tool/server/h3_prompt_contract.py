@@ -187,7 +187,8 @@ def inject_shared_context_into_rendered_prompt(prompt, shared_context_text):
         for line in str(shared_context_text or "").splitlines()
         if line.strip()
     )
-    if not text or not continuity_text or "Continuity anchors —" in text:
+    owned_prefix = "integrated_multimodal_description: [Shot 1] Continuity anchors —"
+    if not text or not continuity_text or owned_prefix in text:
         return text
 
     marker = "integrated_multimodal_description:"

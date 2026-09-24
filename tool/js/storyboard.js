@@ -1054,6 +1054,21 @@
     return value == null ? fallback : value;
   }
 
+  function syncSceneGenerationDefaultHints() {
+    var aspectNode = el('storyboard-story-aspect-ratio');
+    var megapixelsNode = el('storyboard-story-megapixels');
+    if (!aspectNode || !megapixelsNode) return;
+    var aspectRatio = aspectNode.value || '4:3 (Standard)';
+    var megapixels = megapixelsNode.value || '0.2';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-scene-field="aspectRatio"]'), function (select) {
+      var inherit = select.querySelector('option[value=""]');
+      if (inherit) inherit.textContent = 'Inherit · ' + aspectRatio;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-scene-field="megapixels"]'), function (input) {
+      input.placeholder = 'Inherit · ' + megapixels;
+    });
+  }
+
   function loraOptions(selectedName) {
     var names = (storyState.generationCapabilities.loras || []).slice();
     if (selectedName && names.indexOf(selectedName) < 0) names.unshift(selectedName);
@@ -1868,10 +1883,10 @@
       style: el('storyboard-story-style').value,
       invariants: storyInvariantsFromUi(),
       loras: storyLorasFromUi(),
-      targetSceneCount: el('storyboard-story-target-scenes').value,
+      targetSceneCount: el('storyboard-story-target-scenes').value || 12,
       generationDefaults: {
-        aspectRatio: el('storyboard-story-aspect-ratio').value,
-        megapixels: el('storyboard-story-megapixels').value
+        aspectRatio: el('storyboard-story-aspect-ratio').value || '4:3 (Standard)',
+        megapixels: el('storyboard-story-megapixels').value || 0.2
       },
       tags: el('storyboard-story-tags').value.split(',').map(function (value) { return value.trim(); }).filter(Boolean),
       status: el('storyboard-story-status').value,
@@ -2716,10 +2731,17 @@
       if (directorActivityActive()) positionDirectorActivity();
     }, true);
 
-    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style', 'storyboard-story-tags', 'storyboard-story-target-scenes', 'storyboard-story-megapixels'].forEach(function (id) {
+    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style', 'storyboard-story-tags', 'storyboard-story-target-scenes'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);
     });
-    el('storyboard-story-aspect-ratio').addEventListener('change', scheduleStorySave);
+    el('storyboard-story-megapixels').addEventListener('input', function () {
+      syncSceneGenerationDefaultHints();
+      scheduleStorySave();
+    });
+    el('storyboard-story-aspect-ratio').addEventListener('change', function () {
+      syncSceneGenerationDefaultHints();
+      scheduleStorySave();
+    });
     el('storyboard-invariants-list').addEventListener('input', scheduleStorySave);
     el('storyboard-invariants-list').addEventListener('change', scheduleStorySave);
     el('storyboard-invariant-add').addEventListener('click', function () {

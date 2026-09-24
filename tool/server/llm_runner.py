@@ -324,6 +324,43 @@ def _assert_storyboard_target_available(context, operation):
             raise ValueError("Storyboard Director target already has pending work.")
 
 
+def storyboard_target_busy(story_id, kind, scene_id=""):
+    wanted = {
+        "kind": str(kind or "").strip(),
+        "storyId": str(story_id or "").strip(),
+        "sceneId": str(scene_id or "").strip(),
+    }
+    if not wanted["storyId"] or wanted["kind"] not in {"concept", "scenes", "scene-prompt"}:
+        raise ValueError("Storyboard Director target is invalid.")
+    current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    for job in current.get("jobs", []):
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("client") or "") != "storyboard":
+            continue
+        existing = _storyboard_target(
+            {
+                "storyId": metadata.get("storyId"),
+                "sceneId": metadata.get("sceneId"),
+            },
+            metadata.get("operation"),
+        )
+        if _storyboard_targets_conflict(wanted, existing):
+            return True
+    return False
+
+
+def storyboard_story_busy(story_id):
+    story_id = str(story_id or "").strip()
+    if not story_id:
+        raise ValueError("Story ID is required.")
+    current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    return any(
+        str((job.get("metadata") or {}).get("client") or "") == "storyboard"
+        and str((job.get("metadata") or {}).get("storyId") or "") == story_id
+        for job in current.get("jobs", [])
+    )
+
+
 def enqueue(client, model_id, contract, context=None, label=""):
     _ensure_execution_reconciled()
     client = str(client or "").strip()

@@ -597,21 +597,95 @@
 }
 
 .storyboard-removed-scenes {
-  margin-top: 14px;
-  padding-top: 4px;
+  margin-top: 10px;
   border-top: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.storyboard-removed-scenes > summary {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 2px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.storyboard-removed-scenes > summary::-webkit-details-marker {
+  display: none;
+}
+
+.storyboard-removed-scenes > summary::before {
+  content: '▸';
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.storyboard-removed-scenes[open] > summary::before {
+  content: '▾';
+}
+
+.storyboard-removed-scenes-count {
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.storyboard-removed-scenes-list {
+  display: grid;
+  gap: 1px;
+  padding: 2px 0 4px;
 }
 
 .storyboard-removed-scene {
-  display: flex;
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 8px;
-  margin: 4px 0;
-  border: 1px dashed var(--border);
-  border-radius: 5px;
+  gap: 10px;
+  padding: 3px 6px 3px 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   color: var(--muted);
+}
+
+.storyboard-removed-scene:first-child {
+  border-top: 0;
+}
+
+.storyboard-removed-scene-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storyboard-restore-scene-btn {
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.storyboard-restore-scene-btn:hover,
+.storyboard-restore-scene-btn:focus-visible {
+  text-decoration: underline;
+  outline: none;
 }
 
 

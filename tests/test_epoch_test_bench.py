@@ -1065,6 +1065,7 @@ def test_new_test_sessions_use_central_webcap_storage_and_record_source(tmp_path
     monkeypatch.setattr(bench.inference_runtime if hasattr(bench, "inference_runtime") else inference_runtime, "resolve_wildcard_prompt", lambda prompt, _seed: prompt)
     monkeypatch.setattr(bench, "_workflow_evidence", lambda _model, _template: {"workflowFile": "test.json", "workflowSha256": "abc"})
     monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="": {"jobId": "job-" + context["candidateKind"]})
+    monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
 
     set_folder = tmp_path / "sets" / "demo"
     set_folder.mkdir(parents=True)

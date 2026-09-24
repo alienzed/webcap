@@ -232,6 +232,15 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
     assert "previousConcept" in storyboard
 
 
+def test_storyboard_director_captures_unsaved_target_before_locking_it():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    for function_name in ("expandConcept", "developStory", "runDirector"):
+        block = storyboard.split("function " + function_name, 1)[1].split("\n  function ", 1)[0]
+        assert block.index("var saveBarrier = flushPendingSaves();") < block.index("setDirectorPending(directorTarget, true);")
+        assert "saveBarrier.then(function () {" in block
+
+
 def test_storyboard_director_pending_state_is_target_scoped():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
@@ -248,7 +257,8 @@ def test_storyboard_director_pending_state_is_target_scoped():
     assert "var directorTarget = { kind: 'concept', storyId: storyId };" in storyboard
     assert "var directorTarget = { kind: 'scenes', storyId: storyId };" in storyboard
     assert "var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId };" in storyboard
-    assert "root.querySelectorAll('input, textarea, select, button')" in storyboard
+    assert "root.querySelectorAll('input, textarea, select')" in storyboard
+    assert "root.querySelectorAll('input, textarea, select, button')" not in storyboard
     assert ".storyboard-director-activity.is-detached-target" in (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
 
@@ -264,6 +274,8 @@ def test_storyboard_scene_director_result_is_backend_owned_not_browser_written()
     assert "def apply_director_prompt" in store
     assert "previousPrompt" in store
     assert "restore_previous_prompt" in storyboard
+    assert "promptDirectorJobId: promptDirectorJobId" in storyboard
+    assert "delete payload.promptDirectorJobId;" in storyboard
 
 
 def test_storyboard_director_conflicts_are_visible_and_target_scoped():
@@ -274,6 +286,8 @@ def test_storyboard_director_conflicts_are_visible_and_target_scoped():
     assert 'id="storyboard-restore-concept-btn"' in html
     assert "function directorTargetBlocked(target)" in storyboard
     assert "reportError(new Error('That Scene prompt already has Director work pending.'))" in storyboard
+    assert "expandButton.disabled = directorTargetBlocked" not in storyboard
+    assert "button.disabled = blocked" not in storyboard
     assert "Storyboard Director target already has pending work." in runner
     assert "storyState.director.busy = storyState.director.pendingOrder.length > 0;" in storyboard
     assert "function restorePreviousConcept()" in storyboard

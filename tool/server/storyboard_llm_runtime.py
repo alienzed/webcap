@@ -367,25 +367,44 @@ def _model_file_size(model):
     if declared_size:
         return declared_size
 
+    try:
+        settings = _director_config()
+        models_dir = settings.get("models_dir")
+    except Exception:
+        settings = {}
+        models_dir = None
+
     candidates = []
     raw_path = str(model.get("path") or "").strip()
     if raw_path:
         candidates.append(Path(raw_path))
+        windows_path = PureWindowsPath(raw_path)
+        if windows_path.drive:
+            try:
+                from .training_runtime import to_wsl_path
+                distribution = str(
+                    app_config.config.get("training", {}).get("wsl_distribution") or ""
+                ).strip()
+                candidates.append(Path(to_wsl_path(raw_path, distribution=distribution)))
+            except Exception:
+                pass
 
-    try:
-        models_dir = _director_config().get("models_dir")
-    except Exception:
-        models_dir = None
-    if models_dir is not None:
-        names = []
-        if raw_path:
-            names.append(Path(raw_path).name)
+    names = []
+    for value in (
+        raw_path,
+        str(model.get("label") or "").strip(),
+        str(model.get("id") or "").strip(),
+    ):
+        if not value:
+            continue
         names.extend([
-            str(model.get("label") or "").strip(),
-            str(model.get("id") or "").strip(),
+            Path(value).name,
+            PureWindowsPath(value).name,
         ])
+
+    if models_dir is not None:
         for name in names:
-            if not name or Path(name).name != name:
+            if not name or Path(name).name != name or PureWindowsPath(name).name != name:
                 continue
             candidates.append(Path(models_dir) / name)
 

@@ -90,6 +90,26 @@ def test_model_file_size_prefers_reported_size_and_relative_selected_path(monkey
     }) == 8192
 
 
+def test_model_file_size_handles_windows_style_router_path(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    models_dir.mkdir()
+    model_path = models_dir / "director.gguf"
+    model_path.write_bytes(b"x" * 16384)
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"models_dir": models_dir, "mode": "local"},
+    )
+
+    assert storyboard_llm_runtime._model_file_size({
+        "id": "director",
+        "label": "director.gguf",
+        "path": r"C:\\models\\text_encoders\\director.gguf",
+        "sizeBytes": 0,
+    }) == 16384
+
+
 def test_loading_activity_exposes_selected_model_size(monkeypatch, tmp_path):
     model_path = tmp_path / "director.gguf"
     model_path.write_bytes(b"x" * 4096)

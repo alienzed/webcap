@@ -462,7 +462,7 @@ def test_apply_developed_plan_rejects_wrong_scene_count_or_out_of_range_duration
         storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_scene, dict(bad_scene)]})
 
 
-def test_concept_expansion_preserves_one_previous_version(storyboard_fs):
+def test_concept_expansion_preserves_original_until_restored(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "concept": "One sentence."})
 
     expanded = storyboard_store.apply_concept_expansion(
@@ -473,9 +473,27 @@ def test_concept_expansion_preserves_one_previous_version(storyboard_fs):
     assert expanded["concept"].startswith("A richer concept")
     assert expanded["previousConcept"] == "One sentence."
 
+    edited = storyboard_store.update_story(
+        story["id"],
+        {"concept": "A manually edited version of the expanded overview."},
+    )
+    assert edited["previousConcept"] == "One sentence."
+
+    with pytest.raises(ValueError, match="already expanded"):
+        storyboard_store.apply_concept_expansion(
+            story["id"],
+            "An expansion of the expansion that should not be accepted.",
+        )
+
     restored = storyboard_store.restore_previous_concept(story["id"])
     assert restored["concept"] == "One sentence."
     assert restored["previousConcept"] is None
+
+    expanded_again = storyboard_store.apply_concept_expansion(
+        story["id"],
+        "A different first expansion after restoring the original.",
+    )
+    assert expanded_again["previousConcept"] == "One sentence."
 
 
 def test_restore_scene_clears_replanning_removal_metadata(storyboard_fs):

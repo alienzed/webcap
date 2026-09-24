@@ -236,6 +236,7 @@ def test_storyboard_director_story_plan_conflicts_but_scene_targets_queue_indepe
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     assert 'id="storyboard-restore-concept-btn"' in html
+    assert ">Restore Original</button>" in html
     assert "busy: false" in storyboard
     assert "storyPlanPending" in storyboard
     assert "node.disabled = storyPlanPending;" in storyboard
@@ -244,6 +245,9 @@ def test_storyboard_director_story_plan_conflicts_but_scene_targets_queue_indepe
     assert "if (directorTargetPending(directorTarget)) return;" in storyboard
     assert "storyState.director.busy = storyState.director.pendingOrder.length > 0;" in storyboard
     assert "function restorePreviousConcept()" in storyboard
+    assert "typeof storyState.story.previousConcept === 'string'" in storyboard
+    assert "expandConceptButton.classList.toggle('hidden', hasExpandedConcept);" in storyboard
+    assert "Restore the original concept before expanding again." in storyboard
     assert "operation: 'restore_previous_concept'" in storyboard
 
 

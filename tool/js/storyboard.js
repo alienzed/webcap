@@ -798,6 +798,10 @@
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'concept', storyId: storyId };
     if (directorTargetPending(directorTarget)) return;
+    if (typeof storyState.story.previousConcept === 'string') {
+      setDevelopStatus('Restore the original concept before expanding again.');
+      return;
+    }
     var modelId = storyState.director.modelId;
     if (!modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
@@ -852,7 +856,7 @@
       if (!storyState.story || storyState.story.id !== storyId) return;
       storyState.story = payload.story;
       renderStory();
-      setDevelopStatus('Previous concept restored.');
+      setDevelopStatus('Original concept restored.');
       setSaveState('Saved');
       return refreshLibrary();
     }).catch(reportError).finally(function () {
@@ -1995,10 +1999,11 @@
       var developRow = developButton.closest('.storyboard-develop-row');
       if (developRow) developRow.classList.toggle('has-scenes', hasScenes);
     }
+    var hasExpandedConcept = typeof storyState.story.previousConcept === 'string';
+    var expandConceptButton = el('storyboard-expand-concept-btn');
+    if (expandConceptButton) expandConceptButton.classList.toggle('hidden', hasExpandedConcept);
     var restoreConceptButton = el('storyboard-restore-concept-btn');
-    if (restoreConceptButton) {
-      restoreConceptButton.classList.toggle('hidden', typeof storyState.story.previousConcept !== 'string');
-    }
+    if (restoreConceptButton) restoreConceptButton.classList.toggle('hidden', !hasExpandedConcept);
     setStoryCollapsed(storyState.storyCollapsed);
     renderStoryLoras();
     renderScenes();

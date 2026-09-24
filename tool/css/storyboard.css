@@ -358,11 +358,15 @@
 
 
 .storyboard-sequence-preview {
-  margin-bottom: 18px;
-  padding: 10px;
+  margin: 12px 0 24px;
+  padding: 16px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--panel);
+}
+
+.storyboard-scene-workspace:has(.storyboard-scenes-list.is-sequence) .storyboard-sequence-preview {
+  min-height: calc(100% - 90px);
 }
 .storyboard-sequence-header { margin-bottom: 8px; }
 .storyboard-sequence-header strong,
@@ -862,6 +866,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.storyboard-continuity-details .storyboard-disclosure-body {
+  padding-top: 10px;
 }
 
 @media (max-width: 980px) {
@@ -1552,15 +1560,15 @@
 
 .storyboard-scenes-list.is-focus {
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .storyboard-scenes-list.is-focus .storyboard-scene {
   min-height: 0;
-  height: 100%;
+  height: auto;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  overflow: hidden;
+  grid-template-rows: auto auto auto;
+  overflow: visible;
   background: transparent;
   border-color: var(--border-soft);
 }
@@ -1568,9 +1576,9 @@
 .storyboard-scenes-list.is-focus .storyboard-scene-body {
   min-height: 0;
   grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
-  align-items: stretch;
+  align-items: start;
   gap: 24px;
-  overflow: auto;
+  overflow: visible;
   padding: 18px 20px 22px;
 }
 
@@ -1670,15 +1678,15 @@
 .storyboard-takes {
   position: relative;
   z-index: 8;
-  min-height: 250px;
-  height: min(34vh, 340px);
+  min-height: 360px;
+  height: auto;
   margin: 0;
-  padding: 0 14px 14px;
+  padding: 0 14px 20px;
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 94%, var(--bg));
   box-shadow: 0 -8px 18px rgba(0, 0, 0, .08);
   display: grid;
-  grid-template-rows: 50px minmax(0, 1fr) auto;
+  grid-template-rows: 50px auto auto;
 }
 
 .storyboard-takes-header {
@@ -1703,35 +1711,37 @@
 }
 
 .storyboard-takes-grid {
-  min-height: 0;
+  min-height: 290px;
   display: flex;
+  align-items: flex-start;
   gap: 16px;
   overflow-x: auto;
-  overflow-y: hidden;
-  padding: 1px 1px 5px;
+  overflow-y: visible;
+  padding: 8px 1px 12px;
   scroll-snap-type: x proximity;
 }
 
 .storyboard-take {
   position: relative;
-  flex: 1 0 360px;
-  min-width: 360px;
+  flex: 0 0 clamp(420px, 32vw, 620px);
+  min-width: 420px;
   min-height: 0;
   max-width: 620px;
   padding: 9px;
   border-radius: 9px;
   scroll-snap-align: start;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
 }
 
 .storyboard-take-media {
   position: relative;
   min-width: 0;
-  min-height: 0;
-  width: auto;
+  min-height: 220px;
+  width: 100%;
   max-width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: 520px;
   justify-self: center;
   aspect-ratio: var(--take-aspect, 16 / 9);
   background: #000;
@@ -2033,12 +2043,13 @@
   min-height: 0;
   width: 100%;
   max-width: none;
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  display: block;
   justify-self: stretch;
-  overflow: hidden;
-  padding: 14px 18px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 14px 18px 32px;
   background: var(--panel);
+  scrollbar-gutter: stable;
 }
 
 .storyboard-scenes-heading,

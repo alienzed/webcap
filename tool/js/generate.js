@@ -554,6 +554,20 @@
       : 'RAM and VRAM history, waiting for samples');
   }
 
+  function positionDirectorActivity() {
+    var card = el('generate-director-activity');
+    var panel = card && card.closest('.generate-prompt-panel');
+    var target = el('generate-prompt');
+    if (!card || !panel || !target || card.classList.contains('hidden')) return;
+    var panelRect = panel.getBoundingClientRect();
+    var targetRect = target.getBoundingClientRect();
+    var inset = 7;
+    card.style.left = Math.round(targetRect.left - panelRect.left + inset) + 'px';
+    card.style.top = Math.round(targetRect.top - panelRect.top + inset) + 'px';
+    card.style.width = Math.round(Math.max(260, targetRect.width - inset * 2)) + 'px';
+    card.style.height = Math.round(Math.max(110, targetRect.height - inset * 2)) + 'px';
+  }
+
   function renderDirectorActivity(activity, system) {
     var card = el('generate-director-activity');
     var phase = el('generate-director-activity-phase');
@@ -565,6 +579,7 @@
     card.classList.toggle('hidden', !visible);
     if (!visible) return;
 
+    positionDirectorActivity();
     updateDirectorTrend(system);
     phase.textContent = directorPhaseLabel(activity && activity.phase);
     var startedAt = Number(activity && activity.startedAt) || generateState.director.activityStartedAt;
@@ -826,6 +841,10 @@
     el('generate-director-restore').onclick = function () {
       restoreDirectorPrompt();
     };
+    window.addEventListener('resize', function () {
+      if (directorActivityActive()) positionDirectorActivity();
+    });
+
     el('generate-director-model').addEventListener('change', function () {
       generateState.director.modelId = this.value;
       setDirectorStatus('');

@@ -578,6 +578,10 @@
 
   function directorActivityTargetElement() {
     var target = storyState.director.activityTarget || {};
+    var currentStoryId = storyState.story ? String(storyState.story.id || '') : '';
+    var targetStoryId = String(target.storyId || '');
+    if (targetStoryId && targetStoryId !== currentStoryId) return null;
+
     if (target.kind === 'concept') {
       return el('storyboard-story-concept');
     }
@@ -599,7 +603,7 @@
     var target = directorActivityTargetElement();
     if (!card || !editor) return;
 
-    var detachedTarget = (kind === 'scene-prompt' || kind === 'scenes') && !target;
+    var detachedTarget = !!kind && !target;
     card.classList.toggle('is-detached-target', detachedTarget);
     if (detachedTarget || !target || card.classList.contains('hidden')) return;
 
@@ -2323,6 +2327,7 @@
     }).then(function (payload) {
       storyState.story = payload.story;
       if (previousStoryId !== payload.story.id && storyState.storyCollapsed) setStoryCollapsed(false);
+      if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};
       storyState.director.previousPrompts = {};

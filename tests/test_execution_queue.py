@@ -95,6 +95,20 @@ def test_execution_queue_terminal_receipt_is_removed_when_consumed(queue_root):
         execution_queue.get_job(job["id"])
 
 
+def test_execution_queue_keeps_bounded_recent_receipt_after_terminal_delivery_is_consumed(queue_root):
+    job = execution_queue.enqueue("inference", {"n": 1}, metadata={"client": "generate"})
+    execution_queue.claim_next("inference")
+    execution_queue.finish_job(job["id"], status="completed", result={"ok": True})
+    execution_queue.consume_terminal_job(job["id"])
+
+    recent = execution_queue.recent_snapshot("inference", limit=5)
+
+    assert len(recent) == 1
+    assert recent[0]["id"] == job["id"]
+    assert recent[0]["status"] == "completed"
+    assert recent[0]["metadata"]["client"] == "generate"
+
+
 def test_execution_queue_terminal_jobs_reject_runtime_updates(queue_root):
     job = execution_queue.enqueue("takes", {"n": 1})
     execution_queue.claim_next("takes")

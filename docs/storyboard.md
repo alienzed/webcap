@@ -138,7 +138,7 @@ Pinned is separate from status because an archived/completed Story may still be 
 
 The Story authoring panel is a dedicated, wide middle column between the Story library and Scene workspace, and is explicitly collapsible. The desktop target is a large production workspace: Story uses a comfortable authoring width rather than sidebar proportions, with readable helper text and Concept actions attached directly to the Concept field. Story and Scene are independent full-height panes rather than one long document.
 
-Scene authoring has two centered workspace modes, **Overview** and **Focus**, plus a persistent horizontal Scene progression strip for normal movement through the Story. Focus edits one Scene at a time. The Scene itself uses a large prompt surface beside a fully visible Generation panel; normal settings such as duration, aspect ratio, megapixels, seed, and wildcards are not hidden. Conditioning remains visible as Scene context, while deeper reference editing can still use disclosure. Entry/Exit state are first-class Scene fields; Notes remain optional.
+Scene authoring has two centered workspace modes, **Overview** and **Focus**, plus a persistent horizontal Scene progression strip for normal movement through the Story. Focus edits one Scene at a time. The Scene itself uses a large prompt surface beside a fully visible Generation panel; normal settings such as duration, aspect ratio, megapixels, and seed are not hidden. Conditioning remains visible as Scene context, while deeper reference editing can still use disclosure. Entry/Exit state are first-class Scene fields; Notes remain optional.
 
 The selected Scene's Takes occupy a substantial bottom evaluation dock. Take cards expand to consume available width up to a sensible maximum and only become horizontally scrollable once there are enough results to require it.
 
@@ -159,7 +159,6 @@ The schema should support future providers without forcing Phase 1 to implement 
   "durationSeconds": 6,
   "seed": null,
   "seedMode": "random",
-  "wildcardsEnabled": false,
   "loras": [],
   "storyLoraOverrides": [],
   "references": [],
@@ -322,7 +321,6 @@ Deliver:
   - title/summary/notes
   - duration
   - seed + random/fixed intent
-  - wildcard intent flag
 - schema placeholders for LoRAs, references, and Takes without requiring provider connectivity
 - visible save/failure state
 - focused backend/frontend tests for the new module and shell contract
@@ -370,6 +368,7 @@ Goal: generate Takes without coupling Storyboard to Test Generations.
 The current usable slice keeps Storyboard ownership of Story/Scene/Take meaning while using WebCap's shared inference runtime:
 
 - Storyboard freezes the Scene prompt, generation settings, effective Story/Scene LoRAs, and semantic references before enqueue;
+- wildcard syntax is not interpreted by Storyboard; the frozen raw prompt and generation seed are passed to the H3 ComfyUI workflow, whose ImpactWildcardProcessor owns wildcard expansion during execution;
 - Storyboard Takes enter the common `inference` lane alongside standalone Generate work, so queue positions are global;
 - the shared inference runner owns scheduling, GPU acquisition/release, ComfyUI transport, provider polling/cancellation, and lifecycle transitions;
 - the shared MiniMax H3 adapter resolves model/VAE/turbo-LoRA assets and binds prompt/settings/first-last frame references;

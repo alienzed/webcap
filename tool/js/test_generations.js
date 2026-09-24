@@ -15,6 +15,9 @@
   var pendingRatingFolder = '';
   var testActivity = {};
   var selectedCandidates = null;
+  var testSource = null;
+  var pendingTestSource = null;
+  var sourceBrowser = null;
   var queuedTestJobs = [];
   var showSessionError = false;
   var reportedFailureKeys = new Set();
@@ -29,12 +32,105 @@
     return index === -1 ? value : value.slice(0, index);
   }
 
+  function setFolderName(folder) {
+    var parts = String(owningSetFolder(folder) || '').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
+  }
+
+  function testSourceStorageKey(modelId) {
+    return 'webcap.test.source.' + encodeURIComponent(String(modelId || ''));
+  }
+
+  function loadLastTestSource(modelId) {
+    var key = testSourceStorageKey(modelId);
+    var value = window.localStorage.getItem(key);
+    return value === null ? null : String(value).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  }
+
+  function saveLastTestSource(modelId, source) {
+    window.localStorage.setItem(
+      testSourceStorageKey(modelId),
+      String(source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+    );
+  }
+
+  function sourceChildPath(parent, child) {
+    return [String(parent || '').replace(/^\/+|\/+$/g, ''), String(child || '').replace(/^\/+|\/+$/g, '')]
+      .filter(Boolean)
+      .join('/');
+  }
+
+  function renderTestSourceBrowser(payload) {
+    sourceBrowser = payload || {};
+    var pathEl = el('test-generations-source-path');
+    var up = el('test-generations-source-up-btn');
+    var host = el('test-generations-source-folders');
+    var source = String(sourceBrowser.source || '');
+    if (pathEl) {
+      pathEl.textContent = source || 'Test root';
+      pathEl.title = source || 'Test root';
+    }
+    if (up) {
+      up.disabled = !source;
+      up.dataset.sourceParent = String(sourceBrowser.parent || '');
+    }
+    if (!host) return;
+    host.innerHTML = '';
+    (Array.isArray(sourceBrowser.folders) ? sourceBrowser.folders : []).forEach(function (folderName) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'test-generations-source-folder';
+      button.dataset.testSource = sourceChildPath(source, folderName);
+      var label = document.createElement('span');
+      label.className = 'test-generations-source-folder-name';
+      label.textContent = folderName;
+      button.appendChild(label);
+      host.appendChild(button);
+    });
+  }
+
+  function refreshTestSourceBrowser() {
+    if (!isTestModelSupported() || testSource === null) return Promise.resolve(null);
+    var url = '/fs/test_generations/source?modelId=' + encodeURIComponent(currentTestModelId()) +
+      '&source=' + encodeURIComponent(String(testSource || ''));
+    return fetch(url).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Could not browse Test Sources.');
+        }
+        renderTestSourceBrowser(payload);
+        return payload;
+      });
+    }).catch(function (err) {
+      if (testSource) {
+        testSource = '';
+        saveLastTestSource(currentTestModelId(), testSource);
+        return openPane();
+      }
+      throw err;
+    });
+  }
+
+  function chooseTestSource(source) {
+    testSource = String(source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    saveLastTestSource(currentTestModelId(), testSource);
+    currentSession = '';
+    currentSessionFolder = '';
+    currentSessionModel = '';
+    selectedCandidates = null;
+    openPane();
+  }
+
   function request(operation, criteria) {
     var body = {
       folder: owningSetFolder(launchFolder || (state && state.folder) || ''),
       operation: operation
     };
-    if (criteria) body.criteria = criteria;
+    var resolvedCriteria = criteria ? Object.assign({}, criteria) : {};
+    if (testSource !== null && !Object.prototype.hasOwnProperty.call(resolvedCriteria, 'source')) {
+      resolvedCriteria.source = String(testSource || '');
+    }
+    if (Object.keys(resolvedCriteria).length) body.criteria = resolvedCriteria;
     return fetch('/fs/test_generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -74,10 +170,9 @@
   }
 
   function testPromptDraftKey() {
-    var folder = owningSetFolder(launchFolder || (state && state.folder) || '');
     var modelId = currentTestModelId();
-    if (!folder || !modelId) return '';
-    return 'webcap.test.promptDraft.' + encodeURIComponent(folder) + '.' + encodeURIComponent(modelId);
+    if (!modelId || testSource === null) return '';
+    return 'webcap.test.promptDraft.' + encodeURIComponent(modelId) + '.' + encodeURIComponent(String(testSource || ''));
   }
 
   function loadTestPromptDraft() {
@@ -410,7 +505,7 @@
     var host = el('test-generations-files');
     if (summary) {
       summary.textContent = (String(payload && payload.modelLabel || '').trim() ? String(payload.modelLabel).trim() + ' · ' : '') +
-        count + ' LoRA' + (count === 1 ? '' : 's') + ' staged';
+        count + ' LoRA' + (count === 1 ? '' : 's') + ' · ' + (String(testSource || '') || 'Test root');
     }
     if (countEl) countEl.textContent = String(count);
     if (!host) return;
@@ -451,7 +546,7 @@
     if (!files.length) {
       var emptyCandidates = document.createElement('div');
       emptyCandidates.className = 'test-generations-library-empty';
-      emptyCandidates.textContent = 'No staged LoRAs.';
+      emptyCandidates.textContent = 'No LoRAs in this folder.';
       host.appendChild(emptyCandidates);
       syncCandidateMasterSelect(files);
       return;

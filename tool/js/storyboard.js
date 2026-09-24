@@ -880,7 +880,7 @@
         return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
       }).length;
       var workBadge = activeCount
-        ? '<span class="storyboard-scene-progress-work is-active" title="' + String(activeCount) + ' active generation' + (activeCount === 1 ? '' : 's') + '">●</span>'
+        ? '<span class="storyboard-scene-progress-work is-active" title="' + String(activeCount) + ' active generation' + (activeCount === 1 ? '' : 's') + '"></span>'
         : (queuedCount
           ? '<span class="storyboard-scene-progress-work is-queued" title="' + String(queuedCount) + ' queued generation' + (queuedCount === 1 ? '' : 's') + '">Q' + (queuedCount > 1 ? String(queuedCount) : '') + '</span>'
           : '');

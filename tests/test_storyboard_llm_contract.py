@@ -198,6 +198,9 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert "complete structured H3 content for every Scene now" in prompt
     assert "establish sharedContext for recurring subjects, wardrobe states, locations" in prompt
     assert "Reuse the same sharedContext IDs in every Scene where they still apply" in prompt
+    assert "If the Story leaves a recurring person or place visually underspecified" in prompt
+    assert "never substitute relative phrases such as 'the same woman'" in prompt
+    assert "locations should carry stable layout/materials/colors/fixed features/baseline practical lighting" in prompt
     assert "WebCap will inject the referenced descriptions into the final H3 prompt mechanically" in prompt
     assert "Produce exactly 12 Scenes" in prompt
     assert "4 to 8 Scenes" not in prompt
@@ -246,6 +249,20 @@ def test_character_continuity_is_authoritative_without_lora_or_media_reasoning()
     assert "ethnicity/heritage" not in prompt
     assert "no LoRA" not in prompt
     assert "LoRA or exact" not in prompt
+
+
+def test_shared_context_schema_requires_self_contained_visual_definitions():
+    schema = storyboard_llm_contract.build_request(_story(), "", "develop_story")["response_schema"]
+    shared = schema["properties"]["sharedContext"]["properties"]
+
+    subject_description = shared["subjects"]["items"]["properties"]["description"]["description"]
+    wardrobe_description = shared["wardrobes"]["items"]["properties"]["description"]["description"]
+    location_description = shared["locations"]["items"]["properties"]["description"]["description"]
+
+    assert "self-contained appearance description" in subject_description
+    assert "do not rely on another Scene" in subject_description
+    assert "actual garments, colors, materials/cut" in wardrobe_description
+    assert "stable layout/geometry, materials, dominant colors" in location_description
 
 
 def test_scene_local_prompt_reuses_developed_shared_continuity():

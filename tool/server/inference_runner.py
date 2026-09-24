@@ -558,16 +558,25 @@ def action(operation, job_id="", direction="", position=None):
         execution_pause_lane(EXECUTION_LANE)
         return {"queue": snapshot()}
     if operation == "resume_queue":
-        owner = execution_resource_owner()
-        if owner and owner != GPU_RESERVATION_OWNER:
-            return {"queue": snapshot()}
+        # Resuming scheduling is independent of immediate GPU availability.
+        # The worker will wait safely while Training or LLM owns the shared
+        # resource; only unresolved provider cleanup is a reason to keep this
+        # lane deliberately paused.
         with _provider_hold_lock:
             cleanup_pending = bool(_provider_cleanup_holds)
         if cleanup_pending and not _reconcile_provider_cleanup_holds():
-            return {"queue": snapshot()}
+            queue = snapshot()
+            return {
+                "queue": queue,
+                "resumeBlocked": True,
+                "resumeBlockReason": str(
+                    queue.get("pauseReason")
+                    or "Inference queue is waiting for ComfyUI provider cleanup."
+                ),
+            }
         execution_resume_lane(EXECUTION_LANE)
         _start_worker_for_requested_inference()
-        return {"queue": snapshot()}
+        return {"queue": snapshot(), "resumed": True}
     if operation == "reorder":
         lane = execution_reorder_job(
             job_id,

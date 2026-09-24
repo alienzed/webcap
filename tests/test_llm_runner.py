@@ -186,6 +186,96 @@ def test_storyboard_llm_job_applies_expanded_concept_before_completion(llm_root,
     assert storyboard_store.load_story(story["id"])["concept"] == "Expanded concept."
 
 
+def test_storyboard_scene_prompt_job_writes_only_its_target_on_backend(llm_root, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, first = storyboard_store.add_scene(story["id"], {
+        "title": "First",
+        "prompt": "Old first prompt.",
+    })
+    story, second = storyboard_store.add_scene(story["id"], {
+        "title": "Second",
+        "prompt": "Second prompt stays untouched.",
+    })
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "text": "New first prompt.",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Write.", "output": "text"},
+        context={
+            "storyId": story["id"],
+            "sceneId": first["id"],
+            "operation": "write_prompt",
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    stored = storyboard_store.load_story(story["id"])
+    assert finished["status"] == "completed"
+    assert stored["scenes"][first["id"]]["prompt"] == "New first prompt."
+    assert stored["scenes"][first["id"]]["previousPrompt"] == "Old first prompt."
+    assert stored["scenes"][first["id"]]["promptDirectorJobId"] == job["jobId"]
+    assert stored["scenes"][second["id"]]["prompt"] == "Second prompt stays untouched."
+
+
+def test_storyboard_director_target_conflicts_are_backend_authoritative(llm_root):
+    story_a = storyboard_store.create_story({"title": "A"})
+    story_a, scene_a1 = storyboard_store.add_scene(story_a["id"], {"prompt": "A1"})
+    story_a, scene_a2 = storyboard_store.add_scene(story_a["id"], {"prompt": "A2"})
+    story_b = storyboard_store.create_story({"title": "B", "concept": "B"})
+
+    first = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Write.", "output": "text"},
+        context={"storyId": story_a["id"], "sceneId": scene_a1["id"], "operation": "write_prompt"},
+    )
+    second = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Write.", "output": "text"},
+        context={"storyId": story_a["id"], "sceneId": scene_a2["id"], "operation": "write_prompt"},
+    )
+
+    assert first["status"] == "queued"
+    assert second["status"] == "queued"
+
+    with pytest.raises(ValueError, match="target already has pending work"):
+        llm_runner.enqueue(
+            "storyboard",
+            "qwen",
+            {"operation": "refine_prompt", "prompt": "Refine.", "output": "text"},
+            context={"storyId": story_a["id"], "sceneId": scene_a1["id"], "operation": "refine_prompt"},
+        )
+
+    with pytest.raises(ValueError, match="target already has pending work"):
+        llm_runner.enqueue(
+            "storyboard",
+            "qwen",
+            {"operation": "develop_story", "prompt": "Develop.", "output": "json"},
+            context={"storyId": story_a["id"], "operation": "develop_story"},
+        )
+
+    other_story = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "expand_concept", "prompt": "Expand.", "output": "text"},
+        context={"storyId": story_b["id"], "operation": "expand_concept"},
+    )
+    assert other_story["status"] == "queued"
+
+
 def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_root, monkeypatch):
     story = storyboard_store.create_story({
         "title": "Story",

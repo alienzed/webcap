@@ -20,7 +20,7 @@ def test_generate_is_first_class_static_activity():
     assert 'id="generate-reference-first_frame"' in html
     assert 'id="generate-reference-last_frame"' in html
     assert 'id="inference-queue-drawer"' in html
-    assert 'id="inference-queue-toggle"' in html
+    assert 'data-inference-queue-toggle' in html
     assert 'id="generate-results"' in html
 
     assert "workspace === 'generate'" in shell
@@ -104,12 +104,15 @@ def test_generate_prompt_assistant_has_non_modal_live_activity():
     assert ">Refine Prompt</button>" in html
     assert 'id="generate-director-activity"' in html
     assert "function refreshDirectorActivity()" in script
+    assert "function positionDirectorActivity()" in script
     assert "requestJson('/fs/director/activity')" in script
     assert "requestJson('/fs/system_status')" in script
     assert "Loading model…" in script
     assert "Generating response…" in script
     assert ".generate-director-activity" in css
     assert 'position: absolute;' in css
+    assert "#generate-director-activity-trend svg" in css
+    assert "min-height: 86px;" in css
     assert '@app.route("/fs/director/activity", methods=["GET"])' in app
 
 
@@ -131,7 +134,7 @@ def test_inference_queue_is_shared_shell_drawer_without_pause_resume_controls():
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
 
     assert 'id="inference-queue-drawer"' in html
-    assert 'id="inference-queue-toggle"' in html
+    assert 'data-inference-queue-toggle' in html
     assert "['generate', 'test', 'storyboard']" in queue
     assert "data-inference-queue-action" in queue
     assert "'cancel'" in queue

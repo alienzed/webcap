@@ -34,7 +34,6 @@
       recoveryJobs: {},
       runtimeLabel: '',
       error: '',
-      previousPrompts: {},
       activityTimer: 0,
       activityStartedAt: 0,
       activityHistory: [],
@@ -268,51 +267,62 @@
     return null;
   }
 
+  function applyDirectorResultToVisibleStory(job) {
+    var storyId = String(job && job.storyId || '');
+    var sceneId = String(job && job.sceneId || '');
+    var operation = String(job && job.operation || '');
+    if (!storyId) return Promise.resolve();
+
+    return request(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
+      var canonical = payload.story;
+      if (!storyState.story || String(storyState.story.id || '') !== storyId) {
+        return refreshLibrary();
+      }
+
+      if ((operation === 'write_prompt' || operation === 'refine_prompt') && sceneId) {
+        var savedScene = canonical && canonical.scenes ? canonical.scenes[sceneId] : null;
+        var currentScene = storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
+        if (savedScene && currentScene) {
+          currentScene.prompt = savedScene.prompt;
+          currentScene.previousPrompt = savedScene.previousPrompt;
+          currentScene.promptDirectorModel = savedScene.promptDirectorModel;
+          currentScene.promptDirectorJobId = savedScene.promptDirectorJobId;
+          currentScene.updatedAt = savedScene.updatedAt;
+          var currentRoot = sceneElement(sceneId);
+          var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
+          if (currentPrompt) currentPrompt.value = savedScene.prompt || '';
+          syncSceneDirectorRestore(sceneId);
+          updateSceneDirectorStatus(sceneId, 'Director completed.');
+        }
+      } else if (operation === 'expand_concept') {
+        storyState.story.concept = canonical.concept;
+        storyState.story.previousConcept = canonical.previousConcept;
+        storyState.story.updatedAt = canonical.updatedAt;
+        var concept = el('storyboard-story-concept');
+        if (concept) concept.value = canonical.concept || '';
+        var restore = el('storyboard-restore-concept-btn');
+        if (restore) restore.classList.toggle('hidden', typeof canonical.previousConcept !== 'string');
+        setDevelopStatus('Concept expansion completed.');
+      } else if (operation === 'develop_story') {
+        storyState.story.sceneOrder = canonical.sceneOrder || [];
+        storyState.story.scenes = canonical.scenes || {};
+        storyState.story.removedScenes = canonical.removedScenes || {};
+        storyState.story.development = canonical.development || null;
+        storyState.story.updatedAt = canonical.updatedAt;
+        storyState.sequenceExport = null;
+        renderScenes();
+        renderStoryReadiness();
+        var developButton = el('storyboard-develop-btn');
+        if (developButton) developButton.textContent = storyState.story.sceneOrder.length ? 'Re-develop Scenes…' : 'Develop Scenes';
+        setDevelopStatus('Story development completed.');
+      }
+      setSaveState('Saved');
+      return refreshLibrary();
+    });
+  }
+
   function applyRecoveredDirectorResult(job) {
-    var result = job.result || {};
-    var storyId = String(job.storyId || '');
-    var sceneId = String(job.sceneId || '');
-
-    if (job.operation === 'write_prompt' || job.operation === 'refine_prompt') {
-      var previousPrompt = '';
-      return request(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
-        var scene = payload.story && payload.story.scenes ? payload.story.scenes[sceneId] : null;
-        if (!scene) throw new Error('Recovered Director Scene no longer exists.');
-        if (String(scene.promptDirectorJobId || '') === String(job.jobId || '')) return null;
-        previousPrompt = String(scene.prompt || '');
-        return request({
-          operation: 'update_scene',
-          storyId: storyId,
-          sceneId: sceneId,
-          scene: {
-            prompt: String(result.result || ''),
-            promptDirectorModel: String(result.model || job.modelId || ''),
-            promptDirectorJobId: String(job.jobId || '')
-          }
-        });
-      }).then(function (saved) {
-        if (!saved) return;
-        if (storyState.story && storyState.story.id === storyId) {
-          storyState.story = saved.story;
-          storyState.director.previousPrompts[sceneId] = previousPrompt;
-          renderStory();
-          updateSceneDirectorStatus(sceneId, 'Recovered Director result.');
-        }
-        return refreshLibrary();
-      });
-    }
-
-    if (job.operation === 'expand_concept' || job.operation === 'develop_story') {
-      return request(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
-        if (storyState.story && storyState.story.id === storyId) {
-          storyState.story = payload.story;
-          renderStory();
-        }
-        return refreshLibrary();
-      });
-    }
-
-    return Promise.resolve();
+    return applyDirectorResultToVisibleStory(job);
   }
 
   function watchRecoveredDirectorJob(job) {
@@ -804,26 +814,34 @@
     var root = sceneElement(sceneId);
     var button = root && root.querySelector('[data-director-restore]');
     if (!button) return;
-    button.classList.toggle(
-      'hidden',
-      typeof storyState.director.previousPrompts[sceneId] !== 'string'
-    );
+    var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
+    button.classList.toggle('hidden', !scene || typeof scene.previousPrompt !== 'string');
   }
 
   function restoreSceneDirectorPrompt(sceneId) {
     if (!storyState.story) return;
-    var directorTarget = { kind: 'scene-prompt', storyId: storyState.story.id, sceneId: sceneId };
-    if (directorTargetPending(directorTarget)) return;
-    var previous = storyState.director.previousPrompts[sceneId];
-    if (typeof previous !== 'string') return;
-    var root = sceneElement(sceneId);
-    var prompt = root && root.querySelector('[data-scene-field="prompt"]');
-    if (!prompt) throw new Error('Scene generation prompt field is missing.');
-    prompt.value = previous;
-    delete storyState.director.previousPrompts[sceneId];
-    syncSceneDirectorRestore(sceneId);
-    updateSceneDirectorStatus(sceneId, 'Previous prompt restored.');
-    saveSceneNow(sceneId).catch(reportError);
+    var storyId = storyState.story.id;
+    var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId };
+    if (directorTargetBlocked(directorTarget)) {
+      reportError(new Error('That Scene prompt already has Director work pending.'));
+      return;
+    }
+    flushPendingSaves().then(function () {
+      return request({
+        operation: 'restore_previous_prompt',
+        storyId: storyId,
+        sceneId: sceneId
+      });
+    }).then(function (payload) {
+      if (!storyState.story || String(storyState.story.id || '') !== String(storyId)) return;
+      storyState.story.scenes[sceneId] = payload.scene;
+      var root = sceneElement(sceneId);
+      var prompt = root && root.querySelector('[data-scene-field="prompt"]');
+      if (prompt) prompt.value = payload.scene.prompt || '';
+      syncSceneDirectorRestore(sceneId);
+      updateSceneDirectorStatus(sceneId, 'Previous prompt restored.');
+      setSaveState('Saved');
+    }).catch(reportError);
   }
 
   function directorContractPreviewText(contract) {
@@ -880,7 +898,10 @@
     if (!storyState.story) return;
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId };
-    if (directorTargetPending(directorTarget)) return;
+    if (directorTargetBlocked(directorTarget)) {
+      reportError(new Error('That Scene prompt already has Director work pending.'));
+      return;
+    }
     var modelId = storyState.director.modelId;
     if (!modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
@@ -888,9 +909,6 @@
     }
     var root = sceneElement(sceneId);
     if (!root) throw new Error('Scene editor is missing for ' + sceneId + '.');
-    var prompt = root.querySelector('[data-scene-field="prompt"]');
-    if (!prompt) throw new Error('Scene generation prompt field is missing.');
-    var previousPrompt = prompt.value;
 
     var instruction = '';
     if (operation === 'refine_prompt') {
@@ -914,35 +932,13 @@
         instruction: instruction
       });
     }).then(function (payload) {
-      var generatedPrompt = payload.result || '';
-      storyState.director.previousPrompts[sceneId] = previousPrompt;
-      return request({
-        operation: 'update_scene',
+      return applyDirectorResultToVisibleStory({
         storyId: storyId,
         sceneId: sceneId,
-        scene: {
-          prompt: generatedPrompt,
-          promptDirectorModel: String(payload.model || modelId),
-          promptDirectorJobId: String(payload.jobId || '')
-        }
-      }).then(function (saved) {
-        var stillViewingOrigin = !!(
-          storyState.story
-          && String(storyState.story.id || '') === String(storyId)
-        );
-        if (stillViewingOrigin && storyState.story.scenes && saved.scene) {
-          storyState.story.scenes[sceneId] = saved.scene;
-          if (saved.story && saved.story.updatedAt) storyState.story.updatedAt = saved.story.updatedAt;
-          var currentRoot = sceneElement(sceneId);
-          var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
-          if (currentPrompt) currentPrompt.value = generatedPrompt;
-          syncSceneDirectorRestore(sceneId);
-          updateSceneDirectorStatus(sceneId, 'Generated with ' + String(payload.model || modelId));
-          setSaveState('Saved');
-        }
-        return refreshLibrary().then(function () {
-          return consumeDirectorJob(payload.jobId);
-        });
+        operation: operation,
+        jobId: payload.jobId
+      }).then(function () {
+        return consumeDirectorJob(payload.jobId);
       });
     }).catch(function (err) {
       updateSceneDirectorStatus(sceneId, 'Director failed');
@@ -962,9 +958,8 @@
     target = target || {};
     var storyId = String(target.storyId || '');
     if (!storyId) return '';
-    if (target.kind === 'concept' || target.kind === 'scenes') {
-      return 'story-plan:' + storyId;
-    }
+    if (target.kind === 'concept') return 'story-concept:' + storyId;
+    if (target.kind === 'scenes') return 'story-scenes:' + storyId;
     if (target.kind === 'scene-prompt' && target.sceneId) {
       return 'scene-prompt:' + storyId + ':' + String(target.sceneId);
     }
@@ -976,6 +971,21 @@
     return !!(key && storyState.director.pendingTargets[key]);
   }
 
+  function directorTargetsConflict(a, b) {
+    if (!a || !b || String(a.storyId || '') !== String(b.storyId || '')) return false;
+    if (a.kind === 'scene-prompt' && b.kind === 'scene-prompt') {
+      return String(a.sceneId || '') === String(b.sceneId || '');
+    }
+    if (a.kind === 'scenes' || b.kind === 'scenes') return true;
+    return a.kind === 'concept' && b.kind === 'concept';
+  }
+
+  function directorTargetBlocked(target) {
+    return Object.keys(storyState.director.pendingTargets).some(function (key) {
+      return directorTargetsConflict(target, storyState.director.pendingTargets[key]);
+    });
+  }
+
   function setDirectorTargetProtected(target, protectedState) {
     target = target || {};
     if (!storyState.story || String(target.storyId || '') !== String(storyState.story.id || '')) return;
@@ -984,25 +994,32 @@
       if (concept) concept.disabled = !!protectedState;
       return;
     }
+    if (target.kind === 'scenes') {
+      Array.prototype.forEach.call(document.querySelectorAll('.storyboard-scene[data-scene-id]'), function (root) {
+        Array.prototype.forEach.call(root.querySelectorAll('[data-scene-field], [data-scene-action], [data-director-write], [data-director-refine], [data-director-restore], [data-scene-generate]'), function (node) {
+          node.disabled = !!protectedState;
+        });
+      });
+      return;
+    }
     if (target.kind === 'scene-prompt') {
       var root = sceneElement(target.sceneId);
       if (!root) return;
       var prompt = root.querySelector('[data-scene-field="prompt"]');
-      var correction = root.querySelector('[data-director-correction]');
       if (prompt) prompt.disabled = !!protectedState;
-      if (correction) correction.disabled = !!protectedState;
     }
   }
 
   function syncDirectorPendingControls() {
     var currentStoryId = storyState.story ? String(storyState.story.id || '') : '';
-    var storyPlanPending = !!storyState.director.pendingTargets['story-plan:' + currentStoryId];
-    ['storyboard-expand-concept-btn', 'storyboard-develop-btn'].forEach(function (id) {
-      var node = el(id);
-      if (node) node.disabled = storyPlanPending;
-    });
+    var conceptTarget = { kind: 'concept', storyId: currentStoryId };
+    var scenesTarget = { kind: 'scenes', storyId: currentStoryId };
+    var expandButton = el('storyboard-expand-concept-btn');
+    var developButton = el('storyboard-develop-btn');
+    if (expandButton) expandButton.disabled = directorTargetBlocked(conceptTarget);
+    if (developButton) developButton.disabled = directorTargetBlocked(scenesTarget);
     var restore = el('storyboard-restore-concept-btn');
-    if (restore) restore.disabled = storyPlanPending;
+    if (restore) restore.disabled = directorTargetBlocked(conceptTarget);
     var selector = el('storyboard-director-model');
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;
 
@@ -1012,9 +1029,9 @@
         storyId: currentStoryId,
         sceneId: root.dataset.sceneId
       };
-      var pending = directorTargetPending(sceneTarget);
+      var blocked = directorTargetBlocked(sceneTarget);
       Array.prototype.forEach.call(root.querySelectorAll('[data-director-write], [data-director-refine], [data-director-restore]'), function (button) {
-        button.disabled = pending;
+        button.disabled = blocked;
       });
     });
 
@@ -1053,7 +1070,10 @@
     if (!storyState.story) return;
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'concept', storyId: storyId };
-    if (directorTargetPending(directorTarget)) return;
+    if (directorTargetBlocked(directorTarget)) {
+      reportError(new Error('That Director target already has pending work.'));
+      return;
+    }
     var modelId = storyState.director.modelId;
     if (!modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
@@ -1151,7 +1171,6 @@
       if (!storyState.story || storyState.story.id !== storyId) return;
       storyState.story = payload.story;
       storyState.sequenceExport = null;
-      storyState.director.previousPrompts = {};
       renderStory();
       setDevelopStatus('Developed ' + String(payload.sceneCount || 0) + ' Scenes with ' + String(payload.model || modelId) + '.');
       setSaveState('Saved');
@@ -2165,7 +2184,7 @@
                 '<div class="storyboard-prompt-actions">' +
                   '<button type="button" class="review-captions-btn" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
                   '<button type="button" class="review-captions-btn' +
-                    (typeof storyState.director.previousPrompts[sceneId] === 'string' ? '' : ' hidden') +
+                    (typeof scene.previousPrompt === 'string' ? '' : ' hidden') +
                     '" data-director-restore title="Restore the prompt from before the last Director edit.">Restore Previous</button>' +
                 '</div>' +
               '</div>' +
@@ -2492,7 +2511,7 @@
   }
 
   function storyPayloadFromUi() {
-    return {
+    var payload = {
       title: el('storyboard-story-title').value,
       concept: el('storyboard-story-concept').value,
       style: el('storyboard-story-style').value,
@@ -2507,6 +2526,10 @@
       status: el('storyboard-story-status').value,
       pinned: !!storyState.story.pinned
     };
+    if (directorTargetPending({ kind: 'concept', storyId: storyState.story.id })) {
+      delete payload.concept;
+    }
+    return payload;
   }
 
   function saveStoryNow() {
@@ -2565,7 +2588,7 @@
     var promptDirectorModel = promptValue === String(currentScene.prompt || '')
       ? String(currentScene.promptDirectorModel || '')
       : '';
-    return {
+    var payload = {
       title: field('title').value,
       summary: field('summary').value,
       entryState: field('entryState').value,
@@ -2595,6 +2618,11 @@
         return null;
       }).filter(Boolean)
     };
+    if (directorTargetPending({ kind: 'scene-prompt', storyId: storyState.story.id, sceneId: sceneId })) {
+      delete payload.prompt;
+      delete payload.promptDirectorModel;
+    }
+    return payload;
   }
 
   function saveSceneNow(sceneId) {

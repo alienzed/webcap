@@ -323,7 +323,12 @@
       });
     }).then(function (payload) {
       trackGenerateJob(payload.job && payload.job.jobId);
-      setStatus('Queued' + (payload.job.queuePosition ? ' · #' + payload.job.queuePosition : '') + '.');
+      var submittedStatus = String(payload.job && payload.job.status || '');
+      setStatus(
+        submittedStatus === 'backlog'
+          ? 'Added to backlog.'
+          : ('Queued' + (payload.job.queuePosition ? ' · #' + payload.job.queuePosition : '') + '.')
+      );
       if (typeof window.refreshInferenceQueue === 'function') window.refreshInferenceQueue();
       return typeof window.refreshInferenceQueue === 'function' ? window.refreshInferenceQueue() : null;
     }).catch(function (err) {

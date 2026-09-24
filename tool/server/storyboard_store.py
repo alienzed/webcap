@@ -23,6 +23,19 @@ VALID_SEED_MODES = {"random", "fixed"}
 VALID_INVARIANT_KINDS = {"visual", "character", "world", "sound", "custom"}
 VALID_REFERENCE_ROLES = {"first_frame", "last_frame", "guide_frame"}
 VALID_REFERENCE_FRAMES = {"first", "last"}
+ASPECT_RATIO_OPTIONS = (
+    "1:1 (Square)",
+    "2:3 (Portrait Photo)",
+    "3:2 (Photo)",
+    "3:4 (Portrait Standard)",
+    "4:3 (Standard)",
+    "9:16 (Portrait Widescreen)",
+    "16:9 (Widescreen)",
+    "21:9 (Ultrawide)",
+)
+DEFAULT_TARGET_SCENE_COUNT = 12
+DEFAULT_STORY_ASPECT_RATIO = "4:3 (Standard)"
+DEFAULT_STORY_MEGAPIXELS = 0.2
 
 _mutation_lock = threading.RLock()
 _logger = logging.getLogger(__name__)
@@ -237,6 +250,72 @@ def _normalize_story_lora_overrides(value):
     return result
 
 
+def _normalize_target_scene_count(value):
+    if isinstance(value, bool):
+        raise ValueError("Story target Scene count must be an integer.")
+    try:
+        count = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Story target Scene count must be an integer.") from exc
+    if count < 2 or count > 50:
+        raise ValueError("Story target Scene count must be between 2 and 50.")
+    return count
+
+
+def _normalize_story_generation_defaults(value=None, existing=None):
+    if value is not None and not isinstance(value, dict):
+        raise ValueError("Story generation defaults must be an object.")
+    current = existing if isinstance(existing, dict) else {}
+    supplied = value if isinstance(value, dict) else {}
+
+    aspect_ratio = str(
+        supplied.get("aspectRatio", current.get("aspectRatio", DEFAULT_STORY_ASPECT_RATIO))
+        or DEFAULT_STORY_ASPECT_RATIO
+    ).strip()
+    if aspect_ratio not in ASPECT_RATIO_OPTIONS:
+        raise ValueError("Unsupported Storyboard aspect ratio: " + aspect_ratio)
+
+    megapixels_value = supplied.get("megapixels", current.get("megapixels", DEFAULT_STORY_MEGAPIXELS))
+    if isinstance(megapixels_value, bool):
+        raise ValueError("Story megapixels must be a number.")
+    try:
+        megapixels = float(megapixels_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Story megapixels must be a number.") from exc
+    if megapixels <= 0:
+        raise ValueError("Story megapixels must be greater than zero.")
+
+    return {
+        "aspectRatio": aspect_ratio,
+        "megapixels": megapixels,
+    }
+
+
+def resolve_scene_generation_defaults(story, scene):
+    defaults = _normalize_story_generation_defaults((story or {}).get("generationDefaults"))
+    aspect_ratio = str((scene or {}).get("aspectRatio") or "").strip() or defaults["aspectRatio"]
+    if aspect_ratio not in ASPECT_RATIO_OPTIONS:
+        raise ValueError("Unsupported Storyboard aspect ratio: " + aspect_ratio)
+
+    megapixels_value = (scene or {}).get("megapixels")
+    if megapixels_value in (None, ""):
+        megapixels = defaults["megapixels"]
+    else:
+        if isinstance(megapixels_value, bool):
+            raise ValueError("Scene megapixels must be a number.")
+        try:
+            megapixels = float(megapixels_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Scene megapixels must be a number.") from exc
+        if megapixels <= 0:
+            raise ValueError("Scene megapixels must be greater than zero.")
+
+    return {
+        "aspectRatio": aspect_ratio,
+        "megapixels": megapixels,
+    }
+
+
 def resolve_scene_loras(story, scene):
     story_loras = _normalize_loras((story or {}).get("loras", []), allow_enabled=True)
     scene_loras = _normalize_loras((scene or {}).get("loras", []))
@@ -295,13 +374,29 @@ def _normalize_scene(scene_id, value, existing=None):
     if duration <= 0:
         raise ValueError("Scene duration must be greater than zero.")
 
-    megapixels = value.get("megapixels", current.get("megapixels", 0.2))
-    try:
-        megapixels = float(megapixels)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Scene megapixels must be a number.") from exc
-    if megapixels <= 0:
-        raise ValueError("Scene megapixels must be greater than zero.")
+    if "aspectRatio" in value:
+        aspect_ratio_value = value.get("aspectRatio")
+    else:
+        aspect_ratio_value = current.get("aspectRatio") if "aspectRatio" in current else None
+    aspect_ratio = str(aspect_ratio_value or "").strip() or None
+    if aspect_ratio is not None and aspect_ratio not in ASPECT_RATIO_OPTIONS:
+        raise ValueError("Unsupported Storyboard aspect ratio: " + aspect_ratio)
+
+    if "megapixels" in value:
+        megapixels_value = value.get("megapixels")
+    else:
+        megapixels_value = current.get("megapixels") if "megapixels" in current else None
+    if megapixels_value in (None, ""):
+        megapixels = None
+    else:
+        if isinstance(megapixels_value, bool):
+            raise ValueError("Scene megapixels must be a number.")
+        try:
+            megapixels = float(megapixels_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Scene megapixels must be a number.") from exc
+        if megapixels <= 0:
+            raise ValueError("Scene megapixels must be greater than zero.")
 
     normalized = {
         "id": scene_id,
@@ -311,7 +406,7 @@ def _normalize_scene(scene_id, value, existing=None):
         "exitState": str(value.get("exitState", current.get("exitState", "")) or "").strip(),
         "prompt": str(value.get("prompt", current.get("prompt", "")) or ""),
         "durationSeconds": duration,
-        "aspectRatio": str(value.get("aspectRatio", current.get("aspectRatio", "4:3 (Standard)")) or "4:3 (Standard)").strip(),
+        "aspectRatio": aspect_ratio,
         "megapixels": megapixels,
         "seed": seed,
         "seedMode": seed_mode,
@@ -350,6 +445,14 @@ def _normalize_story(payload, existing=None, story_id=None):
     scene_order = current.get("sceneOrder") if isinstance(current.get("sceneOrder"), list) else []
     scene_order = [scene_id for scene_id in scene_order if scene_id in scenes]
 
+    target_scene_count = _normalize_target_scene_count(
+        payload.get("targetSceneCount", current.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT))
+    )
+    generation_defaults = _normalize_story_generation_defaults(
+        payload.get("generationDefaults") if "generationDefaults" in payload else None,
+        current.get("generationDefaults"),
+    )
+
     return {
         "version": STORYBOARD_VERSION,
         "id": resolved_id,
@@ -359,6 +462,8 @@ def _normalize_story(payload, existing=None, story_id=None):
         "style": str(payload.get("style", current.get("style", "")) or ""),
         "invariants": _normalize_story_invariants(payload.get("invariants", current.get("invariants", []))),
         "loras": _normalize_loras(payload.get("loras", current.get("loras", [])), allow_enabled=True),
+        "targetSceneCount": target_scene_count,
+        "generationDefaults": generation_defaults,
         "tags": _normalize_tags(payload.get("tags", current.get("tags", []))),
         "status": status,
         "pinned": bool(payload.get("pinned", current.get("pinned", False))),
@@ -422,6 +527,8 @@ def duplicate_story(story_id):
         "style": source.get("style") or "",
         "invariants": copy.deepcopy(source.get("invariants") or []),
         "loras": copy.deepcopy(source.get("loras") or []),
+        "targetSceneCount": source.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT),
+        "generationDefaults": copy.deepcopy(source.get("generationDefaults") or {}),
         "tags": copy.deepcopy(source.get("tags") or []),
         "status": "active",
         "pinned": False,
@@ -668,8 +775,8 @@ def duplicate_scene(story_id, scene_id):
         "exitState": current.get("exitState") or "",
         "prompt": current.get("prompt") or "",
         "durationSeconds": current.get("durationSeconds", 6),
-        "aspectRatio": current.get("aspectRatio", "4:3 (Standard)"),
-        "megapixels": current.get("megapixels", 0.2),
+        "aspectRatio": current.get("aspectRatio"),
+        "megapixels": current.get("megapixels"),
         "seed": current.get("seed"),
         "seedMode": current.get("seedMode", "random"),
         "wildcardsEnabled": bool(current.get("wildcardsEnabled")),

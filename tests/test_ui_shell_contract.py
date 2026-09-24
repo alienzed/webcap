@@ -102,6 +102,28 @@ def test_test_activity_visibility_and_active_state_are_owned_by_new_rail():
     assert "activityButton.classList.toggle('active', isOpen())" in script
 
 
+def test_global_activity_drawer_is_a_read_only_sibling_of_inference_queue():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    inference = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert 'id="activity-monitor-rail-btn"' in html
+    assert 'id="activity-monitor-drawer"' in html
+    assert 'id="activity-monitor-list"' in html
+    assert html.index('id="activity-monitor-rail-btn"') < html.index('id="inference-queue-rail-btn"')
+    assert 'src="/static/js/activity_monitor.js"' in html
+    assert "fetch(url)" in activity
+    assert "'/fs/activity?limit=24'" in activity
+    assert "webcap.activity.lastSeen" in activity
+    assert "window.setActivityDrawerOpen = setOpen" in activity
+    assert "window.setInferenceQueueOpen = setOpen" in inference
+    assert "window.setActivityDrawerOpen(false)" in inference
+    assert ".activity-monitor-drawer {" in css
+    assert ".activity-monitor-recent-row" in css
+    assert ".activity-monitor-queue-row" in css
+
+
 def test_console_has_one_stable_shell_host():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")

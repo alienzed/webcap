@@ -459,6 +459,10 @@ def _normalize_scene(scene_id, value, existing=None):
         if seed < 0:
             raise ValueError("Scene seed must be zero or greater.")
 
+    refine_complete = value.get("refineComplete", current.get("refineComplete", False))
+    if not isinstance(refine_complete, bool):
+        raise ValueError("Scene refineComplete must be boolean.")
+
     duration = value.get("durationSeconds", current.get("durationSeconds", 6))
     try:
         duration = float(duration)
@@ -505,6 +509,7 @@ def _normalize_scene(scene_id, value, existing=None):
         ),
         "promptDirectorModel": str(value.get("promptDirectorModel", current.get("promptDirectorModel", "")) or "").strip(),
         "promptDirectorJobId": str(value.get("promptDirectorJobId", current.get("promptDirectorJobId", "")) or "").strip(),
+        "refineComplete": refine_complete,
         "planDirectorModel": str(value.get("planDirectorModel", current.get("planDirectorModel", "")) or "").strip(),
         "invariantRefs": _normalize_scene_invariant_refs(
             value.get("invariantRefs", current.get("invariantRefs", []))
@@ -1031,7 +1036,7 @@ def update_scene(story_id, scene_id, payload):
 
 
 @_serialized_mutation
-def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id=""):
+def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id="", operation=""):
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     current = scenes.get(scene_id)
@@ -1046,6 +1051,7 @@ def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id=""):
         "previousPrompt": str(current.get("prompt") or ""),
         "promptDirectorModel": str(model_id or "").strip(),
         "promptDirectorJobId": str(job_id or "").strip(),
+        "refineComplete": str(operation or "").strip() == "refine_prompt",
     }, existing=current)
     scenes[scene_id] = scene
     story["scenes"] = scenes
@@ -1178,11 +1184,13 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
                 "previousPrompt": current.get("previousPrompt") if isinstance(current.get("previousPrompt"), str) else None,
                 "promptDirectorModel": str(current.get("promptDirectorModel") or ""),
                 "promptDirectorJobId": str(current.get("promptDirectorJobId") or ""),
+                "refineComplete": bool(current.get("refineComplete")),
             }
             normalize_patch.update({
                 "previousPrompt": str(current.get("prompt") or ""),
                 "promptDirectorModel": str(model_id or "").strip(),
                 "promptDirectorJobId": str(job_id or "").strip(),
+                "refineComplete": False,
             })
         repaired = _normalize_scene(scene_id, normalize_patch, existing=current)
         new_scenes[scene_id] = repaired
@@ -1237,6 +1245,7 @@ def restore_scene_repairs(story_id):
             restored["previousPrompt"] = meta.get("previousPrompt") if isinstance(meta.get("previousPrompt"), str) else None
             restored["promptDirectorModel"] = str(meta.get("promptDirectorModel") or "")
             restored["promptDirectorJobId"] = str(meta.get("promptDirectorJobId") or "")
+            restored["refineComplete"] = bool(meta.get("refineComplete"))
         new_scenes[scene_id] = restored
 
     story["scenes"] = new_scenes
@@ -1262,6 +1271,7 @@ def restore_previous_prompt(story_id, scene_id):
         "previousPrompt": str(current.get("prompt") or ""),
         "promptDirectorModel": "",
         "promptDirectorJobId": "",
+        "refineComplete": False,
     }, existing=current)
     scenes[scene_id] = scene
     story["scenes"] = scenes

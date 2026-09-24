@@ -318,11 +318,17 @@
           currentScene.previousPrompt = savedScene.previousPrompt;
           currentScene.promptDirectorModel = savedScene.promptDirectorModel;
           currentScene.promptDirectorJobId = savedScene.promptDirectorJobId;
+          currentScene.refineComplete = !!savedScene.refineComplete;
           currentScene.updatedAt = savedScene.updatedAt;
           var currentRoot = sceneElement(sceneId);
           var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
           if (currentPrompt) currentPrompt.value = savedScene.prompt || '';
+          if (operation === 'refine_prompt') {
+            var currentCorrection = currentRoot && currentRoot.querySelector('[data-director-correction]');
+            if (currentCorrection) currentCorrection.value = '';
+          }
           syncSceneDirectorRestore(sceneId);
+          syncSceneRefineState(sceneId);
           updateSceneDirectorStatus(sceneId, 'Director completed.');
         }
       } else if (operation === 'define_invariants') {
@@ -927,6 +933,19 @@
     if (!button) return;
     var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
     button.classList.toggle('hidden', !scene || typeof scene.previousPrompt !== 'string');
+  }
+
+  function syncSceneRefineState(sceneId) {
+    var root = sceneElement(sceneId);
+    var button = root && root.querySelector('[data-director-refine]');
+    if (!button) return;
+    var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
+    var correction = root.querySelector('[data-director-correction]');
+    var complete = !!(scene && scene.refineComplete) && !(correction && correction.value.trim());
+    button.textContent = complete ? '✓' : 'Refine';
+    button.title = complete
+      ? 'Last refinement completed. Start typing another instruction to refine again.'
+      : 'Apply this correction to the existing generation prompt.';
   }
 
   function restoreSceneDirectorPrompt(sceneId) {
@@ -2444,7 +2463,9 @@
               '<textarea class="storyboard-prompt-textarea" data-scene-field="prompt" rows="7" placeholder="Full model-facing prompt. Write it directly or let the Director draft it from the Scene intent.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea>' +
               '<div class="storyboard-director-actions">' +
                 '<input type="text" data-director-correction placeholder="Tell the Director what to change in this prompt...">' +
-                '<button type="button" class="review-captions-btn" data-director-refine title="Apply this correction to the existing generation prompt.">Refine</button>' +
+                '<button type="button" class="review-captions-btn" data-director-refine title="' +
+                  (scene.refineComplete ? 'Last refinement completed. Start typing another instruction to refine again.' : 'Apply this correction to the existing generation prompt.') +
+                  '">' + (scene.refineComplete ? '✓' : 'Refine') + '</button>' +
                 '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
               '<details class="storyboard-scene-disclosure storyboard-prompt-pipeline-details">' +
@@ -2844,6 +2865,7 @@
     var promptUnchanged = promptValue === String(currentScene.prompt || '');
     var promptDirectorModel = promptUnchanged ? String(currentScene.promptDirectorModel || '') : '';
     var promptDirectorJobId = promptUnchanged ? String(currentScene.promptDirectorJobId || '') : '';
+    var refineComplete = promptUnchanged && !!currentScene.refineComplete;
     var payload = {
       title: field('title').value,
       summary: field('summary').value,
@@ -2852,6 +2874,7 @@
       prompt: promptValue,
       promptDirectorModel: promptDirectorModel,
       promptDirectorJobId: promptDirectorJobId,
+      refineComplete: refineComplete,
       notes: field('notes').value,
       durationSeconds: field('durationSeconds').value,
       aspectRatio: field('aspectRatio').value || null,
@@ -2879,6 +2902,7 @@
       delete payload.prompt;
       delete payload.promptDirectorModel;
       delete payload.promptDirectorJobId;
+      delete payload.refineComplete;
     }
     if (directorTargetPending({ kind: 'repair', storyId: storyState.story.id })) {
       delete payload.summary;
@@ -2887,6 +2911,7 @@
       delete payload.prompt;
       delete payload.promptDirectorModel;
       delete payload.promptDirectorJobId;
+      delete payload.refineComplete;
     }
     return payload;
   }
@@ -3550,11 +3575,39 @@
   }
 
   function handleSceneInput(event) {
+    var correction = event.target.closest('[data-director-correction]');
+    if (correction) {
+      var correctionScene = correction.closest('.storyboard-scene[data-scene-id]');
+      if (!correctionScene) return;
+      var correctionSceneId = correctionScene.dataset.sceneId;
+      var currentScene = storyState.story && storyState.story.scenes
+        ? storyState.story.scenes[correctionSceneId]
+        : null;
+      if (currentScene && currentScene.refineComplete) {
+        currentScene.refineComplete = false;
+        syncSceneRefineState(correctionSceneId);
+        scheduleSceneSave(correctionSceneId);
+      } else {
+        syncSceneRefineState(correctionSceneId);
+      }
+      return;
+    }
+
     var field = event.target.closest('[data-scene-field]');
     if (!field) return;
     var scene = field.closest('.storyboard-scene[data-scene-id]');
     if (!scene) return;
-    scheduleSceneSave(scene.dataset.sceneId);
+    var sceneId = scene.dataset.sceneId;
+    if (field.dataset.sceneField === 'prompt') {
+      var promptScene = storyState.story && storyState.story.scenes
+        ? storyState.story.scenes[sceneId]
+        : null;
+      if (promptScene && promptScene.refineComplete) {
+        promptScene.refineComplete = false;
+        syncSceneRefineState(sceneId);
+      }
+    }
+    scheduleSceneSave(sceneId);
   }
 
   function handleSceneAction(event) {

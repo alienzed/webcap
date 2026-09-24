@@ -215,6 +215,25 @@ def _normalize_story_invariants(value):
     return result
 
 
+def _normalize_shared_context_refs(value):
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Scene sharedContextRefs must be a list.")
+    result = []
+    seen = set()
+    for raw in value:
+        ref = str(raw or "").strip()
+        if not ref:
+            raise ValueError("Scene sharedContextRefs must contain non-empty strings.")
+        key = ref.casefold()
+        if key in seen:
+            raise ValueError("Scene sharedContextRefs must not contain duplicates.")
+        seen.add(key)
+        result.append(ref)
+    return result
+
+
 def _normalize_story_lora_overrides(value):
     if value is None:
         return []
@@ -436,11 +455,9 @@ def _normalize_scene(scene_id, value, existing=None):
         "promptDirectorModel": str(value.get("promptDirectorModel", current.get("promptDirectorModel", "")) or "").strip(),
         "promptDirectorJobId": str(value.get("promptDirectorJobId", current.get("promptDirectorJobId", "")) or "").strip(),
         "planDirectorModel": str(value.get("planDirectorModel", current.get("planDirectorModel", "")) or "").strip(),
-        "sharedContextRefs": [
-            str(item).strip()
-            for item in value.get("sharedContextRefs", current.get("sharedContextRefs", []))
-            if str(item).strip()
-        ],
+        "sharedContextRefs": _normalize_shared_context_refs(
+            value.get("sharedContextRefs", current.get("sharedContextRefs", []))
+        ),
         "durationSeconds": duration,
         "aspectRatio": aspect_ratio,
         "megapixels": megapixels,

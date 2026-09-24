@@ -400,12 +400,12 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
     assert "storyState.director.activityTarget = storyState.director.pendingTargets[storyState.director.pendingOrder[0]]" in storyboard
     assert ".storyboard-director-activity {" in css
     assert "position: absolute;" in css
-    assert "fillsField = kind === 'concept' || kind === 'scene-prompt'" in storyboard
+    assert "fillsField = kind === 'concept' || kind === 'scene-prompt' || kind === 'scenes'" in storyboard
     assert "card.style.height = Math.round(height) + 'px';" in storyboard
-    assert "storyboard-story-authoring" in storyboard
     assert "kind === 'scenes'" in storyboard
-    assert "bottomAlignedTop" in storyboard
-    assert "is-story-plan-overlay" in storyboard
+    assert "storyboard-story-concept" in storyboard
+    assert "bottomAlignedTop" not in storyboard
+    assert "is-story-plan-overlay" not in storyboard
     assert ".storyboard-director-activity.is-field-overlay" in css
     activity_css = css.split(".storyboard-director-activity {", 1)[1].split("}", 1)[0]
     picker_css = css.split(".storyboard-lora-picker-menu {", 1)[1].split("}", 1)[0]

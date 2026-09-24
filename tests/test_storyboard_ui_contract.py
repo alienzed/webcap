@@ -226,7 +226,7 @@ def test_storyboard_director_pending_state_is_target_scoped():
     assert "var directorTarget = { kind: 'scenes', storyId: storyId };" in storyboard
     assert "var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId };" in storyboard
     assert "detachedScenePrompt = kind === 'scene-prompt' && !target" in storyboard
-    assert "scene: { prompt: generatedPrompt }" in storyboard
+    assert "scene: { prompt: generatedPrompt, promptDirectorModel: String(payload.model || modelId) }" in storyboard
     assert "if (currentPrompt) currentPrompt.value = generatedPrompt;" in storyboard
     assert ".storyboard-director-activity.is-detached-target" in (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
@@ -517,6 +517,18 @@ def test_storyboard_scene_focus_mode_scrolls_naturally_and_has_peer_sequence_vie
     assert ".storyboard-scene-inspector" in css
     inspector = css.split(".storyboard-scene-inspector {", 1)[1].split("}", 1)[0]
     assert "position: sticky;" in inspector
+
+
+def test_storyboard_director_provenance_is_subtle_and_persistent():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+
+    assert "promptDirectorModel" in storyboard
+    assert "promptDirectorModel" in store
+    assert "Scene plan created by Director model " in storyboard
+    assert "Last populated by Director model " in storyboard
+    assert "promptValue === String(currentScene.prompt || '')" in storyboard
+    assert "promptDirectorModel: promptDirectorModel" in storyboard
 
 
 def test_storyboard_scene_continuity_is_collapsible():

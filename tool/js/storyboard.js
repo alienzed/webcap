@@ -986,7 +986,10 @@
     var assembly = storyState.sequenceExport;
     var assemblyCurrent = assemblyMatchesSelection(assembly, selected) && assembly.current !== false;
     var assemblyStatus = '';
-    if (assemblyCurrent) assemblyStatus = 'Exported · ' + String(assembly.itemCount || selected.length) + ' Takes';
+    if (assemblyCurrent) {
+      assemblyStatus = 'Preview built · ' + String(assembly.itemCount || selected.length) + ' Takes';
+      if (assembly.assemblyMode === 'normalized-preview') assemblyStatus += ' · normalized';
+    }
     else if (assembly && !assemblyCurrent) assemblyStatus = 'Selection changed since last export';
 
     var outputHtml = '';
@@ -1000,7 +1003,7 @@
     host.innerHTML = '<header class="storyboard-sequence-header"><div><strong>Selected sequence</strong><span>' +
       selected.length + ' selected Take' + (selected.length === 1 ? '' : 's') +
       '</span></div><div class="storyboard-sequence-actions">' +
-      '<button type="button" class="storyboard-primary-btn" data-sequence-export>Export Sequence</button>' +
+      '<button type="button" class="storyboard-primary-btn" data-sequence-export>Build Preview</button>' +
       '<span class="storyboard-save-state" data-sequence-status>' + assemblyStatus + '</span>' +
       '</div></header>' + outputHtml + '<div class="storyboard-sequence-list">' +
       selected.map(function (item) {
@@ -1025,7 +1028,7 @@
   function exportSelectedSequence() {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
-    setSaveState('Exporting sequence...');
+    setSaveState('Building sequence preview...');
     flushPendingSaves().then(function () {
       return assemblyRequest({ storyId: storyId });
     }).then(function (payload) {

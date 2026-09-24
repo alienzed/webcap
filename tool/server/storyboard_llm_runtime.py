@@ -42,17 +42,32 @@ _activity = {
     "model": "",
     "operation": "",
     "modelSizeBytes": 0,
+    "contextSize": 0,
+    "usage": {},
+    "timings": {},
     "startedAt": None,
     "updatedAt": time.time(),
     "error": "",
 }
 
 
-def _set_activity(phase, model_id=None, operation=None, active=None, error=None, model_size_bytes=None):
+def _set_activity(
+    phase,
+    model_id=None,
+    operation=None,
+    active=None,
+    error=None,
+    model_size_bytes=None,
+    context_size=None,
+    usage=None,
+    timings=None,
+):
     now = time.time()
     with _activity_lock:
         if active is True and not _activity["active"]:
             _activity["startedAt"] = now
+            _activity["usage"] = {}
+            _activity["timings"] = {}
         if active is False:
             _activity["active"] = False
         elif active is True:
@@ -67,6 +82,15 @@ def _set_activity(phase, model_id=None, operation=None, active=None, error=None,
                 _activity["modelSizeBytes"] = max(0, int(model_size_bytes or 0))
             except (TypeError, ValueError):
                 _activity["modelSizeBytes"] = 0
+        if context_size is not None:
+            try:
+                _activity["contextSize"] = max(0, int(context_size or 0))
+            except (TypeError, ValueError):
+                _activity["contextSize"] = 0
+        if usage is not None:
+            _activity["usage"] = dict(usage) if isinstance(usage, dict) else {}
+        if timings is not None:
+            _activity["timings"] = dict(timings) if isinstance(timings, dict) else {}
         if error is not None:
             _activity["error"] = str(error or "")
         _activity["updatedAt"] = now
@@ -858,6 +882,13 @@ def run_contract(model_id, contract, gpu_reserved=False):
             model_size_bytes=0,
         )
         try:
+            settings = _director_config()
+            _set_activity(
+                "preparing",
+                model_id=model_id,
+                operation=operation,
+                context_size=settings.get("context_size", 0) if settings.get("mode", "local") == "local" else 0,
+            )
             chat_kwargs = {
                 "response_schema": contract.get("response_schema"),
                 "sampling": _sampling_profile(operation),
@@ -893,7 +924,14 @@ def run_contract(model_id, contract, gpu_reserved=False):
                     duration=renderer.get("duration"),
                 )
 
-            _set_activity("complete", model_id=model_id, operation=operation, active=False)
+            _set_activity(
+                "complete",
+                model_id=model_id,
+                operation=operation,
+                active=False,
+                usage=result.get("usage"),
+                timings=result.get("timings"),
+            )
             return result
         except Exception as exc:
             _set_activity("error", model_id=model_id, operation=operation, active=False, error=str(exc))

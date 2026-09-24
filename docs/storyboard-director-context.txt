@@ -16,6 +16,9 @@ Unless the current task explicitly changes or develops them, preserve establishe
 RECURRING CHARACTERS STAY THE SAME PEOPLE.
 Preserve established identity across independent Scenes. Whole-Story development may establish missing creative details when needed, but once established they should remain stable unless the Story changes them. Scene-local writing and revision should not invent new identity details merely for variety. Each independently generated Scene should contain enough established identity description to reconstruct recurring characters.
 
+WHOLE-STORY DEVELOPMENT MUST MAKE CONTINUITY EXPLICIT.
+When planning multiple independently generated Scenes, establish reusable shared definitions for recurring subjects, wardrobe states, locations, and other persistent visible/audible facts. Make these definitions concrete enough to reproduce the same person/place/wardrobe, not vague labels. Reuse the same definition across Scenes until the Story explicitly changes it. Do not change clothing, location design, time/weather, props, damage, or appearance merely to add visual variety. If a change is narratively required, make it explicit in the Scene progression and use a new shared definition from that point onward. Repetition of important visual facts is desirable for generation consistency; do not rewrite them with loose synonyms simply to avoid repetition.
+
 BEGIN FROM THE SUPPLIED STATE.
 Do not invent transportation, preceding actions, unseen rooms, off-screen possessions, or other setup merely to explain how a character arrived at the stated starting point.
 

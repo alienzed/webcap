@@ -291,12 +291,6 @@ def test_storyboard_ingest_failure_is_distinguished_from_model_failure(llm_root,
         "run_contract",
         lambda *_args, **_kwargs: {
             "data": {
-                "sharedContext": {
-                    "subjects": [{"id": "mara", "label": "Mara", "description": "A woman."}],
-                    "wardrobes": [{"id": "mara", "label": "Mara outfit", "description": "A black coat."}],
-                    "locations": [],
-                    "persistentFacts": [],
-                },
                 "scenes": [{
                     "title": "Lobby",
                     "summary": "She crosses the lobby.",
@@ -307,12 +301,11 @@ def test_storyboard_ingest_failure_is_distinguished_from_model_failure(llm_root,
                         "overall_soundscape": "Footsteps.",
                         "non_diegetic_music": "N/A",
                     },
-                    "sharedContextRefs": ["mara"],
-                    "suggestedDurationSeconds": 6,
+                    "suggestedDurationSeconds": 20,
                     "continuity": {"continuesPreviousScene": False, "carryForward": []},
                 }],
             },
-            "text": "{\"sharedContext\":{\"subjects\":[{\"id\":\"mara\"}],\"wardrobes\":[{\"id\":\"mara\"}]}}",
+            "text": "{\"scenes\":[{\"title\":\"Lobby\"}]}",
             "model": "qwen",
             "usage": None,
             "timings": None,
@@ -332,7 +325,70 @@ def test_storyboard_ingest_failure_is_distinguished_from_model_failure(llm_root,
     assert finished["error"].startswith(
         "WebCap ingest failed after a successful model response:"
     )
-    assert "sharedContext ids must be unique" in finished["error"]
+    assert "duration must be between 4 and 15 seconds" in finished["error"]
+
+
+def test_storyboard_optional_shared_context_cannot_block_scene_ingest(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "Elena enters a lobby.",
+        "targetSceneCount": 1,
+    })
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "data": {
+                "sharedContext": {
+                    "subjects": [
+                        {"id": "character:elena", "label": "Elena", "description": "Dark shoulder-length hair."},
+                        {"id": "elena", "label": "Elena duplicate", "description": "Same woman."},
+                    ],
+                    "wardrobes": [
+                        {"id": "elena", "label": "Elena wardrobe", "description": "Black wool coat."},
+                    ],
+                    "locations": [],
+                    "persistentFacts": [],
+                },
+                "scenes": [{
+                    "title": "Lobby",
+                    "summary": "Elena crosses the lobby.",
+                    "entryState": "At the door.",
+                    "exitState": "At the desk.",
+                    "prompt": {
+                        "integrated_multimodal_description": "Elena crosses the lobby.",
+                        "overall_soundscape": "Footsteps.",
+                        "non_diegetic_music": "N/A",
+                    },
+                    "sharedContextRefs": ["character:elena", "elena"],
+                    "suggestedDurationSeconds": 6,
+                    "continuity": {"continuesPreviousScene": False, "carryForward": []},
+                }],
+            },
+            "text": "{\"sharedContext\":{},\"scenes\":[{\"title\":\"Lobby\"}]}",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "develop_story", "prompt": "Develop.", "output": "json"},
+        context={"storyId": story["id"], "operation": "develop_story"},
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["result"]["sceneCount"] == 1
+    saved = storyboard_store.load_story(story["id"])
+    scene = saved["scenes"][saved["sceneOrder"][0]]
+    assert scene["title"] == "Lobby"
+    assert scene["sharedContextRefs"] == []
+
 
 def test_storyboard_develop_result_refuses_to_replace_scene_with_active_take(llm_root, monkeypatch):
     story = storyboard_store.create_story({

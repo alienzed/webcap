@@ -231,7 +231,7 @@ def execute_inference(job_id, request, context):
                 "megapixels": request["settings"]["megapixels"],
                 "loras": request.get("loras") or [],
                 "references": copy.deepcopy(context.get("referenceRecords") or []),
-                "workflowProfile": "minimax_h3_storyboard_v1",
+                "workflowProfile": "minimax_h3_inference_v1",
                 "providerJobId": provider_job_id,
                 "effectiveInput": effective_input,
             },

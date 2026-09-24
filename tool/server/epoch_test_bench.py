@@ -138,40 +138,88 @@ def test_presence(folder_path):
     }
 
 def recent_test_sets(limit=8):
+    """Return recent Test Sources from central sessions plus legacy per-set history."""
     now = time.monotonic()
     cached_items = _recent_sets_cache.get("items") if isinstance(_recent_sets_cache.get("items"), list) else []
     if now < float(_recent_sets_cache.get("expires") or 0):
         return [dict(item) for item in cached_items[:max(1, int(limit or 8))]]
 
+    recent_by_key = {}
+
+    central_root = _central_session_root()
+    if central_root.is_dir() and not central_root.is_symlink():
+        for session in central_root.iterdir():
+            if session.is_symlink() or not session.is_dir() or not (session / "test.json").is_file():
+                continue
+            payload = _read_status(session) or {}
+            source = str(payload.get("source") or "").strip()
+            model_id = str(payload.get("modelId") or payload.get("model") or "").strip()
+            owner_folder = str(payload.get("ownerFolder") or "").strip()
+            key = (model_id, source)
+            try:
+                modified = (session / "test.json").stat().st_mtime
+            except OSError:
+                modified = 0
+            item = recent_by_key.setdefault(key, {
+                "folder": owner_folder,
+                "source": source,
+                "modelId": model_id,
+                "sessionCount": 0,
+                "latestSession": "",
+                "modified": 0,
+            })
+            item["sessionCount"] += 1
+            if modified >= float(item.get("modified") or 0):
+                item["modified"] = modified
+                item["latestSession"] = session.name
+                item["folder"] = owner_folder
+
+    # Legacy compatibility: discover historical per-set sessions without mixing
+    # them with the central directory. This can disappear after legacy cleanup.
     fs_root = Path(app_config.FS_ROOT).resolve()
-    recent = []
-    if not fs_root.is_dir():
-        return recent
+    if fs_root.is_dir():
+        for dir_path, dir_names, _file_names in os.walk(fs_root):
+            if Path(dir_path).resolve() == central_root.resolve():
+                dir_names[:] = []
+                continue
+            if TEST_RESULTS_DIR not in dir_names:
+                continue
+            dir_names.remove(TEST_RESULTS_DIR)
+            set_folder = Path(dir_path).resolve()
+            legacy_root = set_folder / TEST_RESULTS_DIR
+            if legacy_root.is_symlink() or not legacy_root.is_dir():
+                continue
+            for session in legacy_root.iterdir():
+                if session.is_symlink() or not session.is_dir() or not (session / "test.json").is_file():
+                    continue
+                payload = _read_status(session) or {}
+                model_id = str(payload.get("modelId") or payload.get("model") or get_test_model().PROFILE_ID)
+                source = _session_source(payload, set_folder)
+                owner_folder = _relative_set_folder(set_folder)
+                key = (model_id, source)
+                try:
+                    modified = (session / "test.json").stat().st_mtime
+                except OSError:
+                    modified = 0
+                item = recent_by_key.setdefault(key, {
+                    "folder": owner_folder,
+                    "source": source,
+                    "modelId": model_id,
+                    "sessionCount": 0,
+                    "latestSession": "",
+                    "modified": 0,
+                })
+                item["sessionCount"] += 1
+                if modified >= float(item.get("modified") or 0):
+                    item["modified"] = modified
+                    item["latestSession"] = session.name
+                    item["folder"] = owner_folder
 
-    for dir_path, dir_names, _file_names in os.walk(fs_root):
-        if TEST_RESULTS_DIR not in dir_names:
-            continue
-        dir_names.remove(TEST_RESULTS_DIR)
-        set_folder = Path(dir_path).resolve()
-        session_root = set_folder / TEST_RESULTS_DIR
-        sessions = list_sessions(set_folder)
-        if not sessions:
-            continue
-        latest = sessions[0]
-        latest_name = str(latest.get("session") or "")
-        latest_status_path = session_root / latest_name / "test.json"
-        try:
-            modified = latest_status_path.stat().st_mtime
-        except OSError:
-            modified = 0
-        recent.append({
-            "folder": _relative_set_folder(set_folder),
-            "sessionCount": len(sessions),
-            "latestSession": latest_name,
-            "modified": modified,
-        })
-
-    recent.sort(key=lambda item: (float(item.get("modified") or 0), str(item.get("latestSession") or "")), reverse=True)
+    recent = sorted(
+        recent_by_key.values(),
+        key=lambda item: (float(item.get("modified") or 0), str(item.get("latestSession") or "")),
+        reverse=True,
+    )
     _recent_sets_cache["items"] = [dict(item) for item in recent]
     _recent_sets_cache["expires"] = time.monotonic() + 10.0
     return recent[:max(1, int(limit or 8))]
@@ -1632,7 +1680,9 @@ def activity_snapshot(folder_path=None):
         except Exception:
             continue
         active.append({
-            "folder": key[0],
+            "folder": str(visible.get("ownerFolder") or key[0]),
+            "source": _session_source(visible, set_folder),
+            "modelId": str(visible.get("modelId") or visible.get("model") or ""),
             "session": key[1],
             "status": str(visible.get("status") or "running"),
             "completed": int(visible.get("completed") or 0),

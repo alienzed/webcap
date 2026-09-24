@@ -263,7 +263,8 @@ var shellWorkloadState = {
   trainingActive: false,
   testingActive: false,
   generatingActive: false,
-  inferenceActive: false
+  inferenceActive: false,
+  directorActive: false
 };
 
 function getShellWorkloadStatus() {
@@ -273,7 +274,7 @@ function getShellWorkloadStatus() {
   if (shellWorkloadState.testingActive) {
     return { key: 'testing', label: 'Testing' };
   }
-  if (shellWorkloadState.generatingActive || shellWorkloadState.inferenceActive) {
+  if (shellWorkloadState.generatingActive || shellWorkloadState.inferenceActive || shellWorkloadState.directorActive) {
     return { key: 'generating', label: 'Generating' };
   }
   return { key: 'idle', label: 'Idle' };
@@ -296,6 +297,11 @@ function setShellGeneratingActive(active) {
 
 function setShellInferenceActive(active) {
   shellWorkloadState.inferenceActive = !!active;
+  renderShellSystemStatus();
+}
+
+function setShellDirectorActive(active) {
+  shellWorkloadState.directorActive = !!active;
   renderShellSystemStatus();
 }
 
@@ -1019,3 +1025,4 @@ window.setShellTrainingActive = setShellTrainingActive;
 window.setShellTestingActive = setShellTestingActive;
 window.setShellGeneratingActive = setShellGeneratingActive;
 window.setShellInferenceActive = setShellInferenceActive;
+window.setShellDirectorActive = setShellDirectorActive;

@@ -69,22 +69,22 @@
   }
 
   function renderToggle(jobs) {
-    var toggle = el('inference-queue-toggle');
-    if (!toggle) return;
-    var visible = isInferenceWorkspace(state.workspace);
-    toggle.classList.toggle('hidden', !visible);
-    if (!visible) return;
-
+    var toggles = document.querySelectorAll('[data-inference-queue-toggle]');
+    if (!toggles.length) return;
     var running = jobs.filter(function (job) {
       return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
     }).length;
     var queued = jobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
     var count = running + queued;
-    toggle.textContent = count ? ('Queue ' + count) : 'Queue';
-    toggle.title = running
+    var label = count ? ('Inference Queue · ' + count) : 'Inference Queue';
+    var title = running
       ? (String(running) + ' running · ' + String(queued) + ' queued')
       : (queued ? String(queued) + ' queued' : 'Inference Queue');
-    toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
+    Array.prototype.forEach.call(toggles, function (toggle) {
+      toggle.textContent = label;
+      toggle.title = title;
+      toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
+    });
   }
 
   function createRow(job) {
@@ -250,12 +250,14 @@
   }
 
   function bind() {
-    var toggle = el('inference-queue-toggle');
+    var toggles = document.querySelectorAll('[data-inference-queue-toggle]');
     var close = el('inference-queue-close');
     var list = el('inference-queue-list');
-    if (!toggle || !close || !list) return;
+    if (!toggles.length || !close || !list) return;
 
-    toggle.onclick = function () { setOpen(!state.open); };
+    Array.prototype.forEach.call(toggles, function (toggle) {
+      toggle.onclick = function () { setOpen(!state.open); };
+    });
     close.onclick = function () { setOpen(false); };
     list.onclick = function (event) {
       var button = event.target.closest('[data-inference-queue-action]');

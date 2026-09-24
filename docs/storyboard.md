@@ -341,6 +341,9 @@ The MVP is successful if a real Story can be created, authored over time, closed
 
 ### Phase 2 - Takes and manual media continuity
 
+Current Focus IA keeps the Scene form as a naturally scrolling authoring page: Scene intent/prompt remain primary, Entry/Exit live under a **Continuity** disclosure, Generation/Conditioning remain alongside the form, and Takes can be temporarily collapsed. When the Scene workspace itself is sufficiently wide, CSS docks the same expanded Takes section as a vertical media rail; there is no JavaScript DOM relocation or dock state.
+
+
 Goal: make Storyboard useful for supervised production before automated intelligence.
 
 Current implementation on the Storyboard branch now includes:
@@ -349,6 +352,7 @@ Current implementation on the Storyboard branch now includes:
 - manual image/video upload as a Take, copied into the Story folder
 - frozen Scene prompt/settings provenance on import
 - Take preview, 1-5 rating, and selected Take per Scene
+- Take labels, explicit permanent deletion, native collapse/expand, and responsive wide-layout docking without moving the underlying DOM
 - reversible Take removal that retains media and metadata for restore
 - selected-Take sequence preview in Scene order
 - semantic `first_frame` and `last_frame` reference assignment from existing Takes; `guide_frame` remains a reserved domain role for future reference-to-video support rather than a current UI option
@@ -357,9 +361,7 @@ Current implementation on the Storyboard branch now includes:
 
 The current slice also supports direct image upload into a Scene's `first_frame` or `last_frame` slot. Uploaded references are copied into the Story's own `references/manual/` area, replace cleanly, and are removed when no longer referenced.
 
-Still to add:
-
-- scene-level generation presets/default inheritance only where the workflow proves it useful
+The current slice also includes Story-level generation defaults for target Scene count, aspect ratio, and megapixels. New Scenes inherit Story generation defaults unless a Scene stores an explicit override.
 
 ### Phase 3 - ComfyUI generation adapter
 
@@ -420,12 +422,13 @@ Current runtime slice:
 - `develop_story` turns the saved concept/style into a complete structured Scene sequence and writes the initial H3-ready prompt for every Scene in the same whole-Story pass;
 - deterministic validation against `docs/storyboard-scene-plan.schema.json` plus app-level validation before any Scene replacement is written;
 - replanning requires explicit confirmation and moves old active Scenes into recoverable `removedScenes` without deleting their Take media;
-- the accepted development plan/model are persisted in Story metadata for provenance;
+- the accepted development plan/model are persisted in Story metadata for provenance, with per-Scene plan/prompt Director provenance retained for quiet hover inspection;
 - existing `write_prompt` and `refine_prompt` Scene-local contracts remain available, with one-step **Restore Previous** for the last Director prompt edit;
+- Director activity overlays the field being authored rather than blocking unrelated Story/Scene controls;
 - thinking disabled for these bounded authoring calls;
-- one Director inference at a time;
-- shared WebCap GPU reservation with explicit model unload after each request;
-- idle ComfyUI model release before Director loading;
+- Storyboard and Generate Director requests share the app-owned `llm` execution lane and may queue without inventing a separate Storyboard scheduler;
+- local Director work shares WebCap GPU arbitration; a successfully loaded local model may remain resident for the next LLM task, while Training/Inference explicitly release the loaded Director model before claiming GPU work;
+- idle ComfyUI model release before local Director loading;
 - no conversational memory; WebCap's stored Story/Scene state remains the complete durable context.
 
 Next candidates after real usage:
@@ -441,7 +444,7 @@ Manual editing remains available at all times. AI output proposes or edits the s
 
 ### Phase 6 - Assembly and production polish
 
-The first intentionally small assembly slice is now implemented:
+The first intentionally small assembly slice is now implemented. Storyboard uses three peer workspace modes — **Overview**, **Focus**, and **Sequence** — so assembled playback/export no longer consumes authoring height above the active Scene.
 
 - the existing per-Scene `selectedTakeId` values are the edit decision;
 - selected video Takes are frozen in Scene order when export starts;
@@ -449,7 +452,7 @@ The first intentionally small assembly slice is now implemented:
 - ffmpeg's concat demuxer joins them with stream copy rather than silently resizing/re-encoding;
 - the result is written predictably to `exports/selected-sequence.mp4`;
 - `exports/selected-sequence.json` records exactly which Scene/Take selections produced that export and is the durable export state after WebCap restarts;
-- the finished sequence is playable directly in the Selected sequence panel;
+- the finished sequence is playable directly in the dedicated Sequence view;
 - if the user changes Take selection afterward, the previous export is visibly treated as stale rather than presented as current.
 
 Deliberately not implemented yet:

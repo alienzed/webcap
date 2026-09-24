@@ -743,6 +743,18 @@ def director_activity_route():
     return jsonify({"ok": True, **activity})
 
 
+@app.route("/fs/director/queue", methods=["GET"])
+def director_queue_route():
+    try:
+        return jsonify({
+            "ok": True,
+            "queue": llm_snapshot(include_terminal=_request_bool_arg("includeTerminal")),
+        })
+    except Exception as exc:
+        app.logger.exception("DIRECTOR QUEUE SNAPSHOT FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/director/job", methods=["GET", "POST"])
 def director_job_route():
     try:

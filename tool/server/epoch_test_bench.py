@@ -47,10 +47,9 @@ def _default_test_source(folder_path):
     return _owning_set_directory(folder_path).name
 
 
-def _test_directory(folder_path, model, source=""):
-    selected_source = str(source or "").strip()
-    if selected_source:
-        return test_source_path(model.STAGING_KEY, selected_source)
+def _test_directory(folder_path, model, source=None):
+    if source is not None:
+        return test_source_path(model.STAGING_KEY, str(source or "").strip())
     return test_copy_path(model.STAGING_KEY, _owning_set_directory(folder_path).name)
 
 
@@ -174,7 +173,7 @@ def recent_test_sets(limit=8):
     return recent[:max(1, int(limit or 8))]
 
 
-def remove_candidate(folder_path, file_name, session_name=None, model_id=None, source=""):
+def remove_candidate(folder_path, file_name, session_name=None, model_id=None, source=None):
     name = str(file_name or "").strip()
     if (
         not name
@@ -186,7 +185,7 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None, s
         raise ValueError("A staged .safetensors filename is required.")
 
     resolved_model_id = str(model_id or "").strip()
-    resolved_source = str(source or "").strip()
+    resolved_source = None if source is None else str(source or "").strip()
     if session_name:
         session = _session_directory(folder_path, session_name)
         session_status = _read_status(session) or {}
@@ -196,7 +195,8 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None, s
             or resolved_model_id
             or get_test_model().PROFILE_ID
         )
-        resolved_source = str(session_status.get("source") or resolved_source).strip()
+        if "source" in session_status:
+            resolved_source = str(session_status.get("source") or "").strip()
     model = get_test_model(resolved_model_id or get_test_model().PROFILE_ID)
     test_directory = _test_directory(folder_path, model, source=resolved_source)
     candidate = test_directory / name
@@ -519,10 +519,10 @@ def supported_models():
     }
 
 
-def prepare(folder_path, model_id=None, source=""):
+def prepare(folder_path, model_id=None, source=None):
     model = get_test_model(model_id)
     template = model.load_template()
-    selected_source = str(source or "").strip()
+    selected_source = None if source is None else str(source or "").strip()
     try:
         test_directory = _test_directory(folder_path, model, source=selected_source)
         loras = _lora_files(test_directory) if test_directory.is_dir() else []
@@ -544,7 +544,7 @@ def prepare(folder_path, model_id=None, source=""):
         "modelId": model.PROFILE_ID,
         "modelLabel": str(model.profile["label"]),
         "mediaKind": model.MEDIA_KIND,
-        "source": selected_source or _default_test_source(folder_path),
+        "source": _default_test_source(folder_path) if selected_source is None else selected_source,
         "settings": list(model.settings),
         "settingOptions": setting_options,
         "warnings": prepare_warnings,
@@ -621,7 +621,7 @@ SHARED_EXECUTION_LANE = "inference"
 
 
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
-                           selected_files=None, include_base=True, model_id=None, source="",
+                           selected_files=None, include_base=True, model_id=None, source=None,
                            aspect_ratio=None, megapixels=None, duration=None):
     from . import inference_runtime
 
@@ -629,7 +629,7 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     prompt = str(prompt or "").strip()
     if not prompt:
         raise ValueError("A test prompt is required.")
-    selected_source = str(source or "").strip()
+    selected_source = None if source is None else str(source or "").strip()
     test_directory = _test_directory(folder_path, model, source=selected_source)
     loras = _selected_lora_files(test_directory, selected_files=selected_files)
     if not loras:
@@ -655,7 +655,7 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     request = {
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,
-        "source": selected_source or _default_test_source(folder_path),
+        "source": _default_test_source(folder_path) if selected_source is None else selected_source,
         "name": session_name,
         "sourcePrompt": prompt,
         "prompt": resolved_prompt,
@@ -1279,7 +1279,7 @@ def reconcile_startup():
 
 
 def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
-            include_base=True, model_id=None, source="", aspect_ratio=None, megapixels=None, duration=None):
+            include_base=True, model_id=None, source=None, aspect_ratio=None, megapixels=None, duration=None):
     reconcile_startup()
     request, loras, include_base = _new_inference_request(
         folder_path,

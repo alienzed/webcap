@@ -780,6 +780,22 @@ def test_storyboard_conditioning_lora_status_and_inherited_rows_render():
     assert 'class="storyboard-lora-subtitle">Inherited from Story</span>' in storyboard
     assert 'class="storyboard-lora-subtitle">Scene only</span>' in storyboard
 
+def test_storyboard_generate_scenes_reuses_existing_scene_generation_path():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-generate-scenes-btn"' in html
+    assert ">Generate Scenes</button>" in html
+    assert "function enqueueSceneGeneration(storyId, sceneId)" in storyboard
+    assert "function generateScenes()" in storyboard
+    assert "storyState.story.sceneOrder.slice()" in storyboard
+    assert "return enqueueSceneGeneration(storyId, sceneId).catch(reportError);" in storyboard
+    assert "el('storyboard-generate-scenes-btn').onclick = generateScenes;" in storyboard
+    assert "return enqueueSceneGeneration(storyId, sceneId);" in storyboard
+    assert ".storyboard-scenes-heading-actions" in css
+
+
 def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 

@@ -3267,23 +3267,48 @@
     }).catch(reportError);
   }
 
-  function generateScene(sceneId) {
-    if (!storyState.story) return;
-    setSaveState('Saving...');
-    flushPendingSaves().then(function () {
-      return generationRequest({
-        storyId: storyState.story.id,
-        sceneId: sceneId
-      });
+  function enqueueSceneGeneration(storyId, sceneId) {
+    return generationRequest({
+      storyId: storyId,
+      sceneId: sceneId
     }).then(function (payload) {
       var job = payload.job;
       var previousJob = storyState.generationJobs[job.jobId] || null;
       storyState.generationJobs[job.jobId] = job;
       reportGenerationStatus(sceneId, job, previousJob);
       syncStoryboardGenerationActivity();
-      syncSceneTakeDom(sceneId);
+      if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(sceneId);
+      pollGeneration(storyId, job.jobId);
+      return job;
+    });
+  }
+
+  function generateScene(sceneId) {
+    if (!storyState.story) return;
+    setSaveState('Saving...');
+    var storyId = storyState.story.id;
+    flushPendingSaves().then(function () {
+      return enqueueSceneGeneration(storyId, sceneId);
+    }).then(function () {
       setSaveState('Saved');
-      pollGeneration(storyState.story.id, job.jobId);
+    }).catch(reportError);
+  }
+
+  function generateScenes() {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    var sceneIds = Array.isArray(storyState.story.sceneOrder)
+      ? storyState.story.sceneOrder.slice()
+      : [];
+    setSaveState('Saving...');
+    flushPendingSaves().then(function () {
+      return sceneIds.reduce(function (promise, sceneId) {
+        return promise.then(function () {
+          return enqueueSceneGeneration(storyId, sceneId).catch(reportError);
+        });
+      }, Promise.resolve());
+    }).then(function () {
+      setSaveState('Saved');
     }).catch(reportError);
   }
 
@@ -3354,6 +3379,7 @@
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
+    el('storyboard-generate-scenes-btn').onclick = generateScenes;
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;

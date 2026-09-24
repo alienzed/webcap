@@ -165,9 +165,16 @@ def test_story_scene_lifecycle(storyboard_fs):
     story, updated = storyboard_store.update_scene(
         story["id"],
         first["id"],
-        {"prompt": "A car arrives in heavy rain.", "promptDirectorModel": "director.gguf", "durationSeconds": 10},
+        {
+            "prompt": "A car arrives in heavy rain.",
+            "promptDirectorModel": "director.gguf",
+            "promptDirectorJobId": "job-123",
+            "durationSeconds": 10,
+        },
     )
     assert updated["prompt"].endswith("heavy rain.")
+    assert updated["promptDirectorModel"] == "director.gguf"
+    assert updated["promptDirectorJobId"] == "job-123"
     assert updated["seed"] == 42
     assert updated["durationSeconds"] == 10
 
@@ -175,6 +182,7 @@ def test_story_scene_lifecycle(storyboard_fs):
     assert story["sceneOrder"][1] == duplicate["id"]
     assert duplicate["prompt"] == updated["prompt"]
     assert duplicate["promptDirectorModel"] == "director.gguf"
+    assert duplicate["promptDirectorJobId"] == "job-123"
     assert duplicate["entryState"] == updated["entryState"]
     assert duplicate["exitState"] == updated["exitState"]
     assert duplicate["takes"] == {}

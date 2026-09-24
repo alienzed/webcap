@@ -395,9 +395,9 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
 
     assert "function directorActivityTargetElement()" in storyboard
     assert "function positionDirectorActivity()" in storyboard
-    assert "startDirectorActivity({ kind: 'concept' })" in storyboard
-    assert "startDirectorActivity({ kind: 'scenes' })" in storyboard
-    assert "startDirectorActivity({ kind: 'scene-prompt', sceneId: sceneId })" in storyboard
+    assert "function startDirectorActivity()" in storyboard
+    assert "setDirectorPending(directorTarget, true);" in storyboard
+    assert "storyState.director.activityTarget = storyState.director.pendingTargets[storyState.director.pendingOrder[0]]" in storyboard
     assert ".storyboard-director-activity {" in css
     assert "position: absolute;" in css
     assert "fillsField = kind === 'concept' || kind === 'scene-prompt'" in storyboard

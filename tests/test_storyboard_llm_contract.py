@@ -181,7 +181,9 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     }
     assert "minItems" not in request["response_schema"]["properties"]["scenes"]
     assert "maxItems" not in request["response_schema"]["properties"]["scenes"]
-    prompt_schema = request["response_schema"]["properties"]["scenes"]["items"]["properties"]["prompt"]
+    scene_schema = request["response_schema"]["properties"]["scenes"]["items"]
+    assert "sharedContextRefs" in scene_schema["required"]
+    prompt_schema = scene_schema["properties"]["prompt"]
     assert prompt_schema["type"] == "object"
     assert prompt_schema["required"] == [
         "integrated_multimodal_description",

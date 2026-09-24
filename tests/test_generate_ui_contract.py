@@ -19,7 +19,8 @@ def test_generate_is_first_class_static_activity():
     assert 'id="generate-lora-list"' in html
     assert 'id="generate-reference-first_frame"' in html
     assert 'id="generate-reference-last_frame"' in html
-    assert 'id="generate-queue-list"' in html
+    assert 'id="inference-queue-drawer"' in html
+    assert 'id="inference-queue-toggle"' in html
     assert 'id="generate-results"' in html
 
     assert "workspace === 'generate'" in shell
@@ -30,13 +31,13 @@ def test_generate_is_first_class_static_activity():
     assert "function openGenerateActivity()" in script
     assert "function runGenerate()" in script
     assert "function runDirector(operation)" in script
-    assert "requestJson('/fs/inference')" in script
+    assert "window.refreshInferenceQueue" in script
     assert "postJson('/fs/generate'" in script
     assert "uploadReference(file)" in script
 
     assert ".app-frame.workspace-generate-open > .app" in css
     assert ".generate-authoring" in css
-    assert ".generate-queue-panel" in css
+    assert ".generate-queue-panel" not in html
     assert ".generate-results" in css
 
 
@@ -124,32 +125,35 @@ def test_generate_uses_shared_director_preference_without_eager_preload():
     assert '@app.route("/fs/director/preload"' not in app
 
 
-def test_generate_queue_resume_surfaces_success_or_block_reason():
+def test_inference_queue_is_shared_shell_drawer_without_pause_resume_controls():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    queue = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+
+    assert 'id="inference-queue-drawer"' in html
+    assert 'id="inference-queue-toggle"' in html
+    assert "['generate', 'test', 'storyboard']" in queue
+    assert "data-inference-queue-action" in queue
+    assert "'cancel'" in queue
+    assert "'stop'" in queue
+    assert "pause_queue" not in queue
+    assert "resume_queue" not in queue
+    assert "window.syncInferenceQueueSurface(navigation.activity)" in shell
+
+
+def test_generate_tracks_terminal_jobs_while_shared_drawer_owns_live_queue_ui():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
-
-    assert "payload.resumeBlocked" in script
-    assert "payload.resumeBlockReason" in script
-    assert "payload.resumed" in script
-    assert "Queue resumed." in script
-
-
-def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():
-    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    queue = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
 
     assert "trackedJobIds: loadTrackedGenerateJobs()" in script
     assert "function refreshTrackedGenerateJobs()" in script
-    assert "requestJson('/fs/inference?job=' + encodeURIComponent(jobId))" in script
+    assert "requestJson('/fs/inference?job=' + encodeURIComponent(jobId) + '&consume=1')" in script
     assert "var generationError = new Error(" in script
     assert "reportError(generationError, conciseGenerateError(" in script
     assert "webcap.generate.trackedJobs" in script
-
-    queue_start = script.index("function renderQueue()")
-    queue_end = script.index("function refreshQueue()", queue_start)
-    queue_code = script[queue_start:queue_end]
-    assert "dataset.inferenceJobId" in queue_code
-    assert "host.querySelectorAll('.generate-queue-row[data-inference-job-id]')" in queue_code
-    assert "syncQueueRow(row, job)" in queue_code
-    assert "host.innerHTML = jobs.map" not in queue_code
+    assert "function createRow(job)" in queue
+    assert "dataset.inferenceJobId" in queue
+    assert "function syncRow(row, job)" in queue
 
 def test_generate_partial_reference_uploads_have_a_cleanup_path():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")

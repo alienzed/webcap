@@ -981,3 +981,6 @@ def test_storyboard_refine_completion_is_scene_specific_persistent_and_self_clea
     assert "currentScene.refineComplete = !!savedScene.refineComplete;" in storyboard
     assert "currentScene.refineComplete = false;" in storyboard
     assert "scheduleSceneSave(correctionSceneId);" in storyboard
+    assert "target.operation === 'refine_prompt'" in storyboard
+    assert "currentScene.durationSeconds = savedScene.durationSeconds;" in storyboard
+    assert "currentDuration.value = savedScene.durationSeconds == null ? '' : savedScene.durationSeconds;" in storyboard

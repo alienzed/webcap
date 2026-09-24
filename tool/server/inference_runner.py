@@ -363,20 +363,19 @@ def _advance_queue():
             )
             return None
 
-        try:
-            from . import inference_runtime
-            inference_runtime.system_stats()
-        except Exception:
-            _set_backlog_wait_reason("ComfyUI unavailable.")
-            if execution_resource_owner() == GPU_RESERVATION_OWNER:
-                _release_gpu()
-            return None
-
-        _set_backlog_wait_reason("")
         if not queued and armed_backlog:
+            try:
+                from . import inference_runtime
+                inference_runtime.system_stats()
+            except Exception:
+                _set_backlog_wait_reason("ComfyUI unavailable.")
+                if execution_resource_owner() == GPU_RESERVATION_OWNER:
+                    _release_gpu()
+                return None
             promoted = execution_promote_backlog(str(armed_backlog[0].get("id") or ""))
             _disarm_backlog(promoted.get("id"))
 
+        _set_backlog_wait_reason("")
         claimed = execution_claim_next(EXECUTION_LANE)
         if claimed is None:
             if reserved_here:

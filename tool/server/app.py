@@ -649,6 +649,8 @@ def storyboard_route():
             )
             return jsonify({"ok": True, "story": story, "scene": scene})
         if operation == "label_take":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story, take = storyboard_label_take(
                 story_id,
                 str(data.get("sceneId") or "").strip(),
@@ -657,21 +659,33 @@ def storyboard_route():
             )
             return jsonify({"ok": True, "story": story, "take": take})
         if operation == "rate_take":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story, take = storyboard_rate_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip(), data.get("rating"))
             return jsonify({"ok": True, "story": story, "take": take})
         if operation == "select_take":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story = storyboard_select_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip())
             return jsonify({"ok": True, "story": story})
         if operation == "remove_take":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story = storyboard_remove_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip())
             return jsonify({"ok": True, "story": story})
         if operation == "delete_take":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story = storyboard_delete_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip())
             return jsonify({"ok": True, "story": story})
         if operation == "restore_take":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story = storyboard_restore_take(story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip())
             return jsonify({"ok": True, "story": story})
         if operation == "set_scene_reference_from_take":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story, reference = storyboard_set_scene_reference_from_take(
                 story_id,
                 str(data.get("sceneId") or "").strip(),
@@ -682,6 +696,8 @@ def storyboard_route():
             )
             return jsonify({"ok": True, "story": story, "reference": reference})
         if operation == "clear_scene_reference":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story = storyboard_clear_scene_reference(story_id, str(data.get("sceneId") or "").strip(), str(data.get("role") or "").strip())
             return jsonify({"ok": True, "story": story})
         raise ValueError("Unknown Storyboard operation.")
@@ -743,10 +759,13 @@ def storyboard_generation_route():
                     direction=str(data.get("direction") or "").strip(),
                 ),
             })
+        story_id = str(data.get("storyId") or "").strip()
+        if llm_storyboard_target_busy(story_id, "scenes"):
+            raise ValueError("Story Scenes have pending Director work.")
         return jsonify({
             "ok": True,
             "job": storyboard_start_generation(
-                str(data.get("storyId") or "").strip(),
+                story_id,
                 str(data.get("sceneId") or "").strip(),
             ),
         })
@@ -843,8 +862,12 @@ def storyboard_director_route():
 
         story = storyboard_load_story(story_id)
         replace_existing = bool(data.get("replaceExisting"))
-        if operation == "develop_story" and story.get("sceneOrder") and not replace_existing:
-            raise ValueError("Story already has Scenes. Confirm replacement before developing it again.")
+        if operation == "develop_story":
+            if story.get("sceneOrder") and not replace_existing:
+                raise ValueError("Story already has Scenes. Confirm replacement before developing it again.")
+            active_generation = storyboard_generation_queue(story_id)
+            if active_generation.get("jobs"):
+                raise ValueError("Story has pending Take generation. Stop or finish it before developing Scenes.")
 
         contract = storyboard_build_llm_request(
             story,
@@ -885,6 +908,8 @@ def storyboard_reference_upload_route():
         story_id = str(request.form.get("storyId") or "").strip()
         scene_id = str(request.form.get("sceneId") or "").strip()
         role = str(request.form.get("role") or "").strip()
+        if llm_storyboard_target_busy(story_id, "scenes"):
+            raise ValueError("Story Scenes have pending Director work.")
         upload = request.files.get("file")
         if upload is None or not upload.filename:
             raise ValueError("Missing reference image file.")
@@ -908,6 +933,8 @@ def storyboard_take_upload_route():
     try:
         story_id = str(request.form.get("storyId") or "").strip()
         scene_id = str(request.form.get("sceneId") or "").strip()
+        if llm_storyboard_target_busy(story_id, "scenes"):
+            raise ValueError("Story Scenes have pending Director work.")
         upload = request.files.get("file")
         if upload is None or not upload.filename:
             raise ValueError("Missing Take media file.")

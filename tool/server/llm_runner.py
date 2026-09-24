@@ -344,7 +344,9 @@ def storyboard_target_busy(story_id, kind, scene_id=""):
             },
             metadata.get("operation"),
         )
-        if _storyboard_targets_conflict(wanted, existing):
+        if not existing or existing["storyId"] != wanted["storyId"] or existing["kind"] != wanted["kind"]:
+            continue
+        if wanted["kind"] != "scene-prompt" or existing["sceneId"] == wanted["sceneId"]:
             return True
     return False
 

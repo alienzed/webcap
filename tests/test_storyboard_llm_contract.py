@@ -109,6 +109,12 @@ def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
     assert "EXISTING SECOND PROMPT" in prompt
     assert "Keep the camera behind her until she notices the footprints." in prompt
     assert "smallest coherent change" in prompt
+    assert "materially changes how much screen time" in prompt
+    assert "durationSeconds" in request["response_schema"]["properties"]
+    assert request["response_schema"]["properties"]["durationSeconds"]["minimum"] == 6
+    assert request["response_schema"]["properties"]["durationSeconds"]["maximum"] == 15
+    assert "durationSeconds" not in request["response_schema"]["required"]
+    assert request["result_renderer"]["duration_field"] == "durationSeconds"
     assert "UNRELATED SCENE PROMPT MUST NOT LEAK" not in prompt
     assert "OTHER TAKE DATA MUST NOT LEAK" not in prompt
 

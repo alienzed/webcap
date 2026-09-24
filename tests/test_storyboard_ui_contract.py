@@ -640,6 +640,12 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
 
     assert 'class="storyboard-editor-header"' not in html
     assert 'class="storyboard-story-panel-heading"' in html
+    assert "<strong>Story Overview</strong>" in html
+    assert ">Hide Overview</button>" in html
+    assert ">Show Overview</button>" in html
+    assert "Story Context" not in html
+    assert ">Collapse Story</button>" not in html
+    assert ">Expand Story</button>" not in html
     assert 'id="storyboard-story-expand-toggle"' in html
     scenes_heading = html.split('class="storyboard-scenes-heading"', 1)[1].split('</div>\n                            <div id="storyboard-scene-progression"', 1)[0]
     assert 'id="storyboard-director-model"' in scenes_heading
@@ -654,6 +660,7 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
     assert ".storyboard-view-toggle .review-captions-btn.active" in css
     assert "box-shadow: inset 0 -2px 0 var(--accent);" in css
     assert ".storyboard-story-panel-heading" in css
+    assert ".storyboard-story-panel-heading > strong" in css
     assert ".storyboard-scene-progress-work" in css
 
 

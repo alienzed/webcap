@@ -2509,6 +2509,10 @@
   gap: 10px;
 }
 
+.storyboard-story-panel-heading > strong {
+  font-size: 16px;
+}
+
 .storyboard-scenes-heading {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }

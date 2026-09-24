@@ -174,6 +174,10 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
 
     assert request["operation"] == "develop_story"
     assert request["output"] == "json"
+    assert request["response_schema"]["required"] == ["sharedContext", "scenes"]
+    assert set(request["response_schema"]["properties"]["sharedContext"]["required"]) == {
+        "subjects", "wardrobes", "locations", "persistentFacts"
+    }
     assert "minItems" not in request["response_schema"]["properties"]["scenes"]
     assert "maxItems" not in request["response_schema"]["properties"]["scenes"]
     prompt_schema = request["response_schema"]["properties"]["scenes"]["items"]["properties"]["prompt"]
@@ -189,6 +193,9 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert "Character: Mara" in prompt
     assert "Low analog synth, no vocals." in prompt
     assert "complete structured H3 content for every Scene now" in prompt
+    assert "establish sharedContext for recurring subjects, wardrobe states, locations" in prompt
+    assert "Reuse the same sharedContext IDs in every Scene where they still apply" in prompt
+    assert "WebCap will inject the referenced descriptions into the final H3 prompt mechanically" in prompt
     assert "Produce exactly 12 Scenes" in prompt
     assert "4 to 8 Scenes" not in prompt
     assert "at least two Scenes" not in prompt
@@ -236,6 +243,29 @@ def test_character_continuity_is_authoritative_without_lora_or_media_reasoning()
     assert "ethnicity/heritage" not in prompt
     assert "no LoRA" not in prompt
     assert "LoRA or exact" not in prompt
+
+
+def test_scene_local_prompt_reuses_developed_shared_continuity():
+    story = _story()
+    story["development"] = {
+        "plan": {
+            "sharedContext": {
+                "subjects": [{"id": "mara", "label": "Mara", "description": "Mara has a dark bob."}],
+                "wardrobes": [{"id": "coat", "label": "Wardrobe", "description": "Mara wears a pale raincoat."}],
+                "locations": [{"id": "lobby", "label": "Lobby", "description": "Dark terrazzo lobby with brass fixtures."}],
+                "persistentFacts": [],
+            }
+        }
+    }
+    story["scenes"]["scene-2"]["sharedContextRefs"] = ["mara", "coat", "lobby"]
+
+    request = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")
+
+    assert "[SHARED CONTINUITY FOR THIS SCENE]" in request["prompt"]
+    assert "Mara: Mara has a dark bob." in request["prompt"]
+    assert "Wardrobe: Mara wears a pale raincoat." in request["prompt"]
+    assert "Lobby: Dark terrazzo lobby with brass fixtures." in request["prompt"]
+    assert request["result_renderer"]["shared_context"].startswith("Mara: Mara has a dark bob.")
 
 
 def test_scene_local_prompt_does_not_solicit_unsolicited_advice():

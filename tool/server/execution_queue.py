@@ -12,6 +12,8 @@ from . import config as app_config
 
 STATE_VERSION = 1
 QUEUE_STATUSES = {"queued"}
+BACKLOG_STATUSES = {"backlog"}
+PENDING_STATUSES = QUEUE_STATUSES | BACKLOG_STATUSES
 ACTIVE_STATUSES = {"starting", "running", "stopping"}
 TERMINAL_STATUSES = {"completed", "failed", "cancelled", "stopped", "interrupted"}
 
@@ -177,7 +179,10 @@ def resource_owner():
         return _resource_owner
 
 
-def enqueue(lane_name, payload, metadata=None, job_id=None):
+def enqueue(lane_name, payload, metadata=None, job_id=None, initial_status="queued"):
+    initial_status = str(initial_status or "queued").strip()
+    if initial_status not in PENDING_STATUSES:
+        raise ValueError("Execution queue initial status must be queued or backlog.")
     now = time.time()
     frozen_payload = copy.deepcopy(payload if isinstance(payload, dict) else {})
     frozen_metadata = copy.deepcopy(metadata if isinstance(metadata, dict) else {})
@@ -187,7 +192,7 @@ def enqueue(lane_name, payload, metadata=None, job_id=None):
         job = {
             "id": str(job_id or secrets.token_hex(12)),
             "lane": str(lane_name),
-            "status": "queued",
+            "status": initial_status,
             "queuePosition": 0,
             "createdAt": now,
             "updatedAt": now,
@@ -377,15 +382,15 @@ def request_stop(job_id):
         return _public_job(job)
 
 
-def cancel_queued(job_id):
+def _cancel_pending(job_id, allowed_statuses):
     now = time.time()
     with _lock:
         state = _read_state()
         lane_name, job = _find_job(state, job_id)
         if job is None:
             raise FileNotFoundError("Execution queue job does not exist.")
-        if job.get("status") != "queued":
-            raise ValueError("Only queued execution jobs can be cancelled.")
+        if job.get("status") not in allowed_statuses:
+            raise ValueError("Only pending execution jobs can be cancelled.")
         lane = _lane(state, lane_name)
         job["status"] = "cancelled"
         job["finishedAt"] = now
@@ -395,6 +400,49 @@ def cancel_queued(job_id):
         _refresh_positions(lane)
         _write_state(state)
         return _public_job(job)
+
+
+def cancel_queued(job_id):
+    return _cancel_pending(job_id, QUEUE_STATUSES)
+
+
+def cancel_pending(job_id):
+    return _cancel_pending(job_id, PENDING_STATUSES)
+
+
+def promote_backlog(job_id):
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        if job.get("status") != "backlog":
+            raise ValueError("Only backlogged execution jobs can be queued.")
+        lane = _lane(state, lane_name)
+        job["status"] = "queued"
+        job["updatedAt"] = now
+        _refresh_positions(lane)
+        _write_state(state)
+        return _public_job(job)
+
+
+def shelve_queued(lane_name):
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name)
+        changed = []
+        for job in lane.get("jobs", []):
+            if job.get("status") != "queued":
+                continue
+            job["status"] = "backlog"
+            job["queuePosition"] = 0
+            job["updatedAt"] = now
+            changed.append(_public_job(job))
+        _refresh_positions(lane)
+        _write_state(state)
+        return changed
 
 
 def reorder_job(job_id, direction=None, position=None):

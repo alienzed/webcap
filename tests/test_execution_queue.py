@@ -118,17 +118,14 @@ def test_execution_queue_terminal_jobs_reject_runtime_updates(queue_root):
         execution_queue.update_job(job["id"], {"phase": "too-late"})
 
 
-def test_server_startup_keeps_inference_dormant():
+def test_server_startup_shelves_inference_without_starting_it():
     app_source = (Path(__file__).parents[1] / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     startup = app_source.split('if __name__ == "__main__":', 1)[1]
 
+    assert "prepare_inference_startup_backlog()" in startup
     assert "start_training_runner_observer()" in startup
-    assert "reconcile_test_generations_startup()" not in startup
-    assert "reconcile_storyboard_generation_startup()" not in startup
-    assert "reconcile_inference_startup()" not in startup
     assert "start_inference_observer()" not in startup
-    assert "reconcile_llm_startup()" not in startup
-    assert "start_llm_observer()" not in startup
+    assert "reconcile_llm_startup()" in startup
 
 
 def test_execution_queue_resource_claim_is_exclusive(queue_root):
@@ -177,3 +174,44 @@ def test_execution_queue_reorders_mixed_inference_client_jobs(queue_root):
 
     assert [job["id"] for job in snapshot["jobs"]] == [third["id"], second["id"], first["id"]]
     assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2, 3]
+
+
+def test_execution_queue_backlog_is_not_claimable_until_promoted(queue_root):
+    backlog = execution_queue.enqueue(
+        "inference",
+        {"request": {"prompt": "later"}},
+        metadata={"client": "generate"},
+        initial_status="backlog",
+    )
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+
+    assert backlog["status"] == "backlog"
+    assert snapshot["jobs"][0]["queuePosition"] == 0
+    assert execution_queue.claim_next("inference") is None
+
+    promoted = execution_queue.promote_backlog(backlog["id"])
+    assert promoted["status"] == "queued"
+    assert promoted["queuePosition"] == 1
+    assert execution_queue.claim_next("inference")["id"] == backlog["id"]
+
+
+def test_execution_queue_shelves_only_queued_work(queue_root):
+    queued = execution_queue.enqueue("inference", {"n": 1})
+    backlog = execution_queue.enqueue("inference", {"n": 2}, initial_status="backlog")
+
+    changed = execution_queue.shelve_queued("inference")
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+
+    assert [job["id"] for job in changed] == [queued["id"]]
+    assert changed[0]["queuePosition"] == 0
+    assert [job["status"] for job in snapshot["jobs"]] == ["backlog", "backlog"]
+    assert snapshot["jobs"][0]["queuePosition"] == 0
+    assert snapshot["jobs"][1]["id"] == backlog["id"]
+
+
+def test_execution_queue_cancel_pending_accepts_backlog(queue_root):
+    backlog = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
+
+    cancelled = execution_queue.cancel_pending(backlog["id"])
+
+    assert cancelled["status"] == "cancelled"

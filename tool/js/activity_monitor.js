@@ -261,6 +261,7 @@
     var parts = [];
     if (includeRunning && Number(queue.running || 0)) parts.push(String(queue.running) + ' running');
     if (Number(queue.queued || 0)) parts.push(String(queue.queued) + ' queued');
+    if (Number(queue.backlog || 0)) parts.push(String(queue.backlog) + ' backlog');
     if (queue.paused) parts.push('paused');
     return parts.join(' · ') || 'Empty';
   }

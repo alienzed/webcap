@@ -647,3 +647,17 @@ def test_caption_report_owns_a_large_inspectable_balance_wheel():
     assert "min-width: 300px" in css
     assert ".report-balance-wheel-slice:hover" in css
 
+
+
+def test_inference_drawer_exposes_backlog_without_treating_it_as_active_work():
+    inference = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert "run_backlog" in inference
+    assert "run_all_backlog" in inference
+    assert "Eligible when GPU is free" in inference
+    assert "var activeCount = running + queued + armedBacklog;" in inference
+    assert "toggle.classList.toggle('inference-active', activeCount > 0);" in inference
+    assert "String(queue.backlog) + ' backlog'" in activity
+    assert ".inference-backlog-heading" in css

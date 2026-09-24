@@ -624,6 +624,55 @@
     saveSceneNow(sceneId).catch(reportError);
   }
 
+  function directorContractPreviewText(contract) {
+    contract = contract || {};
+    var parts = [String(contract.prompt || '')];
+    if (contract.response_schema) {
+      parts.push('--- OUTPUT SCHEMA ---\n' + JSON.stringify(contract.response_schema, null, 2));
+    } else {
+      parts.push('--- OUTPUT ---\n' + String(contract.output || 'text'));
+    }
+    if (contract.result_renderer) {
+      parts.push('--- WEBCAP RESULT RENDERER ---\n' + JSON.stringify(contract.result_renderer, null, 2));
+    }
+    return parts.filter(Boolean).join('\n\n');
+  }
+
+  function previewDirectorRequest(sceneId, operation) {
+    if (!storyState.story) return;
+    var root = sceneElement(sceneId);
+    if (!root) throw new Error('Scene editor is missing for ' + sceneId + '.');
+    var output = root.querySelector('[data-director-request-preview-output]');
+    if (!output) throw new Error('Director request preview output is missing.');
+
+    var instruction = '';
+    if (operation === 'refine_prompt') {
+      var correction = root.querySelector('[data-director-correction]');
+      instruction = correction ? correction.value.trim() : '';
+      if (!instruction) {
+        output.textContent = 'Enter a refinement instruction first.';
+        return;
+      }
+    }
+
+    output.textContent = 'Building exact Director request…';
+    flushPendingSaves().then(function () {
+      return directorRequest({
+        storyId: storyState.story.id,
+        sceneId: sceneId,
+        operation: operation,
+        model: storyState.director.modelId,
+        instruction: instruction,
+        previewOnly: true
+      });
+    }).then(function (payload) {
+      output.textContent = directorContractPreviewText(payload.contract);
+    }).catch(function (err) {
+      output.textContent = 'Director request preview failed: ' + String(err && err.message ? err.message : err);
+      reportError(err);
+    });
+  }
+
   function runDirector(sceneId, operation) {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
@@ -1624,6 +1673,38 @@
     return parts.join(' · ');
   }
 
+  function takeEffectiveInputHtml(take) {
+    if (!take || !take.generated || !take.effectiveInput) return '';
+    var input = take.effectiveInput || {};
+    var references = input.references && typeof input.references === 'object' ? input.references : {};
+    var loras = Array.isArray(input.loras) ? input.loras : [];
+    var facts = [
+      'Duration: ' + String(input.durationSeconds == null ? '' : input.durationSeconds) + 's',
+      'Aspect: ' + String(input.aspectRatio || ''),
+      'Megapixels: ' + String(input.megapixels == null ? '' : input.megapixels),
+      'Seed: ' + String(input.seed == null ? '' : input.seed),
+      'Prompt mode: ' + String(input.promptMode || '')
+    ].filter(function (value) { return !/:\s*$/.test(value); });
+
+    var referenceLines = Object.keys(references).map(function (role) {
+      return role + ': ' + String(references[role] || '');
+    });
+    var loraLines = loras.map(function (item) {
+      return String(item.name || '') + ' @ ' + String(item.strength == null ? 1 : item.strength);
+    });
+
+    return '<details class="storyboard-take-effective-input">' +
+      '<summary>Effective H3 Input</summary>' +
+      '<div class="storyboard-take-effective-input-body">' +
+        '<div class="storyboard-effective-input-meta">' + escapeHtml(facts.join(' · ')) + '</div>' +
+        '<strong>Exact prompt sent to ComfyUI</strong>' +
+        '<pre>' + escapeHtml(String(input.prompt || take.prompt || '')) + '</pre>' +
+        (referenceLines.length ? '<strong>Reference inputs</strong><pre>' + escapeHtml(referenceLines.join('\n')) + '</pre>' : '') +
+        (loraLines.length ? '<strong>Effective LoRAs</strong><pre>' + escapeHtml(loraLines.join('\n')) + '</pre>' : '') +
+      '</div>' +
+    '</details>';
+  }
+
   function takeCardHtml(storyId, sceneId, takeId, take, takeIndex, selectedTakeId) {
     var rating = Math.max(0, Math.min(5, Number(take && take.rating || 0)));
     var selected = selectedTakeId === takeId;
@@ -1649,6 +1730,7 @@
         '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
         '<button type="button" class="review-captions-btn storyboard-take-delete" data-take-action="delete" data-take-id="' + escapeHtml(takeId) + '">Delete</button>' +
       '</div>' +
+      takeEffectiveInputHtml(take) +
     '</article>';
   }
 
@@ -1874,6 +1956,17 @@
                 '<button type="button" class="review-captions-btn" data-director-refine title="Apply this correction to the existing generation prompt.">Refine</button>' +
                 '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
+              '<details class="storyboard-scene-disclosure storyboard-prompt-pipeline-details">' +
+                '<summary><span>Prompt pipeline</span><span class="storyboard-disclosure-summary-state">Inspect Director → H3</span></summary>' +
+                '<div class="storyboard-disclosure-body storyboard-prompt-pipeline-body">' +
+                  '<div class="storyboard-prompt-pipeline-actions">' +
+                    '<button type="button" class="review-captions-btn" data-director-preview="write_prompt">Preview Write request</button>' +
+                    '<button type="button" class="review-captions-btn" data-director-preview="refine_prompt">Preview Refine request</button>' +
+                  '</div>' +
+                  '<span class="storyboard-prompt-pipeline-note">This is the exact current Director contract. Generated Takes preserve the exact effective H3 input separately.</span>' +
+                  '<pre data-director-request-preview-output>Choose a request to inspect what WebCap will send to the Director.</pre>' +
+                '</div>' +
+              '</details>' +
             '</div>' +
             '<details class="storyboard-scene-disclosure storyboard-continuity-details">' +
               '<summary><span>Continuity</span><span class="storyboard-disclosure-summary-state">' +
@@ -3203,6 +3296,13 @@
         if (!removeRow) throw new Error('LoRA row is missing.');
         removeRow.remove();
         scheduleSceneSave(removeLoraScene.dataset.sceneId);
+        return;
+      }
+      var directorPreview = event.target.closest('[data-director-preview]');
+      if (directorPreview) {
+        var previewScene = directorPreview.closest('.storyboard-scene[data-scene-id]');
+        if (!previewScene) throw new Error('Director preview Scene is missing.');
+        previewDirectorRequest(previewScene.dataset.sceneId, directorPreview.dataset.directorPreview);
         return;
       }
       var directorWrite = event.target.closest('[data-director-write]');

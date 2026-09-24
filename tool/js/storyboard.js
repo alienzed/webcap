@@ -256,7 +256,9 @@
   function reconcileDirectorJobs() {
     return directorQueueSnapshot(true).then(function (queue) {
       (queue.jobs || []).forEach(function (job) {
-        if (job && job.client === 'storyboard') watchRecoveredDirectorJob(job);
+        if (!job || job.client !== 'storyboard') return;
+        var target = directorTargetFromJob(job);
+        if (target && !directorTargetPending(target)) watchRecoveredDirectorJob(job);
       });
     });
   }
@@ -272,11 +274,14 @@
         }
         if (payload && body.job) {
           return waitForDirectorJob(body.job).then(function (result) {
+            result.jobId = body.job.jobId;
             if (payload.operation !== 'expand_concept' && payload.operation !== 'develop_story') return result;
             return request(null, 'story=' + encodeURIComponent(payload.storyId)).then(function (storyPayload) {
               result.story = storyPayload.story;
               return result;
             });
+          }).catch(function (err) {
+            return consumeDirectorJob(body.job.jobId).catch(function () {}).then(function () { throw err; });
           });
         }
         return body;
@@ -672,7 +677,9 @@
         syncSceneDirectorRestore(sceneId);
         updateSceneDirectorStatus(sceneId, 'Generated with ' + String(payload.model || modelId));
         setSaveState('Saved');
-        return refreshLibrary();
+        return refreshLibrary().then(function () {
+          return consumeDirectorJob(payload.jobId);
+        });
       });
     }).catch(function (err) {
       updateSceneDirectorStatus(sceneId, 'Director failed');
@@ -810,7 +817,9 @@
       renderStory();
       setDevelopStatus('Concept expanded with ' + String(payload.model || modelId) + '.');
       setSaveState('Saved');
-      return refreshLibrary();
+      return refreshLibrary().then(function () {
+        return consumeDirectorJob(payload.jobId);
+      });
     }).catch(function (err) {
       setDevelopStatus('Concept expansion failed.');
       reportError(err);
@@ -883,7 +892,9 @@
       renderStory();
       setDevelopStatus('Developed ' + String(payload.sceneCount || 0) + ' Scenes with ' + String(payload.model || modelId) + '.');
       setSaveState('Saved');
-      return refreshLibrary();
+      return refreshLibrary().then(function () {
+        return consumeDirectorJob(payload.jobId);
+      });
     }).catch(function (err) {
       setDevelopStatus('Story development failed.');
       reportError(err);

@@ -1675,12 +1675,57 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .inference-queue-actions {
   display: flex;
   align-items: center;
+  gap: 4px;
 }
 
 .inference-queue-actions .review-captions-btn {
+  width: auto;
   min-height: 26px;
   padding: 3px 7px;
   font-size: 10px;
+  white-space: nowrap;
+}
+
+.inference-backlog-heading {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 5px 4px 2px;
+  border-top: 1px solid var(--border);
+}
+
+.inference-backlog-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inference-backlog-heading strong {
+  font-size: 11px;
+}
+
+.inference-backlog-heading span {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.inference-backlog-heading .review-captions-btn {
+  width: auto;
+  min-height: 24px;
+  padding: 2px 7px;
+  font-size: 10px;
+}
+
+.inference-queue-row.status-backlog {
+  opacity: .86;
 }
 
 .inference-queue-empty {

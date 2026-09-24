@@ -399,6 +399,11 @@
   min-width: 0;
 }
 
+#storyboard-sequence-toggle {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .storyboard-progress-summary {
   display: block;
   margin-top: 3px;
@@ -900,8 +905,8 @@
 
 .storyboard-sequence-output video {
   display: block;
-  width: min(100%, 960px);
-  max-height: 540px;
+  width: min(100%, 640px);
+  max-height: 360px;
   margin: 0 auto;
   border-radius: 6px;
   background: #000;

@@ -5,7 +5,6 @@ import time
 
 from .execution_queue import (
     cancel_pending as execution_cancel_pending,
-    cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
     claim_next as execution_claim_next,
     enqueue as execution_enqueue,

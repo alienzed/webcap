@@ -452,34 +452,6 @@
   overflow: hidden;
 }
 
-.storyboard-scene.has-selected-take {
-  border-color: color-mix(in srgb, #22c55e 42%, var(--border));
-  background: color-mix(in srgb, var(--panel) 94%, #22c55e 6%);
-}
-
-.storyboard-scene.has-selected-take > .storyboard-scene-header {
-  background: color-mix(in srgb, var(--panel-soft) 91%, #22c55e 9%);
-}
-
-.storyboard-scene-header {
-  grid-area: header;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 50px;
-  padding: 9px 14px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel-soft);
-}
-
-.storyboard-scene-number {
-  min-width: 58px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 750;
-}
-
 .storyboard-scene-title-field input {
   font-size: 15px;
   font-weight: 700;
@@ -490,17 +462,24 @@
 }
 
 .storyboard-scene-menu > summary {
-  width: 38px;
-  height: 34px;
+  width: 28px;
+  height: 24px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
   list-style: none;
   font-size: 18px;
   font-weight: 800;
+}
+
+.storyboard-scene-menu > summary:hover,
+.storyboard-scene-menu[open] > summary {
+  background: var(--panel);
+  color: var(--text);
 }
 
 .storyboard-scene-menu > summary::-webkit-details-marker {
@@ -508,10 +487,8 @@
 }
 
 .storyboard-scene-menu-popover {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 5px);
-  right: 0;
+  position: fixed;
+  z-index: 200;
   min-width: 180px;
   display: none;
   padding: 6px;
@@ -1474,17 +1451,39 @@
   border-bottom: 1px solid var(--border);
 }
 
-.storyboard-scene-progress-step {
+.storyboard-scene-progress-card {
   flex: 0 0 150px;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 9px 12px;
+  position: relative;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel-soft);
   color: var(--text);
+  overflow: visible;
+}
+
+.storyboard-scene-progress-card.has-selected-take {
+  border-color: color-mix(in srgb, #22c55e 48%, var(--border));
+  background: color-mix(in srgb, var(--panel-soft) 88%, #22c55e 12%);
+}
+
+.storyboard-scene-progress-card.active {
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+.storyboard-scene-progress-step {
+  width: 100%;
+  min-width: 0;
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 9px 10px 28px 12px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
   text-align: left;
   cursor: pointer;
 }
@@ -1525,10 +1524,11 @@
   white-space: nowrap;
 }
 
-.storyboard-scene-progress-step.active {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: color-mix(in srgb, var(--panel-soft) 82%, var(--accent));
-  box-shadow: inset 0 -3px 0 var(--accent);
+.storyboard-scene-progress-menu {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  z-index: 2;
 }
 
 .storyboard-scene-progress-add {
@@ -1635,7 +1635,6 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "header"
     "body"
     "takes";
   overflow: visible;
@@ -1982,7 +1981,6 @@
   .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) {
     grid-template-columns: minmax(0, 1fr) minmax(420px, 500px);
     grid-template-areas:
-      "header header"
       "body takes";
     align-items: start;
   }
@@ -2571,18 +2569,29 @@
   line-height: 1;
 }
 
-.storyboard-scene-progress-work.is-active {
-  min-width: 8px;
-  width: 8px;
-  height: 8px;
+.storyboard-scene-progress-work.is-generating {
+  min-width: 14px;
+  width: 14px;
+  height: 14px;
   padding: 0;
-  border: 0;
+  border: 2px solid color-mix(in srgb, var(--muted) 42%, transparent);
+  border-top-color: var(--accent);
   border-radius: 999px;
-  background: var(--accent);
+  animation: storyboard-scene-progress-spin .8s linear infinite;
 }
 
 .storyboard-scene-progress-work.is-queued {
   border-style: dashed;
+}
+
+@keyframes storyboard-scene-progress-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .storyboard-scene-progress-work.is-generating {
+    animation: none;
+  }
 }
 
 @media (max-width: 980px) {

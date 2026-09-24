@@ -661,10 +661,9 @@ def test_storyboard_scene_title_lives_in_main_form_and_story_switch_reopens_cont
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    header_block = storyboard.split("'<header class=\"storyboard-scene-header\">'", 1)[1].split("'</header>'", 1)[0]
     scene_main = storyboard.split("'<div class=\"storyboard-scene-main\">'", 1)[1].split("'<div class=\"storyboard-prompt-block\">'", 1)[0]
 
-    assert 'data-scene-field="title"' not in header_block
+    assert "'<header class=\"storyboard-scene-header\">'" not in storyboard
     assert 'storyboard-scene-title-field' in scene_main
     assert '<span>Title</span><input data-scene-field="title"' in scene_main
     assert '<span>Scene intent</span>' in scene_main
@@ -866,6 +865,29 @@ def test_storyboard_scene_focus_mode_scrolls_naturally_and_has_peer_sequence_vie
     assert "position: sticky;" in inspector
 
 
+def test_storyboard_progression_card_owns_scene_status_and_actions():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    progression = storyboard.split("function renderSceneProgression(order)", 1)[1].split("\n  function ", 1)[0]
+    assert "storyboard-scene-progress-card" in progression
+    assert "storyState.sceneViewMode === 'focus' && sceneId === active" in progression
+    assert "storyboard-scene-progress-menu" in progression
+    assert 'data-scene-action="duplicate"' in progression
+    assert 'data-scene-action="up"' in progression
+    assert 'data-scene-action="down"' in progression
+    assert 'data-scene-action="delete"' in progression
+    assert "sceneProgressionIndicatorsHtml(sceneId)" in progression
+    assert "is-generating" in storyboard
+    assert "is-queued" in storyboard
+    assert "storyboard-scene-progress-badge" in storyboard
+    assert ".storyboard-scene-progress-card.has-selected-take" in css
+    assert ".storyboard-scene-progress-card.active" in css
+    assert "box-shadow: inset 0 -3px 0 var(--accent);" in css
+    assert ".storyboard-scene-progress-work.is-generating" in css
+    assert "position: fixed;" in css.split(".storyboard-scene-menu-popover {", 1)[1].split("}", 1)[0]
+
+
 def test_storyboard_takes_open_on_first_activity_without_forcing_manual_reopen():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
@@ -893,8 +915,9 @@ def test_storyboard_scene_cards_visually_mark_selected_take_state():
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
     assert "storyboard-scene-overview-card' + (scene.selectedTakeId ? ' has-selected-take' : '')" in storyboard
-    assert "storyboard-scene' + (scene.selectedTakeId ? ' has-selected-take' : '')" in storyboard
-    assert ".storyboard-scene.has-selected-take" in css
+    assert "(scene.selectedTakeId ? ' has-selected-take' : '')" in storyboard
+    assert ".storyboard-scene-progress-card.has-selected-take" in css
+    assert ".storyboard-scene.has-selected-take" not in css
     assert ".storyboard-scene-overview-card.has-selected-take" in css
 
 

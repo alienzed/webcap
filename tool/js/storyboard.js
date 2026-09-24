@@ -1644,11 +1644,40 @@
     delete storyState.newTakeCounts[sceneId];
   }
 
+  function sceneProgressionIndicatorsHtml(sceneId) {
+    var newTakeCount = Number(storyState.newTakeCounts[sceneId] || 0);
+    var jobs = generationJobsForScene(sceneId);
+    var queuedCount = jobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
+    var activeCount = jobs.filter(function (job) {
+      return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
+    }).length;
+    var workBadge = activeCount
+      ? '<span class="storyboard-scene-progress-work is-generating" title="' + String(activeCount) + ' active generation' + (activeCount === 1 ? '' : 's') + '"></span>'
+      : (queuedCount
+        ? '<span class="storyboard-scene-progress-work is-queued" title="' + String(queuedCount) + ' queued generation' + (queuedCount === 1 ? '' : 's') + '">Q' + (queuedCount > 1 ? String(queuedCount) : '') + '</span>'
+        : '');
+    return workBadge +
+      (newTakeCount ? '<span class="storyboard-scene-progress-badge" title="' + String(newTakeCount) + ' new Take' + (newTakeCount === 1 ? '' : 's') + '">' + String(newTakeCount) + '</span>' : '');
+  }
+
+  function syncSceneProgressionCard(sceneId) {
+    if (!sceneId || !storyState.story) return;
+    var card = document.querySelector('.storyboard-scene-progress-card[data-scene-id="' + CSS.escape(sceneId) + '"]');
+    if (!card) return;
+    var scene = storyState.story.scenes && storyState.story.scenes[sceneId] || {};
+    card.classList.toggle('has-selected-take', !!scene.selectedTakeId);
+    var indicators = card.querySelector('.storyboard-scene-progress-indicators');
+    var title = card.querySelector('[data-scene-progress-title]');
+    if (!indicators || !title) throw new Error('Storyboard Scene progression card markup is missing.');
+    indicators.innerHTML = sceneProgressionIndicatorsHtml(sceneId);
+    title.textContent = scene.title || 'Untitled Scene';
+  }
+
   function markSceneNewTake(sceneId) {
     if (!sceneId || !storyState.story) return;
     if (storyState.sceneViewMode === 'focus' && storyState.activeSceneId === sceneId) return;
     storyState.newTakeCounts[sceneId] = Number(storyState.newTakeCounts[sceneId] || 0) + 1;
-    renderSceneProgression(storyState.story.sceneOrder || []);
+    syncSceneProgressionCard(sceneId);
   }
 
   function renderSceneProgression(order) {
@@ -1659,26 +1688,30 @@
     var active = ensureActiveScene(order);
     host.innerHTML = order.map(function (sceneId, index) {
       var scene = scenes[sceneId] || {};
-      var newTakeCount = Number(storyState.newTakeCounts[sceneId] || 0);
-      var jobs = generationJobsForScene(sceneId);
-      var queuedCount = jobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
-      var activeCount = jobs.filter(function (job) {
-        return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
-      }).length;
-      var workBadge = activeCount
-        ? '<span class="storyboard-scene-progress-work is-active" title="' + String(activeCount) + ' active generation' + (activeCount === 1 ? '' : 's') + '"></span>'
-        : (queuedCount
-          ? '<span class="storyboard-scene-progress-work is-queued" title="' + String(queuedCount) + ' queued generation' + (queuedCount === 1 ? '' : 's') + '">Q' + (queuedCount > 1 ? String(queuedCount) : '') + '</span>'
-          : '');
-      return '<button type="button" class="storyboard-scene-progress-step' + (sceneId === active ? ' active' : '') + '" data-scene-progress="' + escapeHtml(sceneId) + '">' +
-        '<span class="storyboard-scene-progress-kicker">Scene ' + String(index + 1).padStart(2, '0') +
-          '<span class="storyboard-scene-progress-indicators">' +
-            workBadge +
-            (newTakeCount ? '<span class="storyboard-scene-progress-badge" title="' + String(newTakeCount) + ' new Take' + (newTakeCount === 1 ? '' : 's') + '">' + String(newTakeCount) + '</span>' : '') +
+      var isCurrent = storyState.sceneViewMode === 'focus' && sceneId === active;
+      var planDirectorModel = String(scene.planDirectorModel || '').trim();
+      return '<div class="storyboard-scene-progress-card' +
+          (isCurrent ? ' active' : '') +
+          (scene.selectedTakeId ? ' has-selected-take' : '') +
+          '" data-scene-id="' + escapeHtml(sceneId) + '">' +
+        '<button type="button" class="storyboard-scene-progress-step" data-scene-progress="' + escapeHtml(sceneId) + '">' +
+          '<span class="storyboard-scene-progress-kicker"' +
+            (planDirectorModel ? ' title="Scene plan originated from Director model ' + escapeHtml(planDirectorModel) + '"' : '') +
+          '>Scene ' + String(index + 1).padStart(2, '0') +
+            '<span class="storyboard-scene-progress-indicators">' + sceneProgressionIndicatorsHtml(sceneId) + '</span>' +
           '</span>' +
-        '</span>' +
-        '<strong>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
-      '</button>';
+          '<strong data-scene-progress-title>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
+        '</button>' +
+        '<details class="storyboard-scene-menu storyboard-scene-progress-menu">' +
+          '<summary title="Scene actions" aria-label="Scene actions">•••</summary>' +
+          '<div class="storyboard-scene-menu-popover">' +
+            '<button type="button" data-scene-action="duplicate">Duplicate Scene</button>' +
+            '<button type="button" data-scene-action="up"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
+            '<button type="button" data-scene-action="down"' + (index === order.length - 1 ? ' disabled' : '') + '>Move later</button>' +
+            '<button type="button" class="danger" data-scene-action="delete">Remove Scene</button>' +
+          '</div>' +
+        '</details>' +
+      '</div>';
     }).join('') +
       '<button type="button" class="storyboard-scene-progress-add" data-scene-progress-add title="Add Scene" aria-label="Add Scene">+</button>';
   }
@@ -1908,6 +1941,37 @@
 
     var anchorRect = summary.getBoundingClientRect();
     var width = popover.offsetWidth || 150;
+    var height = popover.offsetHeight || 0;
+    var gap = 4;
+    var margin = 8;
+    var left = Math.min(
+      Math.max(margin, anchorRect.right - width),
+      Math.max(margin, window.innerWidth - width - margin)
+    );
+    var below = anchorRect.bottom + gap;
+    var above = anchorRect.top - height - gap;
+    var top = below + height <= window.innerHeight - margin || above < margin
+      ? below
+      : above;
+
+    popover.style.left = Math.round(left) + 'px';
+    popover.style.top = Math.round(Math.max(margin, top)) + 'px';
+  }
+
+  function closeSceneActionMenus(exceptMenu) {
+    document.querySelectorAll('.storyboard-scene-menu[open]').forEach(function (menu) {
+      if (menu !== exceptMenu) menu.open = false;
+    });
+  }
+
+  function positionSceneActionMenu(menu) {
+    if (!menu || !menu.open) return;
+    var summary = menu.querySelector('summary');
+    var popover = menu.querySelector('.storyboard-scene-menu-popover');
+    if (!summary || !popover) throw new Error('Storyboard Scene action menu markup is missing.');
+
+    var anchorRect = summary.getBoundingClientRect();
+    var width = popover.offsetWidth || 180;
     var height = popover.offsetHeight || 0;
     var gap = 4;
     var margin = 8;
@@ -2464,7 +2528,6 @@
     var activeHtml = renderOrder.map(function (sceneId) {
       var index = order.indexOf(sceneId);
       var scene = scenes[sceneId] || {};
-      var planDirectorModel = String(scene.planDirectorModel || '').trim();
       var promptDirectorModel = String(scene.promptDirectorModel || '').trim();
       var seedMode = sceneValue(scene, 'seedMode', 'random');
       var seed = sceneValue(scene, 'seed', '');
@@ -2538,21 +2601,7 @@
         takeSummaryParts.push(String(sceneGenerationJobs.length) + ' pending');
       }
       var takesInitiallyOpen = takeOrder.length > 0 || sceneGenerationJobs.length > 0;
-      return '<section class="storyboard-scene' + (scene.selectedTakeId ? ' has-selected-take' : '') + '" data-scene-id="' + escapeHtml(sceneId) + '">' +
-        '<header class="storyboard-scene-header">' +
-          '<span class="storyboard-scene-number"' +
-            (planDirectorModel ? ' title="Scene plan originated from Director model ' + escapeHtml(planDirectorModel) + '"' : '') +
-          '>Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
-          '<details class="storyboard-scene-menu">' +
-            '<summary title="Scene actions" aria-label="Scene actions">•••</summary>' +
-            '<div class="storyboard-scene-menu-popover">' +
-              '<button type="button" data-scene-action="duplicate">Duplicate Scene</button>' +
-              '<button type="button" data-scene-action="up"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
-              '<button type="button" data-scene-action="down"' + (index === order.length - 1 ? ' disabled' : '') + '>Move later</button>' +
-              '<button type="button" class="danger" data-scene-action="delete">Remove Scene</button>' +
-            '</div>' +
-          '</details>' +
-        '</header>' +
+      return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<div class="storyboard-scene-body">' +
           '<div class="storyboard-scene-main">' +
             '<label class="storyboard-field storyboard-scene-title-field"><span>Title</span><input data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title"></label>' +
@@ -3405,6 +3454,9 @@
       return status === 'starting' || status === 'running' || status === 'stopping';
     });
     setShellGeneratingActive(running);
+    if (storyState.story) {
+      (storyState.story.sceneOrder || []).forEach(syncSceneProgressionCard);
+    }
     renderStoryReadiness();
   }
 
@@ -3718,6 +3770,12 @@
     var scene = field.closest('.storyboard-scene[data-scene-id]');
     if (!scene) return;
     var sceneId = scene.dataset.sceneId;
+    if (field.dataset.sceneField === 'title') {
+      var progressCard = document.querySelector('.storyboard-scene-progress-card[data-scene-id="' + CSS.escape(sceneId) + '"]');
+      var progressTitle = progressCard && progressCard.querySelector('[data-scene-progress-title]');
+      if (!progressTitle) throw new Error('Storyboard Scene progression title is missing.');
+      progressTitle.textContent = field.value.trim() || 'Untitled Scene';
+    }
     if (field.dataset.sceneField === 'prompt') {
       var promptScene = storyState.story && storyState.story.scenes
         ? storyState.story.scenes[sceneId]
@@ -3733,8 +3791,8 @@
   function handleSceneAction(event) {
     var button = event.target.closest('[data-scene-action]');
     if (!button) return;
-    var scene = button.closest('.storyboard-scene[data-scene-id]');
-    if (!scene) return;
+    var scene = button.closest('[data-scene-id]');
+    if (!scene) throw new Error('Storyboard Scene action target is missing.');
     var sceneId = scene.dataset.sceneId;
     var action = button.dataset.sceneAction;
     if (action === 'up') reorderScene(sceneId, -1);
@@ -3804,7 +3862,25 @@
       }, { passive: true });
     }
 
-    el('storyboard-scene-progression').addEventListener('click', function (event) {
+    var sceneProgression = el('storyboard-scene-progression');
+    sceneProgression.addEventListener('click', function (event) {
+      var menuSummary = event.target.closest('.storyboard-scene-progress-menu > summary');
+      if (menuSummary) {
+        var sceneMenu = menuSummary.closest('.storyboard-scene-menu');
+        window.setTimeout(function () {
+          if (!sceneMenu.open) return;
+          closeSceneActionMenus(sceneMenu);
+          positionSceneActionMenu(sceneMenu);
+        }, 0);
+        return;
+      }
+      var actionButton = event.target.closest('[data-scene-action]');
+      if (actionButton) {
+        var menu = actionButton.closest('details');
+        if (menu) menu.open = false;
+        handleSceneAction(event);
+        return;
+      }
       var sceneButton = event.target.closest('[data-scene-progress]');
       if (sceneButton) {
         setSceneViewMode('focus', sceneButton.dataset.sceneProgress);
@@ -3812,6 +3888,9 @@
       }
       if (event.target.closest('[data-scene-progress-add]')) addScene();
     });
+    sceneProgression.addEventListener('scroll', function () {
+      closeSceneActionMenus();
+    }, { passive: true });
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;
       setSharedDirectorModelPreference(this.value);
@@ -3864,9 +3943,11 @@
     });
     document.addEventListener('click', function (event) {
       if (!event.target.closest('.storyboard-story-menu')) closeStoryActionMenus();
+      if (!event.target.closest('.storyboard-scene-menu')) closeSceneActionMenus();
     });
     window.addEventListener('resize', function () {
       closeStoryActionMenus();
+      closeSceneActionMenus();
       if (directorActivityActive()) positionDirectorActivity();
     });
     workspace.addEventListener('scroll', function () {
@@ -4135,7 +4216,6 @@
         restoreScene(restore.dataset.restoreScene);
         return;
       }
-      handleSceneAction(event);
     });
   }
 

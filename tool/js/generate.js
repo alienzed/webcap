@@ -576,25 +576,41 @@
     phase.textContent = directorPhaseLabel(activity && activity.phase);
     var startedAt = Number(activity && activity.startedAt) || generateState.director.activityStartedAt;
     var parts = [];
-    if (startedAt) parts.push(Math.max(0, Math.round(Date.now() / 1000 - startedAt)) + 's elapsed');
+    if (startedAt) {
+      parts.push('<span>' + escapeHtml(String(Math.max(0, Math.round(Date.now() / 1000 - startedAt))) + 's elapsed') + '</span>');
+    }
 
     var gpu = system && system.gpu;
     var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
     if (primary) {
       var utilization = Number(primary.utilization);
-      if (isFinite(utilization)) parts.push('GPU ' + Math.round(utilization) + '%');
-      var used = directorMemoryGiB(primary.memoryUsed);
-      var total = directorMemoryGiB(primary.memoryTotal);
-      if (used && total) parts.push('VRAM ' + used + ' / ' + total);
+      if (isFinite(utilization)) {
+        parts.push('<span title="GPU utilization">GPU ' + Math.round(utilization) + '%</span>');
+      }
+      var memoryUsed = Number(primary.memoryUsed);
+      var memoryTotal = Number(primary.memoryTotal);
+      var used = directorMemoryGiB(memoryUsed);
+      var total = directorMemoryGiB(memoryTotal);
+      var vramPercent = memoryTotal > 0 ? memoryUsed / memoryTotal * 100 : NaN;
+      if (isFinite(vramPercent)) {
+        var vramTitle = used && total ? used + ' used of ' + total : '';
+        parts.push('<span' + (vramTitle ? ' title="' + escapeHtml(vramTitle) + '"' : '') + '>VRAM ' + Math.round(vramPercent) + '%</span>');
+      }
     }
 
     var ram = system && system.ram;
     if (ram && ram.available) {
-      var ramUsed = directorBytesGiB(ram.used);
-      var ramTotal = directorBytesGiB(ram.total);
-      if (ramUsed && ramTotal) parts.push('RAM ' + ramUsed + ' / ' + ramTotal);
+      var ramUsedBytes = Number(ram.used);
+      var ramTotalBytes = Number(ram.total);
+      var ramUsed = directorBytesGiB(ramUsedBytes);
+      var ramTotal = directorBytesGiB(ramTotalBytes);
+      var ramPercent = ramTotalBytes > 0 ? ramUsedBytes / ramTotalBytes * 100 : NaN;
+      if (isFinite(ramPercent)) {
+        var ramTitle = ramUsed && ramTotal ? ramUsed + ' used of ' + ramTotal : '';
+        parts.push('<span' + (ramTitle ? ' title="' + escapeHtml(ramTitle) + '"' : '') + '>RAM ' + Math.round(ramPercent) + '%</span>');
+      }
     }
-    detail.textContent = parts.join(' · ');
+    detail.innerHTML = parts.join(' · ');
   }
 
   function directorActivityActive() {

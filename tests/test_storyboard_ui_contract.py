@@ -240,6 +240,17 @@ def test_storyboard_director_pending_state_is_target_scoped():
     assert ".storyboard-director-activity.is-detached-target" in (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
 
+def test_storyboard_scene_director_result_only_updates_origin_story_ui():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    run_block = storyboard.split("function runDirector(sceneId, operation)", 1)[1].split("function setDevelopStatus", 1)[0]
+
+    assert "var stillViewingOrigin" in run_block
+    assert "String(storyState.story.id || '') === String(storyId)" in run_block
+    guarded = run_block.split("if (stillViewingOrigin", 1)[1]
+    assert "currentPrompt.value = generatedPrompt;" in guarded
+    assert "updateSceneDirectorStatus(sceneId, 'Generated with '" in guarded
+
+
 def test_storyboard_director_story_plan_conflicts_but_scene_targets_queue_independently():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

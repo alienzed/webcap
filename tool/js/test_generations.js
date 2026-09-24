@@ -105,7 +105,7 @@
       if (testSource) {
         testSource = '';
         saveLastTestSource(currentTestModelId(), testSource);
-        return openPane();
+        return refreshTestSourceBrowser();
       }
       throw err;
     });
@@ -299,7 +299,7 @@
       var total = Number(item.total || 0);
       actions.push({
         label: 'Running · ' + recentSetLabel(folder) + (total ? ' · ' + completed + ' / ' + total : ''),
-        run: function () { openTestBenchFolder(folder); }
+        run: function () { openTestBenchFolder(folder, true); }
       });
     });
 
@@ -311,7 +311,7 @@
       var sessionCount = Number(item.sessionCount || 0);
       recentActions.push({
         label: recentSetLabel(folder) + (sessionCount ? ' · ' + sessionCount + ' session' + (sessionCount === 1 ? '' : 's') : ''),
-        run: function () { openTestBenchFolder(folder); }
+        run: function () { openTestBenchFolder(folder, true); }
       });
       return recentActions.length >= 5;
     });
@@ -355,9 +355,10 @@
     });
   }
 
-  function openTestBenchFolder(folder) {
+  function openTestBenchFolder(folder, useSetSource) {
     var targetFolder = String(folder || '');
     if (!targetFolder) return;
+    if (useSetSource) pendingTestSource = setFolderName(targetFolder);
     if (String(state && state.folder || '') === targetFolder && state.folderStateWritable) {
       openPane();
       return;
@@ -366,14 +367,18 @@
     openTrainingWorkspaceFolder(targetFolder);
   }
 
+  function openTestBenchForSetFolder(folder) {
+    openTestBenchFolder(folder, true);
+  }
+
   function openTestBenchActivity() {
     var currentFolder = String(state && state.folder || '');
     if (currentFolder) {
-      openTestBenchFolder(currentFolder);
+      openTestBenchFolder(currentFolder, false);
       return;
     }
     var active = Array.isArray(testActivity.active) && testActivity.active.length ? testActivity.active[0] : null;
-    if (active && active.folder) openTestBenchFolder(String(active.folder));
+    if (active && active.folder) openTestBenchFolder(String(active.folder), false);
   }
 
   function openTestBenchActivityMenu(event) {
@@ -2225,6 +2230,15 @@
     if (!node || !frame) throw new Error('Test Generations requires the app frame and Test workspace.');
     launchFolder = owningSetFolder(state && state.folder || '');
     var requestedModelId = currentTestModelId();
+    if (pendingTestSource !== null) {
+      testSource = String(pendingTestSource || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      pendingTestSource = null;
+      saveLastTestSource(requestedModelId, testSource);
+    } else {
+      var savedSource = loadLastTestSource(requestedModelId);
+      testSource = savedSource === null ? setFolderName(launchFolder) : savedSource;
+      saveLastTestSource(requestedModelId, testSource);
+    }
     var rememberedSession = (
       currentSession &&
       currentSessionFolder === launchFolder &&
@@ -2262,7 +2276,9 @@
       syncActiveRunControls({ status: 'idle' });
       return;
     }
-    request('test_prepare', { modelId: getWorkingModelProfileId() }).then(function (payload) {
+    refreshTestSourceBrowser().then(function () {
+      return request('test_prepare', { modelId: getWorkingModelProfileId() });
+    }).then(function (payload) {
       prepared = payload;
       if (Array.isArray(payload.warnings)) {
         payload.warnings.forEach(function (warning) {
@@ -2433,10 +2449,23 @@
     var node = el('test-generations-pane');
     if (!button || !workspace || !node) throw new Error('Test Generations requires its Training handoff and Test workspace markup.');
 
-    button.onclick = openPane;
+    button.onclick = function () {
+      pendingTestSource = setFolderName(state && state.folder || '');
+      openPane();
+    };
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
+    el('test-generations-source-up-btn').onclick = function () {
+      if (!this.disabled) chooseTestSource(String(this.dataset.sourceParent || ''));
+    };
+    el('test-generations-source-path-btn').onclick = function () {
+      if (String(testSource || '')) chooseTestSource('');
+    };
+    el('test-generations-source-folders').onclick = function (event) {
+      var button = event.target.closest('[data-test-source]');
+      if (button) chooseTestSource(String(button.dataset.testSource || ''));
+    };
     el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
     el('test-generations-rate-items-btn').onclick = function () {
@@ -2582,7 +2611,7 @@
   window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
   window.openTestBenchActivity = openTestBenchActivity;
   window.openTestBenchActivityMenu = openTestBenchActivityMenu;
-  window.openTestBenchForFolder = openTestBenchFolder;
+  window.openTestBenchForFolder = openTestBenchForSetFolder;
   window.openTestBenchForCurrentFolder = openPane;
   window.closeTestBenchActivity = closePane;
   window.refreshTestBenchActivity = refreshActivityButton;

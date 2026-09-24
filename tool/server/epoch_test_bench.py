@@ -379,7 +379,8 @@ def _new_session_directory(folder_path, model=None):
     base = datetime.now().strftime("%Y-%m-%d_%H%M-") + selected_model.SESSION_SLUG
     candidate = root / base
     suffix = 2
-    while candidate.exists():
+    existing_names = {path.name for path in _session_directories(folder_path)}
+    while candidate.exists() or candidate.name in existing_names:
         candidate = root / (base + "-" + str(suffix))
         suffix += 1
     candidate.mkdir()

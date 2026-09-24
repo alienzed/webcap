@@ -20,6 +20,9 @@ def inference_root(tmp_path, monkeypatch):
     with inference_runner._provider_hold_lock:
         inference_runner._provider_cleanup_holds.clear()
         inference_runner._provider_cleanup_reason = ""
+    with inference_runner._backlog_lock:
+        inference_runner._armed_backlog_ids.clear()
+        inference_runner._backlog_wait_reason = ""
     return tmp_path
 
 
@@ -732,3 +735,128 @@ def test_inference_resume_protects_gpu_when_provider_is_confirmed_active(inferen
     assert calls == ["provider-active"]
     assert result["queue"]["paused"] is True
     assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
+
+
+def test_inference_enqueue_backlogs_and_arms_while_shared_gpu_is_busy(inference_root, monkeypatch):
+    execution_queue._resource_owner = "training"
+    started = []
+    monkeypatch.setattr(
+        inference_runner,
+        "_start_worker_for_requested_inference",
+        lambda: started.append(True),
+    )
+
+    job = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Later"}
+    )
+
+    assert job["status"] == "backlog"
+    assert job["armed"] is True
+    assert started == [True]
+    assert inference_runner._monitor_has_work() is True
+
+
+def test_inference_startup_shelves_persisted_queue_without_arming_or_provider_contact(
+    inference_root, monkeypatch
+):
+    inference_runner._startup_reconciled = False
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    touched = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait_status",
+        lambda provider_id: touched.append(provider_id),
+    )
+
+    changed = inference_runner.prepare_startup_backlog()
+
+    assert [job["id"] for job in changed] == [queued["id"]]
+    assert execution_queue.get_job(queued["id"])["status"] == "backlog"
+    assert touched == []
+    assert inference_runner._armed_backlog_snapshot() == set()
+    assert inference_runner._monitor_has_work() is False
+
+
+def test_inference_armed_backlog_promotes_when_gpu_becomes_available(inference_root, monkeypatch):
+    backlog = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    inference_runner._arm_backlog(backlog["id"])
+    execution_queue._resource_owner = "training"
+
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+
+    execution_queue._resource_owner = ""
+    monkeypatch.setattr(inference_runtime, "system_stats", lambda: {"ok": True})
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        inference_runner,
+        "_execute_claimed",
+        lambda job_id: execution_queue.finish_job(job_id, status="completed"),
+    )
+
+    inference_runner._advance_queue()
+
+    assert execution_queue.get_job(backlog["id"])["status"] == "completed"
+    assert backlog["id"] not in inference_runner._armed_backlog_snapshot()
+
+
+def test_inference_armed_backlog_waits_if_comfyui_is_unavailable(inference_root, monkeypatch):
+    backlog = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    inference_runner._arm_backlog(backlog["id"])
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: False,
+    )
+
+    def unavailable():
+        raise ConnectionError("ComfyUI unavailable")
+
+    monkeypatch.setattr(inference_runtime, "system_stats", unavailable)
+
+    assert inference_runner._advance_queue() is None
+
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+    assert backlog["id"] in inference_runner._armed_backlog_snapshot()
+    assert inference_runner.snapshot()["waitReason"] == "ComfyUI unavailable."
+    assert execution_queue.resource_owner() == ""
+
+
+def test_inference_run_backlog_arms_without_promoting_immediately(inference_root, monkeypatch):
+    backlog = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    started = []
+    monkeypatch.setattr(
+        inference_runner,
+        "_start_worker_for_requested_inference",
+        lambda: started.append(True),
+    )
+
+    result = inference_runner.action("run_backlog", job_id=backlog["id"])
+
+    assert result["job"]["status"] == "backlog"
+    assert result["job"]["armed"] is True
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+    assert started == [True]

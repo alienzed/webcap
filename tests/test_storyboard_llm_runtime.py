@@ -470,7 +470,7 @@ def test_chat_wraps_json_schema_for_llama_cpp(monkeypatch):
 
     assert calls[-1]["response_format"] == {
         "type": "json_schema",
-        "json_schema": {"name": "storyboard_response", "schema": schema},
+        "schema": schema,
     }
 
 

@@ -178,6 +178,13 @@ def effective_input(workflow):
             "strength": 1.0 if strength in (None, "") else float(strength),
         })
 
+    turbo = ((workflow.get("148") or {}).get("inputs") or {})
+    required_loras = [{
+        "name": str(turbo.get("lora_name") or ""),
+        "strengthModel": float(turbo.get("strength_model", 1.0)),
+        "strengthClip": float(turbo.get("strength_clip", 1.0)),
+    }]
+
     return {
         "prompt": str(prompt_inputs.get("populated_text") or prompt_inputs.get("wildcard_text") or ""),
         "promptMode": str(prompt_inputs.get("mode") or ""),
@@ -186,6 +193,7 @@ def effective_input(workflow):
         "megapixels": resolution.get("megapixels"),
         "durationSeconds": duration.get("value"),
         "references": references,
+        "requiredLoras": required_loras,
         "loras": loras,
     }
 

@@ -1483,6 +1483,12 @@
     });
   }
 
+  function seedInheritedSceneMegapixels(input) {
+    if (!input || String(input.value || '').trim() !== '') return;
+    var defaults = storyState.story && storyState.story.generationDefaults || {};
+    input.value = String(defaults.megapixels == null ? 0.2 : defaults.megapixels);
+  }
+
   function loraOptions(selectedName) {
     var names = (storyState.generationCapabilities.loras || []).slice();
     if (selectedName && names.indexOf(selectedName) < 0) names.unshift(selectedName);
@@ -3307,6 +3313,8 @@
     });
 
     el('storyboard-scenes-list').addEventListener('focusin', function (event) {
+      var inheritedMegapixels = event.target.closest('[data-scene-field="megapixels"]');
+      if (inheritedMegapixels) seedInheritedSceneMegapixels(inheritedMegapixels);
       var picker = event.target.closest('[data-scene-lora-picker]');
       if (picker) renderLoraPickerMenu(picker);
     });

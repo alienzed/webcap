@@ -82,7 +82,6 @@ def build_workflow(template, prompt, settings, loras, _uploaded_references, file
     prompt_inputs = workflow["332"]["inputs"]
     prompt_inputs["wildcard_text"] = prompt
     prompt_inputs["populated_text"] = prompt
-    prompt_inputs["mode"] = "fixed"
     prompt_inputs["seed"] = selected["seed"]
     workflow["276"]["inputs"]["seed"] = selected["seed"]
     workflow["328"]["inputs"]["dimensions"] = selected["dimensions"]

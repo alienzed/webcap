@@ -16,8 +16,8 @@ from . import config as app_config
 
 LLAMA_HOST = "127.0.0.1"
 DEFAULT_PORT = 8189
-DEFAULT_CONTEXT_SIZE = 16384
-DEFAULT_MAX_TOKENS = 8192
+DEFAULT_CONTEXT_SIZE = None
+DEFAULT_MAX_TOKENS = None
 GPU_RESERVATION_OWNER = "llm"
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 
@@ -112,13 +112,15 @@ def _director_config():
     endpoint = str(director.get("endpoint") or "").strip().rstrip("/")
     executable = str(director.get("llama_server") or "").strip()
     port = int(director.get("port") or DEFAULT_PORT)
-    context_size = int(director.get("context_size") or DEFAULT_CONTEXT_SIZE)
-    max_tokens = int(director.get("max_tokens") or DEFAULT_MAX_TOKENS)
+    raw_context_size = director.get("context_size", DEFAULT_CONTEXT_SIZE)
+    context_size = None if raw_context_size in (None, "") else int(raw_context_size)
+    raw_max_tokens = director.get("max_tokens", DEFAULT_MAX_TOKENS)
+    max_tokens = None if raw_max_tokens in (None, "") else int(raw_max_tokens)
 
     if mode not in {"local", "remote"}:
         raise ValueError("Storyboard Director mode must be local or remote.")
-    if max_tokens <= 0:
-        raise ValueError("Storyboard Director max_tokens must be greater than zero.")
+    if max_tokens is not None and max_tokens <= 0:
+        raise ValueError("Storyboard Director max_tokens must be greater than zero when overridden.")
 
     models_dir = None
     if mode == "remote":
@@ -139,8 +141,8 @@ def _director_config():
             models_dir = Path(to_wsl_path(windows_models_dir, distribution=distribution))
         if port <= 0 or port > 65535:
             raise ValueError("Storyboard Director llama.cpp port must be between 1 and 65535.")
-        if context_size < 1024:
-            raise ValueError("Storyboard Director context_size must be at least 1024.")
+        if context_size is not None and context_size < 1024:
+            raise ValueError("Storyboard Director context_size must be at least 1024 when overridden.")
 
     return {
         "mode": mode,
@@ -270,7 +272,7 @@ def _server_signature(settings):
         str(settings["llama_server"]),
         str(settings["models_dir"]),
         int(settings["port"]),
-        int(settings["context_size"]),
+        settings["context_size"],
     )
 
 
@@ -315,12 +317,15 @@ def _ensure_server():
             "--no-models-autoload",
             "--host", LLAMA_HOST,
             "--port", str(settings["port"]),
-            "--ctx-size", str(settings["context_size"]),
+        ]
+        if settings["context_size"] is not None:
+            command.extend(["--ctx-size", str(settings["context_size"])])
+        command.extend([
             "--n-gpu-layers", "all",
             "--parallel", "1",
             "--jinja",
             "--cache-prompt",
-        ]
+        ])
         try:
             _process = subprocess.Popen(
                 command,
@@ -769,12 +774,17 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
             "model": model_id,
             "messages": messages,
             "stream": False,
-            "max_tokens": int(max_tokens or settings["max_tokens"]),
             "temperature": float(sampling.get("temperature", 0.2)),
             "top_p": float(sampling.get("top_p", 0.85)),
             "presence_penalty": float(sampling.get("presence_penalty", 0.0)),
             "frequency_penalty": float(sampling.get("frequency_penalty", 0.0)),
         }
+        requested_max_tokens = max_tokens if max_tokens is not None else settings["max_tokens"]
+        if requested_max_tokens is not None:
+            requested_max_tokens = int(requested_max_tokens)
+            if requested_max_tokens <= 0:
+                raise ValueError("Storyboard Director max_tokens override must be greater than zero.")
+            payload["max_tokens"] = requested_max_tokens
         if settings.get("mode", "local") == "local":
             payload["reasoning_effort"] = "none"
             payload["chat_template_kwargs"] = {"enable_thinking": False}
@@ -853,8 +863,7 @@ def _completion_result(response, model_id):
     finish_reason = str(choice.get("finish_reason") or "").strip().lower() if isinstance(choice, dict) else ""
     if finish_reason in {"length", "max_tokens"}:
         raise RuntimeError(
-            "Storyboard Director output was truncated at the configured token limit. "
-            "Increase App Settings > Storyboard > Max output tokens and try again."
+            "Storyboard Director output was truncated because the runtime reached its available token/context limit."
         )
     return {
         "text": content,
@@ -887,7 +896,7 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 "preparing",
                 model_id=model_id,
                 operation=operation,
-                context_size=settings.get("context_size", 0) if settings.get("mode", "local") == "local" else 0,
+                context_size=(settings.get("context_size") or 0) if settings.get("mode", "local") == "local" else 0,
             )
             chat_kwargs = {
                 "response_schema": contract.get("response_schema"),

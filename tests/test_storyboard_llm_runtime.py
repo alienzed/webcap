@@ -74,6 +74,24 @@ def test_model_file_size_stats_selected_model_in_configured_directory(monkeypatc
     }) == 4096
 
 
+def test_model_file_size_adds_gguf_suffix_for_llama_model_stem(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    models_dir.mkdir()
+    model_path = models_dir / "director.gguf"
+    model_path.write_bytes(b"x" * 6144)
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"models_dir": models_dir, "mode": "local"},
+    )
+
+    assert storyboard_llm_runtime._model_file_size({
+        "id": "director",
+        "path": "director",
+    }) == 6144
+
+
 def test_model_file_size_uses_model_id_when_runtime_path_is_empty(monkeypatch, tmp_path):
     models_dir = tmp_path / "text_encoders"
     models_dir.mkdir()

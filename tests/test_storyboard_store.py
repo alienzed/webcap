@@ -433,6 +433,7 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
     assert first["durationSeconds"] == 6
     assert "integrated_multimodal_description" in first["prompt"]
     assert first["promptDirectorModel"] == "director.gguf"
+    assert first["planDirectorModel"] == "director.gguf"
 
 
 def test_apply_developed_plan_rejects_wrong_scene_count_or_out_of_range_duration(storyboard_fs):

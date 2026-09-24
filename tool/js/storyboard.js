@@ -700,9 +700,7 @@
       return sceneRoot && sceneRoot.querySelector('[data-scene-field="prompt"]');
     }
     if (target.kind === 'scenes') {
-      var developRow = document.querySelector('.storyboard-develop-row');
-      if (developRow && developRow.offsetParent !== null) return developRow;
-      return document.querySelector('.storyboard-story-panel-heading');
+      return document.querySelector('.storyboard-scene-workspace');
     }
     if (target.kind === 'repair') {
       var repairInstruction = el('storyboard-repair-instruction');
@@ -715,19 +713,27 @@
   function positionDirectorActivity() {
     var card = el('storyboard-director-activity');
     var editor = document.querySelector('.storyboard-editor');
+    var sceneWorkspace = document.querySelector('.storyboard-scene-workspace');
     var kind = String((storyState.director.activityTarget || {}).kind || '');
     var target = directorActivityTargetElement();
     if (!card || !editor) return;
 
     var detachedTarget = !!kind && !target;
+    var hidden = card.classList.contains('hidden');
+    var fillsWorkspace = kind === 'scenes';
+    if (sceneWorkspace) {
+      sceneWorkspace.classList.toggle('director-active', fillsWorkspace && !detachedTarget && !hidden);
+    }
+
     card.classList.toggle('is-detached-target', detachedTarget);
-    if (detachedTarget || !target || card.classList.contains('hidden')) return;
+    card.classList.toggle('is-workspace-overlay', fillsWorkspace);
+    if (detachedTarget || !target || hidden) return;
 
     var editorRect = editor.getBoundingClientRect();
     var targetRect = target.getBoundingClientRect();
-    var fillsField = kind === 'concept' || kind === 'scene-prompt' || kind === 'scenes';
+    var fillsField = kind === 'concept' || kind === 'scene-prompt';
     card.classList.toggle('is-field-overlay', fillsField);
-    card.classList.toggle('is-structure-overlay', !fillsField);
+    card.classList.toggle('is-structure-overlay', !fillsField && !fillsWorkspace);
 
     if (fillsField) {
       var inset = 7;
@@ -741,6 +747,28 @@
     }
 
     card.style.height = '';
+
+    if (fillsWorkspace) {
+      var workspaceWidth = Math.max(0, targetRect.width - 48);
+      var availableWidth = Math.max(0, editorRect.width - 24);
+      var cardWidth = Math.min(560, workspaceWidth || 560, availableWidth || 560);
+      cardWidth = Math.max(320, cardWidth);
+      if (cardWidth > availableWidth && availableWidth > 0) cardWidth = availableWidth;
+      card.style.width = Math.round(cardWidth) + 'px';
+      card.style.left = Math.round(
+        targetRect.left - editorRect.left + Math.max(0, (targetRect.width - cardWidth) / 2)
+      ) + 'px';
+
+      window.requestAnimationFrame(function () {
+        if (card.classList.contains('hidden')) return;
+        var targetTop = targetRect.top - editorRect.top;
+        var insetTop = 24;
+        var centeredTop = targetTop + Math.max(insetTop, (targetRect.height - card.offsetHeight) / 2);
+        var maxTop = targetTop + Math.max(insetTop, targetRect.height - card.offsetHeight - insetTop);
+        card.style.top = Math.round(Math.max(targetTop + insetTop, Math.min(maxTop, centeredTop))) + 'px';
+      });
+      return;
+    }
 
     var preferredWidth = 440;
     var targetWidth = Math.max(0, targetRect.width - 24);
@@ -825,9 +853,8 @@
     var terminal = activity && ['complete', 'error'].indexOf(String(activity.phase || '')) !== -1;
     var visible = directorActivityActive() || (activity && activity.active) || terminal;
     card.classList.toggle('hidden', !visible);
-    if (!visible) return;
-
     positionDirectorActivity();
+    if (!visible) return;
     updateDirectorTrend(system);
     updateDirectorModelLoad(activity, system);
     phase.textContent = directorPhaseLabel(activity && activity.phase);
@@ -919,6 +946,7 @@
     }).catch(function (err) {
       var card = el('storyboard-director-activity');
       if (card) card.classList.add('hidden');
+      positionDirectorActivity();
       if (!storyState.director.activityErrorReported) {
         storyState.director.activityErrorReported = true;
         reportError(err);
@@ -964,14 +992,17 @@
       }
       var staleCard = el('storyboard-director-activity');
       if (staleCard) staleCard.classList.add('hidden');
+      positionDirectorActivity();
     }).catch(function () {
       var card = el('storyboard-director-activity');
       if (card) card.classList.add('hidden');
+      positionDirectorActivity();
     }).then(function () {
       setTimeout(function () {
         var card = el('storyboard-director-activity');
         if (!directorActivityActive() && card) {
           card.classList.add('hidden');
+          positionDirectorActivity();
           storyState.director.activityTarget = null;
           storyState.director.activityStartedAt = 0;
         }

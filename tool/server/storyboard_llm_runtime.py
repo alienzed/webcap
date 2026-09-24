@@ -339,24 +339,68 @@ def _normalize_models(payload):
             continue
         path = str(entry.get("path") or "").strip()
         status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
+        meta = entry.get("meta") if isinstance(entry.get("meta"), dict) else {}
+        size_value = entry.get("size")
+        if size_value in (None, ""):
+            size_value = meta.get("size")
+        try:
+            size_bytes = max(0, int(size_value or 0))
+        except (TypeError, ValueError):
+            size_bytes = 0
         models.append({
             "id": model_id,
             "label": Path(path or model_id).name,
             "path": path,
             "status": str(status.get("value") or ("remote" if not path else "unloaded")),
+            "sizeBytes": size_bytes,
         })
     models.sort(key=lambda model: model["label"].casefold())
     return models
 
 
 def _model_file_size(model):
-    path = str((model or {}).get("path") or "").strip()
-    if not path:
-        return 0
+    model = model if isinstance(model, dict) else {}
     try:
-        return int(Path(path).stat().st_size)
-    except OSError:
-        return 0
+        declared_size = max(0, int(model.get("sizeBytes") or 0))
+    except (TypeError, ValueError):
+        declared_size = 0
+    if declared_size:
+        return declared_size
+
+    candidates = []
+    raw_path = str(model.get("path") or "").strip()
+    if raw_path:
+        candidates.append(Path(raw_path))
+
+    try:
+        models_dir = _director_config().get("models_dir")
+    except Exception:
+        models_dir = None
+    if models_dir is not None:
+        names = []
+        if raw_path:
+            names.append(Path(raw_path).name)
+        names.extend([
+            str(model.get("label") or "").strip(),
+            str(model.get("id") or "").strip(),
+        ])
+        for name in names:
+            if not name or Path(name).name != name:
+                continue
+            candidates.append(Path(models_dir) / name)
+
+    seen = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            if candidate.is_file():
+                return int(candidate.stat().st_size)
+        except OSError:
+            continue
+    return 0
 
 
 def list_models(reload=False):

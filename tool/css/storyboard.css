@@ -2366,8 +2366,13 @@
 }
 
 .storyboard-scene-progress-work.is-active {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  color: var(--accent);
+  min-width: 8px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
 }
 
 .storyboard-scene-progress-work.is-queued {

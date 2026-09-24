@@ -40,13 +40,14 @@ _activity = {
     "phase": "idle",
     "model": "",
     "operation": "",
+    "modelSizeBytes": 0,
     "startedAt": None,
     "updatedAt": time.time(),
     "error": "",
 }
 
 
-def _set_activity(phase, model_id=None, operation=None, active=None, error=None):
+def _set_activity(phase, model_id=None, operation=None, active=None, error=None, model_size_bytes=None):
     now = time.time()
     with _activity_lock:
         if active is True and not _activity["active"]:
@@ -60,6 +61,11 @@ def _set_activity(phase, model_id=None, operation=None, active=None, error=None)
             _activity["model"] = str(model_id or "")
         if operation is not None:
             _activity["operation"] = str(operation or "")
+        if model_size_bytes is not None:
+            try:
+                _activity["modelSizeBytes"] = max(0, int(model_size_bytes or 0))
+            except (TypeError, ValueError):
+                _activity["modelSizeBytes"] = 0
         if error is not None:
             _activity["error"] = str(error or "")
         _activity["updatedAt"] = now
@@ -333,10 +339,17 @@ def _normalize_models(payload):
             continue
         path = str(entry.get("path") or "").strip()
         status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
+        size_bytes = 0
+        if path:
+            try:
+                size_bytes = int(Path(path).stat().st_size)
+            except OSError:
+                size_bytes = 0
         models.append({
             "id": model_id,
             "label": Path(path or model_id).name,
             "path": path,
+            "sizeBytes": size_bytes,
             "status": str(status.get("value") or ("remote" if not path else "unloaded")),
         })
     models.sort(key=lambda model: model["label"].casefold())
@@ -516,7 +529,11 @@ def _ensure_local_model_loaded(model_id):
     if selected["status"] == "loaded":
         return False
 
-    _set_activity("loading_model", model_id=model_id)
+    _set_activity(
+        "loading_model",
+        model_id=model_id,
+        model_size_bytes=selected.get("sizeBytes") or 0,
+    )
     for model in models:
         if model["id"] == model_id or model["status"] == "unloaded":
             continue
@@ -668,7 +685,14 @@ def run_contract(model_id, contract, gpu_reserved=False):
 
     operation = str(contract.get("operation") or "").strip()
     with _request_lock:
-        _set_activity("preparing", model_id=model_id, operation=operation, active=True, error="")
+        _set_activity(
+            "preparing",
+            model_id=model_id,
+            operation=operation,
+            active=True,
+            error="",
+            model_size_bytes=0,
+        )
         try:
             chat_kwargs = {
                 "response_schema": contract.get("response_schema"),

@@ -15,6 +15,7 @@ from .execution_queue import (
     recover_lane as execution_recover_lane,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
+    update_job as execution_update_job,
     reserve_resource as execution_reserve_resource,
     resource_owner as execution_resource_owner,
     resume_lane as execution_resume_lane,
@@ -239,11 +240,15 @@ def _cancel_failed_provider(job):
     details = job.get("details") if isinstance(job, dict) and isinstance(job.get("details"), dict) else {}
     provider_job_id = str(details.get("providerJobId") or "").strip()
     provider_status = str(details.get("providerStatus") or "").strip().lower()
-    if not provider_job_id or provider_status in {"completed", "failed", "cancelled"}:
+    job_id = str(job.get("id") or "").strip() if isinstance(job, dict) else ""
+    if not provider_job_id or provider_status in {"completed", "failed", "cancelled", "missing"}:
         return True
     try:
-        from .inference_runtime import cancel_job_and_wait
-        if cancel_job_and_wait(provider_job_id):
+        from .inference_runtime import cancel_job_and_wait_status
+        terminal_status = cancel_job_and_wait_status(provider_job_id)
+        if terminal_status:
+            if job_id:
+                execution_update_job(job_id, details={"providerStatus": terminal_status})
             return True
         _logger.error(
             "Inference provider job %s did not confirm cancellation; retaining the GPU reservation.",

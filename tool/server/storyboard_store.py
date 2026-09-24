@@ -1070,6 +1070,7 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
 
     current_story_context = {
+        "title": str(story.get("title") or ""),
         "concept": str(story.get("concept") or ""),
         "style": str(story.get("style") or ""),
         "invariants": story.get("invariants") if isinstance(story.get("invariants"), list) else [],
@@ -1118,12 +1119,11 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
             continue
         if scene_number < 1 or scene_number > len(base_order):
             continue
-        if scene_number in seen_numbers:
-            raise ValueError("Storyboard Scene repair returned the same Scene more than once.")
-        seen_numbers.add(scene_number)
-
         fields = raw.get("fields")
         if not isinstance(fields, dict):
+            continue
+        if scene_number in seen_numbers:
+            _logger.warning("Ignoring duplicate optional Scene repair patch for Scene %s.", scene_number)
             continue
         scene_id = str(base_order[scene_number - 1] or "").strip()
         current = scenes.get(scene_id)
@@ -1153,6 +1153,7 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
                 patch[key] = normalized_value
 
         if patch:
+            seen_numbers.add(scene_number)
             prepared.append((scene_id, patch))
 
     if not prepared:

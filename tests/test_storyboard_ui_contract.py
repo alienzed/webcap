@@ -243,6 +243,16 @@ def test_storyboard_director_tools_has_sparse_scene_healing_pass():
     assert "function restoreLastRepair()" in storyboard
     assert "restore_last_scene_repair" in storyboard
     assert 'if operation == "restore_last_scene_repair":' in app
+    protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
+    assert '[data-scene-field="summary"]' in protection
+    assert '[data-scene-field="entryState"]' in protection
+    assert '[data-scene-field="exitState"]' in protection
+    assert '[data-scene-field="prompt"]' in protection
+    scene_payload = storyboard.split("function scenePayloadFromUi(sceneId)", 1)[1].split("\n  function ", 1)[0]
+    assert "directorTargetPending({ kind: 'repair'" in scene_payload
+    assert "delete payload.summary;" in scene_payload
+    assert "delete payload.prompt;" in scene_payload
+    assert 'llm_storyboard_target_busy(story_id, "repair")' in app
 
 
 def test_storyboard_can_develop_concept_directly_into_scenes():

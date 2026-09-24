@@ -1131,6 +1131,14 @@
       var repairButton = el('storyboard-repair-scenes-btn');
       if (instruction) instruction.disabled = !!protectedState;
       if (repairButton) repairButton.disabled = !!protectedState;
+      document.querySelectorAll(
+        '#storyboard-scenes-list [data-scene-field="summary"], ' +
+        '#storyboard-scenes-list [data-scene-field="entryState"], ' +
+        '#storyboard-scenes-list [data-scene-field="exitState"], ' +
+        '#storyboard-scenes-list [data-scene-field="prompt"]'
+      ).forEach(function (field) {
+        field.disabled = !!protectedState;
+      });
     }
   }
 
@@ -2874,6 +2882,14 @@
       }).filter(Boolean)
     };
     if (directorTargetPending({ kind: 'scene-prompt', storyId: storyState.story.id, sceneId: sceneId })) {
+      delete payload.prompt;
+      delete payload.promptDirectorModel;
+      delete payload.promptDirectorJobId;
+    }
+    if (directorTargetPending({ kind: 'repair', storyId: storyState.story.id })) {
+      delete payload.summary;
+      delete payload.entryState;
+      delete payload.exitState;
       delete payload.prompt;
       delete payload.promptDirectorModel;
       delete payload.promptDirectorJobId;

@@ -938,7 +938,7 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
         "prompt": "UNCHANGED PROMPT",
     })
     base = {
-        "storyContext": {"concept": "", "style": "", "invariants": []},
+        "storyContext": {"title": "Story", "concept": "", "style": "", "invariants": []},
         "sceneOrder": list(story["sceneOrder"]),
         "scenes": {
             first["id"]: {
@@ -1003,7 +1003,7 @@ def test_scene_repair_refuses_to_overwrite_a_field_edited_while_director_was_run
         "prompt": "Original prompt.",
     })
     base = {
-        "storyContext": {"concept": "", "style": "", "invariants": []},
+        "storyContext": {"title": "Story", "concept": "", "style": "", "invariants": []},
         "sceneOrder": [scene["id"]],
         "scenes": {
             scene["id"]: {
@@ -1036,7 +1036,7 @@ def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "concept": "Original concept."})
     story, scene = storyboard_store.add_scene(story["id"], {"summary": "Original summary.", "prompt": "Prompt."})
     base = {
-        "storyContext": {"concept": "Original concept.", "style": "", "invariants": []},
+        "storyContext": {"title": "Story", "concept": "Original concept.", "style": "", "invariants": []},
         "sceneOrder": [scene["id"]],
         "scenes": {
             scene["id"]: {
@@ -1062,3 +1062,79 @@ def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
         )
 
     assert storyboard_store.load_story(story["id"])["concept"] == "Newer concept."
+
+
+def test_scene_repair_ignores_duplicate_patch_after_first_valid_patch(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "summary": "Original summary.",
+        "prompt": "Original prompt.",
+    })
+    base = {
+        "storyContext": {"title": "Story", "concept": "", "style": "", "invariants": []},
+        "sceneOrder": [scene["id"]],
+        "scenes": {
+            scene["id"]: {
+                "title": scene["title"],
+                "summary": scene["summary"],
+                "entryState": scene["entryState"],
+                "exitState": scene["exitState"],
+                "prompt": scene["prompt"],
+                "durationSeconds": scene["durationSeconds"],
+                "referenceRoles": [],
+                "invariantRefs": [],
+            }
+        },
+    }
+
+    repaired, scene_count, field_count = storyboard_store.apply_scene_repairs(
+        story["id"],
+        {"changes": [
+            {"sceneNumber": 1, "fields": {"summary": "First valid repair."}},
+            {"sceneNumber": 1, "fields": {"summary": "Duplicate must be ignored."}},
+        ]},
+        base,
+        model_id="director",
+    )
+
+    assert scene_count == 1
+    assert field_count == 1
+    assert repaired["scenes"][scene["id"]]["summary"] == "First valid repair."
+
+
+def test_scene_repair_allows_later_valid_patch_after_malformed_duplicate_candidate(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "summary": "Original summary.",
+        "prompt": "Original prompt.",
+    })
+    base = {
+        "storyContext": {"title": "Story", "concept": "", "style": "", "invariants": []},
+        "sceneOrder": [scene["id"]],
+        "scenes": {
+            scene["id"]: {
+                "title": scene["title"],
+                "summary": scene["summary"],
+                "entryState": scene["entryState"],
+                "exitState": scene["exitState"],
+                "prompt": scene["prompt"],
+                "durationSeconds": scene["durationSeconds"],
+                "referenceRoles": [],
+                "invariantRefs": [],
+            }
+        },
+    }
+
+    repaired, scene_count, field_count = storyboard_store.apply_scene_repairs(
+        story["id"],
+        {"changes": [
+            {"sceneNumber": 1, "fields": "bad"},
+            {"sceneNumber": 1, "fields": {"summary": "Valid repair survives."}},
+        ]},
+        base,
+        model_id="director",
+    )
+
+    assert scene_count == 1
+    assert field_count == 1
+    assert repaired["scenes"][scene["id"]]["summary"] == "Valid repair survives."

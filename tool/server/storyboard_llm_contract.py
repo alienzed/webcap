@@ -234,7 +234,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[SHARED CONTINUITY FOR THIS SCENE]\n"
             + shared_context
-            + "\n\nThese definitions are authoritative and must be repeated concretely in the resulting prompt. Do not redesign, synonymize away, or omit them."
+            + "\n\nThese definitions are authoritative. WebCap will inject them verbatim into the rendered H3 prompt after your response. Use them when writing the Scene action, but do not rewrite, paraphrase, or duplicate the app-owned continuity block in your structured fields."
         )
     if scene_context:
         blocks.append("[SCENE]\n" + scene_context)
@@ -253,7 +253,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[H3 OUTPUT CONTRACT]\n"
             + h3_output
-            + "\n\nWebCap owns the final labels and alignment syntax. Return only the three semantic field values through the supplied JSON schema."
+            + "\n\nWebCap owns the final labels, alignment syntax, and shared continuity prefix. Do not reproduce any app-owned 'Continuity anchors' prefix yourself. Return only the three semantic field values through the supplied JSON schema."
         )
         blocks.append(
             "[CURRENT TASK]\nWrite the MiniMax H3 prompt for this Scene. "
@@ -276,7 +276,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[H3 OUTPUT CONTRACT]\n"
             + h3_output
-            + "\n\nPreserve all prompt details unrelated to the requested correction. WebCap owns the final labels and alignment syntax; return only the three revised semantic field values through the supplied JSON schema."
+            + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. WebCap owns the final labels and alignment syntax; return only the three revised semantic field values through the supplied JSON schema."
         )
         blocks.append("[CURRENT TASK]\nApply this correction with the smallest coherent change:\n" + correction)
 

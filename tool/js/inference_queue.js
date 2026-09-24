@@ -251,6 +251,9 @@
 
   function setOpen(open) {
     state.open = !!open;
+    if (state.open && typeof window.setActivityDrawerOpen === 'function') {
+      window.setActivityDrawerOpen(false);
+    }
     render();
     schedule();
   }
@@ -318,6 +321,7 @@
 
   window.syncInferenceQueueSurface = syncSurface;
   window.refreshInferenceQueue = refresh;
+  window.setInferenceQueueOpen = setOpen;
   bind();
   if (typeof window.deriveShellNavigationState === 'function') {
     syncSurface(window.deriveShellNavigationState().activity);

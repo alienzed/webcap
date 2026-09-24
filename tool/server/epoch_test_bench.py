@@ -1430,6 +1430,7 @@ def list_sessions(folder_path, source=None):
             "session": session.name,
             "name": str(payload.get("name") or ""),
             "modelId": str(payload.get("modelId") or payload.get("model") or ""),
+            "source": _session_source(payload, folder_path),
             "status": str(payload.get("status") or ""),
             "startedAt": int(payload.get("startedAt") or 0),
             "candidateStartedAt": int(payload.get("candidateStartedAt") or 0),

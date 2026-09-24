@@ -73,9 +73,31 @@
             }
           },
           "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Complete MiniMax H3 model-facing prompt for this Scene, including useful visual, camera, performance, dialogue, sound, and music detail where appropriate."
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "integrated_multimodal_description",
+              "overall_soundscape",
+              "non_diegetic_music"
+            ],
+            "description": "Structured MiniMax H3 base prompt content. WebCap renders the exact model-facing field labels and spacing deterministically.",
+            "properties": {
+              "integrated_multimodal_description": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Chronological audiovisual description for this Scene. Begin with [Shot 1]; later shots may use H3 cut timestamps."
+              },
+              "overall_soundscape": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Clip-wide ambience, Foley, impacts, and non-dialogue diegetic sound."
+              },
+              "non_diegetic_music": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Audience-only score, or N/A when no non-diegetic score is intended."
+              }
+            }
           }
         }
       }

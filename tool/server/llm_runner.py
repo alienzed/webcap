@@ -110,10 +110,12 @@ def _client_result(client, context, llm_result):
         }
 
     if operation == "develop_story":
+        from .h3_prompt_contract import render_story_plan_prompts
         from .storyboard_store import apply_developed_plan
+        plan = render_story_plan_prompts(llm_result.get("data"))
         story = apply_developed_plan(
             story_id,
-            llm_result.get("data"),
+            plan,
             model_id=llm_result["model"],
         )
         return {

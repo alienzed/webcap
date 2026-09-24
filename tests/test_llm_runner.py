@@ -158,6 +158,62 @@ def test_storyboard_llm_job_applies_expanded_concept_before_completion(llm_root,
     assert storyboard_store.load_story(story["id"])["concept"] == "Expanded concept."
 
 
+def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "A woman crosses a silent lobby.",
+        "targetSceneCount": 1,
+    })
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "data": {
+                "scenes": [{
+                    "title": "Lobby",
+                    "summary": "She crosses the lobby.",
+                    "entryState": "She stands at the door.",
+                    "exitState": "She reaches the desk.",
+                    "prompt": {
+                        "integrated_multimodal_description": "She crosses the lobby toward the desk.",
+                        "overall_soundscape": "Soft footsteps and distant rain.",
+                        "non_diegetic_music": "N/A",
+                    },
+                    "suggestedDurationSeconds": 6,
+                    "continuity": {"continuesPreviousScene": False, "carryForward": []},
+                }]
+            },
+            "text": "{}",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "develop_story", "prompt": "Develop.", "output": "json"},
+        context={
+            "storyId": story["id"],
+            "operation": "develop_story",
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    stored = storyboard_store.load_story(story["id"])
+    prompt = stored["scenes"][stored["sceneOrder"][0]]["prompt"]
+
+    assert finished["status"] == "completed"
+    assert prompt == (
+        "integrated_multimodal_description: [Shot 1] She crosses the lobby toward the desk.\n\n"
+        "overall_soundscape: Soft footsteps and distant rain.\n\n"
+        "non_diegetic_music: N/A"
+    )
+
+
 def test_llm_restart_marks_only_active_work_interrupted(llm_root):
     active = execution_queue.enqueue(
         llm_runner.EXECUTION_LANE,

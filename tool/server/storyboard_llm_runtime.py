@@ -682,6 +682,18 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 if not isinstance(data, dict):
                     raise RuntimeError("Storyboard Director structured output must be a JSON object.")
                 result["data"] = data
+
+            renderer = contract.get("result_renderer")
+            if isinstance(renderer, dict) and renderer.get("type") == "h3_base":
+                if contract.get("output") != "json":
+                    raise RuntimeError("MiniMax H3 result rendering requires structured JSON output.")
+                from .h3_prompt_contract import render_base_prompt
+                result["text"] = render_base_prompt(
+                    result["data"],
+                    mode=renderer.get("mode") or "T2VA",
+                    duration=renderer.get("duration"),
+                )
+
             _set_activity("complete", model_id=model_id, operation=operation, active=False)
             return result
         except Exception as exc:

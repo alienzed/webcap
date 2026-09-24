@@ -977,6 +977,7 @@ def generate_director_route():
             prompt=data.get("prompt") or "",
             instruction=data.get("instruction") or "",
             settings=data.get("settings"),
+            reference_roles=data.get("referenceRoles"),
         )
         job = enqueue_llm(
             "generate",

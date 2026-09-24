@@ -93,6 +93,8 @@ def test_generate_prompt_assistant_uses_shared_llm_queue():
     waiter = script.split("function waitForDirectorJob(job)", 1)[1].split("function queueDirectorRequest", 1)[0]
     assert "renderDirectorActivity(" not in waiter
     assert "enqueue_llm(" in app
+    assert "referenceRoles: ['first_frame', 'last_frame'].filter" in script
+    assert "reference_roles=data.get(\"referenceRoles\")" in app
 
 
 def test_generate_prompt_assistant_memory_display_uses_percentages_with_amount_tooltips():

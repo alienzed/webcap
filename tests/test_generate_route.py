@@ -71,6 +71,44 @@ def test_generate_capabilities_results_and_inference_routes(monkeypatch):
     assert cancelled.get_json()["job"]["status"] == "cancelled"
 
 
+def test_generate_director_passes_reference_roles_into_h3_contract(monkeypatch):
+    seen = {}
+
+    def fake_contract(model_id, operation, prompt="", instruction="", settings=None, reference_roles=None):
+        seen["modelId"] = model_id
+        seen["operation"] = operation
+        seen["referenceRoles"] = reference_roles
+        return {"operation": operation, "output": "text", "prompt": "contract"}
+
+    monkeypatch.setattr(app_module, "generate_build_director_request", fake_contract)
+    monkeypatch.setattr(
+        app_module,
+        "enqueue_llm",
+        lambda client, model_id, contract, context=None, label="": {
+            "jobId": "llm-1",
+            "status": "queued",
+            "queuePosition": 1,
+        },
+    )
+    client = app_module.app.test_client()
+
+    response = client.post("/fs/generate/director", json={
+        "modelId": "minimax_h3",
+        "directorModel": "director.gguf",
+        "operation": "write_prompt",
+        "prompt": "A woman crosses a lobby.",
+        "settings": {"duration": 8},
+        "referenceRoles": ["first_frame", "last_frame"],
+    })
+
+    assert response.status_code == 202
+    assert seen == {
+        "modelId": "minimax_h3",
+        "operation": "write_prompt",
+        "referenceRoles": ["first_frame", "last_frame"],
+    }
+
+
 def test_generate_reference_upload_uses_generate_store(monkeypatch):
     monkeypatch.setattr(
         app_module,

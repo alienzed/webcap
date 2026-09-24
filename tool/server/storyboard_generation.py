@@ -66,13 +66,14 @@ def generation_capabilities():
 
 
 def _scene_settings(scene, story=None):
-    prompt = str(scene.get("prompt") or "").strip()
-    if not prompt:
+    source_prompt = str(scene.get("prompt") or "").strip()
+    if not source_prompt:
         raise ValueError("Scene generation prompt is empty.")
     shared_context = resolve_scene_shared_context(story or {}, scene)
+    prompt = source_prompt
     if shared_context:
         from .h3_prompt_contract import inject_shared_context_into_rendered_prompt
-        prompt = inject_shared_context_into_rendered_prompt(prompt, shared_context)
+        prompt = inject_shared_context_into_rendered_prompt(source_prompt, shared_context)
 
     resolved_defaults = resolve_scene_generation_defaults(story or {}, scene)
     aspect_ratio = resolved_defaults["aspectRatio"]
@@ -98,7 +99,8 @@ def _scene_settings(scene, story=None):
         "prompt": prompt,
         "entryState": str(scene.get("entryState") or ""),
         "exitState": str(scene.get("exitState") or ""),
-        "sourcePrompt": prompt,
+        "sourcePrompt": source_prompt,
+        "sharedContext": shared_context,
         "wildcardsEnabled": bool(scene.get("wildcardsEnabled")),
         "aspectRatio": aspect_ratio,
         "megapixels": megapixels,
@@ -129,6 +131,10 @@ def _storyboard_request(settings):
     prompt = str(settings.get("prompt") or "").strip()
     if settings.get("wildcardsEnabled"):
         prompt = inference_runtime.resolve_wildcard_prompt(source_prompt, settings["seed"])
+        shared_context = str(settings.get("sharedContext") or "").strip()
+        if shared_context:
+            from .h3_prompt_contract import inject_shared_context_into_rendered_prompt
+            prompt = inject_shared_context_into_rendered_prompt(prompt, shared_context)
 
     references = {}
     for reference in settings.get("references") or []:

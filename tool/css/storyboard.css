@@ -894,6 +894,10 @@
   gap: 8px;
 }
 
+.storyboard-sequence-body {
+  min-width: 0;
+}
+
 .storyboard-sequence-output {
   margin-bottom: 10px;
 }

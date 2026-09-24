@@ -174,7 +174,7 @@ def recent_test_sets(limit=8):
     return recent[:max(1, int(limit or 8))]
 
 
-def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
+def remove_candidate(folder_path, file_name, session_name=None, model_id=None, source=""):
     name = str(file_name or "").strip()
     if (
         not name
@@ -186,6 +186,7 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
         raise ValueError("A staged .safetensors filename is required.")
 
     resolved_model_id = str(model_id or "").strip()
+    resolved_source = str(source or "").strip()
     if session_name:
         session = _session_directory(folder_path, session_name)
         session_status = _read_status(session) or {}
@@ -195,8 +196,9 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
             or resolved_model_id
             or get_test_model().PROFILE_ID
         )
+        resolved_source = str(session_status.get("source") or resolved_source).strip()
     model = get_test_model(resolved_model_id or get_test_model().PROFILE_ID)
-    test_directory = _test_directory(folder_path, model)
+    test_directory = _test_directory(folder_path, model, source=resolved_source)
     candidate = test_directory / name
     sidecar = candidate.with_suffix(".webcap.json")
 
@@ -517,11 +519,12 @@ def supported_models():
     }
 
 
-def prepare(folder_path, model_id=None):
+def prepare(folder_path, model_id=None, source=""):
     model = get_test_model(model_id)
     template = model.load_template()
+    selected_source = str(source or "").strip()
     try:
-        test_directory = _test_directory(folder_path, model)
+        test_directory = _test_directory(folder_path, model, source=selected_source)
         loras = _lora_files(test_directory) if test_directory.is_dir() else []
     except ValueError:
         loras = []
@@ -541,6 +544,7 @@ def prepare(folder_path, model_id=None):
         "modelId": model.PROFILE_ID,
         "modelLabel": str(model.profile["label"]),
         "mediaKind": model.MEDIA_KIND,
+        "source": selected_source or _default_test_source(folder_path),
         "settings": list(model.settings),
         "settingOptions": setting_options,
         "warnings": prepare_warnings,
@@ -558,7 +562,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
     operation = str(mode or "").strip().lower()
     if operation == "test_prepare":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return prepare(folder_path, model_id=criteria.get("modelId"))
+        return prepare(folder_path, model_id=criteria.get("modelId"), source=criteria.get("source"))
     if operation == "test_status":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return status(folder_path, model_id=criteria.get("modelId"))
@@ -590,6 +594,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             criteria.get("fileName"),
             session_name=criteria.get("session"),
             model_id=criteria.get("modelId"),
+            source=criteria.get("source"),
         )
     if operation == "test_enqueue":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
@@ -605,6 +610,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             selected_files=criteria.get("selectedFiles"),
             include_base=criteria.get("includeBase"),
             model_id=criteria.get("modelId"),
+            source=criteria.get("source"),
         )
     raise ValueError("Unsupported Test Generations operation: " + operation)
 
@@ -615,7 +621,7 @@ SHARED_EXECUTION_LANE = "inference"
 
 
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
-                           selected_files=None, include_base=True, model_id=None,
+                           selected_files=None, include_base=True, model_id=None, source="",
                            aspect_ratio=None, megapixels=None, duration=None):
     from . import inference_runtime
 
@@ -623,7 +629,8 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     prompt = str(prompt or "").strip()
     if not prompt:
         raise ValueError("A test prompt is required.")
-    test_directory = _test_directory(folder_path, model)
+    selected_source = str(source or "").strip()
+    test_directory = _test_directory(folder_path, model, source=selected_source)
     loras = _selected_lora_files(test_directory, selected_files=selected_files)
     if not loras:
         raise ValueError("The Test folder contains no .safetensors files.")
@@ -648,6 +655,7 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     request = {
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,
+        "source": selected_source or _default_test_source(folder_path),
         "name": session_name,
         "sourcePrompt": prompt,
         "prompt": resolved_prompt,
@@ -857,6 +865,7 @@ def execute_inference(job_id, request, context):
     session_id = str(context.get("sessionId") or "").strip()
     candidate_kind = str(context.get("candidateKind") or "").strip()
     candidate_file = str(context.get("candidateFile") or "").strip()
+    source = str(context.get("source") or request.get("source") or "").strip()
     candidate_label = str(context.get("candidateLabel") or "").strip() or (
         "Base" if candidate_kind == "base" else candidate_file
     )
@@ -868,7 +877,7 @@ def execute_inference(job_id, request, context):
     model = get_test_model(request.get("modelId"))
     lora_file = None
     if candidate_kind == "lora":
-        lora_file = _test_directory(folder_path, model) / candidate_file
+        lora_file = _test_directory(folder_path, model, source=source) / candidate_file
         if not lora_file.is_file():
             _logger.warning("Queued Test skipped removed staged LoRA: %s", candidate_file)
             _record_skipped_inference(session_directory, str(job_id))
@@ -1025,6 +1034,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "status": "queued",
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,
+        "source": str(request.get("source") or ""),
         "session": session_directory.name,
         "name": str(request.get("name") or ""),
         "sourcePrompt": str(request.get("sourcePrompt") or ""),
@@ -1069,6 +1079,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                     "candidateFile": candidate["file"],
                     "candidateLabel": candidate["label"],
                     "candidateIndex": index,
+                    "source": str(request.get("source") or ""),
                 },
                 label=label,
             )
@@ -1268,7 +1279,7 @@ def reconcile_startup():
 
 
 def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
-            include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None):
+            include_base=True, model_id=None, source="", aspect_ratio=None, megapixels=None, duration=None):
     reconcile_startup()
     request, loras, include_base = _new_inference_request(
         folder_path,
@@ -1279,6 +1290,7 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
         selected_files=selected_files,
         include_base=include_base,
         model_id=model_id,
+        source=source,
         aspect_ratio=aspect_ratio,
         megapixels=megapixels,
         duration=duration,

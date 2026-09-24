@@ -60,13 +60,14 @@ def test_duplicate_story_copies_authoring_but_not_generated_artifacts(storyboard
         "title": "Source Story",
         "concept": "A motel at night.",
         "style": "Neo-noir.",
-        "invariants": [{"kind": "world", "title": "Weather", "text": "Heavy rain."}],
+        "invariants": [{"kind": "character", "title": "Elena", "text": "Elena wears a black coat."}],
         "tags": ["motel"],
         "pinned": True,
     })
     story, scene = storyboard_store.add_scene(story["id"], {
         "title": "Arrival",
         "prompt": "A car arrives at a motel.",
+        "invariantRefs": [{"kind": "character", "title": "Elena"}],
         "loras": [{"name": "character.safetensors", "strength": 0.8}],
     })
     story, take = storyboard_store.add_take_upload(
@@ -90,6 +91,7 @@ def test_duplicate_story_copies_authoring_but_not_generated_artifacts(storyboard
     assert copied_scene["id"] != scene["id"]
     assert copied_scene["title"] == scene["title"]
     assert copied_scene["prompt"] == scene["prompt"]
+    assert copied_scene["invariantRefs"] == scene["invariantRefs"]
     assert copied_scene["previousPrompt"] is None
     assert copied_scene["promptDirectorModel"] == ""
     assert copied_scene["promptDirectorJobId"] == ""
@@ -200,6 +202,7 @@ def test_story_scene_lifecycle(storyboard_fs):
     assert duplicate["planDirectorModel"] == ""
     assert duplicate["entryState"] == updated["entryState"]
     assert duplicate["exitState"] == updated["exitState"]
+    assert duplicate["invariantRefs"] == updated["invariantRefs"]
     assert duplicate["takes"] == {}
     assert duplicate["takeOrder"] == []
 

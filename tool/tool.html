@@ -43,7 +43,6 @@
                     </label>
                 </div>
                 <div id="app-header-global" class="app-header-global">
-                    <button id="inference-queue-toggle" type="button" class="inference-queue-toggle hidden" aria-expanded="false" aria-controls="inference-queue-drawer">Queue</button>
                     <div id="shell-gpu-status" class="shell-gpu-status hidden" aria-live="polite"></div>
                 </div>
             </header>
@@ -1036,6 +1035,7 @@
                                     <button id="test-generations-view-compare-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Compare</button>
                                 </div>
                                 <div class="test-generations-results-actions">
+                                    <button type="button" class="inference-queue-toggle" data-inference-queue-toggle aria-expanded="false" aria-controls="inference-queue-drawer">Inference Queue</button>
                                     <button id="test-generations-rate-items-btn" type="button" class="review-captions-btn hidden">Rate Items</button>
                                 </div>
                             </div>
@@ -1070,6 +1070,7 @@
                         <strong>Generate</strong>
                         <span>Standalone image and video inference, independent of Sets and Stories.</span>
                     </div>
+                    <button type="button" class="inference-queue-toggle" data-inference-queue-toggle aria-expanded="false" aria-controls="inference-queue-drawer">Inference Queue</button>
                 </header>
                 <main class="generate-main">
                     <section class="generate-authoring" aria-label="Generation setup">
@@ -1227,6 +1228,7 @@
                                     <select id="storyboard-director-model" aria-label="Storyboard Director model">
                                         <option value="">Director unavailable</option>
                                     </select>
+                                    <button type="button" class="inference-queue-toggle" data-inference-queue-toggle aria-expanded="false" aria-controls="inference-queue-drawer">Inference Queue</button>
                                 </div>
                             </div>
                             <div id="storyboard-scene-progression" class="storyboard-scene-progression" aria-label="Scene progression"></div>

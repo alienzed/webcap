@@ -286,6 +286,10 @@
   display: none;
 }
 
+.activity-monitor-rail-btn {
+  position: relative;
+}
+
 .activity-monitor-rail-btn.activity-running::after {
   content: "";
   position: absolute;

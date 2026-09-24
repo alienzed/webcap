@@ -405,7 +405,8 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
     assert 'id="storyboard-director-model"' in scenes_heading
     assert 'id="storyboard-scenes-overview-btn"' in scenes_heading
     assert 'id="storyboard-scenes-focus-btn"' in scenes_heading
-    assert 'data-inference-queue-toggle' in scenes_heading
+    assert 'data-inference-queue-toggle' not in scenes_heading
+    assert 'id="inference-queue-rail-btn"' in html
     assert "storyboard-scene-progress-work" in storyboard
     assert "generationJobsForScene(sceneId)" in storyboard
     assert ".storyboard-story-panel-heading" in css

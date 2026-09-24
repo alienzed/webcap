@@ -805,11 +805,16 @@ def run_contract(model_id, contract, gpu_reserved=False):
                     result["data"],
                     renderer.get("shared_context") or "",
                 )
+                duration = renderer.get("duration")
+                duration_field = str(renderer.get("duration_field") or "").strip()
+                if duration_field and duration_field in result["data"]:
+                    duration = result["data"][duration_field]
                 result["text"] = render_base_prompt(
                     rendered_data,
                     mode=renderer.get("mode") or "T2VA",
-                    duration=renderer.get("duration"),
+                    duration=duration,
                 )
+                result["renderedDuration"] = duration
 
             _set_activity(
                 "complete",

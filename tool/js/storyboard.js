@@ -2644,6 +2644,7 @@
     el('storyboard-story-title').value = storyState.story.title || '';
     el('storyboard-story-concept').value = storyState.story.concept || '';
     el('storyboard-story-style').value = storyState.story.style || '';
+    el('storyboard-repair-instruction').value = storyState.story.repairInstruction || '';
     renderStoryStylePresetSelector();
     renderStoryInvariants();
     el('storyboard-story-status').value = storyState.story.status || 'active';
@@ -2852,6 +2853,7 @@
       title: el('storyboard-story-title').value,
       concept: el('storyboard-story-concept').value,
       style: el('storyboard-story-style').value,
+      repairInstruction: el('storyboard-repair-instruction').value,
       invariants: storyInvariantsFromUi(),
       loras: storyLorasFromUi(),
       targetSceneCount: el('storyboard-story-target-scenes').value || 12,
@@ -3814,7 +3816,7 @@
       if (directorActivityActive()) positionDirectorActivity();
     }, true);
 
-    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-target-scenes'].forEach(function (id) {
+    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-target-scenes', 'storyboard-repair-instruction'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);
     });
     el('storyboard-story-style').addEventListener('input', function () {

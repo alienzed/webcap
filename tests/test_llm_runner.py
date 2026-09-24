@@ -250,6 +250,8 @@ def test_storyboard_director_target_conflicts_are_backend_authoritative(llm_root
 
     assert first["status"] == "queued"
     assert second["status"] == "queued"
+    assert llm_runner.storyboard_target_busy(story_a["id"], "scene-prompt", scene_a1["id"]) is True
+    assert llm_runner.storyboard_target_busy(story_a["id"], "concept") is False
 
     with pytest.raises(ValueError, match="target already has pending work"):
         llm_runner.enqueue(

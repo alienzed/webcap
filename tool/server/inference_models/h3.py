@@ -153,6 +153,44 @@ def build_workflow(template, prompt, settings, loras, uploaded_references, filen
     return workflow
 
 
+def effective_input(workflow):
+    prompt_inputs = ((workflow.get("146") or {}).get("inputs") or {})
+    resolution = ((workflow.get("115") or {}).get("inputs") or {})
+    duration = ((workflow.get("133") or {}).get("inputs") or {})
+    noise = ((workflow.get("129") or {}).get("inputs") or {})
+    power = ((workflow.get("138") or {}).get("inputs") or {})
+
+    references = {}
+    for role, node_id in {"first_frame": "190", "last_frame": "191"}.items():
+        inputs = ((workflow.get(node_id) or {}).get("inputs") or {})
+        image = str(inputs.get("image") or "").strip()
+        if image:
+            references[role] = image
+
+    loras = []
+    for value in power.values():
+        if not isinstance(value, dict) or value.get("on") is not True:
+            continue
+        name = str(value.get("lora") or "").strip()
+        if not name:
+            continue
+        loras.append({
+            "name": name,
+            "strength": float(value.get("strength", 1.0)),
+        })
+
+    return {
+        "prompt": str(prompt_inputs.get("populated_text") or prompt_inputs.get("wildcard_text") or ""),
+        "promptMode": str(prompt_inputs.get("mode") or ""),
+        "seed": noise.get("noise_seed"),
+        "aspectRatio": str(resolution.get("aspect_ratio") or ""),
+        "megapixels": resolution.get("megapixels"),
+        "durationSeconds": duration.get("value"),
+        "references": references,
+        "loras": loras,
+    }
+
+
 def find_output_ref(value):
     if isinstance(value, dict):
         filename = str(value.get("filename") or "")

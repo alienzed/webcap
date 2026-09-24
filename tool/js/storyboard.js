@@ -1048,7 +1048,7 @@
     }
     if (target.kind === 'scenes') {
       Array.prototype.forEach.call(document.querySelectorAll('.storyboard-scene[data-scene-id]'), function (root) {
-        Array.prototype.forEach.call(root.querySelectorAll('[data-scene-field], [data-scene-action], [data-director-write], [data-director-refine], [data-director-restore], [data-scene-generate]'), function (node) {
+        Array.prototype.forEach.call(root.querySelectorAll('input, textarea, select, button'), function (node) {
           node.disabled = !!protectedState;
         });
       });
@@ -2415,7 +2415,9 @@
       if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};
-      return refreshGenerationQueue(storyId);
+      return refreshGenerationQueue(storyId).then(function () {
+        return reconcileDirectorJobs();
+      });
     }).then(function () {
       renderStory();
       setSaveState('Saved');

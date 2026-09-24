@@ -110,6 +110,48 @@ def test_model_file_size_handles_windows_style_router_path(monkeypatch, tmp_path
     }) == 16384
 
 
+def test_model_file_size_resolves_nested_relative_path_from_models_dir(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    nested_dir = models_dir / "Qwen" / "30B"
+    nested_dir.mkdir(parents=True)
+    model_path = nested_dir / "director.gguf"
+    model_path.write_bytes(b"x" * 32768)
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"models_dir": models_dir, "mode": "local"},
+    )
+
+    assert storyboard_llm_runtime._model_file_size({
+        "id": "director",
+        "label": "director.gguf",
+        "path": "Qwen/30B/director.gguf",
+        "sizeBytes": 0,
+    }) == 32768
+
+
+def test_model_file_size_resolves_text_encoders_suffix_from_runtime_path(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    nested_dir = models_dir / "Qwen"
+    nested_dir.mkdir(parents=True)
+    model_path = nested_dir / "director.gguf"
+    model_path.write_bytes(b"x" * 65536)
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"models_dir": models_dir, "mode": "local"},
+    )
+
+    assert storyboard_llm_runtime._model_file_size({
+        "id": "director",
+        "label": "director.gguf",
+        "path": "/runtime/models/text_encoders/Qwen/director.gguf",
+        "sizeBytes": 0,
+    }) == 65536
+
+
 def test_model_file_size_sums_split_gguf_shards(tmp_path):
     shard_1 = tmp_path / "director-00001-of-00002.gguf"
     shard_2 = tmp_path / "director-00002-of-00002.gguf"

@@ -424,7 +424,9 @@ Current runtime slice:
 - deterministic validation against `docs/storyboard-scene-plan.schema.json` plus app-level validation before any Scene replacement is written;
 - replanning requires explicit confirmation and moves old active Scenes into recoverable `removedScenes` without deleting their Take media;
 - the accepted development plan/model are persisted in Story metadata for provenance, with per-Scene plan/prompt Director provenance retained for quiet hover inspection;
-- existing `write_prompt` and `refine_prompt` Scene-local contracts remain available, with one-step **Restore Previous** for the last Director prompt edit;
+- existing `write_prompt` and `refine_prompt` Scene-local contracts remain available, with one-step **Restore Previous** persisted in `story.json` so it survives Story switches and WebCap sessions;
+- every queued Storyboard Director job freezes its Story/Scene destination; the backend applies completed output directly to that durable target, so browser navigation is never responsible for persistence;
+- the durable LLM queue is the authority for target occupancy: only the Story/Scene fields a Director job will replace are protected, unrelated Stories/Scenes remain usable, and conflicting requests fail visibly rather than silently doing nothing;
 - Director activity overlays the field being authored rather than blocking unrelated Story/Scene controls;
 - thinking disabled for these bounded authoring calls;
 - sampling is app-owned rather than left to changing runtime defaults: concept expansion is mildly creative, Develop Scenes is conservative, and Scene write/refine calls are tighter; local llama.cpp also receives explicit top-k/min-p settings with repetition/presence/frequency penalties disabled so necessary continuity wording is not discouraged;
@@ -535,6 +537,6 @@ Current runtime assumptions:
 - Jinja chat templates enabled;
 - prompt caching enabled inside a loaded model process;
 - thinking/reasoning disabled for current Storyboard authoring calls;
-- the model is unloaded after each call, so its transient KV cache is not durable memory.
+- a successfully loaded Director model may remain resident between LLM calls; Training/Inference explicitly release it when they need the shared GPU, and transient KV/cache state is never treated as durable Story memory.
 
 The important operational dependency beyond model disk space is therefore a **recent CUDA-capable llama.cpp binary**. No Python llama.cpp binding, Ollama daemon, database, or ComfyUI text workflow is required.

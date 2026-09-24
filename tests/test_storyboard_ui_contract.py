@@ -522,6 +522,32 @@ def test_storyboard_scene_title_lives_in_main_form_and_story_switch_reopens_cont
     assert ".storyboard-scene-title-field input" in css
 
 
+def test_storyboard_visual_atmosphere_has_editable_presets():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-story-style-preset"' in html
+    assert '<option value="">Custom…</option>' in html
+    assert "var STORY_STYLE_PRESETS = [" in storyboard
+    assert "Naturalistic cinematic" in storyboard
+    assert "Moody noir" in storyboard
+    assert "Dreamy ethereal" in storyboard
+    assert "Documentary handheld" in storyboard
+    assert "Clean commercial" in storyboard
+    assert "Warm intimate drama" in storyboard
+    assert "Cool futuristic sci-fi" in storyboard
+    assert "Stylized painterly" in storyboard
+    assert "Gritty urban realism" in storyboard
+    assert "Epic high-contrast" in storyboard
+    assert "function renderStoryStylePresetSelector()" in storyboard
+    assert "function applyStoryStylePreset(presetId)" in storyboard
+    assert "select.value = storyStylePresetIdForText(textarea.value);" in storyboard
+    assert "textarea.value = preset.text;" in storyboard
+    assert "storyboard-story-style').addEventListener('input'" in storyboard
+    assert ".storyboard-style-preset" in css
+
+
 def test_storyboard_story_can_collapse_and_supports_structured_invariants():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

@@ -110,6 +110,24 @@ def test_model_file_size_handles_windows_style_router_path(monkeypatch, tmp_path
     }) == 16384
 
 
+def test_model_file_size_sums_split_gguf_shards(tmp_path):
+    shard_1 = tmp_path / "director-00001-of-00002.gguf"
+    shard_2 = tmp_path / "director-00002-of-00002.gguf"
+    shard_1.write_bytes(b"x" * 1024)
+    shard_2.write_bytes(b"x" * 2048)
+
+    assert storyboard_llm_runtime._model_file_size({"path": str(shard_1)}) == 3072
+
+
+def test_model_file_size_reads_single_model_directory_without_deep_scan(tmp_path):
+    model_dir = tmp_path / "director-model"
+    model_dir.mkdir()
+    (model_dir / "director-00001-of-00002.gguf").write_bytes(b"x" * 1024)
+    (model_dir / "director-00002-of-00002.gguf").write_bytes(b"x" * 2048)
+
+    assert storyboard_llm_runtime._model_file_size({"path": str(model_dir)}) == 3072
+
+
 def test_loading_activity_exposes_selected_model_size(monkeypatch, tmp_path):
     model_path = tmp_path / "director.gguf"
     model_path.write_bytes(b"x" * 4096)

@@ -30,19 +30,6 @@ def _read_json(path, label):
     return payload
 
 
-def _scene_plan_schema(target_scene_count):
-    schema = _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema")
-    try:
-        target = int(target_scene_count or 12)
-    except (TypeError, ValueError):
-        target = 12
-    target = max(2, min(50, target))
-    scenes = schema["properties"]["scenes"]
-    scenes["minItems"] = max(2, target - 2)
-    scenes["maxItems"] = min(50, target + 2)
-    return schema
-
-
 def _reference_roles(scene):
     roles = set()
     for reference in scene.get("references") or []:
@@ -210,13 +197,10 @@ def build_request(story, scene_id, operation, instruction=""):
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 WRITING RULES]\n" + h3_runtime_context)
-        target_scene_count = story.get("targetSceneCount") or 12
-        scene_plan_schema = _scene_plan_schema(target_scene_count)
-        min_scenes = scene_plan_schema["properties"]["scenes"]["minItems"]
-        max_scenes = scene_plan_schema["properties"]["scenes"]["maxItems"]
+        target_scene_count = int(story.get("targetSceneCount") or 12)
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
-            "The Story target is " + str(target_scene_count) + " Scenes. Return between " + str(min_scenes) + " and " + str(max_scenes) + " Scenes, aiming near the target rather than the minimum. Give each meaningful narrative beat its own generatable Scene; do not compress distinct beats merely to reduce Scene count. "
+            "Produce exactly " + str(target_scene_count) + " Scenes. Give each meaningful narrative beat its own generatable Scene and pace the material across the full requested Scene count rather than compressing several beats together. "
             "Keep every Scene between 4 and 15 seconds. Preserve coherent narrative progression, explicit entry/exit "
             "continuity, supplied Story facts, and Story invariants across the sequence. Write a complete model-facing H3 "
             "prompt for every Scene now, not a placeholder. Be creatively useful: invent natural dialogue, performance details, "
@@ -228,7 +212,7 @@ def build_request(story, scene_id, operation, instruction=""):
             "operation": operation,
             "output": "json",
             "prompt": "\n\n".join(blocks).strip() + "\n",
-            "response_schema": scene_plan_schema,
+            "response_schema": _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema"),
         }
 
     scene_id = _clean(scene_id)

@@ -4741,6 +4741,58 @@ html[data-theme="dark"] iframe {
   background: #0f1623;
   border-color: var(--border);
 }
+.director-model-load {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding-top: 3px;
+}
+
+.director-model-load.hidden {
+  display: none;
+}
+
+.director-model-load-copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.director-model-load-copy span {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.director-model-load-copy strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.director-model-load-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.director-model-load-track > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 180ms linear;
+}
+
 .director-activity-trend {
   display: grid;
   gap: 3px;

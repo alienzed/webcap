@@ -2142,6 +2142,11 @@
   backdrop-filter: blur(8px);
 }
 
+.storyboard-director-activity.is-detached-target {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .storyboard-director-activity strong {
   grid-area: label;
   color: var(--muted);

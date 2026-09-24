@@ -454,6 +454,7 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
     assert "integrated_multimodal_description" in first["prompt"]
     assert first["promptDirectorModel"] == "director.gguf"
     assert first["planDirectorModel"] == "director.gguf"
+    assert first["sharedContextRefs"] == ["mara", "coat", "lobby"]
 
 
 def test_apply_developed_plan_rejects_wrong_scene_count_or_out_of_range_duration(storyboard_fs):
@@ -547,6 +548,14 @@ def test_developed_plan_rejects_schema_shape_drift(storyboard_fs):
     bad_scene["extra"] = "nope"
     with pytest.raises(ValueError, match="missing or unsupported fields"):
         storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": [bad_scene, dict(base_scene)]})
+
+    bad_ref = dict(base_scene)
+    bad_ref["sharedContextRefs"] = ["missing"]
+    with pytest.raises(ValueError, match="unknown sharedContext id"):
+        storyboard_store.apply_developed_plan(
+            story["id"],
+            {"sharedContext": _shared_context(), "scenes": [bad_ref, dict(base_scene)]},
+        )
 
     bad_type = dict(base_scene)
     bad_type["title"] = 42

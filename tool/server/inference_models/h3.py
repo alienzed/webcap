@@ -84,6 +84,8 @@ def resolve_assets(template, available_names, resolve_name):
                 cache[key] = available_names(node_type, input_name, label)
             inputs[input_name] = resolve_name(inputs[input_name], cache[key], label)
         available_loras = available_lora_names(available_names)
+        turbo_inputs = workflow["148"]["inputs"]
+        turbo_inputs["lora_name"] = resolve_name(turbo_inputs["lora_name"], available_loras, "LoRA")
         for value in workflow["138"]["inputs"].values():
             if isinstance(value, dict) and value.get("on") is True and str(value.get("lora") or "").strip():
                 value["lora"] = resolve_name(value["lora"], available_loras, "LoRA")
@@ -93,11 +95,11 @@ def resolve_assets(template, available_names, resolve_name):
 
 
 def base_loras(workflow):
-    return [
-        str(value.get("lora"))
-        for value in ((workflow.get("138") or {}).get("inputs") or {}).values()
-        if isinstance(value, dict) and value.get("on") is True and str(value.get("lora") or "").strip()
-    ]
+    inputs = ((workflow.get("148") or {}).get("inputs") or {})
+    name = str(inputs.get("lora_name") or "").strip()
+    if not name:
+        raise ValueError("MiniMax H3 inference workflow is missing the required Turbo LoRA.")
+    return [name]
 
 
 def build_workflow(template, prompt, settings, loras, uploaded_references, filename_prefix, available_names, resolve_name):
@@ -114,21 +116,18 @@ def build_workflow(template, prompt, settings, loras, uploaded_references, filen
     workflow["141"]["inputs"]["filename_prefix"] = filename_prefix
 
     power = workflow["138"]["inputs"]
-    power["model"] = ["161", 0]
-    power["clip"] = ["128", 0]
-    workflow.pop("148", None)
-
     available_loras = available_lora_names(available_names)
-    existing = {
+    existing = {normalize_name(name) for name in base_loras(workflow)}
+    existing.update({
         normalize_name(value.get("lora"))
         for value in power.values()
         if isinstance(value, dict) and value.get("on") is True and value.get("lora")
-    }
-    next_index = 2
+    })
+    next_index = 1
     for item in loras or []:
         resolved = resolve_name(item.get("name"), available_loras, "LoRA")
         if normalize_name(resolved) in existing:
-            raise RuntimeError("Selected LoRA is already part of the base H3 workflow: " + resolved)
+            raise RuntimeError("Selected LoRA is already part of the required H3 workflow: " + resolved)
         while "lora_" + str(next_index) in power:
             next_index += 1
         power["lora_" + str(next_index)] = {

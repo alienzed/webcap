@@ -309,6 +309,29 @@ def test_storyboard_uses_shared_director_preference_without_eager_preload():
     assert "preloadDirectorModel" not in storyboard
 
 
+def test_storyboard_prompt_pipeline_is_visible_without_changing_authoring_schema():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+    generation = (ROOT / "tool" / "server" / "storyboard_generation.py").read_text(encoding="utf-8")
+
+    assert "Prompt pipeline" in storyboard
+    assert 'data-director-preview="write_prompt"' in storyboard
+    assert 'data-director-preview="refine_prompt"' in storyboard
+    assert "function previewDirectorRequest(sceneId, operation)" in storyboard
+    assert "previewOnly: true" in storyboard
+    assert "directorContractPreviewText(payload.contract)" in storyboard
+    assert 'if bool(data.get("previewOnly")):' in app
+
+    assert "Effective H3 Input" in storyboard
+    assert "Exact prompt sent to ComfyUI" in storyboard
+    assert "take.effectiveInput" in storyboard
+    assert '"effectiveInput": effective_input' in generation
+    assert '"effectiveInput",' in store
+    assert ".storyboard-take-effective-input" in css
+
+
 def test_storyboard_take_generation_uses_global_console_and_visible_pending_cards():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")

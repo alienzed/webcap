@@ -304,3 +304,16 @@ def test_scene_local_prompt_does_not_solicit_unsolicited_advice():
     assert "recommend a natural Scene split" not in prompt
     assert "state the missing fact" not in prompt
     assert "Do not add unsolicited advice or commentary." in prompt
+
+
+def test_director_context_prioritizes_filmmaking_without_forcing_classical_coverage():
+    prompt = storyboard_llm_contract.build_request(_story(), "", "develop_story")["prompt"]
+
+    assert "DIRECT THE FILM FIRST; WRITE THE GENERATION PROMPT SECOND." in prompt
+    assert "Think like a director" in prompt
+    assert "CREATIVE INTENT OUTRANKS DEFAULT FILM GRAMMAR." in prompt
+    assert "They are tools, not mandatory recipes." in prompt
+    assert "montage, abstraction, surrealism, discontinuity" in prompt
+    assert "TREAT GENERATION LIMITS AS PRODUCTION CONSTRAINTS, NOT STORY INSTRUCTIONS." in prompt
+    assert "preserve the underlying narrative, visual idea, and intended experience" in prompt
+    assert "not a mandatory master/medium/close-up recipe" in prompt

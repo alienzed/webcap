@@ -328,6 +328,20 @@ def test_storyboard_director_has_non_modal_live_activity():
     assert "position: absolute;" in css
 
 
+def test_storyboard_director_activity_shows_completion_telemetry():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "function directorCompletionStats(activity)" in storyboard
+    assert "usage.prompt_tokens" in storyboard
+    assert "usage.completion_tokens" in storyboard
+    assert "timings.predicted_per_second" in storyboard
+    assert "prompt_tokens_details" in storyboard
+    assert "cached_tokens" in storyboard
+    assert "cached_n" in storyboard
+    assert "' tok/s'" in storyboard
+    assert "'% ctx'" in storyboard
+
+
 def test_storyboard_director_activity_rejects_stale_terminal_state():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 

@@ -655,7 +655,7 @@ def duplicate_story(story_id):
     duplicate["development"] = copy.deepcopy(source.get("development")) if isinstance(source.get("development"), dict) else None
 
     scene_fields = (
-        "title", "summary", "entryState", "exitState", "prompt", "sharedContextRefs",
+        "title", "summary", "entryState", "exitState", "prompt", "invariantRefs", "sharedContextRefs",
         "durationSeconds", "aspectRatio", "megapixels", "seed", "seedMode",
         "loras", "storyLoraOverrides", "notes",
     )
@@ -1321,6 +1321,7 @@ def duplicate_scene(story_id, scene_id):
         "entryState": current.get("entryState") or "",
         "exitState": current.get("exitState") or "",
         "prompt": current.get("prompt") or "",
+        "invariantRefs": copy.deepcopy(current.get("invariantRefs") or []),
         "sharedContextRefs": copy.deepcopy(current.get("sharedContextRefs") or []),
         "durationSeconds": current.get("durationSeconds", 6),
         "aspectRatio": current.get("aspectRatio"),

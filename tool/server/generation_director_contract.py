@@ -30,7 +30,7 @@ def build_request(model_id, operation, prompt="", instruction="", settings=None,
         "[DIRECTOR CONTEXT]\n"
         "You are helping write one standalone image or video generation prompt inside WebCap Generate. "
         "There is no Story or Scene continuity unless the user explicitly supplies it. Preserve explicit facts, "
-        "avoid inventing unrelated narrative, and return only the final model-facing prompt."
+        "avoid inventing unrelated narrative, and return only the output shape requested below without commentary."
     ]
 
     h3_mode = None

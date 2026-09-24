@@ -237,7 +237,7 @@
     if (items.some(function (item) { return item.name === name; })) {
       throw new Error('That LoRA is already added.');
     }
-    items.push({ name: name, strength: 1 });
+    items.push({ name: name, strength: 0.9 });
     input.value = '';
     saveLoras();
     renderLoras();

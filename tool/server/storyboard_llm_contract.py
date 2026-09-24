@@ -445,18 +445,21 @@ def build_request(story, scene_id, operation, instruction=""):
             "Otherwise omit durationSeconds and keep the current duration unchanged."
         )
 
+    result_renderer = {
+        "type": "h3_base",
+        "mode": h3_mode,
+        "duration": scene.get("durationSeconds"),
+        "shared_context": "\n".join(
+            part for part in (scene_invariants, shared_context) if part
+        ),
+    }
+    if operation == "refine_prompt":
+        result_renderer["duration_field"] = "durationSeconds"
+
     return {
         "operation": operation,
         "output": "json",
         "prompt": "\n\n".join(blocks).strip() + "\n",
         "response_schema": _prompt_response_schema(allow_duration=operation == "refine_prompt"),
-        "result_renderer": {
-            "type": "h3_base",
-            "mode": h3_mode,
-            "duration": scene.get("durationSeconds"),
-            "duration_field": "durationSeconds" if operation == "refine_prompt" else "",
-            "shared_context": "\n".join(
-                part for part in (scene_invariants, shared_context) if part
-            ),
-        },
+        "result_renderer": result_renderer,
     }

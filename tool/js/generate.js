@@ -15,7 +15,10 @@
       status: '',
       activityTimer: 0,
       activityStartedAt: 0,
-      activityHistory: []
+      activityHistory: [],
+      activityLastMemory: null,
+      activityLoadBaseline: null,
+      activityLoadModelId: ''
     },
     trackedJobIds: loadTrackedGenerateJobs(),
     open: false,
@@ -510,6 +513,65 @@
     return isFinite(value) && value >= 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
   }
 
+  function directorMemorySample(system) {
+    var gpu = system && system.gpu;
+    var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
+    var ram = system && system.ram;
+    var ramBytes = ram && ram.available ? Number(ram.used) : NaN;
+    var vramMiB = primary ? Number(primary.memoryUsed) : NaN;
+    if (!isFinite(ramBytes) || !isFinite(vramMiB)) return null;
+    return {
+      ramBytes: ramBytes,
+      vramBytes: vramMiB * 1024 * 1024
+    };
+  }
+
+  function updateDirectorModelLoad(activity, system) {
+    var meter = el('generate-director-model-load');
+    var label = el('generate-director-model-load-label');
+    var fill = el('generate-director-model-load-fill');
+    if (!meter || !label || !fill) return;
+
+    var phase = String(activity && activity.phase || '');
+    var sample = directorMemorySample(system);
+    if (phase !== 'loading_model') {
+      meter.classList.add('hidden');
+      if (sample) generateState.director.activityLastMemory = sample;
+      if (phase === 'preparing' || phase === 'queued' || phase === 'freeing_comfy') {
+        generateState.director.activityLoadBaseline = null;
+        generateState.director.activityLoadModelId = '';
+      }
+      return;
+    }
+
+    var modelId = String(activity && activity.model || '');
+    if (generateState.director.activityLoadModelId !== modelId) {
+      generateState.director.activityLoadModelId = modelId;
+      generateState.director.activityLoadBaseline = generateState.director.activityLastMemory || sample;
+    } else if (!generateState.director.activityLoadBaseline && sample) {
+      generateState.director.activityLoadBaseline = generateState.director.activityLastMemory || sample;
+    }
+
+    var modelSizeBytes = Number(activity && activity.modelSizeBytes);
+    var baseline = generateState.director.activityLoadBaseline;
+    if (!sample || !baseline || !isFinite(modelSizeBytes) || modelSizeBytes <= 0) {
+      meter.classList.add('hidden');
+      return;
+    }
+
+    var ramDelta = Math.max(0, sample.ramBytes - baseline.ramBytes);
+    var vramDelta = Math.max(0, sample.vramBytes - baseline.vramBytes);
+    var residentBytes = Math.max(0, ramDelta + vramDelta);
+    var displayBytes = Math.min(modelSizeBytes, residentBytes);
+    var percent = Math.max(0, Math.min(100, residentBytes / modelSizeBytes * 100));
+    label.textContent = '≈ ' + directorBytesGiB(displayBytes) + ' / ' + directorBytesGiB(modelSizeBytes) + ' · ~' + Math.round(percent) + '%';
+    fill.style.width = percent.toFixed(1) + '%';
+    var track = meter.querySelector('.director-model-load-track');
+    if (track) track.setAttribute('aria-valuenow', String(Math.round(percent)));
+    meter.title = 'Approximate model residency from RAM + VRAM growth since loading began. mmap, caching, and GPU offload can make this differ from the GGUF file size.';
+    meter.classList.remove('hidden');
+  }
+
   function directorTrendPath(history, key) {
     var path = '';
     var cutoff = Date.now() - 60000;
@@ -573,6 +635,7 @@
 
     positionDirectorActivity();
     updateDirectorTrend(system);
+    updateDirectorModelLoad(activity, system);
     phase.textContent = directorPhaseLabel(activity && activity.phase);
     var startedAt = Number(activity && activity.startedAt) || generateState.director.activityStartedAt;
     var parts = [];

@@ -735,8 +735,8 @@ def _validate_developed_plan(plan, target_scene_count=None):
     if set(plan.keys()) != {"sharedContext", "scenes"}:
         raise ValueError("Developed Story plan contains missing or unsupported fields.")
     shared_context = _normalize_developed_shared_context(plan.get("sharedContext"))
-    shared_context_ids = {
-        item["id"].casefold()
+    shared_context_id_map = {
+        item["id"].casefold(): item["id"]
         for category in shared_context.values()
         for item in category
     }
@@ -788,12 +788,12 @@ def _validate_developed_plan(plan, target_scene_count=None):
         for value in refs:
             ref = value.strip()
             key = ref.casefold()
-            if key not in shared_context_ids:
+            if key not in shared_context_id_map:
                 raise ValueError("Developed Story Scene references unknown sharedContext id: " + ref)
             if key in seen_refs:
                 raise ValueError("Developed Story Scene sharedContextRefs must not contain duplicates.")
             seen_refs.add(key)
-            normalized_refs.append(ref)
+            normalized_refs.append(shared_context_id_map[key])
 
         duration_value = item.get("suggestedDurationSeconds")
         if isinstance(duration_value, bool) or not isinstance(duration_value, (int, float)):

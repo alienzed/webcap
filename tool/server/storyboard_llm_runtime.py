@@ -809,12 +809,12 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 duration_field = str(renderer.get("duration_field") or "").strip()
                 if duration_field and duration_field in result["data"]:
                     duration = result["data"][duration_field]
+                    result["durationOverride"] = duration
                 result["text"] = render_base_prompt(
                     rendered_data,
                     mode=renderer.get("mode") or "T2VA",
                     duration=duration,
                 )
-                result["renderedDuration"] = duration
 
             _set_activity(
                 "complete",

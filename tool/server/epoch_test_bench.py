@@ -129,7 +129,7 @@ def test_presence(folder_path):
                 ])
         except (OSError, ValueError):
             continue
-    sessions = list_sessions(set_folder)
+    sessions = list_sessions(set_folder, source=set_folder.name)
     return {
         "folder": _relative_set_folder(set_folder),
         "stagedCount": staged_count,
@@ -1464,12 +1464,18 @@ def cancel_queued(folder_path, job_id):
     visible = _sync_inference_session(session_directory)
     if visible.get("status") != "queued":
         raise RuntimeError("Only a fully queued Test session can be cancelled here.")
+    source = _session_source(visible, folder_path)
     status_payload = _read_status(session_directory) or {}
     for child in _session_job_records(status_payload):
         if str(child.get("status") or "") == "queued":
             execution_cancel_queued(str(child.get("id") or ""))
     shutil.rmtree(session_directory)
-    return {"operation": "test_queue_cancel", "removed": str(job_id), "jobs": queued_jobs(folder_path)["jobs"]}
+    return {
+        "operation": "test_queue_cancel",
+        "removed": str(job_id),
+        "source": source,
+        "jobs": queued_jobs(folder_path, source=source)["jobs"],
+    }
 
 
 def clear_queued(folder_path, source=None):
@@ -1595,27 +1601,18 @@ def stop(folder_path, session_name=None):
 def delete_session(folder_path, session_name):
     session = _session_directory(folder_path, session_name)
     session_payload = _read_status(session) or {}
-    if not isinstance(session_payload.get("inferenceJobs"), list):
-        model_id = str(session_payload.get("modelId") or session_payload.get("model") or get_test_model().PROFILE_ID)
-        shutil.rmtree(session)
-        return {
-            "operation": "test_delete_session",
-            "deleted": session.name,
-            "modelId": model_id,
-            "sessions": list_sessions(folder_path),
-            "latest": _latest_status(folder_path, model_id=model_id),
-        }
-    if _session_has_nonterminal_jobs(session):
+    source = _session_source(session_payload, folder_path)
+    model_id = str(session_payload.get("modelId") or session_payload.get("model") or get_test_model().PROFILE_ID)
+    if isinstance(session_payload.get("inferenceJobs"), list) and _session_has_nonterminal_jobs(session):
         raise RuntimeError("Cannot delete an active Test Generations session. Stop it first.")
-    session_status = _read_status(session) or {}
-    model_id = str(session_status.get("modelId") or session_status.get("model") or get_test_model().PROFILE_ID)
     shutil.rmtree(session)
     return {
         "operation": "test_delete_session",
-        "deleted": session.name,
+        "deleted": Path(session_name).name,
         "modelId": model_id,
-        "sessions": list_sessions(folder_path),
-        "latest": _latest_status(folder_path, model_id=model_id),
+        "source": source,
+        "sessions": list_sessions(folder_path, source=source),
+        "latest": _latest_status(folder_path, model_id=model_id, source=source),
     }
 
 

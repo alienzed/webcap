@@ -54,7 +54,7 @@ def test_write_prompt_request_is_deliberately_local_and_manual_first():
     prompt = request["prompt"]
 
     assert request["operation"] == "write_prompt"
-    assert request["output"] == "text"
+    assert request["output"] == "json"
     assert "Rain-soaked neo-noir horror" in prompt
     assert "[STORY INVARIANTS]" in prompt
     assert "Character: Mara" in prompt
@@ -69,6 +69,16 @@ def test_write_prompt_request_is_deliberately_local_and_manual_first():
     assert "integrated_multimodal_description" in prompt
     assert "[H3 MODE]\nI2VA" in prompt
     assert "at 0.00 seconds into the target video" in prompt
+    assert request["response_schema"]["required"] == [
+        "integrated_multimodal_description",
+        "overall_soundscape",
+        "non_diegetic_music",
+    ]
+    assert request["result_renderer"] == {
+        "type": "h3_base",
+        "mode": "I2VA",
+        "duration": 8,
+    }
 
     assert "A long concept that should not be sent" not in prompt
     assert "UNRELATED SCENE PROMPT MUST NOT LEAK" not in prompt
@@ -166,12 +176,19 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert request["output"] == "json"
     assert "minItems" not in request["response_schema"]["properties"]["scenes"]
     assert "maxItems" not in request["response_schema"]["properties"]["scenes"]
+    prompt_schema = request["response_schema"]["properties"]["scenes"]["items"]["properties"]["prompt"]
+    assert prompt_schema["type"] == "object"
+    assert prompt_schema["required"] == [
+        "integrated_multimodal_description",
+        "overall_soundscape",
+        "non_diegetic_music",
+    ]
     assert "A long concept that should not be sent for a local prompt-writing operation." in prompt
     assert "Rain-soaked neo-noir horror" in prompt
     assert "[STORY INVARIANTS]" in prompt
     assert "Character: Mara" in prompt
     assert "Low analog synth, no vocals." in prompt
-    assert "complete model-facing H3 prompt for every Scene now" in prompt
+    assert "complete structured H3 content for every Scene now" in prompt
     assert "Produce exactly 12 Scenes" in prompt
     assert "4 to 8 Scenes" not in prompt
     assert "at least two Scenes" not in prompt

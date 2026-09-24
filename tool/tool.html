@@ -99,6 +99,27 @@
                 </button>
                 <div class="activity-rail-spacer"></div>
                 <button
+                    id="inference-queue-rail-btn"
+                    type="button"
+                    class="activity-rail-btn inference-queue-rail-btn"
+                    data-inference-queue-toggle
+                    data-inference-queue-rail
+                    title="Inference Queue"
+                    aria-label="Inference Queue"
+                    aria-expanded="false"
+                    aria-controls="inference-queue-drawer"
+                >
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 6h12"></path>
+                        <path d="M7 12h12"></path>
+                        <path d="M7 18h12"></path>
+                        <circle cx="4" cy="6" r="1"></circle>
+                        <circle cx="4" cy="12" r="1"></circle>
+                        <circle cx="4" cy="18" r="1"></circle>
+                    </svg>
+                    <span class="inference-queue-rail-badge hidden" data-inference-queue-badge></span>
+                </button>
+                <button
                     id="console-toggle-btn"
                     type="button"
                     class="activity-rail-btn"
@@ -1035,7 +1056,6 @@
                                     <button id="test-generations-view-compare-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Compare</button>
                                 </div>
                                 <div class="test-generations-results-actions">
-                                    <button type="button" class="inference-queue-toggle" data-inference-queue-toggle aria-expanded="false" aria-controls="inference-queue-drawer">Inference Queue</button>
                                     <button id="test-generations-rate-items-btn" type="button" class="review-captions-btn hidden">Rate Items</button>
                                 </div>
                             </div>
@@ -1070,7 +1090,6 @@
                         <strong>Generate</strong>
                         <span>Standalone image and video inference, independent of Sets and Stories.</span>
                     </div>
-                    <button type="button" class="inference-queue-toggle" data-inference-queue-toggle aria-expanded="false" aria-controls="inference-queue-drawer">Inference Queue</button>
                 </header>
                 <main class="generate-main">
                     <section class="generate-authoring" aria-label="Generation setup">
@@ -1236,7 +1255,6 @@
                                     <select id="storyboard-director-model" aria-label="Storyboard Director model">
                                         <option value="">Director unavailable</option>
                                     </select>
-                                    <button type="button" class="inference-queue-toggle" data-inference-queue-toggle aria-expanded="false" aria-controls="inference-queue-drawer">Inference Queue</button>
                                 </div>
                             </div>
                             <div id="storyboard-scene-progression" class="storyboard-scene-progression" aria-label="Scene progression"></div>

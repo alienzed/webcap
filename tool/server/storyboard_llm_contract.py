@@ -289,5 +289,6 @@ def build_request(story, scene_id, operation, instruction=""):
             "type": "h3_base",
             "mode": h3_mode,
             "duration": scene.get("durationSeconds"),
+            "shared_context": shared_context,
         },
     }

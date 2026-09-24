@@ -174,9 +174,10 @@ def effective_input(workflow):
         name = str(value.get("lora") or "").strip()
         if not name:
             continue
+        strength = value.get("strength", 1.0)
         loras.append({
             "name": name,
-            "strength": float(value.get("strength", 1.0)),
+            "strength": 1.0 if strength in (None, "") else float(strength),
         })
 
     return {

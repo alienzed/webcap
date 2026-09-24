@@ -192,6 +192,23 @@ def get_job(job_id, include_payload=False):
         return _public_job(job)
 
 
+def consume_terminal_job(job_id):
+    """Return and remove a terminal delivery receipt from the execution queue."""
+    with _lock:
+        state = _read_state()
+        lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        if job.get("status") not in TERMINAL_STATUSES:
+            raise ValueError("Only a terminal execution job can be consumed.")
+        lane = _lane(state, lane_name)
+        result = _public_job(job)
+        lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+        _refresh_positions(lane)
+        _write_state(state)
+        return result
+
+
 def lane_snapshot(lane_name, include_terminal=True):
     with _lock:
         state = _read_state()

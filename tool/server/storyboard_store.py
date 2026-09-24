@@ -405,6 +405,7 @@ def _normalize_scene(scene_id, value, existing=None):
         "entryState": str(value.get("entryState", current.get("entryState", "")) or "").strip(),
         "exitState": str(value.get("exitState", current.get("exitState", "")) or "").strip(),
         "prompt": str(value.get("prompt", current.get("prompt", "")) or ""),
+        "promptDirectorModel": str(value.get("promptDirectorModel", current.get("promptDirectorModel", "")) or "").strip(),
         "durationSeconds": duration,
         "aspectRatio": aspect_ratio,
         "megapixels": megapixels,
@@ -540,7 +541,7 @@ def duplicate_story(story_id):
     duplicate["development"] = copy.deepcopy(source.get("development")) if isinstance(source.get("development"), dict) else None
 
     scene_fields = (
-        "title", "summary", "entryState", "exitState", "prompt",
+        "title", "summary", "entryState", "exitState", "prompt", "promptDirectorModel",
         "durationSeconds", "aspectRatio", "megapixels", "seed", "seedMode",
         "wildcardsEnabled", "loras", "storyLoraOverrides", "notes",
     )
@@ -730,7 +731,10 @@ def apply_developed_plan(story_id, plan, model_id=""):
     new_order = []
     for item in planned_scenes:
         scene_id = _new_id("scene")
-        scene = _normalize_scene(scene_id, item)
+        scene = _normalize_scene(scene_id, {
+            **item,
+            "promptDirectorModel": str(model_id or "").strip(),
+        })
         new_scenes[scene_id] = scene
         new_order.append(scene_id)
 
@@ -782,6 +786,7 @@ def duplicate_scene(story_id, scene_id):
         "entryState": current.get("entryState") or "",
         "exitState": current.get("exitState") or "",
         "prompt": current.get("prompt") or "",
+        "promptDirectorModel": current.get("promptDirectorModel") or "",
         "durationSeconds": current.get("durationSeconds", 6),
         "aspectRatio": current.get("aspectRatio"),
         "megapixels": current.get("megapixels"),

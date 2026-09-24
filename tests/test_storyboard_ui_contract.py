@@ -828,7 +828,8 @@ def test_storyboard_scene_focus_mode_scrolls_naturally_and_has_peer_sequence_vie
     assert ".storyboard-scenes-list.is-focus" in css
     assert "overflow: visible;" in css
     assert "height: auto;" in css
-    assert "'<details class=\"storyboard-takes\" open>'" in storyboard
+    assert "var takesInitiallyOpen = takeOrder.length > 0 || sceneGenerationJobs.length > 0;" in storyboard
+    assert "'<details class=\"storyboard-takes\"' + (takesInitiallyOpen ? ' open' : '') + '>'" in storyboard
     assert 'class="storyboard-takes-summary"' in storyboard
     assert "takeSummaryParts" in storyboard
     assert ".storyboard-takes {" in css
@@ -848,6 +849,15 @@ def test_storyboard_scene_focus_mode_scrolls_naturally_and_has_peer_sequence_vie
     assert ".storyboard-scene-inspector" in css
     inspector = css.split(".storyboard-scene-inspector {", 1)[1].split("}", 1)[0]
     assert "position: sticky;" in inspector
+
+
+def test_storyboard_takes_open_on_first_activity_without_forcing_manual_reopen():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    sync_block = storyboard.split("function syncSceneTakeDom(sceneId)", 1)[1].split("\n  function ", 1)[0]
+    assert "var hadNoTakeActivity = !grid.querySelector('[data-take-id], [data-generation-job-id]');" in sync_block
+    assert "if (hadNoTakeActivity && (takeOrder.length || jobs.length))" in sync_block
+    assert "takesDetails.open = true;" in sync_block
 
 
 def test_storyboard_director_provenance_is_subtle_and_persistent():

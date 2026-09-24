@@ -2490,6 +2490,7 @@
       if (sceneGenerationJobs.length) {
         takeSummaryParts.push(String(sceneGenerationJobs.length) + ' pending');
       }
+      var takesInitiallyOpen = takeOrder.length > 0 || sceneGenerationJobs.length > 0;
       return '<section class="storyboard-scene' + (scene.selectedTakeId ? ' has-selected-take' : '') + '" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<header class="storyboard-scene-header">' +
           '<span class="storyboard-scene-number"' +
@@ -2610,7 +2611,7 @@
             '</section>' +
           '</aside>' +
         '</div>' +
-        '<details class="storyboard-takes" open>' +
+        '<details class="storyboard-takes"' + (takesInitiallyOpen ? ' open' : '') + '>' +
           '<summary class="storyboard-takes-summary"><strong>Takes</strong><span>' + escapeHtml(takeSummaryParts.join(' · ')) + '</span>' +
             '<label class="review-captions-btn storyboard-take-upload-btn" title="Import existing image or video media as a Take for this Scene. Imported media is copied into this Story and keeps a frozen Scene snapshot.">Import Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
           '</summary>' +
@@ -3409,6 +3410,7 @@
     var takeOrder = Array.isArray(scene.takeOrder) ? scene.takeOrder : [];
     var jobs = generationJobsForScene(sceneId);
     var activeJobIds = {};
+    var hadNoTakeActivity = !grid.querySelector('[data-take-id], [data-generation-job-id]');
     var empty = grid.querySelector('.storyboard-takes-empty');
     if ((takeOrder.length || jobs.length) && empty) empty.remove();
 
@@ -3437,6 +3439,12 @@
 
     if (!grid.querySelector('[data-take-id], [data-generation-job-id]') && !grid.querySelector('.storyboard-takes-empty')) {
       grid.insertAdjacentHTML('beforeend', '<div class="storyboard-takes-empty">No Takes yet.</div>');
+    }
+
+    if (hadNoTakeActivity && (takeOrder.length || jobs.length)) {
+      var takesDetails = root.querySelector('.storyboard-takes');
+      if (!takesDetails) throw new Error('Storyboard Takes disclosure is missing.');
+      takesDetails.open = true;
     }
 
     var generateButton = root.querySelector('[data-scene-generate]');

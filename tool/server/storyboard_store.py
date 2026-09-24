@@ -694,25 +694,21 @@ def restore_previous_concept(story_id):
 def _normalize_developed_shared_context(value):
     if not isinstance(value, dict):
         raise ValueError("Developed Story sharedContext must be an object.")
-    expected_categories = {"subjects", "wardrobes", "locations", "persistentFacts"}
-    if set(value.keys()) != expected_categories:
-        raise ValueError("Developed Story sharedContext has missing or unsupported fields.")
-
     normalized = {}
     seen_ids = set()
     for category in ("subjects", "wardrobes", "locations", "persistentFacts"):
-        items = value.get(category)
+        items = value.get(category, [])
         if not isinstance(items, list):
             raise ValueError("Developed Story sharedContext " + category + " must be an array.")
         normalized_items = []
         for index, item in enumerate(items, start=1):
-            if not isinstance(item, dict) or set(item.keys()) != {"id", "label", "description"}:
+            if not isinstance(item, dict) or not {"id", "label", "description"}.issubset(item):
                 raise ValueError(
                     "Developed Story sharedContext "
                     + category
                     + " item "
                     + str(index)
-                    + " has missing or unsupported fields."
+                    + " is missing required fields."
                 )
             context_id = str(item.get("id") or "").strip()
             label = str(item.get("label") or "").strip()
@@ -737,8 +733,8 @@ def _normalize_developed_shared_context(value):
 def _validate_developed_plan(plan, target_scene_count=None):
     if not isinstance(plan, dict):
         raise ValueError("Developed Story plan must be an object.")
-    if set(plan.keys()) != {"sharedContext", "scenes"}:
-        raise ValueError("Developed Story plan contains missing or unsupported fields.")
+    if not {"sharedContext", "scenes"}.issubset(plan):
+        raise ValueError("Developed Story plan is missing required fields.")
     shared_context = _normalize_developed_shared_context(plan.get("sharedContext"))
     shared_context_id_map = {
         item["id"].casefold(): item["id"]
@@ -748,14 +744,8 @@ def _validate_developed_plan(plan, target_scene_count=None):
     scenes = plan.get("scenes")
     if not isinstance(scenes, list):
         raise ValueError("Developed Story plan Scenes must be an array.")
-    if target_scene_count is not None and len(scenes) != int(target_scene_count):
-        raise ValueError(
-            "Storyboard Director returned "
-            + str(len(scenes))
-            + " Scenes; this Story requests exactly "
-            + str(int(target_scene_count))
-            + "."
-        )
+    if not scenes:
+        raise ValueError("Storyboard Director returned no Scenes.")
 
     scene_keys = {
         "title",
@@ -772,8 +762,8 @@ def _validate_developed_plan(plan, target_scene_count=None):
     for index, item in enumerate(scenes, start=1):
         if not isinstance(item, dict):
             raise ValueError("Developed Story Scene " + str(index) + " must be an object.")
-        if set(item.keys()) != scene_keys:
-            raise ValueError("Developed Story Scene " + str(index) + " has missing or unsupported fields.")
+        if not scene_keys.issubset(item):
+            raise ValueError("Developed Story Scene " + str(index) + " is missing required fields.")
 
         text_fields = {}
         for key in ("title", "summary", "entryState", "exitState", "prompt"):
@@ -808,8 +798,8 @@ def _validate_developed_plan(plan, target_scene_count=None):
             raise ValueError("Developed Story Scene duration must be between 4 and 15 seconds.")
 
         continuity = item.get("continuity")
-        if not isinstance(continuity, dict) or set(continuity.keys()) != continuity_keys:
-            raise ValueError("Developed Story Scene continuity has missing or unsupported fields.")
+        if not isinstance(continuity, dict) or not continuity_keys.issubset(continuity):
+            raise ValueError("Developed Story Scene continuity is missing required fields.")
         continues_previous = continuity.get("continuesPreviousScene")
         if not isinstance(continues_previous, bool):
             raise ValueError("Developed Story Scene continuesPreviousScene must be boolean.")

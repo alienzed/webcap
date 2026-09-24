@@ -1723,8 +1723,20 @@
 
 .storyboard-take-media {
   position: relative;
+  min-width: 0;
   min-height: 0;
-  aspect-ratio: auto;
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  justify-self: center;
+  aspect-ratio: var(--take-aspect, 16 / 9);
+  background: #000;
+}
+
+.storyboard-take-media img,
+.storyboard-take-media video {
+  width: 100%;
+  height: 100%;
 }
 
 .storyboard-take-footer {

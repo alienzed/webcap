@@ -507,6 +507,40 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
     assert first["sharedContextRefs"] == ["mara", "coat", "lobby"]
 
 
+def test_apply_developed_plan_harvests_only_known_story_invariant_refs(storyboard_fs):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "invariants": [
+            {"kind": "character", "title": "Elena", "text": "White woman, early 30s, hazel eyes, dark brown shoulder-length hair."},
+            {"kind": "location", "title": "Cemetery", "text": "Old hillside cemetery."},
+        ],
+    })
+    scene = {
+        "title": "Funeral",
+        "summary": "Elena stands at the cemetery.",
+        "entryState": "At the cemetery.",
+        "exitState": "She remains by the grave.",
+        "prompt": "Prompt.",
+        "invariantRefs": [
+            {"kind": "character", "title": "Elena"},
+            {"kind": "location", "title": "Cemetery"},
+            {"kind": "character", "title": "Unknown"},
+            {"kind": "world", "title": "Mood"},
+            "bad",
+        ],
+        "suggestedDurationSeconds": 6,
+        "continuity": {"continuesPreviousScene": False, "carryForward": []},
+    }
+
+    developed = storyboard_store.apply_developed_plan(story["id"], {"scenes": [scene]})
+    saved = developed["scenes"][developed["sceneOrder"][0]]
+
+    assert saved["invariantRefs"] == [
+        {"kind": "character", "title": "Elena"},
+        {"kind": "location", "title": "Cemetery"},
+    ]
+
+
 def test_apply_developed_plan_accepts_scenes_without_shared_context(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "targetSceneCount": 2})
     scene = {

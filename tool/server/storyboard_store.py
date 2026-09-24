@@ -215,6 +215,28 @@ def _normalize_story_invariants(value):
     return result
 
 
+def _normalize_scene_invariant_refs(value):
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Scene invariantRefs must be a list.")
+    result = []
+    seen = set()
+    for raw in value:
+        if not isinstance(raw, dict):
+            raise ValueError("Each Scene invariantRef must be an object.")
+        kind = str(raw.get("kind") or "").strip().lower()
+        title = str(raw.get("title") or "").strip()
+        if kind not in {"character", "location"} or not title:
+            raise ValueError("Scene invariantRefs must contain a character/location kind and non-empty title.")
+        key = (kind, title.casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append({"kind": kind, "title": title})
+    return result
+
+
 def _normalize_shared_context_refs(value):
     if value is None:
         return []
@@ -460,6 +482,9 @@ def _normalize_scene(scene_id, value, existing=None):
         "promptDirectorModel": str(value.get("promptDirectorModel", current.get("promptDirectorModel", "")) or "").strip(),
         "promptDirectorJobId": str(value.get("promptDirectorJobId", current.get("promptDirectorJobId", "")) or "").strip(),
         "planDirectorModel": str(value.get("planDirectorModel", current.get("planDirectorModel", "")) or "").strip(),
+        "invariantRefs": _normalize_scene_invariant_refs(
+            value.get("invariantRefs", current.get("invariantRefs", []))
+        ),
         "sharedContextRefs": _normalize_shared_context_refs(
             value.get("sharedContextRefs", current.get("sharedContextRefs", []))
         ),
@@ -766,7 +791,7 @@ def _normalize_developed_shared_context(value):
     return normalized
 
 
-def _validate_developed_plan(plan, target_scene_count=None):
+def _validate_developed_plan(plan, target_scene_count=None, story_invariants=None):
     if not isinstance(plan, dict):
         raise ValueError("Developed Story plan must be an object.")
     if "scenes" not in plan:
@@ -792,6 +817,16 @@ def _validate_developed_plan(plan, target_scene_count=None):
         for category in shared_context.values()
         for item in category
     }
+    invariant_map = {}
+    for invariant in story_invariants if isinstance(story_invariants, list) else []:
+        if not isinstance(invariant, dict):
+            continue
+        kind = str(invariant.get("kind") or "").strip().lower()
+        title = str(invariant.get("title") or "").strip()
+        text = str(invariant.get("text") or "").strip()
+        if kind in {"character", "location"} and title and text:
+            invariant_map[(kind, title.casefold())] = {"kind": kind, "title": title}
+
     scenes = plan.get("scenes")
     if not isinstance(scenes, list):
         raise ValueError("Developed Story plan Scenes must be an array.")
@@ -841,6 +876,29 @@ def _validate_developed_plan(plan, target_scene_count=None):
                 index,
             )
 
+        raw_invariant_refs = item.get("invariantRefs", [])
+        normalized_invariant_refs = []
+        seen_invariant_refs = set()
+        if isinstance(raw_invariant_refs, list):
+            for ref in raw_invariant_refs:
+                if not isinstance(ref, dict):
+                    continue
+                kind = str(ref.get("kind") or "").strip().lower()
+                title = str(ref.get("title") or "").strip()
+                canonical = invariant_map.get((kind, title.casefold()))
+                if canonical is None:
+                    continue
+                key = (canonical["kind"], canonical["title"].casefold())
+                if key in seen_invariant_refs:
+                    continue
+                seen_invariant_refs.add(key)
+                normalized_invariant_refs.append(dict(canonical))
+        elif raw_invariant_refs not in (None, ""):
+            _logger.warning(
+                "Ignoring optional Director invariantRefs for Scene %s because they are not an array.",
+                index,
+            )
+
         duration_value = item.get("suggestedDurationSeconds")
         if isinstance(duration_value, bool) or not isinstance(duration_value, (int, float)):
             raise ValueError("Developed Story Scene duration must be numeric.")
@@ -864,6 +922,7 @@ def _validate_developed_plan(plan, target_scene_count=None):
         normalized.append({
             **text_fields,
             "durationSeconds": duration,
+            "invariantRefs": normalized_invariant_refs,
             "sharedContextRefs": normalized_refs,
             "continuity": {
                 "continuesPreviousScene": continues_previous,
@@ -879,7 +938,11 @@ def _validate_developed_plan(plan, target_scene_count=None):
 @_serialized_mutation
 def apply_developed_plan(story_id, plan, model_id=""):
     story = load_story(story_id)
-    normalized_plan = _validate_developed_plan(plan, story.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT))
+    normalized_plan = _validate_developed_plan(
+        plan,
+        story.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT),
+        story.get("invariants"),
+    )
     planned_scenes = normalized_plan["scenes"]
     now = _utc_now()
 

@@ -21,6 +21,7 @@
           "exitState",
           "prompt",
           "suggestedDurationSeconds",
+          "invariantRefs",
           "continuity"
         ],
         "properties": {
@@ -96,6 +97,31 @@
                 "type": "string",
                 "minLength": 1,
                 "description": "Audience-only score, or N/A when no non-diegetic score is intended."
+              }
+            }
+          },
+          "invariantRefs": {
+            "type": "array",
+            "description": "Exact Story character/location invariants relevant to this Scene. Use an empty array when none apply.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "title"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "character",
+                    "location"
+                  ]
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                }
               }
             }
           }

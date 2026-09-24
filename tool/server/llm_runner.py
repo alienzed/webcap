@@ -126,13 +126,17 @@ def _client_result(client, context, llm_result, job_id=""):
     if operation == "develop_story":
         from .h3_prompt_contract import render_story_plan_prompts
         from .storyboard_generation import generation_queue
-        from .storyboard_store import apply_developed_plan
+        from .storyboard_store import apply_developed_plan, load_story
         active_generation = generation_queue(story_id)
         if active_generation.get("jobs"):
             raise RuntimeError(
                 "Story has pending Take generation. Stop or finish it before applying developed Scenes."
             )
-        plan = render_story_plan_prompts(llm_result.get("data"))
+        current_story = load_story(story_id)
+        plan = render_story_plan_prompts(
+            llm_result.get("data"),
+            current_story.get("invariants"),
+        )
         story = apply_developed_plan(
             story_id,
             plan,

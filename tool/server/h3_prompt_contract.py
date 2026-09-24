@@ -147,6 +147,43 @@ def _shared_context_index(plan):
     return index
 
 
+def _story_invariant_index(invariants):
+    index = {}
+    for item in invariants if isinstance(invariants, list) else []:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip().lower()
+        title = str(item.get("title") or "").strip()
+        text = str(item.get("text") or "").strip()
+        if kind not in {"character", "location"} or not title or not text:
+            continue
+        index[(kind, title.casefold())] = {
+            "kind": kind,
+            "title": title,
+            "text": text,
+        }
+    return index
+
+
+def _invariant_refs_text(refs, invariant_index):
+    lines = []
+    seen = set()
+    for ref in refs if isinstance(refs, list) else []:
+        if not isinstance(ref, dict):
+            continue
+        kind = str(ref.get("kind") or "").strip().lower()
+        title = str(ref.get("title") or "").strip()
+        key = (kind, title.casefold())
+        if key in seen:
+            continue
+        item = invariant_index.get(key)
+        if item is None:
+            continue
+        seen.add(key)
+        lines.append(item["kind"].capitalize() + " " + item["title"] + ": " + item["text"])
+    return "\n".join(lines)
+
+
 def inject_shared_context_text(prompt_data, shared_context_text):
     if not isinstance(prompt_data, dict):
         raise ValueError("MiniMax H3 structured output must be an object.")
@@ -233,20 +270,26 @@ def _canonical_story_plan_shape(plan):
     return rendered
 
 
-def render_story_plan_prompts(plan):
+def render_story_plan_prompts(plan, story_invariants=None):
     rendered = _canonical_story_plan_shape(plan)
     scenes = rendered.get("scenes")
     if not isinstance(scenes, list):
         raise ValueError("Storyboard Scene plan Scenes must be an array.")
     context_index = _shared_context_index(rendered)
+    invariant_index = _story_invariant_index(story_invariants)
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict):
             raise ValueError("Storyboard Scene plan Scene " + str(index) + " must be an object.")
-        prompt_data = _inject_shared_context(
-            scene.get("prompt"),
-            scene.get("sharedContextRefs") if isinstance(scene.get("sharedContextRefs"), list) else [],
-            context_index,
+        shared_lines = []
+        for context_id in scene.get("sharedContextRefs") if isinstance(scene.get("sharedContextRefs"), list) else []:
+            item = context_index.get(str(context_id or "").strip())
+            if item is not None:
+                shared_lines.append(item["label"] + ": " + item["description"])
+        invariant_text = _invariant_refs_text(scene.get("invariantRefs"), invariant_index)
+        continuity_text = "\n".join(
+            part for part in ("\n".join(shared_lines), invariant_text) if part
         )
+        prompt_data = inject_shared_context_text(scene.get("prompt"), continuity_text)
         scene["prompt"] = render_base_prompt(
             prompt_data,
             mode="T2VA",

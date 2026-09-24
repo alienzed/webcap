@@ -226,6 +226,10 @@ def test_define_invariants_is_a_small_character_location_pass():
     item = schema["properties"]["invariants"]["items"]
     assert item["properties"]["kind"]["enum"] == ["character", "location"]
     assert "recurring characters and recurring locations" in prompt
+    assert "eye color" in prompt
+    assert "hair color" in prompt
+    assert "hair length" in prompt
+    assert "skin tone" in prompt
     assert "Do not plan Scenes." in prompt
     assert '"kind":"character"' in prompt
     assert '"kind":"location"' in prompt
@@ -261,7 +265,9 @@ def test_character_continuity_is_authoritative_without_lora_or_media_reasoning()
 
     assert prompt.count("RECURRING CHARACTERS STAY THE SAME PEOPLE.") == 1
     assert "Preserve established identity across independent Scenes." in prompt
-    assert "ethnicity/heritage" not in prompt
+    assert "broad racial or ethnic appearance" in prompt
+    assert "eye color" in prompt
+    assert "hair length" in prompt
     assert "no LoRA" not in prompt
     assert "LoRA or exact" not in prompt
 
@@ -273,6 +279,8 @@ def test_develop_story_schema_keeps_scene_planning_independent_of_shared_context
     assert "sharedContext" not in schema["properties"]
     scene = schema["properties"]["scenes"]["items"]
     assert "sharedContextRefs" not in scene["properties"]
+    assert "invariantRefs" in scene["required"]
+    assert scene["properties"]["invariantRefs"]["items"]["required"] == ["kind", "title"]
 
 
 def test_scene_local_prompt_reuses_developed_shared_continuity():
@@ -296,6 +304,28 @@ def test_scene_local_prompt_reuses_developed_shared_continuity():
     assert "Wardrobe: Mara wears a pale raincoat." in request["prompt"]
     assert "Lobby: Dark terrazzo lobby with brass fixtures." in request["prompt"]
     assert request["result_renderer"]["shared_context"].startswith("Mara: Mara has a dark bob.")
+
+
+def test_scene_local_prompt_uses_only_relevant_story_invariants_as_authoritative_anchors():
+    story = _story()
+    story["invariants"] = [
+        {"kind": "character", "title": "Mara", "text": "White woman, early 30s, hazel eyes, shoulder-length dark brown hair."},
+        {"kind": "character", "title": "Jon", "text": "Black man, late 30s, shaved head, brown eyes."},
+        {"kind": "location", "title": "Lobby", "text": "Dark terrazzo floor, brass desk, rain-streaked windows."},
+    ]
+    story["scenes"]["scene-2"]["invariantRefs"] = [
+        {"kind": "character", "title": "Mara"},
+        {"kind": "location", "title": "Lobby"},
+    ]
+
+    request = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")
+
+    assert "[SCENE INVARIANTS]" in request["prompt"]
+    assert "White woman, early 30s, hazel eyes" in request["prompt"]
+    assert "Dark terrazzo floor, brass desk" in request["prompt"]
+    assert "Black man, late 30s" not in request["prompt"]
+    assert "White woman, early 30s, hazel eyes" in request["result_renderer"]["shared_context"]
+    assert "Black man, late 30s" not in request["result_renderer"]["shared_context"]
 
 
 def test_scene_local_prompt_does_not_solicit_unsolicited_advice():

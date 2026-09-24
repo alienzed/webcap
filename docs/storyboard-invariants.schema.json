@@ -33,7 +33,8 @@
           },
           "text": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "For a character, a concrete reusable visual identity; for a location, a concrete reusable physical design."
           }
         }
       }

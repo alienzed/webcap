@@ -502,8 +502,11 @@ def test_storyboard_develop_result_refuses_to_replace_scene_with_active_take(llm
 def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_root, monkeypatch):
     story = storyboard_store.create_story({
         "title": "Story",
-        "concept": "A woman crosses a silent lobby.",
+        "concept": "Elena crosses a silent lobby.",
         "targetSceneCount": 1,
+        "invariants": [
+            {"kind": "character", "title": "Elena", "text": "White woman in her early 30s with fair skin, hazel eyes, and shoulder-length dark brown wavy hair."},
+        ],
     })
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
     monkeypatch.setattr(
@@ -517,10 +520,13 @@ def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_r
                     "entryState": "She stands at the door.",
                     "exitState": "She reaches the desk.",
                     "prompt": {
-                        "integrated_multimodal_description": "She crosses the lobby toward the desk.",
+                        "integrated_multimodal_description": "Elena crosses the lobby toward the desk.",
                         "overall_soundscape": "Soft footsteps and distant rain.",
                         "non_diegetic_music": "N/A",
                     },
+                    "invariantRefs": [
+                        {"kind": "character", "title": "Elena"},
+                    ],
                     "suggestedDurationSeconds": 6,
                     "continuity": {"continuesPreviousScene": False, "carryForward": []},
                 }]
@@ -549,10 +555,14 @@ def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_r
 
     assert finished["status"] == "completed"
     assert prompt == (
-        "integrated_multimodal_description: [Shot 1] She crosses the lobby toward the desk.\n\n"
+        "integrated_multimodal_description: [Shot 1] Continuity anchors — "
+        "Character Elena: White woman in her early 30s with fair skin, hazel eyes, and shoulder-length dark brown wavy hair. "
+        "Elena crosses the lobby toward the desk.\n\n"
         "overall_soundscape: Soft footsteps and distant rain.\n\n"
         "non_diegetic_music: N/A"
     )
+    scene = stored["scenes"][stored["sceneOrder"][0]]
+    assert scene["invariantRefs"] == [{"kind": "character", "title": "Elena"}]
 
 
 def test_llm_restart_marks_only_active_work_interrupted(llm_root):

@@ -90,6 +90,36 @@ def test_h3_story_plan_renderer_converts_structured_prompt_objects_without_mutat
     assert "Hotel lobby: The lobby has dark terrazzo floors" in rendered["scenes"][0]["prompt"]
 
 
+def test_h3_story_plan_renderer_injects_only_referenced_story_invariants_verbatim():
+    plan = {
+        "scenes": [{
+            "title": "Funeral",
+            "summary": "Elena stands apart from the mourners.",
+            "entryState": "At the cemetery.",
+            "exitState": "She watches the mourners leave.",
+            "prompt": _fields(),
+            "invariantRefs": [
+                {"kind": "character", "title": "Elena"},
+                {"kind": "location", "title": "Cemetery"},
+            ],
+            "suggestedDurationSeconds": 6,
+            "continuity": {"continuesPreviousScene": False, "carryForward": []},
+        }]
+    }
+    invariants = [
+        {"kind": "character", "title": "Elena", "text": "White woman in her early 30s, fair skin, hazel eyes, shoulder-length dark brown wavy hair."},
+        {"kind": "character", "title": "Jon", "text": "Black man in his late 30s with a shaved head."},
+        {"kind": "location", "title": "Cemetery", "text": "Old hillside cemetery with weathered gray markers and mature maples."},
+    ]
+
+    rendered = h3_prompt_contract.render_story_plan_prompts(plan, invariants)
+    prompt = rendered["scenes"][0]["prompt"]
+
+    assert "Character Elena: White woman in her early 30s" in prompt
+    assert "Location Cemetery: Old hillside cemetery" in prompt
+    assert "Black man in his late 30s" not in prompt
+
+
 def test_h3_story_plan_renderer_does_not_require_shared_context():
     plan = {
         "scenes": [{

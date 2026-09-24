@@ -165,11 +165,13 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
             "Produce exactly " + str(target_scene_count) + " Scenes. Give each meaningful narrative beat its own generatable Scene and pace the material across the full requested Scene count rather than compressing several beats together. "
-            "Keep every Scene between 4 and 15 seconds. Preserve coherent narrative progression, explicit entry/exit "
-            "continuity, supplied Story facts, and Story invariants across the sequence. Provide complete structured H3 content "
-            "for every Scene now, not a placeholder; WebCap will render the exact model-facing field labels and spacing. Be creatively useful: invent natural dialogue, performance details, "
-            "camera behavior, sound, and music when they improve the Story and remain consistent with the supplied material. "
-            "Each Scene prompt must be independently generatable and follow the supplied H3 base prompt rules. "
+            "Keep every Scene between 4 and 15 seconds. Preserve coherent narrative progression, explicit entry/exit continuity, supplied Story facts, and Story invariants across the sequence. "
+            "Before writing Scenes, establish sharedContext for recurring subjects, wardrobe states, locations, and other persistent visible/audible facts. These definitions must be concrete, visually detailed, and reusable verbatim. "
+            "Do not redesign the same character, clothes, room, weather, props, or other persistent state for variety. Reuse the same sharedContext IDs in every Scene where they still apply, and create a new wardrobe/location/persistent-state definition only when the Story explicitly changes it. "
+            "Each Scene must list sharedContextRefs for the exact shared definitions that apply to that Scene. Treat those references as authoritative continuity. WebCap will inject the referenced descriptions into the final H3 prompt mechanically; do not depend on implicit memory between Scenes. "
+            "Use continuity.carryForward only for state changes created by a Scene, not for static shared definitions. "
+            "Provide complete structured H3 content for every Scene now, not a placeholder; WebCap will render the exact model-facing field labels and spacing. Be creatively useful: invent natural dialogue, performance details, camera behavior, sound, and music when they improve the Story and remain consistent with the supplied material. "
+            "Each Scene prompt must be independently generatable and follow the supplied H3 base prompt rules. Repeat important identity/wardrobe/location facts through sharedContext references rather than synonymizing or creatively varying them. "
             "Return only JSON matching the supplied schema."
         )
         return {

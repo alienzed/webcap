@@ -316,6 +316,34 @@ def resolve_scene_generation_defaults(story, scene):
     }
 
 
+def resolve_scene_shared_context(story, scene):
+    refs = scene.get("sharedContextRefs") if isinstance((scene or {}).get("sharedContextRefs"), list) else []
+    if not refs:
+        return ""
+    development = story.get("development") if isinstance((story or {}).get("development"), dict) else {}
+    plan = development.get("plan") if isinstance(development.get("plan"), dict) else {}
+    shared = plan.get("sharedContext") if isinstance(plan.get("sharedContext"), dict) else {}
+    by_id = {}
+    for category in ("subjects", "wardrobes", "locations", "persistentFacts"):
+        items = shared.get(category) if isinstance(shared.get(category), list) else []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            context_id = str(item.get("id") or "").strip()
+            description = str(item.get("description") or "").strip()
+            if context_id and description:
+                by_id[context_id] = (
+                    (str(item.get("label") or context_id).strip() or context_id)
+                    + ": "
+                    + description
+                )
+    return "\n".join(
+        by_id[ref]
+        for ref in (str(value or "").strip() for value in refs)
+        if ref in by_id
+    )
+
+
 def resolve_scene_loras(story, scene):
     story_loras = _normalize_loras((story or {}).get("loras", []), allow_enabled=True)
     scene_loras = _normalize_loras((scene or {}).get("loras", []))
@@ -548,7 +576,7 @@ def duplicate_story(story_id):
     duplicate["development"] = copy.deepcopy(source.get("development")) if isinstance(source.get("development"), dict) else None
 
     scene_fields = (
-        "title", "summary", "entryState", "exitState", "prompt", "promptDirectorModel", "planDirectorModel", "sharedContextRefs",
+        "title", "summary", "entryState", "exitState", "prompt", "promptDirectorModel", "promptDirectorJobId", "planDirectorModel", "sharedContextRefs",
         "durationSeconds", "aspectRatio", "megapixels", "seed", "seedMode",
         "wildcardsEnabled", "loras", "storyLoraOverrides", "notes",
     )

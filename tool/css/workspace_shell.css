@@ -1248,6 +1248,27 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   gap: 1px;
 }
 
+.inference-queue-link {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inference-queue-link:hover strong,
+.inference-queue-link:focus-visible strong {
+  color: var(--accent);
+}
+
+.inference-queue-link:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 3px;
+}
+
 .inference-queue-copy strong,
 .inference-queue-copy span,
 .inference-queue-copy small {

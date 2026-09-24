@@ -58,6 +58,7 @@ def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs
     assert settings == {
         "prompt": "A quiet hallway.",
         "sourcePrompt": "A quiet hallway.",
+        "sharedContext": "",
         "entryState": "The hall is empty.",
         "exitState": "A door at the far end opens.",
         "wildcardsEnabled": False,
@@ -103,7 +104,9 @@ def test_scene_settings_compile_shared_continuity_into_final_prompt(storyboard_f
     assert "Mara: Mara has a dark bob." in settings["prompt"]
     assert "Wardrobe: Mara wears a pale raincoat." in settings["prompt"]
     assert "Lobby: Dark terrazzo lobby with brass fixtures." in settings["prompt"]
-    assert settings["sourcePrompt"] == settings["prompt"]
+    assert "Continuity anchors —" not in settings["sourcePrompt"]
+    assert "Continuity anchors —" in settings["prompt"]
+    assert settings["sharedContext"].startswith("Mara: Mara has a dark bob.")
 
 
 def test_scene_settings_inherit_story_generation_defaults(storyboard_fs, monkeypatch):
@@ -168,6 +171,40 @@ def test_scene_settings_resolve_story_loras_before_queueing(storyboard_fs):
         {"name": "characters/alice.safetensors", "strength": 0.7},
         {"name": "clothing/dress.safetensors", "strength": 0.6},
     ]
+
+
+def test_storyboard_wildcards_resolve_before_shared_continuity_is_injected(storyboard_fs, monkeypatch):
+    monkeypatch.setattr(
+        storyboard_generation.inference_runtime,
+        "resolve_wildcard_prompt",
+        lambda prompt, seed: prompt.replace("{action}", "walks"),
+    )
+    settings = {
+        "prompt": (
+            "integrated_multimodal_description: [Shot 1] walks.\n\n"
+            "overall_soundscape: Room tone.\n\nnon_diegetic_music: N/A"
+        ),
+        "sourcePrompt": (
+            "integrated_multimodal_description: [Shot 1] {action}.\n\n"
+            "overall_soundscape: Room tone.\n\nnon_diegetic_music: N/A"
+        ),
+        "sharedContext": "Wardrobe: She wears literal {red|blue} stitching.",
+        "wildcardsEnabled": True,
+        "aspectRatio": "4:3 (Standard)",
+        "megapixels": 0.2,
+        "duration": 6,
+        "seed": 1,
+        "seedMode": "fixed",
+        "entryState": "",
+        "exitState": "",
+        "loras": [],
+        "references": [],
+    }
+
+    request = storyboard_generation._storyboard_request(settings)
+
+    assert "[Shot 1] Continuity anchors — Wardrobe: She wears literal {red|blue} stitching. walks." in request["prompt"]
+    assert "{action}" in request["sourcePrompt"]
 
 
 def test_storyboard_request_preserves_full_reference_provenance(storyboard_fs):

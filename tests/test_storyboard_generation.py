@@ -71,6 +71,26 @@ def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs
     }
 
 
+
+def test_scene_settings_inherit_story_generation_defaults(storyboard_fs, monkeypatch):
+    monkeypatch.setattr(storyboard_generation.secrets, "randbelow", lambda _limit: 99)
+    story = {
+        "generationDefaults": {"aspectRatio": "21:9 (Ultrawide)", "megapixels": 0.45},
+    }
+    scene = {
+        "prompt": "A wide establishing shot.",
+        "durationSeconds": 7,
+        "aspectRatio": None,
+        "megapixels": None,
+        "seedMode": "random",
+    }
+
+    settings = storyboard_generation._scene_settings(scene, story)
+
+    assert settings["aspectRatio"] == "21:9 (Ultrawide)"
+    assert settings["megapixels"] == 0.45
+    assert settings["seed"] == 99
+
 def test_scene_settings_reject_h3_duration_outside_supported_range(storyboard_fs):
     with pytest.raises(ValueError, match="between 4 and 15"):
         storyboard_generation._scene_settings({

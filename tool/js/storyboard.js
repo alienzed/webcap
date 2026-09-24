@@ -1655,7 +1655,7 @@
     var activeHtml = renderOrder.map(function (sceneId) {
       var index = order.indexOf(sceneId);
       var scene = scenes[sceneId] || {};
-      var developmentModel = String((story.development && story.development.model) || '').trim();
+      var planDirectorModel = String(scene.planDirectorModel || '').trim();
       var promptDirectorModel = String(scene.promptDirectorModel || '').trim();
       var seedMode = sceneValue(scene, 'seedMode', 'random');
       var seed = sceneValue(scene, 'seed', '');
@@ -1731,7 +1731,7 @@
       return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<header class="storyboard-scene-header">' +
           '<span class="storyboard-scene-number"' +
-            (developmentModel ? ' title="Scene plan created by Director model ' + escapeHtml(developmentModel) + '"' : '') +
+            (planDirectorModel ? ' title="Scene plan originated from Director model ' + escapeHtml(planDirectorModel) + '"' : '') +
           '>Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
           '<input class="storyboard-scene-title" data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title">' +
           '<details class="storyboard-scene-menu">' +

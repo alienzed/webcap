@@ -525,7 +525,7 @@
       label.textContent = 'Model size unavailable';
       fill.style.width = '0%';
       if (track) track.removeAttribute('aria-valuenow');
-      meter.title = 'llama.cpp did not expose a usable size for the selected model. WebCap does not scan the model directory to estimate it.';
+      meter.title = 'WebCap could not resolve the selected model size from llama.cpp metadata or the configured model path.';
       return;
     }
 

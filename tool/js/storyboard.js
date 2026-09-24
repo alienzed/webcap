@@ -648,11 +648,14 @@
     window.localStorage.setItem('webcap.storyboard.storyCollapsed', storyState.storyCollapsed ? '1' : '0');
     var authoring = el('storyboard-story-authoring');
     var editor = el('storyboard-editor-content');
-    var button = el('storyboard-story-toggle');
+    var collapseButton = el('storyboard-story-toggle');
+    var expandButton = el('storyboard-story-expand-toggle');
     authoring.classList.toggle('hidden', storyState.storyCollapsed);
     editor.classList.toggle('story-collapsed', storyState.storyCollapsed);
-    button.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
-    button.textContent = storyState.storyCollapsed ? 'Expand Story' : 'Collapse Story';
+    collapseButton.classList.toggle('hidden', storyState.storyCollapsed);
+    collapseButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
+    expandButton.classList.toggle('hidden', !storyState.storyCollapsed);
+    expandButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
   }
 
   function ensureActiveScene(order) {
@@ -686,9 +689,22 @@
     host.innerHTML = order.map(function (sceneId, index) {
       var scene = scenes[sceneId] || {};
       var newTakeCount = Number(storyState.newTakeCounts[sceneId] || 0);
+      var jobs = generationJobsForScene(sceneId);
+      var queuedCount = jobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
+      var activeCount = jobs.filter(function (job) {
+        return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
+      }).length;
+      var workBadge = activeCount
+        ? '<span class="storyboard-scene-progress-work is-active" title="' + String(activeCount) + ' active generation' + (activeCount === 1 ? '' : 's') + '">●</span>'
+        : (queuedCount
+          ? '<span class="storyboard-scene-progress-work is-queued" title="' + String(queuedCount) + ' queued generation' + (queuedCount === 1 ? '' : 's') + '">Q' + (queuedCount > 1 ? String(queuedCount) : '') + '</span>'
+          : '');
       return '<button type="button" class="storyboard-scene-progress-step' + (sceneId === active ? ' active' : '') + '" data-scene-progress="' + escapeHtml(sceneId) + '">' +
         '<span class="storyboard-scene-progress-kicker">Scene ' + String(index + 1).padStart(2, '0') +
-          (newTakeCount ? '<span class="storyboard-scene-progress-badge" title="' + String(newTakeCount) + ' new Take' + (newTakeCount === 1 ? '' : 's') + '">' + String(newTakeCount) + '</span>' : '') +
+          '<span class="storyboard-scene-progress-indicators">' +
+            workBadge +
+            (newTakeCount ? '<span class="storyboard-scene-progress-badge" title="' + String(newTakeCount) + ' new Take' + (newTakeCount === 1 ? '' : 's') + '">' + String(newTakeCount) + '</span>' : '') +
+          '</span>' +
         '</span>' +
         '<strong>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
       '</button>';
@@ -2523,7 +2539,8 @@
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
 
     el('storyboard-new-btn').onclick = createStory;
-    el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
+    el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(true); };
+    el('storyboard-story-expand-toggle').onclick = function () { setStoryCollapsed(false); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
     el('storyboard-expand-concept-btn').onclick = expandConcept;

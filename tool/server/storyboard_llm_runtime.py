@@ -393,6 +393,8 @@ def _model_file_size(model):
     filename = PureWindowsPath(raw_path).name if raw_path else str(model.get("id") or "").strip()
     if not filename:
         raise FileNotFoundError("Storyboard Director model filename is missing.")
+    if not filename.casefold().endswith(".gguf"):
+        filename += ".gguf"
 
     models_dir = _director_config().get("models_dir")
     if models_dir is None:

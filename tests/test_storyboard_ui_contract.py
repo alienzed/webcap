@@ -219,6 +219,11 @@ def test_storyboard_director_busy_state_only_protects_its_edit_target():
     assert "var directorTarget = { kind: 'scenes' };" in storyboard
     assert "var directorTarget = { kind: 'scene-prompt', sceneId: sceneId };" in storyboard
     assert "storyboard-delete-story-btn" not in storyboard.split("function setDirectorBusy", 1)[1].split("function expandConcept", 1)[0]
+    assert "detachedScenePrompt = kind === 'scene-prompt' && !target" in storyboard
+    assert "scene: { prompt: generatedPrompt }" in storyboard
+    assert "if (currentPrompt) currentPrompt.value = generatedPrompt;" in storyboard
+    assert "setDirectorTargetProtected(storyState.director.activityTarget, true);" in storyboard
+    assert ".storyboard-director-activity.is-detached-target" in (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
 
 def test_storyboard_director_actions_share_one_busy_state_and_concept_restore():

@@ -158,7 +158,7 @@ def _storyboard_request(settings):
         "loras": copy.deepcopy(settings.get("loras") or []),
         "references": references,
         "referenceRecords": copy.deepcopy(settings.get("references") or []),
-        "workflowFile": "minimax_h3_storyboard_api.json",
+        "workflowFile": "minimax_h3_inference_api.json",
         "entryState": str(settings.get("entryState") or ""),
         "exitState": str(settings.get("exitState") or ""),
         "seedMode": str(settings.get("seedMode") or ""),

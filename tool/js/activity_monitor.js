@@ -7,7 +7,8 @@
     payload: { active: [], recent: [], queues: {} },
     timer: 0,
     pending: false,
-    lastSeen: loadLastSeen()
+    lastSeen: loadLastSeen(),
+    openedAt: 0
   };
 
   function el(id) { return document.getElementById(id); }
@@ -329,7 +330,7 @@
 
     var unseen = unseenCount();
     badge.textContent = unseen > 99 ? '99+' : String(unseen);
-    badge.classList.toggle('hidden', unseen === 0);
+    badge.classList.toggle('hidden', unseen === 0 || state.open);
     summary.textContent = active.length
       ? String(active.length) + ' active · ' + (unseen ? String(unseen) + ' new' : 'up to date')
       : (unseen ? String(unseen) + ' completed since your last check' : 'Now and recently completed work');
@@ -388,10 +389,14 @@
   }
 
   function setOpen(open) {
+    var wasOpen = state.open;
     state.open = !!open;
     if (state.open) {
+      if (!wasOpen) state.openedAt = Date.now() / 1000;
       if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
+    } else if (wasOpen) {
       storeLastSeen(Date.now() / 1000);
+      state.openedAt = 0;
     }
     render();
     refresh().then(schedule);

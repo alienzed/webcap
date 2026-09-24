@@ -286,34 +286,59 @@
     return parts.length ? parts[parts.length - 1] : String(folder || '');
   }
 
+  function testSourceLabel(item) {
+    var source = String(item && item.source || '');
+    if (source) {
+      var parts = source.split('/').filter(Boolean);
+      return parts.length ? parts[parts.length - 1] : source;
+    }
+    return 'Test root';
+  }
+
+  function openTestBenchSource(folder, source, modelId) {
+    var targetFolder = String(folder || '');
+    pendingTestSource = String(source || '');
+    if (modelId) setWorkingModelProfileId(String(modelId), targetFolder);
+    if (targetFolder) {
+      openTestBenchFolder(targetFolder, false);
+      return;
+    }
+    openPane();
+  }
+
   function buildTestActivityContextActions() {
     var actions = [];
     var seen = {};
-    var currentFolder = String(state && state.folder || '');
     var active = Array.isArray(testActivity.active) ? testActivity.active : [];
     var recent = Array.isArray(testActivity.recent) ? testActivity.recent : [];
 
     active.forEach(function (item) {
       var folder = String(item && item.folder || '');
-      if (!folder || folder === currentFolder || seen[folder]) return;
-      seen[folder] = true;
+      var source = String(item && item.source || '');
+      var modelId = String(item && item.modelId || '');
+      var key = modelId + '|' + source;
+      if (seen[key]) return;
+      seen[key] = true;
       var completed = Number(item.completed || 0);
       var total = Number(item.total || 0);
       actions.push({
-        label: 'Running · ' + recentSetLabel(folder) + (total ? ' · ' + completed + ' / ' + total : ''),
-        run: function () { openTestBenchFolder(folder, true); }
+        label: 'Running · ' + testSourceLabel(item) + (total ? ' · ' + completed + ' / ' + total : ''),
+        run: function () { openTestBenchSource(folder, source, modelId); }
       });
     });
 
     var recentActions = [];
     recent.some(function (item) {
       var folder = String(item && item.folder || '');
-      if (!folder || folder === currentFolder || seen[folder]) return false;
-      seen[folder] = true;
+      var source = String(item && item.source || '');
+      var modelId = String(item && item.modelId || '');
+      var key = modelId + '|' + source;
+      if (seen[key]) return false;
+      seen[key] = true;
       var sessionCount = Number(item.sessionCount || 0);
       recentActions.push({
-        label: recentSetLabel(folder) + (sessionCount ? ' · ' + sessionCount + ' session' + (sessionCount === 1 ? '' : 's') : ''),
-        run: function () { openTestBenchFolder(folder, true); }
+        label: testSourceLabel(item) + (sessionCount ? ' · ' + sessionCount + ' session' + (sessionCount === 1 ? '' : 's') : ''),
+        run: function () { openTestBenchSource(folder, source, modelId); }
       });
       return recentActions.length >= 5;
     });
@@ -335,9 +360,9 @@
     if (active) {
       var completed = Number(active.completed || 0);
       var total = Number(active.total || 0);
-      activityButton.title = 'Test Generations · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total + ' · Right-click for Test sets';
+      activityButton.title = 'Test Generations · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total + ' · Right-click for Test sources';
     } else {
-      activityButton.title = 'Test Generations · Right-click for recent Test sets';
+      activityButton.title = 'Test Generations · Right-click for recent Test sources';
     }
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
@@ -374,13 +399,17 @@
   }
 
   function openTestBenchActivity() {
-    var currentFolder = String(state && state.folder || '');
-    if (currentFolder) {
-      openTestBenchFolder(currentFolder, false);
+    if (isOpen()) return;
+    var active = Array.isArray(testActivity.active) && testActivity.active.length ? testActivity.active[0] : null;
+    if (active) {
+      openTestBenchSource(
+        String(active.folder || ''),
+        String(active.source || ''),
+        String(active.modelId || '')
+      );
       return;
     }
-    var active = Array.isArray(testActivity.active) && testActivity.active.length ? testActivity.active[0] : null;
-    if (active && active.folder) openTestBenchFolder(String(active.folder), false);
+    openPane();
   }
 
   function openTestBenchActivityMenu(event) {

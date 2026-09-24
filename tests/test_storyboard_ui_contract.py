@@ -382,9 +382,11 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
     assert "startDirectorActivity({ kind: 'scene-prompt', sceneId: sceneId })" in storyboard
     assert ".storyboard-director-activity {" in css
     assert "position: absolute;" in css
-    assert "width: 380px;" in css
+    assert "fillsField = kind === 'concept' || kind === 'scene-prompt'" in storyboard
+    assert "card.style.height = Math.round(height) + 'px';" in storyboard
+    assert ".storyboard-director-activity.is-field-overlay" in css
     assert "#storyboard-director-activity-trend svg" in css
-    assert "height: 54px;" in css
+    assert "min-height: 72px;" in css
 
 
 def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
@@ -399,6 +401,7 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
     assert 'id="storyboard-director-model"' in scenes_heading
     assert 'id="storyboard-scenes-overview-btn"' in scenes_heading
     assert 'id="storyboard-scenes-focus-btn"' in scenes_heading
+    assert 'data-inference-queue-toggle' in scenes_heading
     assert "storyboard-scene-progress-work" in storyboard
     assert "generationJobsForScene(sceneId)" in storyboard
     assert ".storyboard-story-panel-heading" in css

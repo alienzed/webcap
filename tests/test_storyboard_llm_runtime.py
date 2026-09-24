@@ -170,6 +170,32 @@ def test_model_file_size_reads_single_model_directory_without_deep_scan(tmp_path
     assert storyboard_llm_runtime._model_file_size({"path": str(model_dir)}) == 3072
 
 
+def test_director_activity_completion_preserves_usage_timings_and_context():
+    storyboard_llm_runtime._set_activity(
+        "preparing",
+        model_id="director",
+        operation="develop_story",
+        active=True,
+        context_size=16384,
+    )
+    storyboard_llm_runtime._set_activity(
+        "complete",
+        model_id="director",
+        operation="develop_story",
+        active=False,
+        usage={"prompt_tokens": 2000, "completion_tokens": 500, "total_tokens": 2500},
+        timings={"predicted_per_second": 40.5, "cached_n": 1200},
+    )
+
+    activity = storyboard_llm_runtime.activity_status()
+
+    assert activity["contextSize"] == 16384
+    assert activity["usage"]["prompt_tokens"] == 2000
+    assert activity["usage"]["completion_tokens"] == 500
+    assert activity["timings"]["predicted_per_second"] == 40.5
+    assert activity["timings"]["cached_n"] == 1200
+
+
 def test_loading_activity_exposes_selected_model_size(monkeypatch, tmp_path):
     model_path = tmp_path / "director.gguf"
     model_path.write_bytes(b"x" * 4096)

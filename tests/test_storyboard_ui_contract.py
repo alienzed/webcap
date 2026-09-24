@@ -226,7 +226,7 @@ def test_storyboard_director_pending_state_is_target_scoped():
     assert "var directorTarget = { kind: 'scenes', storyId: storyId };" in storyboard
     assert "var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId };" in storyboard
     assert "detachedScenePrompt = kind === 'scene-prompt' && !target" in storyboard
-    assert "scene: { prompt: generatedPrompt, promptDirectorModel: String(payload.model || modelId) }" in storyboard
+    assert "promptDirectorJobId: String(payload.jobId || '')" in storyboard
     assert "if (currentPrompt) currentPrompt.value = generatedPrompt;" in storyboard
     assert ".storyboard-director-activity.is-detached-target" in (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
@@ -262,6 +262,25 @@ def test_storyboard_director_requests_use_shared_llm_queue():
     assert 'EXECUTION_LANE = "llm"' in runner
     assert '"storyboard"' in runner
     assert '"generate"' in runner
+
+
+def test_storyboard_director_jobs_reconcile_after_browser_refresh():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+
+    assert '@app.route("/fs/director/queue", methods=["GET"])' in app
+    assert "llm_snapshot(include_terminal=_request_bool_arg(\"includeTerminal\"))" in app
+    assert "function directorQueueSnapshot(includeTerminal)" in storyboard
+    assert "function reconcileDirectorJobs()" in storyboard
+    assert "function watchRecoveredDirectorJob(job)" in storyboard
+    assert "function applyRecoveredDirectorResult(job)" in storyboard
+    assert "return reconcileDirectorJobs();" in storyboard
+    assert "directorJobRequest(current.jobId, false)" in storyboard
+    assert "return consumeDirectorJob(current.jobId);" in storyboard
+    assert "promptDirectorJobId" in storyboard
+    assert "promptDirectorJobId" in store
+    assert "scene.promptDirectorJobId" in storyboard
 
 
 def test_storyboard_director_has_non_modal_live_activity():

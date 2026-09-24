@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from .h3_prompt_contract import content_schema, final_shape, mode_from_reference_roles
+
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
 DIRECTOR_CONTEXT_PATH = DOCS_ROOT / "storyboard-director-context.txt"
@@ -48,44 +50,6 @@ def _reference_summary(scene):
         return ""
     return ", ".join(role + " exact visual anchor supplied" for role in roles)
 
-
-def _h3_mode(scene):
-    roles = set(_reference_roles(scene))
-    if roles == {"first_frame", "last_frame"}:
-        return "FL2VA"
-    if roles == {"first_frame"}:
-        return "I2VA"
-    if roles == {"last_frame"}:
-        return "L2VA"
-    return "T2VA"
-
-
-def _h3_output_contract(scene):
-    mode = _h3_mode(scene)
-    duration = float(scene.get("durationSeconds") or 0)
-    if mode == "I2VA":
-        preamble = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."
-    elif mode == "L2VA":
-        preamble = (
-            "How the reference pictures align with the target video — <Picture 1> (from [Shot N]) "
-            "aligns with the " + format(duration, ".2f") + "-second mark of the target video."
-        )
-    elif mode == "FL2VA":
-        preamble = (
-            "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns "
-            "with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the "
-            + format(duration, ".2f") + "-second mark of the target video."
-        )
-    else:
-        preamble = ""
-
-    core = (
-        "integrated_multimodal_description: [Shot 1] ...\n\n"
-        "overall_soundscape: ...\n\n"
-        "non_diegetic_music: ..."
-    )
-    body = core if not preamble else preamble + "\n\n" + core
-    return mode, body
 
 
 def _scene_context(scene):
@@ -225,7 +189,8 @@ def build_request(story, scene_id, operation, instruction=""):
     invariants = _story_invariants_text(story)
     scene_context = _scene_context(scene)
     previous_handoff = _previous_handoff(story, scene_id)
-    h3_mode, h3_output = _h3_output_contract(scene)
+    h3_mode = mode_from_reference_roles(_reference_roles(scene))
+    h3_output = final_shape(h3_mode, scene.get("durationSeconds"))
 
     blocks = [
         "[DIRECTOR CONTEXT]\n" + director_context,
@@ -251,7 +216,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[H3 OUTPUT CONTRACT]\n"
             + h3_output
-            + "\n\nUse the supplied Scene facts and exact frame anchors. Return only the final model-facing prompt."
+            + "\n\nWebCap owns the final labels and alignment syntax. Return only the three semantic field values through the supplied JSON schema."
         )
         blocks.append(
             "[CURRENT TASK]\nWrite the MiniMax H3 prompt for this Scene. "
@@ -274,12 +239,18 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[H3 OUTPUT CONTRACT]\n"
             + h3_output
-            + "\n\nPreserve all prompt details unrelated to the requested correction. Return only the revised model-facing prompt."
+            + "\n\nPreserve all prompt details unrelated to the requested correction. WebCap owns the final labels and alignment syntax; return only the three revised semantic field values through the supplied JSON schema."
         )
         blocks.append("[CURRENT TASK]\nApply this correction with the smallest coherent change:\n" + correction)
 
     return {
         "operation": operation,
-        "output": "text",
+        "output": "json",
         "prompt": "\n\n".join(blocks).strip() + "\n",
+        "response_schema": content_schema(),
+        "result_renderer": {
+            "type": "h3_base",
+            "mode": h3_mode,
+            "duration": scene.get("durationSeconds"),
+        },
     }

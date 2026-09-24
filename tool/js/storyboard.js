@@ -640,6 +640,7 @@
 
   function previewDirectorRequest(sceneId, operation) {
     if (!storyState.story) return;
+    var storyId = storyState.story.id;
     var root = sceneElement(sceneId);
     if (!root) throw new Error('Scene editor is missing for ' + sceneId + '.');
     var output = root.querySelector('[data-director-request-preview-output]');
@@ -658,7 +659,7 @@
     output.textContent = 'Building exact Director request…';
     flushPendingSaves().then(function () {
       return directorRequest({
-        storyId: storyState.story.id,
+        storyId: storyId,
         sceneId: sceneId,
         operation: operation,
         model: storyState.director.modelId,

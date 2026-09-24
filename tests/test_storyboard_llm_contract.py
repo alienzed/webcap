@@ -78,6 +78,7 @@ def test_write_prompt_request_is_deliberately_local_and_manual_first():
         "type": "h3_base",
         "mode": "I2VA",
         "duration": 8,
+        "shared_context": "",
     }
 
     assert "A long concept that should not be sent" not in prompt

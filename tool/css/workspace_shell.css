@@ -244,6 +244,13 @@
   display: none !important;
 }
 
+.activity-rail-separator {
+  height: 1px;
+  margin: 4px 5px 2px;
+  background: var(--border);
+  opacity: 0.7;
+}
+
 .inference-queue-rail-btn {
   position: relative;
 }

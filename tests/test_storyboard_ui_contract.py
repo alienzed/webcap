@@ -32,6 +32,16 @@ def test_storyboard_is_a_first_class_independent_workspace():
     assert ".workspace-storyboard-open > .app" in css
 
 
+def test_storyboard_inherited_megapixels_seed_from_story_default_on_focus():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "function seedInheritedSceneMegapixels(input)" in storyboard
+    assert "defaults.megapixels == null ? 0.2 : defaults.megapixels" in storyboard
+    focus_block = storyboard.split("addEventListener('focusin'", 1)[1].split("addEventListener('keydown'", 1)[0]
+    assert 'data-scene-field="megapixels"' in focus_block
+    assert "seedInheritedSceneMegapixels(inheritedMegapixels)" in focus_block
+
+
 def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

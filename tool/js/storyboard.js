@@ -293,7 +293,7 @@
     if (job.operation === 'develop_story') return { kind: 'scenes', storyId: job.storyId };
     if (job.operation === 'repair_scenes') return { kind: 'repair', storyId: job.storyId };
     if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
-      return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId };
+      return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId, operation: job.operation };
     }
     return null;
   }
@@ -1085,7 +1085,7 @@
   function runDirector(sceneId, operation) {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
-    var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId };
+    var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId, operation: operation };
     if (directorTargetBlocked(directorTarget)) {
       reportError(new Error('That Scene prompt already has Director work pending.'));
       return;
@@ -1202,7 +1202,7 @@
       var prompt = root.querySelector('[data-scene-field="prompt"]');
       var duration = root.querySelector('[data-scene-field="durationSeconds"]');
       if (prompt) prompt.disabled = !!protectedState;
-      if (duration) duration.disabled = !!protectedState;
+      if (duration && target.operation === 'refine_prompt') duration.disabled = !!protectedState;
       return;
     }
     if (target.kind === 'repair') {

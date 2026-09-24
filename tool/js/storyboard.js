@@ -1896,9 +1896,6 @@
           '<aside class="storyboard-scene-inspector" aria-label="Scene inspector">' +
             '<section class="storyboard-inspector-section storyboard-generation-inspector">' +
               '<div class="storyboard-inspector-section-heading"><strong>Generation</strong><span>Current Scene</span></div>' +
-              '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Queue a new Take from the current saved Scene.">' +
-                (sceneGenerationJobs.length ? 'Generate Another Take' : 'Generate Take') +
-              '</button>' +
               '<div class="storyboard-generation-settings">' +
                 '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
                 '<label class="storyboard-field" title="Inherit the Story aspect ratio unless this Scene needs an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
@@ -1911,6 +1908,9 @@
                 '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
               '</div>' +
               '<label class="storyboard-inline-check storyboard-generation-wildcards" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
+              '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Queue a new Take from the current saved Scene.">' +
+                (sceneGenerationJobs.length ? 'Generate Another Take' : 'Generate Take') +
+              '</button>' +
             '</section>' +
             '<section class="storyboard-inspector-section storyboard-conditioning-panel">' +
               '<div class="storyboard-inspector-section-heading"><strong>Conditioning</strong><span>' + escapeHtml(conditioningSummary) + '</span></div>' +

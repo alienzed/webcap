@@ -33,6 +33,7 @@ def _default_lane():
         "pauseReason": "",
         "activeJobId": "",
         "jobs": [],
+        "recent": [],
     }
 
 
@@ -78,6 +79,11 @@ def _lane(state, lane_name, create=True):
         lanes[lane_name] = lane
     if not isinstance(lane, dict) or not isinstance(lane.get("jobs"), list):
         raise RuntimeError("Execution queue lane is invalid: " + lane_name)
+    recent = lane.get("recent")
+    if recent is None:
+        lane["recent"] = []
+    elif not isinstance(recent, list):
+        raise RuntimeError("Execution queue lane recent receipts are invalid: " + lane_name)
     lane.setdefault("paused", False)
     lane.setdefault("pauseReason", "")
     lane.setdefault("activeJobId", "")
@@ -111,6 +117,28 @@ def _prune_terminal(lane, keep=200):
         return
     remove_ids = {job.get("id") for job in terminal[:-keep]}
     lane["jobs"] = [job for job in lane.get("jobs", []) if job.get("id") not in remove_ids]
+
+
+def _record_recent(lane, job, keep=80):
+    receipt = _public_job(job)
+    if not isinstance(receipt, dict):
+        return
+    recent = lane.setdefault("recent", [])
+    recent.append(receipt)
+    if len(recent) > keep:
+        del recent[:-keep]
+
+
+def recent_snapshot(lane_name, limit=30):
+    try:
+        limit = max(1, min(int(limit), 80))
+    except (TypeError, ValueError):
+        limit = 30
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name, create=False) or _default_lane()
+        recent = lane.get("recent") if isinstance(lane.get("recent"), list) else []
+        return [copy.deepcopy(item) for item in reversed(recent[-limit:]) if isinstance(item, dict)]
 
 
 def _public_job(job):
@@ -324,6 +352,7 @@ def finish_job(job_id, status="completed", result=None, error=""):
             job.setdefault("result", {}).update(copy.deepcopy(result))
         if lane.get("activeJobId") == job["id"]:
             lane["activeJobId"] = ""
+        _record_recent(lane, job)
         _prune_terminal(lane)
         _refresh_positions(lane)
         _write_state(state)
@@ -362,6 +391,7 @@ def cancel_queued(job_id):
         job["finishedAt"] = now
         job["updatedAt"] = now
         job["requestedAction"] = ""
+        _record_recent(lane, job)
         _refresh_positions(lane)
         _write_state(state)
         return _public_job(job)

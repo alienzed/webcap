@@ -358,6 +358,22 @@ def test_storyboard_lora_chooser_is_single_searchable_field():
     assert "picker.value = '';" in storyboard
 
 
+def test_storyboard_director_activity_floats_over_context_without_reflow():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert "function directorActivityTargetElement()" in storyboard
+    assert "function positionDirectorActivity()" in storyboard
+    assert "startDirectorActivity({ kind: 'concept' })" in storyboard
+    assert "startDirectorActivity({ kind: 'scenes' })" in storyboard
+    assert "startDirectorActivity({ kind: 'scene-prompt', sceneId: sceneId })" in storyboard
+    assert ".storyboard-director-activity {" in css
+    assert "position: absolute;" in css
+    assert "width: 380px;" in css
+    assert "#storyboard-director-activity-trend svg" in css
+    assert "height: 54px;" in css
+
+
 def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

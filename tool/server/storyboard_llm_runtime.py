@@ -1,6 +1,7 @@
 import atexit
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -358,6 +359,72 @@ def _normalize_models(payload):
     return models
 
 
+def _split_gguf_size(path):
+    match = re.fullmatch(r"(.+)-(\\d+)-of-(\\d+)\\.gguf", path.name, flags=re.IGNORECASE)
+    if match is None:
+        return 0
+    shard_text = match.group(2)
+    total_text = match.group(3)
+    try:
+        total = int(total_text)
+    except ValueError:
+        return 0
+    if total <= 1:
+        return 0
+
+    width = len(shard_text)
+    total_width = len(total_text)
+    total_bytes = 0
+    for index in range(1, total + 1):
+        shard = path.with_name(
+            match.group(1)
+            + "-"
+            + str(index).zfill(width)
+            + "-of-"
+            + str(total).zfill(total_width)
+            + ".gguf"
+        )
+        if not shard.is_file():
+            return 0
+        total_bytes += int(shard.stat().st_size)
+    return total_bytes
+
+
+def _model_path_size(path):
+    try:
+        if path.is_file():
+            split_size = _split_gguf_size(path)
+            return split_size or int(path.stat().st_size)
+        if path.is_dir():
+            ggufs = [
+                child
+                for child in path.iterdir()
+                if child.is_file()
+                and child.suffix.casefold() == ".gguf"
+                and not child.name.casefold().startswith("mmproj")
+            ]
+            if not ggufs:
+                return 0
+
+            split_groups = {}
+            singles = []
+            for child in ggufs:
+                match = re.fullmatch(r"(.+)-(\\d+)-of-(\\d+)\\.gguf", child.name, flags=re.IGNORECASE)
+                if match is None:
+                    singles.append(child)
+                    continue
+                split_groups.setdefault((match.group(1), match.group(3)), []).append(child)
+
+            if len(split_groups) == 1 and not singles:
+                representative = next(iter(split_groups.values()))[0]
+                return _split_gguf_size(representative)
+            if len(ggufs) == 1:
+                return int(ggufs[0].stat().st_size)
+    except OSError:
+        return 0
+    return 0
+
+
 def _model_file_size(model):
     model = model if isinstance(model, dict) else {}
     try:
@@ -371,7 +438,6 @@ def _model_file_size(model):
         settings = _director_config()
         models_dir = settings.get("models_dir")
     except Exception:
-        settings = {}
         models_dir = None
 
     candidates = []
@@ -414,11 +480,9 @@ def _model_file_size(model):
         if key in seen:
             continue
         seen.add(key)
-        try:
-            if candidate.is_file():
-                return int(candidate.stat().st_size)
-        except OSError:
-            continue
+        size_bytes = _model_path_size(candidate)
+        if size_bytes:
+            return size_bytes
     return 0
 
 

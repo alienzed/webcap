@@ -24,6 +24,21 @@ def _clean(value):
     return str(value or "").strip()
 
 
+def _prompt_response_schema(allow_duration=False):
+    schema = content_schema()
+    if allow_duration:
+        schema["properties"]["durationSeconds"] = {
+            "type": "number",
+            "minimum": 6,
+            "maximum": 15,
+            "description": (
+                "Optional revised Scene duration in seconds. Include only when the requested refinement "
+                "materially changes how much screen time the Scene needs."
+            ),
+        }
+    return schema
+
+
 def _read_json(path, label):
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -422,17 +437,24 @@ def build_request(story, scene_id, operation, instruction=""):
             + h3_output
             + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. WebCap owns the final labels and alignment syntax; return only the three revised semantic field values through the supplied JSON schema."
         )
-        blocks.append("[CURRENT TASK]\nApply this correction with the smallest coherent change:\n" + correction)
+        blocks.append(
+            "[CURRENT TASK]\nApply this correction with the smallest coherent change:\n"
+            + correction
+            + "\n\nIf the requested change materially changes how much screen time this Scene needs, "
+            "include a revised durationSeconds between 6 and 15 seconds. "
+            "Otherwise omit durationSeconds and keep the current duration unchanged."
+        )
 
     return {
         "operation": operation,
         "output": "json",
         "prompt": "\n\n".join(blocks).strip() + "\n",
-        "response_schema": content_schema(),
+        "response_schema": _prompt_response_schema(allow_duration=operation == "refine_prompt"),
         "result_renderer": {
             "type": "h3_base",
             "mode": h3_mode,
             "duration": scene.get("durationSeconds"),
+            "duration_field": "durationSeconds" if operation == "refine_prompt" else "",
             "shared_context": "\n".join(
                 part for part in (scene_invariants, shared_context) if part
             ),

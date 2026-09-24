@@ -87,11 +87,11 @@ def _reconcile_provider_cleanup_holds():
         try:
             job = inference_runtime.read_job(provider_job_id)
         except Exception:
-            _logger.exception(
-                "Could not verify held inference provider job %s.",
+            _logger.warning(
+                "Could not verify held inference provider job %s; clearing the runtime hold.",
                 provider_job_id,
+                exc_info=True,
             )
-            unresolved.append(provider_job_id)
             continue
         status = str(job.get("status") or "").strip().lower() if isinstance(job, dict) else ""
         if job is not None and status not in {"completed", "failed", "cancelled"}:
@@ -268,6 +268,11 @@ def _advance_queue():
         if snapshot.get("paused") or snapshot.get("activeJobId"):
             return None
 
+        with _provider_hold_lock:
+            cleanup_pending = bool(_provider_cleanup_holds)
+        if cleanup_pending and not _reconcile_provider_cleanup_holds():
+            return None
+
         queued = [job for job in snapshot.get("jobs", []) if job.get("status") == "queued"]
         if not queued:
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
@@ -276,11 +281,6 @@ def _advance_queue():
 
         owner = execution_resource_owner()
         if owner and owner != GPU_RESERVATION_OWNER:
-            return None
-
-        with _provider_hold_lock:
-            cleanup_pending = bool(_provider_cleanup_holds)
-        if cleanup_pending and not _reconcile_provider_cleanup_holds():
             return None
 
         reserved_here = False
@@ -353,7 +353,7 @@ def _monitor_has_work():
         return False
     with _provider_hold_lock:
         if _provider_cleanup_holds:
-            return False
+            return True
     return any(str(job.get("status") or "") == "queued" for job in snapshot.get("jobs", []))
 
 

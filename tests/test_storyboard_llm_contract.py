@@ -171,6 +171,8 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert "Character: Mara" in prompt
     assert "Low analog synth, no vocals." in prompt
     assert "complete model-facing H3 prompt for every Scene now" in prompt
+    assert "approximately 12 Scenes" in prompt
+    assert "4 to 8 Scenes" not in prompt
     assert "at least two Scenes" in prompt
     assert "between 4 and 15 seconds" in prompt
     assert "invent natural dialogue" in prompt

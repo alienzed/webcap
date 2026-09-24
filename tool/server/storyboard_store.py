@@ -1036,7 +1036,7 @@ def update_scene(story_id, scene_id, payload):
 
 
 @_serialized_mutation
-def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id="", operation=""):
+def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id="", operation="", duration_override=None):
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     current = scenes.get(scene_id)
@@ -1046,13 +1046,27 @@ def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id="", op
     if not generated.strip():
         raise ValueError("Storyboard Director returned an empty Scene prompt.")
 
-    scene = _normalize_scene(scene_id, {
+    scene_patch = {
         "prompt": generated,
         "previousPrompt": str(current.get("prompt") or ""),
         "promptDirectorModel": str(model_id or "").strip(),
         "promptDirectorJobId": str(job_id or "").strip(),
         "refineComplete": str(operation or "").strip() == "refine_prompt",
-    }, existing=current)
+    }
+    if duration_override is not None:
+        if str(operation or "").strip() != "refine_prompt":
+            raise ValueError("Only Scene refinement may return a duration override.")
+        if isinstance(duration_override, bool):
+            raise ValueError("Refined Scene duration must be numeric.")
+        try:
+            duration_override = float(duration_override)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Refined Scene duration must be numeric.") from exc
+        if duration_override < 6 or duration_override > 15:
+            raise ValueError("Refined Scene duration must be between 6 and 15 seconds.")
+        scene_patch["durationSeconds"] = duration_override
+
+    scene = _normalize_scene(scene_id, scene_patch, existing=current)
     scenes[scene_id] = scene
     story["scenes"] = scenes
     story["updatedAt"] = _utc_now()

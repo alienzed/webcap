@@ -398,7 +398,19 @@ def _with_session_ratings(session_directory, payload):
     return visible
 
 
-def _candidate_rating_scores(folder_path, model_id=None):
+def _session_source(payload, folder_path):
+    if isinstance(payload, dict) and "source" in payload:
+        return str(payload.get("source") or "").strip()
+    return _default_test_source(folder_path)
+
+
+def _session_matches_source(payload, folder_path, source):
+    if source is None:
+        return True
+    return _session_source(payload, folder_path) == str(source or "").strip()
+
+
+def _candidate_rating_scores(folder_path, model_id=None, source=None):
     root = _session_root(folder_path)
     if not root.is_dir():
         return {}
@@ -409,6 +421,8 @@ def _candidate_rating_scores(folder_path, model_id=None):
         if not session.is_dir() or not (session / "test.json").is_file():
             continue
         payload = _read_status(session) or {}
+        if not _session_matches_source(payload, folder_path, source):
+            continue
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
         if selected_model_id and session_model_id != selected_model_id:
             continue
@@ -450,11 +464,11 @@ def open_session(folder_path, session_name):
     return _with_session_ratings(session, _visible_session_status(folder_path, session))
 
 
-def rating_summary(folder_path, model_id=None):
+def rating_summary(folder_path, model_id=None, source=None):
     return {
         "operation": "test_rating_summary",
-        "candidateScores": _candidate_rating_scores(folder_path, model_id),
-        "sessions": list_sessions(folder_path),
+        "candidateScores": _candidate_rating_scores(folder_path, model_id, source=source),
+        "sessions": list_sessions(folder_path, source=source),
     }
 
 def _session_result_path(session_directory, file_name):
@@ -553,9 +567,13 @@ def prepare(folder_path, model_id=None, source=None):
         "aspectRatioOptions": list(getattr(model, "ASPECT_RATIO_OPTIONS", ())),
         "count": len(loras),
         "files": [path.name for path in loras],
-        "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID),
-        "sessions": list_sessions(folder_path),
-        "latest": status(folder_path, model_id=model.PROFILE_ID),
+        "removableFiles": [
+            path.name for path in loras
+            if path.with_suffix(".webcap.json").is_file()
+        ],
+        "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, source=selected_source),
+        "sessions": list_sessions(folder_path, source=selected_source),
+        "latest": status(folder_path, model_id=model.PROFILE_ID, source=selected_source),
     }
 
 def handle_request(folder_path, mode, selection_criteria=None):
@@ -565,16 +583,19 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return prepare(folder_path, model_id=criteria.get("modelId"), source=criteria.get("source"))
     if operation == "test_status":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return status(folder_path, model_id=criteria.get("modelId"))
+        return status(folder_path, model_id=criteria.get("modelId"), source=criteria.get("source"))
     if operation == "test_sessions":
-        return {"operation": "test_sessions", "sessions": list_sessions(folder_path)}
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return {"operation": "test_sessions", "sessions": list_sessions(folder_path, source=criteria.get("source"))}
     if operation == "test_queue":
-        return queued_jobs(folder_path)
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return queued_jobs(folder_path, source=criteria.get("source"))
     if operation == "test_queue_cancel":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return cancel_queued(folder_path, criteria.get("jobId"))
     if operation == "test_queue_clear":
-        return clear_queued(folder_path)
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return clear_queued(folder_path, source=criteria.get("source"))
     if operation == "test_open_session":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return open_session(folder_path, criteria.get("session"))
@@ -583,7 +604,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return delete_session(folder_path, criteria.get("session"))
     if operation == "test_rating_summary":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return rating_summary(folder_path, model_id=criteria.get("modelId"))
+        return rating_summary(folder_path, model_id=criteria.get("modelId"), source=criteria.get("source"))
     if operation == "test_stop":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return stop(folder_path, session_name=criteria.get("session"))
@@ -1319,7 +1340,7 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
     }
 
 
-def queued_jobs(folder_path):
+def queued_jobs(folder_path, source=None):
     reconcile_startup()
     root = _session_root(folder_path)
     if not root.is_dir():
@@ -1330,7 +1351,7 @@ def queued_jobs(folder_path):
         key=lambda path: path.name.lower(),
     ):
         visible = _sync_inference_session(session_directory)
-        if not visible or visible.get("status") != "queued":
+        if not visible or not _session_matches_source(visible, folder_path, source) or visible.get("status") != "queued":
             continue
         child_jobs = _session_job_records(_read_status(session_directory) or {})
         positions = [
@@ -1366,12 +1387,12 @@ def cancel_queued(folder_path, job_id):
     return {"operation": "test_queue_cancel", "removed": str(job_id), "jobs": queued_jobs(folder_path)["jobs"]}
 
 
-def clear_queued(folder_path):
+def clear_queued(folder_path, source=None):
     removed = 0
-    for job in list(queued_jobs(folder_path)["jobs"]):
+    for job in list(queued_jobs(folder_path, source=source)["jobs"]):
         cancel_queued(folder_path, job["id"])
         removed += 1
-    return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path)["jobs"]}
+    return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path, source=source)["jobs"]}
 
 
 def _visible_session_status(folder_path, session_directory):
@@ -1385,7 +1406,7 @@ def _visible_session_status(folder_path, session_directory):
     return payload
 
 
-def list_sessions(folder_path):
+def list_sessions(folder_path, source=None):
     root = _session_root(folder_path)
     if not root.is_dir():
         return []
@@ -1396,7 +1417,7 @@ def list_sessions(folder_path):
         reverse=True,
     ):
         payload = _visible_session_status(folder_path, session)
-        if not payload or payload.get("status") == "queued":
+        if not payload or not _session_matches_source(payload, folder_path, source) or payload.get("status") == "queued":
             continue
         results = payload.get("results") if isinstance(payload.get("results"), list) else []
         ratings = _session_rating_map(session)
@@ -1423,7 +1444,7 @@ def list_sessions(folder_path):
     return sessions
 
 
-def _latest_status(folder_path, model_id=None):
+def _latest_status(folder_path, model_id=None, source=None):
     root = _session_root(folder_path)
     if not root.is_dir():
         return {"status": "idle"}
@@ -1438,6 +1459,8 @@ def _latest_status(folder_path, model_id=None):
         payload = _visible_session_status(folder_path, session)
         if not payload:
             continue
+        if not _session_matches_source(payload, folder_path, source):
+            continue
         if selected_model and str(payload.get("modelId") or payload.get("model") or "") != selected_model:
             continue
         payloads.append(payload)
@@ -1447,12 +1470,12 @@ def _latest_status(folder_path, model_id=None):
     return payloads[0] if payloads else {"status": "idle"}
 
 
-def _visible_status(folder_path, model_id=None):
-    return _latest_status(folder_path, model_id=model_id)
+def _visible_status(folder_path, model_id=None, source=None):
+    return _latest_status(folder_path, model_id=model_id, source=source)
 
 
-def status(folder_path, model_id=None):
-    payload = _visible_status(folder_path, model_id=model_id)
+def status(folder_path, model_id=None, source=None):
+    payload = _visible_status(folder_path, model_id=model_id, source=source)
     session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
     if not session_name:
         return payload

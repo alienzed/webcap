@@ -43,6 +43,10 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert 'id="storyboard-sequence-preview"' in html
     assert 'id="storyboard-story-tags"' in html
     assert 'id="storyboard-story-status"' in html
+    assert 'id="storyboard-story-target-scenes"' in html
+    assert 'id="storyboard-story-aspect-ratio"' in html
+    assert 'id="storyboard-story-megapixels"' in html
+    assert "Inherit · " in storyboard
     assert "Generation prompt" in storyboard
     assert "durationSeconds" in storyboard
     assert "seedMode" in storyboard

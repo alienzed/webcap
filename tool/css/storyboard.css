@@ -2007,22 +2007,24 @@
 }
 
 .storyboard-director-activity {
-  position: relative;
-  z-index: 2;
-  width: min(860px, calc(100% - 32px));
-  margin: 12px auto 2px;
+  position: absolute;
+  z-index: 40;
+  width: 380px;
+  max-width: calc(100% - 24px);
+  margin: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 34%);
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 42%);
   grid-template-areas: "label trend" "phase trend" "detail trend";
   align-items: center;
-  column-gap: 24px;
-  row-gap: 3px;
-  padding: 12px 18px;
+  column-gap: 16px;
+  row-gap: 4px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: 8px;
-  background: linear-gradient(100deg, var(--panel), var(--panel-soft));
-  box-shadow: 0 5px 16px rgba(0, 0, 0, .14);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .28);
+  backdrop-filter: blur(8px);
 }
 
 .storyboard-director-activity strong {
@@ -2050,11 +2052,20 @@
 #storyboard-director-activity-detail { grid-area: detail; }
 #storyboard-director-activity-trend { grid-area: trend; }
 
+#storyboard-director-activity-trend svg {
+  height: 54px;
+}
+
 @media (max-width: 760px) {
   .storyboard-director-activity {
+    width: min(340px, calc(100% - 24px));
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "label" "phase" "detail" "trend";
     row-gap: 5px;
+  }
+
+  #storyboard-director-activity-trend svg {
+    height: 48px;
   }
 }
 

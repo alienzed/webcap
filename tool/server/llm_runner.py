@@ -81,7 +81,7 @@ def reconcile_startup():
     _ensure_execution_reconciled()
 
 
-def _client_result(client, context, llm_result):
+def _client_result(client, context, llm_result, job_id=""):
     if client == "generate":
         return {
             "result": llm_result["text"],
@@ -126,12 +126,28 @@ def _client_result(client, context, llm_result):
             "timings": llm_result.get("timings"),
         }
 
-    return {
-        "result": llm_result["text"],
-        "model": llm_result["model"],
-        "usage": llm_result.get("usage"),
-        "timings": llm_result.get("timings"),
-    }
+    if operation in {"write_prompt", "refine_prompt"}:
+        scene_id = str(context.get("sceneId") or "").strip()
+        if not scene_id:
+            raise RuntimeError("Storyboard Scene Director job is missing its Scene ID.")
+        from .storyboard_store import apply_director_prompt
+        story, scene = apply_director_prompt(
+            story_id,
+            scene_id,
+            llm_result.get("text"),
+            model_id=llm_result["model"],
+            job_id=job_id,
+        )
+        return {
+            "storyId": story["id"],
+            "sceneId": scene["id"],
+            "result": scene["prompt"],
+            "model": llm_result["model"],
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
+    raise RuntimeError("Unsupported Storyboard LLM operation: " + (operation or "empty"))
 
 
 def _execute_claimed(job_id, gpu_reserved):
@@ -167,7 +183,7 @@ def _execute_claimed(job_id, gpu_reserved):
 
     from .storyboard_llm_runtime import run_contract
     llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
-    result = _client_result(client, context, llm_result)
+    result = _client_result(client, context, llm_result, job_id=job_id)
     execution_finish_job(job_id, status="completed", result=result)
 
 
@@ -259,6 +275,53 @@ def _ensure_monitor_started():
         _monitor_thread.start()
 
 
+def _storyboard_target(context, operation):
+    story_id = str((context or {}).get("storyId") or "").strip()
+    scene_id = str((context or {}).get("sceneId") or "").strip()
+    operation = str(operation or "").strip()
+    if not story_id:
+        return None
+    if operation == "expand_concept":
+        return {"kind": "concept", "storyId": story_id, "sceneId": ""}
+    if operation == "develop_story":
+        return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
+    if operation in {"write_prompt", "refine_prompt"} and scene_id:
+        return {"kind": "scene-prompt", "storyId": story_id, "sceneId": scene_id}
+    return None
+
+
+def _storyboard_targets_conflict(a, b):
+    if not a or not b or a["storyId"] != b["storyId"]:
+        return False
+    if a["kind"] == "scene-prompt" and b["kind"] == "scene-prompt":
+        return a["sceneId"] == b["sceneId"]
+    if a["kind"] == "scenes" or b["kind"] == "scenes":
+        return True
+    if a["kind"] == "concept" and b["kind"] == "concept":
+        return True
+    return False
+
+
+def _assert_storyboard_target_available(context, operation):
+    wanted = _storyboard_target(context, operation)
+    if wanted is None:
+        raise ValueError("Storyboard Director target is invalid.")
+    current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    for job in current.get("jobs", []):
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("client") or "") != "storyboard":
+            continue
+        existing = _storyboard_target(
+            {
+                "storyId": metadata.get("storyId"),
+                "sceneId": metadata.get("sceneId"),
+            },
+            metadata.get("operation"),
+        )
+        if _storyboard_targets_conflict(wanted, existing):
+            raise ValueError("Storyboard Director target already has pending work.")
+
+
 def enqueue(client, model_id, contract, context=None, label=""):
     _ensure_execution_reconciled()
     client = str(client or "").strip()
@@ -271,6 +334,8 @@ def enqueue(client, model_id, contract, context=None, label=""):
         raise ValueError("LLM contract must be an object.")
 
     context = copy.deepcopy(context) if isinstance(context, dict) else {}
+    if client == "storyboard":
+        _assert_storyboard_target_available(context, contract.get("operation"))
     job = execution_enqueue(
         EXECUTION_LANE,
         {

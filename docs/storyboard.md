@@ -25,6 +25,8 @@ Story -> Scenes -> Takes
 
 A Scene is one generatable unit, not necessarily a screenplay scene. A Take is one concrete generation attempt for that Scene.
 
+A Story also owns planning and generation defaults. `targetSceneCount` guides Director scene planning without acting as a hard scene limit. Story-wide `aspectRatio` and `megapixels` defaults are inherited by Scenes unless a Scene stores an explicit override. Effective generation settings are resolved and frozen when a Take is queued, so later Story-default changes do not mutate queued jobs or existing Take provenance.
+
 ## Non-negotiable architecture
 
 ### Local-first, file-based storage

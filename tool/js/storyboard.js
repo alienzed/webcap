@@ -874,6 +874,7 @@
 
   function setSceneViewMode(mode, sceneId) {
     if (['overview', 'focus', 'sequence'].indexOf(mode) === -1) throw new Error('Unknown Storyboard Scene view.');
+    var previousMode = storyState.sceneViewMode;
     return flushPendingSaves().then(function () {
       storyState.sceneViewMode = mode;
       if (sceneId) storyState.activeSceneId = sceneId;
@@ -884,6 +885,10 @@
       window.localStorage.setItem('webcap.storyboard.sceneView', mode);
       renderScenes();
       renderSequencePreview();
+      if (mode !== previousMode || sceneId) {
+        var sceneWorkspace = document.querySelector('.storyboard-scene-workspace');
+        if (sceneWorkspace) sceneWorkspace.scrollTop = 0;
+      }
     }).catch(reportError);
   }
 
@@ -2771,6 +2776,13 @@
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
+    var sceneWorkspace = document.querySelector('.storyboard-scene-workspace');
+    if (sceneWorkspace) {
+      sceneWorkspace.addEventListener('scroll', function () {
+        if (directorActivityActive()) positionDirectorActivity();
+      }, { passive: true });
+    }
+
     el('storyboard-scene-progression').addEventListener('click', function (event) {
       var sceneButton = event.target.closest('[data-scene-progress]');
       if (sceneButton) {

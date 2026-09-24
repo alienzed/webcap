@@ -36,4 +36,4 @@ Sound:
 
 Prefer concrete positive visual description over negative constraint lists.
 
-When writing one Scene prompt directly, return only the final H3 model-facing prompt. In structured whole-Story tasks, apply these rules independently inside each Scene prompt field.
+When WebCap supplies a structured response schema, return exactly the requested semantic H3 fields and do not typeset field labels or alignment preambles yourself; WebCap renders the final model-facing prompt deterministically. In structured whole-Story tasks, apply these rules independently inside each Scene prompt object.

@@ -2209,7 +2209,6 @@
                 '<label class="storyboard-field" title="Leave blank to inherit the Story megapixel target."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneMegapixels) + '" placeholder="Inherit · ' + escapeHtml(inheritedMegapixels) + '"></label>' +
                 '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
               '</div>' +
-              '<label class="storyboard-inline-check storyboard-generation-wildcards" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
               '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Queue a new Take from the current saved Scene.">' +
                 (sceneGenerationJobs.length ? 'Generate Another Take' : 'Generate Take') +
               '</button>' +
@@ -2569,7 +2568,6 @@
       megapixels: String(field('megapixels').value || '').trim() || null,
       seedMode: randomSeed ? 'random' : 'fixed',
       seed: randomSeed ? null : seedText,
-      wildcardsEnabled: field('wildcardsEnabled').checked,
       loras: Array.prototype.map.call(root.querySelectorAll('[data-scene-lora-row]'), function (row) {
         return {
           name: row.querySelector('[data-scene-lora-name]').value,

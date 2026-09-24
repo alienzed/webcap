@@ -1265,20 +1265,33 @@
                                     </div>
                                 </details>
 
+                                <div class="storyboard-develop-row">
+                                    <div class="storyboard-develop-copy">
+                                        <strong>Scenes</strong>
+                                        <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite">Create a Scene plan from this Story.</span>
+                                    </div>
+                                    <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn">Develop Scenes</button>
+                                </div>
+
                                 <details class="storyboard-story-section" data-story-section="director">
                                     <summary>
                                         <span class="storyboard-story-section-summary-copy">
                                             <strong>Director Tools</strong>
-                                            <span>Whole-Story Director actions and review tools.</span>
+                                            <span>Optional whole-Story review and repair tools.</span>
                                         </span>
                                     </summary>
                                     <div class="storyboard-story-section-body">
-                                        <div class="storyboard-develop-row">
-                                            <div class="storyboard-develop-copy">
-                                                <strong>Scenes</strong>
-                                                <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite">Create a Scene plan from this Story.</span>
+                                        <div class="storyboard-director-repair">
+                                            <label class="storyboard-field">
+                                                <span>Check &amp; Repair Scenes</span>
+                                                <textarea id="storyboard-repair-instruction" rows="3" placeholder="Tell the Director what tendency or problem to check across the current Scene plan…"></textarea>
+                                            </label>
+                                            <div class="storyboard-director-repair-actions">
+                                                <button id="storyboard-repair-scenes-btn" type="button" class="review-captions-btn">Check &amp; Repair Scenes</button>
+                                                <button id="storyboard-restore-repair-btn" type="button" class="review-captions-btn hidden">Restore Last Repair</button>
+                                                <span id="storyboard-repair-status" class="storyboard-save-state" aria-live="polite"></span>
                                             </div>
-                                            <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn">Develop Scenes</button>
+                                            <span class="storyboard-reference-empty">Healing pass only: keep the Scene plan, patch only what the instruction actually requires.</span>
                                         </div>
                                     </div>
                                 </details>

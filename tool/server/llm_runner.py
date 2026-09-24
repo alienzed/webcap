@@ -123,6 +123,76 @@ def _client_result(client, context, llm_result, job_id=""):
             "timings": llm_result.get("timings"),
         }
 
+    if operation == "repair_scenes":
+        from .h3_prompt_contract import inject_shared_context_text, mode_from_reference_roles, render_base_prompt
+        from .storyboard_store import (
+            apply_scene_repairs,
+            load_story,
+            resolve_scene_invariant_context,
+            resolve_scene_shared_context,
+        )
+
+        current_story = load_story(story_id)
+        repair_payload = copy.deepcopy(llm_result.get("data"))
+        if not isinstance(repair_payload, dict) or not isinstance(repair_payload.get("changes"), list):
+            raise ValueError("Storyboard Scene repair response must contain a changes array.")
+        repair_base = context.get("repairBase")
+        base_order = repair_base.get("sceneOrder") if isinstance(repair_base, dict) else None
+        if not isinstance(base_order, list):
+            raise RuntimeError("Storyboard Scene repair is missing its frozen Scene order.")
+
+        scenes = current_story.get("scenes") if isinstance(current_story.get("scenes"), dict) else {}
+        for change in repair_payload["changes"]:
+            if not isinstance(change, dict) or not isinstance(change.get("fields"), dict):
+                continue
+            prompt_data = change["fields"].get("prompt")
+            if not isinstance(prompt_data, dict):
+                continue
+            scene_number = change.get("sceneNumber")
+            if isinstance(scene_number, bool) or not isinstance(scene_number, int):
+                continue
+            if scene_number < 1 or scene_number > len(base_order):
+                continue
+            scene_id = str(base_order[scene_number - 1] or "").strip()
+            scene = scenes.get(scene_id)
+            if not isinstance(scene, dict):
+                raise RuntimeError("A Scene changed structurally while Check & Repair was running.")
+            roles = [
+                str(reference.get("role") or "").strip()
+                for reference in scene.get("references") or []
+                if isinstance(reference, dict)
+            ]
+            continuity = "\n".join(
+                part
+                for part in (
+                    resolve_scene_invariant_context(current_story, scene),
+                    resolve_scene_shared_context(current_story, scene),
+                )
+                if part
+            )
+            structured = inject_shared_context_text(prompt_data, continuity)
+            change["fields"]["prompt"] = render_base_prompt(
+                structured,
+                mode=mode_from_reference_roles(roles),
+                duration=scene.get("durationSeconds"),
+            )
+
+        story, changed_scene_count, changed_field_count = apply_scene_repairs(
+            story_id,
+            repair_payload,
+            repair_base,
+            model_id=llm_result["model"],
+            job_id=job_id,
+        )
+        return {
+            "storyId": story["id"],
+            "changedSceneCount": changed_scene_count,
+            "changedFieldCount": changed_field_count,
+            "model": llm_result["model"],
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if operation == "develop_story":
         from .h3_prompt_contract import render_story_plan_prompts
         from .storyboard_generation import generation_queue
@@ -335,6 +405,8 @@ def _storyboard_target(context, operation):
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
     if operation == "develop_story":
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
+    if operation == "repair_scenes":
+        return {"kind": "repair", "storyId": story_id, "sceneId": ""}
     if operation in {"write_prompt", "refine_prompt"} and scene_id:
         return {"kind": "scene-prompt", "storyId": story_id, "sceneId": scene_id}
     return None
@@ -345,6 +417,8 @@ def _storyboard_targets_conflict(a, b):
         return False
     if a["kind"] == "scene-prompt" and b["kind"] == "scene-prompt":
         return a["sceneId"] == b["sceneId"]
+    if a["kind"] == "repair" or b["kind"] == "repair":
+        return True
     if a["kind"] == "scenes" or b["kind"] == "scenes":
         return True
     if a["kind"] == "concept" and b["kind"] == "concept":
@@ -378,7 +452,7 @@ def storyboard_target_busy(story_id, kind, scene_id=""):
         "storyId": str(story_id or "").strip(),
         "sceneId": str(scene_id or "").strip(),
     }
-    if not wanted["storyId"] or wanted["kind"] not in {"concept", "scenes", "scene-prompt"}:
+    if not wanted["storyId"] or wanted["kind"] not in {"concept", "scenes", "repair", "scene-prompt"}:
         raise ValueError("Storyboard Director target is invalid.")
     current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
     for job in current.get("jobs", []):

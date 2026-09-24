@@ -584,3 +584,109 @@ def test_llm_restart_marks_only_active_work_interrupted(llm_root):
 
     assert llm_runner.job_status(active["id"])["status"] == "interrupted"
     assert llm_runner.job_status(queued["id"])["status"] == "queued"
+
+
+def test_storyboard_scene_repair_renders_prompt_and_patches_only_returned_fields(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "Elena attends a funeral.",
+        "invariants": [
+            {"kind": "character", "title": "Elena", "text": "White woman in her early 30s with hazel eyes and dark brown hair."},
+        ],
+    })
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Funeral",
+        "summary": "Elena stands by the grave.",
+        "entryState": "At the cemetery.",
+        "exitState": "She remains after the mourners leave.",
+        "prompt": "OLD PROMPT",
+        "invariantRefs": [{"kind": "character", "title": "Elena"}],
+        "durationSeconds": 6,
+    })
+    base = {
+        "sceneOrder": [scene["id"]],
+        "scenes": {
+            scene["id"]: {
+                "summary": scene["summary"],
+                "entryState": scene["entryState"],
+                "exitState": scene["exitState"],
+                "prompt": scene["prompt"],
+            }
+        },
+    }
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "data": {
+                "changes": [{
+                    "sceneNumber": 1,
+                    "fields": {
+                        "prompt": {
+                            "integrated_multimodal_description": "A wide observational view keeps Elena small beside the grave.",
+                            "overall_soundscape": "Wind in trees and distant footsteps.",
+                            "non_diegetic_music": "N/A",
+                        }
+                    },
+                }]
+            },
+            "text": "{}",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "repair_scenes", "prompt": "Heal.", "output": "json"},
+        context={
+            "storyId": story["id"],
+            "operation": "repair_scenes",
+            "repairBase": base,
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    stored = storyboard_store.load_story(story["id"])
+    repaired = stored["scenes"][scene["id"]]
+
+    assert finished["status"] == "completed"
+    assert finished["result"]["changedSceneCount"] == 1
+    assert repaired["title"] == "Funeral"
+    assert repaired["summary"] == "Elena stands by the grave."
+    assert "Continuity anchors — Character Elena:" in repaired["prompt"]
+    assert "wide observational view" in repaired["prompt"]
+    assert repaired["previousPrompt"] == "OLD PROMPT"
+
+
+def test_storyboard_scene_repair_conflicts_with_other_director_work(llm_root):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"prompt": "Prompt."})
+
+    repair = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "repair_scenes", "prompt": "Heal.", "output": "json"},
+        context={
+            "storyId": story["id"],
+            "operation": "repair_scenes",
+            "repairBase": {
+                "sceneOrder": [scene["id"]],
+                "scenes": {scene["id"]: {"summary": "", "entryState": "", "exitState": "", "prompt": "Prompt."}},
+            },
+        },
+    )
+    assert repair["status"] == "queued"
+    assert llm_runner.storyboard_target_busy(story["id"], "repair") is True
+
+    with pytest.raises(ValueError, match="target already has pending work"):
+        llm_runner.enqueue(
+            "storyboard",
+            "qwen",
+            {"operation": "write_prompt", "prompt": "Write.", "output": "text"},
+            context={"storyId": story["id"], "sceneId": scene["id"], "operation": "write_prompt"},
+        )

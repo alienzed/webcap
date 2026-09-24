@@ -9,7 +9,8 @@ DIRECTOR_CONTEXT_PATH = DOCS_ROOT / "storyboard-director-context.txt"
 H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
-VALID_OPERATIONS = {"expand_concept", "define_invariants", "develop_story", "write_prompt", "refine_prompt"}
+SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"
+VALID_OPERATIONS = {"expand_concept", "define_invariants", "develop_story", "repair_scenes", "write_prompt", "refine_prompt"}
 
 
 def _read_text(path, label):
@@ -118,6 +119,28 @@ def _scene_invariants_text(story, scene):
         if item is not None:
             lines.append(item["kind"].capitalize() + ": " + item["title"] + "\n" + item["text"])
     return "\n\n".join(lines)
+
+
+def _repair_scene_plan(story):
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
+    result = []
+    for index, scene_id in enumerate(order, start=1):
+        scene = scenes.get(scene_id)
+        if not isinstance(scene, dict):
+            continue
+        result.append({
+            "sceneNumber": index,
+            "title": _clean(scene.get("title")),
+            "summary": _clean(scene.get("summary")),
+            "entryState": _clean(scene.get("entryState")),
+            "exitState": _clean(scene.get("exitState")),
+            "durationSeconds": scene.get("durationSeconds"),
+            "referenceRoles": _reference_roles(scene),
+            "invariantRefs": scene.get("invariantRefs") if isinstance(scene.get("invariantRefs"), list) else [],
+            "prompt": _clean(scene.get("prompt")),
+        })
+    return result
 
 
 def _scene_shared_context_text(story, scene):
@@ -280,6 +303,47 @@ def build_request(story, scene_id, operation, instruction=""):
             "output": "json",
             "prompt": "\n\n".join(blocks).strip() + "\n",
             "response_schema": _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema"),
+        }
+
+    if operation == "repair_scenes":
+        correction = _clean(instruction)
+        if not correction:
+            raise ValueError("A Check & Repair instruction is required.")
+        scene_plan = _repair_scene_plan(story)
+        if not scene_plan:
+            raise ValueError("Story must have Scenes before Check & Repair can run.")
+
+        blocks = ["[DIRECTOR CONTEXT]\n" + director_context]
+        title = _clean(story.get("title"))
+        if title:
+            blocks.append("[STORY TITLE]\n" + title)
+        concept = _clean(story.get("concept"))
+        if concept:
+            blocks.append("[STORY CONCEPT]\n" + concept)
+        style = _clean(story.get("style"))
+        if style:
+            blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
+        blocks.append("[H3 WRITING RULES]\n" + h3_runtime_context)
+        blocks.append("[CURRENT SCENE PLAN]\n" + json.dumps(scene_plan, indent=2, ensure_ascii=False))
+        blocks.append(
+            "[USER REPAIR INSTRUCTION]\n" + correction
+            + "\n\n[CURRENT TASK]\nReview the whole current Scene plan against the user's instruction and heal only concrete problems. "
+            "This is a sparse repair pass, not Story redevelopment. Keep the exact Scene count, order, titles, durations, references, LoRAs, seeds, and narrative beats. "
+            "Do not add, remove, merge, split, or reorder Scenes. Do not rewrite an unaffected Scene or field for style or variety. "
+            "Return only the minimum field patches actually required. Allowed fields are summary, entryState, exitState, and prompt. "
+            "Use the 1-based sceneNumber values supplied above; never invent or return WebCap IDs, and return each Scene at most once. "
+            "If a generation prompt needs repair, return complete semantic H3 prompt content in fields.prompt using the supplied three-field structure; "
+            "do not reproduce WebCap's app-owned Continuity anchors prefix or final field labels. WebCap will render those itself. "
+            "If the instruction does not require any repair, return {\"changes\":[]}."
+        )
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+            "response_schema": _read_json(SCENE_REPAIR_SCHEMA_PATH, "Storyboard Scene repair schema"),
         }
 
     scene_id = _clean(scene_id)

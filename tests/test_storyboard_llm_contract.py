@@ -205,6 +205,45 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert "EXISTING SECOND PROMPT" not in prompt
 
 
+def test_repair_scenes_is_sparse_whole_story_patch_not_redevelopment():
+    story = _story()
+    request = storyboard_llm_contract.build_request(
+        story,
+        "",
+        "repair_scenes",
+        "Use perspective appropriate to each beat; stop defaulting to front-facing portrait coverage.",
+    )
+    prompt = request["prompt"]
+    schema = request["response_schema"]
+
+    assert request["operation"] == "repair_scenes"
+    assert request["output"] == "json"
+    assert schema["required"] == ["changes"]
+    assert set(schema["properties"]["changes"]["items"]["properties"]["fields"]["properties"]) == {
+        "summary", "entryState", "exitState", "prompt"
+    }
+    assert "[CURRENT SCENE PLAN]" in prompt
+    assert "Use perspective appropriate to each beat" in prompt
+    assert "sparse repair pass, not Story redevelopment" in prompt
+    assert "exact Scene count, order, titles, durations, references, LoRAs, seeds" in prompt
+    assert "Do not add, remove, merge, split, or reorder Scenes." in prompt
+    assert "return each Scene at most once" in prompt
+    assert "WebCap will render those itself" in prompt
+    assert '"sceneNumber": 1' in prompt
+    assert "TAKE DATA MUST NOT LEAK" not in prompt
+
+
+def test_repair_scenes_requires_instruction_and_existing_scenes():
+    with pytest.raises(ValueError, match="instruction"):
+        storyboard_llm_contract.build_request(_story(), "", "repair_scenes", "")
+
+    story = _story()
+    story["sceneOrder"] = []
+    story["scenes"] = {}
+    with pytest.raises(ValueError, match="must have Scenes"):
+        storyboard_llm_contract.build_request(story, "", "repair_scenes", "Check perspective.")
+
+
 def test_develop_story_requires_concept():
     story = _story()
     story["concept"] = ""

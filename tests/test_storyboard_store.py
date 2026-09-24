@@ -921,3 +921,98 @@ def test_take_reference_replaces_and_cleans_manual_upload(storyboard_fs):
 
     assert reference["source"] == "take"
     assert not uploaded_path.exists()
+
+
+def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, first = storyboard_store.add_scene(story["id"], {
+        "title": "Funeral",
+        "summary": "Elena stands at the grave.",
+        "entryState": "At the cemetery.",
+        "exitState": "Mourners begin to leave.",
+        "prompt": "OLD PROMPT",
+    })
+    story, second = storyboard_store.add_scene(story["id"], {
+        "title": "Home",
+        "summary": "Elena arrives home.",
+        "prompt": "UNCHANGED PROMPT",
+    })
+    base = {
+        "sceneOrder": list(story["sceneOrder"]),
+        "scenes": {
+            first["id"]: {
+                "summary": first["summary"],
+                "entryState": first["entryState"],
+                "exitState": first["exitState"],
+                "prompt": first["prompt"],
+            },
+            second["id"]: {
+                "summary": second["summary"],
+                "entryState": second["entryState"],
+                "exitState": second["exitState"],
+                "prompt": second["prompt"],
+            },
+        },
+    }
+
+    repaired, scene_count, field_count = storyboard_store.apply_scene_repairs(
+        story["id"],
+        {"changes": [{
+            "sceneNumber": 1,
+            "fields": {
+                "summary": "Elena remains small in frame while the funeral activity carries the beat.",
+                "prompt": "NEW PROMPT",
+            },
+        }]},
+        base,
+        model_id="director",
+        job_id="job-1",
+    )
+
+    assert scene_count == 1
+    assert field_count == 2
+    assert repaired["sceneOrder"] == [first["id"], second["id"]]
+    assert repaired["scenes"][first["id"]]["title"] == "Funeral"
+    assert repaired["scenes"][first["id"]]["durationSeconds"] == first["durationSeconds"]
+    assert repaired["scenes"][first["id"]]["summary"].startswith("Elena remains small")
+    assert repaired["scenes"][first["id"]]["prompt"] == "NEW PROMPT"
+    assert repaired["scenes"][first["id"]]["previousPrompt"] == "OLD PROMPT"
+    assert repaired["scenes"][second["id"]]["prompt"] == "UNCHANGED PROMPT"
+    assert repaired["previousSceneRepair"]["scenes"][0]["sceneId"] == first["id"]
+
+    restored = storyboard_store.restore_scene_repairs(story["id"])
+    assert restored["scenes"][first["id"]]["summary"] == "Elena stands at the grave."
+    assert restored["scenes"][first["id"]]["prompt"] == "OLD PROMPT"
+    assert restored["scenes"][first["id"]]["previousPrompt"] is None
+    assert restored["previousSceneRepair"] is None
+
+
+def test_scene_repair_refuses_to_overwrite_a_field_edited_while_director_was_running(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "summary": "Original summary.",
+        "prompt": "Original prompt.",
+    })
+    base = {
+        "sceneOrder": [scene["id"]],
+        "scenes": {
+            scene["id"]: {
+                "summary": "Original summary.",
+                "entryState": "",
+                "exitState": "",
+                "prompt": "Original prompt.",
+            }
+        },
+    }
+    storyboard_store.update_scene(story["id"], scene["id"], {"summary": "User edited this while Director ran."})
+
+    with pytest.raises(RuntimeError, match="newer edits are preserved"):
+        storyboard_store.apply_scene_repairs(
+            story["id"],
+            {"changes": [{"sceneNumber": 1, "fields": {"summary": "Director repair."}}]},
+            base,
+            model_id="director",
+        )
+
+    loaded = storyboard_store.load_story(story["id"])
+    assert loaded["scenes"][scene["id"]]["summary"] == "User edited this while Director ran."

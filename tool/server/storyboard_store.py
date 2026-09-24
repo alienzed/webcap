@@ -357,6 +357,30 @@ def resolve_scene_generation_defaults(story, scene):
     }
 
 
+def resolve_scene_invariant_context(story, scene):
+    refs = scene.get("invariantRefs") if isinstance((scene or {}).get("invariantRefs"), list) else []
+    invariants = story.get("invariants") if isinstance((story or {}).get("invariants"), list) else []
+    by_key = {}
+    for item in invariants:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip().lower()
+        title = str(item.get("title") or "").strip()
+        text = str(item.get("text") or "").strip()
+        if kind in {"character", "location"} and title and text:
+            by_key[(kind, title.casefold())] = kind.capitalize() + " " + title + ": " + text
+    lines = []
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        kind = str(ref.get("kind") or "").strip().lower()
+        title = str(ref.get("title") or "").strip()
+        value = by_key.get((kind, title.casefold()))
+        if value:
+            lines.append(value)
+    return "\n".join(lines)
+
+
 def resolve_scene_shared_context(story, scene):
     refs = scene.get("sharedContextRefs") if isinstance((scene or {}).get("sharedContextRefs"), list) else []
     if not refs:
@@ -555,6 +579,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "scenes": scenes,
         "removedScenes": removed_scenes,
         "development": copy.deepcopy(current.get("development")) if isinstance(current.get("development"), dict) else None,
+        "previousSceneRepair": copy.deepcopy(current.get("previousSceneRepair")) if isinstance(current.get("previousSceneRepair"), dict) else None,
     }
 
 
@@ -981,6 +1006,7 @@ def apply_developed_plan(story_id, plan, model_id=""):
         "model": str(model_id or "").strip(),
         "plan": copy.deepcopy(plan),
     }
+    story["previousSceneRepair"] = None
     story["updatedAt"] = now
     _write_json_atomic(_story_path(story_id), story)
 
@@ -1026,6 +1052,159 @@ def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id=""):
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story, scene
+
+
+@_serialized_mutation
+def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
+    if not isinstance(payload, dict) or not isinstance(payload.get("changes"), list):
+        raise ValueError("Storyboard Scene repair response must contain a changes array.")
+    if not isinstance(repair_base, dict):
+        raise RuntimeError("Storyboard Scene repair is missing its frozen base state.")
+
+    base_order = repair_base.get("sceneOrder")
+    base_scenes = repair_base.get("scenes")
+    if not isinstance(base_order, list) or not isinstance(base_scenes, dict):
+        raise RuntimeError("Storyboard Scene repair frozen base state is invalid.")
+
+    story = load_story(story_id)
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    allowed_fields = ("summary", "entryState", "exitState", "prompt")
+    prepared = []
+    seen_numbers = set()
+
+    for raw in payload["changes"]:
+        if not isinstance(raw, dict):
+            continue
+        scene_number = raw.get("sceneNumber")
+        if isinstance(scene_number, bool) or not isinstance(scene_number, int):
+            continue
+        if scene_number < 1 or scene_number > len(base_order):
+            continue
+        if scene_number in seen_numbers:
+            raise ValueError("Storyboard Scene repair returned the same Scene more than once.")
+        seen_numbers.add(scene_number)
+
+        fields = raw.get("fields")
+        if not isinstance(fields, dict):
+            continue
+        scene_id = str(base_order[scene_number - 1] or "").strip()
+        current = scenes.get(scene_id)
+        base_scene = base_scenes.get(scene_id)
+        if not isinstance(current, dict) or not isinstance(base_scene, dict):
+            raise RuntimeError("A Scene changed structurally while Check & Repair was running. Run Check & Repair again.")
+
+        patch = {}
+        for key in allowed_fields:
+            if key not in fields:
+                continue
+            value = fields.get(key)
+            if not isinstance(value, str):
+                continue
+            if key in {"summary", "prompt"} and not value.strip():
+                continue
+            current_value = str(current.get(key) or "")
+            base_value = str(base_scene.get(key) or "")
+            if current_value != base_value:
+                raise RuntimeError(
+                    "Scene "
+                    + str(scene_number)
+                    + " changed while Check & Repair was running. Run Check & Repair again so newer edits are preserved."
+                )
+            normalized_value = value if key == "prompt" else value.strip()
+            if normalized_value != current_value:
+                patch[key] = normalized_value
+
+        if patch:
+            prepared.append((scene_id, patch))
+
+    if not prepared:
+        return story, 0, 0
+
+    new_scenes = copy.deepcopy(scenes)
+    repair_snapshot = {
+        "createdAt": _utc_now(),
+        "model": str(model_id or "").strip(),
+        "jobId": str(job_id or "").strip(),
+        "scenes": [],
+    }
+    changed_field_count = 0
+
+    for scene_id, patch in prepared:
+        current = new_scenes[scene_id]
+        before = {key: str(current.get(key) or "") for key in patch}
+        normalize_patch = dict(patch)
+        prompt_meta_before = None
+        if "prompt" in patch:
+            prompt_meta_before = {
+                "previousPrompt": current.get("previousPrompt") if isinstance(current.get("previousPrompt"), str) else None,
+                "promptDirectorModel": str(current.get("promptDirectorModel") or ""),
+                "promptDirectorJobId": str(current.get("promptDirectorJobId") or ""),
+            }
+            normalize_patch.update({
+                "previousPrompt": str(current.get("prompt") or ""),
+                "promptDirectorModel": str(model_id or "").strip(),
+                "promptDirectorJobId": str(job_id or "").strip(),
+            })
+        repaired = _normalize_scene(scene_id, normalize_patch, existing=current)
+        new_scenes[scene_id] = repaired
+        snapshot = {
+            "sceneId": scene_id,
+            "before": before,
+            "after": {key: str(repaired.get(key) or "") for key in patch},
+        }
+        if prompt_meta_before is not None:
+            snapshot["promptMetaBefore"] = prompt_meta_before
+        repair_snapshot["scenes"].append(snapshot)
+        changed_field_count += len(patch)
+
+    story["scenes"] = new_scenes
+    story["previousSceneRepair"] = repair_snapshot
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story, len(prepared), changed_field_count
+
+
+@_serialized_mutation
+def restore_scene_repairs(story_id):
+    story = load_story(story_id)
+    snapshot = story.get("previousSceneRepair")
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("scenes"), list) or not snapshot["scenes"]:
+        raise FileNotFoundError("No previous Scene repair is available.")
+
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    for item in snapshot["scenes"]:
+        if not isinstance(item, dict):
+            raise RuntimeError("Stored Scene repair snapshot is invalid.")
+        scene_id = str(item.get("sceneId") or "").strip()
+        before = item.get("before")
+        after = item.get("after")
+        current = scenes.get(scene_id)
+        if not isinstance(current, dict) or not isinstance(before, dict) or not isinstance(after, dict):
+            raise RuntimeError("Stored Scene repair snapshot no longer matches the Story.")
+        for key, value in after.items():
+            if str(current.get(key) or "") != str(value or ""):
+                raise RuntimeError(
+                    "A repaired Scene has changed since the repair. Restore Last Repair was not applied so newer edits are preserved."
+                )
+
+    new_scenes = copy.deepcopy(scenes)
+    for item in snapshot["scenes"]:
+        scene_id = str(item["sceneId"])
+        current = new_scenes[scene_id]
+        before = item["before"]
+        restored = _normalize_scene(scene_id, before, existing=current)
+        if "prompt" in before:
+            meta = item.get("promptMetaBefore") if isinstance(item.get("promptMetaBefore"), dict) else {}
+            restored["previousPrompt"] = meta.get("previousPrompt") if isinstance(meta.get("previousPrompt"), str) else None
+            restored["promptDirectorModel"] = str(meta.get("promptDirectorModel") or "")
+            restored["promptDirectorJobId"] = str(meta.get("promptDirectorJobId") or "")
+        new_scenes[scene_id] = restored
+
+    story["scenes"] = new_scenes
+    story["previousSceneRepair"] = None
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story
 
 
 @_serialized_mutation

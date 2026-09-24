@@ -2173,7 +2173,7 @@
 
 .storyboard-story-section .storyboard-invariants,
 .storyboard-story-section .storyboard-story-defaults,
-.storyboard-story-section .storyboard-develop-row {
+.storyboard-director-repair {
   grid-column: 1 / -1;
 }
 
@@ -2184,9 +2184,22 @@
   background: transparent;
 }
 
-.storyboard-story-section .storyboard-develop-row {
-  padding-top: 0;
-  border-top: 0;
+.storyboard-director-repair {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.storyboard-director-repair textarea {
+  min-height: 84px;
+}
+
+.storyboard-director-repair-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .storyboard-story-loras.storyboard-story-section {

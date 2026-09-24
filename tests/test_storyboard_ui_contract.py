@@ -230,6 +230,21 @@ def test_storyboard_director_configuration_is_first_class_app_setting():
 
 
 
+def test_storyboard_director_tools_has_sparse_scene_healing_pass():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-repair-instruction"' in html
+    assert 'id="storyboard-repair-scenes-btn"' in html
+    assert "function repairScenes()" in storyboard
+    assert "operation: 'repair_scenes'" in storyboard
+    assert "kind: 'repair'" in storyboard
+    assert "function restoreLastRepair()" in storyboard
+    assert "restore_last_scene_repair" in storyboard
+    assert 'if operation == "restore_last_scene_repair":' in app
+
+
 def test_storyboard_can_develop_concept_directly_into_scenes():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
@@ -735,7 +750,11 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'id="storyboard-story-style"' in story_section
     assert 'id="storyboard-invariant-define"' in continuity_section
     assert 'id="storyboard-invariants-list"' in continuity_section
-    assert 'id="storyboard-develop-btn"' in director_section
+    assert 'id="storyboard-develop-btn"' not in director_section
+    assert html.index('id="storyboard-develop-btn"') < html.index('data-story-section="director"')
+    assert 'id="storyboard-repair-instruction"' in director_section
+    assert 'id="storyboard-repair-scenes-btn"' in director_section
+    assert 'id="storyboard-restore-repair-btn"' in director_section
     assert 'id="storyboard-story-tags"' in planning_section
     assert 'id="storyboard-story-target-scenes"' in planning_section
     assert 'id="storyboard-story-aspect-ratio"' in planning_section

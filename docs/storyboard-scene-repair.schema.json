@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "storyboard-scene-repair.schema.json",
+  "title": "WebCap Storyboard Scene Repair",
+  "description": "Sparse healing patches for an existing ordered Storyboard Scene plan.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["changes"],
+  "properties": {
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sceneNumber", "fields"],
+        "properties": {
+          "sceneNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              },
+              "entryState": {
+                "type": "string"
+              },
+              "exitState": {
+                "type": "string"
+              },
+              "prompt": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "integrated_multimodal_description",
+                  "overall_soundscape",
+                  "non_diegetic_music"
+                ],
+                "properties": {
+                  "integrated_multimodal_description": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "overall_soundscape": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "non_diegetic_music": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

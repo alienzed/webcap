@@ -291,6 +291,7 @@
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
     if (job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
     if (job.operation === 'develop_story') return { kind: 'scenes', storyId: job.storyId };
+    if (job.operation === 'repair_scenes') return { kind: 'repair', storyId: job.storyId };
     if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId };
     }
@@ -338,6 +339,14 @@
         var restore = el('storyboard-restore-concept-btn');
         if (restore) restore.classList.toggle('hidden', typeof canonical.previousConcept !== 'string');
         setDevelopStatus('Concept expansion completed.');
+      } else if (operation === 'repair_scenes') {
+        storyState.story.scenes = canonical.scenes || {};
+        storyState.story.previousSceneRepair = canonical.previousSceneRepair || null;
+        storyState.story.updatedAt = canonical.updatedAt;
+        renderScenes();
+        renderStoryReadiness();
+        syncRepairRestore();
+        setRepairStatus('Check & Repair completed.');
       } else if (operation === 'develop_story') {
         storyState.story.sceneOrder = canonical.sceneOrder || [];
         storyState.story.scenes = canonical.scenes || {};
@@ -684,6 +693,11 @@
     if (target.kind === 'scenes') {
       var developRow = document.querySelector('.storyboard-develop-row');
       if (developRow && developRow.offsetParent !== null) return developRow;
+      return document.querySelector('.storyboard-story-panel-heading');
+    }
+    if (target.kind === 'repair') {
+      var repairInstruction = el('storyboard-repair-instruction');
+      if (repairInstruction && repairInstruction.offsetParent !== null) return repairInstruction;
       return document.querySelector('[data-story-section="director"] > summary');
     }
     return document.querySelector('.storyboard-scene-workspace');
@@ -1052,12 +1066,24 @@
     if (node) node.textContent = text || '';
   }
 
+  function setRepairStatus(text) {
+    var node = el('storyboard-repair-status');
+    if (node) node.textContent = text || '';
+  }
+
+  function syncRepairRestore() {
+    var button = el('storyboard-restore-repair-btn');
+    if (!button) return;
+    button.classList.toggle('hidden', !storyState.story || !storyState.story.previousSceneRepair);
+  }
+
   function directorTargetKey(target) {
     target = target || {};
     var storyId = String(target.storyId || '');
     if (!storyId) return '';
     if (target.kind === 'concept') return 'story-concept:' + storyId;
     if (target.kind === 'scenes') return 'story-scenes:' + storyId;
+    if (target.kind === 'repair') return 'story-repair:' + storyId;
     if (target.kind === 'scene-prompt' && target.sceneId) {
       return 'scene-prompt:' + storyId + ':' + String(target.sceneId);
     }
@@ -1074,6 +1100,7 @@
     if (a.kind === 'scene-prompt' && b.kind === 'scene-prompt') {
       return String(a.sceneId || '') === String(b.sceneId || '');
     }
+    if (a.kind === 'repair' || b.kind === 'repair') return true;
     if (a.kind === 'scenes' || b.kind === 'scenes') return true;
     return a.kind === 'concept' && b.kind === 'concept';
   }
@@ -1097,6 +1124,13 @@
       if (!root) return;
       var prompt = root.querySelector('[data-scene-field="prompt"]');
       if (prompt) prompt.disabled = !!protectedState;
+      return;
+    }
+    if (target.kind === 'repair') {
+      var instruction = el('storyboard-repair-instruction');
+      var repairButton = el('storyboard-repair-scenes-btn');
+      if (instruction) instruction.disabled = !!protectedState;
+      if (repairButton) repairButton.disabled = !!protectedState;
     }
   }
 
@@ -1255,6 +1289,89 @@
       return refreshLibrary();
     }).catch(reportError).finally(function () {
       setDirectorPending(directorTarget, false);
+    });
+  }
+
+  function repairScenes() {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    var directorTarget = { kind: 'repair', storyId: storyId };
+    if (directorTargetBlocked(directorTarget)) {
+      reportError(new Error('This Story already has Director work that conflicts with Check & Repair.'));
+      return;
+    }
+    var modelId = storyState.director.modelId;
+    if (!modelId) {
+      reportError(new Error('Choose a Storyboard Director model first.'));
+      return;
+    }
+    if (!Array.isArray(storyState.story.sceneOrder) || !storyState.story.sceneOrder.length) {
+      setRepairStatus('Develop Scenes first.');
+      return;
+    }
+    var instruction = el('storyboard-repair-instruction').value.trim();
+    if (!instruction) {
+      setRepairStatus('Enter what the Director should check and repair.');
+      return;
+    }
+
+    var saveBarrier = flushPendingSaves();
+    setDirectorPending(directorTarget, true);
+    setRepairStatus('Director is checking the current Scene plan…');
+    startDirectorActivity();
+    saveBarrier.then(function () {
+      return directorRequest({
+        storyId: storyId,
+        operation: 'repair_scenes',
+        model: modelId,
+        instruction: instruction
+      });
+    }).then(function (payload) {
+      return applyDirectorResultToVisibleStory({
+        storyId: storyId,
+        operation: 'repair_scenes',
+        jobId: payload.jobId
+      }).then(function () {
+        var changedScenes = Number(payload.changedSceneCount || 0);
+        var changedFields = Number(payload.changedFieldCount || 0);
+        setRepairStatus(changedScenes
+          ? ('Repaired ' + String(changedScenes) + ' Scene' + (changedScenes === 1 ? '' : 's') + ' · ' + String(changedFields) + ' field' + (changedFields === 1 ? '' : 's') + '.')
+          : 'No repairs were needed.');
+        return consumeDirectorJob(payload.jobId);
+      });
+    }).catch(function (err) {
+      setRepairStatus('Check & Repair failed.');
+      reportError(err);
+    }).finally(function () {
+      setDirectorPending(directorTarget, false);
+      finishDirectorActivity();
+    });
+  }
+
+  function restoreLastRepair() {
+    if (!storyState.story || !storyState.story.previousSceneRepair) return;
+    var storyId = storyState.story.id;
+    var target = { kind: 'repair', storyId: storyId };
+    if (directorTargetBlocked(target)) {
+      reportError(new Error('This Story has pending Director work.'));
+      return;
+    }
+    setRepairStatus('Restoring last repair…');
+    flushPendingSaves().then(function () {
+      return request({
+        operation: 'restore_last_scene_repair',
+        storyId: storyId
+      });
+    }).then(function (payload) {
+      if (!storyState.story || String(storyState.story.id || '') !== String(storyId)) return;
+      storyState.story = payload.story;
+      renderStory();
+      setRepairStatus('Last repair restored.');
+      setSaveState('Saved');
+      return refreshLibrary();
+    }).catch(function (err) {
+      setRepairStatus('Restore failed.');
+      reportError(err);
     });
   }
 
@@ -2461,6 +2578,7 @@
     if (restoreConceptButton) {
       restoreConceptButton.classList.toggle('hidden', typeof storyState.story.previousConcept !== 'string');
     }
+    syncRepairRestore();
     setStoryCollapsed(storyState.storyCollapsed);
     renderStoryLoras();
     renderScenes();
@@ -3494,6 +3612,8 @@
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
+    el('storyboard-repair-scenes-btn').onclick = repairScenes;
+    el('storyboard-restore-repair-btn').onclick = restoreLastRepair;
     var sceneWorkspace = document.querySelector('.storyboard-scene-workspace');
     if (sceneWorkspace) {
       sceneWorkspace.addEventListener('scroll', function () {

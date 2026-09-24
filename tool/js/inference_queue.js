@@ -112,8 +112,11 @@
     position.className = 'inference-queue-position';
     position.dataset.queuePosition = '1';
 
-    var copy = document.createElement('div');
-    copy.className = 'inference-queue-copy';
+    var copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'inference-queue-copy inference-queue-link';
+    copy.dataset.inferenceQueueOpen = '1';
+    copy.title = 'Open this job\'s screen';
     var title = document.createElement('strong');
     title.dataset.queueTitle = '1';
     var context = document.createElement('span');
@@ -150,6 +153,16 @@
     if (title) title.textContent = jobClientLabel(job);
     if (context) context.textContent = jobContext(job);
     if (detail) detail.textContent = jobDetail(job);
+    var link = row.querySelector('[data-inference-queue-open]');
+    if (link) {
+      link.dataset.client = String(job.client || 'generate');
+      link.dataset.storyId = String(job.storyId || '');
+      link.dataset.sceneId = String(job.sceneId || '');
+      link.dataset.folder = String(job.folder || '');
+      link.dataset.source = String(job.source || '');
+      link.dataset.sessionId = String(job.sessionId || '');
+      link.title = 'Open ' + jobClientLabel(job);
+    }
 
     if (actions) {
       actions.innerHTML = '';
@@ -248,6 +261,23 @@
     refresh().then(schedule);
   }
 
+  function openJobScreen(link) {
+    var client = String(link && link.dataset.client || 'generate');
+    setOpen(false);
+    if (client === 'storyboard') {
+      if (typeof window.openStoryboardActivity !== 'function') throw new Error('Storyboard is not available.');
+      window.openStoryboardActivity();
+      return;
+    }
+    if (client === 'test') {
+      if (typeof window.openTestBenchActivity !== 'function') throw new Error('Test Generations is not available.');
+      window.openTestBenchActivity();
+      return;
+    }
+    if (typeof window.openGenerateActivity !== 'function') throw new Error('Generate is not available.');
+    window.openGenerateActivity();
+  }
+
   function action(operation, jobId) {
     return postJson('/fs/inference', {
       operation: operation,
@@ -273,9 +303,13 @@
     });
     close.onclick = function () { setOpen(false); };
     list.onclick = function (event) {
-      var button = event.target.closest('[data-inference-queue-action]');
-      if (!button) return;
-      action(button.dataset.inferenceQueueAction, button.dataset.jobId);
+      var actionButton = event.target.closest('[data-inference-queue-action]');
+      if (actionButton) {
+        action(actionButton.dataset.inferenceQueueAction, actionButton.dataset.jobId);
+        return;
+      }
+      var link = event.target.closest('[data-inference-queue-open]');
+      if (link) openJobScreen(link);
     };
     window.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && state.open) setOpen(false);

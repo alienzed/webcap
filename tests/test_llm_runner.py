@@ -61,6 +61,23 @@ def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
     assert execution_queue.resource_owner() == ""
 
 
+def test_llm_terminal_receipt_is_removed_when_consumed(llm_root):
+    job = execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"operation": "write_prompt"}, "clientContext": {}},
+        metadata={"client": "generate", "modelId": "qwen"},
+    )
+    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
+    execution_queue.finish_job(job["id"], status="completed", result={"result": "done"})
+
+    delivered = llm_runner.job_status(job["id"], consume=True)
+
+    assert delivered["status"] == "completed"
+    assert delivered["result"]["result"] == "done"
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(job["id"])
+
+
 def test_llm_local_job_waits_while_shared_gpu_is_owned(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
     execution_queue._resource_owner = "training"

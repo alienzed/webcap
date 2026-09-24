@@ -246,18 +246,13 @@ def test_character_continuity_is_authoritative_without_lora_or_media_reasoning()
     assert "LoRA or exact" not in prompt
 
 
-def test_shared_context_schema_requires_self_contained_visual_definitions():
+def test_develop_story_schema_keeps_scene_planning_independent_of_shared_context():
     schema = storyboard_llm_contract.build_request(_story(), "", "develop_story")["response_schema"]
-    shared = schema["properties"]["sharedContext"]["properties"]
 
-    subject_description = shared["subjects"]["items"]["properties"]["description"]["description"]
-    wardrobe_description = shared["wardrobes"]["items"]["properties"]["description"]["description"]
-    location_description = shared["locations"]["items"]["properties"]["description"]["description"]
-
-    assert "self-contained appearance description" in subject_description
-    assert "do not rely on another Scene" in subject_description
-    assert "actual garments, colors, materials/cut" in wardrobe_description
-    assert "stable layout/geometry, materials, dominant colors" in location_description
+    assert schema["required"] == ["scenes"]
+    assert "sharedContext" not in schema["properties"]
+    scene = schema["properties"]["scenes"]["items"]
+    assert "sharedContextRefs" not in scene["properties"]
 
 
 def test_scene_local_prompt_reuses_developed_shared_continuity():

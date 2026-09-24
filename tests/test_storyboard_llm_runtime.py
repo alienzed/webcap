@@ -121,6 +121,14 @@ def test_chat_uses_selected_model_disables_thinking_retains_model_and_releases_g
     assert captured["payload"]["model"] == "qwen-large"
     assert captured["payload"]["reasoning_effort"] == "none"
     assert captured["payload"]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert captured["payload"]["temperature"] == 0.2
+    assert captured["payload"]["top_p"] == 0.85
+    assert captured["payload"]["presence_penalty"] == 0.0
+    assert captured["payload"]["frequency_penalty"] == 0.0
+    assert captured["payload"]["top_k"] == 40
+    assert captured["payload"]["min_p"] == 0.05
+    assert captured["payload"]["repeat_penalty"] == 1.0
+    assert captured["payload"]["seed"] == -1
     assert calls == [
         "server",
         "reserve",
@@ -290,10 +298,25 @@ def test_release_loaded_model_for_gpu_work_is_noop_for_remote_mode(monkeypatch):
     assert storyboard_llm_runtime.release_loaded_model_for_gpu_work() is False
 
 
+def test_director_sampling_profiles_are_explicit_and_conservative():
+    develop = storyboard_llm_runtime._sampling_profile("develop_story")
+    expand = storyboard_llm_runtime._sampling_profile("expand_concept")
+    refine = storyboard_llm_runtime._sampling_profile("refine_prompt")
+
+    assert develop == {
+        "temperature": 0.2,
+        "top_p": 0.85,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+    }
+    assert expand["temperature"] > develop["temperature"]
+    assert refine["temperature"] < develop["temperature"]
+
+
 def test_run_contract_exposes_lifecycle_activity(monkeypatch):
     observed = {}
 
-    def fake_chat(model_id, messages, response_schema=None, max_tokens=None):
+    def fake_chat(model_id, messages, response_schema=None, max_tokens=None, sampling=None):
         observed.update(storyboard_llm_runtime.activity_status())
         return {"text": "prompt", "model": model_id}
 
@@ -412,7 +435,7 @@ def test_run_contract_parses_schema_constrained_json(monkeypatch):
     schema = {"type": "object", "properties": {"scenes": {"type": "array"}}}
     captured = {}
 
-    def fake_chat(model_id, messages, response_schema=None, max_tokens=None):
+    def fake_chat(model_id, messages, response_schema=None, max_tokens=None, sampling=None):
         captured["model"] = model_id
         captured["messages"] = messages
         captured["schema"] = response_schema
@@ -440,7 +463,7 @@ def test_run_contract_renders_structured_h3_result(monkeypatch):
         },
     }
 
-    def fake_chat(model_id, messages, response_schema=None, max_tokens=None):
+    def fake_chat(model_id, messages, response_schema=None, max_tokens=None, sampling=None):
         assert response_schema == schema
         return {
             "text": (
@@ -458,14 +481,20 @@ def test_run_contract_renders_structured_h3_result(monkeypatch):
         "prompt": "Write it.",
         "output": "json",
         "response_schema": schema,
-        "result_renderer": {"type": "h3_base", "mode": "I2VA", "duration": 6},
+        "result_renderer": {
+            "type": "h3_base",
+            "mode": "I2VA",
+            "duration": 6,
+            "shared_context": "Mara: dark bob and pale raincoat.\nLobby: dark terrazzo and brass fixtures.",
+        },
     })
 
     assert result["data"]["overall_soundscape"] == "Room tone."
     assert result["text"].startswith(
         "For the target video, at 0.00 seconds into the target video, "
         "<Picture 1> (from [Shot 1]) is fully referenced.\n\n"
-        "integrated_multimodal_description: [Shot 1] She turns toward the door."
+        "integrated_multimodal_description: [Shot 1] Continuity anchors — Mara: dark bob and pale raincoat. "
+        "Lobby: dark terrazzo and brass fixtures. She turns toward the door."
     )
     assert result["text"].endswith(
         "overall_soundscape: Room tone.\n\nnon_diegetic_music: N/A"
@@ -598,6 +627,14 @@ def test_remote_chat_uses_openai_compatible_endpoint_without_local_gpu_managemen
     }
     assert "reasoning_effort" not in captured["payload"]
     assert "chat_template_kwargs" not in captured["payload"]
+    assert captured["payload"]["temperature"] == 0.2
+    assert captured["payload"]["top_p"] == 0.85
+    assert captured["payload"]["presence_penalty"] == 0.0
+    assert captured["payload"]["frequency_penalty"] == 0.0
+    assert "top_k" not in captured["payload"]
+    assert "min_p" not in captured["payload"]
+    assert "repeat_penalty" not in captured["payload"]
+    assert "seed" not in captured["payload"]
     assert calls == ["server"]
 
 

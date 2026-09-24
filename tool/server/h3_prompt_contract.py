@@ -59,6 +59,8 @@ def _clean_field(data, key):
     prefix = key + ":"
     if value.casefold().startswith(prefix.casefold()):
         value = value[len(prefix):].lstrip()
+    if not value:
+        raise ValueError("MiniMax H3 structured output is missing " + key + ".")
     return value
 
 

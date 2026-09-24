@@ -8,6 +8,7 @@
   var currentSession = '';
   var currentSessionFolder = '';
   var currentSessionModel = '';
+  var currentSessionSource = '';
   var currentStatus = {};
   var resultsView = 'grid';
   var compareIndex = 0;
@@ -117,6 +118,7 @@
     currentSession = '';
     currentSessionFolder = '';
     currentSessionModel = '';
+    currentSessionSource = '';
     selectedCandidates = null;
     openPane();
   }
@@ -493,6 +495,7 @@
     var scores = payload && payload.candidateScores && typeof payload.candidateScores === 'object'
       ? payload.candidateScores
       : {};
+    var removableFiles = payload && Array.isArray(payload.removableFiles) ? payload.removableFiles : [];
     if (!(selectedCandidates instanceof Set)) {
       var savedSettings = savedTestModelState().settings;
       var savedSelection = state
@@ -581,16 +584,18 @@
       detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
       copy.appendChild(name);
       if (detail.textContent) copy.appendChild(detail);
-      var remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'test-generations-remove-candidate';
-      remove.dataset.fileName = String(fileName || '');
-      remove.title = 'Remove this staged Test candidate';
-      remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
-      remove.textContent = '×';
       row.appendChild(include);
       row.appendChild(copy);
-      row.appendChild(remove);
+      if (removableFiles.indexOf(String(fileName || '')) !== -1) {
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'test-generations-remove-candidate';
+        remove.dataset.fileName = String(fileName || '');
+        remove.title = 'Remove this WebCap-staged Test candidate';
+        remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
+        remove.textContent = '×';
+        row.appendChild(remove);
+      }
       host.appendChild(row);
     });
     syncCandidateMasterSelect(files);
@@ -1989,6 +1994,7 @@
       currentSession = String(status.session || '');
       currentSessionFolder = String(launchFolder || '');
       currentSessionModel = String(status.modelId || status.model || currentTestModelId() || '');
+      currentSessionSource = String(status.source == null ? testSource || '' : status.source);
     }
     syncActiveRunControls(status || {});
     var rateItemsBtn = el('test-generations-rate-items-btn');
@@ -2242,12 +2248,14 @@
     var rememberedSession = (
       currentSession &&
       currentSessionFolder === launchFolder &&
-      currentSessionModel === requestedModelId
+      currentSessionModel === requestedModelId &&
+      currentSessionSource === String(testSource || '')
     ) ? currentSession : '';
     if (!rememberedSession) {
       currentSession = '';
       currentSessionFolder = '';
       currentSessionModel = '';
+      currentSessionSource = '';
     }
     frame.classList.add('workspace-test-open');
     node.classList.remove('hidden');
@@ -2303,6 +2311,7 @@
             currentSession = '';
             currentSessionFolder = '';
             currentSessionModel = '';
+            currentSessionSource = '';
             renderStatus(initialStatus);
           })
         : Promise.resolve(renderStatus(initialStatus));
@@ -2399,6 +2408,7 @@
         currentSession = '';
         currentSessionFolder = '';
         currentSessionModel = '';
+        currentSessionSource = '';
         showSessionError = false;
         renderStatus(payload.latest || { status: 'idle' });
       }

@@ -400,6 +400,10 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
     assert "bottomAlignedTop" in storyboard
     assert "is-story-plan-overlay" in storyboard
     assert ".storyboard-director-activity.is-field-overlay" in css
+    activity_css = css.split(".storyboard-director-activity {", 1)[1].split("}", 1)[0]
+    picker_css = css.split(".storyboard-lora-picker-menu {", 1)[1].split("}", 1)[0]
+    assert "pointer-events: none;" in activity_css
+    assert "z-index: 60;" in picker_css
     assert "#storyboard-director-activity-trend svg" in css
     assert "'>VRAM ' + Math.round(vramPercent) + '%</span>'" in storyboard
     assert "'>RAM ' + Math.round(ramPercent) + '%</span>'" in storyboard

@@ -957,7 +957,7 @@
 
 .storyboard-lora-picker-menu {
   position: absolute;
-  z-index: 20;
+  z-index: 60;
   top: calc(100% + 3px);
   left: 0;
   right: 0;
@@ -2124,6 +2124,7 @@
 .storyboard-director-activity {
   position: absolute;
   z-index: 40;
+  pointer-events: none;
   width: 380px;
   max-width: calc(100% - 24px);
   margin: 0;

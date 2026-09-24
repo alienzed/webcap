@@ -275,7 +275,7 @@ def test_storyboard_director_jobs_reconcile_after_browser_refresh():
     assert "function reconcileDirectorJobs()" in storyboard
     assert "function watchRecoveredDirectorJob(job)" in storyboard
     assert "function applyRecoveredDirectorResult(job)" in storyboard
-    assert "reconcileDirectorJobs().catch(reportError);" in storyboard
+    assert "return reconcileDirectorJobs();" in storyboard
     assert "directorJobRequest(current.jobId, false)" in storyboard
     assert "return consumeDirectorJob(current.jobId);" in storyboard
     assert "promptDirectorJobId" in storyboard

@@ -972,10 +972,11 @@
       }
     }
 
+    var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     updateSceneDirectorStatus(sceneId, 'Director working…');
     startDirectorActivity();
-    flushPendingSaves().then(function () {
+    saveBarrier.then(function () {
       return directorRequest({
         storyId: storyId,
         sceneId: sceneId,
@@ -1119,10 +1120,11 @@
       return;
     }
 
+    var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     setDevelopStatus('Director is expanding the concept…');
     startDirectorActivity();
-    flushPendingSaves().then(function () {
+    saveBarrier.then(function () {
       return directorRequest({
         storyId: storyId,
         operation: 'expand_concept',
@@ -1154,9 +1156,10 @@
       reportError(new Error('The Story concept already has Director work pending.'));
       return;
     }
+    var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     setSaveState('Saving...');
-    flushPendingSaves().then(function () {
+    saveBarrier.then(function () {
       return request({
         operation: 'restore_previous_concept',
         storyId: storyId
@@ -1197,10 +1200,11 @@
       'Developing this Story again will replace the active Scene plan. Existing Scenes and Takes will remain recoverable in Removed Scenes. Continue?'
     )) return;
 
+    var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     setDevelopStatus('Director is developing the Story…');
     startDirectorActivity();
-    flushPendingSaves().then(function () {
+    saveBarrier.then(function () {
       return directorRequest({
         storyId: storyId,
         operation: 'develop_story',
@@ -2481,20 +2485,10 @@
   }
 
   function updateStoryFromLibrary(storyId, changes) {
-    return request(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
-      var story = payload.story;
-      var next = {
-        title: story.title || '',
-        concept: story.concept || '',
-        style: story.style || '',
-        invariants: story.invariants || [],
-        loras: story.loras || [],
-        tags: story.tags || [],
-        status: story.status || 'active',
-        pinned: !!story.pinned
-      };
-      Object.keys(changes || {}).forEach(function (key) { next[key] = changes[key]; });
-      return request({ operation: 'update_story', storyId: storyId, story: next });
+    return request({
+      operation: 'update_story',
+      storyId: storyId,
+      story: changes || {}
     }).then(function (payload) {
       if (storyState.story && storyState.story.id === storyId) storyState.story = payload.story;
       return refreshLibrary().then(function () {
@@ -2623,9 +2617,9 @@
     var seedText = String(seedNode.value || '').trim();
     var randomSeed = seedText === '' || seedText === '-1';
     var promptValue = field('prompt').value;
-    var promptDirectorModel = promptValue === String(currentScene.prompt || '')
-      ? String(currentScene.promptDirectorModel || '')
-      : '';
+    var promptUnchanged = promptValue === String(currentScene.prompt || '');
+    var promptDirectorModel = promptUnchanged ? String(currentScene.promptDirectorModel || '') : '';
+    var promptDirectorJobId = promptUnchanged ? String(currentScene.promptDirectorJobId || '') : '';
     var payload = {
       title: field('title').value,
       summary: field('summary').value,
@@ -2633,6 +2627,7 @@
       exitState: field('exitState').value,
       prompt: promptValue,
       promptDirectorModel: promptDirectorModel,
+      promptDirectorJobId: promptDirectorJobId,
       notes: field('notes').value,
       durationSeconds: field('durationSeconds').value,
       aspectRatio: field('aspectRatio').value || null,
@@ -2659,6 +2654,7 @@
     if (directorTargetPending({ kind: 'scene-prompt', storyId: storyState.story.id, sceneId: sceneId })) {
       delete payload.prompt;
       delete payload.promptDirectorModel;
+      delete payload.promptDirectorJobId;
     }
     return payload;
   }

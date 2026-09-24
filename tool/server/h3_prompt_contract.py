@@ -207,10 +207,34 @@ def inject_shared_context_into_rendered_prompt(prompt, shared_context_text):
     )
 
 
-def render_story_plan_prompts(plan):
+def _canonical_story_plan_shape(plan):
     if not isinstance(plan, dict):
         raise ValueError("Storyboard Scene plan must be an object.")
+
     rendered = copy.deepcopy(plan)
+    for wrapper_key in ("plan", "storyPlan", "scenePlan"):
+        wrapped = rendered.get(wrapper_key)
+        if isinstance(wrapped, dict) and ("scenes" in wrapped or "Scenes" in wrapped):
+            rendered = copy.deepcopy(wrapped)
+            break
+
+    if "sharedContext" not in rendered and "SharedContext" in rendered:
+        rendered["sharedContext"] = rendered.pop("SharedContext")
+    if "scenes" not in rendered and "Scenes" in rendered:
+        rendered["scenes"] = rendered.pop("Scenes")
+
+    scenes = rendered.get("scenes")
+    if isinstance(scenes, dict):
+        items = scenes.get("items")
+        if isinstance(items, list):
+            rendered["scenes"] = items
+        elif all(isinstance(value, dict) for value in scenes.values()):
+            rendered["scenes"] = list(scenes.values())
+    return rendered
+
+
+def render_story_plan_prompts(plan):
+    rendered = _canonical_story_plan_shape(plan)
     scenes = rendered.get("scenes")
     if not isinstance(scenes, list):
         raise ValueError("Storyboard Scene plan Scenes must be an array.")

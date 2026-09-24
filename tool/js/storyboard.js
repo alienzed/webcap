@@ -40,7 +40,8 @@
       activityLastMemory: null,
       activityLoadBaseline: null,
       activityLoadModelId: '',
-      activityTarget: null
+      activityTarget: null,
+      activityErrorReported: false
     }
   };
 
@@ -798,9 +799,15 @@
       directorActivityRequest('/fs/director/activity'),
       directorActivityRequest('/fs/system_status').catch(function () { return null; })
     ]).then(function (values) {
+      storyState.director.activityErrorReported = false;
       renderDirectorActivity(directorActivityForCurrentRun(values[0]), values[1]);
-    }).catch(function () {
-      renderDirectorActivity({ phase: 'preparing', active: true }, null);
+    }).catch(function (err) {
+      var card = el('storyboard-director-activity');
+      if (card) card.classList.add('hidden');
+      if (!storyState.director.activityErrorReported) {
+        storyState.director.activityErrorReported = true;
+        reportError(err);
+      }
     }).then(function () {
       if (!directorActivityActive()) return;
       if (storyState.director.activityTimer) clearTimeout(storyState.director.activityTimer);
@@ -812,6 +819,7 @@
     if (storyState.director.pendingOrder.length === 1) {
       storyState.director.activityStartedAt = Date.now() / 1000;
       storyState.director.activityHistory = [];
+      storyState.director.activityErrorReported = false;
       renderDirectorActivity({ phase: 'preparing', active: true, startedAt: storyState.director.activityStartedAt }, null);
     } else {
       positionDirectorActivity();
@@ -1045,14 +1053,6 @@
     if (target.kind === 'concept') {
       var concept = el('storyboard-story-concept');
       if (concept) concept.disabled = !!protectedState;
-      return;
-    }
-    if (target.kind === 'scenes') {
-      Array.prototype.forEach.call(document.querySelectorAll('.storyboard-scene[data-scene-id]'), function (root) {
-        Array.prototype.forEach.call(root.querySelectorAll('input, textarea, select'), function (node) {
-          node.disabled = !!protectedState;
-        });
-      });
       return;
     }
     if (target.kind === 'scene-prompt') {

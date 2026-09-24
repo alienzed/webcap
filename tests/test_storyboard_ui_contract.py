@@ -257,8 +257,11 @@ def test_storyboard_director_pending_state_is_target_scoped():
     assert "var directorTarget = { kind: 'concept', storyId: storyId };" in storyboard
     assert "var directorTarget = { kind: 'scenes', storyId: storyId };" in storyboard
     assert "var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId };" in storyboard
-    assert "root.querySelectorAll('input, textarea, select')" in storyboard
-    assert "root.querySelectorAll('input, textarea, select, button')" not in storyboard
+    protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
+    assert "target.kind === 'concept'" in protection
+    assert "target.kind === 'scene-prompt'" in protection
+    assert "target.kind === 'scenes'" not in protection
+    assert "querySelectorAll('input, textarea, select')" not in protection
     assert ".storyboard-director-activity.is-detached-target" in (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
 
@@ -345,6 +348,17 @@ def test_storyboard_director_has_non_modal_live_activity():
     assert "Generating response…" in storyboard
     assert ".storyboard-director-activity" in css
     assert "position: absolute;" in css
+
+
+
+
+def test_storyboard_director_activity_poll_failure_does_not_fake_preparing():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    refresh = storyboard.split("function refreshDirectorActivity()", 1)[1].split("function startDirectorActivity", 1)[0]
+
+    assert "reportError(err);" in refresh
+    assert "activityErrorReported" in refresh
+    assert "renderDirectorActivity({ phase: 'preparing', active: true }, null);" not in refresh
 
 
 def test_storyboard_director_activity_shows_completion_telemetry():

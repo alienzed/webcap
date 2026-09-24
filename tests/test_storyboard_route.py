@@ -350,6 +350,33 @@ def test_storyboard_generation_fails_loudly_while_develop_scenes_is_pending(monk
     assert "Story Scenes have pending Director work" in response.get_json()["error"]
 
 
+def test_storyboard_take_metadata_is_not_blocked_by_pending_scene_plan(monkeypatch):
+    monkeypatch.setattr(
+        app_module,
+        "llm_storyboard_target_busy",
+        lambda story_id, kind, scene_id="": kind == "scenes",
+    )
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_label_take",
+        lambda story_id, scene_id, take_id, label: (
+            {"id": story_id},
+            {"id": take_id, "label": label},
+        ),
+    )
+
+    response = app_module.app.test_client().post("/fs/storyboard", json={
+        "operation": "label_take",
+        "storyId": "story-1",
+        "sceneId": "scene-1",
+        "takeId": "take-1",
+        "label": "Keeper",
+    })
+
+    assert response.status_code == 200
+    assert response.get_json()["take"]["label"] == "Keeper"
+
+
 def test_storyboard_director_requires_confirmation_before_replacing_existing_scenes(monkeypatch):
     monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: {
         "id": story_id,

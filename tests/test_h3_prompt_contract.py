@@ -96,3 +96,39 @@ def test_h3_renderer_rejects_missing_structured_fields():
             "integrated_multimodal_description": "[Shot 1] A room.",
             "non_diegetic_music": "N/A",
         })
+
+
+def test_story_plan_prompt_renderer_canonicalizes_common_llm_scene_shapes():
+    plan = {
+        "storyPlan": {
+            "SharedContext": {
+                "subjects": [],
+                "wardrobes": [],
+                "locations": [],
+                "persistentFacts": [],
+            },
+            "Scenes": {
+                "scene_1": {
+                    "title": "Opening",
+                    "summary": "A woman enters.",
+                    "entryState": "Outside.",
+                    "exitState": "Inside.",
+                    "prompt": {
+                        "integrated_multimodal_description": "A woman enters.",
+                        "overall_soundscape": "Room tone.",
+                        "non_diegetic_music": "N/A",
+                    },
+                    "sharedContextRefs": [],
+                    "suggestedDurationSeconds": 6,
+                    "continuity": {"continuesPreviousScene": False, "carryForward": []},
+                }
+            },
+        }
+    }
+
+    rendered = h3_prompt_contract.render_story_plan_prompts(plan)
+
+    assert isinstance(rendered["scenes"], list)
+    assert len(rendered["scenes"]) == 1
+    assert rendered["scenes"][0]["title"] == "Opening"
+    assert "integrated_multimodal_description:" in rendered["scenes"][0]["prompt"]

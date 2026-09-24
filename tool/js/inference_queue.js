@@ -268,4 +268,7 @@
   window.syncInferenceQueueSurface = syncSurface;
   window.refreshInferenceQueue = refresh;
   bind();
+  if (typeof window.deriveShellNavigationState === 'function') {
+    syncSurface(window.deriveShellNavigationState().activity);
+  }
 })();

@@ -319,10 +319,13 @@
           currentScene.promptDirectorModel = savedScene.promptDirectorModel;
           currentScene.promptDirectorJobId = savedScene.promptDirectorJobId;
           currentScene.refineComplete = !!savedScene.refineComplete;
+          currentScene.durationSeconds = savedScene.durationSeconds;
           currentScene.updatedAt = savedScene.updatedAt;
           var currentRoot = sceneElement(sceneId);
           var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
+          var currentDuration = currentRoot && currentRoot.querySelector('[data-scene-field="durationSeconds"]');
           if (currentPrompt) currentPrompt.value = savedScene.prompt || '';
+          if (currentDuration) currentDuration.value = savedScene.durationSeconds == null ? '' : savedScene.durationSeconds;
           if (operation === 'refine_prompt') {
             var currentCorrection = currentRoot && currentRoot.querySelector('[data-director-correction]');
             if (currentCorrection) currentCorrection.value = '';
@@ -1197,7 +1200,9 @@
       var root = sceneElement(target.sceneId);
       if (!root) return;
       var prompt = root.querySelector('[data-scene-field="prompt"]');
+      var duration = root.querySelector('[data-scene-field="durationSeconds"]');
       if (prompt) prompt.disabled = !!protectedState;
+      if (duration) duration.disabled = !!protectedState;
       return;
     }
     if (target.kind === 'repair') {

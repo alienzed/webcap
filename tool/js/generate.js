@@ -481,8 +481,18 @@
       operation: operation,
       jobId: jobId || '',
       direction: direction || ''
-    }).then(function () {
+    }).then(function (payload) {
       if (operation === 'cancel') untrackGenerateJob(jobId);
+      if (operation === 'resume_queue') {
+        if (payload && payload.resumeBlocked) {
+          var reason = String(payload.resumeBlockReason || 'Inference queue could not resume.');
+          setStatus('Resume blocked', 'error');
+          if (typeof window.reportConsoleWarning === 'function') window.reportConsoleWarning('Generation Queue', reason);
+        } else if (payload && payload.resumed) {
+          setStatus('');
+          if (typeof window.reportConsoleInfo === 'function') window.reportConsoleInfo('Generation Queue', 'Queue resumed.');
+        }
+      }
       return refreshQueue();
     }).catch(reportError);
   }

@@ -675,7 +675,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
         return rating_summary(folder_path, model_id=criteria.get("modelId"), source=criteria.get("source"))
     if operation == "test_stop":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return stop(folder_path, session_name=criteria.get("session"))
+        return stop(folder_path, session_name=criteria.get("session"), source=criteria.get("source"))
     if operation == "test_remove_candidate":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return remove_candidate(
@@ -1545,14 +1545,14 @@ def status(folder_path, model_id=None, source=None):
     return _with_session_ratings(_session_directory(folder_path, session_name), payload)
 
 
-def stop(folder_path, session_name=None):
+def stop(folder_path, session_name=None, source=None):
     reconcile_startup()
     session_id = str(session_name or "").strip()
     if session_id:
         session_directory = _session_directory(folder_path, session_id)
         payload = _visible_session_status(folder_path, session_directory)
     else:
-        payload = _latest_status(folder_path)
+        payload = _latest_status(folder_path, source=source)
         session_id = str(payload.get("session") or "").strip()
         session_directory = _session_directory(folder_path, session_id) if session_id else None
     if not session_id or session_directory is None or payload.get("status") not in {"running", "stopping"}:

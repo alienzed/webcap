@@ -126,6 +126,34 @@ def test_llm_remote_job_does_not_claim_shared_gpu(llm_root, monkeypatch):
     assert captured == {"model": "remote-model", "gpu_reserved": False}
 
 
+def test_storyboard_llm_job_rejects_inconsistent_frozen_identity(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    job = execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {
+            "contract": {"operation": "expand_concept", "prompt": "Expand.", "output": "text"},
+            "clientContext": {
+                "storyId": "story-b",
+                "sceneId": "",
+                "operation": "expand_concept",
+            },
+        },
+        metadata={
+            "client": "storyboard",
+            "modelId": "qwen",
+            "operation": "expand_concept",
+            "storyId": "story-a",
+            "sceneId": "",
+        },
+    )
+
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["id"])
+    assert finished["status"] == "failed"
+    assert "Story identity is inconsistent" in finished["error"]
+
+
 def test_storyboard_llm_job_applies_expanded_concept_before_completion(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story", "concept": "Short concept."})
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)

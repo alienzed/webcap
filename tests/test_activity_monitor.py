@@ -7,16 +7,14 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
         "pauseReason": "",
         "jobs": [
             {
-                "id": "infer-active",
+                "jobId": "infer-active",
                 "status": "running",
                 "startedAt": 100.0,
-                "metadata": {
-                    "client": "storyboard",
-                    "label": "Scene 04 Take",
-                    "storyId": "story-1",
-                    "sceneId": "scene-4",
-                    "modelId": "h3",
-                },
+                "client": "storyboard",
+                "label": "Scene 04 Take",
+                "storyId": "story-1",
+                "sceneId": "scene-4",
+                "modelId": "h3",
             },
             {
                 "id": "infer-queued",
@@ -31,15 +29,13 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
         "pauseReason": "",
         "jobs": [
             {
-                "id": "llm-queued",
+                "jobId": "llm-queued",
                 "status": "queued",
                 "queuePosition": 1,
-                "metadata": {
-                    "client": "storyboard",
-                    "label": "Story: develop story",
-                    "operation": "develop_story",
-                    "modelId": "director.gguf",
-                },
+                "client": "storyboard",
+                "label": "Story: develop story",
+                "operation": "develop_story",
+                "modelId": "director.gguf",
             },
         ],
     })

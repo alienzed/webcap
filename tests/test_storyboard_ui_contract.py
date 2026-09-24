@@ -464,15 +464,17 @@ def test_storyboard_story_context_is_a_collapsible_middle_column():
     assert ".storyboard-scene-workspace" in css
 
 
-def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
+def test_storyboard_scene_focus_mode_scrolls_naturally_and_has_peer_sequence_view():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
     assert 'id="storyboard-scenes-overview-btn"' in html
     assert 'id="storyboard-scenes-focus-btn"' in html
+    assert 'id="storyboard-scenes-sequence-btn"' in html
     assert 'id="storyboard-scene-progression"' in html
     assert "sceneViewMode:" in storyboard
+    assert "['overview', 'focus', 'sequence']" in storyboard
     assert "data-scene-open" in storyboard
     assert "data-scene-progress" in storyboard
     assert "data-scene-progress-add" in storyboard
@@ -483,15 +485,28 @@ def test_storyboard_scene_focus_mode_bounds_authoring_width_and_has_overview():
     assert "markSceneNewTake(job.sceneId);" in storyboard
     assert "function setSceneViewMode(mode, sceneId)" in storyboard
     assert ".storyboard-scene-progress-badge" in css
-    assert "grid-template-columns: minmax(720px, 900px) minmax(360px, 420px);" in css
-    assert "min-height: 340px;" in css
-    assert "position: sticky;" in css
-    assert "overflow-x: auto;" in css
-    assert "flex: 1 0 360px;" in css
-    assert "grid-template-rows: auto minmax(0, 1fr) auto;" in css
+    assert "overflow-y: auto;" in css
+    assert "scrollbar-gutter: stable;" in css
+    assert ".storyboard-scenes-list.is-focus" in css
+    assert "overflow: visible;" in css
+    assert "height: auto;" in css
+    assert ".storyboard-takes {" in css
+    assert "min-height: 360px;" in css
+    assert "height: auto;" in css
+    assert "flex: 0 0 clamp(420px, 32vw, 620px);" in css
     assert ".storyboard-take-media {" in css
-    assert "aspect-ratio: auto;" in css
-    assert "overflow: hidden;" in css
+    assert "aspect-ratio: var(--take-aspect, 16 / 9);" in css
+    assert "position: sticky;" in css
+
+
+def test_storyboard_scene_continuity_is_collapsible():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'class="storyboard-scene-disclosure storyboard-continuity-details"' in storyboard
+    assert "<span>Continuity</span>" in storyboard
+    assert "Entry + Exit defined" in storyboard
+    assert 'data-scene-field="entryState"' in storyboard
+    assert 'data-scene-field="exitState"' in storyboard
 
 
 def test_storyboard_scene_uses_large_visible_generation_and_conditioning_inspector():

@@ -175,9 +175,11 @@
       return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
     }).length;
     var queued = jobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
-    summary.textContent = running || queued
-      ? [running ? String(running) + ' running' : '', queued ? String(queued) + ' queued' : ''].filter(Boolean).join(' · ')
-      : 'No queued inference';
+    summary.textContent = state.queue.paused
+      ? (String(state.queue.pauseReason || 'Inference is temporarily waiting.'))
+      : (running || queued
+        ? [running ? String(running) + ' running' : '', queued ? String(queued) + ' queued' : ''].filter(Boolean).join(' · ')
+        : 'No queued inference');
 
     host.innerHTML = '';
     if (!jobs.length) {

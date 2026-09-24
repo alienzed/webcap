@@ -254,7 +254,7 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None, s
     candidate = test_directory / name
     sidecar = candidate.with_suffix(".webcap.json")
 
-    if resolved_source is not None and candidate.is_file() and not sidecar.is_file():
+    if resolved_source is not None and candidate.is_file() and not _is_webcap_staged_lora(candidate, model):
         raise ValueError("Only WebCap-staged Test candidates can be removed from Test Generations.")
     if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
         raise RuntimeError("Staged Test candidate is not a regular file: " + name)
@@ -582,6 +582,24 @@ def _staged_lora_provenance(lora_file):
     return payload if isinstance(payload, dict) else {}
 
 
+def _is_webcap_staged_lora(lora_file, model):
+    payload = _staged_lora_provenance(lora_file)
+    if payload.get("version") != 1:
+        return False
+    if str(payload.get("stage") or "").strip().lower() != str(model.STAGING_KEY or "").strip().lower():
+        return False
+    if not str(payload.get("sourceJobId") or "").strip():
+        return False
+    if not str(payload.get("sourceFolder") or "").strip():
+        return False
+    if not str(payload.get("sourceFileName") or "").strip():
+        return False
+    try:
+        return int(payload.get("sourceEpoch")) >= 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _new_session_seed():
     return secrets.randbelow(2 ** 32)
 
@@ -661,7 +679,7 @@ def prepare(folder_path, model_id=None, source=None):
         "files": [path.name for path in loras],
         "removableFiles": [
             path.name for path in loras
-            if path.with_suffix(".webcap.json").is_file()
+            if _is_webcap_staged_lora(path, model)
         ],
         "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, source=selected_source),
         "sessions": list_sessions(folder_path, source=selected_source),

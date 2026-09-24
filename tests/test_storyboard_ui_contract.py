@@ -396,6 +396,10 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
     assert "is-story-plan-overlay" in storyboard
     assert ".storyboard-director-activity.is-field-overlay" in css
     assert "#storyboard-director-activity-trend svg" in css
+    assert "'>VRAM ' + Math.round(vramPercent) + '%</span>'" in storyboard
+    assert "'>RAM ' + Math.round(ramPercent) + '%</span>'" in storyboard
+    assert "' used of '" in storyboard
+    assert "detail.innerHTML = parts.join(' · ');" in storyboard
     assert "min-height: 72px;" in css
 
 

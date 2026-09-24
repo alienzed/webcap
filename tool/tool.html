@@ -99,6 +99,21 @@
                 </button>
                 <div class="activity-rail-spacer"></div>
                 <button
+                    id="activity-monitor-rail-btn"
+                    type="button"
+                    class="activity-rail-btn activity-monitor-rail-btn"
+                    data-activity-monitor-toggle
+                    title="Activity"
+                    aria-label="Activity"
+                    aria-expanded="false"
+                    aria-controls="activity-monitor-drawer"
+                >
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 17h3l2-8 3 11 2-7 2 4h4"></path>
+                    </svg>
+                    <span class="activity-monitor-rail-badge hidden" data-activity-monitor-badge></span>
+                </button>
+                <button
                     id="inference-queue-rail-btn"
                     type="button"
                     class="activity-rail-btn inference-queue-rail-btn"
@@ -1264,6 +1279,16 @@
                     </div>
                 </section>
             </section>
+            <aside id="activity-monitor-drawer" class="activity-monitor-drawer hidden" aria-label="Activity" aria-hidden="true">
+                <header class="activity-monitor-drawer-header">
+                    <div>
+                        <strong>Activity</strong>
+                        <span id="activity-monitor-summary">Now and recently completed work</span>
+                    </div>
+                    <button id="activity-monitor-close" type="button" class="activity-monitor-close" aria-label="Close Activity">×</button>
+                </header>
+                <div id="activity-monitor-list" class="activity-monitor-list"></div>
+            </aside>
             <aside id="inference-queue-drawer" class="inference-queue-drawer hidden" aria-label="Inference Queue" aria-hidden="true">
                 <header class="inference-queue-drawer-header">
                     <div>
@@ -1815,6 +1840,7 @@
         <script src="/static/js/training_workspace.js"></script>
         <script src="/static/js/workspace_shell.js"></script>
         <script src="/static/js/inference_queue.js"></script>
+        <script src="/static/js/activity_monitor.js"></script>
         <script src="/static/js/storage_manager.js"></script>
         <script src="/static/js/generate.js"></script>
         <script src="/static/js/test_generations.js"></script>

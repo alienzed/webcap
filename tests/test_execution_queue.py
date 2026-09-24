@@ -82,6 +82,19 @@ def test_execution_queue_stop_request_survives_late_running_transition(queue_roo
     assert stopped["status"] == "stopped"
 
 
+def test_execution_queue_terminal_receipt_is_removed_when_consumed(queue_root):
+    job = execution_queue.enqueue("inference", {"n": 1})
+    execution_queue.claim_next("inference")
+    execution_queue.finish_job(job["id"], status="completed", result={"ok": True})
+
+    consumed = execution_queue.consume_terminal_job(job["id"])
+
+    assert consumed["status"] == "completed"
+    assert consumed["result"] == {"ok": True}
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(job["id"])
+
+
 def test_execution_queue_terminal_jobs_reject_runtime_updates(queue_root):
     job = execution_queue.enqueue("takes", {"n": 1})
     execution_queue.claim_next("takes")

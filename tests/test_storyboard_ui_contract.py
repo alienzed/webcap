@@ -358,6 +358,24 @@ def test_storyboard_lora_chooser_is_single_searchable_field():
     assert "picker.value = '';" in storyboard
 
 
+def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'class="storyboard-editor-header"' not in html
+    assert 'class="storyboard-story-panel-heading"' in html
+    assert 'id="storyboard-story-expand-toggle"' in html
+    scenes_heading = html.split('class="storyboard-scenes-heading"', 1)[1].split('</div>\n                            <div id="storyboard-scene-progression"', 1)[0]
+    assert 'id="storyboard-director-model"' in scenes_heading
+    assert 'id="storyboard-scenes-overview-btn"' in scenes_heading
+    assert 'id="storyboard-scenes-focus-btn"' in scenes_heading
+    assert "storyboard-scene-progress-work" in storyboard
+    assert "generationJobsForScene(sceneId)" in storyboard
+    assert ".storyboard-story-panel-heading" in css
+    assert ".storyboard-scene-progress-work" in css
+
+
 def test_storyboard_story_can_collapse_and_supports_structured_invariants():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

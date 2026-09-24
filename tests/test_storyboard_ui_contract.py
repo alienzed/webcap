@@ -843,7 +843,7 @@ def test_storyboard_scene_uses_large_visible_generation_and_conditioning_inspect
     assert 'class="storyboard-generation-settings"' in storyboard
     assert 'class="storyboard-inspector-section storyboard-conditioning-panel"' in storyboard
     assert "conditioningSummaryParts" in storyboard
-    assert "Base LoRA active" in storyboard
+    assert "Turbo active" in storyboard
     assert ".storyboard-generation-settings" in css
     assert ".storyboard-conditioning-panel" in css
     generation_block = storyboard.split("'<section class=\"storyboard-inspector-section storyboard-generation-inspector\">'", 1)[1].split("'<section class=\"storyboard-inspector-section storyboard-conditioning-panel\">'", 1)[0]

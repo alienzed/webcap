@@ -202,8 +202,8 @@
     var base = el('generate-base-loras');
     if (base) {
       base.textContent = (model.baseLoras || []).length
-        ? 'Base workflow: ' + model.baseLoras.join(', ')
-        : 'No fixed base LoRAs.';
+        ? 'Required workflow LoRA: ' + model.baseLoras.join(', ')
+        : 'No required workflow LoRAs.';
     }
     renderLoras();
   }

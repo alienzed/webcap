@@ -1846,7 +1846,7 @@
     if (!selectedName) return;
 
     if (picker.id === 'storyboard-story-lora-picker') {
-      el('storyboard-story-lora-list').insertAdjacentHTML('beforeend', storyLoraRowHtml({ name: selectedName, strength: 1 }));
+      el('storyboard-story-lora-list').insertAdjacentHTML('beforeend', storyLoraRowHtml({ name: selectedName, strength: 0.9 }));
       picker.value = '';
       closeLoraPicker(picker);
       syncStoryLorasIntoScenes();
@@ -1859,7 +1859,7 @@
     if (!scene) throw new Error('LoRA picker Scene is missing.');
     var list = scene.querySelector('[data-scene-lora-list]');
     if (!list) throw new Error('LoRA list is missing.');
-    list.insertAdjacentHTML('beforeend', sceneLoraRowHtml({ name: selectedName, strength: 1 }));
+    list.insertAdjacentHTML('beforeend', sceneLoraRowHtml({ name: selectedName, strength: 0.9 }));
     picker.value = '';
     closeLoraPicker(picker);
     scheduleSceneSave(scene.dataset.sceneId);
@@ -2040,6 +2040,7 @@
     if (!take || !take.generated || !take.effectiveInput) return '';
     var input = take.effectiveInput || {};
     var references = input.references && typeof input.references === 'object' ? input.references : {};
+    var requiredLoras = Array.isArray(input.requiredLoras) ? input.requiredLoras : [];
     var loras = Array.isArray(input.loras) ? input.loras : [];
     var facts = [
       'Duration: ' + String(input.durationSeconds == null ? '' : input.durationSeconds) + 's',
@@ -2052,6 +2053,11 @@
     var referenceLines = Object.keys(references).map(function (role) {
       return role + ': ' + String(references[role] || '');
     });
+    var requiredLoraLines = requiredLoras.map(function (item) {
+      return String(item.name || '') +
+        ' · model ' + String(item.strengthModel == null ? 1 : item.strengthModel) +
+        ' · CLIP ' + String(item.strengthClip == null ? 1 : item.strengthClip);
+    });
     var loraLines = loras.map(function (item) {
       return String(item.name || '') + ' @ ' + String(item.strength == null ? 1 : item.strength);
     });
@@ -2063,6 +2069,7 @@
         '<strong>Exact prompt sent to ComfyUI</strong>' +
         '<pre>' + escapeHtml(String(input.prompt || take.prompt || '')) + '</pre>' +
         (referenceLines.length ? '<strong>Reference inputs</strong><pre>' + escapeHtml(referenceLines.join('\n')) + '</pre>' : '') +
+        (requiredLoraLines.length ? '<strong>Required workflow LoRA</strong><pre>' + escapeHtml(requiredLoraLines.join('\n')) + '</pre>' : '') +
         (loraLines.length ? '<strong>Effective LoRAs</strong><pre>' + escapeHtml(loraLines.join('\n')) + '</pre>' : '') +
       '</div>' +
     '</details>';
@@ -2235,10 +2242,10 @@
       var loraRowsHtml = sceneLoras.map(sceneLoraRowHtml).join('');
       var baseLoras = storyState.generationCapabilities.baseLoras || [];
       var loraStatusTitle = storyState.generationCapabilities.available
-        ? (baseLoras.length ? 'Base: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
+        ? (baseLoras.length ? 'Required Turbo: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
         : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
       var loraStatusText = storyState.generationCapabilities.available
-        ? (baseLoras.length ? 'Base LoRA active' : 'LoRAs ready')
+        ? (baseLoras.length ? 'Turbo active' : 'LoRAs ready')
         : 'LoRAs unavailable';
       var referencesHtml = sceneReferences.map(function (reference) {
         if (!reference || !reference.role) return '';

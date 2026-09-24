@@ -1,6 +1,6 @@
 import copy
 
-from tool.server.inference_models import h3, krea2
+from tool.server.inference_models import get_inference_model, h3, krea2
 
 
 def _available(_node_type, _input_name, _label):
@@ -32,11 +32,16 @@ def test_h3_inference_workflow_supports_multiple_loras_and_frame_anchors():
         "138": {"inputs": {
             "model": ["148", 0],
             "clip": ["148", 1],
-            "lora_1": {"on": True, "lora": "base.safetensors", "strength": 1},
         }},
         "141": {"inputs": {"filename_prefix": "old"}},
         "146": {"inputs": {"wildcard_text": "old", "populated_text": "old", "mode": "fixed", "seed": 1}},
-        "148": {"inputs": {"lora_name": "candidate.safetensors"}},
+        "148": {"inputs": {
+            "lora_name": "base.safetensors",
+            "strength_model": 0.9,
+            "strength_clip": 1,
+            "model": ["161", 0],
+            "clip": ["128", 0],
+        }},
         "161": {"inputs": {"model": ["127", 0]}},
     }
     original = copy.deepcopy(template)
@@ -53,8 +58,12 @@ def test_h3_inference_workflow_supports_multiple_loras_and_frame_anchors():
     )
 
     assert template == original
-    assert workflow["138"]["inputs"]["lora_2"]["lora"] == "one.safetensors"
-    assert workflow["138"]["inputs"]["lora_3"]["lora"] == "two.safetensors"
+    assert "148" in workflow
+    assert workflow["148"]["inputs"]["lora_name"] == "base.safetensors"
+    assert workflow["138"]["inputs"]["model"] == ["148", 0]
+    assert workflow["138"]["inputs"]["clip"] == ["148", 1]
+    assert workflow["138"]["inputs"]["lora_1"]["lora"] == "one.safetensors"
+    assert workflow["138"]["inputs"]["lora_2"]["lora"] == "two.safetensors"
     assert workflow["131"]["inputs"]["first_frame"] == ["190", 0]
     assert workflow["131"]["inputs"]["last_frame"] == ["191", 0]
     assert workflow["129"]["inputs"]["noise_seed"] == 42
@@ -75,12 +84,73 @@ def test_h3_inference_workflow_supports_multiple_loras_and_frame_anchors():
             "first_frame": "refs/first.png",
             "last_frame": "refs/last.png",
         },
+        "requiredLoras": [{
+            "name": "base.safetensors",
+            "strengthModel": 0.9,
+            "strengthClip": 1.0,
+        }],
         "loras": [
-            {"name": "base.safetensors", "strength": 1.0},
             {"name": "one.safetensors", "strength": 0.7},
             {"name": "two.safetensors", "strength": 0.5},
         ],
     }
+
+
+def test_h3_shared_inference_model_uses_dedicated_workflow_with_standalone_turbo():
+    model = get_inference_model("minimax_h3")
+    assert model.TEMPLATE_PATH.name == "minimax_h3_inference_api.json"
+
+    workflow = model.load_template()
+    turbo = workflow["148"]["inputs"]
+    power = workflow["138"]["inputs"]
+
+    assert workflow["124"]["inputs"]["steps"] == 8
+    assert turbo["lora_name"] == "mh3\\minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors"
+    assert turbo["strength_model"] == 0.9
+    assert turbo["strength_clip"] == 1
+    assert turbo["model"] == ["161", 0]
+    assert turbo["clip"] == ["128", 0]
+    assert power["model"] == ["148", 0]
+    assert power["clip"] == ["148", 1]
+    assert workflow["131"]["inputs"]["clip"] == ["138", 1]
+    assert not any(
+        isinstance(value, dict) and value.get("on") is True and value.get("lora")
+        for value in power.values()
+    )
+
+
+def test_h3_rejects_selecting_required_turbo_again():
+    model = get_inference_model("minimax_h3")
+    template = model.load_template()
+    turbo_name = template["148"]["inputs"]["lora_name"]
+    assets = {
+        ("UNETLoader", "unet_name"): [template["127"]["inputs"]["unet_name"]],
+        ("CLIPLoader", "clip_name"): [template["128"]["inputs"]["clip_name"]],
+        ("VAELoader", "vae_name"): [
+            template["119"]["inputs"]["vae_name"],
+            template["120"]["inputs"]["vae_name"],
+        ],
+        ("LoraLoader", "lora_name"): [turbo_name],
+    }
+
+    def available_names(node_type, input_name, _label):
+        return assets[(node_type, input_name)]
+
+    def resolve(configured, _available, _label):
+        return configured
+
+    import pytest
+    with pytest.raises(RuntimeError, match="required H3 workflow"):
+        h3.build_workflow(
+            template,
+            "Prompt",
+            {"aspectRatio": "4:3 (Standard)", "megapixels": 0.2, "duration": 7, "seed": 1},
+            [{"name": turbo_name, "strength": 0.5}],
+            {},
+            "webcap-generate/job/render",
+            available_names,
+            resolve,
+        )
 
 
 def test_krea2_inference_workflow_moves_selected_loras_into_power_loader():

@@ -138,14 +138,13 @@ def test_presence(folder_path):
     }
 
 def recent_test_sets(limit=8):
-    """Return recent Test Sources from central sessions plus legacy per-set history."""
+    """Return recent Test Sources from the bounded central session directory."""
     now = time.monotonic()
     cached_items = _recent_sets_cache.get("items") if isinstance(_recent_sets_cache.get("items"), list) else []
     if now < float(_recent_sets_cache.get("expires") or 0):
         return [dict(item) for item in cached_items[:max(1, int(limit or 8))]]
 
     recent_by_key = {}
-
     central_root = _central_session_root()
     if central_root.is_dir() and not central_root.is_symlink():
         for session in central_root.iterdir():
@@ -173,47 +172,6 @@ def recent_test_sets(limit=8):
                 item["modified"] = modified
                 item["latestSession"] = session.name
                 item["folder"] = owner_folder
-
-    # Legacy compatibility: discover historical per-set sessions without mixing
-    # them with the central directory. This can disappear after legacy cleanup.
-    fs_root = Path(app_config.FS_ROOT).resolve()
-    if fs_root.is_dir():
-        for dir_path, dir_names, _file_names in os.walk(fs_root):
-            if Path(dir_path).resolve() == central_root.resolve():
-                dir_names[:] = []
-                continue
-            if TEST_RESULTS_DIR not in dir_names:
-                continue
-            dir_names.remove(TEST_RESULTS_DIR)
-            set_folder = Path(dir_path).resolve()
-            legacy_root = set_folder / TEST_RESULTS_DIR
-            if legacy_root.is_symlink() or not legacy_root.is_dir():
-                continue
-            for session in legacy_root.iterdir():
-                if session.is_symlink() or not session.is_dir() or not (session / "test.json").is_file():
-                    continue
-                payload = _read_status(session) or {}
-                model_id = str(payload.get("modelId") or payload.get("model") or get_test_model().PROFILE_ID)
-                source = _session_source(payload, set_folder)
-                owner_folder = _relative_set_folder(set_folder)
-                key = (model_id, source)
-                try:
-                    modified = (session / "test.json").stat().st_mtime
-                except OSError:
-                    modified = 0
-                item = recent_by_key.setdefault(key, {
-                    "folder": owner_folder,
-                    "source": source,
-                    "modelId": model_id,
-                    "sessionCount": 0,
-                    "latestSession": "",
-                    "modified": 0,
-                })
-                item["sessionCount"] += 1
-                if modified >= float(item.get("modified") or 0):
-                    item["modified"] = modified
-                    item["latestSession"] = session.name
-                    item["folder"] = owner_folder
 
     recent = sorted(
         recent_by_key.values(),

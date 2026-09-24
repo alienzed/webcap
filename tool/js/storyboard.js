@@ -1486,6 +1486,11 @@
       var previousScene = previousSceneId ? scenes[previousSceneId] || {} : {};
       var previousSelectedTakeId = previousScene.selectedTakeId || '';
       var sceneGenerationJobs = generationJobsForScene(sceneId);
+      var storyGenerationDefaults = story.generationDefaults || {};
+      var inheritedAspectRatio = storyGenerationDefaults.aspectRatio || '4:3 (Standard)';
+      var inheritedMegapixels = storyGenerationDefaults.megapixels == null ? 0.2 : storyGenerationDefaults.megapixels;
+      var sceneAspectRatio = scene.aspectRatio == null ? '' : scene.aspectRatio;
+      var sceneMegapixels = scene.megapixels == null ? '' : scene.megapixels;
       var sceneLoras = Array.isArray(scene.loras) ? scene.loras : [];
       var overrides = storyLoraOverrideMap(scene);
       var inheritedLoraRowsHtml = storyLoras.map(function (lora) {
@@ -1587,12 +1592,13 @@
               '</button>' +
               '<div class="storyboard-generation-settings">' +
                 '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
-                '<label class="storyboard-field" title="Currently stored per Scene; keep this consistent across a Story unless you intentionally need an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
+                '<label class="storyboard-field" title="Inherit the Story aspect ratio unless this Scene needs an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
+                  '<option value=""' + (sceneAspectRatio === '' ? ' selected' : '') + '>Inherit · ' + escapeHtml(inheritedAspectRatio) + '</option>' +
                   ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
-                    return '<option value="' + escapeHtml(value) + '"' + (sceneValue(scene, 'aspectRatio', '4:3 (Standard)') === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
+                    return '<option value="' + escapeHtml(value) + '"' + (sceneAspectRatio === value ? ' selected' : '') + '>' + escapeHtml(value) + '</option>';
                   }).join('') +
                 '</select></label>' +
-                '<label class="storyboard-field" title="Output size target for this Scene. Useful when promoting a shot toward final output."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneValue(scene, 'megapixels', 0.2)) + '"></label>' +
+                '<label class="storyboard-field" title="Leave blank to inherit the Story megapixel target."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneMegapixels) + '" placeholder="Inherit · ' + escapeHtml(inheritedMegapixels) + '"></label>' +
                 '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
               '</div>' +
               '<label class="storyboard-inline-check storyboard-generation-wildcards" title="Allow wildcard syntax in the generation prompt."><input type="checkbox" data-scene-field="wildcardsEnabled"' + (scene.wildcardsEnabled ? ' checked' : '') + '> Wildcards intended</label>' +
@@ -1663,6 +1669,10 @@
     renderStoryInvariants();
     el('storyboard-story-tags').value = storyTagsText(storyState.story);
     el('storyboard-story-status').value = storyState.story.status || 'active';
+    el('storyboard-story-target-scenes').value = storyState.story.targetSceneCount || 12;
+    var storyDefaults = storyState.story.generationDefaults || {};
+    el('storyboard-story-aspect-ratio').value = storyDefaults.aspectRatio || '4:3 (Standard)';
+    el('storyboard-story-megapixels').value = storyDefaults.megapixels == null ? 0.2 : storyDefaults.megapixels;
     var developButton = el('storyboard-develop-btn');
     if (developButton) {
       var hasScenes = (storyState.story.sceneOrder || []).length > 0;
@@ -1713,7 +1723,17 @@
     return flushPendingSaves().then(function () {
       return request({
         operation: 'create_story',
-        story: { title: 'Untitled Story', concept: '', style: '', invariants: [], tags: [], status: 'active', pinned: false }
+        story: {
+          title: 'Untitled Story',
+          concept: '',
+          style: '',
+          invariants: [],
+          tags: [],
+          status: 'active',
+          pinned: false,
+          targetSceneCount: 12,
+          generationDefaults: { aspectRatio: '4:3 (Standard)', megapixels: 0.2 }
+        }
       });
     }).then(function (payload) {
       storyState.story = payload.story;
@@ -1848,6 +1868,11 @@
       style: el('storyboard-story-style').value,
       invariants: storyInvariantsFromUi(),
       loras: storyLorasFromUi(),
+      targetSceneCount: el('storyboard-story-target-scenes').value,
+      generationDefaults: {
+        aspectRatio: el('storyboard-story-aspect-ratio').value,
+        megapixels: el('storyboard-story-megapixels').value
+      },
       tags: el('storyboard-story-tags').value.split(',').map(function (value) { return value.trim(); }).filter(Boolean),
       status: el('storyboard-story-status').value,
       pinned: !!storyState.story.pinned
@@ -1911,8 +1936,8 @@
       prompt: field('prompt').value,
       notes: field('notes').value,
       durationSeconds: field('durationSeconds').value,
-      aspectRatio: field('aspectRatio').value,
-      megapixels: field('megapixels').value,
+      aspectRatio: field('aspectRatio').value || null,
+      megapixels: String(field('megapixels').value || '').trim() || null,
       seedMode: randomSeed ? 'random' : 'fixed',
       seed: randomSeed ? null : seedText,
       wildcardsEnabled: field('wildcardsEnabled').checked,
@@ -2003,7 +2028,7 @@
     flushPendingSaves().then(function () { return request({
       operation: 'add_scene',
       storyId: storyState.story.id,
-      scene: { title: 'New Scene', durationSeconds: 6, aspectRatio: '4:3 (Standard)', megapixels: 0.2, seedMode: 'random' }
+      scene: { title: 'New Scene', durationSeconds: 6, seedMode: 'random' }
     }); }).then(function (payload) {
       storyState.story = payload.story;
       storyState.sceneViewMode = 'focus';
@@ -2691,9 +2716,10 @@
       if (directorActivityActive()) positionDirectorActivity();
     }, true);
 
-    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style', 'storyboard-story-tags'].forEach(function (id) {
+    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style', 'storyboard-story-tags', 'storyboard-story-target-scenes', 'storyboard-story-megapixels'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);
     });
+    el('storyboard-story-aspect-ratio').addEventListener('change', scheduleStorySave);
     el('storyboard-invariants-list').addEventListener('input', scheduleStorySave);
     el('storyboard-invariants-list').addEventListener('change', scheduleStorySave);
     el('storyboard-invariant-add').addEventListener('click', function () {

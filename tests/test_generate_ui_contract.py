@@ -200,3 +200,8 @@ def test_generate_errors_keep_detail_in_console_and_use_concise_setup_badge():
     assert 'id="generate-status" class="generate-status-badge hidden"' in html
     assert ".generate-status-badge.is-error" in css
 
+
+
+def test_generate_defaults_new_lora_strength_to_point_nine():
+    js = Path("tool/js/generate.js").read_text(encoding="utf-8")
+    assert "items.push({ name: name, strength: 0.9 });" in js

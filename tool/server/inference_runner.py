@@ -141,16 +141,6 @@ def _ensure_execution_reconciled():
             job for job in prior.get("jobs", [])
             if str(job.get("status") or "") in {"starting", "running", "stopping"}
         ]
-        unresolved_terminal_provider_ids = {
-            str((job.get("details") or {}).get("providerJobId") or "").strip()
-            for job in prior.get("jobs", [])
-            if str(job.get("status") or "") in {"failed", "interrupted", "cancelled", "stopped"}
-            and isinstance(job.get("details"), dict)
-            and str((job.get("details") or {}).get("providerJobId") or "").strip()
-            and str((job.get("details") or {}).get("providerStatus") or "").strip().lower()
-                not in {"completed", "failed", "cancelled", "missing"}
-        }
-
         # Reconcile provider state while active queue jobs are still mutable so
         # the confirmed terminal provider status is persisted before the WebCap
         # job itself is marked interrupted.
@@ -187,36 +177,6 @@ def _ensure_execution_reconciled():
             EXECUTION_LANE,
             reason="Inference was interrupted by a WebCap restart.",
         )
-        interrupted_provider_ids = {
-            str((job.get("details") or {}).get("providerJobId") or "").strip()
-            for job in interrupted
-            if isinstance(job.get("details"), dict)
-        }
-
-        # Historical terminal rows are immutable by design. Query their stale
-        # provider projection directly; only retain a hold when the provider
-        # still cannot be confirmed terminal.
-        for prompt_id in unresolved_terminal_provider_ids - interrupted_provider_ids:
-            try:
-                from .inference_runtime import cancel_job_and_wait_status
-                if not cancel_job_and_wait_status(prompt_id):
-                    hold_provider_cleanup(
-                        prompt_id,
-                        "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",
-                    )
-                    _logger.error(
-                        "Prior terminal inference provider job %s did not confirm cancellation.",
-                        prompt_id,
-                    )
-            except Exception:
-                hold_provider_cleanup(
-                    prompt_id,
-                    "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",
-                )
-                _logger.exception(
-                    "Could not verify prior terminal inference provider job %s.",
-                    prompt_id,
-                )
         _startup_reconciled = True
 
 

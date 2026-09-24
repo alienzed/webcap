@@ -48,7 +48,6 @@
 .generate-director-status,
 .generate-base-loras,
 .generate-empty-inline,
-.generate-queue-row span,
 .generate-result-footer span {
   color: var(--muted);
   font-size: 12px;
@@ -92,8 +91,7 @@
 
 .generate-prompt-panel,
 .generate-inspector,
-.generate-results-panel,
-.generate-queue-panel {
+.generate-results-panel {
   min-width: 0;
   border: 1px solid var(--border);
   background: var(--panel);
@@ -109,7 +107,6 @@
 .generate-section-heading,
 .generate-inspector-heading,
 .generate-results-heading,
-.generate-queue-heading,
 .generate-conditioning-heading {
   display: flex;
   align-items: center;
@@ -123,7 +120,6 @@
 .generate-section-heading strong,
 .generate-inspector-heading strong,
 .generate-results-heading strong,
-.generate-queue-heading strong,
 .generate-conditioning-heading strong {
   font-size: 15px;
 }
@@ -316,76 +312,6 @@
   text-overflow: ellipsis;
 }
 
-.generate-queue-panel {
-  min-height: 0;
-  border-radius: 0;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
-  padding: 16px;
-  overflow: auto;
-}
-
-.generate-queue-heading {
-  position: sticky;
-  top: -16px;
-  z-index: 2;
-  padding: 16px 0 10px;
-  background: var(--panel);
-}
-
-.generate-queue-heading .spacer {
-  flex: 1;
-}
-
-.generate-queue-list {
-  display: grid;
-  gap: 8px;
-}
-
-.generate-queue-row {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
-  gap: 9px;
-  align-items: center;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--panel-soft);
-}
-
-.generate-queue-position {
-  font-weight: 800;
-  text-transform: capitalize;
-}
-
-.generate-queue-copy {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.generate-queue-copy strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.generate-queue-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.generate-queue-row.status-running,
-.generate-queue-row.status-starting {
-  border-color: var(--accent);
-}
-
-.generate-results-empty,
-.generate-queue-empty {
-  color: var(--muted);
-  padding: 20px 4px;
-}
 
 @media (max-width: 1500px) {
   .generate-prompt-tools {
@@ -404,10 +330,6 @@
   }
   .generate-authoring {
     grid-template-columns: 1fr;
-  }
-  .generate-queue-panel {
-    border-left: 0;
-    border-top: 1px solid var(--border);
   }
 }
 

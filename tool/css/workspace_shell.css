@@ -244,6 +244,41 @@
   display: none !important;
 }
 
+.inference-queue-rail-btn {
+  position: relative;
+}
+
+.inference-queue-rail-btn.inference-active {
+  color: var(--accent);
+}
+
+.inference-queue-rail-btn[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--panel-soft) 88%, var(--accent));
+  color: var(--text);
+}
+
+.inference-queue-rail-badge {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.inference-queue-rail-badge.hidden {
+  display: none;
+}
+
 .activity-rail-spacer {
   flex: 1 1 auto;
 }

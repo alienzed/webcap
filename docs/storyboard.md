@@ -444,7 +444,7 @@ Next candidates after real usage:
 - branching/version UX only if actual production use proves simple recoverable replacement is insufficient;
 - lightweight conversational UI only if explicit bounded actions stop being enough.
 
-Manual editing remains available at all times. AI output proposes or edits the same Scene objects the user can edit directly.
+Manual editing remains available everywhere except the exact field or active Scene plan currently owned by a pending Director job. Unrelated Stories, Scenes, Story fields, and app activities remain usable while Director work is queued or running.
 
 ### Phase 6 - Assembly and production polish
 

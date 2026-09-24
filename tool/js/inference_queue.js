@@ -84,8 +84,11 @@
       return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
     }).length;
     var queued = jobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
-    var backlog = jobs.filter(function (job) { return String(job.status || '') === 'backlog'; }).length;
+    var backlogJobs = jobs.filter(function (job) { return String(job.status || '') === 'backlog'; });
+    var backlog = backlogJobs.length;
+    var armedBacklog = backlogJobs.filter(function (job) { return !!job.armed; }).length;
     var count = running + queued + backlog;
+    var activeCount = running + queued + armedBacklog;
     var title = [
       running ? String(running) + ' running' : '',
       queued ? String(queued) + ' queued' : '',
@@ -98,7 +101,7 @@
       toggle.title = title;
       toggle.setAttribute('aria-label', title);
       toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
-      toggle.classList.toggle('inference-active', count > 0);
+      toggle.classList.toggle('inference-active', activeCount > 0);
       if (isRail) {
         var badge = toggle.querySelector('[data-inference-queue-badge]');
         if (badge) {

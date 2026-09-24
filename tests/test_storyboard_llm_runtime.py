@@ -439,6 +439,7 @@ def test_run_contract_parses_schema_constrained_json(monkeypatch):
         captured["model"] = model_id
         captured["messages"] = messages
         captured["schema"] = response_schema
+        captured["sampling"] = sampling
         return {"text": '{"scenes": []}', "model": model_id}
 
     monkeypatch.setattr(storyboard_llm_runtime, "chat", fake_chat)
@@ -450,6 +451,7 @@ def test_run_contract_parses_schema_constrained_json(monkeypatch):
     })
 
     assert captured["schema"] == schema
+    assert captured["sampling"] == storyboard_llm_runtime._sampling_profile("")
     assert result["data"] == {"scenes": []}
 
 

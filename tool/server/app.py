@@ -680,7 +680,8 @@ def storyboard_generation_route():
         if request.method == "GET":
             job_id = str(request.args.get("job") or "").strip()
             if job_id:
-                return jsonify({"ok": True, "job": storyboard_generation_status(job_id)})
+                consume = str(request.args.get("consume") or "").strip().lower() in {"1", "true", "yes"}
+                return jsonify({"ok": True, "job": storyboard_generation_status(job_id, consume=consume)})
             return jsonify({
                 "ok": True,
                 "queue": storyboard_generation_queue(str(request.args.get("story") or "").strip()),
@@ -748,7 +749,10 @@ def director_job_route():
         if request.method == "GET":
             return jsonify({
                 "ok": True,
-                "job": llm_job_status(str(request.args.get("job") or "").strip()),
+                "job": llm_job_status(
+                    str(request.args.get("job") or "").strip(),
+                    consume=str(request.args.get("consume") or "").strip().lower() in {"1", "true", "yes"},
+                ),
             })
         data = request.get_json(silent=True) or {}
         return jsonify({
@@ -928,7 +932,8 @@ def inference_route():
         if request.method == "GET":
             job_id = str(request.args.get("job") or "").strip()
             if job_id:
-                return jsonify({"ok": True, "job": inference_job_status(job_id)})
+                consume = str(request.args.get("consume") or "").strip().lower() in {"1", "true", "yes"}
+                return jsonify({"ok": True, "job": inference_job_status(job_id, consume=consume)})
             return jsonify({"ok": True, "queue": inference_snapshot(include_terminal=False)})
         data = request.get_json(silent=True) or {}
         return jsonify({

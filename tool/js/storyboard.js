@@ -1450,10 +1450,6 @@
     }
   }
 
-  function storyTagsText(story) {
-    return Array.isArray(story && story.tags) ? story.tags.join(', ') : '';
-  }
-
   function invariantRowHtml(item) {
     item = item || {};
     var kind = String(item.kind || 'custom');
@@ -1812,7 +1808,7 @@
     }
 
     var pinned = stories.filter(function (story) { return !!story.pinned; });
-    var recent = stories.filter(function (story) { return !story.pinned && story.status !== 'archived'; });
+    var mainStories = stories.filter(function (story) { return !story.pinned && story.status !== 'archived'; });
     var archived = stories.filter(function (story) { return !story.pinned && story.status === 'archived'; });
 
     function rows(items) {
@@ -1842,7 +1838,7 @@
 
     var html = '';
     if (pinned.length) html += '<div class="storyboard-list-section-title">Pinned</div>' + rows(pinned);
-    if (recent.length) html += '<div class="storyboard-list-section-title">Recent</div>' + rows(recent);
+    if (mainStories.length) html += '<div class="storyboard-list-section-title">Stories</div>' + rows(mainStories);
     if (archived.length) html += '<div class="storyboard-list-section-title">Archived</div>' + rows(archived);
     host.innerHTML = html;
   }
@@ -2568,7 +2564,6 @@
     el('storyboard-story-style').value = storyState.story.style || '';
     renderStoryStylePresetSelector();
     renderStoryInvariants();
-    el('storyboard-story-tags').value = storyTagsText(storyState.story);
     el('storyboard-story-status').value = storyState.story.status || 'active';
     el('storyboard-story-target-scenes').value = storyState.story.targetSceneCount || 12;
     var storyDefaults = storyState.story.generationDefaults || {};
@@ -2782,7 +2777,6 @@
         aspectRatio: el('storyboard-story-aspect-ratio').value || '4:3 (Standard)',
         megapixels: el('storyboard-story-megapixels').value || 0.2
       },
-      tags: el('storyboard-story-tags').value.split(',').map(function (value) { return value.trim(); }).filter(Boolean),
       status: el('storyboard-story-status').value,
       pinned: !!storyState.story.pinned
     };
@@ -3706,7 +3700,7 @@
       if (directorActivityActive()) positionDirectorActivity();
     }, true);
 
-    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-tags', 'storyboard-story-target-scenes'].forEach(function (id) {
+    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-target-scenes'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);
     });
     el('storyboard-story-style').addEventListener('input', function () {

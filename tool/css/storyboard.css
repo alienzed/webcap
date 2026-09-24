@@ -327,8 +327,7 @@
 }
 
 .storyboard-concept-field,
-.storyboard-style-field,
-.storyboard-tags-field {
+.storyboard-style-field {
   grid-column: 1 / -1;
 }
 
@@ -611,8 +610,7 @@
     grid-template-columns: 1fr;
   }
 
-  .storyboard-concept-field,
-  .storyboard-tags-field {
+  .storyboard-concept-field {
     grid-column: auto;
   }
 }
@@ -2223,7 +2221,6 @@
 
 .storyboard-concept-field,
 .storyboard-style-field,
-.storyboard-tags-field,
 .storyboard-invariants,
 .storyboard-story-defaults,
 .storyboard-develop-row {

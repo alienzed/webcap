@@ -51,7 +51,7 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert 'id="storyboard-story-concept"' in html
     assert 'id="storyboard-story-style"' in html
     assert 'id="storyboard-sequence-preview"' in html
-    assert 'id="storyboard-story-tags"' in html
+    assert 'id="storyboard-story-tags"' not in html
     assert 'id="storyboard-story-status"' in html
     assert 'id="storyboard-story-target-scenes"' in html
     assert 'id="storyboard-story-aspect-ratio"' in html
@@ -765,7 +765,7 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'id="storyboard-repair-instruction"' in director_section
     assert 'id="storyboard-repair-scenes-btn"' in director_section
     assert 'id="storyboard-restore-repair-btn"' in director_section
-    assert 'id="storyboard-story-tags"' in planning_section
+    assert 'id="storyboard-story-tags"' not in planning_section
     assert 'id="storyboard-story-target-scenes"' in planning_section
     assert 'id="storyboard-story-aspect-ratio"' in planning_section
     assert 'id="storyboard-story-megapixels"' in planning_section
@@ -774,6 +774,9 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
 
     payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
     assert "storySection" not in payload_block
+    assert "storyboard-story-tags" not in payload_block
+    assert 'storyboard-list-section-title">Stories</div>' in storyboard
+    assert 'storyboard-list-section-title">Recent</div>' not in storyboard
 
 
 def test_storyboard_story_context_is_a_collapsible_middle_column():

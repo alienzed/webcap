@@ -155,8 +155,14 @@ def _ensure_execution_reconciled():
             if not prompt_id:
                 continue
             try:
-                from .inference_runtime import cancel_job_and_wait
-                if not cancel_job_and_wait(prompt_id):
+                from .inference_runtime import cancel_job_and_wait_status
+                terminal_status = cancel_job_and_wait_status(prompt_id)
+                if terminal_status:
+                    execution_update_job(
+                        str(job.get("id") or ""),
+                        details={"providerStatus": terminal_status},
+                    )
+                else:
                     hold_provider_cleanup(
                         prompt_id,
                         "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
@@ -178,8 +184,26 @@ def _ensure_execution_reconciled():
         }
         for prompt_id in unresolved_terminal_provider_ids - interrupted_provider_ids:
             try:
-                from .inference_runtime import cancel_job_and_wait
-                if not cancel_job_and_wait(prompt_id):
+                from .inference_runtime import cancel_job_and_wait_status
+                terminal_status = cancel_job_and_wait_status(prompt_id)
+                if terminal_status:
+                    matching = next(
+                        (
+                            prior_job
+                            for prior_job in prior.get("jobs", [])
+                            if str((prior_job.get("details") or {}).get("providerJobId") or "").strip() == prompt_id
+                        ),
+                        None,
+                    )
+                    if matching:
+                        try:
+                            execution_update_job(
+                                str(matching.get("id") or ""),
+                                details={"providerStatus": terminal_status},
+                            )
+                        except ValueError:
+                            pass
+                else:
                     hold_provider_cleanup(
                         prompt_id,
                         "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",

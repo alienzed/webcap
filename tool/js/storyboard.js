@@ -867,6 +867,9 @@
     if (modeTitle) modeTitle.textContent = storyState.sceneViewMode === 'sequence' ? 'Sequence' : 'Scenes';
     var progression = el('storyboard-scene-progression');
     if (progression) progression.classList.toggle('hidden', storyState.sceneViewMode === 'sequence');
+    var directorHeader = document.querySelector('.storyboard-scenes-heading .storyboard-director-header');
+    if (directorHeader) directorHeader.classList.toggle('hidden', storyState.sceneViewMode === 'sequence');
+    renderSceneProgression(order);
   }
 
   function setSceneViewMode(mode, sceneId) {
@@ -983,12 +986,17 @@
     if (!host || !storyState.story) return;
     var story = storyState.story;
     var selected = selectedSequenceItems(story);
-    if (storyState.sceneViewMode !== 'sequence' || !selected.length) {
+    if (storyState.sceneViewMode !== 'sequence') {
       host.innerHTML = '';
       host.classList.add('hidden');
       return;
     }
     host.classList.remove('hidden');
+    if (!selected.length) {
+      host.innerHTML = '<header class="storyboard-sequence-header"><div><strong>Selected sequence</strong><span>No Takes selected yet</span></div></header>' +
+        '<div class="storyboard-sequence-empty">Select a Take in one or more Scenes to build the sequence.</div>';
+      return;
+    }
     var assembly = storyState.sequenceExport;
     var assemblyCurrent = assemblyMatchesSelection(assembly, selected) && assembly.current !== false;
     var assemblyStatus = '';

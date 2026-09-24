@@ -633,14 +633,22 @@ def restore_previous_concept(story_id):
     return story
 
 
-def _validate_developed_plan(plan):
+def _validate_developed_plan(plan, target_scene_count=None):
     if not isinstance(plan, dict):
         raise ValueError("Developed Story plan must be an object.")
     if set(plan.keys()) != {"scenes"}:
         raise ValueError("Developed Story plan contains unsupported fields.")
     scenes = plan.get("scenes")
-    if not isinstance(scenes, list) or len(scenes) < 2:
-        raise ValueError("Developed Story plan must contain at least two Scenes.")
+    if not isinstance(scenes, list):
+        raise ValueError("Developed Story plan Scenes must be an array.")
+    if target_scene_count is not None and len(scenes) != int(target_scene_count):
+        raise ValueError(
+            "Storyboard Director returned "
+            + str(len(scenes))
+            + " Scenes; this Story requests exactly "
+            + str(int(target_scene_count))
+            + "."
+        )
 
     scene_keys = {
         "title",
@@ -700,7 +708,7 @@ def _validate_developed_plan(plan):
 @_serialized_mutation
 def apply_developed_plan(story_id, plan, model_id=""):
     story = load_story(story_id)
-    planned_scenes = _validate_developed_plan(plan)
+    planned_scenes = _validate_developed_plan(plan, story.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT))
     now = _utc_now()
 
     removed = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}

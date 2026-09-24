@@ -1653,9 +1653,31 @@
 
 .storyboard-generation-inspector .storyboard-generate-btn {
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+  background: color-mix(in srgb, var(--accent) 24%, var(--panel-soft));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
   font-size: 14px;
   font-weight: 850;
+}
+
+.storyboard-generation-inspector .storyboard-generate-btn::before {
+  content: "✦";
+  color: var(--accent);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.storyboard-generation-inspector .storyboard-generate-btn:hover:not(:disabled),
+.storyboard-generation-inspector .storyboard-generate-btn:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 34%, var(--panel-soft));
+  outline: none;
 }
 
 .storyboard-generation-settings {

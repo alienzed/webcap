@@ -165,7 +165,7 @@ def test_story_scene_lifecycle(storyboard_fs):
     story, updated = storyboard_store.update_scene(
         story["id"],
         first["id"],
-        {"prompt": "A car arrives in heavy rain.", "durationSeconds": 10},
+        {"prompt": "A car arrives in heavy rain.", "promptDirectorModel": "director.gguf", "durationSeconds": 10},
     )
     assert updated["prompt"].endswith("heavy rain.")
     assert updated["seed"] == 42
@@ -174,6 +174,7 @@ def test_story_scene_lifecycle(storyboard_fs):
     story, duplicate = storyboard_store.duplicate_scene(story["id"], first["id"])
     assert story["sceneOrder"][1] == duplicate["id"]
     assert duplicate["prompt"] == updated["prompt"]
+    assert duplicate["promptDirectorModel"] == "director.gguf"
     assert duplicate["entryState"] == updated["entryState"]
     assert duplicate["exitState"] == updated["exitState"]
     assert duplicate["takes"] == {}
@@ -431,6 +432,7 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
     assert first["title"] == "Opening"
     assert first["durationSeconds"] == 6
     assert "integrated_multimodal_description" in first["prompt"]
+    assert first["promptDirectorModel"] == "director.gguf"
 
 
 def test_apply_developed_plan_rejects_wrong_scene_count_or_out_of_range_duration(storyboard_fs):

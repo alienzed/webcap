@@ -951,3 +951,16 @@ def test_storyboard_roundoff_has_prompt_restore_manual_refs_and_readiness_summar
     assert "' needs Take'" in script
     assert "' needs selection'" in script
     assert "'s selected'" in script
+
+def test_storyboard_refine_completion_is_scene_specific_persistent_and_self_clearing():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+
+    assert '"refineComplete": refine_complete' in store
+    assert 'operation=operation' in (ROOT / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
+    assert "function syncSceneRefineState(sceneId)" in storyboard
+    assert "(scene.refineComplete ? '✓' : 'Refine')" in storyboard
+    assert "currentCorrection.value = '';" in storyboard
+    assert "currentScene.refineComplete = !!savedScene.refineComplete;" in storyboard
+    assert "currentScene.refineComplete = false;" in storyboard
+    assert "scheduleSceneSave(correctionSceneId);" in storyboard

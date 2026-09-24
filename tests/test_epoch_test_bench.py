@@ -1030,3 +1030,87 @@ def test_test_enqueue_failure_stops_started_child_and_preserves_recovery_session
     assert child["status"] == "stopping"
     assert child["requestedAction"] == "stop"
 
+
+
+def test_explicit_test_source_resolves_independently_of_set_folder(tmp_path, monkeypatch):
+    source = tmp_path / "test-root" / "random-loras"
+    source.mkdir(parents=True)
+    monkeypatch.setattr(
+        bench,
+        "test_source_path",
+        lambda _stage, relative="": source if relative == "random-loras" else tmp_path / "test-root",
+    )
+    model = bench.get_test_model()
+
+    resolved = bench._test_directory(tmp_path / "sets" / "other-set", model, source="random-loras")
+
+    assert resolved == source
+
+
+def test_new_test_sessions_use_central_webcap_storage_and_record_source(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    model = patch_default_test_model(
+        monkeypatch,
+        template={},
+        settings={"seed": 1},
+    )
+    staged = tmp_path / "test-root" / "random-loras"
+    staged.mkdir(parents=True)
+    (staged / "epoch10.safetensors").write_bytes(b"weights")
+    monkeypatch.setattr(
+        bench,
+        "_test_directory",
+        lambda _folder, _model, source=None: staged,
+    )
+    monkeypatch.setattr(bench.inference_runtime if hasattr(bench, "inference_runtime") else inference_runtime, "resolve_wildcard_prompt", lambda prompt, _seed: prompt)
+    monkeypatch.setattr(bench, "_workflow_evidence", lambda _model, _template: {"workflowFile": "test.json", "workflowSha256": "abc"})
+    monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="": {"jobId": "job-" + context["candidateKind"]})
+
+    set_folder = tmp_path / "sets" / "demo"
+    set_folder.mkdir(parents=True)
+    request = {
+        "modelId": model.PROFILE_ID,
+        "mediaKind": model.MEDIA_KIND,
+        "source": "random-loras",
+        "name": "",
+        "sourcePrompt": "prompt",
+        "prompt": "prompt",
+        "settings": {"seed": 1},
+        "workflow": {},
+        "workflowFile": "test.json",
+        "workflowSha256": "abc",
+    }
+
+    session = bench._enqueue_frozen_test_request(
+        set_folder,
+        request,
+        [staged / "epoch10.safetensors"],
+        include_base=False,
+    )
+
+    path = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR / session["session"] / "test.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["source"] == "random-loras"
+    assert payload["ownerFolder"] == "sets/demo"
+    assert not (set_folder / bench.TEST_RESULTS_DIR).exists()
+
+
+def test_recent_test_sources_are_derived_from_central_session_metadata(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
+    session = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR / "2026-09-23_1900-h3"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "archive/selected-run",
+        "ownerFolder": "sets/swimwear",
+        "results": [],
+    })
+
+    recent = bench.recent_test_sets()
+
+    assert recent[0]["source"] == "archive/selected-run"
+    assert recent[0]["folder"] == "sets/swimwear"
+    assert recent[0]["modelId"] == "minimax_h3"
+    assert recent[0]["sessionCount"] == 1

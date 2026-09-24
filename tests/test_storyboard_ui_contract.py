@@ -234,43 +234,43 @@ def test_storyboard_director_pending_state_is_target_scoped():
     assert "pendingTargets: {}" in storyboard
     assert "pendingOrder: []" in storyboard
     assert "function directorTargetKey(target)" in storyboard
-    assert "return 'story-plan:' + storyId;" in storyboard
+    assert "return 'story-concept:' + storyId;" in storyboard
+    assert "return 'story-scenes:' + storyId;" in storyboard
     assert "return 'scene-prompt:' + storyId + ':' + String(target.sceneId);" in storyboard
-    assert "function directorTargetPending(target)" in storyboard
+    assert "function directorTargetsConflict(a, b)" in storyboard
+    assert "function directorTargetBlocked(target)" in storyboard
     assert "function setDirectorPending(target, pending)" in storyboard
     assert "function syncDirectorPendingControls()" in storyboard
-    assert "setStoryDirectorInputsDisabled" not in storyboard
     assert "var directorTarget = { kind: 'concept', storyId: storyId };" in storyboard
     assert "var directorTarget = { kind: 'scenes', storyId: storyId };" in storyboard
     assert "var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId };" in storyboard
-    assert "detachedScenePrompt = kind === 'scene-prompt' && !target" in storyboard
-    assert "promptDirectorJobId: String(payload.jobId || '')" in storyboard
-    assert "if (currentPrompt) currentPrompt.value = generatedPrompt;" in storyboard
+    assert "root.querySelectorAll('input, textarea, select, button')" in storyboard
     assert ".storyboard-director-activity.is-detached-target" in (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
 
-def test_storyboard_scene_director_result_only_updates_origin_story_ui():
+def test_storyboard_scene_director_result_is_backend_owned_not_browser_written():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
     run_block = storyboard.split("function runDirector(sceneId, operation)", 1)[1].split("function setDevelopStatus", 1)[0]
 
-    assert "var stillViewingOrigin" in run_block
-    assert "String(storyState.story.id || '') === String(storyId)" in run_block
-    guarded = run_block.split("if (stillViewingOrigin", 1)[1]
-    assert "currentPrompt.value = generatedPrompt;" in guarded
-    assert "updateSceneDirectorStatus(sceneId, 'Generated with '" in guarded
+    assert "operation: 'update_scene'" not in run_block
+    assert "applyDirectorResultToVisibleStory" in run_block
+    assert "apply_director_prompt" in runner
+    assert "def apply_director_prompt" in store
+    assert "previousPrompt" in store
+    assert "restore_previous_prompt" in storyboard
 
 
-def test_storyboard_director_story_plan_conflicts_but_scene_targets_queue_independently():
+def test_storyboard_director_conflicts_are_visible_and_target_scoped():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
 
     assert 'id="storyboard-restore-concept-btn"' in html
-    assert "busy: false" in storyboard
-    assert "storyPlanPending" in storyboard
-    assert "node.disabled = storyPlanPending;" in storyboard
-    assert "button.disabled = pending;" in storyboard
-    assert "select.disabled = false;" in storyboard
-    assert "if (directorTargetPending(directorTarget)) return;" in storyboard
+    assert "function directorTargetBlocked(target)" in storyboard
+    assert "reportError(new Error('That Scene prompt already has Director work pending.'))" in storyboard
+    assert "Storyboard Director target already has pending work." in runner
     assert "storyState.director.busy = storyState.director.pendingOrder.length > 0;" in storyboard
     assert "function restorePreviousConcept()" in storyboard
     assert "operation: 'restore_previous_concept'" in storyboard
@@ -774,7 +774,7 @@ def test_storyboard_roundoff_has_prompt_restore_manual_refs_and_readiness_summar
     script = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     assert 'id="storyboard-progress-summary"' in html
-    assert "previousPrompts: {}" in script
+    assert "previousPrompt" in script
     assert "function restoreSceneDirectorPrompt(sceneId)" in script
     assert 'data-director-restore' in script
     assert "Restore Previous" in script

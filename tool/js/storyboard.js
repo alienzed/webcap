@@ -681,7 +681,9 @@
       return sceneRoot && sceneRoot.querySelector('[data-scene-field="prompt"]');
     }
     if (target.kind === 'scenes') {
-      return document.querySelector('[data-story-section="director"]');
+      var developRow = document.querySelector('.storyboard-develop-row');
+      if (developRow && developRow.offsetParent !== null) return developRow;
+      return document.querySelector('[data-story-section="director"] > summary');
     }
     return document.querySelector('.storyboard-scene-workspace');
   }

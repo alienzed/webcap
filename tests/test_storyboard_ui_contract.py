@@ -696,6 +696,10 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert "function initStorySections()" in storyboard
     assert "'webcap.storyboard.storySection.' + sectionName" in storyboard
     assert ".storyboard-story-section:not([open]) > .storyboard-story-section-body" in css
+    lora_section_css = css.split(".storyboard-story-loras.storyboard-story-section {", 1)[1].split("}", 1)[0]
+    assert "overflow: visible;" in lora_section_css
+    assert "if (developRow && developRow.offsetParent !== null) return developRow;" in storyboard
+    assert "document.querySelector('[data-story-section=\"director\"] > summary')" in storyboard
 
     story_section = html.split('data-story-section="story"', 1)[1].split("</details>", 1)[0]
     continuity_section = html.split('data-story-section="continuity"', 1)[1].split("</details>", 1)[0]

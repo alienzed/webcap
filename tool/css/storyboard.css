@@ -2193,6 +2193,7 @@
   display: block;
   padding: 0;
   gap: 0;
+  overflow: visible;
   background: var(--panel-soft);
 }
 

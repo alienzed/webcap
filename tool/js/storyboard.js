@@ -45,6 +45,59 @@
     }
   };
 
+  var STORY_STYLE_PRESETS = [
+    {
+      id: 'naturalistic-cinematic',
+      label: 'Naturalistic cinematic',
+      text: 'Naturalistic cinematic realism, grounded performances, believable lighting, subtle camera movement, clean visual continuity, detailed real-world textures, restrained color grading, emotionally credible atmosphere.'
+    },
+    {
+      id: 'moody-noir',
+      label: 'Moody noir',
+      text: 'Moody noir atmosphere, low-key lighting, deep shadows, reflective surfaces, cool dark palette with selective highlights, cinematic contrast, tension-filled framing, ominous and suspenseful tone.'
+    },
+    {
+      id: 'dreamy-ethereal',
+      label: 'Dreamy ethereal',
+      text: 'Dreamy ethereal atmosphere, soft diffused light, gentle glow, delicate textures, airy composition, graceful movement, slightly surreal mood, poetic and emotionally elevated tone.'
+    },
+    {
+      id: 'documentary-handheld',
+      label: 'Documentary handheld',
+      text: 'Documentary-style realism, handheld camera feel, observational framing, available-light look, raw environmental texture, immediate and unpolished atmosphere, grounded natural motion, candid emotional tone.'
+    },
+    {
+      id: 'clean-commercial',
+      label: 'Clean commercial',
+      text: 'Clean polished commercial look, crisp lighting, carefully controlled composition, premium production design, flattering textures, refined color palette, smooth camera language, clear and appealing visual presentation.'
+    },
+    {
+      id: 'warm-intimate-drama',
+      label: 'Warm intimate drama',
+      text: 'Warm intimate dramatic atmosphere, soft practical lighting, close human focus, gentle contrast, rich skin tones, emotionally sensitive framing, subtle camera movement, personal and vulnerable tone.'
+    },
+    {
+      id: 'cool-futuristic-scifi',
+      label: 'Cool futuristic sci-fi',
+      text: 'Cool futuristic sci-fi aesthetic, sleek surfaces, controlled blue-cyan palette, luminous accents, modern production design, precise framing, polished high-tech atmosphere, immersive and slightly clinical tone.'
+    },
+    {
+      id: 'stylized-painterly',
+      label: 'Stylized painterly',
+      text: 'Stylized painterly visual treatment, expressive composition, rich color design, textural surfaces, heightened artistic mood, visually curated framing, soft realism with artistic exaggeration, elegant cinematic tone.'
+    },
+    {
+      id: 'gritty-urban-realism',
+      label: 'Gritty urban realism',
+      text: 'Gritty urban realism, worn textures, imperfect environments, practical lighting, muted palette, natural contrast, grounded camera language, rough lived-in atmosphere, emotionally tense and unsentimental tone.'
+    },
+    {
+      id: 'epic-high-contrast',
+      label: 'Epic high-contrast',
+      text: 'Epic high-contrast cinematic style, bold lighting separation, dramatic scale, striking silhouettes, powerful composition, heightened visual intensity, dynamic atmosphere, emotionally forceful and visually assertive tone.'
+    }
+  ];
+
   function el(id) {
     return document.getElementById(id);
   }
@@ -56,6 +109,42 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function storyStylePresetById(presetId) {
+    return STORY_STYLE_PRESETS.find(function (preset) {
+      return preset.id === String(presetId || '');
+    }) || null;
+  }
+
+  function storyStylePresetIdForText(value) {
+    var normalized = String(value || '').trim();
+    var match = STORY_STYLE_PRESETS.find(function (preset) {
+      return preset.text === normalized;
+    });
+    return match ? match.id : '';
+  }
+
+  function renderStoryStylePresetSelector() {
+    var select = el('storyboard-story-style-preset');
+    var textarea = el('storyboard-story-style');
+    if (!select || !textarea) return;
+    if (!select.dataset.ready) {
+      select.innerHTML = '<option value="">Custom…</option>' + STORY_STYLE_PRESETS.map(function (preset) {
+        return '<option value="' + escapeHtml(preset.id) + '">' + escapeHtml(preset.label) + '</option>';
+      }).join('');
+      select.dataset.ready = '1';
+    }
+    select.value = storyStylePresetIdForText(textarea.value);
+  }
+
+  function applyStoryStylePreset(presetId) {
+    var preset = storyStylePresetById(presetId);
+    var textarea = el('storyboard-story-style');
+    if (!textarea || !preset) return;
+    textarea.value = preset.text;
+    renderStoryStylePresetSelector();
+    scheduleStorySave();
   }
 
   function reportError(err) {
@@ -2177,6 +2266,7 @@
     el('storyboard-story-title').value = storyState.story.title || '';
     el('storyboard-story-concept').value = storyState.story.concept || '';
     el('storyboard-story-style').value = storyState.story.style || '';
+    renderStoryStylePresetSelector();
     renderStoryInvariants();
     el('storyboard-story-tags').value = storyTagsText(storyState.story);
     el('storyboard-story-status').value = storyState.story.status || 'active';
@@ -3256,8 +3346,15 @@
       if (directorActivityActive()) positionDirectorActivity();
     }, true);
 
-    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style', 'storyboard-story-tags', 'storyboard-story-target-scenes'].forEach(function (id) {
+    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-tags', 'storyboard-story-target-scenes'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);
+    });
+    el('storyboard-story-style').addEventListener('input', function () {
+      renderStoryStylePresetSelector();
+      scheduleStorySave();
+    });
+    el('storyboard-story-style-preset').addEventListener('change', function () {
+      if (this.value) applyStoryStylePreset(this.value);
     });
     el('storyboard-story-megapixels').addEventListener('input', function () {
       syncSceneGenerationDefaultHints();

@@ -1220,7 +1220,15 @@
                                     </div>
                                     <textarea id="storyboard-story-concept" rows="6" placeholder="High-level grounded overview of the Story."></textarea>
                                 </div>
-                                <label class="storyboard-field storyboard-style-field"><span>Visual / atmosphere</span><textarea id="storyboard-story-style" rows="3" placeholder="Persistent visual language: genre, era, palette, lighting, camera language, texture..."></textarea></label>
+                                <div class="storyboard-field storyboard-style-field">
+                                    <div class="storyboard-field-header">
+                                        <span>Visual / atmosphere</span>
+                                        <select id="storyboard-story-style-preset" class="storyboard-style-preset" aria-label="Visual and atmosphere preset">
+                                            <option value="">Custom…</option>
+                                        </select>
+                                    </div>
+                                    <textarea id="storyboard-story-style" rows="3" placeholder="Persistent visual language: genre, era, palette, lighting, camera language, texture..."></textarea>
+                                </div>
                                 <section class="storyboard-invariants" aria-label="Story invariants">
                                     <div class="storyboard-invariants-header">
                                         <div>

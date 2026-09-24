@@ -406,6 +406,7 @@ def _normalize_scene(scene_id, value, existing=None):
         "exitState": str(value.get("exitState", current.get("exitState", "")) or "").strip(),
         "prompt": str(value.get("prompt", current.get("prompt", "")) or ""),
         "promptDirectorModel": str(value.get("promptDirectorModel", current.get("promptDirectorModel", "")) or "").strip(),
+        "promptDirectorJobId": str(value.get("promptDirectorJobId", current.get("promptDirectorJobId", "")) or "").strip(),
         "planDirectorModel": str(value.get("planDirectorModel", current.get("planDirectorModel", "")) or "").strip(),
         "durationSeconds": duration,
         "aspectRatio": aspect_ratio,

@@ -14,6 +14,7 @@
   var compareIndex = 0;
   var pendingActivityFolder = '';
   var pendingRatingFolder = '';
+  var pendingRatingReturn = null;
   var testActivity = {};
   var selectedCandidates = null;
   var testSource = null;
@@ -2099,6 +2100,13 @@
     if (!targetFolder || !state || !state.dirStack || !state.dirStack.length) return;
     var opts = options || {};
     pendingRatingFolder = opts.rateItems ? targetFolder : '';
+    if (opts.rateItems) {
+      pendingRatingReturn = {
+        folder: String(launchFolder || ''),
+        source: String(testSource || ''),
+        modelId: currentTestModelId()
+      };
+    }
     if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
       clearFocusSet();
     }
@@ -2141,13 +2149,24 @@
   function finishRatingReview() {
     var sessionFolder = String(state && state.folder || '');
     if (!isTestGenerationSessionFolder(sessionFolder)) return false;
-    var setFolder = owningSetFolder(sessionFolder);
     clearCaptionFilterInputs();
     var capturedSave = typeof captureCurrentFolderStateSave === 'function'
       ? captureCurrentFolderStateSave()
       : null;
+    var returnContext = pendingRatingReturn;
+    pendingRatingReturn = null;
     var returnToTestGenerations = function () {
-      openTestBenchFolder(setFolder);
+      if (returnContext) {
+        openTestBenchSource(
+          String(returnContext.folder || ''),
+          String(returnContext.source || ''),
+          String(returnContext.modelId || '')
+        );
+        return;
+      }
+      // Legacy per-set Test folders can still recover their owner from the path.
+      var setFolder = owningSetFolder(sessionFolder);
+      if (setFolder && setFolder !== '.webcap') openTestBenchFolder(setFolder, true);
     };
     if (capturedSave && typeof writeCapturedFolderState === 'function') {
       Promise.resolve(writeCapturedFolderState(capturedSave)).then(returnToTestGenerations, returnToTestGenerations);

@@ -1,8 +1,6 @@
 import atexit
 import json
 import os
-import re
-import shlex
 import shutil
 import subprocess
 import threading
@@ -389,169 +387,34 @@ def _normalize_models(payload):
     return models
 
 
-def _split_gguf_size(path):
-    match = re.fullmatch(r"(.+)-(\\d+)-of-(\\d+)\\.gguf", path.name, flags=re.IGNORECASE)
-    if match is None:
-        return 0
-    shard_text = match.group(2)
-    total_text = match.group(3)
-    try:
-        total = int(total_text)
-    except ValueError:
-        return 0
-    if total <= 1:
-        return 0
-
-    width = len(shard_text)
-    total_width = len(total_text)
-    total_bytes = 0
-    for index in range(1, total + 1):
-        shard = path.with_name(
-            match.group(1)
-            + "-"
-            + str(index).zfill(width)
-            + "-of-"
-            + str(total).zfill(total_width)
-            + ".gguf"
-        )
-        if not shard.is_file():
-            return 0
-        total_bytes += int(shard.stat().st_size)
-    return total_bytes
-
-
-def _model_path_size(path):
-    try:
-        if path.is_file():
-            split_size = _split_gguf_size(path)
-            return split_size or int(path.stat().st_size)
-        if path.is_dir():
-            ggufs = [
-                child
-                for child in path.iterdir()
-                if child.is_file()
-                and child.suffix.casefold() == ".gguf"
-                and not child.name.casefold().startswith("mmproj")
-            ]
-            if not ggufs:
-                return 0
-
-            split_groups = {}
-            singles = []
-            for child in ggufs:
-                match = re.fullmatch(r"(.+)-(\\d+)-of-(\\d+)\\.gguf", child.name, flags=re.IGNORECASE)
-                if match is None:
-                    singles.append(child)
-                    continue
-                split_groups.setdefault((match.group(1), match.group(3)), []).append(child)
-
-            if len(split_groups) == 1 and not singles:
-                representative = next(iter(split_groups.values()))[0]
-                return _split_gguf_size(representative)
-            if len(ggufs) == 1:
-                return int(ggufs[0].stat().st_size)
-    except OSError:
-        return 0
-    return 0
-
-
-def _model_path_size_wsl(path):
-    from .training_runtime import run_wsl
-
-    distribution = str(
-        app_config.config.get("training", {}).get("wsl_distribution") or ""
-    ).strip()
-    code, stdout, _stderr = run_wsl(
-        "du -sb -- " + shlex.quote(str(path)),
-        timeout=10,
-        distribution=distribution,
-    )
-    if code != 0:
-        return 0
-    try:
-        return max(0, int((stdout or "").strip().split()[0]))
-    except (IndexError, TypeError, ValueError):
-        return 0
-
-
 def _model_file_size(model):
     model = model if isinstance(model, dict) else {}
-    try:
-        declared_size = max(0, int(model.get("sizeBytes") or 0))
-    except (TypeError, ValueError):
-        declared_size = 0
-    if declared_size:
-        return declared_size
-
-    try:
-        settings = _director_config()
-        models_dir = settings.get("models_dir")
-    except Exception:
-        models_dir = None
-
-    candidates = []
     raw_path = str(model.get("path") or "").strip()
-    if raw_path:
-        posix_path = Path(raw_path)
-        windows_path = PureWindowsPath(raw_path)
-        candidates.append(posix_path)
-        if windows_path.drive:
-            try:
-                from .training_runtime import to_wsl_path
-                distribution = str(
-                    app_config.config.get("training", {}).get("wsl_distribution") or ""
-                ).strip()
-                candidates.append(Path(to_wsl_path(raw_path, distribution=distribution)))
-            except Exception:
-                pass
+    if not raw_path:
+        identity = str(model.get("id") or model.get("label") or "unknown")
+        raise FileNotFoundError("Storyboard Director model path is missing for: " + identity)
 
-        if models_dir is not None:
-            if not posix_path.is_absolute() and not windows_path.drive:
-                candidates.append(Path(models_dir) / posix_path)
-                if len(windows_path.parts) > 1:
-                    candidates.append(Path(models_dir).joinpath(*windows_path.parts))
+    path = Path(raw_path)
+    windows_path = PureWindowsPath(raw_path)
 
-            for parts in (posix_path.parts, windows_path.parts):
-                normalized_parts = [str(part).casefold() for part in parts]
-                if "text_encoders" not in normalized_parts:
-                    continue
-                index = normalized_parts.index("text_encoders")
-                relative_parts = parts[index + 1:]
-                if relative_parts:
-                    candidates.append(Path(models_dir).joinpath(*relative_parts))
+    if os.name != "nt" and windows_path.drive:
+        from .training_runtime import to_wsl_path
+        distribution = str(
+            app_config.config.get("training", {}).get("wsl_distribution") or ""
+        ).strip()
+        path = Path(to_wsl_path(raw_path, distribution=distribution))
+    elif not path.is_absolute():
+        models_dir = _director_config().get("models_dir")
+        if models_dir is None:
+            raise RuntimeError("Storyboard Director models directory is unavailable.")
+        path = Path(models_dir) / path
 
-    names = []
-    for value in (
-        raw_path,
-        str(model.get("label") or "").strip(),
-        str(model.get("id") or "").strip(),
-    ):
-        if not value:
-            continue
-        names.extend([
-            Path(value).name,
-            PureWindowsPath(value).name,
-        ])
-
-    if models_dir is not None:
-        for name in names:
-            if not name or Path(name).name != name or PureWindowsPath(name).name != name:
-                continue
-            candidates.append(Path(models_dir) / name)
-
-    seen = set()
-    for candidate in candidates:
-        key = str(candidate)
-        if key in seen:
-            continue
-        seen.add(key)
-        size_bytes = _model_path_size(candidate)
-        if not size_bytes:
-            size_bytes = _model_path_size_wsl(candidate)
-        if size_bytes:
-            return size_bytes
-    return 0
-
+    try:
+        return int(path.stat().st_size)
+    except OSError as exc:
+        raise OSError(
+            "Could not stat Storyboard Director model file '" + str(path) + "': " + str(exc)
+        ) from exc
 
 def list_models(reload=False):
     _ensure_server()

@@ -271,6 +271,54 @@ def test_storyboard_director_develops_story_and_applies_plan(monkeypatch):
     assert response.get_json()["story"]["sceneOrder"] == ["scene-1", "scene-2"]
 
 
+def test_storyboard_director_can_preview_exact_contract_without_queueing(monkeypatch):
+    story = {
+        "id": "story-1",
+        "concept": "A quiet hotel.",
+        "sceneOrder": ["scene-1"],
+        "scenes": {
+            "scene-1": {
+                "id": "scene-1",
+                "summary": "A woman enters the lobby.",
+                "durationSeconds": 6,
+                "references": [],
+            }
+        },
+    }
+    contract = {
+        "operation": "write_prompt",
+        "output": "json",
+        "prompt": "[DIRECTOR CONTEXT]\nExact request.",
+        "response_schema": {"type": "object"},
+        "result_renderer": {"type": "h3_base", "mode": "T2VA", "duration": 6},
+    }
+
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_build_llm_request",
+        lambda loaded, scene_id, operation, instruction="": contract,
+    )
+    monkeypatch.setattr(
+        app_module,
+        "enqueue_llm",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("preview must not queue")),
+    )
+
+    response = app_module.app.test_client().post("/fs/storyboard/director", json={
+        "storyId": "story-1",
+        "sceneId": "scene-1",
+        "operation": "write_prompt",
+        "model": "director.gguf",
+        "previewOnly": True,
+    })
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["contract"] == contract
+    assert payload["model"] == "director.gguf"
+
+
 def test_storyboard_director_requires_confirmation_before_replacing_existing_scenes(monkeypatch):
     monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: {
         "id": story_id,

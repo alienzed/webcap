@@ -470,7 +470,7 @@ def test_chat_wraps_json_schema_for_llama_cpp(monkeypatch):
 
     assert calls[-1]["response_format"] == {
         "type": "json_schema",
-        "json_schema": {"name": "storyboard_response", "schema": schema},
+        "schema": schema,
     }
 
 
@@ -552,14 +552,20 @@ def test_remote_chat_uses_openai_compatible_endpoint_without_local_gpu_managemen
 
     monkeypatch.setattr(storyboard_llm_runtime, "_http_json", fake_http)
 
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
     result = storyboard_llm_runtime.chat(
         "qwen-remote",
         [{"role": "user", "content": "Write."}],
+        response_schema=schema,
     )
 
     assert result["text"] == "remote prompt"
     assert captured["path"] == "/chat/completions"
     assert captured["payload"]["model"] == "qwen-remote"
+    assert captured["payload"]["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {"name": "storyboard_response", "schema": schema},
+    }
     assert "reasoning_effort" not in captured["payload"]
     assert "chat_template_kwargs" not in captured["payload"]
     assert calls == ["server"]

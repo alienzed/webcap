@@ -572,13 +572,19 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
             payload["reasoning_effort"] = "none"
             payload["chat_template_kwargs"] = {"enable_thinking": False}
         if response_schema is not None:
-            payload["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "storyboard_response",
+            if settings.get("mode", "local") == "local":
+                payload["response_format"] = {
+                    "type": "json_schema",
                     "schema": response_schema,
-                },
-            }
+                }
+            else:
+                payload["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "storyboard_response",
+                        "schema": response_schema,
+                    },
+                }
 
         if settings.get("mode", "local") == "remote":
             _set_activity("generating", model_id=model_id)

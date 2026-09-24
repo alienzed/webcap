@@ -1349,6 +1349,7 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
         "references",
         "workflowProfile",
         "providerJobId",
+        "effectiveInput",
     ):
         if key in provenance:
             take[key] = copy.deepcopy(provenance[key])

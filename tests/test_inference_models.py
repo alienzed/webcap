@@ -59,6 +59,25 @@ def test_h3_inference_workflow_supports_multiple_loras_and_frame_anchors():
     assert workflow["131"]["inputs"]["last_frame"] == ["191", 0]
     assert workflow["129"]["inputs"]["noise_seed"] == 42
 
+    effective = h3.effective_input(workflow)
+    assert effective == {
+        "prompt": "Prompt",
+        "promptMode": "fixed",
+        "seed": 42,
+        "aspectRatio": "16:9 (Widescreen)",
+        "megapixels": 0.3,
+        "durationSeconds": 8,
+        "references": {
+            "first_frame": "refs/first.png",
+            "last_frame": "refs/last.png",
+        },
+        "loras": [
+            {"name": "base.safetensors", "strength": 1.0},
+            {"name": "one.safetensors", "strength": 0.7},
+            {"name": "two.safetensors", "strength": 0.5},
+        ],
+    }
+
 
 def test_krea2_inference_workflow_moves_selected_loras_into_power_loader():
     template = {

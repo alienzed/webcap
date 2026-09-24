@@ -192,6 +192,7 @@ def execute_inference(job_id, request, context):
             inference_runtime.available_names,
             inference_runtime.resolve_name,
         )
+        effective_input = model.effective_input(workflow)
         provider_job_id = inference_runtime.queue_workflow(workflow)
         execution_update_job(
             job_id,
@@ -230,6 +231,7 @@ def execute_inference(job_id, request, context):
                 "references": copy.deepcopy(context.get("referenceRecords") or []),
                 "workflowProfile": "minimax_h3_storyboard_v1",
                 "providerJobId": provider_job_id,
+                "effectiveInput": effective_input,
             },
         )
         execution_update_job(job_id, details={"providerStatus": "completed"})

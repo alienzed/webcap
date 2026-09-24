@@ -1,5 +1,21 @@
 # Storyboard LLM Guidance
 
+## Prompt pipeline boundaries
+
+Storyboard has three distinct contracts. Keep them separate.
+
+1. **Director request contract** — the instructions and context WebCap sends to the selected LLM, plus the requested response shape. This layer is allowed to contain reasoning guidance, Story context, invariants, Scene state, model-writing rules, and task-specific instructions.
+2. **Storyboard authoring contract** — durable human-editable Story and Scene state. Do not make this representation mirror a provider prompt merely because the current generation model expects that syntax. The richer authoring schema is intentionally still under design.
+3. **Inference contract** — the exact effective model input assembled for the selected generation workflow. For H3 this includes the final prompt, reference inputs, effective LoRAs, duration, resolution, and seed actually encoded into the ComfyUI workflow.
+
+Do not silently infer semantic applicability while crossing these boundaries. WebCap may validate explicit structure, resolve declared references, calculate mechanical values, and format provider syntax. It must not read prose and guess which character, location, continuity fact, or Story invariant applies to a Scene.
+
+Visibility is part of correctness:
+- the current Director request should be inspectable from Storyboard;
+- generated Takes should retain the effective H3 input that produced them;
+- a preview must never be labeled exact if random seed or wildcard resolution has not happened yet.
+
+
 This document defines the stable authoring contract for LLM assistance inside WebCap Storyboard.
 
 It is intentionally provider-neutral at the request-contract layer. The first runtime implementation uses WebCap-managed llama.cpp, but Storyboard must not depend on hidden provider memory, a particular Qwen checkpoint, or a persistent provider session.

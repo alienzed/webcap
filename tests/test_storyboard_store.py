@@ -90,6 +90,10 @@ def test_duplicate_story_copies_authoring_but_not_generated_artifacts(storyboard
     assert copied_scene["id"] != scene["id"]
     assert copied_scene["title"] == scene["title"]
     assert copied_scene["prompt"] == scene["prompt"]
+    assert copied_scene["previousPrompt"] is None
+    assert copied_scene["promptDirectorModel"] == ""
+    assert copied_scene["promptDirectorJobId"] == ""
+    assert copied_scene["planDirectorModel"] == ""
     assert copied_scene["loras"] == scene["loras"]
     assert copied_scene["takes"] == {}
     assert copied_scene["removedTakes"] == {}
@@ -190,8 +194,10 @@ def test_story_scene_lifecycle(storyboard_fs):
     story, duplicate = storyboard_store.duplicate_scene(story["id"], first["id"])
     assert story["sceneOrder"][1] == duplicate["id"]
     assert duplicate["prompt"] == updated["prompt"]
-    assert duplicate["promptDirectorModel"] == "director.gguf"
-    assert duplicate["promptDirectorJobId"] == "job-123"
+    assert duplicate["previousPrompt"] is None
+    assert duplicate["promptDirectorModel"] == ""
+    assert duplicate["promptDirectorJobId"] == ""
+    assert duplicate["planDirectorModel"] == ""
     assert duplicate["entryState"] == updated["entryState"]
     assert duplicate["exitState"] == updated["exitState"]
     assert duplicate["takes"] == {}

@@ -759,19 +759,13 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
             payload["repeat_penalty"] = 1.0
             payload["seed"] = -1
         if response_schema is not None:
-            if settings.get("mode", "local") == "local":
-                payload["response_format"] = {
-                    "type": "json_schema",
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "storyboard_response",
                     "schema": response_schema,
-                }
-            else:
-                payload["response_format"] = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "storyboard_response",
-                        "schema": response_schema,
-                    },
-                }
+                },
+            }
 
         if settings.get("mode", "local") == "remote":
             _set_activity("generating", model_id=model_id)

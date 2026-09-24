@@ -745,9 +745,13 @@ def run_contract(model_id, contract, gpu_reserved=False):
             if isinstance(renderer, dict) and renderer.get("type") == "h3_base":
                 if contract.get("output") != "json":
                     raise RuntimeError("MiniMax H3 result rendering requires structured JSON output.")
-                from .h3_prompt_contract import render_base_prompt
-                result["text"] = render_base_prompt(
+                from .h3_prompt_contract import inject_shared_context_text, render_base_prompt
+                rendered_data = inject_shared_context_text(
                     result["data"],
+                    renderer.get("shared_context") or "",
+                )
+                result["text"] = render_base_prompt(
+                    rendered_data,
                     mode=renderer.get("mode") or "T2VA",
                     duration=renderer.get("duration"),
                 )

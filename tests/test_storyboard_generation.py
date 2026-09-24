@@ -72,6 +72,40 @@ def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs
 
 
 
+def test_scene_settings_compile_shared_continuity_into_final_prompt(storyboard_fs, monkeypatch):
+    monkeypatch.setattr(storyboard_generation.secrets, "randbelow", lambda _limit: 7)
+    story = {
+        "development": {
+            "plan": {
+                "sharedContext": {
+                    "subjects": [{"id": "mara", "label": "Mara", "description": "Mara has a dark bob."}],
+                    "wardrobes": [{"id": "coat", "label": "Wardrobe", "description": "Mara wears a pale raincoat."}],
+                    "locations": [{"id": "lobby", "label": "Lobby", "description": "Dark terrazzo lobby with brass fixtures."}],
+                    "persistentFacts": [],
+                }
+            }
+        },
+        "generationDefaults": {"aspectRatio": "4:3 (Standard)", "megapixels": 0.2},
+    }
+    scene = {
+        "prompt": (
+            "integrated_multimodal_description: [Shot 1] Mara crosses the room.\n\n"
+            "overall_soundscape: Footsteps.\n\nnon_diegetic_music: N/A"
+        ),
+        "sharedContextRefs": ["mara", "coat", "lobby"],
+        "durationSeconds": 6,
+        "seedMode": "random",
+    }
+
+    settings = storyboard_generation._scene_settings(scene, story)
+
+    assert settings["prompt"].count("Continuity anchors —") == 1
+    assert "Mara: Mara has a dark bob." in settings["prompt"]
+    assert "Wardrobe: Mara wears a pale raincoat." in settings["prompt"]
+    assert "Lobby: Dark terrazzo lobby with brass fixtures." in settings["prompt"]
+    assert settings["sourcePrompt"] == settings["prompt"]
+
+
 def test_scene_settings_inherit_story_generation_defaults(storyboard_fs, monkeypatch):
     monkeypatch.setattr(storyboard_generation.secrets, "randbelow", lambda _limit: 99)
     story = {

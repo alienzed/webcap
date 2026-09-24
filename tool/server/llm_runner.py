@@ -5,6 +5,7 @@ import time
 
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
+    consume_terminal_job as execution_consume_terminal_job,
     claim_next as execution_claim_next,
     enqueue as execution_enqueue,
     finish_job as execution_finish_job,
@@ -272,8 +273,12 @@ def enqueue(client, model_id, contract, context=None, label=""):
     return _job_view(execution_get_job(job["id"]))
 
 
-def job_status(job_id):
-    return _job_view(execution_get_job(str(job_id or "").strip()))
+def job_status(job_id, consume=False):
+    job_id = str(job_id or "").strip()
+    job = execution_get_job(job_id)
+    if consume and str(job.get("status") or "") in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
+        job = execution_consume_terminal_job(job_id)
+    return _job_view(job)
 
 
 def snapshot(include_terminal=False):

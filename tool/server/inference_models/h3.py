@@ -106,7 +106,6 @@ def build_workflow(template, prompt, settings, loras, uploaded_references, filen
     prompt_inputs = workflow["146"]["inputs"]
     prompt_inputs["wildcard_text"] = prompt
     prompt_inputs["populated_text"] = prompt
-    prompt_inputs["mode"] = "fixed"
     prompt_inputs["seed"] = selected["seed"]
     workflow["115"]["inputs"]["aspect_ratio"] = selected["aspectRatio"]
     workflow["115"]["inputs"]["megapixels"] = selected["megapixels"]

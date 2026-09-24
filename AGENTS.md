@@ -56,6 +56,7 @@ Keep ownership obvious as the app grows. These are practical defaults, not purit
 
 Prefer the smallest change that cleanly solves the real problem.
 
+- Before fixing an implementation, establish the simplest normal solution first and compare the existing code against it; simplify toward that path instead of layering on compensating logic.
 - Reuse existing behavior, state, and routes when ownership still makes sense; do not couple one feature to another feature's DOM merely because a usable control already exists.
 - Prefer localized edits over refactors.
 - Prefer one-file or one-function changes when they are enough.

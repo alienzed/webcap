@@ -1821,27 +1821,11 @@
   padding: 0 14px 20px;
 }
 
-.storyboard-takes-header {
-  min-height: 40px;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.storyboard-takes-header span {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .storyboard-take-upload-btn {
   width: auto;
   flex: 0 0 auto;
+  margin-left: auto;
+  cursor: pointer;
 }
 
 .storyboard-takes-grid {

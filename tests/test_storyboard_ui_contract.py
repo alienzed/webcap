@@ -670,10 +670,55 @@ def test_storyboard_story_can_collapse_and_supports_structured_invariants():
     assert 'id="storyboard-invariant-add"' in html
     assert 'id="storyboard-invariants-list"' in html
     assert "function setStoryCollapsed(collapsed)" in storyboard
+    assert "function initStorySections()" in storyboard
     assert "function storyInvariantsFromUi()" in storyboard
     assert "data-story-invariant-row" in storyboard
     assert '"invariants": _normalize_story_invariants' in store
     assert ".storyboard-invariant-row" in css
+
+
+def test_storyboard_story_context_has_persisted_local_collapsible_sections():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    for section in ("story", "continuity", "director", "planning", "loras"):
+        assert f'data-story-section="{section}"' in html
+
+    assert 'data-story-section="story" open' in html
+    assert 'data-story-section="continuity" open' in html
+    assert "var STORY_SECTION_DEFAULTS = {" in storyboard
+    assert "story: true" in storyboard
+    assert "continuity: true" in storyboard
+    assert "director: false" in storyboard
+    assert "planning: false" in storyboard
+    assert "loras: false" in storyboard
+    assert "function initStorySections()" in storyboard
+    assert "'webcap.storyboard.storySection.' + sectionName" in storyboard
+    assert ".storyboard-story-section:not([open]) > .storyboard-story-section-body" in css
+
+    story_section = html.split('data-story-section="story"', 1)[1].split("</details>", 1)[0]
+    continuity_section = html.split('data-story-section="continuity"', 1)[1].split("</details>", 1)[0]
+    director_section = html.split('data-story-section="director"', 1)[1].split("</details>", 1)[0]
+    planning_section = html.split('data-story-section="planning"', 1)[1].split("</details>", 1)[0]
+    lora_section = html.split('data-story-section="loras"', 1)[1].split("</details>", 1)[0]
+
+    assert 'id="storyboard-story-title"' in story_section
+    assert 'id="storyboard-story-status"' in story_section
+    assert 'id="storyboard-story-concept"' in story_section
+    assert 'id="storyboard-story-style"' in story_section
+    assert 'id="storyboard-invariant-define"' in continuity_section
+    assert 'id="storyboard-invariants-list"' in continuity_section
+    assert 'id="storyboard-develop-btn"' in director_section
+    assert 'id="storyboard-story-tags"' in planning_section
+    assert 'id="storyboard-story-target-scenes"' in planning_section
+    assert 'id="storyboard-story-aspect-ratio"' in planning_section
+    assert 'id="storyboard-story-megapixels"' in planning_section
+    assert 'id="storyboard-story-lora-list"' in lora_section
+    assert 'id="storyboard-story-lora-picker"' in lora_section
+
+    payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
+    assert "storySection" not in payload_block
 
 
 def test_storyboard_story_context_is_a_collapsible_middle_column():
@@ -687,6 +732,7 @@ def test_storyboard_story_context_is_a_collapsible_middle_column():
     assert "grid-template-columns: minmax(580px, 640px) minmax(0, 1fr);" in css
     assert ".storyboard-editor-scroll.story-collapsed" in css
     assert ".storyboard-story-authoring" in css
+    assert ".storyboard-story-section" in css
     assert "grid-template-columns: 1fr;" in css
     assert ".storyboard-scene-workspace" in css
 

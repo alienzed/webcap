@@ -2119,6 +2119,109 @@
   gap: 12px;
 }
 
+.storyboard-story-section {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.storyboard-story-section > summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.storyboard-story-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.storyboard-story-section > summary::before {
+  content: '▸';
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.storyboard-story-section[open] > summary::before {
+  content: '▾';
+}
+
+.storyboard-story-section[open] > summary {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.storyboard-story-section-summary-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.storyboard-story-section-summary-copy > strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.storyboard-story-section-summary-copy > span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.storyboard-story-section-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 12px;
+  padding: 14px;
+}
+
+.storyboard-story-section:not([open]) > .storyboard-story-section-body {
+  display: none;
+}
+
+.storyboard-story-section .storyboard-invariants,
+.storyboard-story-section .storyboard-story-defaults,
+.storyboard-story-section .storyboard-develop-row {
+  grid-column: 1 / -1;
+}
+
+.storyboard-story-section .storyboard-invariants,
+.storyboard-story-section .storyboard-story-defaults {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.storyboard-story-section .storyboard-develop-row {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.storyboard-story-loras.storyboard-story-section {
+  display: block;
+  padding: 0;
+  gap: 0;
+  background: var(--panel-soft);
+}
+
+.storyboard-story-lora-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.storyboard-story-loras.storyboard-story-section:not([open]) > .storyboard-story-lora-section-body {
+  display: none;
+}
+
 .storyboard-concept-field,
 .storyboard-style-field,
 .storyboard-tags-field,
@@ -2296,8 +2399,13 @@
 }
 
 @media (max-width: 760px) {
-  .storyboard-story-fields {
+  .storyboard-story-fields,
+  .storyboard-story-section-body {
     grid-template-columns: 1fr;
+  }
+
+  .storyboard-story-section > summary {
+    align-items: flex-start;
   }
 
   .storyboard-invariant-row {

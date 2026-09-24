@@ -45,6 +45,14 @@
     }
   };
 
+  var STORY_SECTION_DEFAULTS = {
+    story: true,
+    continuity: true,
+    director: false,
+    planning: false,
+    loras: false
+  };
+
   var STORY_STYLE_PRESETS = [
     {
       id: 'naturalistic-cinematic',
@@ -109,6 +117,26 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function storySectionStorageKey(sectionName) {
+    return 'webcap.storyboard.storySection.' + sectionName;
+  }
+
+  function initStorySections() {
+    var sections = document.querySelectorAll('#storyboard-story-authoring details[data-story-section]');
+    sections.forEach(function (section) {
+      var sectionName = String(section.dataset.storySection || '');
+      if (!Object.prototype.hasOwnProperty.call(STORY_SECTION_DEFAULTS, sectionName)) {
+        throw new Error('Unknown Storyboard Story section: ' + sectionName);
+      }
+      var stored = window.localStorage.getItem(storySectionStorageKey(sectionName));
+      section.open = stored === null ? STORY_SECTION_DEFAULTS[sectionName] : stored === '1';
+      section.addEventListener('toggle', function () {
+        window.localStorage.setItem(storySectionStorageKey(sectionName), section.open ? '1' : '0');
+        if (directorActivityActive()) positionDirectorActivity();
+      });
+    });
   }
 
   function storyStylePresetById(presetId) {
@@ -644,15 +672,16 @@
     if (targetStoryId && targetStoryId !== currentStoryId) return null;
 
     if (target.kind === 'concept') {
-      return el('storyboard-story-concept');
+      var conceptField = el('storyboard-story-concept');
+      if (conceptField && conceptField.offsetParent !== null) return conceptField;
+      return document.querySelector('[data-story-section="story"] > summary');
     }
     if (target.kind === 'scene-prompt') {
       var sceneRoot = sceneElement(target.sceneId);
       return sceneRoot && sceneRoot.querySelector('[data-scene-field="prompt"]');
     }
     if (target.kind === 'scenes') {
-      var concept = el('storyboard-story-concept');
-      return concept && concept.offsetParent !== null ? concept : null;
+      return document.querySelector('[data-story-section="director"]');
     }
     return document.querySelector('.storyboard-scene-workspace');
   }
@@ -3422,6 +3451,8 @@
   function bindUi() {
     var workspace = el('storyboard-workspace');
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
+
+    initStorySections();
 
     el('storyboard-new-btn').onclick = createStory;
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(true); };

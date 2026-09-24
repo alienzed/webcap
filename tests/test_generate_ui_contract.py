@@ -124,6 +124,15 @@ def test_generate_uses_shared_director_preference_without_eager_preload():
     assert '@app.route("/fs/director/preload"' not in app
 
 
+def test_generate_queue_resume_surfaces_success_or_block_reason():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "payload.resumeBlocked" in script
+    assert "payload.resumeBlockReason" in script
+    assert "payload.resumed" in script
+    assert "Queue resumed." in script
+
+
 def test_generate_tracks_terminal_jobs_and_preserves_queue_dom_identity():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
 

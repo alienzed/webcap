@@ -34,7 +34,7 @@ from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
 from .storage_manager import cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, scan_status as storage_scan_status, start_scan as storage_start_scan
-from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_previous_concept as storyboard_restore_previous_concept, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
+from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
@@ -43,7 +43,7 @@ from .generate_generation import capabilities as generate_capabilities, prepare_
 from .generate_store import cleanup_references as generate_cleanup_references, list_results as generate_list_results, resolve_result_media as generate_resolve_result_media, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
 from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, snapshot as inference_snapshot, stop_storyboard_jobs
-from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, snapshot as llm_snapshot
+from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot
 from .activity_monitor import activity_snapshot
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
@@ -613,6 +613,12 @@ def storyboard_route():
         if operation == "restore_previous_concept":
             story = storyboard_restore_previous_concept(story_id)
             return jsonify({"ok": True, "story": story})
+        if operation == "restore_previous_prompt":
+            story, scene = storyboard_restore_previous_prompt(
+                story_id,
+                str(data.get("sceneId") or "").strip(),
+            )
+            return jsonify({"ok": True, "story": story, "scene": scene})
         if operation == "label_take":
             story, take = storyboard_label_take(
                 story_id,
@@ -1852,6 +1858,7 @@ def open_in_vscode():
     
 if __name__ == "__main__":
     start_training_runner_observer()
+    reconcile_llm_startup()
     # Only bind to localhost for desktop/offline use.
     # Disable Flask debug mode for a production-like local runtime.
     app.run(host="127.0.0.1", port=4200, debug=False)

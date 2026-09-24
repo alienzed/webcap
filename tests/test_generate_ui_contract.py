@@ -104,6 +104,11 @@ def test_generate_prompt_assistant_memory_display_uses_percentages_with_amount_t
     assert "'>RAM ' + Math.round(ramPercent) + '%</span>'" in script
     assert "' used of '" in script
     assert "detail.innerHTML = parts.join(' · ');" in script
+    assert 'id="generate-director-model-load"' in html
+    assert "function updateDirectorModelLoad(activity, system)" in script
+    assert "activity.modelSizeBytes" in script
+    assert "ramDelta + vramDelta" in script
+    assert "Approximate model residency from RAM + VRAM growth since loading began." in script
 
 
 def test_generate_prompt_assistant_has_non_modal_live_activity():

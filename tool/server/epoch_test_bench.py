@@ -14,7 +14,7 @@ from pathlib import Path
 from . import config as app_config
 from .folder_state_store import read_folder_state
 from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
-from .training_test_paths import test_copy_path
+from .training_test_paths import browse_test_source, test_copy_path, test_source_path
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     get_job as execution_get_job,
@@ -43,8 +43,26 @@ def _owning_set_directory(folder_path):
     return path
 
 
-def _test_directory(folder_path, model):
+def _default_test_source(folder_path):
+    return _owning_set_directory(folder_path).name
+
+
+def _test_directory(folder_path, model, source=""):
+    selected_source = str(source or "").strip()
+    if selected_source:
+        return test_source_path(model.STAGING_KEY, selected_source)
     return test_copy_path(model.STAGING_KEY, _owning_set_directory(folder_path).name)
+
+
+def browse_source(model_id=None, source=""):
+    model = get_test_model(model_id)
+    payload = browse_test_source(model.STAGING_KEY, source)
+    payload.update({
+        "operation": "test_source_browse",
+        "modelId": model.PROFILE_ID,
+        "modelLabel": str(model.profile["label"]),
+    })
+    return payload
 
 
 def _lora_files(test_directory):

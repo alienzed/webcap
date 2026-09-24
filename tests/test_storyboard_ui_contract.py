@@ -497,13 +497,26 @@ def test_storyboard_scene_focus_mode_scrolls_naturally_and_has_peer_sequence_vie
     assert ".storyboard-scenes-list.is-focus" in css
     assert "overflow: visible;" in css
     assert "height: auto;" in css
+    assert "'<details class=\"storyboard-takes\" open>'" in storyboard
+    assert 'class="storyboard-takes-summary"' in storyboard
+    assert "takeSummaryParts" in storyboard
     assert ".storyboard-takes {" in css
-    assert "min-height: 360px;" in css
-    assert "height: auto;" in css
-    assert "flex: 0 0 clamp(420px, 32vw, 620px);" in css
+    assert "grid-area: takes;" in css
+    assert "container-type: inline-size;" in css
+    assert "@container (min-width: 1450px)" in css
+    assert "grid-template-areas:" in css
+    assert '"body takes"' in css
+    assert ".storyboard-takes-grid" in css
     assert ".storyboard-take-media {" in css
     assert "aspect-ratio: var(--take-aspect, 16 / 9);" in css
-    assert "position: sticky;" in css
+    assert "#storyboard-story-expand-toggle" in css
+    scenes_heading = css.split(".storyboard-scenes-heading {", 1)[1].split("}", 1)[0]
+    progression = css.split(".storyboard-scene-progression {", 1)[1].split("}", 1)[0]
+    assert "position: sticky;" not in scenes_heading
+    assert "position: sticky;" not in progression
+    assert ".storyboard-scene-inspector" in css
+    inspector = css.split(".storyboard-scene-inspector {", 1)[1].split("}", 1)[0]
+    assert "position: sticky;" in inspector
 
 
 def test_storyboard_scene_continuity_is_collapsible():

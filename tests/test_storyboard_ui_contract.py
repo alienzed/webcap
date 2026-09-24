@@ -41,6 +41,7 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert 'id="storyboard-story-concept"' in html
     assert 'id="storyboard-story-style"' in html
     assert 'id="storyboard-sequence-preview"' in html
+    assert 'id="storyboard-sequence-toggle"' in html
     assert 'id="storyboard-story-tags"' in html
     assert 'id="storyboard-story-status"' in html
     assert 'id="storyboard-story-target-scenes"' in html
@@ -82,6 +83,9 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "Export Sequence" in storyboard
     assert "/fs/storyboard/assembly" in storyboard
     assert "data-sequence-export" in storyboard
+    assert "sequencePreviewOpen: false" in storyboard
+    assert "data-sequence-close" in storyboard
+    assert "setSequencePreviewOpen(false)" in storyboard
 
     assert "ollama" not in app.lower()
     assert "test-generations" not in storyboard

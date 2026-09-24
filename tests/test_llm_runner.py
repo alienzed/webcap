@@ -764,3 +764,46 @@ def test_storyboard_scene_repair_discards_malformed_optional_prompt_patch(llm_ro
     assert finished["status"] == "completed"
     assert stored["scenes"][scene["id"]]["summary"] == "Valid summary repair."
     assert stored["scenes"][scene["id"]]["prompt"] == "Original prompt."
+
+
+def test_llm_snapshot_explains_inference_gpu_blocker(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    execution_queue.reserve_resource("inference")
+    try:
+        job = llm_runner.enqueue(
+            "generate",
+            "qwen",
+            {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+            label="Prompt Assistant",
+        )
+        snapshot = llm_runner.snapshot()
+    finally:
+        execution_queue.release_resource("inference")
+
+    assert job["status"] == "queued"
+    assert snapshot["queueDepth"] == 1
+    assert snapshot["waitOwner"] == "inference"
+    assert snapshot["waitReason"] == "Inference currently holds the shared GPU."
+
+
+def test_llm_snapshot_explains_training_queue_priority(llm_root, monkeypatch):
+    from tool.server import training_runner
+
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(
+        training_runner,
+        "gpu_reservation_block_reason",
+        lambda _owner: "2 Training job(s) are queued and the Training queue is not paused.",
+    )
+    llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+        label="Prompt Assistant",
+    )
+
+    snapshot = llm_runner.snapshot()
+
+    assert snapshot["queueDepth"] == 1
+    assert snapshot["waitOwner"] == "training"
+    assert snapshot["waitReason"].startswith("2 Training job(s) are queued")

@@ -16,6 +16,7 @@ from .execution_queue import (
     pause_lane as execution_pause_lane,
     recover_lane as execution_recover_lane,
     reorder_job as execution_reorder_job,
+    resource_owner as execution_resource_owner,
     resume_lane as execution_resume_lane,
 )
 
@@ -537,12 +538,67 @@ def job_status(job_id, consume=False):
     return _job_view(job)
 
 
+def _queue_wait_state(current):
+    queued = [job for job in current.get("jobs", []) if str(job.get("status") or "") == "queued"]
+    if not queued:
+        return {"queueDepth": 0, "waitOwner": "", "waitReason": ""}
+
+    if current.get("paused"):
+        return {
+            "queueDepth": len(queued),
+            "waitOwner": "paused",
+            "waitReason": str(current.get("pauseReason") or "Director queue is paused."),
+        }
+
+    active_id = str(current.get("activeJobId") or "")
+    if active_id:
+        return {
+            "queueDepth": len(queued),
+            "waitOwner": "llm",
+            "waitReason": "Another Director / Prompt Assistant request is running.",
+        }
+
+    from .storyboard_llm_runtime import uses_local_gpu
+    if not uses_local_gpu():
+        return {"queueDepth": len(queued), "waitOwner": "", "waitReason": ""}
+
+    owner = str(execution_resource_owner() or "")
+    if owner:
+        labels = {"inference": "Inference", "training": "Training", "llm": "Director"}
+        label = labels.get(owner, owner)
+        return {
+            "queueDepth": len(queued),
+            "waitOwner": owner,
+            "waitReason": label + " currently holds the shared GPU.",
+        }
+
+    try:
+        from .training_runner import gpu_reservation_block_reason
+        reason = str(gpu_reservation_block_reason(GPU_RESERVATION_OWNER) or "")
+    except Exception:
+        _logger.exception("Could not inspect the shared GPU blocker for queued LLM work.")
+        return {
+            "queueDepth": len(queued),
+            "waitOwner": "unknown",
+            "waitReason": "Shared GPU availability could not be determined.",
+        }
+
+    if reason.startswith("Training "):
+        return {
+            "queueDepth": len(queued),
+            "waitOwner": "training",
+            "waitReason": reason,
+        }
+    return {"queueDepth": len(queued), "waitOwner": "", "waitReason": ""}
+
+
 def snapshot(include_terminal=False):
     current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=include_terminal)
     return {
         "paused": bool(current.get("paused")),
         "pauseReason": str(current.get("pauseReason") or ""),
         "activeJobId": str(current.get("activeJobId") or ""),
+        **_queue_wait_state(current),
         "jobs": [_job_view(job) for job in current.get("jobs", [])],
     }
 

@@ -764,6 +764,55 @@
     });
   }
 
+  function directorActivityForTargetQueue(activity, queue) {
+    var target = storyState.director.activityTarget;
+    if (!target || !queue || !Array.isArray(queue.jobs)) return activity;
+
+    var targetKey = directorTargetKey(target);
+    var job = queue.jobs.find(function (candidate) {
+      var candidateTarget = directorTargetFromJob(candidate);
+      return candidateTarget && directorTargetKey(candidateTarget) === targetKey;
+    });
+    if (!job || String(job.status || '') !== 'queued') return activity;
+
+    var queuedPosition = Math.max(1, Number(job.queuePosition) || 1);
+    var activeAhead = queue.activeJobId && String(queue.activeJobId) !== String(job.jobId || '') ? 1 : 0;
+    var ahead = Math.max(0, queuedPosition - 1 + activeAhead);
+    var waitOwner = ahead > 0 ? 'llm' : String(queue.waitOwner || '');
+    var waitReason = ahead > 0
+      ? String(ahead) + ' Director / Prompt Assistant request' + (ahead === 1 ? ' is' : 's are') + ' ahead.'
+      : String(queue.waitReason || '');
+
+    return Object.assign({}, activity || {}, {
+      active: true,
+      phase: 'queued',
+      model: job.modelId || (activity && activity.model) || '',
+      operation: job.operation || (activity && activity.operation) || '',
+      startedAt: job.createdAt || (activity && activity.startedAt),
+      queuePosition: queuedPosition,
+      queueAhead: ahead,
+      queueDepth: Number(queue.queueDepth) || 0,
+      waitOwner: waitOwner,
+      waitReason: waitReason
+    });
+  }
+
+  function directorQueuedLabel(activity) {
+    if (!activity || String(activity.phase || '') !== 'queued') return [];
+    var ahead = Math.max(0, Number(activity.queueAhead) || 0);
+    var parts = [ahead > 0 ? ('Queue #' + String(ahead + 1)) : 'Next in queue'];
+    var owner = String(activity.waitOwner || '');
+    var ownerLabels = {
+      llm: 'Waiting for Director',
+      inference: 'Waiting for Inference',
+      training: 'Waiting for Training',
+      paused: 'Queue paused',
+      unknown: 'Waiting for GPU'
+    };
+    if (ownerLabels[owner]) parts.push(ownerLabels[owner]);
+    return parts;
+  }
+
   function renderDirectorActivity(activity, system) {
     var card = el('storyboard-director-activity');
     var phase = el('storyboard-director-activity-phase');
@@ -781,6 +830,10 @@
     phase.textContent = directorPhaseLabel(activity && activity.phase);
     var startedAt = Number(activity && activity.startedAt) || storyState.director.activityStartedAt;
     var parts = [];
+    directorQueuedLabel(activity).forEach(function (label) {
+      var reason = String(activity && activity.waitReason || '');
+      parts.push('<span' + (reason ? ' title="' + escapeHtml(reason) + '"' : '') + '>' + escapeHtml(label) + '</span>');
+    });
     if (startedAt) {
       var endedAt = terminal ? Number(activity && activity.updatedAt) : Date.now() / 1000;
       if (!isFinite(endedAt) || endedAt < startedAt) endedAt = Date.now() / 1000;
@@ -854,10 +907,12 @@
     if (!directorActivityActive()) return Promise.resolve();
     return Promise.all([
       directorActivityRequest('/fs/director/activity'),
-      directorActivityRequest('/fs/system_status').catch(function () { return null; })
+      directorActivityRequest('/fs/system_status').catch(function () { return null; }),
+      directorQueueSnapshot(false)
     ]).then(function (values) {
       storyState.director.activityErrorReported = false;
-      renderDirectorActivity(directorActivityForCurrentRun(values[0]), values[1]);
+      var scopedActivity = directorActivityForTargetQueue(values[0], values[2]);
+      renderDirectorActivity(directorActivityForCurrentRun(scopedActivity), values[1]);
     }).catch(function (err) {
       var card = el('storyboard-director-activity');
       if (card) card.classList.add('hidden');

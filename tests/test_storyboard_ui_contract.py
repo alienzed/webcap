@@ -352,6 +352,13 @@ def test_storyboard_director_requests_use_shared_llm_queue():
     assert "function waitForDirectorJob(job)" in storyboard
     assert "'/fs/director/job?job='" in storyboard
     assert "queued: 'Queued…'" in storyboard
+    assert "function directorActivityForTargetQueue(activity, queue)" in storyboard
+    assert "directorQueueSnapshot(false)" in storyboard
+    assert "'Next in queue'" in storyboard
+    assert "'Queue #'" in storyboard
+    assert "'Waiting for Director'" in storyboard
+    assert "'Waiting for Inference'" in storyboard
+    assert "'Waiting for Training'" in storyboard
     waiter = storyboard.split("function waitForDirectorJob(job)", 1)[1].split("function directorRequest", 1)[0]
     assert "renderDirectorActivity(" not in waiter
     assert "enqueue_llm(" in app

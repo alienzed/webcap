@@ -31,6 +31,7 @@
       busy: false,
       pendingTargets: {},
       pendingOrder: [],
+      recoveryJobs: {},
       runtimeLabel: '',
       error: '',
       previousPrompts: {},
@@ -121,8 +122,10 @@
     });
   }
 
-  function directorJobRequest(jobId) {
-    return fetch('/fs/director/job?job=' + encodeURIComponent(jobId) + '&consume=1').then(function (response) {
+  function directorJobRequest(jobId, consume) {
+    var url = '/fs/director/job?job=' + encodeURIComponent(jobId);
+    if (consume) url += '&consume=1';
+    return fetch(url).then(function (response) {
       return response.json().then(function (body) {
         if (!response.ok || !body || !body.ok || !body.job) {
           throw new Error((body && body.error) || 'Storyboard Director job request failed.');
@@ -141,10 +144,121 @@
         throw new Error(current.error || ('Storyboard Director job ' + status + '.'));
       }
       return new Promise(function (resolve) { setTimeout(resolve, 750); }).then(function () {
-        return directorJobRequest(current.jobId);
+        return directorJobRequest(current.jobId, false);
       }).then(poll);
     }
     return poll(job);
+  }
+
+  function directorQueueSnapshot(includeTerminal) {
+    var url = '/fs/director/queue' + (includeTerminal ? '?includeTerminal=1' : '');
+    return fetch(url).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body || !body.ok || !body.queue) {
+          throw new Error((body && body.error) || 'Director queue snapshot failed.');
+        }
+        return body.queue;
+      });
+    });
+  }
+
+  function consumeDirectorJob(jobId) {
+    return directorJobRequest(jobId, true);
+  }
+
+  function directorTargetFromJob(job) {
+    if (!job || job.client !== 'storyboard' || !job.storyId) return null;
+    if (job.operation === 'expand_concept') return { kind: 'concept', storyId: job.storyId };
+    if (job.operation === 'develop_story') return { kind: 'scenes', storyId: job.storyId };
+    if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
+      return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId };
+    }
+    return null;
+  }
+
+  function applyRecoveredDirectorResult(job) {
+    var result = job.result || {};
+    var storyId = String(job.storyId || '');
+    var sceneId = String(job.sceneId || '');
+
+    if (job.operation === 'write_prompt' || job.operation === 'refine_prompt') {
+      var previousPrompt = '';
+      return request(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
+        var scene = payload.story && payload.story.scenes ? payload.story.scenes[sceneId] : null;
+        if (!scene) throw new Error('Recovered Director Scene no longer exists.');
+        previousPrompt = String(scene.prompt || '');
+        return request({
+          operation: 'update_scene',
+          storyId: storyId,
+          sceneId: sceneId,
+          scene: {
+            prompt: String(result.result || ''),
+            promptDirectorModel: String(result.model || job.modelId || '')
+          }
+        });
+      }).then(function (saved) {
+        if (storyState.story && storyState.story.id === storyId) {
+          storyState.story = saved.story;
+          storyState.director.previousPrompts[sceneId] = previousPrompt;
+          renderStory();
+          updateSceneDirectorStatus(sceneId, 'Recovered Director result.');
+        }
+        return refreshLibrary();
+      });
+    }
+
+    if (job.operation === 'expand_concept' || job.operation === 'develop_story') {
+      return request(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
+        if (storyState.story && storyState.story.id === storyId) {
+          storyState.story = payload.story;
+          renderStory();
+        }
+        return refreshLibrary();
+      });
+    }
+
+    return Promise.resolve();
+  }
+
+  function watchRecoveredDirectorJob(job) {
+    if (!job || !job.jobId || storyState.director.recoveryJobs[job.jobId]) return;
+    var target = directorTargetFromJob(job);
+    if (!target) return;
+
+    storyState.director.recoveryJobs[job.jobId] = true;
+    if (!directorTargetPending(target)) setDirectorPending(target, true);
+    startDirectorActivity();
+
+    function poll(current) {
+      var status = String(current.status || '');
+      if (status === 'completed') {
+        return applyRecoveredDirectorResult(current).then(function () {
+          return consumeDirectorJob(current.jobId);
+        });
+      }
+      if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
+        return consumeDirectorJob(current.jobId).then(function () {
+          throw new Error(current.error || ('Storyboard Director job ' + status + '.'));
+        });
+      }
+      return new Promise(function (resolve) { setTimeout(resolve, 750); }).then(function () {
+        return directorJobRequest(current.jobId, false);
+      }).then(poll);
+    }
+
+    poll(job).catch(reportError).finally(function () {
+      delete storyState.director.recoveryJobs[job.jobId];
+      setDirectorPending(target, false);
+      finishDirectorActivity();
+    });
+  }
+
+  function reconcileDirectorJobs() {
+    return directorQueueSnapshot(true).then(function (queue) {
+      (queue.jobs || []).forEach(function (job) {
+        if (job && job.client === 'storyboard') watchRecoveredDirectorJob(job);
+      });
+    });
   }
 
   function directorRequest(payload) {
@@ -2824,6 +2938,7 @@
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     refreshDirector();
     refreshGenerationCapabilities();
+    reconcileDirectorJobs().catch(reportError);
     refreshLibrary().then(function () {
       if (storyState.story) {
         return refreshGenerationQueue(storyState.story.id).then(function () {

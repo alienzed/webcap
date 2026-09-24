@@ -56,14 +56,25 @@ def test_normalize_models_keeps_reported_size_metadata():
     assert models[0]["sizeBytes"] == 123456
 
 
-def test_model_file_size_stats_selected_model_path(tmp_path):
-    model_path = tmp_path / "director.gguf"
+def test_model_file_size_stats_selected_model_in_configured_directory(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    models_dir.mkdir()
+    model_path = models_dir / "director.gguf"
     model_path.write_bytes(b"x" * 4096)
 
-    assert storyboard_llm_runtime._model_file_size({"path": str(model_path)}) == 4096
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"models_dir": models_dir, "mode": "local"},
+    )
+
+    assert storyboard_llm_runtime._model_file_size({
+        "id": "director",
+        "path": r"C:\\anything\\director.gguf",
+    }) == 4096
 
 
-def test_model_file_size_resolves_relative_path_from_models_dir(monkeypatch, tmp_path):
+def test_model_file_size_uses_model_id_when_runtime_path_is_empty(monkeypatch, tmp_path):
     models_dir = tmp_path / "text_encoders"
     models_dir.mkdir()
     model_path = models_dir / "director.gguf"
@@ -75,41 +86,38 @@ def test_model_file_size_resolves_relative_path_from_models_dir(monkeypatch, tmp
         lambda: {"models_dir": models_dir, "mode": "local"},
     )
 
-    assert storyboard_llm_runtime._model_file_size({"path": "director.gguf"}) == 8192
+    assert storyboard_llm_runtime._model_file_size({
+        "id": "director.gguf",
+        "path": "",
+    }) == 8192
 
 
-def test_model_file_size_translates_windows_path_when_running_in_wsl(monkeypatch, tmp_path):
-    if storyboard_llm_runtime.os.name == "nt":
-        pytest.skip("Windows paths are directly stat-able on Windows.")
-
-    model_path = tmp_path / "director.gguf"
-    model_path.write_bytes(b"x" * 16384)
-
-    from tool.server import training_runtime
+def test_model_file_size_fails_loudly_when_filename_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        training_runtime,
-        "to_wsl_path",
-        lambda path, distribution="": str(model_path),
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"models_dir": tmp_path, "mode": "local"},
     )
 
-    assert storyboard_llm_runtime._model_file_size({
-        "id": "director",
-        "path": r"C:\\models\\text_encoders\\director.gguf",
-    }) == 16384
+    with pytest.raises(FileNotFoundError, match="model filename is missing"):
+        storyboard_llm_runtime._model_file_size({})
 
 
-def test_model_file_size_fails_loudly_when_path_missing():
-    with pytest.raises(FileNotFoundError, match="model path is missing"):
-        storyboard_llm_runtime._model_file_size({"id": "director"})
+def test_model_file_size_fails_loudly_when_stat_fails(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    models_dir.mkdir()
 
-
-def test_model_file_size_fails_loudly_when_stat_fails(tmp_path):
-    missing = tmp_path / "missing.gguf"
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"models_dir": models_dir, "mode": "local"},
+    )
 
     with pytest.raises(OSError, match="Could not stat Storyboard Director model file") as exc:
-        storyboard_llm_runtime._model_file_size({"path": str(missing)})
+        storyboard_llm_runtime._model_file_size({"path": "missing.gguf"})
 
-    assert str(missing) in str(exc.value)
+    assert str(models_dir / "missing.gguf") in str(exc.value)
+
 
 def test_director_activity_completion_preserves_usage_timings_and_context():
     storyboard_llm_runtime._set_activity(

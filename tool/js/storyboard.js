@@ -931,9 +931,16 @@
     order = Array.isArray(order) ? order : [];
     if (['overview', 'focus', 'sequence'].indexOf(storyState.sceneViewMode) === -1) storyState.sceneViewMode = 'focus';
     ensureActiveScene(order);
-    el('storyboard-scenes-overview-btn').classList.toggle('active', storyState.sceneViewMode === 'overview');
-    el('storyboard-scenes-focus-btn').classList.toggle('active', storyState.sceneViewMode === 'focus');
-    el('storyboard-scenes-sequence-btn').classList.toggle('active', storyState.sceneViewMode === 'sequence');
+    [
+      ['storyboard-scenes-overview-btn', 'overview'],
+      ['storyboard-scenes-focus-btn', 'focus'],
+      ['storyboard-scenes-sequence-btn', 'sequence']
+    ].forEach(function (item) {
+      var button = el(item[0]);
+      var active = storyState.sceneViewMode === item[1];
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
     var modeTitle = el('storyboard-workspace-mode-title');
     if (modeTitle) modeTitle.textContent = storyState.sceneViewMode === 'sequence' ? 'Sequence' : 'Scenes';
     var progression = el('storyboard-scene-progression');
@@ -1733,7 +1740,6 @@
           '<span class="storyboard-scene-number"' +
             (planDirectorModel ? ' title="Scene plan originated from Director model ' + escapeHtml(planDirectorModel) + '"' : '') +
           '>Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
-          '<input class="storyboard-scene-title" data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title">' +
           '<details class="storyboard-scene-menu">' +
             '<summary title="Scene actions" aria-label="Scene actions">•••</summary>' +
             '<div class="storyboard-scene-menu-popover">' +
@@ -1746,6 +1752,7 @@
         '</header>' +
         '<div class="storyboard-scene-body">' +
           '<div class="storyboard-scene-main">' +
+            '<label class="storyboard-field storyboard-scene-title-field"><span>Title</span><input data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title"></label>' +
             '<label class="storyboard-field storyboard-scene-intent"><span>Scene intent</span><textarea data-scene-field="summary" rows="2" placeholder="Describe what happens in this Scene.">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>' +
             '<div class="storyboard-prompt-block">' +
               '<div class="storyboard-prompt-heading">' +
@@ -1908,11 +1915,13 @@
   }
 
   function openStory(storyId) {
+    var previousStoryId = storyState.story && storyState.story.id;
     setSaveState('Loading...');
     return flushPendingSaves().then(function () {
       return request(null, 'story=' + encodeURIComponent(storyId));
     }).then(function (payload) {
       storyState.story = payload.story;
+      if (previousStoryId !== payload.story.id && storyState.storyCollapsed) setStoryCollapsed(false);
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};
       storyState.director.previousPrompts = {};
@@ -1942,6 +1951,7 @@
       });
     }).then(function (payload) {
       storyState.story = payload.story;
+      if (storyState.storyCollapsed) setStoryCollapsed(false);
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};
       storyState.director.previousPrompts = {};

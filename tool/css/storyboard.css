@@ -442,7 +442,7 @@
 .storyboard-scene-header {
   grid-area: header;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   min-height: 50px;
@@ -458,15 +458,9 @@
   font-weight: 750;
 }
 
-.storyboard-scene-title {
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 16px;
-  font-weight: 800;
-  outline: none;
+.storyboard-scene-title-field input {
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .storyboard-scene-menu {
@@ -1409,11 +1403,12 @@
   font-weight: 700;
 }
 
-.storyboard-view-toggle .active {
-  border-color: var(--border);
-  background: var(--hover);
+.storyboard-view-toggle .review-captions-btn.active {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  background: color-mix(in srgb, var(--panel) 80%, var(--accent) 20%);
   color: var(--text);
   font-weight: 800;
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .storyboard-scene-progression {
@@ -2319,13 +2314,14 @@
 }
 
 .storyboard-scenes-heading {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
 .storyboard-scenes-heading-left {
   min-width: 0;
   display: flex;
   align-items: center;
+  justify-self: start;
   gap: 12px;
 }
 
@@ -2340,6 +2336,7 @@
 
 .storyboard-scenes-heading .storyboard-director-header {
   margin-left: 0;
+  justify-self: end;
 }
 
 .storyboard-scenes-heading .storyboard-director-header select {

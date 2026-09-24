@@ -168,6 +168,19 @@ def resolve_name(configured_name, available, label):
     raise RuntimeError("ComfyUI " + label + " name is ambiguous: " + display_name)
 
 
+def resolve_wildcard_prompt(prompt, seed):
+    response = _read_json_response(
+        COMFY_BASE_URL + "/impact/wildcards",
+        method="POST",
+        payload={"text": str(prompt or ""), "seed": int(seed)},
+        timeout=10,
+    )
+    resolved = str(response.get("text") or "").strip() if isinstance(response, dict) else ""
+    if not resolved:
+        raise RuntimeError("Impact Pack did not return a resolved prompt.")
+    return resolved
+
+
 def queue_workflow(workflow):
     prompt_id = str(uuid.uuid4())
     response = _read_json_response(

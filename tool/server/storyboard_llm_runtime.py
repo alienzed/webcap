@@ -339,21 +339,24 @@ def _normalize_models(payload):
             continue
         path = str(entry.get("path") or "").strip()
         status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
-        size_bytes = 0
-        if path:
-            try:
-                size_bytes = int(Path(path).stat().st_size)
-            except OSError:
-                size_bytes = 0
         models.append({
             "id": model_id,
             "label": Path(path or model_id).name,
             "path": path,
-            "sizeBytes": size_bytes,
             "status": str(status.get("value") or ("remote" if not path else "unloaded")),
         })
     models.sort(key=lambda model: model["label"].casefold())
     return models
+
+
+def _model_file_size(model):
+    path = str((model or {}).get("path") or "").strip()
+    if not path:
+        return 0
+    try:
+        return int(Path(path).stat().st_size)
+    except OSError:
+        return 0
 
 
 def list_models(reload=False):
@@ -532,7 +535,7 @@ def _ensure_local_model_loaded(model_id):
     _set_activity(
         "loading_model",
         model_id=model_id,
-        model_size_bytes=selected.get("sizeBytes") or 0,
+        model_size_bytes=_model_file_size(selected),
     )
     for model in models:
         if model["id"] == model_id or model["status"] == "unloaded":

@@ -858,15 +858,19 @@
 
   function syncSceneViewControls(order) {
     order = Array.isArray(order) ? order : [];
-    if (storyState.sceneViewMode !== 'overview' && storyState.sceneViewMode !== 'focus') storyState.sceneViewMode = 'focus';
+    if (['overview', 'focus', 'sequence'].indexOf(storyState.sceneViewMode) === -1) storyState.sceneViewMode = 'focus';
     ensureActiveScene(order);
     el('storyboard-scenes-overview-btn').classList.toggle('active', storyState.sceneViewMode === 'overview');
     el('storyboard-scenes-focus-btn').classList.toggle('active', storyState.sceneViewMode === 'focus');
-    renderSceneProgression(order);
+    el('storyboard-scenes-sequence-btn').classList.toggle('active', storyState.sceneViewMode === 'sequence');
+    var modeTitle = el('storyboard-workspace-mode-title');
+    if (modeTitle) modeTitle.textContent = storyState.sceneViewMode === 'sequence' ? 'Sequence' : 'Scenes';
+    var progression = el('storyboard-scene-progression');
+    if (progression) progression.classList.toggle('hidden', storyState.sceneViewMode === 'sequence');
   }
 
   function setSceneViewMode(mode, sceneId) {
-    if (mode !== 'overview' && mode !== 'focus') throw new Error('Unknown Storyboard Scene view.');
+    if (['overview', 'focus', 'sequence'].indexOf(mode) === -1) throw new Error('Unknown Storyboard Scene view.');
     return flushPendingSaves().then(function () {
       storyState.sceneViewMode = mode;
       if (sceneId) storyState.activeSceneId = sceneId;
@@ -876,6 +880,7 @@
       }
       window.localStorage.setItem('webcap.storyboard.sceneView', mode);
       renderScenes();
+      renderSequencePreview();
     }).catch(reportError);
   }
 
@@ -978,7 +983,7 @@
     if (!host || !storyState.story) return;
     var story = storyState.story;
     var selected = selectedSequenceItems(story);
-    if (!selected.length) {
+    if (storyState.sceneViewMode !== 'sequence' || !selected.length) {
       host.innerHTML = '';
       host.classList.add('hidden');
       return;
@@ -1530,6 +1535,13 @@
     var activeStoryLoras = storyLoras.filter(function (lora) { return lora && lora.enabled !== false; });
 
     syncSceneViewControls(order);
+    if (storyState.sceneViewMode === 'sequence') {
+      host.classList.remove('is-focus', 'is-overview');
+      host.classList.add('is-sequence');
+      host.innerHTML = '';
+      return;
+    }
+    host.classList.remove('is-sequence');
     if (storyState.sceneViewMode === 'overview') {
       host.classList.remove('is-focus');
       host.classList.add('is-overview');
@@ -1657,10 +1669,17 @@
                 '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
             '</div>' +
-            '<div class="storyboard-scene-handoff-row storyboard-scene-handoff-primary">' +
-              '<label class="storyboard-field"><span>Entry state</span><textarea data-scene-field="entryState" rows="3" placeholder="What must already be true when this Scene begins?">' + escapeHtml(sceneValue(scene, 'entryState', '')) + '</textarea></label>' +
-              '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="3" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
-            '</div>' +
+            '<details class="storyboard-scene-disclosure storyboard-continuity-details">' +
+              '<summary><span>Continuity</span><span class="storyboard-disclosure-summary-state">' +
+                ((String(sceneValue(scene, 'entryState', '')).trim() || String(sceneValue(scene, 'exitState', '')).trim()) ? 'Entry + Exit defined' : 'Optional') +
+              '</span></summary>' +
+              '<div class="storyboard-disclosure-body">' +
+                '<div class="storyboard-scene-handoff-row storyboard-scene-handoff-primary">' +
+                  '<label class="storyboard-field"><span>Entry state</span><textarea data-scene-field="entryState" rows="3" placeholder="What must already be true when this Scene begins?">' + escapeHtml(sceneValue(scene, 'entryState', '')) + '</textarea></label>' +
+                  '<label class="storyboard-field"><span>Exit state</span><textarea data-scene-field="exitState" rows="3" placeholder="What should be true when this Scene ends?">' + escapeHtml(sceneValue(scene, 'exitState', '')) + '</textarea></label>' +
+                '</div>' +
+              '</div>' +
+            '</details>' +
             '<details class="storyboard-scene-disclosure storyboard-notes-details">' +
               '<summary><span>Notes</span><span class="storyboard-disclosure-summary-state">' + (String(sceneValue(scene, 'notes', '')).trim() ? 'Added' : 'Optional') + '</span></summary>' +
               '<div class="storyboard-disclosure-body">' +
@@ -2740,6 +2759,7 @@
     el('storyboard-story-expand-toggle').onclick = function () { setStoryCollapsed(false); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
+    el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;

@@ -868,6 +868,7 @@ def duplicate_scene(story_id, scene_id):
         "exitState": current.get("exitState") or "",
         "prompt": current.get("prompt") or "",
         "promptDirectorModel": current.get("promptDirectorModel") or "",
+        "promptDirectorJobId": current.get("promptDirectorJobId") or "",
         "planDirectorModel": current.get("planDirectorModel") or "",
         "sharedContextRefs": copy.deepcopy(current.get("sharedContextRefs") or []),
         "durationSeconds": current.get("durationSeconds", 6),

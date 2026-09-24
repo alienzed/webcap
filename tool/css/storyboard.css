@@ -332,6 +332,19 @@
   grid-column: 1 / -1;
 }
 
+.storyboard-style-preset {
+  width: auto;
+  max-width: min(260px, 44vw);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--input-bg, var(--panel));
+  color: var(--text);
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+}
+
+
 .storyboard-develop-row {
   grid-column: 1 / -1;
   display: flex;

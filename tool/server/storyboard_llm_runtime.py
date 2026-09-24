@@ -573,7 +573,23 @@ def release_loaded_model_for_gpu_work():
         _request_lock.release()
 
 
-def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved=False):
+def _sampling_profile(operation):
+    operation = str(operation or "").strip()
+    profiles = {
+        "expand_concept": {"temperature": 0.35, "top_p": 0.9},
+        "develop_story": {"temperature": 0.2, "top_p": 0.85},
+        "write_prompt": {"temperature": 0.15, "top_p": 0.85},
+        "refine_prompt": {"temperature": 0.1, "top_p": 0.8},
+    }
+    profile = profiles.get(operation, {"temperature": 0.2, "top_p": 0.85})
+    return {
+        **profile,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+    }
+
+
+def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Storyboard Director messages are required.")
 
@@ -581,16 +597,24 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
         _ensure_server()
         _model_record(model_id)
         settings = _director_config()
+        sampling = dict(sampling or _sampling_profile(""))
         payload = {
             "model": model_id,
             "messages": messages,
             "stream": False,
             "max_tokens": int(max_tokens or settings["max_tokens"]),
-            "temperature": 0.2,
+            "temperature": float(sampling.get("temperature", 0.2)),
+            "top_p": float(sampling.get("top_p", 0.85)),
+            "presence_penalty": float(sampling.get("presence_penalty", 0.0)),
+            "frequency_penalty": float(sampling.get("frequency_penalty", 0.0)),
         }
         if settings.get("mode", "local") == "local":
             payload["reasoning_effort"] = "none"
             payload["chat_template_kwargs"] = {"enable_thinking": False}
+            payload["top_k"] = 40
+            payload["min_p"] = 0.05
+            payload["repeat_penalty"] = 1.0
+            payload["seed"] = -1
         if response_schema is not None:
             if settings.get("mode", "local") == "local":
                 payload["response_format"] = {
@@ -699,6 +723,7 @@ def run_contract(model_id, contract, gpu_reserved=False):
         try:
             chat_kwargs = {
                 "response_schema": contract.get("response_schema"),
+                "sampling": _sampling_profile(operation),
             }
             if gpu_reserved:
                 chat_kwargs["gpu_reserved"] = True

@@ -1401,6 +1401,24 @@
     return null;
   }
 
+  function removedScenesHtml(removedScenes) {
+    removedScenes = removedScenes && typeof removedScenes === 'object' ? removedScenes : {};
+    var ids = Object.keys(removedScenes);
+    if (!ids.length) return '';
+    return '<details class="storyboard-removed-scenes">' +
+      '<summary><span>Removed Scenes</span><span class="storyboard-removed-scenes-count">' + String(ids.length) + '</span></summary>' +
+      '<div class="storyboard-removed-scenes-list">' +
+        ids.map(function (sceneId) {
+          var scene = removedScenes[sceneId] || {};
+          return '<div class="storyboard-removed-scene" data-removed-scene-id="' + escapeHtml(sceneId) + '">' +
+            '<span class="storyboard-removed-scene-title">' + escapeHtml(scene.title || 'Untitled Scene') + '</span>' +
+            '<button type="button" class="storyboard-restore-scene-btn" data-restore-scene="' + escapeHtml(sceneId) + '" title="Restore Scene">↺ Restore</button>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</details>';
+  }
+
   function renderScenes() {
     var host = el('storyboard-scenes-list');
     if (!host || !storyState.story) return;
@@ -1428,17 +1446,7 @@
             (scene.selectedTakeId ? ' · selected' : '') + '</span>' +
         '</button>';
       }).join('');
-      var overviewRemovedIds = Object.keys(removedScenes);
-      if (overviewRemovedIds.length) {
-        overviewHtml += '<section class="storyboard-removed-scenes"><div class="storyboard-list-section-title">Removed Scenes</div>' +
-          overviewRemovedIds.map(function (sceneId) {
-            var scene = removedScenes[sceneId] || {};
-            return '<div class="storyboard-removed-scene" data-removed-scene-id="' + escapeHtml(sceneId) + '">' +
-              '<span>' + escapeHtml(scene.title || 'Untitled Scene') + '</span>' +
-              '<button type="button" class="review-captions-btn" data-restore-scene="' + escapeHtml(sceneId) + '">Restore</button>' +
-            '</div>';
-          }).join('') + '</section>';
-      }
+      overviewHtml += removedScenesHtml(removedScenes);
       host.innerHTML = overviewHtml || '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
       return;
     }
@@ -1618,20 +1626,7 @@
 
     if (!activeHtml) activeHtml = '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
 
-    var removedIds = Object.keys(removedScenes);
-    var removedHtml = '';
-    if (removedIds.length) {
-      removedHtml = '<section class="storyboard-removed-scenes"><div class="storyboard-list-section-title">Removed Scenes</div>' +
-        removedIds.map(function (sceneId) {
-          var scene = removedScenes[sceneId] || {};
-          return '<div class="storyboard-removed-scene" data-removed-scene-id="' + escapeHtml(sceneId) + '">' +
-            '<span>' + escapeHtml(scene.title || 'Untitled Scene') + '</span>' +
-            '<button type="button" class="review-captions-btn" data-restore-scene="' + escapeHtml(sceneId) + '">Restore</button>' +
-          '</div>';
-        }).join('') + '</section>';
-    }
-
-    host.innerHTML = activeHtml + removedHtml;
+    host.innerHTML = activeHtml + removedScenesHtml(removedScenes);
   }
 
   function renderStory() {

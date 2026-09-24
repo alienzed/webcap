@@ -22,25 +22,25 @@ def _finished_at(item):
 def _execution_item(lane, job):
     metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
     status = str(job.get("status") or "")
-    client = str(metadata.get("client") or "")
-    label = str(metadata.get("label") or "")
+    client = str(job.get("client") or metadata.get("client") or "")
+    label = str(job.get("label") or metadata.get("label") or "")
     if lane == "inference":
         kind = client if client in {"generate", "storyboard", "test"} else "generate"
     else:
         kind = "director"
     return {
-        "id": str(job.get("id") or ""),
+        "id": str(job.get("jobId") or job.get("id") or ""),
         "kind": kind,
         "lane": lane,
         "client": client,
         "status": status,
         "label": label,
-        "modelId": str(metadata.get("modelId") or ""),
-        "storyId": str(metadata.get("storyId") or ""),
-        "sceneId": str(metadata.get("sceneId") or ""),
-        "folder": str(metadata.get("folder") or ""),
-        "sessionId": str(metadata.get("sessionId") or ""),
-        "operation": str(metadata.get("operation") or ""),
+        "modelId": str(job.get("modelId") or metadata.get("modelId") or ""),
+        "storyId": str(job.get("storyId") or metadata.get("storyId") or ""),
+        "sceneId": str(job.get("sceneId") or metadata.get("sceneId") or ""),
+        "folder": str(job.get("folder") or metadata.get("folder") or ""),
+        "sessionId": str(job.get("sessionId") or metadata.get("sessionId") or ""),
+        "operation": str(job.get("operation") or metadata.get("operation") or ""),
         "queuePosition": int(job.get("queuePosition") or 0),
         "createdAt": job.get("createdAt"),
         "startedAt": job.get("startedAt"),

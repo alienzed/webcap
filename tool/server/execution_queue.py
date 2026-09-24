@@ -437,6 +437,7 @@ def shelve_queued(lane_name):
             if job.get("status") != "queued":
                 continue
             job["status"] = "backlog"
+            job["queuePosition"] = 0
             job["updatedAt"] = now
             changed.append(_public_job(job))
         _refresh_positions(lane)

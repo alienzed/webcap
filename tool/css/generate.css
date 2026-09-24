@@ -17,7 +17,7 @@
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 390px;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--bg);
   overflow: hidden;
@@ -391,9 +391,6 @@
   .generate-prompt-tools {
     flex-wrap: wrap;
     justify-content: flex-end;
-  }
-  .generate-workspace {
-    grid-template-columns: minmax(0, 1fr) 330px;
   }
   .generate-authoring {
     grid-template-columns: minmax(460px, 1.4fr) 330px;

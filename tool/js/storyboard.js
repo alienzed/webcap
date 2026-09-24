@@ -3844,6 +3844,10 @@
     });
     el('storyboard-invariants-list').addEventListener('input', scheduleStorySave);
     el('storyboard-invariants-list').addEventListener('change', scheduleStorySave);
+    document.querySelector('.storyboard-continuity-summary .storyboard-invariants-actions').addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    });
     el('storyboard-invariant-define').addEventListener('click', defineInvariants);
     el('storyboard-invariant-add').addEventListener('click', function () {
       el('storyboard-invariants-list').insertAdjacentHTML('beforeend', invariantRowHtml({ kind: 'character', title: '', text: '' }));

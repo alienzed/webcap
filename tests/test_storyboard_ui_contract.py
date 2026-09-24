@@ -766,6 +766,11 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'id="storyboard-story-concept"' in story_section
     assert 'id="storyboard-story-style"' in story_section
     assert 'id="storyboard-invariant-define"' in continuity_section
+    assert 'class="storyboard-continuity-summary"' in continuity_section
+    continuity_summary = continuity_section.split('<summary class="storyboard-continuity-summary">', 1)[1].split("</summary>", 1)[0]
+    assert 'id="storyboard-invariant-define"' in continuity_summary
+    assert 'id="storyboard-invariant-add"' in continuity_summary
+    assert 'class="storyboard-invariants-header"' not in continuity_section
     assert 'id="storyboard-invariants-list"' in continuity_section
     assert 'id="storyboard-develop-btn"' not in director_section
     assert html.index('id="storyboard-develop-btn"') < html.index('data-story-section="director"')
@@ -784,6 +789,16 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert "storyboard-story-tags" not in payload_block
     assert 'storyboard-list-section-title">Stories</div>' in storyboard
     assert 'storyboard-list-section-title">Recent</div>' not in storyboard
+
+
+def test_storyboard_continuity_header_actions_do_not_toggle_disclosure():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert "document.querySelector('.storyboard-continuity-summary .storyboard-invariants-actions').addEventListener('click'" in storyboard
+    assert "event.preventDefault();" in storyboard
+    assert "event.stopPropagation();" in storyboard
+    assert ".storyboard-invariants-actions" in css
 
 
 def test_storyboard_story_context_is_a_collapsible_middle_column():

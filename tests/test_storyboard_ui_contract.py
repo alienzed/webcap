@@ -173,6 +173,15 @@ def test_storyboard_save_barrier_waits_for_inflight_autosaves():
     assert "saveStoryNow().catch(reportError);" in storyboard
     assert "saveSceneNow(sceneId).catch(reportError);" in storyboard
 
+
+def test_storyboard_routine_autosave_state_does_not_pollute_global_console():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    save_state = storyboard.split("function setSaveState(text)", 1)[1].split("function storyTagsText", 1)[0]
+
+    assert "text !== 'Saving...'" in save_state
+    assert "text !== 'Unsaved changes'" in save_state
+    assert "reportConsoleInfo('Storyboard', text);" in save_state
+
 def test_storyboard_director_configuration_is_first_class_app_setting():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")

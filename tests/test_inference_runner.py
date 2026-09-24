@@ -60,7 +60,7 @@ def test_inference_monitor_is_dormant_without_requested_work(inference_root):
         "provider-stale",
         "Queue paused: stale provider cleanup is pending.",
     )
-    assert inference_runner._monitor_has_work() is False
+    assert inference_runner._monitor_has_work() is True
 
 
 def test_inference_snapshot_is_passive_and_does_not_reconcile_provider(inference_root, monkeypatch):
@@ -673,7 +673,7 @@ def test_inference_resume_clears_pause_even_while_other_gpu_owner_is_active(infe
     assert started == [True]
 
 
-def test_inference_resume_checks_pending_cleanup_once_and_stays_dormant_if_unavailable(inference_root, monkeypatch):
+def test_inference_cleanup_hold_fails_forward_if_provider_cannot_verify_job(inference_root, monkeypatch):
     inference_runner.hold_provider_cleanup(
         "provider-stale",
         "Queue paused: stale provider cleanup is pending.",
@@ -689,8 +689,29 @@ def test_inference_resume_checks_pending_cleanup_once_and_stays_dormant_if_unava
     result = inference_runner.action("resume_queue")
 
     assert calls == ["provider-stale"]
-    assert result["queue"]["paused"] is True
+    assert result["queue"]["paused"] is False
     assert execution_queue.resource_owner() == ""
+    assert inference_runner._monitor_has_work() is False
+    with inference_runner._provider_hold_lock:
+        assert not inference_runner._provider_cleanup_holds
+
+
+def test_inference_monitor_self_reconciles_confirmed_provider_hold(inference_root, monkeypatch):
+    inference_runner.hold_provider_cleanup(
+        "provider-active",
+        "Queue paused: provider cleanup is pending.",
+    )
+    states = iter([
+        {"status": "in_progress"},
+        {"status": "completed"},
+    ])
+    monkeypatch.setattr(inference_runtime, "read_job", lambda _provider_id: next(states))
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: execution_queue.release_resource(inference_runner.GPU_RESERVATION_OWNER))
+
+    assert inference_runner._monitor_has_work() is True
+    assert inference_runner._advance_queue() is None
+    assert inference_runner._monitor_has_work() is True
+    assert inference_runner._advance_queue() is None
     assert inference_runner._monitor_has_work() is False
 
 

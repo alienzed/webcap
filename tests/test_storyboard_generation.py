@@ -15,6 +15,31 @@ def storyboard_fs(tmp_path, monkeypatch):
     return tmp_path
 
 
+def test_storyboard_terminal_generation_receipt_is_removed_when_consumed(storyboard_fs):
+    storyboard_generation._startup_reconciled = True
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3"}},
+        metadata={
+            "client": "storyboard",
+            "storyId": "story-1",
+            "sceneId": "scene-1",
+            "label": "Scene 1",
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+        },
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.finish_job(queued["id"], status="completed", result={"takeId": "take-1"})
+
+    delivered = storyboard_generation.generation_status(queued["id"], consume=True)
+
+    assert delivered["status"] == "completed"
+    assert delivered["takeId"] == "take-1"
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(queued["id"])
+
+
 def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs, monkeypatch):
     monkeypatch.setattr(storyboard_generation.secrets, "randbelow", lambda _limit: 4242)
     scene = {

@@ -44,6 +44,7 @@ from .generate_store import cleanup_references as generate_cleanup_references, l
 from .generation_director_contract import build_request as generate_build_director_request
 from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, snapshot as inference_snapshot, stop_storyboard_jobs
 from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, snapshot as llm_snapshot
+from .activity_monitor import activity_snapshot
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -228,6 +229,15 @@ def fs_system_status():
         "ram": ram,
         "disk": disk,
     })
+
+
+@app.route("/fs/activity", methods=["GET"])
+def fs_activity():
+    try:
+        return jsonify(activity_snapshot(request.args.get("limit", 20)))
+    except Exception as exc:
+        app.logger.exception("ACTIVITY SNAPSHOT FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.route("/fs/storage", methods=["GET"])

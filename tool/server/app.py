@@ -607,7 +607,8 @@ def storyboard_route():
             scene_payload = data.get("scene") or {}
             if llm_storyboard_target_busy(story_id, "scenes"):
                 raise ValueError("Story Scenes have pending Director work.")
-            if "prompt" in scene_payload and llm_storyboard_target_busy(story_id, "scene-prompt", scene_id):
+            protected_prompt_keys = {"prompt", "previousPrompt", "promptDirectorModel", "promptDirectorJobId"}
+            if protected_prompt_keys.intersection(scene_payload) and llm_storyboard_target_busy(story_id, "scene-prompt", scene_id):
                 raise ValueError("Scene prompt has pending Director work.")
             story, scene = storyboard_update_scene(story_id, scene_id, scene_payload)
             return jsonify({"ok": True, "story": story, "scene": scene})

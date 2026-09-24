@@ -572,6 +572,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "previousConcept": current.get("previousConcept") if isinstance(current.get("previousConcept"), str) else None,
         "style": str(payload.get("style", current.get("style", "")) or ""),
         "repairInstruction": str(payload.get("repairInstruction", current.get("repairInstruction", "")) or ""),
+        "repairComplete": bool(payload.get("repairComplete", current.get("repairComplete", False))),
         "invariants": _normalize_story_invariants(payload.get("invariants", current.get("invariants", []))),
         "loras": _normalize_loras(payload.get("loras", current.get("loras", [])), allow_enabled=True),
         "targetSceneCount": target_scene_count,
@@ -1179,6 +1180,10 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
             prepared.append((scene_id, patch))
 
     if not prepared:
+        story["repairInstruction"] = ""
+        story["repairComplete"] = True
+        story["updatedAt"] = _utc_now()
+        _write_json_atomic(_story_path(story_id), story)
         return story, 0, 0
 
     new_scenes = copy.deepcopy(scenes)
@@ -1222,6 +1227,8 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
 
     story["scenes"] = new_scenes
     story["previousSceneRepair"] = repair_snapshot
+    story["repairInstruction"] = ""
+    story["repairComplete"] = True
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story, len(prepared), changed_field_count
@@ -1266,6 +1273,7 @@ def restore_scene_repairs(story_id):
 
     story["scenes"] = new_scenes
     story["previousSceneRepair"] = None
+    story["repairComplete"] = False
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story

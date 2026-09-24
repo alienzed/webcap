@@ -1115,3 +1115,17 @@ def test_recent_test_sources_are_derived_from_central_session_metadata(tmp_path,
     assert recent[0]["folder"] == "sets/swimwear"
     assert recent[0]["modelId"] == "minimax_h3"
     assert recent[0]["sessionCount"] == 1
+
+
+def test_direct_test_source_lora_is_read_only_without_webcap_provenance(tmp_path, monkeypatch):
+    staged = tmp_path / "test-root" / "manual"
+    staged.mkdir(parents=True)
+    candidate = staged / "manual.safetensors"
+    candidate.write_bytes(b"weights")
+    model = bench.get_test_model()
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
+
+    with pytest.raises(ValueError, match="WebCap-staged"):
+        bench.remove_candidate(tmp_path, candidate.name, model_id=model.PROFILE_ID, source="manual")
+
+    assert candidate.is_file()

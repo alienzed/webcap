@@ -34,6 +34,8 @@ def test_story_create_list_and_reload(storyboard_fs):
     ]
     assert story["tags"] == ["storm", "hotel"]
     assert story["status"] == "active"
+    assert story["targetSceneCount"] == 12
+    assert story["generationDefaults"] == {"aspectRatio": "4:3 (Standard)", "megapixels": 0.2}
 
     path = storyboard_fs / "output" / "storyboards" / story["id"] / "story.json"
     assert path.is_file()
@@ -90,6 +92,33 @@ def test_duplicate_story_copies_authoring_but_not_generated_artifacts(storyboard
     assert (duplicate_dir / "story.json").is_file()
     assert not (duplicate_dir / "exports").exists()
 
+
+
+def test_story_generation_defaults_and_scene_inheritance_are_persisted(storyboard_fs):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "targetSceneCount": 14,
+        "generationDefaults": {"aspectRatio": "16:9 (Widescreen)", "megapixels": 0.35},
+    })
+    story, inherited = storyboard_store.add_scene(story["id"], {"title": "Inherited"})
+    story, overridden = storyboard_store.add_scene(story["id"], {
+        "title": "Override",
+        "aspectRatio": "9:16 (Portrait Widescreen)",
+        "megapixels": 0.5,
+    })
+
+    assert story["targetSceneCount"] == 14
+    assert story["generationDefaults"] == {"aspectRatio": "16:9 (Widescreen)", "megapixels": 0.35}
+    assert inherited["aspectRatio"] is None
+    assert inherited["megapixels"] is None
+    assert storyboard_store.resolve_scene_generation_defaults(story, inherited) == {
+        "aspectRatio": "16:9 (Widescreen)",
+        "megapixels": 0.35,
+    }
+    assert storyboard_store.resolve_scene_generation_defaults(story, overridden) == {
+        "aspectRatio": "9:16 (Portrait Widescreen)",
+        "megapixels": 0.5,
+    }
 
 def test_delete_story_permanently_removes_complete_story_directory(storyboard_fs):
     story = storyboard_store.create_story({"title": "Disposable Story"})

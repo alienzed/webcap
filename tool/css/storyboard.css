@@ -2622,6 +2622,57 @@
   max-width: calc(100% - 24px);
 }
 
+.storyboard-scene-workspace.director-active {
+  position: relative;
+}
+
+.storyboard-scene-workspace.director-active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--panel) 58%, transparent);
+  box-shadow: inset 0 0 70px rgba(0, 0, 0, .18);
+  backdrop-filter: blur(1px);
+}
+
+.storyboard-director-activity.is-workspace-overlay {
+  z-index: 50;
+  min-height: 132px;
+  grid-template-columns: minmax(170px, .7fr) minmax(220px, 1.3fr);
+  grid-template-areas:
+    "label trend"
+    "phase trend"
+    "detail trend"
+    "load trend";
+  align-items: stretch;
+  padding: 16px 18px;
+}
+
+.storyboard-director-activity.is-workspace-overlay #storyboard-director-activity-trend {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(72px, 1fr);
+}
+
+.storyboard-director-activity.is-workspace-overlay #storyboard-director-activity-trend svg {
+  height: 100%;
+  min-height: 84px;
+}
+
+@media (max-width: 760px) {
+  .storyboard-director-activity.is-workspace-overlay {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "label"
+      "phase"
+      "detail"
+      "load"
+      "trend";
+  }
+}
+
 @media (max-width: 760px) {
   .storyboard-director-activity.is-field-overlay {
     grid-template-columns: 1fr;

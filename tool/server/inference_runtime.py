@@ -219,32 +219,42 @@ def cancel_job(prompt_id):
     return bool(response.get("cancelled")) if isinstance(response, dict) else False
 
 
-def cancel_job_and_wait(prompt_id, timeout=10):
+def cancel_job_and_wait_status(prompt_id, timeout=10):
+    """Cancel provider work and return the confirmed terminal provider state.
+
+    An empty string means the provider did not reach a confirmed terminal
+    state before the timeout. "missing" is terminal for WebCap purposes: the
+    provider no longer has that job.
+    """
     job_id = str(prompt_id or "").strip()
     if not job_id:
-        return True
+        return "missing"
     try:
         cancel_job(job_id)
     except Exception:
         job = read_job(job_id)
         if job is None:
-            return True
+            return "missing"
         status = str(job.get("status") or "").strip().lower()
         if status in {"completed", "failed", "cancelled"}:
-            return True
+            return status
         raise
 
     deadline = time.monotonic() + max(0.0, float(timeout or 0))
     while True:
         job = read_job(job_id)
         if job is None:
-            return True
+            return "missing"
         status = str(job.get("status") or "").strip().lower()
         if status in {"completed", "failed", "cancelled"}:
-            return True
+            return status
         if time.monotonic() >= deadline:
-            return False
+            return ""
         time.sleep(0.5)
+
+
+def cancel_job_and_wait(prompt_id, timeout=10):
+    return bool(cancel_job_and_wait_status(prompt_id, timeout=timeout))
 
 
 def _format_error(job):
@@ -267,10 +277,15 @@ def wait_for_output(prompt_id, execution_job_id, find_output_ref):
         queue_job = execution_get_job(execution_job_id)
         requested_action = str(queue_job.get("requestedAction") or "")
         if requested_action in ("stop", "cancel"):
-            if not cancel_job_and_wait(prompt_id):
+            provider_status = cancel_job_and_wait_status(prompt_id)
+            if not provider_status:
                 raise RuntimeError(
                     "ComfyUI did not confirm inference cancellation; the Generation Queue must remain paused."
                 )
+            execution_update_job(
+                execution_job_id,
+                details={"providerStatus": provider_status},
+            )
             status = "cancelled" if requested_action == "cancel" else "stopped"
             raise InferenceStopped(status, "Inference " + status + ".")
 

@@ -309,6 +309,47 @@ def test_storyboard_director_can_preview_exact_contract_without_queueing(monkeyp
     assert payload["model"] == "director.gguf"
 
 
+def test_storyboard_director_develop_fails_while_story_take_generation_is_pending(monkeypatch):
+    story = {
+        "id": "story-1",
+        "concept": "Existing story.",
+        "sceneOrder": ["scene-1"],
+        "scenes": {"scene-1": {"id": "scene-1"}},
+    }
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_generation_queue",
+        lambda story_id: {"jobs": [{"jobId": "take-job"}]},
+    )
+
+    response = app_module.app.test_client().post("/fs/storyboard/director", json={
+        "storyId": "story-1",
+        "operation": "develop_story",
+        "model": "director.gguf",
+        "replaceExisting": True,
+    })
+
+    assert response.status_code == 400
+    assert "pending Take generation" in response.get_json()["error"]
+
+
+def test_storyboard_generation_fails_loudly_while_develop_scenes_is_pending(monkeypatch):
+    monkeypatch.setattr(
+        app_module,
+        "llm_storyboard_target_busy",
+        lambda story_id, kind, scene_id="": kind == "scenes",
+    )
+
+    response = app_module.app.test_client().post("/fs/storyboard/generation", json={
+        "storyId": "story-1",
+        "sceneId": "scene-1",
+    })
+
+    assert response.status_code == 400
+    assert "Story Scenes have pending Director work" in response.get_json()["error"]
+
+
 def test_storyboard_director_requires_confirmation_before_replacing_existing_scenes(monkeypatch):
     monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: {
         "id": story_id,

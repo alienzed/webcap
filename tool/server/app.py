@@ -817,6 +817,13 @@ def storyboard_director_route():
             operation,
             instruction=instruction,
         )
+        if bool(data.get("previewOnly")):
+            return jsonify({
+                "ok": True,
+                "contract": contract,
+                "model": model_id,
+            })
+
         job = enqueue_llm(
             "storyboard",
             model_id,

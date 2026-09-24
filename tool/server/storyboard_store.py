@@ -408,6 +408,11 @@ def _normalize_scene(scene_id, value, existing=None):
         "promptDirectorModel": str(value.get("promptDirectorModel", current.get("promptDirectorModel", "")) or "").strip(),
         "promptDirectorJobId": str(value.get("promptDirectorJobId", current.get("promptDirectorJobId", "")) or "").strip(),
         "planDirectorModel": str(value.get("planDirectorModel", current.get("planDirectorModel", "")) or "").strip(),
+        "sharedContextRefs": [
+            str(item).strip()
+            for item in value.get("sharedContextRefs", current.get("sharedContextRefs", []))
+            if str(item).strip()
+        ],
         "durationSeconds": duration,
         "aspectRatio": aspect_ratio,
         "megapixels": megapixels,
@@ -543,7 +548,7 @@ def duplicate_story(story_id):
     duplicate["development"] = copy.deepcopy(source.get("development")) if isinstance(source.get("development"), dict) else None
 
     scene_fields = (
-        "title", "summary", "entryState", "exitState", "prompt", "promptDirectorModel", "planDirectorModel",
+        "title", "summary", "entryState", "exitState", "prompt", "promptDirectorModel", "planDirectorModel", "sharedContextRefs",
         "durationSeconds", "aspectRatio", "megapixels", "seed", "seedMode",
         "wildcardsEnabled", "loras", "storyLoraOverrides", "notes",
     )
@@ -636,11 +641,60 @@ def restore_previous_concept(story_id):
     return story
 
 
+def _normalize_developed_shared_context(value):
+    if not isinstance(value, dict):
+        raise ValueError("Developed Story sharedContext must be an object.")
+    expected_categories = {"subjects", "wardrobes", "locations", "persistentFacts"}
+    if set(value.keys()) != expected_categories:
+        raise ValueError("Developed Story sharedContext has missing or unsupported fields.")
+
+    normalized = {}
+    seen_ids = set()
+    for category in ("subjects", "wardrobes", "locations", "persistentFacts"):
+        items = value.get(category)
+        if not isinstance(items, list):
+            raise ValueError("Developed Story sharedContext " + category + " must be an array.")
+        normalized_items = []
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, dict) or set(item.keys()) != {"id", "label", "description"}:
+                raise ValueError(
+                    "Developed Story sharedContext "
+                    + category
+                    + " item "
+                    + str(index)
+                    + " has missing or unsupported fields."
+                )
+            context_id = str(item.get("id") or "").strip()
+            label = str(item.get("label") or "").strip()
+            description = str(item.get("description") or "").strip()
+            if not context_id or not label or not description:
+                raise ValueError("Developed Story sharedContext definitions must have non-empty id, label, and description.")
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", context_id):
+                raise ValueError("Developed Story sharedContext id is invalid: " + context_id)
+            key = context_id.casefold()
+            if key in seen_ids:
+                raise ValueError("Developed Story sharedContext ids must be unique.")
+            seen_ids.add(key)
+            normalized_items.append({
+                "id": context_id,
+                "label": label,
+                "description": description,
+            })
+        normalized[category] = normalized_items
+    return normalized
+
+
 def _validate_developed_plan(plan, target_scene_count=None):
     if not isinstance(plan, dict):
         raise ValueError("Developed Story plan must be an object.")
-    if set(plan.keys()) != {"scenes"}:
-        raise ValueError("Developed Story plan contains unsupported fields.")
+    if set(plan.keys()) != {"sharedContext", "scenes"}:
+        raise ValueError("Developed Story plan contains missing or unsupported fields.")
+    shared_context = _normalize_developed_shared_context(plan.get("sharedContext"))
+    shared_context_ids = {
+        item["id"].casefold()
+        for category in shared_context.values()
+        for item in category
+    }
     scenes = plan.get("scenes")
     if not isinstance(scenes, list):
         raise ValueError("Developed Story plan Scenes must be an array.")
@@ -659,6 +713,7 @@ def _validate_developed_plan(plan, target_scene_count=None):
         "entryState",
         "exitState",
         "prompt",
+        "sharedContextRefs",
         "suggestedDurationSeconds",
         "continuity",
     }
@@ -676,6 +731,24 @@ def _validate_developed_plan(plan, target_scene_count=None):
             if not isinstance(value, str) or not value.strip():
                 raise ValueError("Developed Story Scene " + str(index) + " has invalid " + key + ".")
             text_fields[key] = value.strip()
+
+        refs = item.get("sharedContextRefs")
+        if (
+            not isinstance(refs, list)
+            or any(not isinstance(value, str) or not value.strip() for value in refs)
+        ):
+            raise ValueError("Developed Story Scene sharedContextRefs must be a list of non-empty strings.")
+        normalized_refs = []
+        seen_refs = set()
+        for value in refs:
+            ref = value.strip()
+            key = ref.casefold()
+            if key not in shared_context_ids:
+                raise ValueError("Developed Story Scene references unknown sharedContext id: " + ref)
+            if key in seen_refs:
+                raise ValueError("Developed Story Scene sharedContextRefs must not contain duplicates.")
+            seen_refs.add(key)
+            normalized_refs.append(ref)
 
         duration_value = item.get("suggestedDurationSeconds")
         if isinstance(duration_value, bool) or not isinstance(duration_value, (int, float)):
@@ -700,18 +773,23 @@ def _validate_developed_plan(plan, target_scene_count=None):
         normalized.append({
             **text_fields,
             "durationSeconds": duration,
+            "sharedContextRefs": normalized_refs,
             "continuity": {
                 "continuesPreviousScene": continues_previous,
                 "carryForward": [value.strip() for value in carry_forward],
             },
         })
-    return normalized
+    return {
+        "sharedContext": shared_context,
+        "scenes": normalized,
+    }
 
 
 @_serialized_mutation
 def apply_developed_plan(story_id, plan, model_id=""):
     story = load_story(story_id)
-    planned_scenes = _validate_developed_plan(plan, story.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT))
+    normalized_plan = _validate_developed_plan(plan, story.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT))
+    planned_scenes = normalized_plan["scenes"]
     now = _utc_now()
 
     removed = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
@@ -747,7 +825,7 @@ def apply_developed_plan(story_id, plan, model_id=""):
     story["development"] = {
         "createdAt": now,
         "model": str(model_id or "").strip(),
-        "plan": copy.deepcopy(plan),
+        "plan": copy.deepcopy(normalized_plan),
     }
     story["updatedAt"] = now
     _write_json_atomic(_story_path(story_id), story)

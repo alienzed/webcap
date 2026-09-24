@@ -2239,18 +2239,6 @@
   background: var(--panel-soft);
 }
 
-.storyboard-story-defaults-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.storyboard-story-defaults-heading span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .storyboard-story-defaults-grid {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr) 120px;
@@ -2273,6 +2261,7 @@
 
 .storyboard-invariants-header {
   align-items: center;
+  justify-content: flex-end;
 }
 
 .storyboard-invariants-header > div {
@@ -2537,7 +2526,7 @@
 }
 
 .storyboard-scenes-heading .storyboard-director-header select {
-  max-width: 270px;
+  max-width: 220px;
 }
 
 .storyboard-scene-progress-indicators {

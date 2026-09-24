@@ -2475,7 +2475,7 @@
           '</div>' +
           '<aside class="storyboard-scene-inspector" aria-label="Scene inspector">' +
             '<section class="storyboard-inspector-section storyboard-generation-inspector">' +
-              '<div class="storyboard-inspector-section-heading"><strong>Generation</strong><span>Current Scene</span></div>' +
+              '<div class="storyboard-inspector-section-heading"><strong>Generation</strong></div>' +
               '<div class="storyboard-generation-settings">' +
                 '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
                 '<label class="storyboard-field" title="Inherit the Story aspect ratio unless this Scene needs an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +

@@ -58,6 +58,10 @@ def test_h3_inference_workflow_supports_multiple_loras_and_frame_anchors():
     assert workflow["131"]["inputs"]["first_frame"] == ["190", 0]
     assert workflow["131"]["inputs"]["last_frame"] == ["191", 0]
     assert workflow["129"]["inputs"]["noise_seed"] == 42
+    assert workflow["146"]["inputs"]["wildcard_text"] == "Prompt"
+    assert workflow["146"]["inputs"]["populated_text"] == "Prompt"
+    assert workflow["146"]["inputs"]["mode"] == "fixed"
+    assert workflow["146"]["inputs"]["seed"] == 42
 
     effective = h3.effective_input(workflow)
     assert effective == {

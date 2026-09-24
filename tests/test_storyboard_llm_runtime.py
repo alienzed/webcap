@@ -400,6 +400,48 @@ def test_run_contract_parses_schema_constrained_json(monkeypatch):
     assert result["data"] == {"scenes": []}
 
 
+def test_run_contract_renders_structured_h3_result(monkeypatch):
+    schema = {
+        "type": "object",
+        "properties": {
+            "integrated_multimodal_description": {"type": "string"},
+            "overall_soundscape": {"type": "string"},
+            "non_diegetic_music": {"type": "string"},
+        },
+    }
+
+    def fake_chat(model_id, messages, response_schema=None, max_tokens=None):
+        assert response_schema == schema
+        return {
+            "text": (
+                '{"integrated_multimodal_description":"She turns toward the door.",'
+                '"overall_soundscape":"Room tone.",'
+                '"non_diegetic_music":"N/A"}'
+            ),
+            "model": model_id,
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "chat", fake_chat)
+
+    result = storyboard_llm_runtime.run_contract("director", {
+        "operation": "write_prompt",
+        "prompt": "Write it.",
+        "output": "json",
+        "response_schema": schema,
+        "result_renderer": {"type": "h3_base", "mode": "I2VA", "duration": 6},
+    })
+
+    assert result["data"]["overall_soundscape"] == "Room tone."
+    assert result["text"].startswith(
+        "For the target video, at 0.00 seconds into the target video, "
+        "<Picture 1> (from [Shot 1]) is fully referenced.\n\n"
+        "integrated_multimodal_description: [Shot 1] She turns toward the door."
+    )
+    assert result["text"].endswith(
+        "overall_soundscape: Room tone.\n\nnon_diegetic_music: N/A"
+    )
+
+
 def test_chat_wraps_json_schema_for_llama_cpp(monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)

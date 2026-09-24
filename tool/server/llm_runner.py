@@ -145,6 +145,21 @@ def _execute_claimed(job_id, gpu_reserved):
     if not model_id or contract is None:
         raise RuntimeError("LLM job is missing its frozen model or contract.")
 
+    if client == "storyboard":
+        metadata_story_id = str(metadata.get("storyId") or "").strip()
+        context_story_id = str(context.get("storyId") or "").strip()
+        metadata_scene_id = str(metadata.get("sceneId") or "").strip()
+        context_scene_id = str(context.get("sceneId") or "").strip()
+        metadata_operation = str(metadata.get("operation") or "").strip()
+        context_operation = str(context.get("operation") or "").strip()
+        contract_operation = str(contract.get("operation") or "").strip()
+        if not context_story_id or metadata_story_id != context_story_id:
+            raise RuntimeError("Storyboard LLM job Story identity is inconsistent.")
+        if metadata_scene_id != context_scene_id:
+            raise RuntimeError("Storyboard LLM job Scene identity is inconsistent.")
+        if metadata_operation != context_operation or contract_operation != context_operation:
+            raise RuntimeError("Storyboard LLM job operation identity is inconsistent.")
+
     running = execution_mark_running(job_id, details={"phase": "preparing"})
     if str(running.get("status") or "") == "stopping":
         execution_finish_job(job_id, status="stopped", error="LLM request stopped before execution.")

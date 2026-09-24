@@ -127,6 +127,50 @@ def final_shape(mode="T2VA", duration=None):
     return render_base_prompt(sample, mode=mode, duration=duration)
 
 
+def _shared_context_index(plan):
+    shared = plan.get("sharedContext") if isinstance(plan, dict) and isinstance(plan.get("sharedContext"), dict) else {}
+    index = {}
+    for category in ("subjects", "wardrobes", "locations", "persistentFacts"):
+        items = shared.get(category) if isinstance(shared.get(category), list) else []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            context_id = str(item.get("id") or "").strip()
+            description = str(item.get("description") or "").strip()
+            label = str(item.get("label") or context_id).strip()
+            if context_id and description:
+                index[context_id] = {
+                    "category": category,
+                    "label": label,
+                    "description": description,
+                }
+    return index
+
+
+def _inject_shared_context(prompt_data, refs, context_index):
+    if not isinstance(prompt_data, dict):
+        raise ValueError("MiniMax H3 structured output must be an object.")
+    copied = copy.deepcopy(prompt_data)
+    integrated = _clean_field(copied, "integrated_multimodal_description")
+    lines = []
+    for context_id in refs or []:
+        item = context_index.get(str(context_id or "").strip())
+        if item is None:
+            continue
+        lines.append(item["label"] + ": " + item["description"])
+    if not lines:
+        return copied
+
+    prefix = "[Shot 1]"
+    if integrated.startswith(prefix):
+        remainder = integrated[len(prefix):].lstrip()
+    else:
+        remainder = integrated
+    continuity = "Continuity anchors — " + " ".join(lines)
+    copied["integrated_multimodal_description"] = prefix + " " + continuity + (" " + remainder if remainder else "")
+    return copied
+
+
 def render_story_plan_prompts(plan):
     if not isinstance(plan, dict):
         raise ValueError("Storyboard Scene plan must be an object.")
@@ -134,11 +178,17 @@ def render_story_plan_prompts(plan):
     scenes = rendered.get("scenes")
     if not isinstance(scenes, list):
         raise ValueError("Storyboard Scene plan Scenes must be an array.")
+    context_index = _shared_context_index(rendered)
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict):
             raise ValueError("Storyboard Scene plan Scene " + str(index) + " must be an object.")
-        scene["prompt"] = render_base_prompt(
+        prompt_data = _inject_shared_context(
             scene.get("prompt"),
+            scene.get("sharedContextRefs") if isinstance(scene.get("sharedContextRefs"), list) else [],
+            context_index,
+        )
+        scene["prompt"] = render_base_prompt(
+            prompt_data,
             mode="T2VA",
             duration=scene.get("suggestedDurationSeconds"),
         )

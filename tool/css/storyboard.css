@@ -354,6 +354,7 @@
 
 .storyboard-develop-row .storyboard-save-state {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .storyboard-develop-actions {
@@ -2283,18 +2284,6 @@
   gap: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
-}
-
-.storyboard-develop-copy {
-  min-width: 0;
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.storyboard-develop-copy strong {
-  font-size: 15px;
 }
 
 .storyboard-develop-row.has-scenes .storyboard-primary-btn {

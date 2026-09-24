@@ -50,7 +50,6 @@ def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs
         "aspectRatio": "16:9 (Widescreen)",
         "megapixels": 0.4,
         "seedMode": "random",
-        "wildcardsEnabled": False,
     }
 
     settings = storyboard_generation._scene_settings(scene)
@@ -61,7 +60,6 @@ def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs
         "sharedContext": "",
         "entryState": "The hall is empty.",
         "exitState": "A door at the far end opens.",
-        "wildcardsEnabled": False,
         "aspectRatio": "16:9 (Widescreen)",
         "megapixels": 0.4,
         "duration": 8.0,
@@ -173,23 +171,18 @@ def test_scene_settings_resolve_story_loras_before_queueing(storyboard_fs):
     ]
 
 
-def test_storyboard_wildcards_resolve_before_shared_continuity_is_injected(storyboard_fs, monkeypatch):
-    monkeypatch.setattr(
-        storyboard_generation.inference_runtime,
-        "resolve_wildcard_prompt",
-        lambda prompt, seed: prompt.replace("{action}", "walks"),
-    )
+def test_storyboard_request_leaves_wildcards_for_comfyui_workflow(storyboard_fs):
     settings = {
         "prompt": (
-            "integrated_multimodal_description: [Shot 1] walks.\n\n"
+            "integrated_multimodal_description: [Shot 1] Continuity anchors — "
+            "Wardrobe: She wears literal {red|blue} stitching. {walks|runs}.\n\n"
             "overall_soundscape: Room tone.\n\nnon_diegetic_music: N/A"
         ),
         "sourcePrompt": (
-            "integrated_multimodal_description: [Shot 1] {action}.\n\n"
+            "integrated_multimodal_description: [Shot 1] {walks|runs}.\n\n"
             "overall_soundscape: Room tone.\n\nnon_diegetic_music: N/A"
         ),
         "sharedContext": "Wardrobe: She wears literal {red|blue} stitching.",
-        "wildcardsEnabled": True,
         "aspectRatio": "4:3 (Standard)",
         "megapixels": 0.2,
         "duration": 6,
@@ -203,8 +196,9 @@ def test_storyboard_wildcards_resolve_before_shared_continuity_is_injected(story
 
     request = storyboard_generation._storyboard_request(settings)
 
-    assert "[Shot 1] Continuity anchors — Wardrobe: She wears literal {red|blue} stitching. walks." in request["prompt"]
-    assert "{action}" in request["sourcePrompt"]
+    assert "{walks|runs}" in request["prompt"]
+    assert "{red|blue}" in request["prompt"]
+    assert request["sourcePrompt"] == settings["sourcePrompt"]
 
 
 def test_storyboard_request_preserves_full_reference_provenance(storyboard_fs):
@@ -218,7 +212,6 @@ def test_storyboard_request_preserves_full_reference_provenance(storyboard_fs):
     request = storyboard_generation._storyboard_request({
         "prompt": "Prompt",
         "sourcePrompt": "Prompt",
-        "wildcardsEnabled": False,
         "aspectRatio": "4:3 (Standard)",
         "megapixels": 0.2,
         "duration": 6,
@@ -238,7 +231,6 @@ def test_storyboard_request_rejects_unsupported_guide_frame(storyboard_fs):
     settings = {
         "prompt": "Prompt",
         "sourcePrompt": "Prompt",
-        "wildcardsEnabled": False,
         "aspectRatio": "4:3 (Standard)",
         "megapixels": 0.2,
         "duration": 6,
@@ -501,8 +493,7 @@ def test_legacy_storyboard_queue_migration_is_restart_idempotent(storyboard_fs):
                 "sourcePrompt": "Prompt",
                 "entryState": "",
                 "exitState": "",
-                "wildcardsEnabled": False,
-                "aspectRatio": "4:3 (Standard)",
+                        "aspectRatio": "4:3 (Standard)",
                 "megapixels": 0.2,
                 "duration": 6,
                 "seed": 1,
@@ -529,8 +520,7 @@ def test_legacy_storyboard_queue_migration_is_restart_idempotent(storyboard_fs):
             "loras": [],
             "references": {},
             "referenceRecords": [],
-            "wildcardsEnabled": False,
-            "entryState": "",
+                "entryState": "",
             "exitState": "",
             "seedMode": "fixed",
         },

@@ -344,8 +344,8 @@
   width: 100%;
   display: grid;
   grid-template-columns: minmax(150px, .55fr) minmax(0, 1.45fr);
-  grid-template-rows: auto auto minmax(0, 1fr);
-  grid-template-areas: "label trend" "phase trend" "detail trend";
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-areas: "label trend" "phase trend" "detail trend" "load trend";
   align-items: stretch;
   column-gap: 16px;
   row-gap: 4px;
@@ -382,6 +382,7 @@
 }
 
 #generate-director-activity-detail { grid-area: detail; }
+#generate-director-model-load { grid-area: load; }
 #generate-director-activity-trend {
   grid-area: trend;
   min-width: 0;
@@ -398,8 +399,8 @@
 @media (max-width: 760px) {
   .generate-director-activity {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto minmax(72px, 1fr);
-    grid-template-areas: "label" "phase" "detail" "trend";
+    grid-template-rows: auto auto auto auto minmax(72px, 1fr);
+    grid-template-areas: "label" "phase" "detail" "load" "trend";
     row-gap: 5px;
   }
 }

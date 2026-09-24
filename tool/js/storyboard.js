@@ -508,10 +508,24 @@
       storyState.director.activityLoadBaseline = storyState.director.activityLastMemory || sample;
     }
 
+    var track = meter.querySelector('.director-model-load-track');
     var modelSizeBytes = Number(activity && activity.modelSizeBytes);
     var baseline = storyState.director.activityLoadBaseline;
-    if (!sample || !baseline || !isFinite(modelSizeBytes) || modelSizeBytes <= 0) {
-      meter.classList.add('hidden');
+    meter.classList.remove('hidden');
+
+    if (!sample || !baseline) {
+      label.textContent = 'Waiting for memory sample…';
+      fill.style.width = '0%';
+      if (track) track.removeAttribute('aria-valuenow');
+      meter.title = 'Waiting for a RAM / VRAM sample before estimating Director model residency.';
+      return;
+    }
+
+    if (!isFinite(modelSizeBytes) || modelSizeBytes <= 0) {
+      label.textContent = 'Model size unavailable';
+      fill.style.width = '0%';
+      if (track) track.removeAttribute('aria-valuenow');
+      meter.title = 'llama.cpp did not expose a usable size for the selected model. WebCap does not scan the model directory to estimate it.';
       return;
     }
 
@@ -522,10 +536,8 @@
     var percent = Math.max(0, Math.min(100, residentBytes / modelSizeBytes * 100));
     label.textContent = '≈ ' + directorBytesGiB(displayBytes) + ' / ' + directorBytesGiB(modelSizeBytes) + ' · ~' + Math.round(percent) + '%';
     fill.style.width = percent.toFixed(1) + '%';
-    var track = meter.querySelector('.director-model-load-track');
     if (track) track.setAttribute('aria-valuenow', String(Math.round(percent)));
     meter.title = 'Approximate model residency from RAM + VRAM growth since loading began. mmap, caching, and GPU offload can make this differ from the GGUF file size.';
-    meter.classList.remove('hidden');
   }
 
   function directorTrendPath(history, key) {

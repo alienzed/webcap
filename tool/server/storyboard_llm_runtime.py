@@ -390,31 +390,22 @@ def _normalize_models(payload):
 def _model_file_size(model):
     model = model if isinstance(model, dict) else {}
     raw_path = str(model.get("path") or "").strip()
-    if not raw_path:
-        identity = str(model.get("id") or model.get("label") or "unknown")
-        raise FileNotFoundError("Storyboard Director model path is missing for: " + identity)
+    filename = PureWindowsPath(raw_path).name if raw_path else str(model.get("id") or "").strip()
+    if not filename:
+        raise FileNotFoundError("Storyboard Director model filename is missing.")
 
-    path = Path(raw_path)
-    windows_path = PureWindowsPath(raw_path)
+    models_dir = _director_config().get("models_dir")
+    if models_dir is None:
+        raise RuntimeError("Storyboard Director models directory is unavailable.")
 
-    if os.name != "nt" and windows_path.drive:
-        from .training_runtime import to_wsl_path
-        distribution = str(
-            app_config.config.get("training", {}).get("wsl_distribution") or ""
-        ).strip()
-        path = Path(to_wsl_path(raw_path, distribution=distribution))
-    elif not path.is_absolute():
-        models_dir = _director_config().get("models_dir")
-        if models_dir is None:
-            raise RuntimeError("Storyboard Director models directory is unavailable.")
-        path = Path(models_dir) / path
-
+    path = Path(models_dir) / filename
     try:
         return int(path.stat().st_size)
     except OSError as exc:
         raise OSError(
             "Could not stat Storyboard Director model file '" + str(path) + "': " + str(exc)
         ) from exc
+
 
 def list_models(reload=False):
     _ensure_server()

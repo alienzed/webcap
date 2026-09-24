@@ -2154,6 +2154,11 @@
   gap: 6px;
 }
 
+.storyboard-invariants-actions .review-captions-btn {
+  width: auto;
+  white-space: nowrap;
+}
+
 .storyboard-story-section-summary-copy > strong {
   color: var(--text);
   font-size: 13px;

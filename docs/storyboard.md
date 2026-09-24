@@ -420,12 +420,15 @@ Current runtime slice:
 - Storyboard-level Director model selector;
 - `expand_concept` turns a terse Story seed into a richer persistent overview without creating Scenes; the previous concept is kept as one-step recoverable text;
 - `develop_story` turns the saved concept/style into a complete structured Scene sequence and writes the initial H3-ready prompt for every Scene in the same whole-Story pass;
+- whole-Story development now returns explicit shared continuity definitions for recurring subjects, wardrobe states, locations, and other persistent visible/audible facts, plus per-Scene references to the definitions that apply;
+- WebCap validates those references and injects the exact shared descriptions into each applicable H3 prompt mechanically, including later Director prompt rewrites and final generation compilation; wardrobe/location continuity is therefore not inferred from prose after the fact;
 - deterministic validation against `docs/storyboard-scene-plan.schema.json` plus app-level validation before any Scene replacement is written;
 - replanning requires explicit confirmation and moves old active Scenes into recoverable `removedScenes` without deleting their Take media;
 - the accepted development plan/model are persisted in Story metadata for provenance, with per-Scene plan/prompt Director provenance retained for quiet hover inspection;
 - existing `write_prompt` and `refine_prompt` Scene-local contracts remain available, with one-step **Restore Previous** for the last Director prompt edit;
 - Director activity overlays the field being authored rather than blocking unrelated Story/Scene controls;
 - thinking disabled for these bounded authoring calls;
+- sampling is app-owned rather than left to changing runtime defaults: concept expansion is mildly creative, Develop Scenes is conservative, and Scene write/refine calls are tighter; local llama.cpp also receives explicit top-k/min-p settings with repetition/presence/frequency penalties disabled so necessary continuity wording is not discouraged;
 - Storyboard and Generate Director requests share the app-owned `llm` execution lane and may queue without inventing a separate Storyboard scheduler;
 - local Director work shares WebCap GPU arbitration; a successfully loaded local model may remain resident for the next LLM task, while Training/Inference explicitly release the loaded Director model before claiming GPU work;
 - idle ComfyUI model release before local Director loading;

@@ -224,7 +224,7 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
     assert 'id="storyboard-expand-concept-btn"' in html
     assert "function expandConcept()" in storyboard
     assert "operation: 'expand_concept'" in storyboard
-    assert "storyState.story = payload.story;" in storyboard
+    assert "applyDirectorResultToVisibleStory" in storyboard
     assert "previousConcept" in storyboard
 
 
@@ -304,6 +304,7 @@ def test_storyboard_director_jobs_reconcile_after_browser_refresh():
     assert "function reconcileDirectorJobs()" in storyboard
     assert "function watchRecoveredDirectorJob(job)" in storyboard
     assert "function applyRecoveredDirectorResult(job)" in storyboard
+    assert "return applyDirectorResultToVisibleStory(job);" in storyboard
     assert "return reconcileDirectorJobs();" in storyboard
     assert "directorJobRequest(current.jobId, false)" in storyboard
     assert "return consumeDirectorJob(current.jobId);" in storyboard

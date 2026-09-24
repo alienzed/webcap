@@ -10,6 +10,7 @@ from tool.server import inference_runner
 from tool.server import inference_runtime
 from tool.server import storyboard_generation
 from tool.server import storyboard_llm_runtime
+from tool.server import training_runner
 
 
 @pytest.fixture
@@ -860,3 +861,27 @@ def test_inference_run_backlog_arms_without_promoting_immediately(inference_root
     assert result["job"]["armed"] is True
     assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
     assert started == [True]
+
+
+def test_inference_enqueue_backlogs_behind_unpaused_training_queue(inference_root, monkeypatch):
+    training_state = training_runner._default_state()
+    training_state["jobs"] = [{"id": "train-next", "status": "queued"}]
+    training_state["queuePaused"] = False
+    training_runner._ensure_runtime_dirs()
+    training_runner._write_state(training_state)
+    monkeypatch.setattr(
+        inference_runner,
+        "_start_worker_for_requested_inference",
+        lambda: None,
+    )
+
+    job = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "After training"}
+    )
+
+    assert job["status"] == "backlog"
+    assert job["armed"] is True
+
+    training_state["queuePaused"] = True
+    training_runner._write_state(training_state)
+    assert training_runner.external_gpu_work_block_reason(inference_runner.GPU_RESERVATION_OWNER) == ""

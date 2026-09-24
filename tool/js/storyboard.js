@@ -351,10 +351,14 @@
       } else if (operation === 'repair_scenes') {
         storyState.story.scenes = canonical.scenes || {};
         storyState.story.previousSceneRepair = canonical.previousSceneRepair || null;
+        storyState.story.repairInstruction = canonical.repairInstruction || '';
+        storyState.story.repairComplete = !!canonical.repairComplete;
         storyState.story.updatedAt = canonical.updatedAt;
+        el('storyboard-repair-instruction').value = storyState.story.repairInstruction;
         renderScenes();
         renderStoryReadiness();
         syncRepairRestore();
+        syncRepairState();
         setRepairStatus('Check & Repair completed.');
       } else if (operation === 'develop_story') {
         storyState.story.sceneOrder = canonical.sceneOrder || [];
@@ -1185,6 +1189,17 @@
     button.classList.toggle('hidden', !storyState.story || !storyState.story.previousSceneRepair);
   }
 
+  function syncRepairState() {
+    var button = el('storyboard-repair-scenes-btn');
+    var instruction = el('storyboard-repair-instruction');
+    if (!button || !instruction) return;
+    var complete = !!(storyState.story && storyState.story.repairComplete) && !instruction.value.trim();
+    button.textContent = complete ? '✓' : 'Check & Repair Scenes';
+    button.title = complete
+      ? 'Last Check & Repair completed. Start typing another instruction to run it again.'
+      : 'Check the current Scene plan and patch only what this instruction requires.';
+  }
+
   function directorTargetKey(target) {
     target = target || {};
     var storyId = String(target.storyId || '');
@@ -1485,6 +1500,7 @@
       if (!storyState.story || String(storyState.story.id || '') !== String(storyId)) return;
       storyState.story = payload.story;
       renderStory();
+      syncRepairState();
       setRepairStatus('Last repair restored.');
       setSaveState('Saved');
       return refreshLibrary();
@@ -2677,6 +2693,7 @@
     el('storyboard-story-concept').value = storyState.story.concept || '';
     el('storyboard-story-style').value = storyState.story.style || '';
     el('storyboard-repair-instruction').value = storyState.story.repairInstruction || '';
+    syncRepairState();
     renderStoryStylePresetSelector();
     renderStoryInvariants();
     el('storyboard-story-status').value = storyState.story.status || 'active';
@@ -2886,6 +2903,7 @@
       concept: el('storyboard-story-concept').value,
       style: el('storyboard-story-style').value,
       repairInstruction: el('storyboard-repair-instruction').value,
+      repairComplete: !!storyState.story.repairComplete,
       invariants: storyInvariantsFromUi(),
       loras: storyLorasFromUi(),
       targetSceneCount: el('storyboard-story-target-scenes').value || 12,
@@ -3855,8 +3873,13 @@
       if (directorActivityActive()) positionDirectorActivity();
     }, true);
 
-    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-target-scenes', 'storyboard-repair-instruction'].forEach(function (id) {
+    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-target-scenes'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);
+    });
+    el('storyboard-repair-instruction').addEventListener('input', function () {
+      if (storyState.story && storyState.story.repairComplete) storyState.story.repairComplete = false;
+      syncRepairState();
+      scheduleStorySave();
     });
     el('storyboard-story-style').addEventListener('input', function () {
       renderStoryStylePresetSelector();

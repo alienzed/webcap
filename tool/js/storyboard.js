@@ -576,7 +576,7 @@
         operation: 'update_scene',
         storyId: storyId,
         sceneId: sceneId,
-        scene: { prompt: generatedPrompt }
+        scene: { prompt: generatedPrompt, promptDirectorModel: String(payload.model || modelId) }
       }).then(function (saved) {
         if (storyState.story && storyState.story.id === storyId && storyState.story.scenes && saved.scene) {
           storyState.story.scenes[sceneId] = saved.scene;
@@ -1655,6 +1655,8 @@
     var activeHtml = renderOrder.map(function (sceneId) {
       var index = order.indexOf(sceneId);
       var scene = scenes[sceneId] || {};
+      var developmentModel = String((story.development && story.development.model) || '').trim();
+      var promptDirectorModel = String(scene.promptDirectorModel || '').trim();
       var seedMode = sceneValue(scene, 'seedMode', 'random');
       var seed = sceneValue(scene, 'seed', '');
       var seedDisplay = seedMode === 'fixed' && seed !== '' && seed != null ? seed : -1;
@@ -1728,7 +1730,9 @@
       }
       return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<header class="storyboard-scene-header">' +
-          '<span class="storyboard-scene-number">Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
+          '<span class="storyboard-scene-number"' +
+            (developmentModel ? ' title="Scene plan created by Director model ' + escapeHtml(developmentModel) + '"' : '') +
+          '>Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
           '<input class="storyboard-scene-title" data-scene-field="title" value="' + escapeHtml(sceneValue(scene, 'title', '')) + '" placeholder="Scene title">' +
           '<details class="storyboard-scene-menu">' +
             '<summary title="Scene actions" aria-label="Scene actions">•••</summary>' +
@@ -1745,7 +1749,9 @@
             '<label class="storyboard-field storyboard-scene-intent"><span>Scene intent</span><textarea data-scene-field="summary" rows="2" placeholder="Describe what happens in this Scene.">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>' +
             '<div class="storyboard-prompt-block">' +
               '<div class="storyboard-prompt-heading">' +
-                '<span>Generation prompt</span>' +
+                '<span' +
+                  (promptDirectorModel ? ' title="Last populated by Director model ' + escapeHtml(promptDirectorModel) + '"' : '') +
+                '>Generation prompt</span>' +
                 '<div class="storyboard-prompt-actions">' +
                   '<button type="button" class="review-captions-btn" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
                   '<button type="button" class="review-captions-btn' +
@@ -2121,18 +2127,26 @@
   function scenePayloadFromUi(sceneId) {
     var root = sceneElement(sceneId);
     if (!root) throw new Error('Scene editor is missing for ' + sceneId + '.');
+    var currentScene = storyState.story && storyState.story.scenes
+      ? storyState.story.scenes[sceneId] || {}
+      : {};
     function field(name) {
       return root.querySelector('[data-scene-field="' + name + '"]');
     }
     var seedNode = field('seed');
     var seedText = String(seedNode.value || '').trim();
     var randomSeed = seedText === '' || seedText === '-1';
+    var promptValue = field('prompt').value;
+    var promptDirectorModel = promptValue === String(currentScene.prompt || '')
+      ? String(currentScene.promptDirectorModel || '')
+      : '';
     return {
       title: field('title').value,
       summary: field('summary').value,
       entryState: field('entryState').value,
       exitState: field('exitState').value,
-      prompt: field('prompt').value,
+      prompt: promptValue,
+      promptDirectorModel: promptDirectorModel,
       notes: field('notes').value,
       durationSeconds: field('durationSeconds').value,
       aspectRatio: field('aspectRatio').value || null,

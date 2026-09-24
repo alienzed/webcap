@@ -130,7 +130,7 @@ def test_storyboard_scene_removal_is_recoverable():
     store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
 
     assert "function removedScenesHtml(removedScenes)" in storyboard
-    assert "'<details class="storyboard-removed-scenes">'" in storyboard
+    assert "'<details class=\"storyboard-removed-scenes\">'" in storyboard
     assert "storyboard-restore-scene-btn" in storyboard
     assert "restore_scene" in storyboard
     assert '"removedScenes"' in store

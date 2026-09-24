@@ -1,11 +1,17 @@
 This file tracks implemented work vs outstanding items.
-Last reviewed: 2026-09-23.
+Last reviewed: 2026-09-24.
 
 > Training note: [Training Stabilization](training_stabilization.md) is the current authority for training behavior and deployment. Older profile, immutable-bundle, transcoding, preflight, recovery, and automatic-permission notes below are historical only where they conflict.
 
-## Enhancements / Ideas
+## Deferred Training Lifecycle
 
-- **Selected epoch / concept-maturity record.** Allow the user to mark one saved epoch per run/stage as **Selected** after candidate testing. Reuse the existing Candidate Analysis/TensorBoard substrate rather than inventing a second metrics pipeline. Show/store a small derived snapshot that can answer “when did this concept become good enough?”: selected epoch, optimizer step, progress through the planned run, epoch loss, robust/smoothed step-loss context, stable-region/basin context, training time to that point when it can be grounded, and Test rating average/count when available. Surface the selection in Candidate Analysis and Training History so selected runs can later be compared by time/steps/epochs-to-maturity. Keep the user’s selection as the judgment; analytics explain it rather than choosing the winner.
+- **Selected epoch / concept-maturity record — deferred.** The design remains valid, but it is not current implementation work. When resumed, allow the user to mark one saved epoch per run/stage as **Selected** after candidate testing, reusing the existing Candidate Analysis/TensorBoard substrate rather than inventing a second metrics pipeline. Keep the user’s selection as the judgment; analytics explain it rather than choosing the winner.
+- **Finalize/archive Training run — deferred behind Selected epoch.** Preserve the trainer timestamp folder's compact experiment evidence (especially TensorBoard + `webcap-run.json`) while reclaiming resumable bulk as defined in `storage_manager_plan.md`. Do not begin archive lifecycle work until Selected epoch is intentionally resumed.
+
+## Current Small Follow-up / Verification
+
+- Folder-state verification remains observational: reproduce ordinary caption filtering and verify SuperSet navigation, filtered training selection, prune/restore, and Smart Set creation against real Sets. No persistence redesign is planned unless a real loss path is reproduced.
+- Storyboard's current IA/runtime baseline is documented in `storyboard.md`; no additional Storyboard feature slice is queued from the recent polish pass.
 
 
 ## Parked Design Notes (Not Current Backlog)

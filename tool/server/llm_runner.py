@@ -145,8 +145,13 @@ def _client_result(client, context, llm_result, job_id=""):
         for change in repair_payload["changes"]:
             if not isinstance(change, dict) or not isinstance(change.get("fields"), dict):
                 continue
-            prompt_data = change["fields"].get("prompt")
+            fields = change["fields"]
+            if "prompt" not in fields:
+                continue
+            prompt_data = fields.get("prompt")
             if not isinstance(prompt_data, dict):
+                _logger.warning("Ignoring malformed optional Scene repair prompt patch; expected structured H3 content.")
+                fields.pop("prompt", None)
                 continue
             scene_number = change.get("sceneNumber")
             if isinstance(scene_number, bool) or not isinstance(scene_number, int):
@@ -170,12 +175,16 @@ def _client_result(client, context, llm_result, job_id=""):
                 )
                 if part
             )
-            structured = inject_shared_context_text(prompt_data, continuity)
-            change["fields"]["prompt"] = render_base_prompt(
-                structured,
-                mode=mode_from_reference_roles(roles),
-                duration=scene.get("durationSeconds"),
-            )
+            try:
+                structured = inject_shared_context_text(prompt_data, continuity)
+                fields["prompt"] = render_base_prompt(
+                    structured,
+                    mode=mode_from_reference_roles(roles),
+                    duration=scene.get("durationSeconds"),
+                )
+            except (TypeError, ValueError) as exc:
+                _logger.warning("Ignoring malformed optional Scene repair prompt patch: %s", exc)
+                fields.pop("prompt", None)
 
         story, changed_scene_count, changed_field_count = apply_scene_repairs(
             story_id,

@@ -604,13 +604,22 @@ def test_storyboard_scene_repair_renders_prompt_and_patches_only_returned_fields
         "durationSeconds": 6,
     })
     base = {
+        "storyContext": {
+            "concept": story["concept"],
+            "style": story["style"],
+            "invariants": story["invariants"],
+        },
         "sceneOrder": [scene["id"]],
         "scenes": {
             scene["id"]: {
+                "title": scene["title"],
                 "summary": scene["summary"],
                 "entryState": scene["entryState"],
                 "exitState": scene["exitState"],
                 "prompt": scene["prompt"],
+                "durationSeconds": scene["durationSeconds"],
+                "referenceRoles": [],
+                "invariantRefs": scene["invariantRefs"],
             }
         },
     }
@@ -675,8 +684,18 @@ def test_storyboard_scene_repair_conflicts_with_other_director_work(llm_root):
             "storyId": story["id"],
             "operation": "repair_scenes",
             "repairBase": {
+                "storyContext": {"concept": "", "style": "", "invariants": []},
                 "sceneOrder": [scene["id"]],
-                "scenes": {scene["id"]: {"summary": "", "entryState": "", "exitState": "", "prompt": "Prompt."}},
+                "scenes": {scene["id"]: {
+                    "title": scene["title"],
+                    "summary": "",
+                    "entryState": "",
+                    "exitState": "",
+                    "prompt": "Prompt.",
+                    "durationSeconds": scene["durationSeconds"],
+                    "referenceRoles": [],
+                    "invariantRefs": [],
+                }},
             },
         },
     )
@@ -690,3 +709,58 @@ def test_storyboard_scene_repair_conflicts_with_other_director_work(llm_root):
             {"operation": "write_prompt", "prompt": "Write.", "output": "text"},
             context={"storyId": story["id"], "sceneId": scene["id"], "operation": "write_prompt"},
         )
+
+
+def test_storyboard_scene_repair_discards_malformed_optional_prompt_patch(llm_root, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"summary": "Original.", "prompt": "Original prompt."})
+    base = {
+        "storyContext": {"concept": "", "style": "", "invariants": []},
+        "sceneOrder": [scene["id"]],
+        "scenes": {
+            scene["id"]: {
+                "title": scene["title"],
+                "summary": scene["summary"],
+                "entryState": scene["entryState"],
+                "exitState": scene["exitState"],
+                "prompt": scene["prompt"],
+                "durationSeconds": scene["durationSeconds"],
+                "referenceRoles": [],
+                "invariantRefs": [],
+            }
+        },
+    }
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "data": {
+                "changes": [{
+                    "sceneNumber": 1,
+                    "fields": {
+                        "summary": "Valid summary repair.",
+                        "prompt": "MALFORMED RAW PROMPT MUST NOT BE APPLIED",
+                    },
+                }]
+            },
+            "text": "{}",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "repair_scenes", "prompt": "Heal.", "output": "json"},
+        context={"storyId": story["id"], "operation": "repair_scenes", "repairBase": base},
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    stored = storyboard_store.load_story(story["id"])
+    assert finished["status"] == "completed"
+    assert stored["scenes"][scene["id"]]["summary"] == "Valid summary repair."
+    assert stored["scenes"][scene["id"]]["prompt"] == "Original prompt."

@@ -938,19 +938,28 @@ def test_scene_repair_applies_sparse_fields_and_restores_across_sessions(storybo
         "prompt": "UNCHANGED PROMPT",
     })
     base = {
+        "storyContext": {"concept": "", "style": "", "invariants": []},
         "sceneOrder": list(story["sceneOrder"]),
         "scenes": {
             first["id"]: {
+                "title": first["title"],
                 "summary": first["summary"],
                 "entryState": first["entryState"],
                 "exitState": first["exitState"],
                 "prompt": first["prompt"],
+                "durationSeconds": first["durationSeconds"],
+                "referenceRoles": [],
+                "invariantRefs": [],
             },
             second["id"]: {
+                "title": second["title"],
                 "summary": second["summary"],
                 "entryState": second["entryState"],
                 "exitState": second["exitState"],
                 "prompt": second["prompt"],
+                "durationSeconds": second["durationSeconds"],
+                "referenceRoles": [],
+                "invariantRefs": [],
             },
         },
     }
@@ -994,13 +1003,18 @@ def test_scene_repair_refuses_to_overwrite_a_field_edited_while_director_was_run
         "prompt": "Original prompt.",
     })
     base = {
+        "storyContext": {"concept": "", "style": "", "invariants": []},
         "sceneOrder": [scene["id"]],
         "scenes": {
             scene["id"]: {
+                "title": scene["title"],
                 "summary": "Original summary.",
                 "entryState": "",
                 "exitState": "",
                 "prompt": "Original prompt.",
+                "durationSeconds": scene["durationSeconds"],
+                "referenceRoles": [],
+                "invariantRefs": [],
             }
         },
     }
@@ -1016,3 +1030,35 @@ def test_scene_repair_refuses_to_overwrite_a_field_edited_while_director_was_run
 
     loaded = storyboard_store.load_story(story["id"])
     assert loaded["scenes"][scene["id"]]["summary"] == "User edited this while Director ran."
+
+
+def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story", "concept": "Original concept."})
+    story, scene = storyboard_store.add_scene(story["id"], {"summary": "Original summary.", "prompt": "Prompt."})
+    base = {
+        "storyContext": {"concept": "Original concept.", "style": "", "invariants": []},
+        "sceneOrder": [scene["id"]],
+        "scenes": {
+            scene["id"]: {
+                "title": scene["title"],
+                "summary": scene["summary"],
+                "entryState": scene["entryState"],
+                "exitState": scene["exitState"],
+                "prompt": scene["prompt"],
+                "durationSeconds": scene["durationSeconds"],
+                "referenceRoles": [],
+                "invariantRefs": [],
+            }
+        },
+    }
+    storyboard_store.update_story(story["id"], {"concept": "Newer concept."})
+
+    with pytest.raises(RuntimeError, match="Story context changed"):
+        storyboard_store.apply_scene_repairs(
+            story["id"],
+            {"changes": [{"sceneNumber": 1, "fields": {"summary": "Director repair."}}]},
+            base,
+            model_id="director",
+        )
+
+    assert storyboard_store.load_story(story["id"])["concept"] == "Newer concept."

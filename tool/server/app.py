@@ -869,13 +869,28 @@ def storyboard_director_route():
             scene_order = list(story.get("sceneOrder") or [])
             scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
             repair_base = {
+                "storyContext": {
+                    "concept": str(story.get("concept") or ""),
+                    "style": str(story.get("style") or ""),
+                    "invariants": story.get("invariants") if isinstance(story.get("invariants"), list) else [],
+                },
                 "sceneOrder": scene_order,
                 "scenes": {
                     scene_id: {
+                        "title": str((scenes.get(scene_id) or {}).get("title") or ""),
                         "summary": str((scenes.get(scene_id) or {}).get("summary") or ""),
                         "entryState": str((scenes.get(scene_id) or {}).get("entryState") or ""),
                         "exitState": str((scenes.get(scene_id) or {}).get("exitState") or ""),
                         "prompt": str((scenes.get(scene_id) or {}).get("prompt") or ""),
+                        "durationSeconds": (scenes.get(scene_id) or {}).get("durationSeconds"),
+                        "referenceRoles": [
+                            str(reference.get("role") or "").strip()
+                            for reference in (scenes.get(scene_id) or {}).get("references") or []
+                            if isinstance(reference, dict)
+                        ],
+                        "invariantRefs": (scenes.get(scene_id) or {}).get("invariantRefs")
+                            if isinstance((scenes.get(scene_id) or {}).get("invariantRefs"), list)
+                            else [],
                     }
                     for scene_id in scene_order
                     if isinstance(scenes.get(scene_id), dict)

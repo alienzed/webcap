@@ -1068,6 +1068,44 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
 
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+
+    current_story_context = {
+        "concept": str(story.get("concept") or ""),
+        "style": str(story.get("style") or ""),
+        "invariants": story.get("invariants") if isinstance(story.get("invariants"), list) else [],
+    }
+    if current_story_context != repair_base.get("storyContext"):
+        raise RuntimeError(
+            "Story context changed while Check & Repair was running. Run Check & Repair again so newer edits are preserved."
+        )
+    if list(story.get("sceneOrder") or []) != list(base_order):
+        raise RuntimeError(
+            "Scene order changed while Check & Repair was running. Run Check & Repair again so newer edits are preserved."
+        )
+    for scene_id in base_order:
+        current = scenes.get(scene_id)
+        base_scene = base_scenes.get(scene_id)
+        if not isinstance(current, dict) or not isinstance(base_scene, dict):
+            raise RuntimeError("A Scene changed structurally while Check & Repair was running. Run Check & Repair again.")
+        current_context = {
+            "title": str(current.get("title") or ""),
+            "summary": str(current.get("summary") or ""),
+            "entryState": str(current.get("entryState") or ""),
+            "exitState": str(current.get("exitState") or ""),
+            "prompt": str(current.get("prompt") or ""),
+            "durationSeconds": current.get("durationSeconds"),
+            "referenceRoles": [
+                str(reference.get("role") or "").strip()
+                for reference in current.get("references") or []
+                if isinstance(reference, dict)
+            ],
+            "invariantRefs": current.get("invariantRefs") if isinstance(current.get("invariantRefs"), list) else [],
+        }
+        if current_context != base_scene:
+            raise RuntimeError(
+                "Scene context changed while Check & Repair was running. Run Check & Repair again so newer edits are preserved."
+            )
+
     allowed_fields = ("summary", "entryState", "exitState", "prompt")
     prepared = []
     seen_numbers = set()

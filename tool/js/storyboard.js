@@ -2037,6 +2037,7 @@
     if (!take || !take.generated || !take.effectiveInput) return '';
     var input = take.effectiveInput || {};
     var references = input.references && typeof input.references === 'object' ? input.references : {};
+    var requiredLoras = Array.isArray(input.requiredLoras) ? input.requiredLoras : [];
     var loras = Array.isArray(input.loras) ? input.loras : [];
     var facts = [
       'Duration: ' + String(input.durationSeconds == null ? '' : input.durationSeconds) + 's',
@@ -2049,6 +2050,11 @@
     var referenceLines = Object.keys(references).map(function (role) {
       return role + ': ' + String(references[role] || '');
     });
+    var requiredLoraLines = requiredLoras.map(function (item) {
+      return String(item.name || '') +
+        ' · model ' + String(item.strengthModel == null ? 1 : item.strengthModel) +
+        ' · CLIP ' + String(item.strengthClip == null ? 1 : item.strengthClip);
+    });
     var loraLines = loras.map(function (item) {
       return String(item.name || '') + ' @ ' + String(item.strength == null ? 1 : item.strength);
     });
@@ -2060,6 +2066,7 @@
         '<strong>Exact prompt sent to ComfyUI</strong>' +
         '<pre>' + escapeHtml(String(input.prompt || take.prompt || '')) + '</pre>' +
         (referenceLines.length ? '<strong>Reference inputs</strong><pre>' + escapeHtml(referenceLines.join('\n')) + '</pre>' : '') +
+        (requiredLoraLines.length ? '<strong>Required workflow LoRA</strong><pre>' + escapeHtml(requiredLoraLines.join('\n')) + '</pre>' : '') +
         (loraLines.length ? '<strong>Effective LoRAs</strong><pre>' + escapeHtml(loraLines.join('\n')) + '</pre>' : '') +
       '</div>' +
     '</details>';

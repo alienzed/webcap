@@ -2417,9 +2417,17 @@
   flex: 0 0 auto;
 }
 
+.storyboard-scenes-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 10px;
+  min-width: 0;
+}
+
 .storyboard-scenes-heading .storyboard-director-header {
   margin-left: 0;
-  justify-self: end;
+  justify-self: auto;
 }
 
 .storyboard-scenes-heading .storyboard-director-header select {

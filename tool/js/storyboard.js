@@ -1645,7 +1645,9 @@
   function sceneProgressionIndicatorsHtml(sceneId) {
     var newTakeCount = Number(storyState.newTakeCounts[sceneId] || 0);
     var jobs = generationJobsForScene(sceneId);
-    var queuedCount = jobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
+    var queuedCount = jobs.filter(function (job) {
+      return ['backlog', 'queued'].indexOf(String(job.status || '')) !== -1;
+    }).length;
     var activeCount = jobs.filter(function (job) {
       return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
     }).length;
@@ -2417,14 +2419,16 @@
   function pendingTakeCardHtml(job, takeIndex) {
     var status = String(job && job.status || '');
     var queuePosition = Number(job && job.queuePosition || 0);
-    var statusText = status === 'queued'
-      ? ('Queued' + (queuePosition ? ' · #' + queuePosition : ''))
-      : status === 'starting'
-        ? 'Starting…'
-        : status === 'stopping'
-          ? 'Stopping…'
-          : ('Generating…' + (job && job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : ''));
-    var action = status === 'queued'
+    var statusText = status === 'backlog'
+      ? 'Backlog'
+      : status === 'queued'
+        ? ('Queued' + (queuePosition ? ' · #' + queuePosition : ''))
+        : status === 'starting'
+          ? 'Starting…'
+          : status === 'stopping'
+            ? 'Stopping…'
+            : ('Generating…' + (job && job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : ''));
+    var action = (status === 'backlog' || status === 'queued')
       ? '<button type="button" class="review-captions-btn" data-generation-action="cancel" data-job-id="' + escapeHtml(job.jobId) + '">Cancel</button>'
       : (status === 'starting' || status === 'running')
         ? '<button type="button" class="review-captions-btn" data-generation-action="stop" data-job-id="' + escapeHtml(job.jobId) + '">Stop</button>'
@@ -3433,7 +3437,7 @@
   }
 
   function generationJobIsActive(job) {
-    return !!job && ['queued', 'starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
+    return !!job && ['backlog', 'queued', 'starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
   }
 
   function generationJobsForScene(sceneId) {
@@ -3465,7 +3469,9 @@
       ? String(previousJob.status || '') + '|' + String(previousJob.comfyStatus || '')
       : '';
     if (currentKey === previousKey) return;
-    if (job.status === 'queued') {
+    if (job.status === 'backlog') {
+      reportConsoleInfo(generationConsoleLabel(sceneId), 'Take generation added to backlog.');
+    } else if (job.status === 'queued') {
       var queuePosition = Number(job.queuePosition || 0);
       reportConsoleInfo(
         generationConsoleLabel(sceneId),
@@ -3574,13 +3580,15 @@
     if (!card) return;
     var status = String(job.status || '');
     var queuePosition = Number(job.queuePosition || 0);
-    var statusText = status === 'queued'
-      ? ('Queued' + (queuePosition ? ' · #' + queuePosition : ''))
-      : status === 'starting'
-        ? 'Starting…'
-        : status === 'stopping'
-          ? 'Stopping…'
-          : ('Generating…' + (job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : ''));
+    var statusText = status === 'backlog'
+      ? 'Backlog'
+      : status === 'queued'
+        ? ('Queued' + (queuePosition ? ' · #' + queuePosition : ''))
+        : status === 'starting'
+          ? 'Starting…'
+          : status === 'stopping'
+            ? 'Stopping…'
+            : ('Generating…' + (job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : ''));
     var mediaStatus = card.querySelector('.storyboard-take-pending-media strong');
     var footerStatus = card.querySelector('.storyboard-take-identity span');
     if (mediaStatus) mediaStatus.textContent = statusText;
@@ -3588,7 +3596,7 @@
 
     var actionHost = card.querySelector('.storyboard-take-pending-footer');
     var action = card.querySelector('[data-generation-action]');
-    var wantedAction = status === 'queued'
+    var wantedAction = (status === 'backlog' || status === 'queued')
       ? 'cancel'
       : ((status === 'starting' || status === 'running') ? 'stop' : '');
     if (!wantedAction) {

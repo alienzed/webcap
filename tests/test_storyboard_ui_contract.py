@@ -525,7 +525,8 @@ def test_storyboard_director_provenance_is_subtle_and_persistent():
 
     assert "promptDirectorModel" in storyboard
     assert "promptDirectorModel" in store
-    assert "Scene plan created by Director model " in storyboard
+    assert "planDirectorModel" in store
+    assert "Scene plan originated from Director model " in storyboard
     assert "Last populated by Director model " in storyboard
     assert "promptValue === String(currentScene.prompt || '')" in storyboard
     assert "promptDirectorModel: promptDirectorModel" in storyboard

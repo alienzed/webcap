@@ -87,6 +87,34 @@ def _story_invariants_text(story):
     return "\n\n".join(lines)
 
 
+def _scene_shared_context_text(story, scene):
+    refs = scene.get("sharedContextRefs") if isinstance(scene.get("sharedContextRefs"), list) else []
+    if not refs:
+        return ""
+    development = story.get("development") if isinstance(story.get("development"), dict) else {}
+    plan = development.get("plan") if isinstance(development.get("plan"), dict) else {}
+    shared = plan.get("sharedContext") if isinstance(plan.get("sharedContext"), dict) else {}
+    by_id = {}
+    for category in ("subjects", "wardrobes", "locations", "persistentFacts"):
+        items = shared.get(category) if isinstance(shared.get(category), list) else []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            context_id = _clean(item.get("id"))
+            description = _clean(item.get("description"))
+            if context_id and description:
+                by_id[context_id] = {
+                    "label": _clean(item.get("label")) or context_id,
+                    "description": description,
+                }
+    lines = []
+    for ref in refs:
+        item = by_id.get(_clean(ref))
+        if item is not None:
+            lines.append(item["label"] + ": " + item["description"])
+    return "\n".join(lines)
+
+
 def _previous_handoff(story, scene_id):
     order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
     if scene_id not in order:
@@ -190,6 +218,7 @@ def build_request(story, scene_id, operation, instruction=""):
     style = _clean(story.get("style"))
     invariants = _story_invariants_text(story)
     scene_context = _scene_context(scene)
+    shared_context = _scene_shared_context_text(story, scene)
     previous_handoff = _previous_handoff(story, scene_id)
     h3_mode = mode_from_reference_roles(_reference_roles(scene))
     h3_output = final_shape(h3_mode, scene.get("durationSeconds"))
@@ -201,6 +230,12 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
     if invariants:
         blocks.append("[STORY INVARIANTS]\n" + invariants)
+    if shared_context:
+        blocks.append(
+            "[SHARED CONTINUITY FOR THIS SCENE]\n"
+            + shared_context
+            + "\n\nThese definitions are authoritative and must be repeated concretely in the resulting prompt. Do not redesign, synonymize away, or omit them."
+        )
     if scene_context:
         blocks.append("[SCENE]\n" + scene_context)
     if previous_handoff and not _clean(scene.get("entryState")):

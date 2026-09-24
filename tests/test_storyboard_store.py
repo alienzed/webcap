@@ -247,7 +247,6 @@ def test_take_upload_freezes_scene_provenance_and_can_be_rated_and_selected(stor
         "durationSeconds": 8,
         "seedMode": "fixed",
         "seed": 123,
-        "wildcardsEnabled": True,
     })
 
     story, take = storyboard_store.add_take_upload(
@@ -263,7 +262,7 @@ def test_take_upload_freezes_scene_provenance_and_can_be_rated_and_selected(stor
     assert take["prompt"] == "A woman enters an empty aerobics studio."
     assert take["durationSeconds"] == 8
     assert take["seed"] == 123
-    assert take["wildcardsEnabled"] is True
+    assert "wildcardsEnabled" not in take
     assert story["scenes"][scene["id"]]["takeOrder"] == [take["id"]]
 
     story, rated = storyboard_store.rate_take(story["id"], scene["id"], take["id"], 4)

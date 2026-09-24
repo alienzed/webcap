@@ -14,6 +14,7 @@
     generationPolls: {},
     newTakeCounts: {},
     sequenceExport: null,
+    sequenceCollapsed: window.localStorage.getItem('webcap.storyboard.sequenceCollapsed') === '1',
     sceneViewMode: window.localStorage.getItem('webcap.storyboard.sceneView') || 'focus',
     activeSceneId: '',
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
@@ -986,10 +987,7 @@
     var assembly = storyState.sequenceExport;
     var assemblyCurrent = assemblyMatchesSelection(assembly, selected) && assembly.current !== false;
     var assemblyStatus = '';
-    if (assemblyCurrent) {
-      assemblyStatus = 'Preview built · ' + String(assembly.itemCount || selected.length) + ' Takes';
-      if (assembly.assemblyMode === 'normalized-preview') assemblyStatus += ' · normalized';
-    }
+    if (assemblyCurrent) assemblyStatus = 'Exported · ' + String(assembly.itemCount || selected.length) + ' Takes';
     else if (assembly && !assemblyCurrent) assemblyStatus = 'Selection changed since last export';
 
     var outputHtml = '';
@@ -1003,16 +1001,20 @@
     host.innerHTML = '<header class="storyboard-sequence-header"><div><strong>Selected sequence</strong><span>' +
       selected.length + ' selected Take' + (selected.length === 1 ? '' : 's') +
       '</span></div><div class="storyboard-sequence-actions">' +
-      '<button type="button" class="storyboard-primary-btn" data-sequence-export>Build Preview</button>' +
+      '<button type="button" class="review-captions-btn" data-sequence-toggle aria-expanded="' + (storyState.sequenceCollapsed ? 'false' : 'true') + '">' +
+        (storyState.sequenceCollapsed ? 'Show' : 'Hide') +
+      '</button>' +
+      '<button type="button" class="storyboard-primary-btn" data-sequence-export>Export Sequence</button>' +
       '<span class="storyboard-save-state" data-sequence-status>' + assemblyStatus + '</span>' +
-      '</div></header>' + outputHtml + '<div class="storyboard-sequence-list">' +
+      '</div></header><div class="storyboard-sequence-body' + (storyState.sequenceCollapsed ? ' hidden' : '') + '">' +
+      outputHtml + '<div class="storyboard-sequence-list">' +
       selected.map(function (item) {
         return '<article class="storyboard-sequence-card">' +
           '<div class="storyboard-sequence-label">Scene ' + String(item.number).padStart(2, '0') + ' · ' +
             escapeHtml(item.scene.title || 'Untitled Scene') + '</div>' +
           '<div class="storyboard-sequence-media">' + takePreviewHtml(story.id, item.sceneId, item.take) + '</div>' +
         '</article>';
-      }).join('') + '</div>';
+      }).join('') + '</div></div>';
   }
 
   function refreshSequenceExport(storyId) {
@@ -1028,7 +1030,7 @@
   function exportSelectedSequence() {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
-    setSaveState('Building sequence preview...');
+    setSaveState('Exporting sequence...');
     flushPendingSaves().then(function () {
       return assemblyRequest({ storyId: storyId });
     }).then(function (payload) {
@@ -2755,7 +2757,15 @@
     });
 
     el('storyboard-sequence-preview').addEventListener('click', function (event) {
-      if (event.target.closest('[data-sequence-export]')) exportSelectedSequence();
+      if (event.target.closest('[data-sequence-export]')) {
+        exportSelectedSequence();
+        return;
+      }
+      if (event.target.closest('[data-sequence-toggle]')) {
+        storyState.sequenceCollapsed = !storyState.sequenceCollapsed;
+        window.localStorage.setItem('webcap.storyboard.sequenceCollapsed', storyState.sequenceCollapsed ? '1' : '0');
+        renderSequencePreview();
+      }
     });
 
     var storyLibraryList = el('storyboard-library-list');

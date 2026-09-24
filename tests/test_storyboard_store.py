@@ -507,23 +507,31 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
     assert first["sharedContextRefs"] == ["mara", "coat", "lobby"]
 
 
-def test_apply_developed_plan_rejects_wrong_scene_count_or_out_of_range_duration(storyboard_fs):
+def test_apply_developed_plan_treats_scene_count_as_target_but_keeps_semantic_validation(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "targetSceneCount": 2})
-    with pytest.raises(ValueError, match="requests exactly 2"):
-        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": []})
-
-    bad_scene = {
-        "title": "Too long",
-        "summary": "Too much happens.",
+    good_scene = {
+        "title": "Short plan",
+        "summary": "One useful Scene.",
         "entryState": "Start.",
         "exitState": "End.",
         "prompt": "Prompt.",
         "sharedContextRefs": ["mara", "coat", "lobby"],
-        "suggestedDurationSeconds": 20,
+        "suggestedDurationSeconds": 6,
         "continuity": {"continuesPreviousScene": False, "carryForward": []},
     }
+    developed = storyboard_store.apply_developed_plan(
+        story["id"],
+        {"sharedContext": _shared_context(), "scenes": [good_scene]},
+    )
+    assert len(developed["sceneOrder"]) == 1
+
+    with pytest.raises(ValueError, match="returned no Scenes"):
+        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": []})
+
+    bad_scene = dict(good_scene)
+    bad_scene["suggestedDurationSeconds"] = 20
     with pytest.raises(ValueError, match="between 4 and 15"):
-        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": [bad_scene, dict(bad_scene)]})
+        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": [bad_scene]})
 
 
 def test_concept_expansion_preserves_one_previous_version(storyboard_fs):
@@ -577,7 +585,7 @@ def test_restore_scene_clears_replanning_removal_metadata(storyboard_fs):
     assert "removedReason" not in restored["scenes"][scene["id"]]
 
 
-def test_developed_plan_rejects_schema_shape_drift(storyboard_fs):
+def test_developed_plan_ignores_harmless_extra_fields_but_rejects_ambiguous_content(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     base_scene = {
         "title": "Scene",
@@ -590,14 +598,16 @@ def test_developed_plan_rejects_schema_shape_drift(storyboard_fs):
         "continuity": {"continuesPreviousScene": False, "carryForward": []},
     }
 
-    bad_top = {"sharedContext": _shared_context(), "scenes": [dict(base_scene), dict(base_scene)], "extra": True}
-    with pytest.raises(ValueError, match="unsupported fields"):
-        storyboard_store.apply_developed_plan(story["id"], bad_top)
-
-    bad_scene = dict(base_scene)
-    bad_scene["extra"] = "nope"
-    with pytest.raises(ValueError, match="missing or unsupported fields"):
-        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": [bad_scene, dict(base_scene)]})
+    tolerant_scene = dict(base_scene)
+    tolerant_scene["extra"] = "ignored model annotation"
+    tolerant_context = _shared_context()
+    tolerant_context["extra"] = [{"id": "ignored"}]
+    tolerant_context["subjects"][0]["extra"] = "ignored"
+    developed = storyboard_store.apply_developed_plan(
+        story["id"],
+        {"sharedContext": tolerant_context, "scenes": [tolerant_scene], "extra": True},
+    )
+    assert len(developed["sceneOrder"]) == 1
 
     bad_ref = dict(base_scene)
     bad_ref["sharedContextRefs"] = ["missing"]

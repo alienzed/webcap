@@ -993,11 +993,19 @@
                                     <div class="test-generations-library-panel test-generations-staged-panel">
                                         <div class="test-generations-library-heading">
                                             <div class="test-generations-library-heading-primary">
-                                                <input id="test-generations-master-select" class="test-generations-master-select" type="checkbox" title="Select/deselect all staged LoRAs" aria-label="Select or deselect all staged LoRAs">
-                                                <strong>Staged LoRAs</strong>
+                                                <input id="test-generations-master-select" class="test-generations-master-select" type="checkbox" title="Select/deselect all LoRAs" aria-label="Select or deselect all LoRAs">
+                                                <strong>LoRAs</strong>
                                             </div>
                                             <span id="test-generations-files-count">0</span>
                                         </div>
+                                        <div class="test-generations-source-bar">
+                                            <button id="test-generations-source-up-btn" type="button" class="test-generations-source-up" title="Go to parent Test Source" aria-label="Go to parent Test Source">..</button>
+                                            <button id="test-generations-source-path-btn" type="button" class="test-generations-source-path" title="Browse Test Sources">
+                                                <span class="test-generations-source-label">Source</span>
+                                                <span id="test-generations-source-path">Test root</span>
+                                            </button>
+                                        </div>
+                                        <div id="test-generations-source-folders" class="test-generations-source-folders"></div>
                                         <div id="test-generations-files" class="test-generations-staged-list"></div>
                                     </div>
                                     <div class="test-generations-library-panel test-generations-sessions">

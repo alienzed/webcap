@@ -579,19 +579,23 @@ def test_test_identity_is_owned_by_shell_header():
     assert "? 'Test Generations'" in shell
     assert "window.closeTestBenchActivity" in shell
 
-def test_test_generations_canonicalizes_session_paths_to_owning_set():
+
+def test_test_generations_persists_model_scoped_test_source_and_keeps_set_handoff_explicit():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    assert "function owningSetFolder(folder)" in script
-    assert "var marker = '/test-generations/'" in script
-    assert "folder: owningSetFolder(launchFolder || (state && state.folder) || '')" in script
-    assert "operation: operation" in script
-    assert "body.criteria = criteria" in script
-    assert "fetch('/fs/test_generations'" in script
-    assert "__test_generations__" not in script
-    assert "fetch('/fs/training_setup'" not in script
-    assert "launchFolder = owningSetFolder(state && state.folder || '')" in script
-
+    assert "function testSourceStorageKey(modelId)" in script
+    assert "webcap.test.source." in script
+    assert "function loadLastTestSource(modelId)" in script
+    assert "function saveLastTestSource(modelId, source)" in script
+    assert "function chooseTestSource(source)" in script
+    assert "function openTestBenchForSetFolder(folder)" in script
+    assert "pendingTestSource = setFolderName(targetFolder);" in script
+    assert "savedSource === null ? setFolderName(launchFolder) : savedSource" in script
+    assert "resolvedCriteria.source = String(testSource || '')" in script
+    assert 'id="test-generations-source-folders"' in html
+    assert 'id="test-generations-source-path"' in html
+    assert 'id="test-generations-source-up-btn"' in html
 
 def test_test_generation_sessions_are_not_training_set_contexts():
     common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
@@ -640,21 +644,20 @@ def test_test_preview_controls_do_not_cover_video_frames():
     assert ".test-generations-video-transport {" in css
 
 
-def test_test_activity_menu_reuses_recent_session_history_for_explicit_cross_set_navigation():
+
+def test_test_activity_menu_uses_recent_source_history_not_set_identity():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
 
     assert "def recent_test_sets(limit=8):" in backend
-    assert '"recent": recent_test_sets()' in backend
+    assert "_central_session_root()" in backend
+    assert '"source": source' in backend
+    assert '"modelId": model_id' in backend
     assert "function buildTestActivityContextActions()" in script
-    assert "function openTestBenchActivityMenu(event)" in script
-    assert "showContextMenu(event.clientX, event.clientY, actions);" in script
-    assert "activityButton.oncontextmenu = openTestBenchActivityMenu;" in script
-    assert "recentActions.length >= 5" in script
-    assert "folder === currentFolder" in script
-    assert "seen[folder]" in script
-    assert "function openTestBenchFolder(folder)" in script
-
+    assert "function openTestBenchSource(folder, source, modelId)" in script
+    assert "var key = modelId + '|' + source;" in script
+    assert "openTestBenchSource(folder, source, modelId)" in script
+    assert "Right-click for recent Test sources" in script
 
 def test_test_execution_uses_backend_model_capabilities_even_when_workspace_is_opened_indirectly():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -678,40 +681,33 @@ def test_recent_test_sets_are_cached_during_active_test_polling():
     assert 'time.monotonic() + 10.0' in backend
 
 
-def test_saved_test_history_does_not_require_external_staging_folder():
+
+def test_saved_test_history_is_central_and_source_scoped():
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
 
-    prepare_start = backend.index("def prepare(folder_path, model_id=None):")
-    prepare_end = backend.index("\ndef status(", prepare_start)
-    prepare = backend[prepare_start:prepare_end]
-    assert "except ValueError:" in prepare
-    assert "loras = []" in prepare
-    assert '"sessions": list_sessions(folder_path)' in prepare
-    start_start = backend.index("def start_queued(folder_path")
-    assert "_test_directory(folder_path, model)" in backend[start_start:]
-    assert 'operation == "test_start"' not in backend
+    assert 'Path(app_config.FS_ROOT) / ".webcap" / TEST_RESULTS_DIR' in backend
+    assert "def _session_directories(folder_path):" in backend
+    assert "def _session_matches_source(payload, folder_path, source):" in backend
+    assert "def list_sessions(folder_path, source=None):" in backend
+    assert "def status(folder_path, model_id=None, source=None):" in backend
+    assert '"ownerFolder": folder' in backend
+    assert '"source": str(request.get("source") or "")' in backend
 
-def test_test_generations_rate_items_reuses_unrated_single_item_review():
+
+def test_test_generations_rate_items_returns_to_the_original_test_source():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     item_details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
 
     assert 'id="test-generations-rate-items-btn"' in html
     assert "openResultsFolder(this.dataset.resultFolder, { rateItems: true });" in script
+    assert "pendingRatingReturn = {" in script
+    assert "source: String(testSource || '')" in script
     assert "function initializeRatingReview(folder)" in script
-    assert "clearCaptionFilterInputs();" in script
-    assert "querySelector('input[value=\"no_star\"]')" in script
-    assert "noStarInput.checked = true;" in script
-    assert "var unratedItems = getFilteredMediaItems(false);" in script
-    assert "selectPathMedia(unratedItems[0])" in script
     assert "function completeRatingReviewIfFinished()" in script
-    assert "if (!hasOnlyUnratedFilter()) return false;" in script
-    assert "if (getFilteredMediaItems(false).length) return false;" in script
-    assert "clearCaptionFilterInputs();" in script
-    assert "openTestBenchFolder(setFolder);" in script
+    assert "openTestBenchSource(" in script
     assert "window.testGenerationsRatingChanged = completeRatingReviewIfFinished;" in script
     assert "window.testGenerationsRatingChanged();" in item_details
-
 
 def test_test_generations_reuses_normal_folder_review_for_assessment():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -757,9 +753,9 @@ def test_test_generations_queue_contract():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
     assert "request('test_enqueue'" in script
-    assert "request('test_queue')" in script
+    assert "request('test_queue', { modelId: modelId })" in script
     assert "request('test_queue_cancel'" in script
-    assert "request('test_queue_clear')" in script
+    assert "request('test_queue_clear', { modelId: currentTestModelId() })" in script
     assert "var queuedTestJobs = [];" in script
     assert "remove.dataset.queueCancel" in script
     assert "queueCancel.dataset.queueCancel" in script
@@ -786,13 +782,18 @@ def test_test_generations_queue_contract():
 
 
 
-def test_test_generations_rail_stays_scoped_to_current_set_work():
+
+def test_test_generations_rail_exposes_a_shallow_test_source_browser():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert 'class="test-generations-library-panel test-generations-staged-panel"' in html
-    assert 'class="test-generations-library-panel test-generations-sessions"' in html
-    assert 'class="test-generations-library-section test-generations-recent-sets"' not in html
+    assert '<strong>LoRAs</strong>' in html
+    assert 'id="test-generations-source-folders"' in html
+    assert "function refreshTestSourceBrowser()" in script
+    assert "function renderTestSourceBrowser(payload)" in script
+    assert ".test-generations-source-folders" in css
     assert "grid-template-columns: minmax(400px, 430px) minmax(0, 1fr);" in css
 
 def test_historical_test_session_errors_do_not_claim_current_failure():

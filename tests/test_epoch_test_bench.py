@@ -259,7 +259,7 @@ def test_sessions_list_open_and_delete_are_scoped_to_current_set(tmp_path):
 
 
 
-def test_recent_test_sets_exposes_set_level_summary_only(tmp_path, monkeypatch):
+def test_legacy_set_sessions_remain_readable_without_global_recent_scan(tmp_path, monkeypatch):
     set_folder = tmp_path / "HH4013"
     session = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1300-h3"
     session.mkdir(parents=True)
@@ -273,15 +273,8 @@ def test_recent_test_sets_exposes_set_level_summary_only(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
 
-    recent = bench.recent_test_sets()
-
-    assert len(recent) == 1
-    assert recent[0]["folder"] == "HH4013"
-    assert recent[0]["sessionCount"] == 1
-    assert "status" not in recent[0]
-    assert "completed" not in recent[0]
-    assert "failed" not in recent[0]
-    assert "total" not in recent[0]
+    assert bench.list_sessions(set_folder, source="HH4013")[0]["session"] == session.name
+    assert bench.recent_test_sets() == []
 
 
 def test_cleanup_owned_comfy_directory_rejects_unscoped_path(tmp_path):
@@ -736,7 +729,7 @@ def test_clear_queued_test_sessions_keeps_other_global_inference(tmp_path, monke
     cleared = bench.clear_queued(tmp_path)
 
     assert cleared["removed"] == 1
-    assert not (bench._session_root(tmp_path) / payload["latest"]["session"]).exists()
+    assert not (bench._central_session_root() / payload["latest"]["session"]).exists()
     assert execution_queue.get_job(other["id"])["status"] == "queued"
 
 
@@ -935,7 +928,7 @@ def test_enqueue_preserves_live_session_state_while_child_jobs_are_added(tmp_pat
         job = original_enqueue(request, context, label=label)
         calls["count"] += 1
         if calls["count"] == 1:
-            session_root = tmp_path / bench.TEST_RESULTS_DIR
+            session_root = bench._central_session_root()
             session = next(path for path in session_root.iterdir() if path.is_dir())
             claimed = execution_queue.claim_next(inference_runner.EXECUTION_LANE)
             assert claimed["id"] == job["jobId"]
@@ -1018,7 +1011,7 @@ def test_test_enqueue_failure_stops_started_child_and_preserves_recovery_session
             include_base=True,
         )
 
-    sessions = [path for path in (tmp_path / bench.TEST_RESULTS_DIR).iterdir() if path.is_dir()]
+    sessions = [path for path in bench._central_session_root().iterdir() if path.is_dir()]
     assert len(sessions) == 1
     manifest = bench._read_status(sessions[0])
     assert manifest["migrationComplete"] is False
@@ -1030,3 +1023,123 @@ def test_test_enqueue_failure_stops_started_child_and_preserves_recovery_session
     assert child["status"] == "stopping"
     assert child["requestedAction"] == "stop"
 
+
+
+def test_explicit_test_source_resolves_independently_of_set_folder(tmp_path, monkeypatch):
+    source = tmp_path / "test-root" / "random-loras"
+    source.mkdir(parents=True)
+    monkeypatch.setattr(
+        bench,
+        "test_source_path",
+        lambda _stage, relative="": source if relative == "random-loras" else tmp_path / "test-root",
+    )
+    model = bench.get_test_model()
+
+    resolved = bench._test_directory(tmp_path / "sets" / "other-set", model, source="random-loras")
+
+    assert resolved == source
+
+
+def test_new_test_sessions_use_central_webcap_storage_and_record_source(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    model = patch_default_test_model(
+        monkeypatch,
+        template={},
+        settings={"seed": 1},
+    )
+    staged = tmp_path / "test-root" / "random-loras"
+    staged.mkdir(parents=True)
+    (staged / "epoch10.safetensors").write_bytes(b"weights")
+    monkeypatch.setattr(
+        bench,
+        "_test_directory",
+        lambda _folder, _model, source=None: staged,
+    )
+    monkeypatch.setattr(bench.inference_runtime if hasattr(bench, "inference_runtime") else inference_runtime, "resolve_wildcard_prompt", lambda prompt, _seed: prompt)
+    monkeypatch.setattr(bench, "_workflow_evidence", lambda _model, _template: {"workflowFile": "test.json", "workflowSha256": "abc"})
+    monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="": {"jobId": "job-" + context["candidateKind"]})
+    monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
+
+    set_folder = tmp_path / "sets" / "demo"
+    set_folder.mkdir(parents=True)
+    request = {
+        "modelId": model.PROFILE_ID,
+        "mediaKind": model.MEDIA_KIND,
+        "source": "random-loras",
+        "name": "",
+        "sourcePrompt": "prompt",
+        "prompt": "prompt",
+        "settings": {"seed": 1},
+        "workflow": {},
+        "workflowFile": "test.json",
+        "workflowSha256": "abc",
+    }
+
+    session = bench._enqueue_frozen_test_request(
+        set_folder,
+        request,
+        [staged / "epoch10.safetensors"],
+        include_base=False,
+    )
+
+    path = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR / session["session"] / "test.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["source"] == "random-loras"
+    assert payload["ownerFolder"] == "sets/demo"
+    assert not (set_folder / bench.TEST_RESULTS_DIR).exists()
+
+
+def test_recent_test_sources_are_derived_from_central_session_metadata(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
+    session = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR / "2026-09-23_1900-h3"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "archive/selected-run",
+        "ownerFolder": "sets/swimwear",
+        "results": [],
+    })
+
+    recent = bench.recent_test_sets()
+
+    assert recent[0]["source"] == "archive/selected-run"
+    assert recent[0]["folder"] == "sets/swimwear"
+    assert recent[0]["modelId"] == "minimax_h3"
+    assert recent[0]["sessionCount"] == 1
+
+
+def test_direct_test_source_lora_is_read_only_without_webcap_provenance(tmp_path, monkeypatch):
+    staged = tmp_path / "test-root" / "manual"
+    staged.mkdir(parents=True)
+    candidate = staged / "manual.safetensors"
+    candidate.write_bytes(b"weights")
+    model = bench.get_test_model()
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
+
+    with pytest.raises(ValueError, match="WebCap-staged"):
+        bench.remove_candidate(tmp_path, candidate.name, model_id=model.PROFILE_ID, source="manual")
+
+    assert candidate.is_file()
+
+
+def test_session_history_is_scoped_by_model_and_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    root = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR
+    for name, model_id in (("h3-session", "minimax_h3"), ("krea-session", "krea2_raw")):
+        session = root / name
+        session.mkdir(parents=True)
+        bench._atomic_write_json(session / "test.json", {
+            "status": "complete",
+            "modelId": model_id,
+            "source": "shared-name",
+            "ownerFolder": "sets/demo",
+            "results": [],
+        })
+
+    h3 = bench.list_sessions(tmp_path, source="shared-name", model_id="minimax_h3")
+    krea = bench.list_sessions(tmp_path, source="shared-name", model_id="krea2_raw")
+
+    assert [item["session"] for item in h3] == ["h3-session"]
+    assert [item["session"] for item in krea] == ["krea-session"]

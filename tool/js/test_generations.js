@@ -8,13 +8,18 @@
   var currentSession = '';
   var currentSessionFolder = '';
   var currentSessionModel = '';
+  var currentSessionSource = '';
   var currentStatus = {};
   var resultsView = 'grid';
   var compareIndex = 0;
   var pendingActivityFolder = '';
   var pendingRatingFolder = '';
+  var pendingRatingReturn = null;
   var testActivity = {};
   var selectedCandidates = null;
+  var testSource = null;
+  var pendingTestSource = null;
+  var sourceBrowser = null;
   var queuedTestJobs = [];
   var showSessionError = false;
   var reportedFailureKeys = new Set();
@@ -29,12 +34,106 @@
     return index === -1 ? value : value.slice(0, index);
   }
 
+  function setFolderName(folder) {
+    var parts = String(owningSetFolder(folder) || '').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
+  }
+
+  function testSourceStorageKey(modelId) {
+    return 'webcap.test.source.' + encodeURIComponent(String(modelId || ''));
+  }
+
+  function loadLastTestSource(modelId) {
+    var key = testSourceStorageKey(modelId);
+    var value = window.localStorage.getItem(key);
+    return value === null ? null : String(value).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  }
+
+  function saveLastTestSource(modelId, source) {
+    window.localStorage.setItem(
+      testSourceStorageKey(modelId),
+      String(source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+    );
+  }
+
+  function sourceChildPath(parent, child) {
+    return [String(parent || '').replace(/^\/+|\/+$/g, ''), String(child || '').replace(/^\/+|\/+$/g, '')]
+      .filter(Boolean)
+      .join('/');
+  }
+
+  function renderTestSourceBrowser(payload) {
+    sourceBrowser = payload || {};
+    var pathEl = el('test-generations-source-path');
+    var up = el('test-generations-source-up-btn');
+    var host = el('test-generations-source-folders');
+    var source = String(sourceBrowser.source || '');
+    if (pathEl) {
+      pathEl.textContent = source || 'Test root';
+      pathEl.title = source || 'Test root';
+    }
+    if (up) {
+      up.disabled = !source;
+      up.dataset.sourceParent = String(sourceBrowser.parent || '');
+    }
+    if (!host) return;
+    host.innerHTML = '';
+    (Array.isArray(sourceBrowser.folders) ? sourceBrowser.folders : []).forEach(function (folderName) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'test-generations-source-folder';
+      button.dataset.testSource = sourceChildPath(source, folderName);
+      var label = document.createElement('span');
+      label.className = 'test-generations-source-folder-name';
+      label.textContent = folderName;
+      button.appendChild(label);
+      host.appendChild(button);
+    });
+  }
+
+  function refreshTestSourceBrowser() {
+    if (!isTestModelSupported() || testSource === null) return Promise.resolve(null);
+    var url = '/fs/test_generations/source?modelId=' + encodeURIComponent(currentTestModelId()) +
+      '&source=' + encodeURIComponent(String(testSource || ''));
+    return fetch(url).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Could not browse Test Sources.');
+        }
+        renderTestSourceBrowser(payload);
+        return payload;
+      });
+    }).catch(function (err) {
+      if (testSource) {
+        testSource = '';
+        saveLastTestSource(currentTestModelId(), testSource);
+        return refreshTestSourceBrowser();
+      }
+      throw err;
+    });
+  }
+
+  function chooseTestSource(source) {
+    testSource = String(source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    saveLastTestSource(currentTestModelId(), testSource);
+    currentSession = '';
+    currentSessionFolder = '';
+    currentSessionModel = '';
+    currentSessionSource = '';
+    selectedCandidates = null;
+    openPane();
+  }
+
   function request(operation, criteria) {
     var body = {
       folder: owningSetFolder(launchFolder || (state && state.folder) || ''),
       operation: operation
     };
-    if (criteria) body.criteria = criteria;
+    var resolvedCriteria = criteria ? Object.assign({}, criteria) : {};
+    if (testSource !== null && !Object.prototype.hasOwnProperty.call(resolvedCriteria, 'source')) {
+      resolvedCriteria.source = String(testSource || '');
+    }
+    if (Object.keys(resolvedCriteria).length) body.criteria = resolvedCriteria;
     return fetch('/fs/test_generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -74,10 +173,9 @@
   }
 
   function testPromptDraftKey() {
-    var folder = owningSetFolder(launchFolder || (state && state.folder) || '');
     var modelId = currentTestModelId();
-    if (!folder || !modelId) return '';
-    return 'webcap.test.promptDraft.' + encodeURIComponent(folder) + '.' + encodeURIComponent(modelId);
+    if (!modelId || testSource === null) return '';
+    return 'webcap.test.promptDraft.' + encodeURIComponent(modelId) + '.' + encodeURIComponent(String(testSource || ''));
   }
 
   function loadTestPromptDraft() {
@@ -189,34 +287,59 @@
     return parts.length ? parts[parts.length - 1] : String(folder || '');
   }
 
+  function testSourceLabel(item) {
+    var source = String(item && item.source || '');
+    if (source) {
+      var parts = source.split('/').filter(Boolean);
+      return parts.length ? parts[parts.length - 1] : source;
+    }
+    return 'Test root';
+  }
+
+  function openTestBenchSource(folder, source, modelId) {
+    var targetFolder = String(folder || '');
+    pendingTestSource = String(source || '');
+    if (modelId) setWorkingModelProfileId(String(modelId), targetFolder);
+    if (targetFolder) {
+      openTestBenchFolder(targetFolder, false);
+      return;
+    }
+    openPane();
+  }
+
   function buildTestActivityContextActions() {
     var actions = [];
     var seen = {};
-    var currentFolder = String(state && state.folder || '');
     var active = Array.isArray(testActivity.active) ? testActivity.active : [];
     var recent = Array.isArray(testActivity.recent) ? testActivity.recent : [];
 
     active.forEach(function (item) {
       var folder = String(item && item.folder || '');
-      if (!folder || folder === currentFolder || seen[folder]) return;
-      seen[folder] = true;
+      var source = String(item && item.source || '');
+      var modelId = String(item && item.modelId || '');
+      var key = modelId + '|' + source;
+      if (seen[key]) return;
+      seen[key] = true;
       var completed = Number(item.completed || 0);
       var total = Number(item.total || 0);
       actions.push({
-        label: 'Running · ' + recentSetLabel(folder) + (total ? ' · ' + completed + ' / ' + total : ''),
-        run: function () { openTestBenchFolder(folder); }
+        label: 'Running · ' + testSourceLabel(item) + (total ? ' · ' + completed + ' / ' + total : ''),
+        run: function () { openTestBenchSource(folder, source, modelId); }
       });
     });
 
     var recentActions = [];
     recent.some(function (item) {
       var folder = String(item && item.folder || '');
-      if (!folder || folder === currentFolder || seen[folder]) return false;
-      seen[folder] = true;
+      var source = String(item && item.source || '');
+      var modelId = String(item && item.modelId || '');
+      var key = modelId + '|' + source;
+      if (seen[key]) return false;
+      seen[key] = true;
       var sessionCount = Number(item.sessionCount || 0);
       recentActions.push({
-        label: recentSetLabel(folder) + (sessionCount ? ' · ' + sessionCount + ' session' + (sessionCount === 1 ? '' : 's') : ''),
-        run: function () { openTestBenchFolder(folder); }
+        label: testSourceLabel(item) + (sessionCount ? ' · ' + sessionCount + ' session' + (sessionCount === 1 ? '' : 's') : ''),
+        run: function () { openTestBenchSource(folder, source, modelId); }
       });
       return recentActions.length >= 5;
     });
@@ -238,9 +361,9 @@
     if (active) {
       var completed = Number(active.completed || 0);
       var total = Number(active.total || 0);
-      activityButton.title = 'Test Generations · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total + ' · Right-click for Test sets';
+      activityButton.title = 'Test Generations · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total + ' · Right-click for Test sources';
     } else {
-      activityButton.title = 'Test Generations · Right-click for recent Test sets';
+      activityButton.title = 'Test Generations · Right-click for recent Test sources';
     }
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
@@ -260,9 +383,10 @@
     });
   }
 
-  function openTestBenchFolder(folder) {
+  function openTestBenchFolder(folder, useSetSource) {
     var targetFolder = String(folder || '');
     if (!targetFolder) return;
+    if (useSetSource) pendingTestSource = setFolderName(targetFolder);
     if (String(state && state.folder || '') === targetFolder && state.folderStateWritable) {
       openPane();
       return;
@@ -271,14 +395,22 @@
     openTrainingWorkspaceFolder(targetFolder);
   }
 
+  function openTestBenchForSetFolder(folder) {
+    openTestBenchFolder(folder, true);
+  }
+
   function openTestBenchActivity() {
-    var currentFolder = String(state && state.folder || '');
-    if (currentFolder) {
-      openTestBenchFolder(currentFolder);
+    if (isOpen()) return;
+    var active = Array.isArray(testActivity.active) && testActivity.active.length ? testActivity.active[0] : null;
+    if (active) {
+      openTestBenchSource(
+        String(active.folder || ''),
+        String(active.source || ''),
+        String(active.modelId || '')
+      );
       return;
     }
-    var active = Array.isArray(testActivity.active) && testActivity.active.length ? testActivity.active[0] : null;
-    if (active && active.folder) openTestBenchFolder(String(active.folder));
+    openPane();
   }
 
   function openTestBenchActivityMenu(event) {
@@ -393,6 +525,7 @@
     var scores = payload && payload.candidateScores && typeof payload.candidateScores === 'object'
       ? payload.candidateScores
       : {};
+    var removableFiles = payload && Array.isArray(payload.removableFiles) ? payload.removableFiles : [];
     if (!(selectedCandidates instanceof Set)) {
       var savedSettings = savedTestModelState().settings;
       var savedSelection = state
@@ -410,7 +543,7 @@
     var host = el('test-generations-files');
     if (summary) {
       summary.textContent = (String(payload && payload.modelLabel || '').trim() ? String(payload.modelLabel).trim() + ' · ' : '') +
-        count + ' LoRA' + (count === 1 ? '' : 's') + ' staged';
+        count + ' LoRA' + (count === 1 ? '' : 's') + ' · ' + (String(testSource || '') || 'Test root');
     }
     if (countEl) countEl.textContent = String(count);
     if (!host) return;
@@ -451,7 +584,7 @@
     if (!files.length) {
       var emptyCandidates = document.createElement('div');
       emptyCandidates.className = 'test-generations-library-empty';
-      emptyCandidates.textContent = 'No staged LoRAs.';
+      emptyCandidates.textContent = 'No LoRAs in this folder.';
       host.appendChild(emptyCandidates);
       syncCandidateMasterSelect(files);
       return;
@@ -481,16 +614,18 @@
       detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
       copy.appendChild(name);
       if (detail.textContent) copy.appendChild(detail);
-      var remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'test-generations-remove-candidate';
-      remove.dataset.fileName = String(fileName || '');
-      remove.title = 'Remove this staged Test candidate';
-      remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
-      remove.textContent = '×';
       row.appendChild(include);
       row.appendChild(copy);
-      row.appendChild(remove);
+      if (removableFiles.indexOf(String(fileName || '')) !== -1) {
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'test-generations-remove-candidate';
+        remove.dataset.fileName = String(fileName || '');
+        remove.title = 'Remove this WebCap-staged Test candidate';
+        remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
+        remove.textContent = '×';
+        row.appendChild(remove);
+      }
       host.appendChild(row);
     });
     syncCandidateMasterSelect(files);
@@ -805,7 +940,11 @@
   }
 
   function refreshSessions() {
-    return Promise.all([request('test_sessions'), request('test_queue')]).then(function (payloads) {
+    var modelId = currentTestModelId();
+    return Promise.all([
+      request('test_sessions', { modelId: modelId }),
+      request('test_queue', { modelId: modelId })
+    ]).then(function (payloads) {
       var sessionPayload = payloads[0] || {};
       var queuePayload = payloads[1] || {};
       queuedTestJobs = Array.isArray(queuePayload.jobs) ? queuePayload.jobs : [];
@@ -821,7 +960,7 @@
   }
 
   function clearQueuedTests() {
-    return request('test_queue_clear').then(function () { return refreshSessions(); });
+    return request('test_queue_clear', { modelId: currentTestModelId() }).then(function () { return refreshSessions(); });
   }
 
   function formatElapsedMs(milliseconds) {
@@ -1889,6 +2028,7 @@
       currentSession = String(status.session || '');
       currentSessionFolder = String(launchFolder || '');
       currentSessionModel = String(status.modelId || status.model || currentTestModelId() || '');
+      currentSessionSource = String(status.source == null ? testSource || '' : status.source);
     }
     syncActiveRunControls(status || {});
     var rateItemsBtn = el('test-generations-rate-items-btn');
@@ -1964,6 +2104,13 @@
     if (!targetFolder || !state || !state.dirStack || !state.dirStack.length) return;
     var opts = options || {};
     pendingRatingFolder = opts.rateItems ? targetFolder : '';
+    if (opts.rateItems) {
+      pendingRatingReturn = {
+        folder: String(launchFolder || ''),
+        source: String(testSource || ''),
+        modelId: currentTestModelId()
+      };
+    }
     if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
       clearFocusSet();
     }
@@ -2006,13 +2153,24 @@
   function finishRatingReview() {
     var sessionFolder = String(state && state.folder || '');
     if (!isTestGenerationSessionFolder(sessionFolder)) return false;
-    var setFolder = owningSetFolder(sessionFolder);
     clearCaptionFilterInputs();
     var capturedSave = typeof captureCurrentFolderStateSave === 'function'
       ? captureCurrentFolderStateSave()
       : null;
+    var returnContext = pendingRatingReturn;
+    pendingRatingReturn = null;
     var returnToTestGenerations = function () {
-      openTestBenchFolder(setFolder);
+      if (returnContext) {
+        openTestBenchSource(
+          String(returnContext.folder || ''),
+          String(returnContext.source || ''),
+          String(returnContext.modelId || '')
+        );
+        return;
+      }
+      // Legacy per-set Test folders can still recover their owner from the path.
+      var setFolder = owningSetFolder(sessionFolder);
+      if (setFolder && setFolder !== '.webcap') openTestBenchFolder(setFolder, true);
     };
     if (capturedSave && typeof writeCapturedFolderState === 'function') {
       Promise.resolve(writeCapturedFolderState(capturedSave)).then(returnToTestGenerations, returnToTestGenerations);
@@ -2130,15 +2288,26 @@
     if (!node || !frame) throw new Error('Test Generations requires the app frame and Test workspace.');
     launchFolder = owningSetFolder(state && state.folder || '');
     var requestedModelId = currentTestModelId();
+    if (pendingTestSource !== null) {
+      testSource = String(pendingTestSource || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      pendingTestSource = null;
+      saveLastTestSource(requestedModelId, testSource);
+    } else {
+      var savedSource = loadLastTestSource(requestedModelId);
+      testSource = savedSource === null ? setFolderName(launchFolder) : savedSource;
+      saveLastTestSource(requestedModelId, testSource);
+    }
     var rememberedSession = (
       currentSession &&
       currentSessionFolder === launchFolder &&
-      currentSessionModel === requestedModelId
+      currentSessionModel === requestedModelId &&
+      currentSessionSource === String(testSource || '')
     ) ? currentSession : '';
     if (!rememberedSession) {
       currentSession = '';
       currentSessionFolder = '';
       currentSessionModel = '';
+      currentSessionSource = '';
     }
     frame.classList.add('workspace-test-open');
     node.classList.remove('hidden');
@@ -2167,7 +2336,9 @@
       syncActiveRunControls({ status: 'idle' });
       return;
     }
-    request('test_prepare', { modelId: getWorkingModelProfileId() }).then(function (payload) {
+    refreshTestSourceBrowser().then(function () {
+      return request('test_prepare', { modelId: getWorkingModelProfileId() });
+    }).then(function (payload) {
       prepared = payload;
       if (Array.isArray(payload.warnings)) {
         payload.warnings.forEach(function (warning) {
@@ -2192,6 +2363,7 @@
             currentSession = '';
             currentSessionFolder = '';
             currentSessionModel = '';
+            currentSessionSource = '';
             renderStatus(initialStatus);
           })
         : Promise.resolve(renderStatus(initialStatus));
@@ -2288,6 +2460,7 @@
         currentSession = '';
         currentSessionFolder = '';
         currentSessionModel = '';
+        currentSessionSource = '';
         showSessionError = false;
         renderStatus(payload.latest || { status: 'idle' });
       }
@@ -2338,10 +2511,23 @@
     var node = el('test-generations-pane');
     if (!button || !workspace || !node) throw new Error('Test Generations requires its Training handoff and Test workspace markup.');
 
-    button.onclick = openPane;
+    button.onclick = function () {
+      pendingTestSource = setFolderName(state && state.folder || '');
+      openPane();
+    };
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
+    el('test-generations-source-up-btn').onclick = function () {
+      if (!this.disabled) chooseTestSource(String(this.dataset.sourceParent || ''));
+    };
+    el('test-generations-source-path-btn').onclick = function () {
+      if (String(testSource || '')) chooseTestSource('');
+    };
+    el('test-generations-source-folders').onclick = function (event) {
+      var button = event.target.closest('[data-test-source]');
+      if (button) chooseTestSource(String(button.dataset.testSource || ''));
+    };
     el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
     el('test-generations-rate-items-btn').onclick = function () {
@@ -2487,7 +2673,7 @@
   window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
   window.openTestBenchActivity = openTestBenchActivity;
   window.openTestBenchActivityMenu = openTestBenchActivityMenu;
-  window.openTestBenchForFolder = openTestBenchFolder;
+  window.openTestBenchForFolder = openTestBenchForSetFolder;
   window.openTestBenchForCurrentFolder = openPane;
   window.closeTestBenchActivity = closePane;
   window.refreshTestBenchActivity = refreshActivityButton;

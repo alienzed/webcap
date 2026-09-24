@@ -889,3 +889,32 @@ def test_generate_reference_bundle_refuses_unknown_or_symlinked_tokens(monkeypat
     with pytest.raises(ValueError, match="symlinked"):
         storage_manager.purge("runtime", "generate-reference/1790180000000-abcdef123456")
     assert outside.is_dir()
+
+
+def test_storage_manager_lists_and_purges_central_test_sessions(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    session = tmp_path / ".webcap" / "test-generations" / "session-central"
+    session.mkdir(parents=True)
+    _write_json(session / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "archive/demo",
+        "ownerFolder": "sets/demo",
+        "completed": 1,
+        "failed": 0,
+        "total": 1,
+        "results": [],
+    })
+    (session / "result.mp4").write_bytes(b"video")
+
+    items = storage_manager.overview("")["items"]["tests"]
+
+    assert len(items) == 1
+    assert items[0]["id"] == "session-central"
+    assert items[0]["folder"] == ""
+    assert items[0]["meta"]["source"] == "archive/demo"
+    assert items[0]["purgeable"] is True
+
+    storage_manager.purge("tests", "session-central", "")
+
+    assert not session.exists()

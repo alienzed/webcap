@@ -16,6 +16,12 @@ Unless the current task explicitly changes or develops them, preserve establishe
 RECURRING CHARACTERS STAY THE SAME PEOPLE.
 Preserve established identity across independent Scenes. Whole-Story development may establish missing creative details when needed, but once established they should remain stable unless the Story changes them. Scene-local writing and revision should not invent new identity details merely for variety. Each independently generated Scene should contain enough established identity description to reconstruct recurring characters.
 
+DIRECT THE SCENE, NOT THE RECURRING CHARACTER.
+Choose framing, viewpoint, subject prominence, blocking, and camera position to serve the narrative action and emotional purpose of each Scene. Do not default to front-facing portrait-style coverage, center recurring characters merely because they recur, or force every important character into every shot. A character may be seen from behind, in profile, over a shoulder, partially obscured, small in frame, or absent when the environment, action, object, crowd, or another subject better carries the beat. Wide, environmental, insert, reaction, POV, and over-the-shoulder coverage are all valid when they serve the Scene. Do not introduce people merely to populate the frame. Let composition and blocking direct attention to what matters, and change viewpoint only when it adds meaningful story, spatial, or emotional information.
+
+STORY INVARIANTS ARE REFERENCE FACTS, NOT CASTING REQUIREMENTS.
+Apply an invariant when its subject or location is actually present or relevant in the Scene. Do not introduce a character, location, prop, or state merely because WebCap supplied an invariant.
+
 WHOLE-STORY DEVELOPMENT MUST MAKE CONTINUITY EXPLICIT.
 When planning multiple independently generated Scenes, establish reusable shared definitions for recurring subjects, wardrobe states, locations, and other persistent visible/audible facts. Make these definitions concrete enough to reproduce the same person/place/wardrobe, not vague labels. Reuse the same definition across Scenes until the Story explicitly changes it. Do not change clothing, location design, time/weather, props, damage, or appearance merely to add visual variety. If a change is narratively required, make it explicit in the Scene progression and use a new shared definition from that point onward. Repetition of important visual facts is desirable for generation consistency; do not rewrite them with loose synonyms simply to avoid repetition.
 

@@ -20,7 +20,7 @@ STORYBOARD_DIRNAME = "storyboards"
 STORY_FILE = "story.json"
 VALID_STATUSES = {"active", "complete", "archived"}
 VALID_SEED_MODES = {"random", "fixed"}
-VALID_INVARIANT_KINDS = {"visual", "character", "world", "sound", "custom"}
+VALID_INVARIANT_KINDS = {"visual", "character", "location", "world", "sound", "custom"}
 VALID_REFERENCE_ROLES = {"first_frame", "last_frame", "guide_frame"}
 VALID_REFERENCE_FRAMES = {"first", "last"}
 ASPECT_RATIO_OPTIONS = (
@@ -675,6 +675,42 @@ def apply_concept_expansion(story_id, expanded_concept):
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story
+
+
+@_serialized_mutation
+def apply_defined_invariants(story_id, payload):
+    story = load_story(story_id)
+    raw_items = payload.get("invariants") if isinstance(payload, dict) else None
+    if not isinstance(raw_items, list):
+        return story, 0
+
+    existing = _normalize_story_invariants(story.get("invariants") or [])
+    existing_subjects = {
+        (str(item.get("kind") or "").strip().lower(), str(item.get("title") or "").strip().casefold())
+        for item in existing
+        if str(item.get("title") or "").strip()
+    }
+    added = 0
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip().lower()
+        title = str(item.get("title") or "").strip()
+        text = str(item.get("text") or "").strip()
+        if kind not in {"character", "location"} or not title or not text:
+            continue
+        key = (kind, title.casefold())
+        if key in existing_subjects:
+            continue
+        existing.append({"kind": kind, "title": title, "text": text})
+        existing_subjects.add(key)
+        added += 1
+
+    if added:
+        story["invariants"] = existing
+        story["updatedAt"] = _utc_now()
+        _write_json_atomic(_story_path(story_id), story)
+    return story, added
 
 
 @_serialized_mutation

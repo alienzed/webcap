@@ -235,7 +235,7 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
 def test_storyboard_director_captures_unsaved_target_before_locking_it():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    for function_name in ("expandConcept", "developStory", "runDirector"):
+    for function_name in ("defineInvariants", "expandConcept", "developStory", "runDirector"):
         block = storyboard.split("function " + function_name, 1)[1].split("\n  function ", 1)[0]
         assert block.index("var saveBarrier = flushPendingSaves();") < block.index("setDirectorPending(directorTarget, true);")
         assert "saveBarrier.then(function () {" in block
@@ -644,6 +644,19 @@ def test_storyboard_visual_atmosphere_has_editable_presets():
     assert "textarea.value = preset.text;" in storyboard
     assert "storyboard-story-style').addEventListener('input'" in storyboard
     assert ".storyboard-style-preset" in css
+
+
+def test_storyboard_can_define_character_and_location_invariants_from_concept():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-invariant-define"' in html
+    assert "Define from Concept" in html
+    assert "function defineInvariants()" in storyboard
+    assert "operation: 'define_invariants'" in storyboard
+    assert "location: 'Location'" in storyboard
+    assert '"location"' in store
 
 
 def test_storyboard_story_can_collapse_and_supports_structured_invariants():

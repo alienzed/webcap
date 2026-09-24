@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "storyboard-invariants.schema.json",
+  "title": "WebCap Storyboard Invariant Suggestions",
+  "description": "Small structured output contract for recurring character and location continuity facts proposed from a Story concept.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "invariants"
+  ],
+  "properties": {
+    "invariants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "title",
+          "text"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "character",
+              "location"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -260,7 +260,7 @@
 
   function directorTargetFromJob(job) {
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
-    if (job.operation === 'expand_concept') return { kind: 'concept', storyId: job.storyId };
+    if (job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
     if (job.operation === 'develop_story') return { kind: 'scenes', storyId: job.storyId };
     if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId };
@@ -295,6 +295,11 @@
           syncSceneDirectorRestore(sceneId);
           updateSceneDirectorStatus(sceneId, 'Director completed.');
         }
+      } else if (operation === 'define_invariants') {
+        storyState.story.invariants = canonical.invariants || [];
+        storyState.story.updatedAt = canonical.updatedAt;
+        renderStoryInvariants();
+        setSaveState('Saved');
       } else if (operation === 'expand_concept') {
         storyState.story.concept = canonical.concept;
         storyState.story.previousConcept = canonical.previousConcept;
@@ -1101,6 +1106,51 @@
     syncDirectorPendingControls();
   }
 
+  function defineInvariants() {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    var directorTarget = { kind: 'concept', storyId: storyId };
+    if (directorTargetBlocked(directorTarget)) {
+      reportError(new Error('That Director target already has pending work.'));
+      return;
+    }
+    var modelId = storyState.director.modelId;
+    if (!modelId) {
+      reportError(new Error('Choose a Storyboard Director model first.'));
+      return;
+    }
+    var concept = el('storyboard-story-concept').value.trim();
+    if (!concept) {
+      setSaveState('Write a Story concept first.');
+      return;
+    }
+
+    var saveBarrier = flushPendingSaves();
+    setDirectorPending(directorTarget, true);
+    startDirectorActivity();
+    saveBarrier.then(function () {
+      return directorRequest({
+        storyId: storyId,
+        operation: 'define_invariants',
+        model: modelId
+      });
+    }).then(function (payload) {
+      return applyDirectorResultToVisibleStory({
+        storyId: storyId,
+        operation: 'define_invariants',
+        jobId: payload.jobId
+      }).then(function () {
+        if (typeof reportConsoleInfo === 'function') {
+          reportConsoleInfo('Storyboard', 'Defined ' + String(payload.addedCount || 0) + ' new Story invariant' + (Number(payload.addedCount || 0) === 1 ? '' : 's') + ' from the concept.');
+        }
+        return consumeDirectorJob(payload.jobId);
+      });
+    }).catch(reportError).finally(function () {
+      setDirectorPending(directorTarget, false);
+      finishDirectorActivity();
+    });
+  }
+
   function expandConcept() {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
@@ -1252,7 +1302,7 @@
     var kind = String(item.kind || 'custom');
     var title = String(item.title || '');
     var text = String(item.text || '');
-    var labels = { visual: 'Visual', character: 'Character', world: 'World', sound: 'Sound', custom: 'Custom' };
+    var labels = { visual: 'Visual', character: 'Character', location: 'Location', world: 'World', sound: 'Sound', custom: 'Custom' };
     return '<div class="storyboard-invariant-row" data-story-invariant-row>' +
       '<select data-story-invariant-kind aria-label="Invariant type">' +
         Object.keys(labels).map(function (value) {
@@ -3479,6 +3529,7 @@
     });
     el('storyboard-invariants-list').addEventListener('input', scheduleStorySave);
     el('storyboard-invariants-list').addEventListener('change', scheduleStorySave);
+    el('storyboard-invariant-define').addEventListener('click', defineInvariants);
     el('storyboard-invariant-add').addEventListener('click', function () {
       el('storyboard-invariants-list').insertAdjacentHTML('beforeend', invariantRowHtml({ kind: 'character', title: '', text: '' }));
     });

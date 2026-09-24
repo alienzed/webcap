@@ -186,6 +186,55 @@ def test_storyboard_llm_job_applies_expanded_concept_before_completion(llm_root,
     assert storyboard_store.load_story(story["id"])["concept"] == "Expanded concept."
 
 
+def test_storyboard_define_invariants_appends_only_missing_character_and_location_items(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "Elena grieves and later bonds with a dog.",
+        "invariants": [
+            {"kind": "character", "title": "Elena", "text": "Manual Elena definition stays authoritative."},
+        ],
+    })
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "text": '{"invariants":[]}',
+            "data": {
+                "invariants": [
+                    {"kind": "character", "title": "Elena", "text": "Duplicate model definition."},
+                    {"kind": "location", "title": "Cemetery", "text": "Old hillside cemetery with weathered stone markers."},
+                    {"kind": "world", "title": "Mood", "text": "This unsupported generated item is ignored."},
+                    {"kind": "character", "title": "", "text": "Missing subject is ignored."},
+                ]
+            },
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "define_invariants", "prompt": "Define.", "output": "json"},
+        context={
+            "storyId": story["id"],
+            "operation": "define_invariants",
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["result"]["addedCount"] == 1
+    stored = storyboard_store.load_story(story["id"])
+    assert stored["invariants"] == [
+        {"kind": "character", "title": "Elena", "text": "Manual Elena definition stays authoritative."},
+        {"kind": "location", "title": "Cemetery", "text": "Old hillside cemetery with weathered stone markers."},
+    ]
+
+
 def test_storyboard_scene_prompt_job_writes_only_its_target_on_backend(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story"})
     story, first = storyboard_store.add_scene(story["id"], {

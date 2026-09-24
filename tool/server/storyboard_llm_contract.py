@@ -8,7 +8,8 @@ DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
 DIRECTOR_CONTEXT_PATH = DOCS_ROOT / "storyboard-director-context.txt"
 H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
-VALID_OPERATIONS = {"expand_concept", "develop_story", "write_prompt", "refine_prompt"}
+INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
+VALID_OPERATIONS = {"expand_concept", "define_invariants", "develop_story", "write_prompt", "refine_prompt"}
 
 
 def _read_text(path, label):
@@ -140,6 +141,45 @@ def build_request(story, scene_id, operation, instruction=""):
 
     director_context = _read_text(DIRECTOR_CONTEXT_PATH, "Storyboard director context")
     h3_runtime_context = _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context")
+
+    if operation == "define_invariants":
+        concept = _clean(story.get("concept"))
+        if not concept:
+            raise ValueError("Story concept / overview is required to define Story invariants.")
+        blocks = [
+            "[DIRECTOR CONTEXT]\n" + director_context,
+        ]
+        title = _clean(story.get("title"))
+        if title:
+            blocks.append("[STORY TITLE]\n" + title)
+        blocks.append("[STORY CONCEPT]\n" + concept)
+        existing = _story_invariants_text(story)
+        if existing:
+            blocks.append(
+                "[EXISTING STORY INVARIANTS]\n"
+                + existing
+                + "\n\nDo not repeat an existing character or location invariant with the same subject."
+            )
+        blocks.append(
+            "[CURRENT TASK]\nIdentify recurring characters and recurring locations from this Story concept that should "
+            "have stable visual definitions across independently generated Scenes. Return only character and location "
+            "invariants. Preserve explicit Story facts. For a recurring character, describe stable observable identity "
+            "and appearance; omit scene-specific wardrobe unless the concept makes it a defining persistent feature. "
+            "For a recurring location, describe stable layout, architecture, materials, dominant colors, fixed features, "
+            "and baseline practical lighting when useful. If the concept clearly requires missing visual detail for "
+            "reproducibility, choose one sensible concrete detail and keep it grounded; do not invent plot events, "
+            "relationships, one-off extras, or new locations. Do not plan Scenes.\n\n"
+            "Return exactly this JSON shape:\n"
+            "{\"invariants\":[{\"kind\":\"character\",\"title\":\"Elena\",\"text\":\"stable visual description\"},"
+            "{\"kind\":\"location\",\"title\":\"Elena's apartment\",\"text\":\"stable visual description\"}]}\n"
+            "If there are no useful recurring characters or locations, return {\"invariants\":[]}."
+        )
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+            "response_schema": _read_json(INVARIANT_SCHEMA_PATH, "Storyboard invariant schema"),
+        }
 
     if operation == "expand_concept":
         concept = _clean(story.get("concept"))

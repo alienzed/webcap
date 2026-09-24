@@ -112,6 +112,17 @@ def _client_result(client, context, llm_result, job_id=""):
             "timings": llm_result.get("timings"),
         }
 
+    if operation == "define_invariants":
+        from .storyboard_store import apply_defined_invariants
+        story, added_count = apply_defined_invariants(story_id, llm_result.get("data"))
+        return {
+            "storyId": story["id"],
+            "addedCount": added_count,
+            "model": llm_result["model"],
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if operation == "develop_story":
         from .h3_prompt_contract import render_story_plan_prompts
         from .storyboard_generation import generation_queue
@@ -316,7 +327,7 @@ def _storyboard_target(context, operation):
     operation = str(operation or "").strip()
     if not story_id:
         return None
-    if operation == "expand_concept":
+    if operation in {"expand_concept", "define_invariants"}:
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
     if operation == "develop_story":
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}

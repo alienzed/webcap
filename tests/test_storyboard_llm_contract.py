@@ -212,6 +212,26 @@ def test_develop_story_requires_concept():
         storyboard_llm_contract.build_request(story, "", "develop_story")
 
 
+def test_define_invariants_is_a_small_character_location_pass():
+    story = _story()
+    story["concept"] = "Elena loses her husband, grieves at a cemetery, then gradually bonds with a stray dog."
+
+    request = storyboard_llm_contract.build_request(story, "", "define_invariants")
+    prompt = request["prompt"]
+    schema = request["response_schema"]
+
+    assert request["operation"] == "define_invariants"
+    assert request["output"] == "json"
+    assert schema["required"] == ["invariants"]
+    item = schema["properties"]["invariants"]["items"]
+    assert item["properties"]["kind"]["enum"] == ["character", "location"]
+    assert "recurring characters and recurring locations" in prompt
+    assert "Do not plan Scenes." in prompt
+    assert '"kind":"character"' in prompt
+    assert '"kind":"location"' in prompt
+    assert "[EXISTING STORY INVARIANTS]" in prompt
+
+
 def test_expand_concept_is_creative_but_not_scene_planning():
     story = _story()
     story["concept"] = "Rise and fall of a New York gangster."

@@ -23,6 +23,7 @@ EXECUTION_LANE = "llm"
 GPU_RESERVATION_OWNER = EXECUTION_LANE
 
 _dispatch_lock = threading.Lock()
+_enqueue_lock = threading.Lock()
 _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _monitor_lock = threading.Lock()
@@ -79,6 +80,7 @@ def _ensure_execution_reconciled():
 
 def reconcile_startup():
     _ensure_execution_reconciled()
+    _ensure_monitor_started()
 
 
 def _client_result(client, context, llm_result, job_id=""):
@@ -334,23 +336,24 @@ def enqueue(client, model_id, contract, context=None, label=""):
         raise ValueError("LLM contract must be an object.")
 
     context = copy.deepcopy(context) if isinstance(context, dict) else {}
-    if client == "storyboard":
-        _assert_storyboard_target_available(context, contract.get("operation"))
-    job = execution_enqueue(
-        EXECUTION_LANE,
-        {
-            "contract": copy.deepcopy(contract),
-            "clientContext": context,
-        },
-        metadata={
-            "client": client,
-            "label": str(label or "LLM"),
-            "operation": str(contract.get("operation") or ""),
-            "modelId": model_id,
-            "storyId": str(context.get("storyId") or ""),
-            "sceneId": str(context.get("sceneId") or ""),
-        },
-    )
+    with _enqueue_lock:
+        if client == "storyboard":
+            _assert_storyboard_target_available(context, contract.get("operation"))
+        job = execution_enqueue(
+            EXECUTION_LANE,
+            {
+                "contract": copy.deepcopy(contract),
+                "clientContext": context,
+            },
+            metadata={
+                "client": client,
+                "label": str(label or "LLM"),
+                "operation": str(contract.get("operation") or ""),
+                "modelId": model_id,
+                "storyId": str(context.get("storyId") or ""),
+                "sceneId": str(context.get("sceneId") or ""),
+            },
+        )
     _ensure_monitor_started()
     return _job_view(execution_get_job(job["id"]))
 

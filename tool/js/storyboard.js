@@ -311,12 +311,16 @@
   function positionDirectorActivity() {
     var card = el('storyboard-director-activity');
     var editor = document.querySelector('.storyboard-editor');
+    var kind = String((storyState.director.activityTarget || {}).kind || '');
     var target = directorActivityTargetElement();
-    if (!card || !editor || !target || card.classList.contains('hidden')) return;
+    if (!card || !editor) return;
+
+    var detachedScenePrompt = kind === 'scene-prompt' && !target;
+    card.classList.toggle('is-detached-target', detachedScenePrompt);
+    if (detachedScenePrompt || !target || card.classList.contains('hidden')) return;
 
     var editorRect = editor.getBoundingClientRect();
     var targetRect = target.getBoundingClientRect();
-    var kind = String((storyState.director.activityTarget || {}).kind || '');
     var fillsField = kind === 'concept' || kind === 'scene-prompt';
     card.classList.toggle('is-field-overlay', fillsField);
     card.classList.toggle('is-structure-overlay', !fillsField);
@@ -550,14 +554,26 @@
         instruction: instruction
       });
     }).then(function (payload) {
-      var currentRoot = sceneElement(sceneId);
-      var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
-      if (!currentPrompt) throw new Error('Scene generation prompt field is missing.');
+      var generatedPrompt = payload.result || '';
       storyState.director.previousPrompts[sceneId] = previousPrompt;
-      currentPrompt.value = payload.result || '';
-      syncSceneDirectorRestore(sceneId);
-      updateSceneDirectorStatus(sceneId, 'Generated with ' + String(payload.model || modelId));
-      return saveSceneNow(sceneId);
+      return request({
+        operation: 'update_scene',
+        storyId: storyState.story.id,
+        sceneId: sceneId,
+        scene: { prompt: generatedPrompt }
+      }).then(function (saved) {
+        if (storyState.story && storyState.story.scenes && saved.scene) {
+          storyState.story.scenes[sceneId] = saved.scene;
+          if (saved.story && saved.story.updatedAt) storyState.story.updatedAt = saved.story.updatedAt;
+        }
+        var currentRoot = sceneElement(sceneId);
+        var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
+        if (currentPrompt) currentPrompt.value = generatedPrompt;
+        syncSceneDirectorRestore(sceneId);
+        updateSceneDirectorStatus(sceneId, 'Generated with ' + String(payload.model || modelId));
+        setSaveState('Saved');
+        return refreshLibrary();
+      });
     }).catch(function (err) {
       updateSceneDirectorStatus(sceneId, 'Director failed');
       reportError(err);
@@ -1712,6 +1728,10 @@
     if (!activeHtml) activeHtml = '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
 
     host.innerHTML = activeHtml + removedScenesHtml(removedScenes);
+    if (storyState.director.busy && storyState.director.activityTarget) {
+      setDirectorTargetProtected(storyState.director.activityTarget, true);
+      positionDirectorActivity();
+    }
   }
 
   function renderStory() {

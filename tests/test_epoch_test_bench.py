@@ -259,7 +259,7 @@ def test_sessions_list_open_and_delete_are_scoped_to_current_set(tmp_path):
 
 
 
-def test_recent_test_sets_exposes_set_level_summary_only(tmp_path, monkeypatch):
+def test_legacy_set_sessions_remain_readable_without_global_recent_scan(tmp_path, monkeypatch):
     set_folder = tmp_path / "HH4013"
     session = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1300-h3"
     session.mkdir(parents=True)
@@ -273,15 +273,8 @@ def test_recent_test_sets_exposes_set_level_summary_only(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
 
-    recent = bench.recent_test_sets()
-
-    assert len(recent) == 1
-    assert recent[0]["folder"] == "HH4013"
-    assert recent[0]["sessionCount"] == 1
-    assert "status" not in recent[0]
-    assert "completed" not in recent[0]
-    assert "failed" not in recent[0]
-    assert "total" not in recent[0]
+    assert bench.list_sessions(set_folder, source="HH4013")[0]["session"] == session.name
+    assert bench.recent_test_sets() == []
 
 
 def test_cleanup_owned_comfy_directory_rejects_unscoped_path(tmp_path):
@@ -736,7 +729,7 @@ def test_clear_queued_test_sessions_keeps_other_global_inference(tmp_path, monke
     cleared = bench.clear_queued(tmp_path)
 
     assert cleared["removed"] == 1
-    assert not (bench._session_root(tmp_path) / payload["latest"]["session"]).exists()
+    assert not (bench._central_session_root() / payload["latest"]["session"]).exists()
     assert execution_queue.get_job(other["id"])["status"] == "queued"
 
 
@@ -935,7 +928,7 @@ def test_enqueue_preserves_live_session_state_while_child_jobs_are_added(tmp_pat
         job = original_enqueue(request, context, label=label)
         calls["count"] += 1
         if calls["count"] == 1:
-            session_root = tmp_path / bench.TEST_RESULTS_DIR
+            session_root = bench._central_session_root()
             session = next(path for path in session_root.iterdir() if path.is_dir())
             claimed = execution_queue.claim_next(inference_runner.EXECUTION_LANE)
             assert claimed["id"] == job["jobId"]
@@ -1018,7 +1011,7 @@ def test_test_enqueue_failure_stops_started_child_and_preserves_recovery_session
             include_base=True,
         )
 
-    sessions = [path for path in (tmp_path / bench.TEST_RESULTS_DIR).iterdir() if path.is_dir()]
+    sessions = [path for path in bench._central_session_root().iterdir() if path.is_dir()]
     assert len(sessions) == 1
     manifest = bench._read_status(sessions[0])
     assert manifest["migrationComplete"] is False

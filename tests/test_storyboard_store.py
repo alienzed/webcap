@@ -13,6 +13,15 @@ def storyboard_fs(tmp_path, monkeypatch):
     return tmp_path
 
 
+def _shared_context():
+    return {
+        "subjects": [{"id": "mara", "label": "Mara", "description": "Mara has a dark bob."}],
+        "wardrobes": [{"id": "coat", "label": "Wardrobe", "description": "Mara wears a pale raincoat."}],
+        "locations": [{"id": "lobby", "label": "Lobby", "description": "Dark terrazzo lobby with brass fixtures."}],
+        "persistentFacts": [],
+    }
+
+
 def test_story_create_list_and_reload(storyboard_fs):
     story = storyboard_store.create_story({
         "title": "Storm Hotel",
@@ -404,6 +413,7 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
     old_media = storyboard_fs / "output" / "storyboards" / story["id"] / old_take["mediaPath"]
 
     plan = {
+        "sharedContext": _shared_context(),
         "scenes": [
             {
                 "title": "Opening",
@@ -411,6 +421,7 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
                 "entryState": "She stands outside the lobby doors.",
                 "exitState": "She is inside the lobby.",
                 "prompt": "integrated_multimodal_description: [Shot 1] She enters.\n\noverall_soundscape: Rain.\n\nnon_diegetic_music: None.",
+                "sharedContextRefs": ["mara", "coat", "lobby"],
                 "suggestedDurationSeconds": 6,
                 "continuity": {"continuesPreviousScene": False, "carryForward": []},
             },
@@ -420,6 +431,7 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
                 "entryState": "She is inside the lobby.",
                 "exitState": "She stands at the empty desk.",
                 "prompt": "integrated_multimodal_description: [Shot 1] She crosses the lobby.\n\noverall_soundscape: Footsteps.\n\nnon_diegetic_music: Low drone.",
+                "sharedContextRefs": ["mara", "coat", "lobby"],
                 "suggestedDurationSeconds": 8,
                 "continuity": {"continuesPreviousScene": True, "carryForward": ["She remains inside the hotel."]},
             },
@@ -447,7 +459,7 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
 def test_apply_developed_plan_rejects_wrong_scene_count_or_out_of_range_duration(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "targetSceneCount": 2})
     with pytest.raises(ValueError, match="requests exactly 2"):
-        storyboard_store.apply_developed_plan(story["id"], {"scenes": []})
+        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": []})
 
     bad_scene = {
         "title": "Too long",
@@ -455,11 +467,12 @@ def test_apply_developed_plan_rejects_wrong_scene_count_or_out_of_range_duration
         "entryState": "Start.",
         "exitState": "End.",
         "prompt": "Prompt.",
+        "sharedContextRefs": ["mara", "coat", "lobby"],
         "suggestedDurationSeconds": 20,
         "continuity": {"continuesPreviousScene": False, "carryForward": []},
     }
     with pytest.raises(ValueError, match="between 4 and 15"):
-        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_scene, dict(bad_scene)]})
+        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": [bad_scene, dict(bad_scene)]})
 
 
 def test_concept_expansion_preserves_one_previous_version(storyboard_fs):
@@ -482,6 +495,7 @@ def test_restore_scene_clears_replanning_removal_metadata(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {"title": "Old Scene"})
     plan = {
+        "sharedContext": _shared_context(),
         "scenes": [
             {
                 "title": "New One",
@@ -489,6 +503,7 @@ def test_restore_scene_clears_replanning_removal_metadata(storyboard_fs):
                 "entryState": "Start one.",
                 "exitState": "End one.",
                 "prompt": "Prompt one.",
+                "sharedContextRefs": ["mara", "coat", "lobby"],
                 "suggestedDurationSeconds": 6,
                 "continuity": {"continuesPreviousScene": False, "carryForward": []},
             },
@@ -498,6 +513,7 @@ def test_restore_scene_clears_replanning_removal_metadata(storyboard_fs):
                 "entryState": "Start two.",
                 "exitState": "End two.",
                 "prompt": "Prompt two.",
+                "sharedContextRefs": ["mara", "coat", "lobby"],
                 "suggestedDurationSeconds": 6,
                 "continuity": {"continuesPreviousScene": True, "carryForward": []},
             },
@@ -518,23 +534,24 @@ def test_developed_plan_rejects_schema_shape_drift(storyboard_fs):
         "entryState": "Start.",
         "exitState": "End.",
         "prompt": "Prompt.",
+        "sharedContextRefs": ["mara", "coat", "lobby"],
         "suggestedDurationSeconds": 6,
         "continuity": {"continuesPreviousScene": False, "carryForward": []},
     }
 
-    bad_top = {"scenes": [dict(base_scene), dict(base_scene)], "extra": True}
+    bad_top = {"sharedContext": _shared_context(), "scenes": [dict(base_scene), dict(base_scene)], "extra": True}
     with pytest.raises(ValueError, match="unsupported fields"):
         storyboard_store.apply_developed_plan(story["id"], bad_top)
 
     bad_scene = dict(base_scene)
     bad_scene["extra"] = "nope"
     with pytest.raises(ValueError, match="missing or unsupported fields"):
-        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_scene, dict(base_scene)]})
+        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": [bad_scene, dict(base_scene)]})
 
     bad_type = dict(base_scene)
     bad_type["title"] = 42
     with pytest.raises(ValueError, match="invalid title"):
-        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_type, dict(base_scene)]})
+        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": [bad_type, dict(base_scene)]})
 
 
 def test_take_label_is_editable_and_persists(storyboard_fs):

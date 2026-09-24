@@ -23,7 +23,7 @@
       "properties": {
         "subjects": {
           "type": "array",
-          "description": "Recurring people/subjects. Define stable identity and physical appearance as complete positive visual sentences. Do not put changeable wardrobe here.",
+          "description": "Recurring people/subjects. Define stable identity and physical appearance as complete positive visual sentences that can reconstruct the subject in an independently generated Scene. If the Story leaves appearance underspecified, choose one sensible concrete design once. Do not put changeable wardrobe here and do not use relative phrases such as same person, unchanged, or as before instead of the actual description.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -45,7 +45,7 @@
               "description": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Concrete reusable appearance description suitable for verbatim insertion into every applicable video prompt."
+                "description": "Concrete self-contained appearance description suitable for verbatim insertion into every applicable video prompt. Prefer stable observable traits such as approximate age range, face/hair, build, and distinctive visible features when useful; do not rely on another Scene to establish identity."
               }
             }
           }
@@ -74,7 +74,7 @@
               "description": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Detailed concrete clothing/accessory description suitable for verbatim insertion into applicable video prompts."
+                "description": "Detailed self-contained clothing/accessory description suitable for verbatim insertion into applicable video prompts. State actual garments, colors, materials/cut, footwear, and important accessories when useful; do not say same outfit or as before."
               }
             }
           }
@@ -103,7 +103,7 @@
               "description": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Detailed concrete spatial/material/color/lighting baseline suitable for verbatim insertion into applicable video prompts."
+                "description": "Detailed self-contained location baseline suitable for verbatim insertion into applicable video prompts. Establish stable layout/geometry, materials, dominant colors, fixed architectural or furnishing features, and baseline practical lighting when useful; do not say same location or as before."
               }
             }
           }
@@ -132,7 +132,7 @@
               "description": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Concrete persistent fact suitable for verbatim insertion into applicable video prompts."
+                "description": "Concrete self-contained persistent fact suitable for verbatim insertion into applicable video prompts. State the visible/audible fact itself rather than referring to an earlier Scene."
               }
             }
           }

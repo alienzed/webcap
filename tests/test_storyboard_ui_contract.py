@@ -243,6 +243,8 @@ def test_storyboard_director_requests_use_shared_llm_queue():
     assert "function waitForDirectorJob(job)" in storyboard
     assert "'/fs/director/job?job='" in storyboard
     assert "queued: 'Queued…'" in storyboard
+    waiter = storyboard.split("function waitForDirectorJob(job)", 1)[1].split("function directorRequest", 1)[0]
+    assert "renderDirectorActivity(" not in waiter
     assert "enqueue_llm(" in app
     assert '@app.route("/fs/director/job", methods=["GET", "POST"])' in app
     assert 'EXECUTION_LANE = "llm"' in runner

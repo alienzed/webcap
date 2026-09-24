@@ -194,6 +194,10 @@ def test_storyboard_director_configuration_is_first_class_app_setting():
     assert 'id="app-settings-storyboard-port"' in html
     assert 'id="app-settings-storyboard-context-size"' in html
     assert 'id="app-settings-storyboard-max-tokens"' in html
+    assert 'id="app-settings-storyboard-context-size" type="number" min="1024" step="1" placeholder="Auto"' in html
+    assert 'id="app-settings-storyboard-max-tokens" type="number" min="1" step="1" placeholder="Auto"' in html
+    assert "contextSizeValue === '' ? null" in settings
+    assert "maxTokensValue === '' ? null" in settings
     assert "~/llama.cpp/build/bin/llama-server" in html
 
     assert "['general', 'training', 'storyboard', 'advanced']" in settings

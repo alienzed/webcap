@@ -473,6 +473,11 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
     assert "'>RAM ' + Math.round(ramPercent) + '%</span>'" in storyboard
     assert "' used of '" in storyboard
     assert "detail.innerHTML = parts.join(' · ');" in storyboard
+    assert 'id="storyboard-director-model-load"' in html
+    assert "function updateDirectorModelLoad(activity, system)" in storyboard
+    assert "activity.modelSizeBytes" in storyboard
+    assert "ramDelta + vramDelta" in storyboard
+    assert "Approximate model residency from RAM + VRAM growth since loading began." in storyboard
     assert "min-height: 72px;" in css
 
 

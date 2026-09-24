@@ -43,12 +43,51 @@ def test_normalize_models_exposes_local_gguf_identity_and_status():
     assert models[0]["status"] == "loaded"
 
 
+def test_normalize_models_keeps_reported_size_metadata():
+    models = storyboard_llm_runtime._normalize_models({
+        "data": [{
+            "id": "director",
+            "path": "/models/director.gguf",
+            "status": {"value": "unloaded"},
+            "size": 123456,
+        }]
+    })
+
+    assert models[0]["sizeBytes"] == 123456
+
+
 def test_model_file_size_reads_only_selected_local_model(tmp_path):
     model_path = tmp_path / "director.gguf"
     model_path.write_bytes(b"x" * 4096)
 
     assert storyboard_llm_runtime._model_file_size({"path": str(model_path)}) == 4096
     assert storyboard_llm_runtime._model_file_size({"path": ""}) == 0
+
+
+def test_model_file_size_prefers_reported_size_and_relative_selected_path(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    models_dir.mkdir()
+    model_path = models_dir / "director.gguf"
+    model_path.write_bytes(b"x" * 8192)
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"models_dir": models_dir, "mode": "local"},
+    )
+
+    assert storyboard_llm_runtime._model_file_size({
+        "id": "director.gguf",
+        "label": "director.gguf",
+        "path": "",
+        "sizeBytes": 4096,
+    }) == 4096
+    assert storyboard_llm_runtime._model_file_size({
+        "id": "director.gguf",
+        "label": "director.gguf",
+        "path": "",
+        "sizeBytes": 0,
+    }) == 8192
 
 
 def test_loading_activity_exposes_selected_model_size(monkeypatch, tmp_path):

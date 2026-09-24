@@ -2057,3 +2057,78 @@
     row-gap: 5px;
   }
 }
+
+
+/* Compact Story / Scenes controls */
+.storyboard-story-panel-heading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.storyboard-scenes-heading {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.storyboard-scenes-heading-left {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.storyboard-scenes-heading-left .storyboard-scenes-heading-title {
+  min-width: 0;
+}
+
+.storyboard-scenes-heading .storyboard-director-header {
+  margin-left: 0;
+}
+
+.storyboard-scenes-heading .storyboard-director-header select {
+  max-width: 270px;
+}
+
+.storyboard-scene-progress-indicators {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.storyboard-scene-progress-work {
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.storyboard-scene-progress-work.is-active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--accent);
+}
+
+.storyboard-scene-progress-work.is-queued {
+  border-style: dashed;
+}
+
+@media (max-width: 980px) {
+  .storyboard-scenes-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .storyboard-scenes-heading .storyboard-director-header {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}

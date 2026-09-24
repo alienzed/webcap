@@ -180,6 +180,32 @@ def _inject_shared_context(prompt_data, refs, context_index):
     return inject_shared_context_text(prompt_data, "\n".join(lines))
 
 
+def inject_shared_context_into_rendered_prompt(prompt, shared_context_text):
+    text = str(prompt or "").strip()
+    continuity_text = " ".join(
+        line.strip()
+        for line in str(shared_context_text or "").splitlines()
+        if line.strip()
+    )
+    if not text or not continuity_text or "Continuity anchors —" in text:
+        return text
+
+    marker = "integrated_multimodal_description:"
+    marker_index = text.find(marker)
+    if marker_index < 0:
+        return text
+    shot_index = text.find("[Shot 1]", marker_index + len(marker))
+    if shot_index < 0:
+        return text
+    insert_at = shot_index + len("[Shot 1]")
+    return (
+        text[:insert_at]
+        + " Continuity anchors — "
+        + continuity_text
+        + text[insert_at:]
+    )
+
+
 def render_story_plan_prompts(plan):
     if not isinstance(plan, dict):
         raise ValueError("Storyboard Scene plan must be an object.")

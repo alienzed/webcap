@@ -67,8 +67,8 @@ def test_inference_snapshot_is_passive_and_does_not_reconcile_provider(inference
     touched = []
     monkeypatch.setattr(
         inference_runtime,
-        "cancel_job_and_wait",
-        lambda provider_id: touched.append(provider_id) or True,
+        "cancel_job_and_wait_status",
+        lambda provider_id: touched.append(provider_id) or "cancelled",
     )
 
     snapshot = inference_runner.snapshot(include_terminal=False)
@@ -486,8 +486,8 @@ def test_inference_runner_cancels_provider_after_unexpected_post_launch_failure(
     cancelled = []
     monkeypatch.setattr(
         inference_runtime,
-        "cancel_job_and_wait",
-        lambda provider_id: cancelled.append(provider_id) or True,
+        "cancel_job_and_wait_status",
+        lambda provider_id: cancelled.append(provider_id) or "cancelled",
     )
     monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
     monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
@@ -517,8 +517,8 @@ def test_inference_runner_does_not_cancel_provider_already_terminal(inference_ro
     cancelled = []
     monkeypatch.setattr(
         inference_runtime,
-        "cancel_job_and_wait",
-        lambda provider_id: cancelled.append(provider_id) or True,
+        "cancel_job_and_wait_status",
+        lambda provider_id: cancelled.append(provider_id) or "cancelled",
     )
     monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
     monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
@@ -549,7 +549,7 @@ def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconf
         raise RuntimeError("provider polling exploded")
 
     monkeypatch.setattr(inference_runner, "_execute_claimed", fail_after_launch)
-    monkeypatch.setattr(inference_runtime, "cancel_job_and_wait", lambda _provider_id: False)
+    monkeypatch.setattr(inference_runtime, "cancel_job_and_wait_status", lambda _provider_id: "")
     monkeypatch.setattr(inference_runtime, "read_job", lambda _provider_id: {"status": "in_progress"})
 
     inference_runner._advance_queue()
@@ -579,30 +579,19 @@ def test_cancel_job_and_wait_requires_terminal_provider_state(monkeypatch):
 
     assert inference_runtime.cancel_job_and_wait("provider-123", timeout=1) is True
 
-def test_inference_reconcile_holds_unresolved_provider_without_claiming_idle_gpu(inference_root, monkeypatch):
-    queued = execution_queue.enqueue(
+def test_inference_startup_clears_exact_obsolete_historical_pause_when_lane_is_empty(inference_root):
+    execution_queue.pause_lane(
         inference_runner.EXECUTION_LANE,
-        {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
-        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+        reason="Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",
     )
-    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
-    execution_queue.mark_running(
-        queued["id"],
-        details={"providerJobId": "provider-still-running", "providerStatus": "in_progress"},
-    )
-    execution_queue.finish_job(queued["id"], status="failed", error="polling failed")
-
     inference_runner._startup_reconciled = False
-    monkeypatch.setattr(inference_runtime, "cancel_job_and_wait", lambda _provider_id: False)
 
     inference_runner.reconcile_startup()
 
-    snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
-    assert snapshot["paused"] is True
-    assert execution_queue.resource_owner() == ""
-    assert inference_runner._monitor_has_work() is False
-    with inference_runner._provider_hold_lock:
-        assert "provider-still-running" in inference_runner._provider_cleanup_holds
+    snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE, include_terminal=False)
+    assert snapshot["paused"] is False
+    assert snapshot["pauseReason"] == ""
+    assert snapshot["jobs"] == []
 
 
 def test_inference_restart_does_not_reanimate_historical_terminal_provider_hold(inference_root, monkeypatch):

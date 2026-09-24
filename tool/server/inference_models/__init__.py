@@ -10,7 +10,7 @@ _MODEL_SPECS = {
     MINIMAX_H3_PROFILE_ID: {
         "adapter": h3,
         "mediaKind": "video",
-        "workflowFile": "minimax_h3_storyboard_api.json",
+        "workflowFile": "minimax_h3_inference_api.json",
         "settings": ("aspectRatio", "megapixels", "duration", "seed"),
         "references": ("first_frame", "last_frame"),
         "default": True,

@@ -95,6 +95,15 @@ def test_generate_prompt_assistant_uses_shared_llm_queue():
     assert "enqueue_llm(" in app
 
 
+def test_generate_prompt_assistant_memory_display_uses_percentages_with_amount_tooltips():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "'>VRAM ' + Math.round(vramPercent) + '%</span>'" in script
+    assert "'>RAM ' + Math.round(ramPercent) + '%</span>'" in script
+    assert "' used of '" in script
+    assert "detail.innerHTML = parts.join(' · ');" in script
+
+
 def test_generate_prompt_assistant_has_non_modal_live_activity():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")

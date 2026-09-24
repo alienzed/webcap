@@ -16,6 +16,7 @@ from .folder_state_store import read_folder_state
 from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path, test_source_path
 from .execution_queue import (
+    cancel_pending as execution_cancel_pending,
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
     get_job as execution_get_job,
@@ -805,7 +806,7 @@ def _session_has_nonterminal_jobs(session_directory):
     if not status.get("inferenceJobs"):
         return False
     return any(
-        str(job.get("status") or "") in {"queued", "starting", "running", "stopping"}
+        str(job.get("status") or "") in {"backlog", "queued", "starting", "running", "stopping"}
         for job in _session_job_records(status)
     )
 
@@ -871,7 +872,7 @@ def _sync_inference_session(session_directory):
             ),
             None,
         )
-        queued = [job for job in jobs if str(job.get("status") or "") == "queued"]
+        queued = [job for job in jobs if str(job.get("status") or "") in {"backlog", "queued"}]
         completed = len(status.get("results") if isinstance(status.get("results"), list) else [])
         failed = len(status.get("failures") if isinstance(status.get("failures"), list) else [])
         visible = dict(status)
@@ -1201,8 +1202,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
             try:
                 queued_job = execution_get_job(job_id)
                 job_status = str(queued_job.get("status") or "")
-                if job_status == "queued":
-                    execution_cancel_queued(job_id)
+                if job_status in {"backlog", "queued"}:
+                    execution_cancel_pending(job_id)
                 elif job_status in {"starting", "running"}:
                     execution_request_stop(job_id)
                     rollback_pending = True
@@ -1315,8 +1316,8 @@ def reconcile_startup():
                             try:
                                 child_job = execution_get_job(str(child_id))
                                 child_status = str(child_job.get("status") or "")
-                                if child_status == "queued":
-                                    execution_cancel_queued(str(child_id))
+                                if child_status in {"backlog", "queued"}:
+                                    execution_cancel_pending(str(child_id))
                                 elif child_status in {"starting", "running"}:
                                     execution_request_stop(str(child_id))
                                     cleanup_pending = True
@@ -1457,8 +1458,8 @@ def cancel_queued(folder_path, job_id):
     source = _session_source(visible, folder_path)
     status_payload = _read_status(session_directory) or {}
     for child in _session_job_records(status_payload):
-        if str(child.get("status") or "") == "queued":
-            execution_cancel_queued(str(child.get("id") or ""))
+        if str(child.get("status") or "") in {"backlog", "queued"}:
+            execution_cancel_pending(str(child.get("id") or ""))
     shutil.rmtree(session_directory)
     return {
         "operation": "test_queue_cancel",
@@ -1590,8 +1591,8 @@ def stop(folder_path, session_name=None, source=None):
     for job in _session_job_records(status_payload):
         job_status = str(job.get("status") or "")
         job_id = str(job.get("id") or "")
-        if job_status == "queued":
-            execution_cancel_queued(job_id)
+        if job_status in {"backlog", "queued"}:
+            execution_cancel_pending(job_id)
         elif job_status in {"starting", "running"}:
             execution_request_stop(job_id)
     return _sync_inference_session(session_directory)

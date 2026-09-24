@@ -203,6 +203,7 @@ def test_execution_queue_shelves_only_queued_work(queue_root):
     snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
 
     assert [job["id"] for job in changed] == [queued["id"]]
+    assert changed[0]["queuePosition"] == 0
     assert [job["status"] for job in snapshot["jobs"]] == ["backlog", "backlog"]
     assert snapshot["jobs"][0]["queuePosition"] == 0
     assert snapshot["jobs"][1]["id"] == backlog["id"]

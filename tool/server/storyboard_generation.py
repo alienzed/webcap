@@ -8,6 +8,7 @@ from pathlib import Path
 from . import inference_runtime
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
+    consume_terminal_job as execution_consume_terminal_job,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     recover_lane as execution_recover_lane,
@@ -276,11 +277,14 @@ def _generation_job(job):
     }
 
 
-def _storyboard_job(job_id):
-    job = execution_get_job(str(job_id or "").strip())
+def _storyboard_job(job_id, consume=False):
+    job_id = str(job_id or "").strip()
+    job = execution_get_job(job_id)
     metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
     if metadata.get("client") != "storyboard":
         raise ValueError("Inference job does not belong to Storyboard.")
+    if consume and str(job.get("status") or "") in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
+        job = execution_consume_terminal_job(job_id)
     return job
 
 
@@ -399,9 +403,9 @@ def start_generation(story_id, scene_id):
     return generation_status(job["jobId"])
 
 
-def generation_status(job_id):
+def generation_status(job_id, consume=False):
     reconcile_startup()
-    return _generation_job(_storyboard_job(job_id))
+    return _generation_job(_storyboard_job(job_id, consume=consume))
 
 
 def generation_queue(story_id=""):

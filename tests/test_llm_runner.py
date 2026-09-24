@@ -278,6 +278,66 @@ def test_storyboard_director_target_conflicts_are_backend_authoritative(llm_root
     assert other_story["status"] == "queued"
 
 
+def test_storyboard_develop_result_refuses_to_replace_scene_with_active_take(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "A woman crosses a lobby.",
+        "targetSceneCount": 1,
+    })
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "data": {
+                "sharedContext": {
+                    "subjects": [],
+                    "wardrobes": [],
+                    "locations": [],
+                    "persistentFacts": [],
+                },
+                "scenes": [{
+                    "title": "Lobby",
+                    "summary": "She crosses the lobby.",
+                    "entryState": "At the door.",
+                    "exitState": "At the desk.",
+                    "prompt": {
+                        "integrated_multimodal_description": "She crosses the lobby.",
+                        "overall_soundscape": "Footsteps.",
+                        "non_diegetic_music": "N/A",
+                    },
+                    "sharedContextRefs": [],
+                    "suggestedDurationSeconds": 6,
+                    "continuity": {"continuesPreviousScene": False, "carryForward": []},
+                }],
+            },
+            "text": "{}",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+    from tool.server import storyboard_generation
+    monkeypatch.setattr(
+        storyboard_generation,
+        "generation_queue",
+        lambda story_id="": {"jobs": [{"jobId": "take-job"}]},
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "develop_story", "prompt": "Develop.", "output": "json"},
+        context={"storyId": story["id"], "operation": "develop_story"},
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "failed"
+    assert "pending Take generation" in finished["error"]
+    assert storyboard_store.load_story(story["id"])["sceneOrder"] == []
+
+
 def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_root, monkeypatch):
     story = storyboard_store.create_story({
         "title": "Story",

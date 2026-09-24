@@ -452,6 +452,11 @@ def _normalize_scene(scene_id, value, existing=None):
         "entryState": str(value.get("entryState", current.get("entryState", "")) or "").strip(),
         "exitState": str(value.get("exitState", current.get("exitState", "")) or "").strip(),
         "prompt": str(value.get("prompt", current.get("prompt", "")) or ""),
+        "previousPrompt": (
+            str(value.get("previousPrompt"))
+            if isinstance(value.get("previousPrompt"), str)
+            else (current.get("previousPrompt") if isinstance(current.get("previousPrompt"), str) else None)
+        ),
         "promptDirectorModel": str(value.get("promptDirectorModel", current.get("promptDirectorModel", "")) or "").strip(),
         "promptDirectorJobId": str(value.get("promptDirectorJobId", current.get("promptDirectorJobId", "")) or "").strip(),
         "planDirectorModel": str(value.get("planDirectorModel", current.get("planDirectorModel", "")) or "").strip(),
@@ -592,7 +597,7 @@ def duplicate_story(story_id):
     duplicate["development"] = copy.deepcopy(source.get("development")) if isinstance(source.get("development"), dict) else None
 
     scene_fields = (
-        "title", "summary", "entryState", "exitState", "prompt", "promptDirectorModel", "promptDirectorJobId", "planDirectorModel", "sharedContextRefs",
+        "title", "summary", "entryState", "exitState", "prompt", "previousPrompt", "promptDirectorModel", "promptDirectorJobId", "planDirectorModel", "sharedContextRefs",
         "durationSeconds", "aspectRatio", "megapixels", "seed", "seedMode",
         "loras", "storyLoraOverrides", "notes",
     )
@@ -895,6 +900,54 @@ def update_scene(story_id, scene_id, payload):
 
 
 @_serialized_mutation
+def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id=""):
+    story = load_story(story_id)
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    current = scenes.get(scene_id)
+    if not isinstance(current, dict):
+        raise FileNotFoundError("Director target Scene does not exist.")
+    generated = str(prompt or "")
+    if not generated.strip():
+        raise ValueError("Storyboard Director returned an empty Scene prompt.")
+
+    scene = _normalize_scene(scene_id, {
+        "prompt": generated,
+        "previousPrompt": str(current.get("prompt") or ""),
+        "promptDirectorModel": str(model_id or "").strip(),
+        "promptDirectorJobId": str(job_id or "").strip(),
+    }, existing=current)
+    scenes[scene_id] = scene
+    story["scenes"] = scenes
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story, scene
+
+
+@_serialized_mutation
+def restore_previous_prompt(story_id, scene_id):
+    story = load_story(story_id)
+    scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+    current = scenes.get(scene_id)
+    if not isinstance(current, dict):
+        raise FileNotFoundError("Scene does not exist.")
+    previous = current.get("previousPrompt")
+    if not isinstance(previous, str):
+        raise FileNotFoundError("No previous Scene prompt is available.")
+
+    scene = _normalize_scene(scene_id, {
+        "prompt": previous,
+        "previousPrompt": str(current.get("prompt") or ""),
+        "promptDirectorModel": "",
+        "promptDirectorJobId": "",
+    }, existing=current)
+    scenes[scene_id] = scene
+    story["scenes"] = scenes
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    return story, scene
+
+
+@_serialized_mutation
 def duplicate_scene(story_id, scene_id):
     story = load_story(story_id)
     current = (story.get("scenes") or {}).get(scene_id)
@@ -911,6 +964,7 @@ def duplicate_scene(story_id, scene_id):
         "entryState": current.get("entryState") or "",
         "exitState": current.get("exitState") or "",
         "prompt": current.get("prompt") or "",
+        "previousPrompt": current.get("previousPrompt") if isinstance(current.get("previousPrompt"), str) else None,
         "promptDirectorModel": current.get("promptDirectorModel") or "",
         "promptDirectorJobId": current.get("promptDirectorJobId") or "",
         "planDirectorModel": current.get("planDirectorModel") or "",

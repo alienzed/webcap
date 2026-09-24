@@ -43,29 +43,24 @@ def test_normalize_models_exposes_local_gguf_identity_and_status():
     assert models[0]["status"] == "loaded"
 
 
-def test_normalize_models_exposes_local_gguf_file_size(tmp_path):
+def test_model_file_size_reads_only_selected_local_model(tmp_path):
     model_path = tmp_path / "director.gguf"
     model_path.write_bytes(b"x" * 4096)
 
-    models = storyboard_llm_runtime._normalize_models({
-        "data": [{
-            "id": "director",
-            "path": str(model_path),
-            "status": {"value": "unloaded"},
-        }]
-    })
-
-    assert models[0]["sizeBytes"] == 4096
+    assert storyboard_llm_runtime._model_file_size({"path": str(model_path)}) == 4096
+    assert storyboard_llm_runtime._model_file_size({"path": ""}) == 0
 
 
-def test_loading_activity_exposes_selected_model_size(monkeypatch):
+def test_loading_activity_exposes_selected_model_size(monkeypatch, tmp_path):
+    model_path = tmp_path / "director.gguf"
+    model_path.write_bytes(b"x" * 4096)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "list_models",
         lambda reload=False: [{
             "id": "director",
             "status": "unloaded",
-            "sizeBytes": 8 * 1024 ** 3,
+            "path": str(model_path),
         }],
     )
     monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda _model_id: None)
@@ -75,7 +70,7 @@ def test_loading_activity_exposes_selected_model_size(monkeypatch):
 
     assert activity["phase"] == "loading_model"
     assert activity["model"] == "director"
-    assert activity["modelSizeBytes"] == 8 * 1024 ** 3
+    assert activity["modelSizeBytes"] == 4096
 
 
 def test_chat_uses_selected_model_disables_thinking_retains_model_and_releases_gpu(monkeypatch):

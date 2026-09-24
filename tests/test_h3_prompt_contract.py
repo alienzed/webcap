@@ -49,12 +49,31 @@ def test_h3_renderer_owns_reference_alignment_syntax():
 
 def test_h3_story_plan_renderer_converts_structured_prompt_objects_without_mutating_input():
     plan = {
+        "sharedContext": {
+            "subjects": [{
+                "id": "mara",
+                "label": "Mara",
+                "description": "Mara has a dark bob and a guarded expression.",
+            }],
+            "wardrobes": [{
+                "id": "mara-raincoat",
+                "label": "Mara wardrobe",
+                "description": "Mara wears the same pale yellow raincoat over black trousers.",
+            }],
+            "locations": [{
+                "id": "hotel-lobby",
+                "label": "Hotel lobby",
+                "description": "The lobby has dark terrazzo floors, brass fixtures, and rain-streaked glass.",
+            }],
+            "persistentFacts": [],
+        },
         "scenes": [{
             "title": "Lobby",
             "summary": "She notices footprints.",
             "entryState": "She is inside.",
             "exitState": "She is staring at the floor.",
             "prompt": _fields(),
+            "sharedContextRefs": ["mara", "mara-raincoat", "hotel-lobby"],
             "suggestedDurationSeconds": 6,
             "continuity": {"continuesPreviousScene": False, "carryForward": []},
         }]
@@ -66,6 +85,9 @@ def test_h3_story_plan_renderer_converts_structured_prompt_objects_without_mutat
     assert rendered["scenes"][0]["prompt"].startswith(
         "integrated_multimodal_description: [Shot 1]"
     )
+    assert "Continuity anchors — Mara: Mara has a dark bob" in rendered["scenes"][0]["prompt"]
+    assert "Mara wardrobe: Mara wears the same pale yellow raincoat" in rendered["scenes"][0]["prompt"]
+    assert "Hotel lobby: The lobby has dark terrazzo floors" in rendered["scenes"][0]["prompt"]
 
 
 def test_h3_renderer_rejects_missing_structured_fields():

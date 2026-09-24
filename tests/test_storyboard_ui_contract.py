@@ -299,6 +299,21 @@ def test_storyboard_director_has_non_modal_live_activity():
     assert "position: absolute;" in css
 
 
+def test_storyboard_director_activity_rejects_stale_terminal_state():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "function directorActivityForCurrentRun(activity)" in storyboard
+    assert "var terminal = ['complete', 'error'].indexOf(phase) !== -1;" in storyboard
+    assert "if (activityTime >= localStartedAt) return activity;" in storyboard
+    assert "phase: 'preparing'," in storyboard
+    assert "renderDirectorActivity(directorActivityForCurrentRun(values[0]), values[1]);" in storyboard
+
+    finish = storyboard.split("function finishDirectorActivity()", 1)[1].split("function updateSceneDirectorStatus", 1)[0]
+    assert "if (terminal && (!localStartedAt || activityTime >= localStartedAt))" in finish
+    assert "staleCard.classList.add('hidden');" in finish
+
+
+
 def test_storyboard_uses_shared_director_preference_without_eager_preload():
     common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

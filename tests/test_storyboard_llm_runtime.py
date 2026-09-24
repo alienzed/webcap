@@ -694,6 +694,48 @@ def test_run_contract_renders_structured_h3_result(monkeypatch):
     )
 
 
+def test_refine_renderer_uses_optional_returned_duration(monkeypatch):
+    schema = {
+        "type": "object",
+        "properties": {
+            "integrated_multimodal_description": {"type": "string"},
+            "overall_soundscape": {"type": "string"},
+            "non_diegetic_music": {"type": "string"},
+            "durationSeconds": {"type": "number"},
+        },
+    }
+
+    def fake_chat(model_id, messages, response_schema=None, max_tokens=None, sampling=None):
+        return {
+            "text": (
+                '{"integrated_multimodal_description":"She crosses the room.",'
+                '"overall_soundscape":"Room tone.",'
+                '"non_diegetic_music":"N/A",'
+                '"durationSeconds":12}'
+            ),
+            "model": model_id,
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "chat", fake_chat)
+
+    result = storyboard_llm_runtime.run_contract("director", {
+        "operation": "refine_prompt",
+        "prompt": "Refine it.",
+        "output": "json",
+        "response_schema": schema,
+        "result_renderer": {
+            "type": "h3_base",
+            "mode": "L2VA",
+            "duration": 10,
+            "duration_field": "durationSeconds",
+            "shared_context": "",
+        },
+    })
+
+    assert result["durationOverride"] == 12
+    assert "12.00-second mark" in result["text"]
+
+
 def test_chat_wraps_json_schema_for_llama_cpp(monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)

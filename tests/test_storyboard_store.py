@@ -507,6 +507,64 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
     assert first["sharedContextRefs"] == ["mara", "coat", "lobby"]
 
 
+def test_apply_developed_plan_accepts_scenes_without_shared_context(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story", "targetSceneCount": 2})
+    scene = {
+        "title": "Opening",
+        "summary": "A woman enters.",
+        "entryState": "Outside.",
+        "exitState": "Inside.",
+        "prompt": "integrated_multimodal_description: [Shot 1] She enters.\n\noverall_soundscape: Rain.\n\nnon_diegetic_music: N/A",
+        "suggestedDurationSeconds": 6,
+        "continuity": {"continuesPreviousScene": False, "carryForward": []},
+    }
+
+    developed = storyboard_store.apply_developed_plan(
+        story["id"],
+        {"scenes": [scene]},
+        model_id="director.gguf",
+    )
+
+    assert len(developed["sceneOrder"]) == 1
+    saved = developed["scenes"][developed["sceneOrder"][0]]
+    assert saved["title"] == "Opening"
+    assert saved["sharedContextRefs"] == []
+
+
+def test_apply_developed_plan_ignores_unusable_optional_shared_context(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    scene = {
+        "title": "Opening",
+        "summary": "Elena enters.",
+        "entryState": "Outside.",
+        "exitState": "Inside.",
+        "prompt": "integrated_multimodal_description: [Shot 1] Elena enters.\n\noverall_soundscape: Rain.\n\nnon_diegetic_music: N/A",
+        "sharedContextRefs": ["character:elena", "elena"],
+        "suggestedDurationSeconds": 6,
+        "continuity": {"continuesPreviousScene": False, "carryForward": []},
+    }
+    malformed = {
+        "subjects": [
+            {"id": "character:elena", "label": "Elena", "description": "Dark shoulder-length hair."},
+            {"id": "elena", "label": "Elena duplicate", "description": "Same person."},
+        ],
+        "wardrobes": [
+            {"id": "elena", "label": "Elena wardrobe", "description": "Black wool coat."},
+        ],
+        "locations": [],
+        "persistentFacts": [],
+    }
+
+    developed = storyboard_store.apply_developed_plan(
+        story["id"],
+        {"sharedContext": malformed, "scenes": [scene]},
+    )
+
+    saved = developed["scenes"][developed["sceneOrder"][0]]
+    assert saved["title"] == "Opening"
+    assert saved["sharedContextRefs"] == []
+
+
 def test_apply_developed_plan_treats_scene_count_as_target_but_keeps_semantic_validation(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "targetSceneCount": 2})
     good_scene = {
@@ -611,11 +669,12 @@ def test_developed_plan_ignores_harmless_extra_fields_but_rejects_ambiguous_cont
 
     bad_ref = dict(base_scene)
     bad_ref["sharedContextRefs"] = ["missing"]
-    with pytest.raises(ValueError, match="unknown sharedContext id"):
-        storyboard_store.apply_developed_plan(
-            story["id"],
-            {"sharedContext": _shared_context(), "scenes": [bad_ref, dict(base_scene)]},
-        )
+    developed = storyboard_store.apply_developed_plan(
+        story["id"],
+        {"sharedContext": _shared_context(), "scenes": [bad_ref]},
+    )
+    saved = developed["scenes"][developed["sceneOrder"][0]]
+    assert saved["sharedContextRefs"] == []
 
     bad_type = dict(base_scene)
     bad_type["title"] = 42

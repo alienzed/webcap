@@ -2,143 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "storyboard-scene-plan.schema.json",
   "title": "WebCap Storyboard Scene Plan",
-  "description": "Structured output contract for planning an ordered Story into independently generatable Scenes. WebCap assigns canonical Scene IDs after validation and injects referenced shared continuity descriptions into each Scene prompt.",
+  "description": "Structured output contract for planning an ordered Story into independently generatable Scenes. WebCap assigns canonical Scene IDs after validation.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "sharedContext",
     "scenes"
   ],
   "properties": {
-    "sharedContext": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "subjects",
-        "wardrobes",
-        "locations",
-        "persistentFacts"
-      ],
-      "description": "Reusable concrete continuity definitions established once for the whole Story. Scene sharedContextRefs select which exact definitions WebCap injects into that Scene prompt.",
-      "properties": {
-        "subjects": {
-          "type": "array",
-          "description": "Recurring people/subjects. Define stable identity and physical appearance as complete positive visual sentences that can reconstruct the subject in an independently generated Scene. If the Story leaves appearance underspecified, choose one sensible concrete design once. Do not put changeable wardrobe here and do not use relative phrases such as same person, unchanged, or as before instead of the actual description.",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "id",
-              "label",
-              "description"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Short stable identifier reused by Scene sharedContextRefs."
-              },
-              "label": {
-                "type": "string",
-                "minLength": 1
-              },
-              "description": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Concrete self-contained appearance description suitable for verbatim insertion into every applicable video prompt. Prefer stable observable traits such as approximate age range, face/hair, build, and distinctive visible features when useful; do not rely on another Scene to establish identity."
-              }
-            }
-          }
-        },
-        "wardrobes": {
-          "type": "array",
-          "description": "Reusable wardrobe states. Create a new wardrobe only when the Story explicitly requires a clothing change; otherwise Scenes must reuse the same wardrobe id.",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "id",
-              "label",
-              "description"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Short stable identifier reused by Scene sharedContextRefs."
-              },
-              "label": {
-                "type": "string",
-                "minLength": 1
-              },
-              "description": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Detailed self-contained clothing/accessory description suitable for verbatim insertion into applicable video prompts. State actual garments, colors, materials/cut, footwear, and important accessories when useful; do not say same outfit or as before."
-              }
-            }
-          }
-        },
-        "locations": {
-          "type": "array",
-          "description": "Recurring physical locations. Create a new location only when the Story actually moves somewhere else; do not redesign the same place for visual variety.",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "id",
-              "label",
-              "description"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Short stable identifier reused by Scene sharedContextRefs."
-              },
-              "label": {
-                "type": "string",
-                "minLength": 1
-              },
-              "description": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Detailed self-contained location baseline suitable for verbatim insertion into applicable video prompts. Establish stable layout/geometry, materials, dominant colors, fixed architectural or furnishing features, and baseline practical lighting when useful; do not say same location or as before."
-              }
-            }
-          }
-        },
-        "persistentFacts": {
-          "type": "array",
-          "description": "Other reusable visible/audible state that persists across multiple Scenes, such as a specific prop, vehicle, weather/time state, injury, dirt, or damage.",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "id",
-              "label",
-              "description"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Short stable identifier reused by Scene sharedContextRefs."
-              },
-              "label": {
-                "type": "string",
-                "minLength": 1
-              },
-              "description": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Concrete self-contained persistent fact suitable for verbatim insertion into applicable video prompts. State the visible/audible fact itself rather than referring to an earlier Scene."
-              }
-            }
-          }
-        }
-      }
-    },
     "scenes": {
       "type": "array",
       "items": {
@@ -149,7 +19,6 @@
           "summary",
           "entryState",
           "exitState",
-          "sharedContextRefs",
           "prompt",
           "suggestedDurationSeconds",
           "continuity"
@@ -174,14 +43,6 @@
             "minLength": 1,
             "description": "What should be true when this Scene ends."
           },
-          "sharedContextRefs": {
-            "type": "array",
-            "description": "IDs from sharedContext that are visibly/audibly applicable in this Scene. Reuse the same subject, wardrobe, location, and persistent-state IDs across Scenes until the Story explicitly changes them. WebCap injects these definitions verbatim into the H3 prompt.",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
           "suggestedDurationSeconds": {
             "type": "number",
             "exclusiveMinimum": 0,
@@ -203,7 +64,7 @@
               },
               "carryForward": {
                 "type": "array",
-                "description": "Changed state established by this Scene that must remain true later until superseded. Do not repeat static sharedContext definitions here.",
+                "description": "Changed state established by this Scene that must remain true later until superseded.",
                 "items": {
                   "type": "string",
                   "minLength": 1
@@ -219,12 +80,12 @@
               "overall_soundscape",
               "non_diegetic_music"
             ],
-            "description": "Scene-specific MiniMax H3 base prompt content. Do not restate sharedContext definitions here; WebCap injects the exact referenced definitions before rendering the final prompt.",
+            "description": "Scene-specific MiniMax H3 base prompt content.",
             "properties": {
               "integrated_multimodal_description": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Chronological audiovisual action/camera description for this Scene. Begin with [Shot 1]; later shots may use H3 cut timestamps. Assume WebCap will prepend referenced shared continuity descriptions immediately after [Shot 1]."
+                "description": "Chronological audiovisual action/camera description for this Scene. Begin with [Shot 1]; later shots may use H3 cut timestamps."
               },
               "overall_soundscape": {
                 "type": "string",

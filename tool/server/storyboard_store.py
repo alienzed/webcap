@@ -733,9 +733,24 @@ def _normalize_developed_shared_context(value):
 def _validate_developed_plan(plan, target_scene_count=None):
     if not isinstance(plan, dict):
         raise ValueError("Developed Story plan must be an object.")
-    if not {"sharedContext", "scenes"}.issubset(plan):
-        raise ValueError("Developed Story plan is missing required fields.")
-    shared_context = _normalize_developed_shared_context(plan.get("sharedContext"))
+    if "scenes" not in plan:
+        raise ValueError("Developed Story plan is missing Scenes.")
+
+    shared_context = {
+        "subjects": [],
+        "wardrobes": [],
+        "locations": [],
+        "persistentFacts": [],
+    }
+    raw_shared_context = plan.get("sharedContext")
+    if raw_shared_context is not None:
+        try:
+            shared_context = _normalize_developed_shared_context(raw_shared_context)
+        except ValueError as exc:
+            _logger.warning(
+                "Ignoring unusable optional Director sharedContext; Scenes remain usable: %s",
+                exc,
+            )
     shared_context_id_map = {
         item["id"].casefold(): item["id"]
         for category in shared_context.values()
@@ -753,7 +768,6 @@ def _validate_developed_plan(plan, target_scene_count=None):
         "entryState",
         "exitState",
         "prompt",
-        "sharedContextRefs",
         "suggestedDurationSeconds",
         "continuity",
     }
@@ -772,23 +786,24 @@ def _validate_developed_plan(plan, target_scene_count=None):
                 raise ValueError("Developed Story Scene " + str(index) + " has invalid " + key + ".")
             text_fields[key] = value.strip()
 
-        refs = item.get("sharedContextRefs")
-        if (
-            not isinstance(refs, list)
-            or any(not isinstance(value, str) or not value.strip() for value in refs)
-        ):
-            raise ValueError("Developed Story Scene sharedContextRefs must be a list of non-empty strings.")
+        refs = item.get("sharedContextRefs", [])
         normalized_refs = []
         seen_refs = set()
-        for value in refs:
-            ref = value.strip()
-            key = ref.casefold()
-            if key not in shared_context_id_map:
-                raise ValueError("Developed Story Scene references unknown sharedContext id: " + ref)
-            if key in seen_refs:
-                raise ValueError("Developed Story Scene sharedContextRefs must not contain duplicates.")
-            seen_refs.add(key)
-            normalized_refs.append(shared_context_id_map[key])
+        if isinstance(refs, list):
+            for value in refs:
+                if not isinstance(value, str) or not value.strip():
+                    continue
+                ref = value.strip()
+                key = ref.casefold()
+                if key in seen_refs or key not in shared_context_id_map:
+                    continue
+                seen_refs.add(key)
+                normalized_refs.append(shared_context_id_map[key])
+        elif refs not in (None, ""):
+            _logger.warning(
+                "Ignoring optional Director sharedContextRefs for Scene %s because they are not an array.",
+                index,
+            )
 
         duration_value = item.get("suggestedDurationSeconds")
         if isinstance(duration_value, bool) or not isinstance(duration_value, (int, float)):

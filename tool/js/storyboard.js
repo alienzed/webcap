@@ -483,9 +483,10 @@
       }
     }
 
-    setDirectorBusy(true);
+    var directorTarget = { kind: 'scene-prompt', sceneId: sceneId };
+    setDirectorBusy(true, directorTarget);
     updateSceneDirectorStatus(sceneId, 'Director working…');
-    startDirectorActivity({ kind: 'scene-prompt', sceneId: sceneId });
+    startDirectorActivity(directorTarget);
     flushPendingSaves().then(function () {
       return directorRequest({
         storyId: storyState.story.id,
@@ -517,20 +518,33 @@
     if (node) node.textContent = text || '';
   }
 
-  function setStoryDirectorInputsDisabled(disabled) {
-    ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-style'].forEach(function (id) {
-      el(id).disabled = !!disabled;
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-story-invariant-kind], [data-story-invariant-title], [data-story-invariant-text], [data-story-invariant-remove]'), function (node) {
-      node.disabled = !!disabled;
-    });
-    el('storyboard-invariant-add').disabled = !!disabled;
+  function setDirectorTargetProtected(target, protectedState) {
+    target = target || {};
+    if (target.kind === 'concept') {
+      var concept = el('storyboard-story-concept');
+      if (concept) concept.disabled = !!protectedState;
+      return;
+    }
+    if (target.kind === 'scene-prompt') {
+      var root = sceneElement(target.sceneId);
+      if (!root) return;
+      var prompt = root.querySelector('[data-scene-field="prompt"]');
+      var correction = root.querySelector('[data-director-correction]');
+      if (prompt) prompt.disabled = !!protectedState;
+      if (correction) correction.disabled = !!protectedState;
+    }
   }
 
-  function setDirectorBusy(busy) {
+  function setDirectorBusy(busy, target) {
+    if (!busy && storyState.director.activityTarget) {
+      setDirectorTargetProtected(storyState.director.activityTarget, false);
+    }
     storyState.director.busy = !!busy;
-    setStoryDirectorInputsDisabled(busy);
-    ['storyboard-expand-concept-btn', 'storyboard-develop-btn', 'storyboard-delete-story-btn'].forEach(function (id) {
+    if (busy && target) {
+      storyState.director.activityTarget = target;
+      setDirectorTargetProtected(target, true);
+    }
+    ['storyboard-expand-concept-btn', 'storyboard-develop-btn'].forEach(function (id) {
       var node = el(id);
       if (node) node.disabled = !!busy;
     });
@@ -557,9 +571,10 @@
     }
 
     var storyId = storyState.story.id;
-    setDirectorBusy(true);
+    var directorTarget = { kind: 'concept' };
+    setDirectorBusy(true, directorTarget);
     setDevelopStatus('Director is expanding the concept…');
-    startDirectorActivity({ kind: 'concept' });
+    startDirectorActivity(directorTarget);
     flushPendingSaves().then(function () {
       return directorRequest({
         storyId: storyId,
@@ -623,9 +638,10 @@
       'Developing this Story again will replace the active Scene plan. Existing Scenes and Takes will remain recoverable in Removed Scenes. Continue?'
     )) return;
 
-    setDirectorBusy(true);
+    var directorTarget = { kind: 'scenes' };
+    setDirectorBusy(true, directorTarget);
     setDevelopStatus('Director is developing the Story…');
-    startDirectorActivity({ kind: 'scenes' });
+    startDirectorActivity(directorTarget);
     flushPendingSaves().then(function () {
       return directorRequest({
         storyId: storyId,
@@ -1652,7 +1668,7 @@
     renderStoryLoras();
     renderScenes();
     renderStoryReadiness();
-    setDirectorBusy(storyState.director.busy);
+    setDirectorBusy(storyState.director.busy, storyState.director.activityTarget);
     renderSequencePreview();
     renderLibrary();
   }

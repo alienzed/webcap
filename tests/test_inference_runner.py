@@ -19,6 +19,7 @@ def inference_root(tmp_path, monkeypatch):
     inference_runner._startup_reconciled = True
     with inference_runner._provider_hold_lock:
         inference_runner._provider_cleanup_holds.clear()
+        inference_runner._provider_cleanup_reason = ""
     return tmp_path
 
 
@@ -555,10 +556,13 @@ def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconf
     inference_runner._advance_queue()
 
     finished = execution_queue.get_job(queued["id"])
-    snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
+    snapshot = inference_runner.snapshot()
     assert finished["status"] == "failed"
     assert snapshot["paused"] is True
     assert "could not be confirmed stopped" in snapshot["pauseReason"]
+    persisted = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
+    assert persisted["paused"] is False
+    assert persisted["pauseReason"] == ""
     assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
 
     execution_queue.resume_lane(inference_runner.EXECUTION_LANE)
@@ -578,6 +582,26 @@ def test_cancel_job_and_wait_requires_terminal_provider_state(monkeypatch):
     monkeypatch.setattr(inference_runtime.time, "sleep", lambda _seconds: None)
 
     assert inference_runtime.cancel_job_and_wait("provider-123", timeout=1) is True
+
+def test_inference_snapshot_migrates_obsolete_persisted_provider_pause_without_provider_contact(inference_root, monkeypatch):
+    execution_queue.pause_lane(
+        inference_runner.EXECUTION_LANE,
+        reason="Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",
+    )
+    touched = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "read_job",
+        lambda provider_id: touched.append(provider_id) or {"status": "in_progress"},
+    )
+
+    snapshot = inference_runner.snapshot(include_terminal=False)
+
+    assert snapshot["paused"] is False
+    assert snapshot["pauseReason"] == ""
+    assert snapshot["jobs"] == []
+    assert touched == []
+
 
 def test_inference_startup_clears_exact_obsolete_historical_pause_when_lane_is_empty(inference_root):
     execution_queue.pause_lane(

@@ -301,12 +301,8 @@
       return sceneRoot && sceneRoot.querySelector('[data-scene-field="prompt"]');
     }
     if (target.kind === 'scenes') {
-      var authoring = el('storyboard-story-authoring');
-      if (authoring && !authoring.classList.contains('hidden')) {
-        var authoringRect = authoring.getBoundingClientRect();
-        if (authoringRect.width >= 240 && authoringRect.height >= 120) return authoring;
-      }
-      return document.querySelector('.storyboard-scene-workspace');
+      var concept = el('storyboard-story-concept');
+      return concept && concept.offsetParent !== null ? concept : null;
     }
     return document.querySelector('.storyboard-scene-workspace');
   }
@@ -318,16 +314,15 @@
     var target = directorActivityTargetElement();
     if (!card || !editor) return;
 
-    var detachedScenePrompt = kind === 'scene-prompt' && !target;
-    card.classList.toggle('is-detached-target', detachedScenePrompt);
-    if (detachedScenePrompt || !target || card.classList.contains('hidden')) return;
+    var detachedTarget = (kind === 'scene-prompt' || kind === 'scenes') && !target;
+    card.classList.toggle('is-detached-target', detachedTarget);
+    if (detachedTarget || !target || card.classList.contains('hidden')) return;
 
     var editorRect = editor.getBoundingClientRect();
     var targetRect = target.getBoundingClientRect();
-    var fillsField = kind === 'concept' || kind === 'scene-prompt';
+    var fillsField = kind === 'concept' || kind === 'scene-prompt' || kind === 'scenes';
     card.classList.toggle('is-field-overlay', fillsField);
     card.classList.toggle('is-structure-overlay', !fillsField);
-    if (fillsField) card.classList.remove('is-story-plan-overlay');
 
     if (fillsField) {
       var inset = 7;
@@ -342,31 +337,6 @@
 
     card.style.height = '';
 
-    if (kind === 'scenes') {
-      card.classList.add('is-story-plan-overlay');
-      var structureInset = 14;
-      var structureWidth = Math.max(300, targetRect.width - structureInset * 2);
-      var availableEditorWidth = Math.max(300, editorRect.width - structureInset * 2);
-      structureWidth = Math.min(structureWidth, availableEditorWidth);
-      card.style.width = Math.round(structureWidth) + 'px';
-      card.style.left = Math.round(
-        Math.max(structureInset, targetRect.left - editorRect.left + structureInset)
-      ) + 'px';
-
-      window.requestAnimationFrame(function () {
-        if (card.classList.contains('hidden')) return;
-        var refreshedEditorRect = editor.getBoundingClientRect();
-        var refreshedTargetRect = target.getBoundingClientRect();
-        var bottomAlignedTop = refreshedTargetRect.bottom - refreshedEditorRect.top - card.offsetHeight - structureInset;
-        var maxTop = Math.max(structureInset, refreshedEditorRect.height - card.offsetHeight - structureInset);
-        card.style.top = Math.round(
-          Math.max(structureInset, Math.min(maxTop, bottomAlignedTop))
-        ) + 'px';
-      });
-      return;
-    }
-
-    card.classList.remove('is-story-plan-overlay');
     var preferredWidth = 440;
     var targetWidth = Math.max(0, targetRect.width - 24);
     var editorWidth = Math.max(0, editorRect.width - 24);

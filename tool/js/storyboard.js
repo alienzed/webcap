@@ -479,6 +479,51 @@
     return isFinite(value) && value >= 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
   }
 
+  function directorTokenCount(value) {
+    var count = Number(value);
+    if (!isFinite(count) || count < 0) return '';
+    if (count < 1000) return String(Math.round(count));
+    if (count < 10000) return (count / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return Math.round(count / 1000) + 'k';
+  }
+
+  function directorCompletionStats(activity) {
+    var usage = activity && activity.usage && typeof activity.usage === 'object' ? activity.usage : {};
+    var timings = activity && activity.timings && typeof activity.timings === 'object' ? activity.timings : {};
+    var promptTokens = Number(usage.prompt_tokens);
+    if (!isFinite(promptTokens)) promptTokens = Number(timings.prompt_n);
+    var completionTokens = Number(usage.completion_tokens);
+    if (!isFinite(completionTokens)) completionTokens = Number(timings.predicted_n);
+    var totalTokens = Number(usage.total_tokens);
+    if (!isFinite(totalTokens) && isFinite(promptTokens) && isFinite(completionTokens)) {
+      totalTokens = promptTokens + completionTokens;
+    }
+
+    var speed = Number(timings.predicted_per_second);
+    if ((!isFinite(speed) || speed <= 0) && isFinite(completionTokens)) {
+      var predictedMs = Number(timings.predicted_ms);
+      if (isFinite(predictedMs) && predictedMs > 0) speed = completionTokens / predictedMs * 1000;
+    }
+
+    var cachedTokens = NaN;
+    var promptDetails = usage.prompt_tokens_details;
+    if (promptDetails && typeof promptDetails === 'object') cachedTokens = Number(promptDetails.cached_tokens);
+    if (!isFinite(cachedTokens)) cachedTokens = Number(usage.cached_tokens);
+    if (!isFinite(cachedTokens)) cachedTokens = Number(timings.cached_n);
+    if (!isFinite(cachedTokens)) cachedTokens = Number(timings.cache_n);
+
+    var contextSize = Number(activity && activity.contextSize);
+    var parts = [];
+    if (isFinite(promptTokens) && promptTokens >= 0) parts.push(directorTokenCount(promptTokens) + ' in');
+    if (isFinite(completionTokens) && completionTokens >= 0) parts.push(directorTokenCount(completionTokens) + ' out');
+    if (isFinite(speed) && speed > 0) parts.push((speed >= 10 ? speed.toFixed(0) : speed.toFixed(1)) + ' tok/s');
+    if (isFinite(cachedTokens) && cachedTokens > 0) parts.push(directorTokenCount(cachedTokens) + ' cached');
+    if (isFinite(totalTokens) && totalTokens >= 0 && isFinite(contextSize) && contextSize > 0) {
+      parts.push(Math.max(0, Math.min(100, Math.round(totalTokens / contextSize * 100))) + '% ctx');
+    }
+    return parts;
+  }
+
   function directorMemorySample(system) {
     var gpu = system && system.gpu;
     var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
@@ -679,7 +724,14 @@
     var startedAt = Number(activity && activity.startedAt) || storyState.director.activityStartedAt;
     var parts = [];
     if (startedAt) {
-      parts.push('<span>' + escapeHtml(String(Math.max(0, Math.round(Date.now() / 1000 - startedAt))) + 's elapsed') + '</span>');
+      var endedAt = terminal ? Number(activity && activity.updatedAt) : Date.now() / 1000;
+      if (!isFinite(endedAt) || endedAt < startedAt) endedAt = Date.now() / 1000;
+      parts.push('<span>' + escapeHtml(String(Math.max(0, Math.round(endedAt - startedAt))) + 's elapsed') + '</span>');
+    }
+    if (terminal && String(activity && activity.phase || '') === 'complete') {
+      directorCompletionStats(activity).forEach(function (stat) {
+        parts.push('<span>' + escapeHtml(stat) + '</span>');
+      });
     }
 
     var gpu = system && system.gpu;

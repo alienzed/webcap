@@ -502,7 +502,7 @@
     if (!ids.length) return Promise.resolve([]);
 
     return Promise.all(ids.map(function (jobId) {
-      return requestJson('/fs/inference?job=' + encodeURIComponent(jobId)).then(function (payload) {
+      return requestJson('/fs/inference?job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
         return payload.job || null;
       }).catch(function (err) {
         return { jobId: jobId, status: 'missing', error: String(err && err.message ? err.message : err) };
@@ -626,7 +626,7 @@
   }
 
   function directorJobRequest(jobId) {
-    return requestJson('/fs/director/job?job=' + encodeURIComponent(jobId)).then(function (payload) {
+    return requestJson('/fs/director/job?job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
       if (!payload.job) throw new Error('Prompt Assistant job response is missing its job.');
       return payload.job;
     });

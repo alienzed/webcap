@@ -43,7 +43,7 @@ from .generate_generation import capabilities as generate_capabilities, prepare_
 from .generate_store import cleanup_references as generate_cleanup_references, list_results as generate_list_results, resolve_result_media as generate_resolve_result_media, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
 from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, snapshot as inference_snapshot, stop_storyboard_jobs
-from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot
+from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot, storyboard_story_busy as llm_storyboard_story_busy, storyboard_target_busy as llm_storyboard_target_busy
 from .activity_monitor import activity_snapshot
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
@@ -587,36 +587,64 @@ def storyboard_route():
             return jsonify({"ok": True, "story": storyboard_duplicate_story(story_id)})
         if operation == "delete_story":
             storyboard_load_story(story_id)
+            if llm_storyboard_story_busy(story_id):
+                raise ValueError("Story has pending Director work. Cancel it or let it finish before deleting the Story.")
             stop_storyboard_jobs(story_id)
             deleted_story_id = storyboard_delete_story(story_id)
             return jsonify({"ok": True, "storyId": deleted_story_id})
         if operation == "update_story":
-            return jsonify({"ok": True, "story": storyboard_update_story(story_id, data.get("story") or {})})
+            story_payload = data.get("story") or {}
+            if "concept" in story_payload and llm_storyboard_target_busy(story_id, "concept"):
+                raise ValueError("Story concept has pending Director work.")
+            return jsonify({"ok": True, "story": storyboard_update_story(story_id, story_payload)})
         if operation == "add_scene":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story, scene = storyboard_add_scene(story_id, data.get("scene") or {})
             return jsonify({"ok": True, "story": story, "scene": scene})
         if operation == "update_scene":
-            story, scene = storyboard_update_scene(story_id, str(data.get("sceneId") or "").strip(), data.get("scene") or {})
+            scene_id = str(data.get("sceneId") or "").strip()
+            scene_payload = data.get("scene") or {}
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
+            if "prompt" in scene_payload and llm_storyboard_target_busy(story_id, "scene-prompt", scene_id):
+                raise ValueError("Scene prompt has pending Director work.")
+            story, scene = storyboard_update_scene(story_id, scene_id, scene_payload)
             return jsonify({"ok": True, "story": story, "scene": scene})
         if operation == "duplicate_scene":
-            story, scene = storyboard_duplicate_scene(story_id, str(data.get("sceneId") or "").strip())
+            scene_id = str(data.get("sceneId") or "").strip()
+            if llm_storyboard_target_busy(story_id, "scenes") or llm_storyboard_target_busy(story_id, "scene-prompt", scene_id):
+                raise ValueError("Scene has pending Director work.")
+            story, scene = storyboard_duplicate_scene(story_id, scene_id)
             return jsonify({"ok": True, "story": story, "scene": scene})
         if operation == "reorder_scenes":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story = storyboard_reorder_scenes(story_id, data.get("sceneOrder"))
             return jsonify({"ok": True, "story": story})
         if operation == "delete_scene":
-            story = storyboard_delete_scene(story_id, str(data.get("sceneId") or "").strip())
+            scene_id = str(data.get("sceneId") or "").strip()
+            if llm_storyboard_target_busy(story_id, "scenes") or llm_storyboard_target_busy(story_id, "scene-prompt", scene_id):
+                raise ValueError("Scene has pending Director work.")
+            story = storyboard_delete_scene(story_id, scene_id)
             return jsonify({"ok": True, "story": story})
         if operation == "restore_scene":
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story = storyboard_restore_scene(story_id, str(data.get("sceneId") or "").strip())
             return jsonify({"ok": True, "story": story})
         if operation == "restore_previous_concept":
+            if llm_storyboard_target_busy(story_id, "concept"):
+                raise ValueError("Story concept has pending Director work.")
             story = storyboard_restore_previous_concept(story_id)
             return jsonify({"ok": True, "story": story})
         if operation == "restore_previous_prompt":
+            scene_id = str(data.get("sceneId") or "").strip()
+            if llm_storyboard_target_busy(story_id, "scenes") or llm_storyboard_target_busy(story_id, "scene-prompt", scene_id):
+                raise ValueError("Scene prompt has pending Director work.")
             story, scene = storyboard_restore_previous_prompt(
                 story_id,
-                str(data.get("sceneId") or "").strip(),
+                scene_id,
             )
             return jsonify({"ok": True, "story": story, "scene": scene})
         if operation == "label_take":

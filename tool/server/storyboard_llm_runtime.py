@@ -2,6 +2,7 @@ import atexit
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import threading
@@ -449,6 +450,25 @@ def _model_path_size(path):
     return 0
 
 
+def _model_path_size_wsl(path):
+    from .training_runtime import run_wsl
+
+    distribution = str(
+        app_config.config.get("training", {}).get("wsl_distribution") or ""
+    ).strip()
+    code, stdout, _stderr = run_wsl(
+        "du -sb -- " + shlex.quote(str(path)),
+        timeout=10,
+        distribution=distribution,
+    )
+    if code != 0:
+        return 0
+    try:
+        return max(0, int((stdout or "").strip().split()[0]))
+    except (IndexError, TypeError, ValueError):
+        return 0
+
+
 def _model_file_size(model):
     model = model if isinstance(model, dict) else {}
     try:
@@ -521,6 +541,8 @@ def _model_file_size(model):
             continue
         seen.add(key)
         size_bytes = _model_path_size(candidate)
+        if not size_bytes:
+            size_bytes = _model_path_size_wsl(candidate)
         if size_bytes:
             return size_bytes
     return 0

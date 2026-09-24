@@ -840,6 +840,16 @@
     return '<video src="' + escapeHtml(url) + '" controls muted preload="metadata"></video>';
   }
 
+  function takeAspectRatioCss(take) {
+    var value = String(take && take.aspectRatio || '').trim();
+    var match = value.match(/^(\d+)\s*:\s*(\d+)/);
+    if (!match) return '16 / 9';
+    var width = Number(match[1]);
+    var height = Number(match[2]);
+    if (!width || !height) return '16 / 9';
+    return String(width) + ' / ' + String(height);
+  }
+
   function selectedSequenceItems(story) {
     var selected = [];
     (story.sceneOrder || []).forEach(function (sceneId, index) {
@@ -1369,7 +1379,7 @@
     });
     ratingHtml += '</div>';
     return '<article class="storyboard-take' + (selected ? ' selected' : '') + '" data-take-id="' + escapeHtml(takeId) + '">' +
-      '<div class="storyboard-take-media">' + takePreviewHtml(storyId, sceneId, take) +
+      '<div class="storyboard-take-media" style="--take-aspect: ' + escapeHtml(takeAspectRatioCss(take)) + ';">' + takePreviewHtml(storyId, sceneId, take) +
         '<button type="button" class="storyboard-take-remove" data-take-action="remove" data-take-id="' + escapeHtml(takeId) + '" title="Remove Take" aria-label="Remove Take">×</button>' +
       '</div>' +
       '<div class="storyboard-take-footer">' +

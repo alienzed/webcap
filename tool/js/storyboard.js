@@ -2398,11 +2398,10 @@
           '</aside>' +
         '</div>' +
         '<details class="storyboard-takes" open>' +
-          '<summary class="storyboard-takes-summary"><strong>Takes</strong><span>' + escapeHtml(takeSummaryParts.join(' · ')) + '</span></summary>' +
+          '<summary class="storyboard-takes-summary"><strong>Takes</strong><span>' + escapeHtml(takeSummaryParts.join(' · ')) + '</span>' +
+            '<label class="review-captions-btn storyboard-take-upload-btn" title="Import existing image or video media as a Take for this Scene. Imported media is copied into this Story and keeps a frozen Scene snapshot.">Import Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
+          '</summary>' +
           '<div class="storyboard-takes-content">' +
-            '<div class="storyboard-takes-header"><span>Imported media is copied into this Story and keeps a frozen Scene snapshot.</span>' +
-              '<label class="review-captions-btn storyboard-take-upload-btn" title="Import existing image or video media as a Take for this Scene.">Import Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
-            '</div>' +
             '<div class="storyboard-takes-grid">' + (takesHtml + pendingTakesHtml || '<div class="storyboard-takes-empty">No Takes yet.</div>') + '</div>' +
             removedTakesHtml +
           '</div>' +

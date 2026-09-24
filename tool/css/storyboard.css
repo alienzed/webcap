@@ -1750,10 +1750,6 @@
   gap: 12px;
 }
 
-.storyboard-generation-wildcards {
-  margin-top: 2px;
-}
-
 .storyboard-conditioning-panel {
   background: var(--panel-soft);
 }

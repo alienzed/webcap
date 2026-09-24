@@ -19,6 +19,7 @@ from .storyboard_store import (
     add_take_upload,
     finalize_generated_take,
     load_story,
+    resolve_scene_generation_defaults,
     resolve_scene_loras,
     storyboard_root,
 )
@@ -68,16 +69,13 @@ def _scene_settings(scene, story=None):
     if not prompt:
         raise ValueError("Scene generation prompt is empty.")
 
-    aspect_ratio = str(scene.get("aspectRatio") or "4:3 (Standard)").strip()
-    if aspect_ratio not in ASPECT_RATIO_OPTIONS:
-        raise ValueError("Unsupported Storyboard aspect ratio: " + aspect_ratio)
+    resolved_defaults = resolve_scene_generation_defaults(story or {}, scene)
+    aspect_ratio = resolved_defaults["aspectRatio"]
+    megapixels = resolved_defaults["megapixels"]
     try:
-        megapixels = float(scene.get("megapixels", 0.2))
         duration = float(scene.get("durationSeconds", 6))
     except (TypeError, ValueError) as exc:
-        raise ValueError("Storyboard resolution and duration must be numeric.") from exc
-    if megapixels <= 0:
-        raise ValueError("Storyboard resolution must be greater than zero megapixels.")
+        raise ValueError("Storyboard duration must be numeric.") from exc
     if duration < 4 or duration > 15:
         raise ValueError("MiniMax H3 Storyboard duration must be between 4 and 15 seconds.")
 

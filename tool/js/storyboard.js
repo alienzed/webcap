@@ -1095,12 +1095,12 @@
         model: modelId
       });
     }).then(function (payload) {
-      if (!storyState.story || storyState.story.id !== storyId) return;
-      storyState.story = payload.story;
-      renderStory();
-      setDevelopStatus('Concept expanded with ' + String(payload.model || modelId) + '.');
-      setSaveState('Saved');
-      return refreshLibrary().then(function () {
+      return applyDirectorResultToVisibleStory({
+        storyId: storyId,
+        operation: 'expand_concept',
+        jobId: payload.jobId
+      }).then(function () {
+        setDevelopStatus('Concept expanded with ' + String(payload.model || modelId) + '.');
         return consumeDirectorJob(payload.jobId);
       });
     }).catch(function (err) {
@@ -1116,7 +1116,10 @@
     if (!storyState.story || typeof storyState.story.previousConcept !== 'string') return;
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'concept', storyId: storyId };
-    if (directorTargetPending(directorTarget)) return;
+    if (directorTargetBlocked(directorTarget)) {
+      reportError(new Error('The Story concept already has Director work pending.'));
+      return;
+    }
     setDirectorPending(directorTarget, true);
     setSaveState('Saving...');
     flushPendingSaves().then(function () {
@@ -1140,7 +1143,10 @@
     if (!storyState.story) return;
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'scenes', storyId: storyId };
-    if (directorTargetPending(directorTarget)) return;
+    if (directorTargetBlocked(directorTarget)) {
+      reportError(new Error('This Story already has Director work that conflicts with Develop Scenes.'));
+      return;
+    }
     var modelId = storyState.director.modelId;
     if (!modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
@@ -1168,13 +1174,12 @@
         replaceExisting: hasScenes
       });
     }).then(function (payload) {
-      if (!storyState.story || storyState.story.id !== storyId) return;
-      storyState.story = payload.story;
-      storyState.sequenceExport = null;
-      renderStory();
-      setDevelopStatus('Developed ' + String(payload.sceneCount || 0) + ' Scenes with ' + String(payload.model || modelId) + '.');
-      setSaveState('Saved');
-      return refreshLibrary().then(function () {
+      return applyDirectorResultToVisibleStory({
+        storyId: storyId,
+        operation: 'develop_story',
+        jobId: payload.jobId
+      }).then(function () {
+        setDevelopStatus('Developed ' + String(payload.sceneCount || 0) + ' Scenes with ' + String(payload.model || modelId) + '.');
         return consumeDirectorJob(payload.jobId);
       });
     }).catch(function (err) {
@@ -2358,7 +2363,6 @@
       if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};
-      storyState.director.previousPrompts = {};
       return refreshGenerationQueue(storyId);
     }).then(function () {
       renderStory();
@@ -2388,7 +2392,6 @@
       if (storyState.storyCollapsed) setStoryCollapsed(false);
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};
-      storyState.director.previousPrompts = {};
       storyState.generationJobs = {};
       Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
       syncStoryboardGenerationActivity();
@@ -2419,7 +2422,6 @@
         storyState.sequenceExport = null;
         storyState.newTakeCounts = {};
         storyState.activeSceneId = '';
-        storyState.director.previousPrompts = {};
         storyState.generationJobs = {};
         Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
         syncStoryboardGenerationActivity();

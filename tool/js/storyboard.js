@@ -186,6 +186,7 @@
       return request(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
         var scene = payload.story && payload.story.scenes ? payload.story.scenes[sceneId] : null;
         if (!scene) throw new Error('Recovered Director Scene no longer exists.');
+        if (String(scene.promptDirectorJobId || '') === String(job.jobId || '')) return null;
         previousPrompt = String(scene.prompt || '');
         return request({
           operation: 'update_scene',
@@ -193,10 +194,12 @@
           sceneId: sceneId,
           scene: {
             prompt: String(result.result || ''),
-            promptDirectorModel: String(result.model || job.modelId || '')
+            promptDirectorModel: String(result.model || job.modelId || ''),
+            promptDirectorJobId: String(job.jobId || '')
           }
         });
       }).then(function (saved) {
+        if (!saved) return;
         if (storyState.story && storyState.story.id === storyId) {
           storyState.story = saved.story;
           storyState.director.previousPrompts[sceneId] = previousPrompt;
@@ -665,7 +668,11 @@
         operation: 'update_scene',
         storyId: storyId,
         sceneId: sceneId,
-        scene: { prompt: generatedPrompt, promptDirectorModel: String(payload.model || modelId) }
+        scene: {
+          prompt: generatedPrompt,
+          promptDirectorModel: String(payload.model || modelId),
+          promptDirectorJobId: String(payload.jobId || '')
+        }
       }).then(function (saved) {
         if (storyState.story && storyState.story.id === storyId && storyState.story.scenes && saved.scene) {
           storyState.story.scenes[sceneId] = saved.scene;

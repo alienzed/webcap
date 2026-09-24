@@ -1543,8 +1543,8 @@
         }).join('') +
       '</select>' +
       '<input type="text" data-story-invariant-title value="' + escapeHtml(title) + '" placeholder="Name / subject" aria-label="Invariant name">' +
+      '<button type="button" class="storyboard-invariant-remove" data-story-invariant-remove title="Remove invariant" aria-label="Remove invariant">×</button>' +
       '<textarea data-story-invariant-text rows="2" placeholder="What must stay consistent across Scenes?" aria-label="Invariant description">' + escapeHtml(text) + '</textarea>' +
-      '<button type="button" class="review-captions-btn" data-story-invariant-remove title="Remove invariant">×</button>' +
     '</div>';
   }
 

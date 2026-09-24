@@ -53,6 +53,10 @@ def _test_directory(folder_path, model, source=None):
     return test_copy_path(model.STAGING_KEY, _owning_set_directory(folder_path).name)
 
 
+def _resolved_test_directory(folder_path, model, source=None):
+    return _test_directory(folder_path, model) if source is None else _test_directory(folder_path, model, source=source)
+
+
 def browse_source(model_id=None, source=""):
     model = get_test_model(model_id)
     payload = browse_test_source(model.STAGING_KEY, source)
@@ -198,10 +202,12 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None, s
         if "source" in session_status:
             resolved_source = str(session_status.get("source") or "").strip()
     model = get_test_model(resolved_model_id or get_test_model().PROFILE_ID)
-    test_directory = _test_directory(folder_path, model, source=resolved_source)
+    test_directory = _resolved_test_directory(folder_path, model, source=resolved_source)
     candidate = test_directory / name
     sidecar = candidate.with_suffix(".webcap.json")
 
+    if resolved_source is not None and candidate.is_file() and not sidecar.is_file():
+        raise ValueError("Only WebCap-staged Test candidates can be removed from Test Generations.")
     if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
         raise RuntimeError("Staged Test candidate is not a regular file: " + name)
     if sidecar.is_symlink() or (sidecar.exists() and not sidecar.is_file()):
@@ -576,7 +582,7 @@ def prepare(folder_path, model_id=None, source=None):
     template = model.load_template()
     selected_source = None if source is None else str(source or "").strip()
     try:
-        test_directory = _test_directory(folder_path, model, source=selected_source)
+        test_directory = _resolved_test_directory(folder_path, model, source=selected_source)
         loras = _lora_files(test_directory) if test_directory.is_dir() else []
     except ValueError:
         loras = []
@@ -689,7 +695,7 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     if not prompt:
         raise ValueError("A test prompt is required.")
     selected_source = None if source is None else str(source or "").strip()
-    test_directory = _test_directory(folder_path, model, source=selected_source)
+    test_directory = _resolved_test_directory(folder_path, model, source=selected_source)
     loras = _selected_lora_files(test_directory, selected_files=selected_files)
     if not loras:
         raise ValueError("The Test folder contains no .safetensors files.")
@@ -928,10 +934,10 @@ def execute_inference(job_id, request, context):
     candidate_label = str(context.get("candidateLabel") or "").strip() or (
         "Base" if candidate_kind == "base" else candidate_file
     )
-    if not folder or not session_id or candidate_kind not in {"base", "lora"}:
+    if not session_id or candidate_kind not in {"base", "lora"}:
         raise RuntimeError("Test inference is missing its Session candidate context.")
 
-    folder_path = app_config.safe_join_fs_root(folder)
+    folder_path = app_config.safe_join_fs_root(folder) if folder else Path(app_config.FS_ROOT).resolve()
     session_directory = _session_directory(folder_path, session_id)
     model = get_test_model(request.get("modelId"))
     lora_file = None
@@ -1094,6 +1100,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,
         "source": str(request.get("source") or ""),
+        "ownerFolder": folder,
         "session": session_directory.name,
         "name": str(request.get("name") or ""),
         "sourcePrompt": str(request.get("sourcePrompt") or ""),
@@ -1458,6 +1465,7 @@ def list_sessions(folder_path, source=None):
             "name": str(payload.get("name") or ""),
             "modelId": str(payload.get("modelId") or payload.get("model") or ""),
             "source": _session_source(payload, folder_path),
+            "ownerFolder": str(payload.get("ownerFolder") or _relative_set_folder(folder_path)),
             "status": str(payload.get("status") or ""),
             "startedAt": int(payload.get("startedAt") or 0),
             "candidateStartedAt": int(payload.get("candidateStartedAt") or 0),

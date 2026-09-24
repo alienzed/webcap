@@ -940,7 +940,11 @@
   }
 
   function refreshSessions() {
-    return Promise.all([request('test_sessions'), request('test_queue')]).then(function (payloads) {
+    var modelId = currentTestModelId();
+    return Promise.all([
+      request('test_sessions', { modelId: modelId }),
+      request('test_queue', { modelId: modelId })
+    ]).then(function (payloads) {
       var sessionPayload = payloads[0] || {};
       var queuePayload = payloads[1] || {};
       queuedTestJobs = Array.isArray(queuePayload.jobs) ? queuePayload.jobs : [];
@@ -956,7 +960,7 @@
   }
 
   function clearQueuedTests() {
-    return request('test_queue_clear').then(function () { return refreshSessions(); });
+    return request('test_queue_clear', { modelId: currentTestModelId() }).then(function () { return refreshSessions(); });
   }
 
   function formatElapsedMs(milliseconds) {

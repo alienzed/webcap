@@ -1,4 +1,5 @@
 import copy
+import json
 import logging
 import threading
 import time
@@ -190,8 +191,34 @@ def _execute_claimed(job_id, gpu_reserved):
         return
 
     from .storyboard_llm_runtime import run_contract
-    llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
-    result = _client_result(client, context, llm_result, job_id=job_id)
+    try:
+        llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
+    except Exception as exc:
+        _logger.exception(
+            "Director/model stage failed before WebCap ingest.\n"
+            "--- FROZEN LLM CONTRACT ---\n%s",
+            json.dumps(contract, indent=2, ensure_ascii=False),
+        )
+        raise RuntimeError(
+            "Director/model stage failed before WebCap ingest: " + str(exc)
+        ) from exc
+
+    try:
+        result = _client_result(client, context, llm_result, job_id=job_id)
+    except Exception as exc:
+        _logger.exception(
+            "WebCap ingest rejected a successful LLM response.\n"
+            "--- FROZEN LLM CONTRACT ---\n%s\n"
+            "--- CLIENT CONTEXT ---\n%s\n"
+            "--- RAW MODEL RESPONSE ---\n%s",
+            json.dumps(contract, indent=2, ensure_ascii=False),
+            json.dumps(context, indent=2, ensure_ascii=False),
+            str(llm_result.get("text") or ""),
+        )
+        raise RuntimeError(
+            "WebCap ingest failed after a successful model response: " + str(exc)
+        ) from exc
+
     execution_finish_job(job_id, status="completed", result=result)
 
 

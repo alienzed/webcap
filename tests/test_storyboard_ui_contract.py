@@ -60,7 +60,6 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "Generation prompt" in storyboard
     assert "durationSeconds" in storyboard
     assert "seedMode" in storyboard
-    assert "wildcardsEnabled" in storyboard
     assert "loras" in store
     assert "references" in store
     assert "takeOrder" in store
@@ -697,7 +696,7 @@ def test_storyboard_scene_uses_large_visible_generation_and_conditioning_inspect
     assert ".storyboard-conditioning-panel" in css
     generation_block = storyboard.split("'<section class=\"storyboard-inspector-section storyboard-generation-inspector\">'", 1)[1].split("'<section class=\"storyboard-inspector-section storyboard-conditioning-panel\">'", 1)[0]
     assert generation_block.index('class="storyboard-generation-settings"') < generation_block.index('data-scene-generate')
-    assert generation_block.index('Wildcards intended') < generation_block.index('data-scene-generate')
+    assert 'Wildcards intended' not in generation_block
     generate_css = css.split(".storyboard-generation-inspector .storyboard-generate-btn {", 1)[1].split("}", 1)[0]
     assert "min-height: 48px;" in generate_css
     assert "var(--accent)" in generate_css

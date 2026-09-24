@@ -1253,6 +1253,7 @@
     }
 
     storyState.director.busy = storyState.director.pendingOrder.length > 0;
+    setShellDirectorActive(storyState.director.busy);
     storyState.director.activityTarget = storyState.director.pendingOrder.length
       ? storyState.director.pendingTargets[storyState.director.pendingOrder[0]]
       : null;

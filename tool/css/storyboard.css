@@ -369,6 +369,14 @@
   min-height: calc(100% - 90px);
 }
 .storyboard-sequence-header { margin-bottom: 8px; }
+.storyboard-sequence-empty {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
 .storyboard-sequence-header strong,
 .storyboard-sequence-header span { display: block; }
 .storyboard-sequence-header span,

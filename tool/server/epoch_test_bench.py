@@ -17,6 +17,7 @@ from .test_models import get_test_model, supported_models as registered_test_mod
 from .training_test_paths import browse_test_source, test_copy_path, test_source_path
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
+    consume_terminal_job as execution_consume_terminal_job,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     recover_lane as execution_recover_lane,
@@ -913,6 +914,15 @@ def _sync_inference_session(session_directory):
             status["comfyJobId"] = ""
             status["comfyStatus"] = ""
             _atomic_write_json(_status_path(session_directory), status)
+
+        if terminal_status in {"complete", "stopped"}:
+            for job in jobs:
+                if str(job.get("status") or "") not in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
+                    continue
+                try:
+                    execution_consume_terminal_job(str(job.get("id") or ""))
+                except FileNotFoundError:
+                    pass
         return visible
 
 def _record_skipped_inference(session_directory, job_id):

@@ -14,6 +14,7 @@
     generationPolls: {},
     newTakeCounts: {},
     sequenceExport: null,
+    sequencePreviewOpen: false,
     sceneViewMode: window.localStorage.getItem('webcap.storyboard.sceneView') || 'focus',
     activeSceneId: '',
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
@@ -962,6 +963,20 @@
     node.title = selected === order.length && order.length
       ? 'All Scenes have a selected Take and are ready to export.'
       : 'Story completion summary';
+
+    var sequenceToggle = el('storyboard-sequence-toggle');
+    if (sequenceToggle) {
+      if (!selected) storyState.sequencePreviewOpen = false;
+      sequenceToggle.classList.toggle('hidden', selected === 0);
+      sequenceToggle.textContent = 'Sequence · ' + String(selected);
+      sequenceToggle.setAttribute('aria-expanded', storyState.sequencePreviewOpen && selected ? 'true' : 'false');
+    }
+  }
+
+  function setSequencePreviewOpen(open) {
+    storyState.sequencePreviewOpen = !!open;
+    renderStoryReadiness();
+    renderSequencePreview();
   }
 
   function assemblyMatchesSelection(job, selected) {
@@ -977,7 +992,7 @@
     if (!host || !storyState.story) return;
     var story = storyState.story;
     var selected = selectedSequenceItems(story);
-    if (!selected.length) {
+    if (!selected.length || !storyState.sequencePreviewOpen) {
       host.innerHTML = '';
       host.classList.add('hidden');
       return;
@@ -1002,6 +1017,7 @@
       '</span></div><div class="storyboard-sequence-actions">' +
       '<button type="button" class="storyboard-primary-btn" data-sequence-export>Export Sequence</button>' +
       '<span class="storyboard-save-state" data-sequence-status>' + assemblyStatus + '</span>' +
+      '<button type="button" class="review-captions-btn" data-sequence-close>Close</button>' +
       '</div></header>' + outputHtml + '<div class="storyboard-sequence-list">' +
       selected.map(function (item) {
         return '<article class="storyboard-sequence-card">' +
@@ -1792,6 +1808,7 @@
     }).then(function (payload) {
       storyState.story = payload.story;
       storyState.sequenceExport = null;
+      storyState.sequencePreviewOpen = false;
       storyState.newTakeCounts = {};
       storyState.director.previousPrompts = {};
       return refreshGenerationQueue(storyId);
@@ -1821,6 +1838,7 @@
     }).then(function (payload) {
       storyState.story = payload.story;
       storyState.sequenceExport = null;
+      storyState.sequencePreviewOpen = false;
       storyState.newTakeCounts = {};
       storyState.director.previousPrompts = {};
       storyState.generationJobs = {};
@@ -1851,6 +1869,7 @@
       if (deletedWasOpen) {
         storyState.story = null;
         storyState.sequenceExport = null;
+        storyState.sequencePreviewOpen = false;
         storyState.newTakeCounts = {};
         storyState.activeSceneId = '';
         storyState.director.previousPrompts = {};
@@ -2735,6 +2754,7 @@
     el('storyboard-story-expand-toggle').onclick = function () { setStoryCollapsed(false); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
+    el('storyboard-sequence-toggle').onclick = function () { setSequencePreviewOpen(!storyState.sequencePreviewOpen); };
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
@@ -2752,6 +2772,10 @@
     });
 
     el('storyboard-sequence-preview').addEventListener('click', function (event) {
+      if (event.target.closest('[data-sequence-close]')) {
+        setSequencePreviewOpen(false);
+        return;
+      }
       if (event.target.closest('[data-sequence-export]')) exportSelectedSequence();
     });
 

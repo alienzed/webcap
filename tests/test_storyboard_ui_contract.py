@@ -204,6 +204,17 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
     assert "previousConcept" in storyboard
 
 
+def test_storyboard_director_busy_state_only_protects_its_edit_target():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "function setDirectorTargetProtected(target, protectedState)" in storyboard
+    assert "setStoryDirectorInputsDisabled" not in storyboard
+    assert "var directorTarget = { kind: 'concept' };" in storyboard
+    assert "var directorTarget = { kind: 'scenes' };" in storyboard
+    assert "var directorTarget = { kind: 'scene-prompt', sceneId: sceneId };" in storyboard
+    assert "storyboard-delete-story-btn" not in storyboard.split("function setDirectorBusy", 1)[1].split("function expandConcept", 1)[0]
+
+
 def test_storyboard_director_actions_share_one_busy_state_and_concept_restore():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

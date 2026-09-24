@@ -15,6 +15,13 @@
     return ['generate', 'test', 'storyboard'].indexOf(String(name || '')) !== -1;
   }
 
+  function hasActiveQueueWork() {
+    var jobs = Array.isArray(state.queue.jobs) ? state.queue.jobs : [];
+    return jobs.some(function (job) {
+      return ['queued', 'starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
+    });
+  }
+
   function requestJson(url, options) {
     return fetch(url, options || {}).then(function (response) {
       return response.json().then(function (payload) {
@@ -76,14 +83,23 @@
     }).length;
     var queued = jobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
     var count = running + queued;
-    var label = count ? ('Inference Queue · ' + count) : 'Inference Queue';
     var title = running
-      ? (String(running) + ' running · ' + String(queued) + ' queued')
-      : (queued ? String(queued) + ' queued' : 'Inference Queue');
+      ? ('Generating · ' + String(running) + ' running' + (queued ? ' · ' + String(queued) + ' queued' : ''))
+      : (queued ? ('Inference Queue · ' + String(queued) + ' queued') : 'Inference Queue');
     Array.prototype.forEach.call(toggles, function (toggle) {
-      toggle.textContent = label;
+      var isRail = toggle.hasAttribute('data-inference-queue-rail');
+      if (!isRail) toggle.textContent = count ? ('Inference Queue · ' + count) : 'Inference Queue';
       toggle.title = title;
+      toggle.setAttribute('aria-label', title);
       toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
+      toggle.classList.toggle('inference-active', count > 0);
+      if (isRail) {
+        var badge = toggle.querySelector('[data-inference-queue-badge]');
+        if (badge) {
+          badge.textContent = count > 99 ? '99+' : String(count);
+          badge.classList.toggle('hidden', count === 0);
+        }
+      }
     });
   }
 
@@ -168,8 +184,8 @@
     var summary = el('inference-queue-summary');
     if (!drawer || !host || !summary) return;
 
-    drawer.classList.toggle('hidden', !state.open || !isInferenceWorkspace(state.workspace));
-    drawer.setAttribute('aria-hidden', state.open && isInferenceWorkspace(state.workspace) ? 'false' : 'true');
+    drawer.classList.toggle('hidden', !state.open);
+    drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
 
     var running = jobs.filter(function (job) {
       return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
@@ -197,7 +213,7 @@
   }
 
   function refresh() {
-    if (state.pending || !isInferenceWorkspace(state.workspace)) return Promise.resolve(state.queue);
+    if (state.pending) return Promise.resolve(state.queue);
     state.pending = true;
     return requestJson('/fs/inference').then(function (payload) {
       state.queue = payload.queue || { jobs: [], paused: false, pauseReason: '' };
@@ -215,24 +231,21 @@
   function schedule() {
     if (state.timer) clearTimeout(state.timer);
     state.timer = 0;
-    if (!isInferenceWorkspace(state.workspace)) return;
     state.timer = setTimeout(function () {
       refresh().then(schedule);
-    }, state.open ? 1500 : 2500);
+    }, state.open ? 1500 : (hasActiveQueueWork() ? 2500 : 8000));
   }
 
   function setOpen(open) {
-    state.open = !!open && isInferenceWorkspace(state.workspace);
+    state.open = !!open;
     render();
     schedule();
   }
 
   function syncSurface(workspace) {
     state.workspace = String(workspace || '');
-    if (!isInferenceWorkspace(state.workspace)) state.open = false;
     render();
-    if (isInferenceWorkspace(state.workspace)) refresh().then(schedule);
-    else schedule();
+    refresh().then(schedule);
   }
 
   function action(operation, jobId) {

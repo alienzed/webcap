@@ -1340,9 +1340,7 @@
         operation: 'define_invariants',
         jobId: payload.jobId
       }).then(function () {
-        if (typeof reportConsoleInfo === 'function') {
-          reportConsoleInfo('Storyboard', 'Defined ' + String(payload.addedCount || 0) + ' new Story invariant' + (Number(payload.addedCount || 0) === 1 ? '' : 's') + ' from the concept.');
-        }
+        reportConsoleInfo('Storyboard', 'Defined ' + String(payload.addedCount || 0) + ' new Story invariant' + (Number(payload.addedCount || 0) === 1 ? '' : 's') + ' from the concept.');
         return consumeDirectorJob(payload.jobId);
       });
     }).catch(reportError).finally(function () {

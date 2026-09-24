@@ -356,6 +356,19 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
             assert prefix.startswith("webcap-storyboard/")
             return {"workflow": True}
 
+        def effective_input(self, workflow):
+            assert workflow == {"workflow": True}
+            return {
+                "prompt": "A woman enters an empty studio.",
+                "promptMode": "fixed",
+                "seed": 77,
+                "aspectRatio": "16:9 (Widescreen)",
+                "megapixels": 0.3,
+                "durationSeconds": 6.0,
+                "references": {},
+                "loras": [],
+            }
+
         def find_output_ref(self, outputs):
             return outputs
 
@@ -400,6 +413,8 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
     assert take["loras"] == []
     assert take["workflowProfile"] == "minimax_h3_storyboard_v1"
     assert take["providerJobId"] == "comfy-123"
+    assert take["effectiveInput"]["prompt"] == "A woman enters an empty studio."
+    assert take["effectiveInput"]["seed"] == 77
     media_path = storyboard_fs / "output" / "storyboards" / story["id"] / take["mediaPath"]
     assert media_path.read_bytes() == b"generated-video"
     assert storyboard_generation.generation_status(queued["jobId"])["status"] == "completed"
@@ -496,6 +511,19 @@ def test_storyboard_generation_cleans_owned_comfy_reference_inputs_after_capture
         ):
             assert uploaded["first_frame"].endswith(".png")
             return {"workflow": True}
+
+        def effective_input(self, workflow):
+            assert workflow == {"workflow": True}
+            return {
+                "prompt": "A woman enters an empty studio.",
+                "promptMode": "fixed",
+                "seed": 77,
+                "aspectRatio": "16:9 (Widescreen)",
+                "megapixels": 0.3,
+                "durationSeconds": 6.0,
+                "references": {"first_frame": "uploaded/first.png"},
+                "loras": [],
+            }
 
         def find_output_ref(self, outputs):
             return outputs

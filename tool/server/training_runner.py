@@ -97,7 +97,7 @@ def _ensure_runtime_dirs():
     _runtime_root().mkdir(parents=True, exist_ok=True)
 
 
-def reserve_gpu_for_external_work(owner):
+def external_gpu_work_block_reason(owner):
     owner = str(owner or "").strip()
     if not owner:
         raise ValueError("GPU reservation owner is required.")
@@ -105,9 +105,22 @@ def reserve_gpu_for_external_work(owner):
         state = _read_state()
         jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
         if any(job.get("status") in ACTIVE_STATUSES for job in jobs):
-            return False
+            return "training"
         if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
-            return False
+            return "training"
+
+    resource_owner = execution_resource_owner()
+    if resource_owner and resource_owner != owner:
+        return resource_owner
+    return ""
+
+
+def reserve_gpu_for_external_work(owner):
+    owner = str(owner or "").strip()
+    if not owner:
+        raise ValueError("GPU reservation owner is required.")
+    if external_gpu_work_block_reason(owner):
+        return False
     return reserve_execution_resource(owner)
 
 

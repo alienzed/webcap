@@ -107,6 +107,7 @@ def test_h3_shared_inference_model_uses_dedicated_workflow_with_standalone_turbo
     assert turbo["clip"] == ["128", 0]
     assert power["model"] == ["148", 0]
     assert power["clip"] == ["148", 1]
+    assert workflow["131"]["inputs"]["clip"] == ["138", 1]
     assert not any(
         isinstance(value, dict) and value.get("on") is True and value.get("lora")
         for value in power.values()

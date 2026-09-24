@@ -322,18 +322,34 @@
     var editorRect = editor.getBoundingClientRect();
     var targetRect = target.getBoundingClientRect();
     var kind = String((storyState.director.activityTarget || {}).kind || '');
-    var preferredWidth = kind === 'scenes' ? 420 : 380;
+    var fillsField = kind === 'concept' || kind === 'scene-prompt';
+    card.classList.toggle('is-field-overlay', fillsField);
+    card.classList.toggle('is-structure-overlay', !fillsField);
+
+    if (fillsField) {
+      var inset = 7;
+      var width = Math.max(260, targetRect.width - inset * 2);
+      var height = Math.max(96, targetRect.height - inset * 2);
+      card.style.width = Math.round(width) + 'px';
+      card.style.height = Math.round(height) + 'px';
+      card.style.left = Math.round(targetRect.left - editorRect.left + inset) + 'px';
+      card.style.top = Math.round(targetRect.top - editorRect.top + inset) + 'px';
+      return;
+    }
+
+    card.style.height = '';
+    var preferredWidth = 440;
     var targetWidth = Math.max(0, targetRect.width - 24);
     var editorWidth = Math.max(0, editorRect.width - 24);
-    var width = Math.min(preferredWidth, targetWidth || preferredWidth, editorWidth || preferredWidth);
-    width = Math.max(280, width);
-    if (width > editorWidth && editorWidth > 0) width = editorWidth;
+    var structureWidth = Math.min(preferredWidth, targetWidth || preferredWidth, editorWidth || preferredWidth);
+    structureWidth = Math.max(300, structureWidth);
+    if (structureWidth > editorWidth && editorWidth > 0) structureWidth = editorWidth;
 
-    card.style.width = Math.round(width) + 'px';
+    card.style.width = Math.round(structureWidth) + 'px';
 
-    var left = targetRect.right - editorRect.left - width - 12;
+    var left = targetRect.right - editorRect.left - structureWidth - 12;
     var top = targetRect.top - editorRect.top + 12;
-    var maxLeft = Math.max(12, editorRect.width - width - 12);
+    var maxLeft = Math.max(12, editorRect.width - structureWidth - 12);
     left = Math.max(12, Math.min(maxLeft, left));
 
     card.style.left = Math.round(left) + 'px';

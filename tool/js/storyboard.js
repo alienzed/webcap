@@ -1170,7 +1170,13 @@
   function setSaveState(text) {
     var node = el('storyboard-save-state');
     if (node) node.textContent = text || '';
-    if (text && typeof reportConsoleInfo === 'function' && text !== 'Saved') {
+    if (
+      text &&
+      typeof reportConsoleInfo === 'function' &&
+      text !== 'Saved' &&
+      text !== 'Saving...' &&
+      text !== 'Unsaved changes'
+    ) {
       reportConsoleInfo('Storyboard', text);
     }
   }

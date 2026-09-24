@@ -390,6 +390,10 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
     assert "position: absolute;" in css
     assert "fillsField = kind === 'concept' || kind === 'scene-prompt'" in storyboard
     assert "card.style.height = Math.round(height) + 'px';" in storyboard
+    assert "storyboard-story-authoring" in storyboard
+    assert "kind === 'scenes'" in storyboard
+    assert "bottomAlignedTop" in storyboard
+    assert "is-story-plan-overlay" in storyboard
     assert ".storyboard-director-activity.is-field-overlay" in css
     assert "#storyboard-director-activity-trend svg" in css
     assert "min-height: 72px;" in css

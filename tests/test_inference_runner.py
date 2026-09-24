@@ -605,6 +605,30 @@ def test_inference_reconcile_holds_unresolved_provider_without_claiming_idle_gpu
         assert "provider-still-running" in inference_runner._provider_cleanup_holds
 
 
+def test_inference_resume_clears_pause_even_while_other_gpu_owner_is_active(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    execution_queue.pause_lane(inference_runner.EXECUTION_LANE)
+    execution_queue._resource_owner = "training"
+    started = []
+    monkeypatch.setattr(
+        inference_runner,
+        "_start_worker_for_requested_inference",
+        lambda: started.append(True),
+    )
+
+    result = inference_runner.action("resume_queue")
+
+    assert result["resumed"] is True
+    assert result["queue"]["paused"] is False
+    assert execution_queue.get_job(queued["id"])["status"] == "queued"
+    assert execution_queue.resource_owner() == "training"
+    assert started == [True]
+
+
 def test_inference_resume_checks_pending_cleanup_once_and_stays_dormant_if_unavailable(inference_root, monkeypatch):
     inference_runner.hold_provider_cleanup(
         "provider-stale",

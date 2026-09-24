@@ -2956,16 +2956,17 @@
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     refreshDirector();
     refreshGenerationCapabilities();
-    reconcileDirectorJobs().catch(reportError);
     refreshLibrary().then(function () {
+      return reconcileDirectorJobs();
+    }).then(function () {
       if (storyState.story) {
         return refreshGenerationQueue(storyState.story.id).then(function () {
           renderStory();
         });
       }
       var first = storyState.stories && storyState.stories[0];
-      if (first) openStory(first.id);
-      else renderStory();
+      if (first) return openStory(first.id);
+      renderStory();
     }).catch(reportError);
   }
 

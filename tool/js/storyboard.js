@@ -1048,7 +1048,7 @@
     }
     if (target.kind === 'scenes') {
       Array.prototype.forEach.call(document.querySelectorAll('.storyboard-scene[data-scene-id]'), function (root) {
-        Array.prototype.forEach.call(root.querySelectorAll('input, textarea, select, button'), function (node) {
+        Array.prototype.forEach.call(root.querySelectorAll('input, textarea, select'), function (node) {
           node.disabled = !!protectedState;
         });
       });
@@ -1066,26 +1066,8 @@
     var currentStoryId = storyState.story ? String(storyState.story.id || '') : '';
     var conceptTarget = { kind: 'concept', storyId: currentStoryId };
     var scenesTarget = { kind: 'scenes', storyId: currentStoryId };
-    var expandButton = el('storyboard-expand-concept-btn');
-    var developButton = el('storyboard-develop-btn');
-    if (expandButton) expandButton.disabled = directorTargetBlocked(conceptTarget);
-    if (developButton) developButton.disabled = directorTargetBlocked(scenesTarget);
-    var restore = el('storyboard-restore-concept-btn');
-    if (restore) restore.disabled = directorTargetBlocked(conceptTarget);
     var selector = el('storyboard-director-model');
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;
-
-    Array.prototype.forEach.call(document.querySelectorAll('.storyboard-scene[data-scene-id]'), function (root) {
-      var sceneTarget = {
-        kind: 'scene-prompt',
-        storyId: currentStoryId,
-        sceneId: root.dataset.sceneId
-      };
-      var blocked = directorTargetBlocked(sceneTarget);
-      Array.prototype.forEach.call(root.querySelectorAll('[data-director-write], [data-director-refine], [data-director-restore]'), function (button) {
-        button.disabled = blocked;
-      });
-    });
 
     Object.keys(storyState.director.pendingTargets).forEach(function (key) {
       setDirectorTargetProtected(storyState.director.pendingTargets[key], true);

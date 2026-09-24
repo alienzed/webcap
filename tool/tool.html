@@ -43,6 +43,7 @@
                     </label>
                 </div>
                 <div id="app-header-global" class="app-header-global">
+                    <button id="inference-queue-toggle" type="button" class="inference-queue-toggle hidden" aria-expanded="false" aria-controls="inference-queue-drawer">Queue</button>
                     <div id="shell-gpu-status" class="shell-gpu-status hidden" aria-live="polite"></div>
                 </div>
             </header>
@@ -1136,14 +1137,6 @@
                         <div id="generate-results" class="generate-results"></div>
                     </section>
                 </main>
-                <aside class="generate-queue-panel" aria-label="Generation Queue">
-                    <div class="generate-queue-heading">
-                        <strong>Generation Queue</strong>
-                        <span class="spacer"></span>
-                        <button id="generate-queue-pause" type="button" class="review-captions-btn">Pause queue</button>
-                    </div>
-                    <div id="generate-queue-list" class="generate-queue-list"></div>
-                </aside>
             </section>
             <section id="storyboard-workspace" class="storyboard-workspace hidden" data-workspace-root="storyboard" aria-label="Storyboard workspace">
                 <aside class="storyboard-library" aria-label="Stories">
@@ -1242,6 +1235,16 @@
                     </div>
                 </section>
             </section>
+            <aside id="inference-queue-drawer" class="inference-queue-drawer hidden" aria-label="Inference Queue" aria-hidden="true">
+                <header class="inference-queue-drawer-header">
+                    <div>
+                        <strong>Inference Queue</strong>
+                        <span id="inference-queue-summary">No queued inference</span>
+                    </div>
+                    <button id="inference-queue-close" type="button" class="inference-queue-close" aria-label="Close Inference Queue">×</button>
+                </header>
+                <div id="inference-queue-list" class="inference-queue-list"></div>
+            </aside>
             <div id="console-panel" class="hidden" aria-hidden="true">
                 <div class="console-panel-header">
                     <strong class="console-panel-title">Console</strong>
@@ -1782,6 +1785,7 @@
         <script src="/static/js/training_candidates.js"></script>
         <script src="/static/js/training_workspace.js"></script>
         <script src="/static/js/workspace_shell.js"></script>
+        <script src="/static/js/inference_queue.js"></script>
         <script src="/static/js/storage_manager.js"></script>
         <script src="/static/js/generate.js"></script>
         <script src="/static/js/test_generations.js"></script>

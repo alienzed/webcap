@@ -210,32 +210,39 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
     assert "previousConcept" in storyboard
 
 
-def test_storyboard_director_busy_state_only_protects_its_edit_target():
+def test_storyboard_director_pending_state_is_target_scoped():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    assert "function setDirectorTargetProtected(target, protectedState)" in storyboard
+    assert "pendingTargets: {}" in storyboard
+    assert "pendingOrder: []" in storyboard
+    assert "function directorTargetKey(target)" in storyboard
+    assert "return 'story-plan:' + storyId;" in storyboard
+    assert "return 'scene-prompt:' + storyId + ':' + String(target.sceneId);" in storyboard
+    assert "function directorTargetPending(target)" in storyboard
+    assert "function setDirectorPending(target, pending)" in storyboard
+    assert "function syncDirectorPendingControls()" in storyboard
     assert "setStoryDirectorInputsDisabled" not in storyboard
-    assert "var directorTarget = { kind: 'concept' };" in storyboard
-    assert "var directorTarget = { kind: 'scenes' };" in storyboard
-    assert "var directorTarget = { kind: 'scene-prompt', sceneId: sceneId };" in storyboard
-    assert "storyboard-delete-story-btn" not in storyboard.split("function setDirectorBusy", 1)[1].split("function expandConcept", 1)[0]
+    assert "var directorTarget = { kind: 'concept', storyId: storyId };" in storyboard
+    assert "var directorTarget = { kind: 'scenes', storyId: storyId };" in storyboard
+    assert "var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId };" in storyboard
     assert "detachedScenePrompt = kind === 'scene-prompt' && !target" in storyboard
     assert "scene: { prompt: generatedPrompt }" in storyboard
     assert "if (currentPrompt) currentPrompt.value = generatedPrompt;" in storyboard
-    assert "setDirectorTargetProtected(storyState.director.activityTarget, true);" in storyboard
     assert ".storyboard-director-activity.is-detached-target" in (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
 
-def test_storyboard_director_actions_share_one_busy_state_and_concept_restore():
+def test_storyboard_director_story_plan_conflicts_but_scene_targets_queue_independently():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     assert 'id="storyboard-restore-concept-btn"' in html
     assert "busy: false" in storyboard
-    assert "function setDirectorBusy(busy)" in storyboard
-    assert "if (!storyState.story || storyState.director.busy) return;" in storyboard
-    assert "setDirectorBusy(true);" in storyboard
-    assert "setDirectorBusy(false);" in storyboard
+    assert "storyPlanPending" in storyboard
+    assert "node.disabled = storyPlanPending;" in storyboard
+    assert "button.disabled = pending;" in storyboard
+    assert "select.disabled = false;" in storyboard
+    assert "if (directorTargetPending(directorTarget)) return;" in storyboard
+    assert "storyState.director.busy = storyState.director.pendingOrder.length > 0;" in storyboard
     assert "function restorePreviousConcept()" in storyboard
     assert "operation: 'restore_previous_concept'" in storyboard
 
@@ -388,9 +395,9 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
 
     assert "function directorActivityTargetElement()" in storyboard
     assert "function positionDirectorActivity()" in storyboard
-    assert "startDirectorActivity({ kind: 'concept' })" in storyboard
-    assert "startDirectorActivity({ kind: 'scenes' })" in storyboard
-    assert "startDirectorActivity({ kind: 'scene-prompt', sceneId: sceneId })" in storyboard
+    assert "function startDirectorActivity()" in storyboard
+    assert "setDirectorPending(directorTarget, true);" in storyboard
+    assert "storyState.director.activityTarget = storyState.director.pendingTargets[storyState.director.pendingOrder[0]]" in storyboard
     assert ".storyboard-director-activity {" in css
     assert "position: absolute;" in css
     assert "fillsField = kind === 'concept' || kind === 'scene-prompt'" in storyboard

@@ -208,32 +208,9 @@ def test_storyboard_generation_capabilities_route(monkeypatch):
     assert response.get_json()["baseLoras"] == ["mh3/turbo.safetensors"]
 
 
-def test_storyboard_director_develops_story_and_applies_plan(monkeypatch):
+def test_storyboard_director_develop_request_queues_frozen_story_target(monkeypatch):
     story = {"id": "story-1", "concept": "A rise and fall story.", "sceneOrder": [], "scenes": {}}
-    plan = {
-        "scenes": [
-            {
-                "title": "Rise",
-                "summary": "He gains power.",
-                "entryState": "He is unknown.",
-                "exitState": "He controls the neighborhood.",
-                "prompt": "prompt one",
-                "suggestedDurationSeconds": 8,
-                "continuity": {"continuesPreviousScene": False, "carryForward": []},
-            },
-            {
-                "title": "Fall",
-                "summary": "His empire collapses.",
-                "entryState": "He controls the neighborhood.",
-                "exitState": "He is alone.",
-                "prompt": "prompt two",
-                "suggestedDurationSeconds": 10,
-                "continuity": {"continuesPreviousScene": True, "carryForward": []},
-            },
-        ]
-    }
-    applied = dict(story)
-    applied["sceneOrder"] = ["scene-1", "scene-2"]
+    captured = {}
 
     monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
     monkeypatch.setattr(
@@ -248,27 +225,40 @@ def test_storyboard_director_develops_story_and_applies_plan(monkeypatch):
     )
     monkeypatch.setattr(
         app_module,
-        "storyboard_run_llm_contract",
-        lambda model, contract: {"model": model, "data": plan, "usage": None, "timings": None},
-    )
-    monkeypatch.setattr(
-        app_module,
-        "storyboard_apply_developed_plan",
-        lambda story_id, received_plan, model_id="": applied
-        if received_plan == plan and model_id == "director.gguf"
-        else (_ for _ in ()).throw(AssertionError("wrong developed plan")),
+        "enqueue_llm",
+        lambda client, model, contract, context=None, label="": captured.update({
+            "client": client,
+            "model": model,
+            "contract": contract,
+            "context": context,
+            "label": label,
+        }) or {
+            "jobId": "job-1",
+            "client": client,
+            "operation": contract["operation"],
+            "modelId": model,
+            "storyId": context["storyId"],
+            "sceneId": context["sceneId"],
+            "status": "queued",
+            "queuePosition": 1,
+        },
     )
 
-    client = app_module.app.test_client()
-    response = client.post("/fs/storyboard/director", json={
+    response = app_module.app.test_client().post("/fs/storyboard/director", json={
         "storyId": "story-1",
         "operation": "develop_story",
         "model": "director.gguf",
     })
 
-    assert response.status_code == 200
-    assert response.get_json()["sceneCount"] == 2
-    assert response.get_json()["story"]["sceneOrder"] == ["scene-1", "scene-2"]
+    assert response.status_code == 202
+    assert response.get_json()["job"]["storyId"] == "story-1"
+    assert captured["client"] == "storyboard"
+    assert captured["context"] == {
+        "storyId": "story-1",
+        "sceneId": "",
+        "operation": "develop_story",
+        "replaceExisting": False,
+    }
 
 
 def test_storyboard_director_can_preview_exact_contract_without_queueing(monkeypatch):
@@ -338,54 +328,51 @@ def test_storyboard_director_requires_confirmation_before_replacing_existing_sce
     assert "Confirm replacement" in response.get_json()["error"]
 
 
-def test_storyboard_director_expands_concept_with_recovery(tmp_path, monkeypatch):
+def test_storyboard_route_restores_persisted_previous_prompt(tmp_path, monkeypatch):
     root = tmp_path / "root"
     root.mkdir()
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", str(root))
     client = app_module.app.test_client()
 
-    created = client.post("/fs/storyboard", json={
+    story = client.post("/fs/storyboard", json={
         "operation": "create_story",
-        "story": {"title": "Gangster", "concept": "Rise and fall of a New York gangster."},
+        "story": {"title": "Story"},
     }).get_json()["story"]
-
-    monkeypatch.setattr(
-        app_module,
-        "storyboard_build_llm_request",
-        lambda story, scene_id, operation, instruction="": {
-            "operation": operation,
-            "output": "text",
-            "prompt": "expand",
+    scene = client.post("/fs/storyboard", json={
+        "operation": "add_scene",
+        "storyId": story["id"],
+        "scene": {
+            "prompt": "Director prompt.",
+            "previousPrompt": "Original prompt.",
         },
-    )
-    monkeypatch.setattr(
-        app_module,
-        "storyboard_run_llm_contract",
-        lambda model, contract: {
-            "text": "A richer rise-and-fall crime story with a complete arc.",
-            "model": model,
-            "usage": None,
-            "timings": None,
-        },
-    )
-
-    expanded = client.post("/fs/storyboard/director", json={
-        "storyId": created["id"],
-        "operation": "expand_concept",
-        "model": "director.gguf",
-    })
-    assert expanded.status_code == 200
-    expanded_story = expanded.get_json()["story"]
-    assert expanded_story["concept"].startswith("A richer")
-    assert expanded_story["previousConcept"] == "Rise and fall of a New York gangster."
+    }).get_json()["scene"]
 
     restored = client.post("/fs/storyboard", json={
-        "operation": "restore_previous_concept",
-        "storyId": created["id"],
+        "operation": "restore_previous_prompt",
+        "storyId": story["id"],
+        "sceneId": scene["id"],
     })
+
     assert restored.status_code == 200
-    assert restored.get_json()["story"]["concept"] == "Rise and fall of a New York gangster."
-    assert restored.get_json()["story"]["previousConcept"] is None
+    restored_scene = restored.get_json()["scene"]
+    assert restored_scene["prompt"] == "Original prompt."
+    assert restored_scene["previousPrompt"] == "Director prompt."
+
+
+def test_storyboard_route_fails_loudly_when_manual_prompt_write_hits_pending_director(monkeypatch):
+    monkeypatch.setattr(app_module, "llm_storyboard_target_busy", lambda story_id, kind, scene_id="": kind == "scene-prompt")
+    client = app_module.app.test_client()
+
+    response = client.post("/fs/storyboard", json={
+        "operation": "update_scene",
+        "storyId": "story-1",
+        "sceneId": "scene-1",
+        "scene": {"prompt": "Manual overwrite."},
+    })
+
+    assert response.status_code == 400
+    assert "Scene prompt has pending Director work" in response.get_json()["error"]
+
 
 def test_storyboard_route_can_permanently_delete_take(tmp_path, monkeypatch):
     root = tmp_path / "root"

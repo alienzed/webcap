@@ -242,6 +242,7 @@ def _client_result(client, context, llm_result, job_id=""):
             model_id=llm_result["model"],
             job_id=job_id,
             operation=operation,
+            duration_override=llm_result.get("durationOverride"),
         )
         return {
             "storyId": story["id"],

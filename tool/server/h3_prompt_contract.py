@@ -1,3 +1,5 @@
+import copy
+
 BASE_FIELDS = (
     "integrated_multimodal_description",
     "overall_soundscape",
@@ -121,3 +123,21 @@ def final_shape(mode="T2VA", duration=None):
         "non_diegetic_music": "...",
     }
     return render_base_prompt(sample, mode=mode, duration=duration)
+
+
+def render_story_plan_prompts(plan):
+    if not isinstance(plan, dict):
+        raise ValueError("Storyboard Scene plan must be an object.")
+    rendered = copy.deepcopy(plan)
+    scenes = rendered.get("scenes")
+    if not isinstance(scenes, list):
+        raise ValueError("Storyboard Scene plan Scenes must be an array.")
+    for index, scene in enumerate(scenes, start=1):
+        if not isinstance(scene, dict):
+            raise ValueError("Storyboard Scene plan Scene " + str(index) + " must be an object.")
+        scene["prompt"] = render_base_prompt(
+            scene.get("prompt"),
+            mode="T2VA",
+            duration=scene.get("suggestedDurationSeconds"),
+        )
+    return rendered

@@ -1154,18 +1154,6 @@
                     <div id="storyboard-library-list" class="storyboard-library-list"></div>
                 </aside>
                 <section class="storyboard-editor" aria-label="Story editor">
-                    <header class="storyboard-editor-header">
-                        <div class="storyboard-editor-title">
-                            <strong>Story</strong>
-                            <button id="storyboard-story-toggle" type="button" class="review-captions-btn" aria-expanded="true" aria-controls="storyboard-story-authoring">Collapse Story</button>
-                        </div>
-                        <div class="storyboard-director-header">
-                            <label for="storyboard-director-model">Director</label>
-                            <select id="storyboard-director-model" aria-label="Storyboard Director model">
-                                <option value="">Director unavailable</option>
-                            </select>
-                        </div>
-                    </header>
                     <aside id="storyboard-director-activity" class="storyboard-director-activity hidden" aria-live="polite">
                         <strong>Director</strong>
                         <span id="storyboard-director-activity-phase">Preparing…</span>
@@ -1179,6 +1167,10 @@
                     <div id="storyboard-editor-content" class="storyboard-editor-scroll hidden">
                         <div id="storyboard-story-authoring" class="storyboard-story-authoring">
                             <div class="storyboard-story-fields">
+                                <div class="storyboard-story-panel-heading">
+                                    <strong>Story</strong>
+                                    <button id="storyboard-story-toggle" type="button" class="review-captions-btn" aria-expanded="true" aria-controls="storyboard-story-authoring">Collapse Story</button>
+                                </div>
                                 <label class="storyboard-field"><span>Title</span><input id="storyboard-story-title" type="text" maxlength="200"></label>
                                 <label class="storyboard-field"><span>Status</span><select id="storyboard-story-status"><option value="active">Active</option><option value="complete">Complete</option><option value="archived">Archived</option></select></label>
                                 <div class="storyboard-field storyboard-concept-field">
@@ -1229,12 +1221,20 @@
                         <div class="storyboard-scene-workspace">
                             <section id="storyboard-sequence-preview" class="storyboard-sequence-preview hidden" aria-label="Selected sequence"></section>
                             <div class="storyboard-scenes-heading">
-                                <div class="storyboard-scenes-heading-title"><strong>Scenes</strong><span id="storyboard-progress-summary" class="storyboard-progress-summary"></span></div>
+                                <div class="storyboard-scenes-heading-left">
+                                    <button id="storyboard-story-expand-toggle" type="button" class="review-captions-btn hidden" aria-expanded="false" aria-controls="storyboard-story-authoring">Expand Story</button>
+                                    <div class="storyboard-scenes-heading-title"><strong>Scenes</strong><span id="storyboard-progress-summary" class="storyboard-progress-summary"></span></div>
+                                </div>
                                 <div class="storyboard-view-toggle" role="group" aria-label="Scene workspace mode">
                                     <button id="storyboard-scenes-overview-btn" type="button" class="review-captions-btn">Overview</button>
                                     <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn active">Focus</button>
                                 </div>
-                                <div class="storyboard-scenes-heading-spacer" aria-hidden="true"></div>
+                                <div class="storyboard-director-header">
+                                    <label for="storyboard-director-model">Director</label>
+                                    <select id="storyboard-director-model" aria-label="Storyboard Director model">
+                                        <option value="">Director unavailable</option>
+                                    </select>
+                                </div>
                             </div>
                             <div id="storyboard-scene-progression" class="storyboard-scene-progression" aria-label="Scene progression"></div>
                             <div id="storyboard-scenes-list" class="storyboard-scenes-list"></div>

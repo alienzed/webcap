@@ -137,14 +137,6 @@
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
         throw new Error(current.error || ('Storyboard Director job ' + status + '.'));
       }
-      if (status === 'queued') {
-        renderDirectorActivity({
-          phase: 'queued',
-          active: true,
-          startedAt: current.createdAt,
-          queuePosition: current.queuePosition || 0
-        }, null);
-      }
       return new Promise(function (resolve) { setTimeout(resolve, 750); }).then(function () {
         return directorJobRequest(current.jobId);
       }).then(poll);

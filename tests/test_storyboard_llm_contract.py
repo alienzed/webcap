@@ -175,14 +175,13 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
 
     assert request["operation"] == "develop_story"
     assert request["output"] == "json"
-    assert request["response_schema"]["required"] == ["sharedContext", "scenes"]
-    assert set(request["response_schema"]["properties"]["sharedContext"]["required"]) == {
-        "subjects", "wardrobes", "locations", "persistentFacts"
-    }
+    assert request["response_schema"]["required"] == ["scenes"]
+    assert "sharedContext" not in request["response_schema"]["properties"]
     assert "minItems" not in request["response_schema"]["properties"]["scenes"]
     assert "maxItems" not in request["response_schema"]["properties"]["scenes"]
     scene_schema = request["response_schema"]["properties"]["scenes"]["items"]
-    assert "sharedContextRefs" in scene_schema["required"]
+    assert "sharedContextRefs" not in scene_schema["required"]
+    assert "sharedContextRefs" not in scene_schema["properties"]
     prompt_schema = scene_schema["properties"]["prompt"]
     assert prompt_schema["type"] == "object"
     assert prompt_schema["required"] == [
@@ -196,13 +195,9 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert "Character: Mara" in prompt
     assert "Low analog synth, no vocals." in prompt
     assert "complete structured H3 content for every Scene now" in prompt
-    assert "establish sharedContext for recurring subjects, wardrobe states, locations" in prompt
-    assert "Reuse the same sharedContext IDs in every Scene where they still apply" in prompt
-    assert "If the Story leaves a recurring person or place visually underspecified" in prompt
-    assert "never substitute relative phrases such as 'the same woman'" in prompt
-    assert "locations should carry stable layout/materials/colors/fixed features/baseline practical lighting" in prompt
-    assert "WebCap will inject the referenced descriptions into the final H3 prompt mechanically" in prompt
-    assert "Produce exactly 12 Scenes" in prompt
+    assert "Aim for 12 Scenes" in prompt
+    assert "recurring character identity, wardrobe, location" in prompt
+    assert "sharedContext" not in prompt
     assert "4 to 8 Scenes" not in prompt
     assert "at least two Scenes" not in prompt
     assert "between 4 and 15 seconds" in prompt

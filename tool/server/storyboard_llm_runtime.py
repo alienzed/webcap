@@ -574,10 +574,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
         if response_schema is not None:
             payload["response_format"] = {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "storyboard_response",
-                    "schema": response_schema,
-                },
+                "schema": response_schema,
             }
 
         if settings.get("mode", "local") == "remote":

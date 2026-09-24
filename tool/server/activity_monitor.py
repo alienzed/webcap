@@ -174,6 +174,7 @@ def activity_snapshot(limit=20):
             "inference": {
                 "running": sum(1 for job in inference_jobs if str(job.get("status") or "") in _ACTIVE_STATUSES),
                 "queued": sum(1 for job in inference_jobs if str(job.get("status") or "") == "queued"),
+                "backlog": int(inference.get("backlogCount") or 0),
                 "paused": bool(inference.get("paused")),
                 "pauseReason": str(inference.get("pauseReason") or ""),
             },

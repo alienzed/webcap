@@ -1648,6 +1648,13 @@
       var pendingTakesHtml = sceneGenerationJobs.map(function (job, pendingIndex) {
         return pendingTakeCardHtml(job, takeOrder.length + pendingIndex);
       }).join('');
+      var takeSummaryParts = [
+        String(takeOrder.length) + ' Take' + (takeOrder.length === 1 ? '' : 's')
+      ];
+      if (scene.selectedTakeId) takeSummaryParts.push('1 selected');
+      if (sceneGenerationJobs.length) {
+        takeSummaryParts.push(String(sceneGenerationJobs.length) + ' pending');
+      }
       return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<header class="storyboard-scene-header">' +
           '<span class="storyboard-scene-number">Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
@@ -1752,13 +1759,16 @@
             '</section>' +
           '</aside>' +
         '</div>' +
-        '<div class="storyboard-takes">' +
-          '<div class="storyboard-takes-header"><div><strong>Takes</strong><span>Imported media is copied into this Story and keeps a frozen Scene snapshot.</span></div>' +
-            '<label class="review-captions-btn storyboard-take-upload-btn" title="Import existing image or video media as a Take for this Scene.">Import Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
+        '<details class="storyboard-takes" open>' +
+          '<summary class="storyboard-takes-summary"><strong>Takes</strong><span>' + escapeHtml(takeSummaryParts.join(' · ')) + '</span></summary>' +
+          '<div class="storyboard-takes-content">' +
+            '<div class="storyboard-takes-header"><span>Imported media is copied into this Story and keeps a frozen Scene snapshot.</span>' +
+              '<label class="review-captions-btn storyboard-take-upload-btn" title="Import existing image or video media as a Take for this Scene.">Import Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
+            '</div>' +
+            '<div class="storyboard-takes-grid">' + (takesHtml + pendingTakesHtml || '<div class="storyboard-takes-empty">No Takes yet.</div>') + '</div>' +
+            removedTakesHtml +
           '</div>' +
-          '<div class="storyboard-takes-grid">' + (takesHtml + pendingTakesHtml || '<div class="storyboard-takes-empty">No Takes yet.</div>') + '</div>' +
-          removedTakesHtml +
-        '</div>' +
+        '</details>' +
       '</section>';
     }).join('');
 

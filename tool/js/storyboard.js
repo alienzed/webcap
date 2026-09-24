@@ -2389,7 +2389,7 @@
         var scene = scenes[sceneId] || {};
         var takeCount = Array.isArray(scene.takeOrder) ? scene.takeOrder.length : 0;
         var pendingTakeCount = generationJobsForScene(sceneId).length;
-        return '<button type="button" class="storyboard-scene-overview-card" data-scene-open="' + escapeHtml(sceneId) + '">' +
+        return '<button type="button" class="storyboard-scene-overview-card' + (scene.selectedTakeId ? ' has-selected-take' : '') + '" data-scene-open="' + escapeHtml(sceneId) + '">' +
           '<span class="storyboard-scene-overview-number">Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
           '<strong>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
           '<span class="storyboard-scene-overview-summary">' + escapeHtml(scene.summary || 'No Scene intent yet.') + '</span>' +
@@ -2484,7 +2484,7 @@
       if (sceneGenerationJobs.length) {
         takeSummaryParts.push(String(sceneGenerationJobs.length) + ' pending');
       }
-      return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
+      return '<section class="storyboard-scene' + (scene.selectedTakeId ? ' has-selected-take' : '') + '" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<header class="storyboard-scene-header">' +
           '<span class="storyboard-scene-number"' +
             (planDirectorModel ? ' title="Scene plan originated from Director model ' + escapeHtml(planDirectorModel) + '"' : '') +

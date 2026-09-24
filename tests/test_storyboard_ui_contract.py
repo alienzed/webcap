@@ -863,6 +863,16 @@ def test_storyboard_director_provenance_is_subtle_and_persistent():
     assert "promptDirectorModel: promptDirectorModel" in storyboard
 
 
+def test_storyboard_scene_cards_visually_mark_selected_take_state():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert "storyboard-scene-overview-card' + (scene.selectedTakeId ? ' has-selected-take' : '')" in storyboard
+    assert "storyboard-scene' + (scene.selectedTakeId ? ' has-selected-take' : '')" in storyboard
+    assert ".storyboard-scene.has-selected-take" in css
+    assert ".storyboard-scene-overview-card.has-selected-take" in css
+
+
 def test_storyboard_scene_continuity_is_collapsible():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 

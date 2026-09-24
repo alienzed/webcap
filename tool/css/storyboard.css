@@ -452,6 +452,15 @@
   overflow: hidden;
 }
 
+.storyboard-scene.has-selected-take {
+  border-color: color-mix(in srgb, #22c55e 42%, var(--border));
+  background: color-mix(in srgb, var(--panel) 94%, #22c55e 6%);
+}
+
+.storyboard-scene.has-selected-take > .storyboard-scene-header {
+  background: color-mix(in srgb, var(--panel-soft) 91%, #22c55e 9%);
+}
+
 .storyboard-scene-header {
   grid-area: header;
   display: grid;
@@ -1579,8 +1588,17 @@
   cursor: pointer;
 }
 
+.storyboard-scene-overview-card.has-selected-take {
+  border-color: color-mix(in srgb, #22c55e 42%, var(--border));
+  background: color-mix(in srgb, var(--panel) 92%, #22c55e 8%);
+}
+
 .storyboard-scene-overview-card:hover {
   background: var(--panel-soft);
+}
+
+.storyboard-scene-overview-card.has-selected-take:hover {
+  background: color-mix(in srgb, var(--panel-soft) 89%, #22c55e 11%);
 }
 
 .storyboard-scene-overview-number {

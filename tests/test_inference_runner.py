@@ -605,6 +605,37 @@ def test_inference_reconcile_holds_unresolved_provider_without_claiming_idle_gpu
         assert "provider-still-running" in inference_runner._provider_cleanup_holds
 
 
+def test_inference_restart_does_not_reanimate_historical_terminal_provider_hold(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(
+        queued["id"],
+        details={"providerJobId": "provider-old", "providerStatus": "in_progress"},
+    )
+    execution_queue.finish_job(queued["id"], status="failed", error="old failure")
+
+    inference_runner._startup_reconciled = False
+    touched = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait_status",
+        lambda provider_id: touched.append(provider_id) or "",
+    )
+
+    inference_runner.reconcile_startup()
+
+    snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
+    assert snapshot["paused"] is False
+    assert snapshot["activeJobId"] == ""
+    assert touched == []
+    with inference_runner._provider_hold_lock:
+        assert not inference_runner._provider_cleanup_holds
+
+
 def test_inference_resume_clears_pause_even_while_other_gpu_owner_is_active(inference_root, monkeypatch):
     queued = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,

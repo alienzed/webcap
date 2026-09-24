@@ -753,9 +753,9 @@ def test_test_generations_queue_contract():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
     assert "request('test_enqueue'" in script
-    assert "request('test_queue')" in script
+    assert "request('test_queue', { modelId: modelId })" in script
     assert "request('test_queue_cancel'" in script
-    assert "request('test_queue_clear')" in script
+    assert "request('test_queue_clear', { modelId: currentTestModelId() })" in script
     assert "var queuedTestJobs = [];" in script
     assert "remove.dataset.queueCancel" in script
     assert "queueCancel.dataset.queueCancel" in script

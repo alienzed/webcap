@@ -463,7 +463,6 @@ def _normalize_scene(scene_id, value, existing=None):
         "megapixels": megapixels,
         "seed": seed,
         "seedMode": seed_mode,
-        "wildcardsEnabled": bool(value.get("wildcardsEnabled", current.get("wildcardsEnabled", False))),
         "loras": _normalize_loras(value.get("loras", current.get("loras", []))),
         "storyLoraOverrides": _normalize_story_lora_overrides(
             value.get("storyLoraOverrides", current.get("storyLoraOverrides", []))
@@ -595,7 +594,7 @@ def duplicate_story(story_id):
     scene_fields = (
         "title", "summary", "entryState", "exitState", "prompt", "promptDirectorModel", "promptDirectorJobId", "planDirectorModel", "sharedContextRefs",
         "durationSeconds", "aspectRatio", "megapixels", "seed", "seedMode",
-        "wildcardsEnabled", "loras", "storyLoraOverrides", "notes",
+        "loras", "storyLoraOverrides", "notes",
     )
     for source_scene_id in source.get("sceneOrder") or []:
         current = source_scenes.get(source_scene_id)
@@ -921,7 +920,6 @@ def duplicate_scene(story_id, scene_id):
         "megapixels": current.get("megapixels"),
         "seed": current.get("seed"),
         "seedMode": current.get("seedMode", "random"),
-        "wildcardsEnabled": bool(current.get("wildcardsEnabled")),
         "notes": current.get("notes") or "",
     }
     copied["loras"] = copy.deepcopy(current.get("loras") or [])
@@ -1061,7 +1059,6 @@ def add_take_upload(story_id, scene_id, filename, stream, effective_loras=None):
         "durationSeconds": scene.get("durationSeconds", 6),
         "seed": scene.get("seed"),
         "seedMode": scene.get("seedMode", "random"),
-        "wildcardsEnabled": bool(scene.get("wildcardsEnabled")),
         "loras": _normalize_loras(effective_loras) if effective_loras is not None else resolve_scene_loras(story, scene),
         "references": copy.deepcopy(scene.get("references") or []),
         "workflowProfile": None,
@@ -1464,7 +1461,6 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
         "entryState",
         "exitState",
         "sourcePrompt",
-        "wildcardsEnabled",
         "durationSeconds",
         "seed",
         "seedMode",

@@ -135,7 +135,12 @@ def _ensure_execution_reconciled():
     with _reconcile_lock:
         if _startup_reconciled:
             return
+
         prior = execution_lane_snapshot(EXECUTION_LANE, include_terminal=True)
+        prior_active = [
+            job for job in prior.get("jobs", [])
+            if str(job.get("status") or "") in {"starting", "running", "stopping"}
+        ]
         unresolved_terminal_provider_ids = {
             str((job.get("details") or {}).get("providerJobId") or "").strip()
             for job in prior.get("jobs", [])
@@ -143,13 +148,13 @@ def _ensure_execution_reconciled():
             and isinstance(job.get("details"), dict)
             and str((job.get("details") or {}).get("providerJobId") or "").strip()
             and str((job.get("details") or {}).get("providerStatus") or "").strip().lower()
-                not in {"completed", "failed", "cancelled"}
+                not in {"completed", "failed", "cancelled", "missing"}
         }
-        interrupted = execution_recover_lane(
-            EXECUTION_LANE,
-            reason="Inference was interrupted by a WebCap restart.",
-        )
-        for job in interrupted:
+
+        # Reconcile provider state while active queue jobs are still mutable so
+        # the confirmed terminal provider status is persisted before the WebCap
+        # job itself is marked interrupted.
+        for job in prior_active:
             details = job.get("details") if isinstance(job.get("details"), dict) else {}
             prompt_id = str(details.get("providerJobId") or "").strip()
             if not prompt_id:
@@ -177,33 +182,24 @@ def _ensure_execution_reconciled():
                     "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
                 )
                 _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
+
+        interrupted = execution_recover_lane(
+            EXECUTION_LANE,
+            reason="Inference was interrupted by a WebCap restart.",
+        )
         interrupted_provider_ids = {
             str((job.get("details") or {}).get("providerJobId") or "").strip()
             for job in interrupted
             if isinstance(job.get("details"), dict)
         }
+
+        # Historical terminal rows are immutable by design. Query their stale
+        # provider projection directly; only retain a hold when the provider
+        # still cannot be confirmed terminal.
         for prompt_id in unresolved_terminal_provider_ids - interrupted_provider_ids:
             try:
                 from .inference_runtime import cancel_job_and_wait_status
-                terminal_status = cancel_job_and_wait_status(prompt_id)
-                if terminal_status:
-                    matching = next(
-                        (
-                            prior_job
-                            for prior_job in prior.get("jobs", [])
-                            if str((prior_job.get("details") or {}).get("providerJobId") or "").strip() == prompt_id
-                        ),
-                        None,
-                    )
-                    if matching:
-                        try:
-                            execution_update_job(
-                                str(matching.get("id") or ""),
-                                details={"providerStatus": terminal_status},
-                            )
-                        except ValueError:
-                            pass
-                else:
+                if not cancel_job_and_wait_status(prompt_id):
                     hold_provider_cleanup(
                         prompt_id,
                         "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart.",

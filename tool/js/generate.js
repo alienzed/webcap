@@ -17,7 +17,6 @@
       activityStartedAt: 0,
       activityHistory: []
     },
-    queue: { jobs: [], paused: false },
     trackedJobIds: loadTrackedGenerateJobs(),
     open: false,
     timer: 0
@@ -322,7 +321,8 @@
     }).then(function (payload) {
       trackGenerateJob(payload.job && payload.job.jobId);
       setStatus('Queued' + (payload.job.queuePosition ? ' · #' + payload.job.queuePosition : '') + '.');
-      return refreshQueue();
+      if (typeof window.refreshInferenceQueue === 'function') window.refreshInferenceQueue();
+      return typeof window.refreshInferenceQueue === 'function' ? window.refreshInferenceQueue() : null;
     }).catch(function (err) {
       reportError(err, conciseGenerateError(err, 'Generation failed'));
     }).then(function () {
@@ -330,172 +330,6 @@
     });
   }
 
-  function queueClientLabel(job) {
-    if (job.client === 'storyboard') return 'Storyboard';
-    if (job.client === 'test') return 'Test';
-    return 'Generate';
-  }
-
-  function createQueueRow(job) {
-    var row = document.createElement('article');
-    row.className = 'generate-queue-row';
-    row.dataset.inferenceJobId = String(job.jobId || '');
-
-    var position = document.createElement('div');
-    position.className = 'generate-queue-position';
-    position.dataset.queuePosition = '1';
-
-    var copy = document.createElement('div');
-    copy.className = 'generate-queue-copy';
-    var title = document.createElement('strong');
-    title.dataset.queueTitle = '1';
-    var detail = document.createElement('span');
-    detail.dataset.queueDetail = '1';
-    copy.appendChild(title);
-    copy.appendChild(detail);
-
-    var actions = document.createElement('div');
-    actions.className = 'generate-queue-actions';
-
-    row.appendChild(position);
-    row.appendChild(copy);
-    row.appendChild(actions);
-    return row;
-  }
-
-  function syncQueueActions(row, job) {
-    var actions = row.querySelector('.generate-queue-actions');
-    if (!actions) return;
-    var queued = job.status === 'queued';
-    var active = ['starting', 'running', 'stopping'].indexOf(job.status) !== -1;
-    var desired = queued ? ['up', 'down', 'cancel'] : (active ? ['stop'] : []);
-    var labels = { up: '↑', down: '↓', cancel: 'Cancel', stop: 'Stop' };
-    var existing = {};
-    Array.prototype.forEach.call(actions.querySelectorAll('[data-inference-action]'), function (button) {
-      existing[String(button.dataset.inferenceAction || '')] = button;
-    });
-
-    Object.keys(existing).forEach(function (action) {
-      if (desired.indexOf(action) === -1) existing[action].remove();
-    });
-
-    desired.forEach(function (action) {
-      var button = existing[action];
-      if (!button) {
-        button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'review-captions-btn';
-        button.dataset.inferenceAction = action;
-      }
-      button.dataset.jobId = String(job.jobId || '');
-      button.textContent = labels[action];
-      button.disabled = action === 'stop' && job.status === 'stopping';
-      if (actions.children[desired.indexOf(action)] !== button) actions.appendChild(button);
-    });
-  }
-
-  function syncQueueRow(row, job) {
-    row.className = 'generate-queue-row status-' + String(job.status || '');
-    row.dataset.inferenceJobId = String(job.jobId || '');
-    var position = row.querySelector('[data-queue-position]');
-    var title = row.querySelector('[data-queue-title]');
-    var detail = row.querySelector('[data-queue-detail]');
-    var queued = job.status === 'queued';
-    if (position) {
-      position.textContent = queued && job.queuePosition
-        ? '#' + job.queuePosition
-        : String(job.status || '').replace(/_/g, ' ');
-    }
-    if (title) title.textContent = queueClientLabel(job) + ' · ' + (job.label || 'Generation');
-    if (detail) {
-      detail.textContent = String(job.modelId || '') +
-        (job.providerStatus ? ' · ' + String(job.providerStatus) : '');
-    }
-    syncQueueActions(row, job);
-  }
-
-  function renderQueue() {
-    var host = el('generate-queue-list');
-    var pause = el('generate-queue-pause');
-    if (pause) pause.textContent = generateState.queue.paused ? 'Resume queue' : 'Pause queue';
-    if (!host) return;
-
-    var jobs = Array.isArray(generateState.queue.jobs) ? generateState.queue.jobs : [];
-    var running = jobs.some(function (job) {
-      return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
-    });
-    if (typeof window.setShellInferenceActive === 'function') window.setShellInferenceActive(running);
-
-    var empty = host.querySelector('.generate-queue-empty');
-    if (jobs.length && empty) empty.remove();
-
-    var rows = {};
-    Array.prototype.forEach.call(
-      host.querySelectorAll('.generate-queue-row[data-inference-job-id]'),
-      function (row) { rows[String(row.dataset.inferenceJobId || '')] = row; }
-    );
-    var valid = {};
-
-    jobs.forEach(function (job, index) {
-      var key = String(job.jobId || '');
-      if (!key) return;
-      valid[key] = true;
-      var row = rows[key];
-      if (!row) {
-        row = createQueueRow(job);
-        rows[key] = row;
-      }
-      syncQueueRow(row, job);
-
-      var currentRows = host.querySelectorAll('.generate-queue-row[data-inference-job-id]');
-      var expected = currentRows[index] || null;
-      if (expected !== row) host.insertBefore(row, expected);
-      else if (!row.parentNode) host.appendChild(row);
-    });
-
-    Object.keys(rows).forEach(function (key) {
-      if (!valid[key]) rows[key].remove();
-    });
-
-    if (!jobs.length && !host.querySelector('.generate-queue-empty')) {
-      empty = document.createElement('div');
-      empty.className = 'generate-queue-empty';
-      empty.textContent = 'No queued inference.';
-      host.appendChild(empty);
-    }
-  }
-
-  function refreshQueue() {
-    return requestJson('/fs/inference').then(function (payload) {
-      generateState.queue = payload.queue || { jobs: [], paused: false };
-      renderQueue();
-      return payload.queue;
-    }).catch(function (err) {
-      reportError(err);
-      return null;
-    });
-  }
-
-  function queueAction(operation, jobId, direction) {
-    return postJson('/fs/inference', {
-      operation: operation,
-      jobId: jobId || '',
-      direction: direction || ''
-    }).then(function (payload) {
-      if (operation === 'cancel') untrackGenerateJob(jobId);
-      if (operation === 'resume_queue') {
-        if (payload && payload.resumeBlocked) {
-          var reason = String(payload.resumeBlockReason || 'Inference queue could not resume.');
-          setStatus('Resume blocked', 'error');
-          if (typeof window.reportConsoleWarning === 'function') window.reportConsoleWarning('Generation Queue', reason);
-        } else if (payload && payload.resumed) {
-          setStatus('');
-          if (typeof window.reportConsoleInfo === 'function') window.reportConsoleInfo('Generation Queue', 'Queue resumed.');
-        }
-      }
-      return refreshQueue();
-    }).catch(reportError);
-  }
 
   function refreshTrackedGenerateJobs() {
     var ids = (generateState.trackedJobIds || []).slice();
@@ -924,7 +758,6 @@
     if (generateState.timer) clearTimeout(generateState.timer);
     generateState.timer = setTimeout(function () {
       Promise.all([
-        refreshQueue(),
         refreshTrackedGenerateJobs(),
         generateState.open ? refreshResults() : Promise.resolve()
       ]).then(schedulePoll);
@@ -946,7 +779,6 @@
     Promise.all([
       refreshCapabilities(),
       refreshDirector(),
-      refreshQueue(),
       refreshTrackedGenerateJobs(),
       refreshResults()
     ]).catch(reportError);
@@ -1000,10 +832,6 @@
       setSharedDirectorModelPreference(this.value);
       renderDirector();
     });
-    el('generate-queue-pause').onclick = function () {
-      queueAction(generateState.queue.paused ? 'resume_queue' : 'pause_queue');
-    };
-
     el('generate-lora-list').addEventListener('input', function (event) {
       var input = event.target.closest('[data-generate-lora-strength]');
       if (!input) return;
@@ -1020,15 +848,6 @@
       saveLoras();
       renderLoras();
     });
-    el('generate-queue-list').addEventListener('click', function (event) {
-      var button = event.target.closest('[data-inference-action]');
-      if (!button) return;
-      var action = button.dataset.inferenceAction;
-      if (action === 'up' || action === 'down') queueAction('reorder', button.dataset.jobId, action);
-      else queueAction(action, button.dataset.jobId);
-    });
-
-    refreshQueue();
     schedulePoll();
   }
 

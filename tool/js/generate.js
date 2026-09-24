@@ -735,7 +735,11 @@
       modelId: generateState.modelId,
       prompt: prompt,
       instruction: instruction,
-      settings: collectSettings()
+      settings: collectSettings(),
+      referenceRoles: ['first_frame', 'last_frame'].filter(function (role) {
+        var input = el('generate-reference-' + role);
+        return !!(input && input.files && input.files[0]);
+      })
     }).then(function (payload) {
       promptNode.value = String(payload.result || '');
       generateState.director.previousPrompt = previousPrompt;

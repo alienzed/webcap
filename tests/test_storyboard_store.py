@@ -387,7 +387,7 @@ def test_scene_loras_are_persisted_ordered_and_duplicated(storyboard_fs):
 
 
 def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(storyboard_fs):
-    story = storyboard_store.create_story({"title": "Story", "concept": "A short film."})
+    story = storyboard_store.create_story({"title": "Story", "concept": "A short film.", "targetSceneCount": 2})
     story, old_scene = storyboard_store.add_scene(story["id"], {"title": "Old", "prompt": "Old prompt"})
     story, old_take = storyboard_store.add_take_upload(
         story["id"], old_scene["id"], "old.mp4", BytesIO(b"old-video")
@@ -433,9 +433,9 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
     assert "integrated_multimodal_description" in first["prompt"]
 
 
-def test_apply_developed_plan_rejects_single_scene_or_out_of_range_duration(storyboard_fs):
-    story = storyboard_store.create_story({"title": "Story"})
-    with pytest.raises(ValueError, match="at least two"):
+def test_apply_developed_plan_rejects_wrong_scene_count_or_out_of_range_duration(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story", "targetSceneCount": 2})
+    with pytest.raises(ValueError, match="requests exactly 2"):
         storyboard_store.apply_developed_plan(story["id"], {"scenes": []})
 
     bad_scene = {

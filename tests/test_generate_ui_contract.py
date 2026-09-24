@@ -90,6 +90,8 @@ def test_generate_prompt_assistant_uses_shared_llm_queue():
     assert "function waitForDirectorJob(job)" in script
     assert "'/fs/director/job?job='" in script
     assert "queued: 'Queued…'" in script
+    waiter = script.split("function waitForDirectorJob(job)", 1)[1].split("function queueDirectorRequest", 1)[0]
+    assert "renderDirectorActivity(" not in waiter
     assert "enqueue_llm(" in app
 
 

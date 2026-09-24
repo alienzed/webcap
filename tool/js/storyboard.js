@@ -118,7 +118,7 @@
   }
 
   function directorJobRequest(jobId) {
-    return fetch('/fs/director/job?job=' + encodeURIComponent(jobId)).then(function (response) {
+    return fetch('/fs/director/job?job=' + encodeURIComponent(jobId) + '&consume=1').then(function (response) {
       return response.json().then(function (body) {
         if (!response.ok || !body || !body.ok || !body.job) {
           throw new Error((body && body.error) || 'Storyboard Director job request failed.');
@@ -2364,7 +2364,7 @@
     if (storyState.generationPolls[jobId]) return;
     storyState.generationPolls[jobId] = window.setTimeout(function () {
       delete storyState.generationPolls[jobId];
-      generationRequest(null, 'job=' + encodeURIComponent(jobId)).then(function (payload) {
+      generationRequest(null, 'job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
         var job = payload.job;
         var previousJob = storyState.generationJobs[jobId] || null;
         storyState.generationJobs[jobId] = job;

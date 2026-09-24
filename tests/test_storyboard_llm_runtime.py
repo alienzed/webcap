@@ -3,9 +3,9 @@ import pytest
 from tool.server import storyboard_llm_runtime
 
 
-def test_director_capacity_defaults_leave_room_for_whole_story_output():
-    assert storyboard_llm_runtime.DEFAULT_CONTEXT_SIZE == 16384
-    assert storyboard_llm_runtime.DEFAULT_MAX_TOKENS == 8192
+def test_director_capacity_defaults_defer_to_runtime():
+    assert storyboard_llm_runtime.DEFAULT_CONTEXT_SIZE is None
+    assert storyboard_llm_runtime.DEFAULT_MAX_TOKENS is None
 
 
 def test_completion_result_rejects_token_limit_truncation():
@@ -274,6 +274,7 @@ def test_chat_uses_selected_model_disables_thinking_retains_model_and_releases_g
     assert captured["payload"]["min_p"] == 0.05
     assert captured["payload"]["repeat_penalty"] == 1.0
     assert captured["payload"]["seed"] == -1
+    assert captured["payload"]["max_tokens"] == 4096
     assert calls == [
         "server",
         "reserve",
@@ -281,6 +282,36 @@ def test_chat_uses_selected_model_disables_thinking_retains_model_and_releases_g
         "ensure:qwen-large",
         "release",
     ]
+
+
+def test_chat_omits_max_tokens_when_limit_is_auto(monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
+    monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_release_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: {
+        "mode": "local",
+        "llama_server": "",
+        "models_dir": None,
+        "port": 8189,
+        "context_size": None,
+        "max_tokens": None,
+    })
+
+    captured = {}
+
+    def fake_http(path, method="GET", payload=None, timeout=30):
+        captured["payload"] = payload
+        return {"choices": [{"message": {"content": "done"}}]}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_http_json", fake_http)
+
+    result = storyboard_llm_runtime.chat("director", [{"role": "user", "content": "Write."}])
+
+    assert result["text"] == "done"
+    assert "max_tokens" not in captured["payload"]
 
 
 def test_ensure_local_model_loaded_reuses_loaded_selection(monkeypatch):
@@ -567,6 +598,54 @@ def test_owned_router_restarts_when_runtime_settings_change(tmp_path, monkeypatc
             str(tmp_path / "text_encoders"),
             8189,
             8192,
+        )
+    finally:
+        if storyboard_llm_runtime._log_handle is not None:
+            storyboard_llm_runtime._log_handle.close()
+        storyboard_llm_runtime._log_handle = None
+        storyboard_llm_runtime._process = None
+        storyboard_llm_runtime._server_settings_signature = None
+
+
+def test_owned_router_omits_context_size_when_limit_is_auto(tmp_path, monkeypatch):
+    calls = []
+    health = iter([False, True])
+
+    class FakeProcess:
+        def poll(self):
+            return None
+
+    storyboard_llm_runtime._process = None
+    storyboard_llm_runtime._log_handle = None
+    storyboard_llm_runtime._server_settings_signature = None
+
+    settings = {
+        "mode": "local",
+        "llama_server": "/new/llama-server",
+        "models_dir": tmp_path / "text_encoders",
+        "port": 8189,
+        "context_size": None,
+        "max_tokens": None,
+    }
+
+    def fake_popen(command, **_kwargs):
+        calls.append(command)
+        return FakeProcess()
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: settings)
+    monkeypatch.setattr(storyboard_llm_runtime, "_resolve_executable", lambda: "/new/llama-server")
+    monkeypatch.setattr(storyboard_llm_runtime, "_runtime_dir", lambda: tmp_path)
+    monkeypatch.setattr(storyboard_llm_runtime, "_health_ok", lambda: next(health))
+    monkeypatch.setattr(storyboard_llm_runtime.subprocess, "Popen", fake_popen)
+
+    try:
+        storyboard_llm_runtime._ensure_server()
+        assert "--ctx-size" not in calls[0]
+        assert storyboard_llm_runtime._server_settings_signature == (
+            "/new/llama-server",
+            str(tmp_path / "text_encoders"),
+            8189,
+            None,
         )
     finally:
         if storyboard_llm_runtime._log_handle is not None:

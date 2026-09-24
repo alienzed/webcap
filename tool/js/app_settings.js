@@ -75,8 +75,8 @@ function normalizeAppConfigShape(cfg) {
   if (typeof out.storyboard.director.endpoint !== 'string') out.storyboard.director.endpoint = '';
   if (typeof out.storyboard.director.llama_server !== 'string') out.storyboard.director.llama_server = '';
   if (!Number.isInteger(out.storyboard.director.port)) out.storyboard.director.port = 8189;
-  if (!Number.isInteger(out.storyboard.director.context_size)) out.storyboard.director.context_size = 16384;
-  if (!Number.isInteger(out.storyboard.director.max_tokens)) out.storyboard.director.max_tokens = 8192;
+  if (out.storyboard.director.context_size !== null && !Number.isInteger(out.storyboard.director.context_size)) out.storyboard.director.context_size = null;
+  if (out.storyboard.director.max_tokens !== null && !Number.isInteger(out.storyboard.director.max_tokens)) out.storyboard.director.max_tokens = null;
   if (typeof out.primer.template !== 'string') out.primer.template = '';
   if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};
   if (typeof out.analysis.enableFaceAnalysis !== 'boolean') out.analysis.enableFaceAnalysis = false;
@@ -130,8 +130,8 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsStoryboardEndpointEl) ui.appSettingsStoryboardEndpointEl.value = c.storyboard.director.endpoint || '';
   if (ui.appSettingsStoryboardLlamaServerEl) ui.appSettingsStoryboardLlamaServerEl.value = c.storyboard.director.llama_server || '';
   if (ui.appSettingsStoryboardPortEl) ui.appSettingsStoryboardPortEl.value = c.storyboard.director.port;
-  if (ui.appSettingsStoryboardContextSizeEl) ui.appSettingsStoryboardContextSizeEl.value = c.storyboard.director.context_size;
-  if (ui.appSettingsStoryboardMaxTokensEl) ui.appSettingsStoryboardMaxTokensEl.value = c.storyboard.director.max_tokens;
+  if (ui.appSettingsStoryboardContextSizeEl) ui.appSettingsStoryboardContextSizeEl.value = c.storyboard.director.context_size == null ? '' : c.storyboard.director.context_size;
+  if (ui.appSettingsStoryboardMaxTokensEl) ui.appSettingsStoryboardMaxTokensEl.value = c.storyboard.director.max_tokens == null ? '' : c.storyboard.director.max_tokens;
   if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
   if (ui.appSettingsDebugEl) ui.appSettingsDebugEl.checked = !!c.debug;
   if (ui.appSettingsEnableFaceAnalysisEl) ui.appSettingsEnableFaceAnalysisEl.checked = !!c.analysis.enableFaceAnalysis;
@@ -166,8 +166,10 @@ function collectAppSettingsFormConfig() {
   base.storyboard.director.endpoint = ui.appSettingsStoryboardEndpointEl ? ui.appSettingsStoryboardEndpointEl.value : '';
   base.storyboard.director.llama_server = ui.appSettingsStoryboardLlamaServerEl ? ui.appSettingsStoryboardLlamaServerEl.value : '';
   base.storyboard.director.port = Number(ui.appSettingsStoryboardPortEl ? ui.appSettingsStoryboardPortEl.value : 8189);
-  base.storyboard.director.context_size = Number(ui.appSettingsStoryboardContextSizeEl ? ui.appSettingsStoryboardContextSizeEl.value : 16384);
-  base.storyboard.director.max_tokens = Number(ui.appSettingsStoryboardMaxTokensEl ? ui.appSettingsStoryboardMaxTokensEl.value : 8192);
+  var contextSizeValue = ui.appSettingsStoryboardContextSizeEl ? ui.appSettingsStoryboardContextSizeEl.value.trim() : '';
+  var maxTokensValue = ui.appSettingsStoryboardMaxTokensEl ? ui.appSettingsStoryboardMaxTokensEl.value.trim() : '';
+  base.storyboard.director.context_size = contextSizeValue === '' ? null : Number(contextSizeValue);
+  base.storyboard.director.max_tokens = maxTokensValue === '' ? null : Number(maxTokensValue);
   base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';
   base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);
   base.analysis.enableMediaPipeAnalysis = !!(ui.appSettingsEnableMediaPipeAnalysisEl && ui.appSettingsEnableMediaPipeAnalysisEl.checked);

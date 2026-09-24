@@ -279,15 +279,22 @@ def validate_config_payload(payload):
     }
     if mode == "remote" and not normalized_director["endpoint"]:
         raise ValueError("Config.storyboard.director.endpoint is required in remote mode.")
-    for key, default, minimum, maximum in (
-        ("port", 8189, 1, 65535),
-        ("context_size", 16384, 1024, 1048576),
-        ("max_tokens", 8192, 1, 262144),
+    port = director.get("port", 8189)
+    if isinstance(port, bool) or not isinstance(port, int) or port < 1 or port > 65535:
+        raise ValueError("Config.storyboard.director.port must be an integer between 1 and 65535.")
+    normalized_director["port"] = port
+
+    for key, minimum, maximum in (
+        ("context_size", 1024, 1048576),
+        ("max_tokens", 1, 262144),
     ):
-        value = director.get(key, default)
+        value = director.get(key)
+        if value is None:
+            normalized_director[key] = None
+            continue
         if isinstance(value, bool) or not isinstance(value, int) or value < minimum or value > maximum:
             raise ValueError(
-                "Config.storyboard.director." + key + " must be an integer between "
+                "Config.storyboard.director." + key + " must be null for Auto or an integer between "
                 + str(minimum) + " and " + str(maximum) + "."
             )
         normalized_director[key] = value

@@ -212,6 +212,22 @@ def test_training_repeat_reference_epochs_defaults_to_90():
     assert normalized["training"]["repeat_reference_epochs"] == 90
 
 
+def test_storyboard_director_limits_default_to_auto_and_accept_overrides():
+    normalized = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "storyboard": {"director": {}},
+    })
+    assert normalized["storyboard"]["director"]["context_size"] is None
+    assert normalized["storyboard"]["director"]["max_tokens"] is None
+
+    overridden = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "storyboard": {"director": {"context_size": 32768, "max_tokens": 16384}},
+    })
+    assert overridden["storyboard"]["director"]["context_size"] == 32768
+    assert overridden["storyboard"]["director"]["max_tokens"] == 16384
+
+
 def test_training_repeat_reference_epochs_must_be_positive_integer():
     with pytest.raises(ValueError, match="repeat_reference_epochs"):
         config_module.validate_config_payload({"filesystem": {"root": "C:/training", "models": ""}, "training": {"repeat_reference_epochs": 0}})

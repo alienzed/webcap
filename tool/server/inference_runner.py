@@ -33,6 +33,7 @@ _monitor_lock = threading.Lock()
 _monitor_thread = None
 _provider_hold_lock = threading.Lock()
 _provider_cleanup_holds = set()
+_provider_cleanup_reason = ""
 _logger = logging.getLogger(__name__)
 
 
@@ -47,12 +48,30 @@ def _release_gpu():
 
 
 def hold_provider_cleanup(provider_job_id, reason):
+    global _provider_cleanup_reason
     provider_job_id = str(provider_job_id or "").strip()
     if not provider_job_id:
         return
     with _provider_hold_lock:
         _provider_cleanup_holds.add(provider_job_id)
-    execution_pause_lane(EXECUTION_LANE, reason=str(reason or "Queue paused for provider cleanup."))
+        _provider_cleanup_reason = str(
+            reason or "Inference is waiting for ComfyUI provider cleanup."
+        )
+
+
+def _clear_obsolete_persisted_provider_pause():
+    """Migrate runtime-only provider pauses written by older versions."""
+    current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    reason = str(current.get("pauseReason") or "")
+    lowered = reason.lower()
+    if (
+        current.get("paused")
+        and (
+            "comfyui provider" in lowered
+            or "provider cleanup" in lowered
+        )
+    ):
+        execution_resume_lane(EXECUTION_LANE)
 
 
 def _reconcile_provider_cleanup_holds():
@@ -79,16 +98,13 @@ def _reconcile_provider_cleanup_holds():
             unresolved.append(provider_job_id)
             provider_active = True
 
+    global _provider_cleanup_reason
     with _provider_hold_lock:
         _provider_cleanup_holds.intersection_update(unresolved)
         remaining = bool(_provider_cleanup_holds)
+        if not remaining:
+            _provider_cleanup_reason = ""
     if remaining:
-        current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-        if not current.get("paused"):
-            execution_pause_lane(
-                EXECUTION_LANE,
-                reason="Queue paused: unresolved ComfyUI provider cleanup must finish before inference can resume.",
-            )
         if provider_active and not execution_resource_owner():
             execution_reserve_resource(GPU_RESERVATION_OWNER)
         return False
@@ -137,6 +153,7 @@ def _ensure_execution_reconciled():
         if _startup_reconciled:
             return
 
+        _clear_obsolete_persisted_provider_pause()
         prior = execution_lane_snapshot(EXECUTION_LANE, include_terminal=True)
         prior_active = [
             job for job in prior.get("jobs", [])
@@ -179,18 +196,6 @@ def _ensure_execution_reconciled():
             reason="Inference was interrupted by a WebCap restart.",
         )
 
-        # Migration for the obsolete historical-provider reconciliation bug.
-        # That bug could persist a paused lane even with no live work. Do not
-        # generalize this: only clear the exact retired reason.
-        current_lane = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-        if (
-            current_lane.get("paused")
-            and not current_lane.get("activeJobId")
-            and not current_lane.get("jobs")
-            and str(current_lane.get("pauseReason") or "")
-                == "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart."
-        ):
-            execution_resume_lane(EXECUTION_LANE)
         _startup_reconciled = True
 
 
@@ -346,6 +351,9 @@ def _monitor_has_work():
         return True
     if snapshot.get("paused"):
         return False
+    with _provider_hold_lock:
+        if _provider_cleanup_holds:
+            return False
     return any(str(job.get("status") or "") == "queued" for job in snapshot.get("jobs", []))
 
 
@@ -469,10 +477,18 @@ def enqueue_test(request, context, label=""):
 
 
 def snapshot(include_terminal=False):
+    _clear_obsolete_persisted_provider_pause()
     current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=include_terminal)
+    with _provider_hold_lock:
+        provider_paused = bool(_provider_cleanup_holds)
+        provider_reason = str(_provider_cleanup_reason or "")
     return {
-        "paused": bool(current.get("paused")),
-        "pauseReason": str(current.get("pauseReason") or ""),
+        "paused": bool(current.get("paused")) or provider_paused,
+        "pauseReason": (
+            provider_reason
+            if provider_paused
+            else str(current.get("pauseReason") or "")
+        ),
         "activeJobId": str(current.get("activeJobId") or ""),
         "jobs": [_job_view(job) for job in current.get("jobs", [])],
     }

@@ -1154,6 +1154,26 @@ def test_scene_refine_completion_is_persisted_only_for_successful_refine(storybo
     assert refined["refineComplete"] is True
     assert storyboard_store.load_story(story["id"])["scenes"][scene["id"]]["refineComplete"] is True
 
+    _, refined_with_duration = storyboard_store.apply_director_prompt(
+        story["id"],
+        scene["id"],
+        "Longer refined prompt.",
+        model_id="director.gguf",
+        job_id="job-refine-duration",
+        operation="refine_prompt",
+        duration_override=12,
+    )
+    assert refined_with_duration["durationSeconds"] == 12
+
+    with pytest.raises(ValueError, match="between 6 and 15"):
+        storyboard_store.apply_director_prompt(
+            story["id"],
+            scene["id"],
+            "Invalid duration prompt.",
+            operation="refine_prompt",
+            duration_override=16,
+        )
+
     _, rewritten = storyboard_store.apply_director_prompt(
         story["id"],
         scene["id"],

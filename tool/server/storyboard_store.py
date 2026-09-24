@@ -825,7 +825,7 @@ def apply_developed_plan(story_id, plan, model_id=""):
     story["development"] = {
         "createdAt": now,
         "model": str(model_id or "").strip(),
-        "plan": copy.deepcopy(normalized_plan),
+        "plan": copy.deepcopy(plan),
     }
     story["updatedAt"] = now
     _write_json_atomic(_story_path(story_id), story)

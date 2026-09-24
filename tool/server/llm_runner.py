@@ -192,7 +192,6 @@ def _client_result(client, context, llm_result, job_id=""):
             repair_base,
             model_id=llm_result["model"],
             job_id=job_id,
-            operation=operation,
         )
         return {
             "storyId": story["id"],
@@ -241,6 +240,7 @@ def _client_result(client, context, llm_result, job_id=""):
             llm_result.get("text"),
             model_id=llm_result["model"],
             job_id=job_id,
+            operation=operation,
         )
         return {
             "storyId": story["id"],

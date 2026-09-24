@@ -399,10 +399,53 @@ def _test_items_for_folder(cache, folder, qualify_label=False):
     return rows
 
 
+def _central_test_items(cache):
+    root = _central_test_root()
+    if not root.is_dir():
+        return []
+    rows = []
+    for path in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower(), reverse=True):
+        if not path.is_dir() or path.is_symlink():
+            continue
+        try:
+            session = _read_test_session_manifest(path)
+        except (FileNotFoundError, RuntimeError):
+            continue
+        session_id = path.name
+        status = str(session.get("status") or "")
+        active = status in ACTIVE_TEST_STATUSES
+        source = str(session.get("source") or "")
+        owner_folder = str(session.get("ownerFolder") or "")
+        label = str(session.get("name") or "").strip() or session_id
+        if source:
+            label += " · " + source
+        rows.append(_item(
+            "tests",
+            session_id,
+            label,
+            path,
+            folder="",
+            kind=session.get("modelId") or session.get("model") or "Test Session",
+            status=status,
+            purgeable=not active,
+            protected_reason=("Active Test Session; stop it before deletion." if active else ""),
+            meta={
+                "source": source,
+                "ownerFolder": owner_folder,
+                "completed": int(session.get("completed") or 0),
+                "failed": int(session.get("failed") or 0),
+                "total": int(session.get("total") or 0),
+                "startedAt": session.get("startedAt"),
+            },
+            cache=cache,
+        ))
+    return rows
+
+
 def _test_items(cache, folder):
     folders = _discovered_set_folders(cache, folder)
     qualify = len(folders) > 1
-    rows = []
+    rows = _central_test_items(cache)
     for set_folder in folders:
         try:
             rows.extend(_test_items_for_folder(cache, set_folder, qualify_label=qualify))
@@ -951,13 +994,31 @@ def _resolve_generate(item_id):
     return directory
 
 
+def _central_test_root():
+    root = Path(app_config.FS_ROOT) / ".webcap" / "test-generations"
+    if root.is_symlink():
+        raise ValueError("Central Test Session storage path is symlinked.")
+    return root
+
+
 def _resolve_test(folder, session_id):
+    name = str(session_id or "").strip()
+    if not name or name in (".", "..") or "/" in name or "\\" in name:
+        raise ValueError("Test Session storage ID is invalid.")
+
+    central_root = _central_test_root()
+    central_session = central_root / name
+    if central_session.is_symlink():
+        raise ValueError("Test Session storage path is symlinked.")
+    if central_session.is_dir() and (central_session / "test.json").is_file():
+        return central_session.resolve()
+
     folder = str(folder or "").strip()
     if not folder:
-        raise ValueError("Current Set is required for Test Session storage.")
+        raise FileNotFoundError("Test Session is unavailable.")
     raw_set_path = app_config.safe_join_fs_root(folder)
     raw_root = raw_set_path / "test-generations"
-    raw_session = raw_root / str(session_id or "")
+    raw_session = raw_root / name
     if raw_root.is_symlink() or raw_session.is_symlink():
         raise ValueError("Test Session storage path is symlinked.")
     set_path = raw_set_path.resolve()
@@ -1509,8 +1570,9 @@ def purge(area, item_id, folder=""):
         status = str(session_payload.get("status") or "").strip().lower()
         if status in ACTIVE_TEST_STATUSES:
             raise RuntimeError("Active Test Session; stop it before deletion.")
-        set_path = app_config.safe_join_fs_root(folder)
-        delete_session(set_path, item_id)
+        owner_folder = str(session_payload.get("ownerFolder") or folder or "").strip()
+        owner_path = app_config.safe_join_fs_root(owner_folder) if owner_folder else Path(app_config.FS_ROOT).resolve()
+        delete_session(owner_path, item_id)
     elif area == "staged":
         candidate, sidecar, _provenance = _resolve_staged(folder, item_id)
         if candidate.name in _active_staged_test_candidates(folder):

@@ -182,6 +182,28 @@ def test_storyboard_routine_autosave_state_does_not_pollute_global_console():
     assert "text !== 'Unsaved changes'" in save_state
     assert "reportConsoleInfo('Storyboard', text);" in save_state
 
+def test_storyboard_story_switching_and_save_results_are_story_scoped():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "openStoryRequestId: 0" in storyboard
+    open_block = storyboard.split("function openStory(storyId)", 1)[1].split("\n  function ", 1)[0]
+    assert "var requestId = ++storyState.openStoryRequestId;" in open_block
+    assert "if (requestId !== storyState.openStoryRequestId) return null;" in open_block
+    assert "Storyboard Story response identity mismatch." in open_block
+    assert open_block.index("requestId !== storyState.openStoryRequestId") < open_block.index("storyState.story = payload.story;")
+
+    story_save = storyboard.split("function saveStoryNow()", 1)[1].split("\n  function ", 1)[0]
+    assert "String(storyState.story.id || '') === String(storyId)" in story_save
+    assert story_save.index("String(storyState.story.id || '') === String(storyId)") < story_save.index("storyState.story = payload.story;")
+
+    scene_save = storyboard.split("function saveSceneNow(sceneId)", 1)[1].split("\n  function ", 1)[0]
+    assert "String(storyState.story.id || '') === String(storyId)" in scene_save
+    assert scene_save.index("String(storyState.story.id || '') === String(storyId)") < scene_save.index("storyState.story = payload.story;")
+
+    queue_refresh = storyboard.split("function refreshGenerationQueue(storyId)", 1)[1].split("\n  function ", 1)[0]
+    assert "String(storyState.story.id || '') !== String(storyId)" in queue_refresh
+
+
 def test_storyboard_director_configuration_is_first_class_app_setting():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")

@@ -17,6 +17,7 @@
     sequenceCollapsed: window.localStorage.getItem('webcap.storyboard.sequenceCollapsed') === '1',
     sceneViewMode: window.localStorage.getItem('webcap.storyboard.sceneView') || 'focus',
     activeSceneId: '',
+    openStoryRequestId: 0,
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
     generationCapabilities: {
       loras: [],
@@ -2471,24 +2472,38 @@
   }
 
   function openStory(storyId) {
+    storyId = String(storyId || '');
+    if (!storyId) throw new Error('Storyboard Story ID is required.');
+    var requestId = ++storyState.openStoryRequestId;
     var previousStoryId = storyState.story && storyState.story.id;
     setSaveState('Loading...');
     return flushPendingSaves().then(function () {
+      if (requestId !== storyState.openStoryRequestId) return null;
       return request(null, 'story=' + encodeURIComponent(storyId));
     }).then(function (payload) {
+      if (!payload || requestId !== storyState.openStoryRequestId) return null;
+      if (!payload.story || String(payload.story.id || '') !== storyId) {
+        throw new Error('Storyboard Story response identity mismatch.');
+      }
       storyState.story = payload.story;
       if (previousStoryId !== payload.story.id && storyState.storyCollapsed) setStoryCollapsed(false);
       if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
       storyState.sequenceExport = null;
       storyState.newTakeCounts = {};
       return refreshGenerationQueue(storyId).then(function () {
+        if (requestId !== storyState.openStoryRequestId) return null;
         return reconcileDirectorJobs();
       });
     }).then(function () {
+      if (requestId !== storyState.openStoryRequestId) return null;
       renderStory();
       setSaveState('Saved');
       return refreshSequenceExport(storyId);
-    }).catch(reportError);
+    }).catch(function (err) {
+      if (requestId !== storyState.openStoryRequestId) return null;
+      reportError(err);
+      return null;
+    });
   }
 
   function createStory() {
@@ -2657,9 +2672,11 @@
         story: storyPayload
       });
     }).then(function (payload) {
-      storyState.story = payload.story;
+      if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
+        storyState.story = payload.story;
+        setSaveState('Saved');
+      }
       if (storyState.storySavePromise === promise) storyState.storySaveError = null;
-      setSaveState('Saved');
       return refreshLibrary();
     }).catch(function (err) {
       if (storyState.storySavePromise === promise) storyState.storySaveError = err;
@@ -2753,9 +2770,11 @@
         scene: scenePayload
       });
     }).then(function (payload) {
-      storyState.story = payload.story;
+      if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
+        storyState.story = payload.story;
+        setSaveState('Saved');
+      }
       if (storyState.sceneSavePromises[sceneId] === promise) delete storyState.sceneSaveErrors[sceneId];
-      setSaveState('Saved');
       return refreshLibrary();
     }).catch(function (err) {
       if (storyState.sceneSavePromises[sceneId] === promise) storyState.sceneSaveErrors[sceneId] = err;
@@ -3322,6 +3341,9 @@
       return Promise.resolve();
     }
     return generationRequest(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
+      if (!storyState.story || String(storyState.story.id || '') !== String(storyId)) {
+        return payload.queue;
+      }
       var jobs = payload.queue && Array.isArray(payload.queue.jobs) ? payload.queue.jobs : [];
       jobs.forEach(function (job) {
         storyState.generationJobs[job.jobId] = job;

@@ -84,6 +84,11 @@ def test_h3_inference_workflow_supports_multiple_loras_and_frame_anchors():
             "first_frame": "refs/first.png",
             "last_frame": "refs/last.png",
         },
+        "requiredLoras": [{
+            "name": "base.safetensors",
+            "strengthModel": 0.9,
+            "strengthClip": 1.0,
+        }],
         "loras": [
             {"name": "one.safetensors", "strength": 0.7},
             {"name": "two.safetensors", "strength": 0.5},

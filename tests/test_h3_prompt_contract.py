@@ -90,6 +90,28 @@ def test_h3_story_plan_renderer_converts_structured_prompt_objects_without_mutat
     assert "Hotel lobby: The lobby has dark terrazzo floors" in rendered["scenes"][0]["prompt"]
 
 
+def test_h3_story_plan_renderer_does_not_require_shared_context():
+    plan = {
+        "scenes": [{
+            "title": "Lobby",
+            "summary": "She enters.",
+            "entryState": "Outside.",
+            "exitState": "Inside.",
+            "prompt": _fields(),
+            "suggestedDurationSeconds": 6,
+            "continuity": {"continuesPreviousScene": False, "carryForward": []},
+        }]
+    }
+
+    rendered = h3_prompt_contract.render_story_plan_prompts(plan)
+
+    assert len(rendered["scenes"]) == 1
+    assert rendered["scenes"][0]["prompt"].startswith(
+        "integrated_multimodal_description: [Shot 1]"
+    )
+    assert "Continuity anchors —" not in rendered["scenes"][0]["prompt"]
+
+
 def test_h3_renderer_rejects_missing_structured_fields():
     with pytest.raises(ValueError, match="overall_soundscape"):
         h3_prompt_contract.render_base_prompt({

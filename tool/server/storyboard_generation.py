@@ -21,6 +21,7 @@ from .storyboard_store import (
     load_story,
     resolve_scene_generation_defaults,
     resolve_scene_loras,
+    resolve_scene_shared_context,
     storyboard_root,
 )
 
@@ -68,6 +69,10 @@ def _scene_settings(scene, story=None):
     prompt = str(scene.get("prompt") or "").strip()
     if not prompt:
         raise ValueError("Scene generation prompt is empty.")
+    shared_context = resolve_scene_shared_context(story or {}, scene)
+    if shared_context:
+        from .h3_prompt_contract import inject_shared_context_into_rendered_prompt
+        prompt = inject_shared_context_into_rendered_prompt(prompt, shared_context)
 
     resolved_defaults = resolve_scene_generation_defaults(story or {}, scene)
     aspect_ratio = resolved_defaults["aspectRatio"]

@@ -214,6 +214,32 @@ def test_story_scene_lifecycle(storyboard_fs):
     assert restored["sceneOrder"] == [second["id"], duplicate["id"], first["id"]]
 
 
+def test_director_prompt_restore_is_durable_and_revertable(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "prompt": "Original prompt.",
+    })
+
+    story, updated = storyboard_store.apply_director_prompt(
+        story["id"],
+        scene["id"],
+        "Director prompt.",
+        model_id="director.gguf",
+        job_id="job-1",
+    )
+    assert updated["prompt"] == "Director prompt."
+    assert updated["previousPrompt"] == "Original prompt."
+    assert storyboard_store.load_story(story["id"])["scenes"][scene["id"]]["previousPrompt"] == "Original prompt."
+
+    story, restored = storyboard_store.restore_previous_prompt(story["id"], scene["id"])
+    assert restored["prompt"] == "Original prompt."
+    assert restored["previousPrompt"] == "Director prompt."
+
+    _, redone = storyboard_store.restore_previous_prompt(story["id"], scene["id"])
+    assert redone["prompt"] == "Director prompt."
+    assert redone["previousPrompt"] == "Original prompt."
+
+
 def test_reorder_requires_every_scene_exactly_once(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, first = storyboard_store.add_scene(story["id"], {})

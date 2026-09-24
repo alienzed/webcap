@@ -5,6 +5,7 @@ import time
 
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
+    consume_terminal_job as execution_consume_terminal_job,
     claim_next as execution_claim_next,
     enqueue as execution_enqueue,
     finish_job as execution_finish_job,
@@ -177,6 +178,19 @@ def _ensure_execution_reconciled():
             EXECUTION_LANE,
             reason="Inference was interrupted by a WebCap restart.",
         )
+
+        # Migration for the obsolete historical-provider reconciliation bug.
+        # That bug could persist a paused lane even with no live work. Do not
+        # generalize this: only clear the exact retired reason.
+        current_lane = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+        if (
+            current_lane.get("paused")
+            and not current_lane.get("activeJobId")
+            and not current_lane.get("jobs")
+            and str(current_lane.get("pauseReason") or "")
+                == "Queue paused: prior ComfyUI provider work could not be confirmed stopped after restart."
+        ):
+            execution_resume_lane(EXECUTION_LANE)
         _startup_reconciled = True
 
 
@@ -464,8 +478,12 @@ def snapshot(include_terminal=False):
     }
 
 
-def job_status(job_id):
-    return _job_view(execution_get_job(str(job_id or "").strip()))
+def job_status(job_id, consume=False):
+    job_id = str(job_id or "").strip()
+    job = execution_get_job(job_id)
+    if consume and str(job.get("status") or "") in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
+        job = execution_consume_terminal_job(job_id)
+    return _job_view(job)
 
 
 def _cleanup_generate_job_references(job_id):

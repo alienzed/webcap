@@ -983,6 +983,10 @@
     });
   }
 
+  function directorJobPollDelay(job) {
+    return String(job && job.status || '') === 'queued' ? 2000 : 1000;
+  }
+
   function waitForDirectorJob(job) {
     if (!job || !job.jobId) throw new Error('Prompt Assistant did not return a queued job.');
     function poll(current) {
@@ -991,7 +995,7 @@
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
         throw new Error(current.error || ('Prompt Assistant job ' + status + '.'));
       }
-      return new Promise(function (resolve) { setTimeout(resolve, 750); }).then(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, directorJobPollDelay(current)); }).then(function () {
         return directorJobRequest(current.jobId);
       }).then(poll);
     }

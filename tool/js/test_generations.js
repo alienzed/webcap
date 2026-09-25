@@ -21,6 +21,7 @@
   var selectedCandidates = null;
   var testSource = null;
   var pendingTestSource = null;
+  var pendingSourceOwnerFolder = '';
   var sourceBrowser = null;
   var queuedTestJobs = [];
   var showSessionError = false;
@@ -91,6 +92,15 @@
         }
         testSource = String(payload.source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
         renderTestSourceBrowser(payload);
+        var ownerFolder = String(payload.ownerFolder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+        var currentFolder = String(state && state.folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+        if (ownerFolder && ownerFolder !== currentFolder) {
+          pendingSourceOwnerFolder = ownerFolder;
+          pendingTestSource = testSource;
+          openTrainingWorkspaceFolder(ownerFolder);
+          return { navigated: true };
+        }
+        pendingSourceOwnerFolder = '';
         return payload;
       });
     });
@@ -412,6 +422,11 @@
   function testGenerationsFolderLoaded() {
     syncLaunchVisibility();
     refreshActivityButton();
+    if (pendingSourceOwnerFolder && String(state && state.folder || '') === String(pendingSourceOwnerFolder)) {
+      pendingSourceOwnerFolder = '';
+      openPane();
+      return;
+    }
     if (pendingRatingFolder && String(state && state.folder || '') === String(pendingRatingFolder)) {
       var ratingFolder = pendingRatingFolder;
       pendingRatingFolder = '';
@@ -2330,9 +2345,11 @@
       syncActiveRunControls({ status: 'idle' });
       return;
     }
-    refreshTestSourceBrowser().then(function () {
+    refreshTestSourceBrowser().then(function (sourcePayload) {
+      if (sourcePayload && sourcePayload.navigated) return null;
       return request('test_prepare', { modelId: getWorkingModelProfileId() });
     }).then(function (payload) {
+      if (!payload) return;
       prepared = payload;
       if (Array.isArray(payload.warnings)) {
         payload.warnings.forEach(function (warning) {

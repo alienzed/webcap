@@ -626,7 +626,7 @@ def action(operation, job_id="", direction="", position=None):
         current = execution_get_job(job_id)
         status = str(current.get("status") or "")
         if operation == "stop_or_cancel" and status == "queued":
-            return {"job": _job_view(execution_cancel_queued(job_id))}
+            return {"job": _job_view(execution_cancel_pending_transient(job_id))}
         if status not in {"starting", "running", "stopping"}:
             raise ValueError("Only queued or active LLM jobs can be stopped.")
         from .storyboard_llm_runtime import assert_hard_stop_supported, stop_owned_server

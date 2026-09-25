@@ -809,6 +809,49 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     return request, loras, include_base is not False
 
 
+def committed_inference_outcome(job):
+    metadata = job.get("metadata") if isinstance(job, dict) and isinstance(job.get("metadata"), dict) else {}
+    job_id = str(job.get("id") or "").strip() if isinstance(job, dict) else ""
+    folder = str(metadata.get("folder") or "").strip()
+    session_id = str(metadata.get("sessionId") or "").strip()
+    if not job_id or not session_id:
+        return None
+    folder_path = app_config.safe_join_fs_root(folder) if folder else Path(app_config.FS_ROOT).resolve()
+    try:
+        session_directory = _session_directory(folder_path, session_id)
+    except FileNotFoundError:
+        return None
+    status = _read_status(session_directory) or {}
+
+    for result in status.get("results") if isinstance(status.get("results"), list) else []:
+        if isinstance(result, dict) and str(result.get("jobId") or "") == job_id:
+            return {
+                "status": "completed",
+                "result": {
+                    "status": "completed",
+                    "session": session_id,
+                    "mediaFile": str(result.get("mediaFile") or ""),
+                },
+                "error": "",
+            }
+
+    if job_id in {str(value) for value in (status.get("skippedJobIds") or [])}:
+        return {
+            "status": "completed",
+            "result": {"status": "skipped", "session": session_id},
+            "error": "",
+        }
+
+    for failure in status.get("failures") if isinstance(status.get("failures"), list) else []:
+        if isinstance(failure, dict) and str(failure.get("jobId") or "") == job_id:
+            return {
+                "status": "failed",
+                "result": {},
+                "error": str(failure.get("error") or "Test generation failed."),
+            }
+    return None
+
+
 def _cancel_shared_pending_job(job_id):
     from .inference_runner import action as inference_action
     return inference_action("cancel", job_id=str(job_id or "").strip())["job"]

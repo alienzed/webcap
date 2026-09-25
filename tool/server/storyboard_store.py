@@ -1659,6 +1659,10 @@ def _resolved_story_media_path(story_id, media_path):
     return resolved
 
 
+def resolve_story_media(story_id, media_path):
+    return _resolved_story_media_path(_safe_story_id(story_id), media_path)
+
+
 def _reference_media_for_take(story_id, source_scene_id, take, frame):
     frame = str(frame or "").strip().lower()
     if frame not in VALID_REFERENCE_FRAMES:

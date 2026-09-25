@@ -2831,7 +2831,7 @@
 }
 
 .storyboard-scenes-heading {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(220px, 1fr);
 }
 
 .storyboard-scenes-heading-left {
@@ -2866,12 +2866,18 @@
 }
 
 .storyboard-scenes-heading .storyboard-director-header {
+  width: min(100%, 280px);
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   margin-left: 0;
   justify-self: auto;
 }
 
 .storyboard-scenes-heading .storyboard-director-header select {
-  max-width: 220px;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
 }
 
 .storyboard-scene-progress-indicators {
@@ -2926,8 +2932,12 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .storyboard-scenes-heading .storyboard-director-header {
+  .storyboard-scenes-heading-actions {
     grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .storyboard-scenes-heading .storyboard-director-header {
     justify-self: end;
   }
 }

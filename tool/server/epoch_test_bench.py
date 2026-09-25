@@ -18,6 +18,7 @@ from .training_test_paths import browse_test_source, test_copy_path, test_source
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
+    discard_terminal_and_recent as execution_discard_terminal_and_recent,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     recover_lane as execution_recover_lane,
@@ -1533,6 +1534,7 @@ def reconcile_startup():
                     "Could not migrate legacy Test queue job %s; leaving it intact for manual recovery.",
                     legacy_job_id,
                 )
+        execution_discard_terminal_and_recent(LEGACY_EXECUTION_LANE)
         _startup_reconciled = True
 
 

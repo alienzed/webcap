@@ -818,7 +818,7 @@ def director_activity_route():
                 "startedAt": queued[0].get("createdAt"),
                 "queuePosition": queued[0].get("queuePosition") or 0,
             }
-    return jsonify({"ok": True, **activity})
+    return jsonify({"ok": True, **activity, "queue": queue})
 
 
 @app.route("/fs/director/queue", methods=["GET"])

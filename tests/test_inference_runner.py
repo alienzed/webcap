@@ -63,7 +63,7 @@ def test_inference_monitor_is_dormant_without_requested_work(inference_root):
 
     inference_runner.hold_provider_cleanup(
         "provider-stale",
-        "Queue paused: stale provider cleanup is pending.",
+        "Inference is waiting for stale provider cleanup.",
     )
     assert inference_runner._monitor_has_work() is True
 
@@ -563,8 +563,9 @@ def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconf
     finished = execution_queue.get_job(queued["id"])
     snapshot = inference_runner.snapshot()
     assert finished["status"] == "failed"
-    assert snapshot["paused"] is True
-    assert "could not be confirmed stopped" in snapshot["pauseReason"]
+    assert snapshot["paused"] is False
+    assert snapshot["pauseReason"] == ""
+    assert "could not be confirmed stopped" in snapshot["waitReason"]
     persisted = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
     assert persisted["paused"] is False
     assert persisted["pauseReason"] == ""

@@ -126,7 +126,6 @@ def _reconcile_provider_cleanup_holds():
 
     from . import inference_runtime
     unresolved = []
-    provider_active = False
     for provider_job_id in pending:
         try:
             job = inference_runtime.read_job(provider_job_id)
@@ -141,7 +140,6 @@ def _reconcile_provider_cleanup_holds():
         status = str(job.get("status") or "").strip().lower() if isinstance(job, dict) else ""
         if job is not None and status not in {"completed", "failed", "cancelled"}:
             unresolved.append(provider_job_id)
-            provider_active = True
 
     global _provider_cleanup_reason
     with _provider_hold_lock:

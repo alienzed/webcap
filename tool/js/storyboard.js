@@ -107,6 +107,86 @@
       id: 'epic-high-contrast',
       label: 'Epic high-contrast',
       text: 'Epic high-contrast cinematic style, bold lighting separation, dramatic scale, striking silhouettes, powerful composition, heightened visual intensity, dynamic atmosphere, emotionally forceful and visually assertive tone.'
+    },
+    {
+      id: 'fashion-runway-editorial',
+      label: 'Fashion runway editorial',
+      text: 'High-fashion runway editorial, sculpted directional lighting, polished catwalk staging, confident model movement, graphic silhouettes, luxurious materials, bold styling, crisp composition, premium magazine-campaign energy.'
+    },
+    {
+      id: 'luxury-fashion-film',
+      label: 'Luxury fashion film',
+      text: 'Luxury fashion-film aesthetic, elegant controlled movement, refined soft-to-hard lighting transitions, tactile fabrics, architectural framing, restrained glamour, premium color grading, sophisticated editorial atmosphere.'
+    },
+    {
+      id: 'studio-beauty-campaign',
+      label: 'Studio beauty campaign',
+      text: 'Studio beauty-campaign look, immaculate controlled lighting, luminous skin and material detail, minimal backgrounds, precise close framing, polished movement, pristine surfaces, high-end cosmetic-advertising atmosphere.'
+    },
+    {
+      id: 'theatrical-stage',
+      label: 'Theatrical stage',
+      text: 'Theatrical stage atmosphere, deliberate blocking, dramatic pools of light, visible depth and negative space, expressive silhouettes, heightened gestures, controlled staging, performance-first visual language.'
+    },
+    {
+      id: 'retro-70s-celluloid',
+      label: 'Retro 1970s celluloid',
+      text: '1970s-inspired celluloid look, warm film stock, soft contrast, practical interiors, subtle grain, period color response, natural zooms and restrained camera movement, tactile analog atmosphere.'
+    },
+    {
+      id: 'retro-80s-neon',
+      label: 'Retro 1980s neon',
+      text: '1980s neon-inflected atmosphere, saturated practical lights, glossy surfaces, deep colored shadows, bold geometric composition, hazy highlights, stylized nightlife energy, cinematic retro-futurist mood.'
+    },
+    {
+      id: 'y2k-gloss',
+      label: 'Y2K gloss',
+      text: 'Y2K glossy visual language, bright flash-lit surfaces, chrome and translucent materials, playful futurism, punchy framing, cool highlights, pop-commercial polish, energetic turn-of-the-millennium styling.'
+    },
+    {
+      id: 'sun-drenched-mediterranean',
+      label: 'Sun-drenched Mediterranean',
+      text: 'Sun-drenched Mediterranean atmosphere, hard natural sunlight, bleached stone and warm earth tones, bright skies, textured shadows, breezy movement, sensual realism, relaxed but visually rich composition.'
+    },
+    {
+      id: 'pastel-pop',
+      label: 'Pastel pop',
+      text: 'Pastel pop aesthetic, clean graphic color blocking, soft candy-toned palette, playful composition, bright even light, crisp surfaces, upbeat movement, stylized but accessible commercial energy.'
+    },
+    {
+      id: 'minimal-architectural',
+      label: 'Minimal architectural',
+      text: 'Minimal architectural visual language, strong lines and negative space, restrained palette, geometric framing, controlled natural or practical light, slow deliberate movement, elegant spatial composition, quiet precision.'
+    },
+    {
+      id: 'clinical-sterile',
+      label: 'Clinical sterile',
+      text: 'Clinical sterile atmosphere, cool neutral palette, bright controlled illumination, clean hard surfaces, symmetrical composition, precise movement, low visual clutter, detached and highly ordered mood.'
+    },
+    {
+      id: 'romantic-soft-focus',
+      label: 'Romantic soft focus',
+      text: 'Romantic soft-focus atmosphere, gentle bloom, warm diffused light, delicate contrast, intimate framing, graceful movement, tactile softness, emotionally heightened but tasteful cinematic tone.'
+    },
+    {
+      id: 'surreal-dream-logic',
+      label: 'Surreal dream logic',
+      text: 'Surreal dream-logic visual language, uncanny but coherent spaces, unexpected scale or composition, smooth impossible-feeling transitions, controlled symbolism, atmospheric lighting, elegant visual disorientation without horror.'
+    },
+    {
+      id: 'expressionist-shadow',
+      label: 'Expressionist shadow',
+      text: 'Expressionist shadow-driven style, exaggerated light and darkness, angular compositions, distorted spatial emphasis, bold silhouettes, theatrical contrast, psychologically charged visual tension.'
+    },
+    {
+      id: 'coastal-natural-light',
+      label: 'Coastal natural light',
+      text: 'Coastal natural-light atmosphere, soft overcast or late-day sun, pale natural palette, open air, wind-shaped movement, reflective water and weathered textures, calm observational framing, understated cinematic realism.'
+    },
+    {
+      id: 'kinetic-music-video',
+      label: 'Kinetic music video',
+      text: 'Kinetic music-video energy, bold camera movement, rhythmic framing, punchy lighting changes, expressive color, dynamic performance staging, visually memorable transitions, polished contemporary spectacle.'
     }
   ];
 

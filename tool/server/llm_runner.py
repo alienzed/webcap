@@ -16,6 +16,7 @@ from .execution_queue import (
     pause_lane as execution_pause_lane,
     recover_lane as execution_recover_lane,
     reorder_job as execution_reorder_job,
+    request_stop as execution_request_stop,
     resource_owner as execution_resource_owner,
     resume_lane as execution_resume_lane,
 )
@@ -360,7 +361,10 @@ def _advance_queue():
                     reason="Queue paused: llama.cpp GPU state could not be confirmed safe after a failed LLM request.",
                 )
             current = execution_get_job(job_id)
-            if str(current.get("status") or "") in {"starting", "running", "stopping"}:
+            current_status = str(current.get("status") or "")
+            if current_status == "stopping":
+                execution_finish_job(job_id, status="stopped", error="LLM request stopped.")
+            elif current_status in {"starting", "running"}:
                 execution_finish_job(job_id, status="failed", error=str(exc))
             _logger.exception("Queued LLM job failed.")
         finally:
@@ -610,6 +614,15 @@ def action(operation, job_id="", direction="", position=None):
     job_id = str(job_id or "").strip()
     if operation == "cancel":
         return {"job": _job_view(execution_cancel_queued(job_id))}
+    if operation == "stop":
+        current = execution_get_job(job_id)
+        if str(current.get("status") or "") not in {"starting", "running", "stopping"}:
+            raise ValueError("Only active LLM jobs can be stopped.")
+        if str(current.get("status") or "") != "stopping":
+            execution_request_stop(job_id)
+        from .storyboard_llm_runtime import stop_owned_server
+        stop_owned_server()
+        return {"job": _job_view(execution_get_job(job_id))}
     if operation == "pause_queue":
         execution_pause_lane(EXECUTION_LANE)
         return {"queue": snapshot()}

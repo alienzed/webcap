@@ -747,6 +747,10 @@
       row.className = 'test-generations-session-row';
       row.dataset.sessionRowKey = key;
 
+      var stateBadge = document.createElement('span');
+      stateBadge.className = 'test-generations-session-state';
+      stateBadge.dataset.sessionRowState = '1';
+
       var copy = document.createElement('div');
       copy.className = 'test-generations-session-copy';
       var title = document.createElement('strong');
@@ -760,6 +764,7 @@
       actions.className = 'test-generations-session-actions';
       actions.dataset.sessionRowActions = '1';
 
+      row.appendChild(stateBadge);
       row.appendChild(copy);
       row.appendChild(actions);
       return row;
@@ -798,6 +803,18 @@
       row.querySelector('[data-session-row-title]').textContent =
         String(session.name || '').trim() || sessionLabel(name);
       row.querySelector('[data-session-row-meta]').textContent = sessionStatusText(session);
+      var stateBadge = row.querySelector('[data-session-row-state]');
+      var state = String(session.status || '').trim().toLowerCase() || 'complete';
+      if (stateBadge) {
+        stateBadge.className = 'test-generations-session-state status-' + state;
+        stateBadge.textContent = state === 'complete'
+          ? 'Complete'
+          : (state === 'starting' ? 'Starting'
+            : (state === 'running' ? 'Running'
+              : (state === 'stopping' ? 'Stopping'
+                : (state === 'stopped' ? 'Stopped'
+                  : (state === 'failed' ? 'Failed' : state)))));
+      }
 
       var copy = row.querySelector('.test-generations-session-copy');
       var active = session.status === 'running' || session.status === 'stopping' || session.status === 'starting';
@@ -865,6 +882,11 @@
       row.removeAttribute('data-session-name');
       row.querySelector('[data-session-row-title]').textContent =
         String(job.runName || '').trim() || 'Queued Test';
+      var stateBadge = row.querySelector('[data-session-row-state]');
+      if (stateBadge) {
+        stateBadge.className = 'test-generations-session-state status-queued';
+        stateBadge.textContent = 'Queued';
+      }
 
       var total = Number(job.testTotal || 0);
       var position = Number(job.queuePosition || 0);
@@ -916,7 +938,7 @@
 
     if (historyItems.length) {
       usedGroups.history = true;
-      var historyList = ensureGroup('history', 'Finished', historyItems.length, 'is-history');
+      var historyList = ensureGroup('history', 'History', historyItems.length, 'is-history');
       historyItems.forEach(function (session, index) {
         var row = syncSessionRow(session, historyList, index);
         validRows[String(row.dataset.sessionRowKey || '')] = true;

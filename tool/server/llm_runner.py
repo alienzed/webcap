@@ -87,7 +87,31 @@ def reconcile_startup():
     _ensure_monitor_started()
 
 
-def _client_result(client, context, llm_result, job_id=""):
+def _assert_storyboard_contract_current(context, frozen_contract):
+    if "sourceInstruction" not in context:
+        return
+
+    from .storyboard_llm_contract import build_request
+    from .storyboard_store import load_story
+
+    story_id = str(context.get("storyId") or "").strip()
+    scene_id = str(context.get("sceneId") or "").strip()
+    operation = str(context.get("operation") or "").strip()
+    current_story = load_story(story_id)
+    current_contract = build_request(
+        current_story,
+        scene_id,
+        operation,
+        instruction=str(context.get("sourceInstruction") or ""),
+    )
+    if current_contract != frozen_contract:
+        raise RuntimeError(
+            "Storyboard Director inputs changed while the request was running. "
+            "The stale result was not applied; run the Director action again against the current Story state."
+        )
+
+
+def _client_result(client, context, llm_result, job_id="", frozen_contract=None):
     if client == "generate":
         return {
             "result": llm_result["text"],
@@ -103,6 +127,9 @@ def _client_result(client, context, llm_result, job_id=""):
     operation = str(context.get("operation") or "").strip()
     if not story_id:
         raise RuntimeError("Storyboard LLM job is missing its Story ID.")
+    if frozen_contract is None:
+        raise RuntimeError("Storyboard LLM job is missing its frozen contract.")
+    _assert_storyboard_contract_current(context, frozen_contract)
 
     if operation == "expand_concept":
         from .storyboard_store import apply_concept_expansion
@@ -308,7 +335,7 @@ def _execute_claimed(job_id, gpu_reserved):
         return
 
     try:
-        result = _client_result(client, context, llm_result, job_id=job_id)
+        result = _client_result(client, context, llm_result, job_id=job_id, frozen_contract=contract)
     except Exception as exc:
         _logger.exception(
             "WebCap ingest rejected a successful LLM response.\n"

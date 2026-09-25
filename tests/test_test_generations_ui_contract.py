@@ -864,3 +864,23 @@ def test_test_prompt_draft_survives_prepare_and_template_fallback():
     assert "saveTestPromptDraft(this.value);" in script
     assert "saveTestPromptDraft(prompt);" in script
 
+
+
+def test_test_source_selection_syncs_deterministic_owner_without_leaving_test_workspace():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "var pendingSourceOwnerFolder = '';" in script
+    browser_block = script.split("function refreshTestSourceBrowser()", 1)[1].split("function chooseTestSource", 1)[0]
+    assert "var ownerFolder = String(payload.ownerFolder || '')" in browser_block
+    assert "if (ownerFolder && ownerFolder !== currentFolder)" in browser_block
+    assert "pendingTestSource = testSource;" in browser_block
+    assert "openTrainingWorkspaceFolder(ownerFolder);" in browser_block
+    assert "return { navigated: true };" in browser_block
+
+    loaded_block = script.split("function testGenerationsFolderLoaded()", 1)[1].split("function isTestModelSupported", 1)[0]
+    assert "pendingSourceOwnerFolder" in loaded_block
+    assert "openPane();" in loaded_block
+
+    open_block = script.split("function openPane()", 1)[1].split("function startRun", 1)[0]
+    assert "if (sourcePayload && sourcePayload.navigated) return null;" in open_block
+    assert "if (!payload) return;" in open_block

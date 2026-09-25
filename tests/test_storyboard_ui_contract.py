@@ -1158,3 +1158,20 @@ def test_storyboard_takes_display_live_and_persisted_generation_elapsed_time():
     assert "elapsed_ms = int((time.monotonic() - started) * 1000)" in generation
     assert '"elapsedMs": elapsed_ms' in generation
     assert '"elapsedMs",' in store
+
+
+def test_storyboard_enqueue_refreshes_shared_inference_queue_immediately():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    block = storyboard.split("function enqueueSceneGeneration(storyId, sceneId)", 1)[1].split("\n  function ", 1)[0]
+    assert "return window.refreshInferenceQueue().then(function () {" in block
+    assert "return job;" in block
+
+
+def test_inference_drawer_refreshes_before_rendering_when_opened():
+    inference = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
+
+    block = inference.split("function setOpen(open)", 1)[1].split("\n  function ", 1)[0]
+    assert "if (state.open) {" in block
+    assert "refresh().then(schedule);" in block
+    assert block.index("refresh().then(schedule);") < block.index("render();")

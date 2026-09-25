@@ -1126,6 +1126,7 @@
       loading_model: 'Loading model…',
       generating: 'Generating response…',
       complete: 'Complete',
+      stopped: 'Stopped',
       error: 'Failed'
     };
     return labels[String(phase || '')] || 'Working…';

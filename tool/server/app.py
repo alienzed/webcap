@@ -941,6 +941,7 @@ def storyboard_director_route():
                 "sceneId": scene_id,
                 "operation": operation,
                 "replaceExisting": replace_existing,
+                "sourceInstruction": instruction,
                 **({"repairBase": repair_base} if repair_base is not None else {}),
             },
             label=("Story: " + operation.replace("_", " ")).strip(),

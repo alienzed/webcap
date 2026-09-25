@@ -323,6 +323,7 @@
       });
     }).then(function (payload) {
       trackGenerateJob(payload.job && payload.job.jobId);
+      syncGenerationPreviewCard(payload.job);
       var submittedStatus = String(payload.job && payload.job.status || '');
       setStatus(
         submittedStatus === 'backlog'
@@ -336,6 +337,86 @@
     }).then(function () {
       button.disabled = false;
     });
+  }
+
+
+  function generationPreviewStatus(job) {
+    var status = String(job && job.status || '');
+    var queuePosition = Number(job && job.queuePosition || 0);
+    if (status === 'backlog') return 'Backlog';
+    if (status === 'queued') return 'Queued' + (queuePosition ? ' · #' + queuePosition : '');
+    if (status === 'starting') return 'Starting…';
+    if (status === 'stopping') return 'Stopping…';
+    return 'Generating…';
+  }
+
+  function generationPreviewCard(jobId) {
+    var host = el('generate-results');
+    if (!host) return null;
+    var wanted = String(jobId || '');
+    var cards = host.querySelectorAll('.generate-result-card.is-pending[data-generation-job-id]');
+    for (var index = 0; index < cards.length; index += 1) {
+      if (String(cards[index].dataset.generationJobId || '') === wanted) return cards[index];
+    }
+    return null;
+  }
+
+  function removeGenerationPreviewCard(jobId) {
+    var card = generationPreviewCard(jobId);
+    if (card) card.remove();
+  }
+
+  function syncGenerationPreviewCard(job) {
+    var host = el('generate-results');
+    var jobId = String(job && job.jobId || '');
+    if (!host || !jobId) return;
+
+    var status = String(job.status || '');
+    if (['backlog', 'queued', 'starting', 'running', 'stopping'].indexOf(status) === -1) {
+      removeGenerationPreviewCard(jobId);
+      return;
+    }
+
+    var empty = host.querySelector('.generate-results-empty');
+    if (empty) empty.remove();
+
+    var card = generationPreviewCard(jobId);
+    if (!card) {
+      card = document.createElement('article');
+      card.className = 'generate-result-card is-pending';
+      card.dataset.generationJobId = jobId;
+
+      var mediaHost = document.createElement('div');
+      mediaHost.className = 'generate-result-media generate-result-pending-media';
+      var indicator = document.createElement('div');
+      indicator.className = 'generate-result-pending-indicator';
+      indicator.setAttribute('aria-hidden', 'true');
+      var mediaStatus = document.createElement('strong');
+      mediaStatus.dataset.generationPreviewStatus = '1';
+      mediaHost.appendChild(indicator);
+      mediaHost.appendChild(mediaStatus);
+
+      var footer = document.createElement('div');
+      footer.className = 'generate-result-footer';
+      var model = document.createElement('strong');
+      model.dataset.generationPreviewModel = '1';
+      var details = document.createElement('span');
+      details.dataset.generationPreviewDetail = '1';
+      footer.appendChild(model);
+      footer.appendChild(details);
+
+      card.appendChild(mediaHost);
+      card.appendChild(footer);
+      host.insertBefore(card, host.firstChild);
+    }
+
+    var statusText = generationPreviewStatus(job);
+    var statusNode = card.querySelector('[data-generation-preview-status]');
+    var modelNode = card.querySelector('[data-generation-preview-model]');
+    var detailNode = card.querySelector('[data-generation-preview-detail]');
+    if (statusNode) statusNode.textContent = statusText;
+    if (modelNode) modelNode.textContent = String(job.modelId || 'Generate');
+    if (detailNode) detailNode.textContent = String(job.providerStatus || '').replace(/_/g, ' ');
   }
 
 
@@ -355,6 +436,7 @@
         if (!job) return;
         var jobId = String(job.jobId || '');
         var status = String(job.status || '');
+        syncGenerationPreviewCard(job);
         if (['completed', 'failed', 'interrupted', 'cancelled', 'stopped', 'missing'].indexOf(status) === -1) return;
 
         untrackGenerateJob(jobId);

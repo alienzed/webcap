@@ -298,6 +298,38 @@
   display: block;
 }
 
+.generate-result-card.is-pending {
+  border-style: dashed;
+}
+
+.generate-result-pending-media {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.generate-result-pending-indicator {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: generate-result-spin .9s linear infinite;
+}
+
+@keyframes generate-result-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generate-result-pending-indicator {
+    animation: none;
+  }
+}
+
 .generate-result-footer {
   padding: 10px 12px;
   display: grid;

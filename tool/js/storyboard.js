@@ -3664,6 +3664,48 @@
     return !!job && ['backlog', 'queued', 'starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
   }
 
+  function generationJobIsExecuting(job) {
+    return !!job && ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
+  }
+
+  function storyboardInferenceJob(job) {
+    if (!job || String(job.client || '') !== 'storyboard') return null;
+    return {
+      jobId: String(job.jobId || ''),
+      storyId: String(job.storyId || ''),
+      sceneId: String(job.sceneId || ''),
+      status: String(job.status || ''),
+      queuedAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.finishedAt,
+      queuePosition: Number(job.queuePosition || 0),
+      comfyJobId: String(job.providerJobId || ''),
+      comfyStatus: String(job.providerStatus || ''),
+      takeId: job.result && job.result.takeId,
+      requestedAction: String(job.requestedAction || ''),
+      error: String(job.error || '')
+    };
+  }
+
+  function syncStoryboardInferenceSnapshot(queue) {
+    if (!storyState.story || !queue || !Array.isArray(queue.jobs)) return;
+    var storyId = String(storyState.story.id || '');
+    queue.jobs.forEach(function (rawJob) {
+      if (String(rawJob.client || '') !== 'storyboard' || String(rawJob.storyId || '') !== storyId) return;
+      var job = storyboardInferenceJob(rawJob);
+      if (!job || !job.jobId) return;
+      var previousJob = storyState.generationJobs[job.jobId] || null;
+      storyState.generationJobs[job.jobId] = job;
+      reportGenerationStatus(job.sceneId, job, previousJob);
+      syncSceneTakeDom(job.sceneId);
+      if (generationJobIsExecuting(job)) {
+        clearGenerationPoll(job.jobId);
+        pollGeneration(storyId, job.jobId);
+      }
+    });
+    syncStoryboardGenerationActivity();
+  }
+
   function generationJobsForScene(sceneId) {
     return Object.keys(storyState.generationJobs).map(function (jobId) {
       return storyState.generationJobs[jobId];
@@ -3838,6 +3880,8 @@
 
   function pollGeneration(storyId, jobId) {
     if (storyState.generationPolls[jobId]) return;
+    var current = storyState.generationJobs[jobId];
+    var delay = generationJobIsExecuting(current) ? 2000 : 8000;
     storyState.generationPolls[jobId] = window.setTimeout(function () {
       delete storyState.generationPolls[jobId];
       generationRequest(null, 'job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
@@ -4081,6 +4125,13 @@
       sceneWorkspace.addEventListener('scroll', function () {
         if (directorActivityActive()) positionDirectorActivity();
       }, { passive: true });
+    }
+
+    window.addEventListener('webcap:inference-queue-snapshot', function (event) {
+      syncStoryboardInferenceSnapshot(event && event.detail && event.detail.queue);
+    });
+    if (typeof window.getInferenceQueueSnapshot === 'function') {
+      syncStoryboardInferenceSnapshot(window.getInferenceQueueSnapshot());
     }
 
     var sceneProgression = el('storyboard-scene-progression');

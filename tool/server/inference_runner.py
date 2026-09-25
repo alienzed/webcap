@@ -10,6 +10,7 @@ from .execution_queue import (
     enqueue as execution_enqueue,
     finish_job as execution_finish_job,
     get_job as execution_get_job,
+    lane_guard as execution_lane_guard,
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
@@ -17,6 +18,7 @@ from .execution_queue import (
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
     shelve_queued as execution_shelve_queued,
+    set_lane_guard as execution_set_lane_guard,
     update_job as execution_update_job,
     reserve_resource as execution_reserve_resource,
     resource_owner as execution_resource_owner,
@@ -26,6 +28,7 @@ from .execution_queue import (
 
 EXECUTION_LANE = "inference"
 GPU_RESERVATION_OWNER = EXECUTION_LANE
+PROVIDER_CLEANUP_GUARD = "providerCleanup"
 
 _dispatch_lock = threading.Lock()
 _reconcile_lock = threading.Lock()
@@ -81,13 +84,67 @@ def _set_backlog_wait_reason(reason):
         _backlog_wait_reason = str(reason or "")
 
 
+def _persist_provider_cleanup_guard_locked():
+    if _provider_cleanup_holds:
+        execution_set_lane_guard(
+            EXECUTION_LANE,
+            PROVIDER_CLEANUP_GUARD,
+            {
+                "providerJobIds": sorted(_provider_cleanup_holds),
+                "reason": str(
+                    _provider_cleanup_reason
+                    or "Inference is waiting for ComfyUI provider cleanup."
+                ),
+            },
+        )
+    else:
+        execution_set_lane_guard(EXECUTION_LANE, PROVIDER_CLEANUP_GUARD, None)
+
+
+def _restore_provider_cleanup_guard():
+    payload = execution_lane_guard(EXECUTION_LANE, PROVIDER_CLEANUP_GUARD)
+    if payload is None:
+        return
+    if not isinstance(payload, dict):
+        raise RuntimeError("Inference provider cleanup guard is invalid.")
+    raw_ids = payload.get("providerJobIds")
+    if not isinstance(raw_ids, list):
+        raise RuntimeError("Inference provider cleanup guard job IDs are invalid.")
+    provider_ids = {
+        str(provider_id or "").strip()
+        for provider_id in raw_ids
+        if str(provider_id or "").strip()
+    }
+    if not provider_ids:
+        execution_set_lane_guard(EXECUTION_LANE, PROVIDER_CLEANUP_GUARD, None)
+        return
+    reason = str(
+        payload.get("reason")
+        or "Inference is waiting for ComfyUI provider cleanup."
+    )
+    global _provider_cleanup_reason
+    with _provider_hold_lock:
+        _provider_cleanup_holds.update(provider_ids)
+        _provider_cleanup_reason = reason
+
+
 def prepare_startup_backlog():
     """Shelf persisted pending work and reconcile only interrupted active work."""
     with _backlog_lock:
         _armed_backlog_ids.clear()
     _set_backlog_wait_reason("")
+    _restore_provider_cleanup_guard()
     shelved = execution_shelve_queued(EXECUTION_LANE)
     _ensure_execution_reconciled()
+
+    with _provider_hold_lock:
+        cleanup_pending = bool(_provider_cleanup_holds)
+    if cleanup_pending:
+        _reconcile_provider_cleanup_holds()
+        with _provider_hold_lock:
+            cleanup_pending = bool(_provider_cleanup_holds)
+        if cleanup_pending:
+            _ensure_monitor_started()
     return shelved
 
 
@@ -101,6 +158,7 @@ def hold_provider_cleanup(provider_job_id, reason):
         _provider_cleanup_reason = str(
             reason or "Inference is waiting for ComfyUI provider cleanup."
         )
+        _persist_provider_cleanup_guard_locked()
 
 
 def _clear_obsolete_persisted_provider_pause():
@@ -147,6 +205,7 @@ def _reconcile_provider_cleanup_holds():
         remaining = bool(_provider_cleanup_holds)
         if not remaining:
             _provider_cleanup_reason = ""
+        _persist_provider_cleanup_guard_locked()
     if remaining:
         owner = execution_resource_owner()
         if not owner:

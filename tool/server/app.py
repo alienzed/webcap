@@ -630,6 +630,9 @@ def storyboard_route():
             scene_id = str(data.get("sceneId") or "").strip()
             if llm_storyboard_target_busy(story_id, "scenes") or llm_storyboard_target_busy(story_id, "scene-prompt", scene_id):
                 raise ValueError("Scene has pending Director work.")
+            generation = storyboard_generation_queue(story_id)
+            if any(str(job.get("sceneId") or "") == scene_id for job in generation.get("jobs", [])):
+                raise ValueError("Scene has pending Take generation. Stop it before removing the Scene.")
             story = storyboard_delete_scene(story_id, scene_id)
             return jsonify({"ok": True, "story": story})
         if operation == "restore_scene":

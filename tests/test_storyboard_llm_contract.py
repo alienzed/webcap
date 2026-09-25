@@ -112,7 +112,7 @@ def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
     assert "smallest coherent change" in prompt
     assert "materially changes how much screen time" in prompt
     assert "durationSeconds" in request["response_schema"]["properties"]
-    assert request["response_schema"]["properties"]["durationSeconds"]["minimum"] == 9
+    assert request["response_schema"]["properties"]["durationSeconds"]["minimum"] == 6
     assert request["response_schema"]["properties"]["durationSeconds"]["maximum"] == 15
     assert "durationSeconds" not in request["response_schema"]["required"]
     assert request["result_renderer"]["duration_field"] == "durationSeconds"

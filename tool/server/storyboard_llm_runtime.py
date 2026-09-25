@@ -38,6 +38,7 @@ _request_lock = threading.RLock()
 _activity_lock = threading.Lock()
 _log_relay_lock = threading.Lock()
 _log_relay_offset = 0
+_stop_requested = threading.Event()
 _logger = logging.getLogger(__name__)
 _activity = {
     "active": False,
@@ -393,6 +394,29 @@ def _stop_server_locked():
 def stop_server():
     with _process_lock:
         _stop_server_locked()
+
+
+def assert_hard_stop_supported():
+    settings = _director_config()
+    if settings.get("mode", "local") != "local":
+        raise ValueError("Hard Stop is only available for the local WebCap-owned llama.cpp runtime.")
+    with _process_lock:
+        process = _process
+        if process is not None and process.poll() is None:
+            return
+        if process is None and _health_ok():
+            raise RuntimeError("The active llama.cpp server is not owned by WebCap and cannot be hard-stopped.")
+        return
+
+
+def stop_owned_server():
+    assert_hard_stop_supported()
+    _stop_requested.set()
+    with _process_lock:
+        if _process is None:
+            return False
+        _stop_server_locked()
+        return True
 
 
 def _server_signature(settings):
@@ -861,7 +885,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
             return result
         finally:
             cleanup_error = None
-            if not completed:
+            if not completed and not _stop_requested.is_set():
                 try:
                     if _model_status(model_id) != "unloaded":
                         _unload_model(model_id)
@@ -912,6 +936,7 @@ def run_contract(model_id, contract, gpu_reserved=False):
 
     operation = str(contract.get("operation") or "").strip()
     with _request_lock:
+        _stop_requested.clear()
         _set_activity(
             "preparing",
             model_id=model_id,
@@ -996,7 +1021,10 @@ def run_contract(model_id, contract, gpu_reserved=False):
             _relay_log_updates()
             return result
         except Exception as exc:
-            _set_activity("error", model_id=model_id, operation=operation, active=False, error=str(exc))
+            if _stop_requested.is_set():
+                _set_activity("stopped", model_id=model_id, operation=operation, active=False, error="")
+            else:
+                _set_activity("error", model_id=model_id, operation=operation, active=False, error=str(exc))
             raise
 
 

@@ -1535,6 +1535,8 @@ def add_take_upload(
     suffix = Path(safe_name).suffix.lower()
     if suffix not in MEDIA_ALL_EXTS:
         raise ValueError("Take must be a supported image or video file.")
+    if generated_provenance is not None and not isinstance(generated_provenance, dict):
+        raise ValueError("Generated Take provenance must be an object.")
 
     take_id = _new_id("take")
     take_dir = _story_dir(story_id) / "takes" / scene_id
@@ -1574,8 +1576,6 @@ def add_take_upload(
         "rating": None,
     }
     if generated_provenance is not None:
-        if not isinstance(generated_provenance, dict):
-            raise ValueError("Generated Take provenance must be an object.")
         for key in (
             "prompt",
             "entryState",

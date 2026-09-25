@@ -157,6 +157,101 @@ def test_storyboard_llm_job_rejects_inconsistent_frozen_identity(llm_root, monke
     assert "Story identity is inconsistent" in finished["error"]
 
 
+def test_storyboard_llm_rejects_stale_contract_before_applying_result(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "Original concept.",
+        "style": "Original style.",
+    })
+    from tool.server.storyboard_llm_contract import build_request
+
+    contract = build_request(story, "", "expand_concept")
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+
+    def run_and_change_story(*_args, **_kwargs):
+        storyboard_store.update_story(story["id"], {"style": "Changed while Director was running."})
+        return {
+            "text": "Stale expanded concept.",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_contract", run_and_change_story)
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        contract,
+        context={
+            "storyId": story["id"],
+            "sceneId": "",
+            "operation": "expand_concept",
+            "sourceInstruction": "",
+        },
+    )
+
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    stored = storyboard_store.load_story(story["id"])
+    assert finished["status"] == "failed"
+    assert "inputs changed while the request was running" in finished["error"]
+    assert stored["concept"] == "Original concept."
+    assert stored["style"] == "Changed while Director was running."
+
+
+def test_storyboard_scene_refine_rejects_changed_duration_instead_of_overwriting_it(llm_root, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story", "style": "Grounded."})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Scene",
+        "summary": "A person crosses the room.",
+        "prompt": "Original prompt.",
+        "durationSeconds": 10,
+    })
+    from tool.server.storyboard_llm_contract import build_request
+
+    contract = build_request(story, scene["id"], "refine_prompt", instruction="Make the movement slower.")
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+
+    def run_and_change_duration(*_args, **_kwargs):
+        storyboard_store.update_scene(story["id"], scene["id"], {"durationSeconds": 14})
+        return {
+            "text": "Refined prompt.",
+            "data": {
+                "integrated_multimodal_description": "Refined prompt.",
+                "soundscape": "",
+                "music": "",
+                "durationSeconds": 12,
+            },
+            "durationOverride": 12,
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_contract", run_and_change_duration)
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        contract,
+        context={
+            "storyId": story["id"],
+            "sceneId": scene["id"],
+            "operation": "refine_prompt",
+            "sourceInstruction": "Make the movement slower.",
+        },
+    )
+
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    stored_scene = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
+    assert finished["status"] == "failed"
+    assert "inputs changed while the request was running" in finished["error"]
+    assert stored_scene["durationSeconds"] == 14
+    assert stored_scene["prompt"] == "Original prompt."
+
+
 def test_storyboard_llm_job_applies_expanded_concept_before_completion(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story", "concept": "Short concept."})
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)

@@ -261,6 +261,9 @@ def result_for_job(job_id):
         except (OSError, json.JSONDecodeError):
             continue
         if isinstance(payload, dict) and str(payload.get("jobId") or "") == wanted:
+            media_name = Path(str(payload.get("mediaPath") or "")).name
+            if not media_name or not (manifest.parent / media_name).is_file():
+                continue
             return _listed_result_payload(manifest, payload)
     return None
 

@@ -991,3 +991,44 @@ def test_deferred_storyboard_and_test_jobs_remain_inert(inference_root, monkeypa
     assert test["armed"] is False
     assert started == []
     assert inference_runner._monitor_has_work() is False
+
+
+
+def test_inference_revalidates_head_if_backlog_becomes_armed_during_dispatch(
+    inference_root, monkeypatch
+):
+    backlog = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    armed_snapshots = iter([set(), {backlog["id"]}])
+    monkeypatch.setattr(
+        inference_runner,
+        "_armed_backlog_snapshot",
+        lambda: next(armed_snapshots),
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: False,
+    )
+    executed = []
+    monkeypatch.setattr(
+        inference_runner,
+        "_execute_claimed",
+        lambda job_id: executed.append(job_id),
+    )
+
+    assert inference_runner._advance_queue() is None
+
+    assert executed == []
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+    assert execution_queue.get_job(queued["id"])["status"] == "queued"
+    assert execution_queue.resource_owner() == ""

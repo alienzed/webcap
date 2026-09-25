@@ -1175,3 +1175,18 @@ def test_inference_drawer_refreshes_before_rendering_when_opened():
     assert "if (state.open) {" in block
     assert "refresh().then(schedule);" in block
     assert block.index("refresh().then(schedule);") < block.index("render();")
+
+
+def test_storyboard_director_activity_exposes_hard_stop_control():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    styles = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-director-stop"' in html
+    assert "function stopDirectorJob()" in storyboard
+    assert "operation: 'stop_or_cancel'" in storyboard
+    assert "directorWasStopped(err)" in storyboard
+    assert ".director-stop-btn {" in styles
+    assert "position: absolute;" in styles
+    assert "right: 4px;" in styles
+    assert "bottom: 3px;" in styles

@@ -297,12 +297,9 @@
       ? String(state.queue.pauseReason || 'Inference is temporarily waiting.')
       : (String(state.queue.waitReason || '').trim() || counts || 'No inference work');
 
-    var clearAll = el('inference-queue-clear-all');
-    if (clearAll) {
-      clearAll.disabled = !jobs.some(function (job) {
-        return ['queued', 'backlog'].indexOf(String(job.status || '')) !== -1;
-      });
-    }
+    var hasPending = jobs.some(function (job) {
+      return ['queued', 'backlog'].indexOf(String(job.status || '')) !== -1;
+    });
 
     host.innerHTML = '';
     if (!jobs.length) {
@@ -311,6 +308,32 @@
       empty.textContent = 'No queued or backlogged inference.';
       host.appendChild(empty);
       return;
+    }
+
+    if (queued && !backlogJobs.length) {
+      var queuedHeading = document.createElement('div');
+      queuedHeading.className = 'inference-backlog-heading inference-queued-heading';
+
+      var queuedCopy = document.createElement('div');
+      var queuedTitle = document.createElement('strong');
+      queuedTitle.textContent = 'Queued';
+      var queuedCount = document.createElement('span');
+      queuedCount.textContent = String(queued);
+      queuedCopy.appendChild(queuedTitle);
+      queuedCopy.appendChild(queuedCount);
+      queuedHeading.appendChild(queuedCopy);
+
+      var queuedActions = document.createElement('div');
+      queuedActions.className = 'inference-queue-section-actions';
+      var queuedClearAll = document.createElement('button');
+      queuedClearAll.type = 'button';
+      queuedClearAll.className = 'review-captions-btn';
+      queuedClearAll.dataset.inferenceQueueAction = 'clear_all';
+      queuedClearAll.textContent = 'Clear all';
+      queuedClearAll.title = 'Cancel all queued and backlogged inference';
+      queuedActions.appendChild(queuedClearAll);
+      queuedHeading.appendChild(queuedActions);
+      host.appendChild(queuedHeading);
     }
 
     jobs.filter(function (job) { return String(job.status || '') !== 'backlog'; }).forEach(function (job) {
@@ -331,13 +354,27 @@
       headingCopy.appendChild(headingCount);
       heading.appendChild(headingCopy);
 
+      var headingActions = document.createElement('div');
+      headingActions.className = 'inference-queue-section-actions';
+
       var runAll = document.createElement('button');
       runAll.type = 'button';
       runAll.className = 'review-captions-btn';
       runAll.dataset.inferenceQueueAction = 'run_all_backlog';
       runAll.textContent = 'Run all';
       runAll.disabled = backlogJobs.every(function (job) { return !!job.armed; });
-      heading.appendChild(runAll);
+      headingActions.appendChild(runAll);
+
+      var clearAll = document.createElement('button');
+      clearAll.type = 'button';
+      clearAll.className = 'review-captions-btn';
+      clearAll.dataset.inferenceQueueAction = 'clear_all';
+      clearAll.textContent = 'Clear all';
+      clearAll.title = 'Cancel all queued and backlogged inference';
+      clearAll.disabled = !hasPending;
+      headingActions.appendChild(clearAll);
+
+      heading.appendChild(headingActions);
       host.appendChild(heading);
 
       backlogJobs.forEach(function (job) {
@@ -430,7 +467,6 @@
     var toggles = document.querySelectorAll('[data-inference-queue-toggle]');
     var drawer = el('inference-queue-drawer');
     var close = el('inference-queue-close');
-    var clearAll = el('inference-queue-clear-all');
     var list = el('inference-queue-list');
     if (!toggles.length || !drawer || !close || !list) return;
 
@@ -438,7 +474,6 @@
       toggle.onclick = function () { setOpen(!state.open); };
     });
     close.onclick = function () { setOpen(false); };
-    if (clearAll) clearAll.onclick = function () { action('clear_all', ''); };
     list.onclick = function (event) {
       var actionButton = event.target.closest('[data-inference-queue-action]');
       if (actionButton) {

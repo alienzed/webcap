@@ -767,7 +767,7 @@
       host.appendChild(empty);
     }
 
-    renderTakes(items);
+    renderTakes(items.slice(0, 12));
     if (generateState.activePendingJobId) {
       var completed = items.find(function (result) {
         return String(result.jobId || '') === String(generateState.activePendingJobId || '');

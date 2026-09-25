@@ -14,6 +14,8 @@
     generationPolls: {},
     newTakeCounts: {},
     sequenceExport: null,
+    sequenceEncodingWarnings: [],
+    sequenceWarningsVisible: false,
     sequenceCollapsed: window.localStorage.getItem('webcap.storyboard.sequenceCollapsed') === '1',
     sceneViewMode: window.localStorage.getItem('webcap.storyboard.sceneView') || 'focus',
     activeSceneId: '',
@@ -1878,6 +1880,11 @@
       : '';
 
     var assembly = storyState.sequenceExport;
+    var encodingWarnings = storyState.sequenceEncodingWarnings || [];
+    var warningByTake = {};
+    encodingWarnings.forEach(function (warning) {
+      warningByTake[String(warning.sceneId || '') + ':' + String(warning.takeId || '')] = warning;
+    });
     var assemblyCurrent = assemblyMatchesSelection(assembly, selected) && assembly.current !== false;
     var assemblyStatus = '';
     if (assemblyCurrent) assemblyStatus = 'Exported · ' + String(assembly.itemCount || selected.length) + ' Takes';
@@ -1901,7 +1908,13 @@
         (storyState.sequenceCollapsed ? 'Show' : 'Hide') +
       '</button>' +
       '<button type="button" class="storyboard-primary-btn" data-sequence-export>Export Sequence</button>' +
-      '</div></header><div class="storyboard-sequence-body' + (storyState.sequenceCollapsed ? ' hidden' : '') + '">' +
+      '</div></header>' +
+      (encodingWarnings.length ? '<div class="storyboard-sequence-encoding-warning"><strong>This requires encoding</strong>' +
+        '<button type="button" class="review-captions-btn" data-sequence-warnings>' +
+          (storyState.sequenceWarningsVisible ? 'Hide warnings' : 'Show warnings') +
+        '</button>' +
+        '<button type="button" class="storyboard-primary-btn" data-sequence-encode>Encode</button></div>' : '') +
+      '<div class="storyboard-sequence-body' + (storyState.sequenceCollapsed ? ' hidden' : '') + '">' +
       outputHtml +
       '<section class="storyboard-sequence-timeline" aria-label="Selected Takes timeline">' +
         '<div class="storyboard-sequence-timeline-header"><strong>Timeline</strong><span>' +
@@ -1915,12 +1928,15 @@
           var duration = Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds * 10) / 10 : 10;
           var durationLabel = Number.isFinite(seconds) && seconds > 0 ? String(duration) + 's' : '';
           var title = item.scene.title || 'Untitled Scene';
-          return '<article class="storyboard-sequence-card" style="--sequence-clip-seconds:' + String(duration) + '">' +
+          var warning = warningByTake[String(item.sceneId || '') + ':' + String(item.take.id || '')];
+          var warningText = warning && Array.isArray(warning.differences) ? warning.differences.join(' · ') : '';
+          return '<article class="storyboard-sequence-card' + (warning ? ' requires-encoding' : '') + '" style="--sequence-clip-seconds:' + String(duration) + '">' +
             '<div class="storyboard-sequence-label">' +
               '<span>Scene ' + String(item.number).padStart(2, '0') + '</span>' +
               '<strong title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</strong>' +
               (durationLabel ? '<em>' + escapeHtml(durationLabel) + '</em>' : '') +
             '</div>' +
+            (warning && storyState.sequenceWarningsVisible ? '<div class="storyboard-sequence-card-warning">' + escapeHtml(warningText) + '</div>' : '') +
             '<div class="storyboard-sequence-media">' + takePreviewHtml(story.id, item.sceneId, item.take) + '</div>' +
           '</article>';
         }).join('') +
@@ -1939,15 +1955,22 @@
     });
   }
 
-  function exportSelectedSequence() {
+  function exportSelectedSequence(encode) {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
-    setSaveState('Exporting sequence...');
+    setSaveState(encode ? 'Encoding sequence...' : 'Exporting sequence...');
     flushPendingSaves().then(function () {
-      return assemblyRequest({ storyId: storyId });
+      return assemblyRequest({ storyId: storyId, encode: !!encode });
     }).then(function (payload) {
       if (storyState.story && storyState.story.id === storyId) {
-        storyState.sequenceExport = payload.export || null;
+        if (payload.requiresEncoding) {
+          storyState.sequenceEncodingWarnings = payload.warnings || [];
+          storyState.sequenceWarningsVisible = false;
+        } else {
+          storyState.sequenceExport = payload.export || null;
+          storyState.sequenceEncodingWarnings = [];
+          storyState.sequenceWarningsVisible = false;
+        }
         renderSequencePreview();
       }
       setSaveState('Saved');
@@ -3946,7 +3969,16 @@
 
     el('storyboard-sequence-preview').addEventListener('click', function (event) {
       if (event.target.closest('[data-sequence-export]')) {
-        exportSelectedSequence();
+        exportSelectedSequence(false);
+        return;
+      }
+      if (event.target.closest('[data-sequence-encode]')) {
+        exportSelectedSequence(true);
+        return;
+      }
+      if (event.target.closest('[data-sequence-warnings]')) {
+        storyState.sequenceWarningsVisible = !storyState.sequenceWarningsVisible;
+        renderSequencePreview();
         return;
       }
       if (event.target.closest('[data-sequence-toggle]')) {

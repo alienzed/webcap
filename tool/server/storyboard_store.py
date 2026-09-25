@@ -1987,18 +1987,21 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
     return story, take
 
 
-def generated_take_for_job(story_id, scene_id, job_id):
+def generated_take_for_job(story_id, scene_id, job_id, provider_job_id=""):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
     wanted = str(job_id or "").strip()
-    if not wanted:
+    provider = str(provider_job_id or "").strip()
+    if not wanted and not provider:
         return None
     for source in ("takes", "removedTakes"):
         takes = scene.get(source) if isinstance(scene.get(source), dict) else {}
         for take in takes.values():
             if not isinstance(take, dict):
                 continue
-            if str(take.get("jobId") or "").strip() == wanted:
+            if wanted and str(take.get("jobId") or "").strip() == wanted:
+                return copy.deepcopy(take)
+            if provider and str(take.get("providerJobId") or "").strip() == provider:
                 return copy.deepcopy(take)
     return None
 

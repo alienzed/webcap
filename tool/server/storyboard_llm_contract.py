@@ -311,7 +311,7 @@ def build_request(story, scene_id, operation, instruction=""):
             "For every Scene, invariantRefs must contain the exact kind/title pairs of only the supplied character and location invariants actually present or materially relevant in that Scene; use an empty array when none apply. Do not introduce a character or location merely to justify a reference. WebCap will inject those invariant descriptions verbatim into the final H3 prompt, so do not rewrite their identity details merely for variety. "
             "Provide complete structured H3 content for every Scene now, not a placeholder; WebCap will render the exact model-facing field labels and spacing. Be creatively useful, but invent supporting performance, camera behavior, sound, dialogue, or music only when they serve the supplied concept; none is mandatory. "
             "Each Scene prompt must be independently generatable and follow the supplied H3 base prompt rules. "
-            "For scale, aim for roughly 120-250 words in each Scene's integrated multimodal description; keep the supporting "
+            "For scale, aim for roughly 200-400 words in each Scene's integrated multimodal description; keep the supporting "
             "soundscape and music fields concise, normally one sentence each. Treat these as ballpark targets, not minimums, "
             "and do not keep elaborating once the Scene is fully described. "
             "Return only JSON matching the supplied schema."

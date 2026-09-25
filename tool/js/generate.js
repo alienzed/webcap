@@ -408,7 +408,7 @@
     var summary = el('generate-stage-summary');
     if (!host || !summary) throw new Error('Generations active preview markup is missing.');
     var key = resultKey(result);
-    if (!key) return;
+    if (!key) throw new Error('Generate result is missing its stable identity.');
     generateState.activeResultKey = key;
     generateState.activePendingJobId = '';
     summary.textContent = [String(result.modelId || 'Generated'), resultSummary(result)].filter(Boolean).join(' · ');
@@ -439,7 +439,7 @@
     var summary = el('generate-stage-summary');
     if (!host || !summary) throw new Error('Generations active preview markup is missing.');
     var jobId = String(job && job.jobId || '');
-    if (!jobId) return;
+    if (!jobId) throw new Error('Generate inference job is missing its job ID.');
     generateState.activePendingJobId = jobId;
     generateState.activeResultKey = '';
     summary.textContent = [String(job.modelId || 'Generate'), generationPreviewStatus(job)].filter(Boolean).join(' · ');
@@ -460,7 +460,7 @@
   function renderStageEmpty() {
     var host = el('generate-active-preview');
     var summary = el('generate-stage-summary');
-    if (!host || !summary) return;
+    if (!host || !summary) throw new Error('Generations active preview markup is missing.');
     if (generateState.activePendingJobId || generateState.activeResultKey) return;
     host.innerHTML = '<div class="generate-stage-empty"><strong>Ready to create</strong><span>Generate something or choose a Take.</span></div>';
     host.removeAttribute('data-result-key');
@@ -470,7 +470,7 @@
 
   function syncActiveTakeState() {
     var host = el('generate-takes');
-    if (!host) return;
+    if (!host) throw new Error('Generations Takes markup is missing.');
     host.querySelectorAll('[data-generate-take-key]').forEach(function (card) {
       card.classList.toggle('active', String(card.dataset.generateTakeKey || '') === String(generateState.activeResultKey || ''));
     });
@@ -550,7 +550,7 @@
 
   function generationPreviewCard(jobId) {
     var host = el('generate-takes');
-    if (!host) return null;
+    if (!host) throw new Error('Generations Takes markup is missing.');
     var wanted = String(jobId || '');
     var cards = host.querySelectorAll('.generate-take-card.is-pending[data-generation-job-id]');
     for (var index = 0; index < cards.length; index += 1) {
@@ -571,7 +571,8 @@
   function syncGenerationPreviewCard(job) {
     var host = el('generate-takes');
     var jobId = String(job && job.jobId || '');
-    if (!host || !jobId) return;
+    if (!host) throw new Error('Generations Takes markup is missing.');
+    if (!jobId) throw new Error('Generate inference job is missing its job ID.');
 
     var status = String(job.status || '');
     if (['backlog', 'queued', 'starting', 'running', 'stopping'].indexOf(status) === -1) {
@@ -734,7 +735,7 @@
   function renderResults(results) {
     var host = el('generate-results');
     var librarySummary = el('generate-library-summary');
-    if (!host || !librarySummary) return;
+    if (!host || !librarySummary) throw new Error('Generations Library markup is missing.');
     var items = Array.isArray(results) ? results : [];
     generateState.results = items;
     librarySummary.textContent = items.length ? String(items.length) + ' generated item' + (items.length === 1 ? '' : 's') : 'No generated media yet';

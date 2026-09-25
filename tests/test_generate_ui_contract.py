@@ -73,8 +73,10 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "Restore Previous" in html
     assert "Describe what you want — a rough idea or a finished prompt." in html
     assert "Valid work queues even while Training owns the GPU." not in html
-    assert "<strong>Setup</strong>" in html
-    assert "<strong>Output</strong>" in html
+    assert "<strong>Generation Settings</strong>" in html
+    assert "<strong>Setup</strong>" not in html
+    assert "<strong>Output</strong>" not in html
+    assert 'class="storyboard-inline-check generate-prompt-option"' in html
 
     assert "previousPrompt: null" in script
     assert "function restoreDirectorPrompt()" in script
@@ -212,6 +214,16 @@ def test_generate_errors_keep_detail_in_console_and_use_concise_setup_badge():
 def test_generate_defaults_new_lora_strength_to_point_nine():
     js = Path("tool/js/generate.js").read_text(encoding="utf-8")
     assert "items.push({ name: name, strength: 0.9 });" in js
+
+
+def test_generate_library_open_restores_saved_generation_configuration():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "function restoreResultConfiguration(result)" in script
+    assert "prompt.value = String(result.sourcePrompt || result.resolvedPrompt || '');" in script
+    assert "generateState.lorasByModel[resultModelId]" in script
+    assert "wildcards.checked = !!result.wildcardsEnabled;" in script
+    assert "restoreResultConfiguration(result);" in script
 
 
 def test_generate_results_have_permanent_delete_action():

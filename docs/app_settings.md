@@ -15,6 +15,10 @@ The app settings modal is the global configuration surface for values stored in 
 - **Training → H3 calibration**: hardware-bound MiniMax H3 bucket calibration.
 - **Advanced**: diagnostics, H3 troubleshooting options, and raw JSON editing.
 
+## Storyboard Director output limit
+
+`storyboard.director.max_tokens` defaults to `16384` as a generous runaway-generation safety limit. The Storyboard settings field remains user-editable: clear it to use Auto/unbounded runtime behavior, or enter another limit. Existing configurations that explicitly store `null` remain Auto rather than being silently changed.
+
 ## Repeat planning
 
 `training.repeat_reference_epochs` defaults to 90. WebCap uses it only when solving generated dataset repeat counts. Changing a run's **Epochs** field does not cause repeats to be recalculated around that run length; Epochs changes the captured run configuration and its estimated total work.

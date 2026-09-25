@@ -50,7 +50,6 @@ def _public_model(model):
 
 
 def capabilities():
-    inference_runtime.system_stats()
     models = []
     unavailable_models = []
     for item in public_models():

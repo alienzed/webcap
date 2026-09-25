@@ -90,6 +90,9 @@ def test_generate_prompt_assistant_uses_shared_llm_queue():
 
     assert "function queueDirectorRequest(payload)" in script
     assert "function waitForDirectorJob(job)" in script
+    assert "function directorJobPollDelay(job)" in script
+    assert "return String(job && job.status || '') === 'queued' ? 2000 : 1000;" in script
+    assert "setTimeout(resolve, directorJobPollDelay(current))" in script
     assert "'/fs/director/job?job='" in script
     assert "queued: 'Queued…'" in script
     waiter = script.split("function waitForDirectorJob(job)", 1)[1].split("function queueDirectorRequest", 1)[0]

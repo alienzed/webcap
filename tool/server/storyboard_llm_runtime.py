@@ -36,6 +36,8 @@ _server_settings_signature = None
 _process_lock = threading.RLock()
 _request_lock = threading.RLock()
 _activity_lock = threading.Lock()
+_log_relay_lock = threading.Lock()
+_log_relay_offset = 0
 _logger = logging.getLogger(__name__)
 _activity = {
     "active": False,
@@ -99,7 +101,26 @@ def _set_activity(
 
 def activity_status():
     with _activity_lock:
-        return dict(_activity)
+        activity = dict(_activity)
+
+    try:
+        settings = _director_config()
+    except Exception:
+        settings = {"mode": "local"}
+
+    if settings.get("mode", "local") == "local":
+        _relay_log_updates()
+        if activity.get("active") and activity.get("phase") == "generating":
+            slot = _slot_snapshot(activity.get("model"))
+            if slot:
+                activity["slot"] = slot
+                context_size = int(slot.get("contextSize") or 0)
+                if context_size > 0:
+                    activity["contextSize"] = context_size
+                    with _activity_lock:
+                        if _activity.get("active") and _activity.get("phase") == "generating":
+                            _activity["contextSize"] = context_size
+    return activity
 
 
 
@@ -244,11 +265,129 @@ def _log_tail():
     return "\n".join(lines[-20:])
 
 
+def _llama_log_line_is_meaningful(line):
+    normalized = str(line or "").casefold()
+    return any(token in normalized for token in (
+        " error",
+        " warning",
+        " warn",
+        "cuda",
+        "cpu",
+        "offload",
+        "buffer size",
+        "kv cache",
+        "n_ctx",
+        "n_prompt_tokens",
+        "prompt done",
+        "prompt eval time",
+        " eval time",
+        "total time",
+        "stopped by",
+        "load_tensors",
+        "loading model",
+        "model loaded",
+    ))
+
+
+def _relay_log_updates():
+    global _log_relay_offset
+    path = _runtime_dir() / "llama-server.log"
+    with _log_relay_lock:
+        try:
+            size = path.stat().st_size
+            if _log_relay_offset > size:
+                _log_relay_offset = 0
+            with path.open("rb") as handle:
+                handle.seek(_log_relay_offset)
+                data = handle.read(256 * 1024)
+                _log_relay_offset = handle.tell()
+        except OSError:
+            return
+
+    if not data:
+        return
+    for line in data.decode("utf-8", errors="replace").splitlines():
+        if _llama_log_line_is_meaningful(line):
+            _logger.info("[llama.cpp] %s", line)
+
+
+def _slot_snapshot(model_id=""):
+    settings = _director_config()
+    if settings.get("mode", "local") != "local":
+        return {}
+
+    model_id = str(model_id or "").strip()
+    paths = []
+    if model_id:
+        paths.append("/slots?model=" + urllib.parse.quote(model_id, safe=""))
+    paths.append("/slots")
+
+    payload = None
+    for path in paths:
+        try:
+            payload = _http_json(path, timeout=1)
+            break
+        except Exception:
+            payload = None
+    slots = payload if isinstance(payload, list) else (
+        payload.get("slots") if isinstance(payload, dict) and isinstance(payload.get("slots"), list) else []
+    )
+    slot = next(
+        (item for item in slots if isinstance(item, dict) and item.get("is_processing")),
+        None,
+    )
+    if slot is None:
+        return {}
+
+    params = slot.get("params") if isinstance(slot.get("params"), dict) else {}
+    next_token = slot.get("next_token") if isinstance(slot.get("next_token"), list) else []
+    token_state = next_token[0] if next_token and isinstance(next_token[0], dict) else {}
+    timings = slot.get("timings") if isinstance(slot.get("timings"), dict) else {}
+
+    def _nonnegative_int(value):
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 0
+
+    def _positive_float(value):
+        try:
+            result = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        return result if result > 0 else 0.0
+
+    predicted_per_second = _positive_float(timings.get("predicted_per_second"))
+    if not predicted_per_second:
+        predicted_n = _nonnegative_int(timings.get("predicted_n"))
+        predicted_ms = _positive_float(timings.get("predicted_ms"))
+        if predicted_n and predicted_ms:
+            predicted_per_second = predicted_n / predicted_ms * 1000.0
+
+    max_tokens = params.get("max_tokens", params.get("n_predict"))
+    try:
+        max_tokens = int(max_tokens)
+    except (TypeError, ValueError):
+        max_tokens = None
+
+    return {
+        "slotId": slot.get("id"),
+        "contextSize": _nonnegative_int(slot.get("n_ctx")),
+        "promptTokens": _nonnegative_int(slot.get("n_prompt_tokens")),
+        "promptProcessed": _nonnegative_int(slot.get("n_prompt_tokens_processed")),
+        "promptCached": _nonnegative_int(slot.get("n_prompt_tokens_cache")),
+        "generatedTokens": _nonnegative_int(token_state.get("n_decoded")),
+        "maxTokens": max_tokens,
+        "tokensPerSecond": predicted_per_second,
+    }
+
+
 def _stop_server_locked():
-    global _process, _log_handle, _server_settings_signature
+    global _process, _log_handle, _server_settings_signature, _log_relay_offset
     process = _process
     _process = None
     _server_settings_signature = None
+    _log_relay_offset = 0
     if process is not None and process.poll() is None:
         process.terminate()
         try:
@@ -278,7 +417,7 @@ def _server_signature(settings):
 
 
 def _ensure_server():
-    global _process, _log_handle, _server_settings_signature
+    global _process, _log_handle, _server_settings_signature, _log_relay_offset
     with _process_lock:
         settings = _director_config()
         if settings.get("mode", "local") == "remote":
@@ -310,6 +449,10 @@ def _ensure_server():
         models_dir.mkdir(parents=True, exist_ok=True)
         executable = _resolve_executable()
         log_path = _runtime_dir() / "llama-server.log"
+        try:
+            _log_relay_offset = log_path.stat().st_size
+        except OSError:
+            _log_relay_offset = 0
         _log_handle = open(log_path, "a", encoding="utf-8")
         command = [
             executable,
@@ -318,6 +461,10 @@ def _ensure_server():
             "--no-models-autoload",
             "--host", LLAMA_HOST,
             "--port", str(settings["port"]),
+            "--log-colors", "off",
+            "--log-prefix",
+            "--log-timestamps",
+            "--log-verbosity", "3",
         ]
         if settings["context_size"] is not None:
             command.extend(["--ctx-size", str(settings["context_size"])])
@@ -629,17 +776,6 @@ def release_loaded_model_for_gpu_work():
         _request_lock.release()
 
 
-def _operation_max_tokens(operation):
-    operation = str(operation or "").strip()
-    # Short prose expansion should never consume an effectively unbounded
-    # completion budget. Whole-story development intentionally remains Auto
-    # because its structured multi-Scene response can legitimately exceed
-    # the former 8192-token global ceiling.
-    return {
-        "expand_concept": 4096,
-    }.get(operation)
-
-
 def _sampling_profile(operation):
     operation = str(operation or "").strip()
     profiles = {
@@ -714,6 +850,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
             _set_activity("freeing_comfy", model_id=model_id)
             _free_comfy_models()
             _ensure_local_model_loaded(model_id)
+            _relay_log_updates()
             _set_activity("generating", model_id=model_id)
             try:
                 response = _http_json(
@@ -730,6 +867,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                         tail,
                     )
                 raise
+            _relay_log_updates()
             result = _completion_result(response, model_id)
             completed = True
             return result
@@ -796,6 +934,14 @@ def run_contract(model_id, contract, gpu_reserved=False):
         )
         try:
             settings = _director_config()
+            _logger.info(
+                "Director request starting: operation=%s model=%s prompt_chars=%d context=%s max_output=%s",
+                operation or "unknown",
+                model_id,
+                len(prompt),
+                settings.get("context_size") if settings.get("context_size") is not None else "auto",
+                settings.get("max_tokens") if settings.get("max_tokens") is not None else "auto",
+            )
             _set_activity(
                 "preparing",
                 model_id=model_id,
@@ -806,10 +952,6 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 "response_schema": contract.get("response_schema"),
                 "sampling": _sampling_profile(operation),
             }
-            if settings.get("max_tokens") is None:
-                operation_max_tokens = _operation_max_tokens(operation)
-                if operation_max_tokens is not None:
-                    chat_kwargs["max_tokens"] = operation_max_tokens
             if gpu_reserved:
                 chat_kwargs["gpu_reserved"] = True
             result = chat(
@@ -854,6 +996,14 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 usage=result.get("usage"),
                 timings=result.get("timings"),
             )
+            _logger.info(
+                "Director request completed: operation=%s model=%s usage=%s timings=%s",
+                operation or "unknown",
+                model_id,
+                json.dumps(result.get("usage") or {}, ensure_ascii=False),
+                json.dumps(result.get("timings") or {}, ensure_ascii=False),
+            )
+            _relay_log_updates()
             return result
         except Exception as exc:
             _set_activity("error", model_id=model_id, operation=operation, active=False, error=str(exc))

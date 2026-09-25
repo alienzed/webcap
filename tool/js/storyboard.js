@@ -2764,16 +2764,29 @@
       var conditioningSummary = conditioningSummaryParts.length ? conditioningSummaryParts.join(' · ') : 'None';
       var removedTakeIds = Object.keys(removedTakes);
       var removedTakesHtml = removedTakeIds.length
-        ? '<div class="storyboard-removed-takes"><span>Removed Takes</span>' +
-          removedTakeIds.map(function (takeId) {
-            var take = removedTakes[takeId] || {};
-            return '<span class="storyboard-removed-take-actions">' +
-              '<button type="button" class="review-captions-btn" data-take-action="restore" data-take-id="' +
-                escapeHtml(takeId) + '">Restore ' + escapeHtml(take.sourceFilename || takeId) + '</button>' +
-              '<button type="button" class="review-captions-btn storyboard-take-delete" data-take-action="delete" data-take-id="' +
-                escapeHtml(takeId) + '">Delete</button>' +
-            '</span>';
-          }).join('') + '</div>'
+        ? '<section class="storyboard-removed-takes">' +
+            '<header class="storyboard-removed-takes-header">' +
+              '<strong>Removed Takes</strong>' +
+              '<span>' + String(removedTakeIds.length) + '</span>' +
+            '</header>' +
+            '<div class="storyboard-removed-takes-list">' +
+              removedTakeIds.map(function (takeId) {
+                var take = removedTakes[takeId] || {};
+                var filename = String(take.sourceFilename || takeId);
+                return '<div class="storyboard-removed-take-row">' +
+                  '<span class="storyboard-removed-take-name" title="' + escapeHtml(filename) + '">' +
+                    escapeHtml(filename) +
+                  '</span>' +
+                  '<div class="storyboard-removed-take-actions">' +
+                    '<button type="button" class="review-captions-btn" data-take-action="restore" data-take-id="' +
+                      escapeHtml(takeId) + '">Restore</button>' +
+                    '<button type="button" class="review-captions-btn storyboard-take-delete" data-take-action="delete" data-take-id="' +
+                      escapeHtml(takeId) + '">Delete</button>' +
+                  '</div>' +
+                '</div>';
+              }).join('') +
+            '</div>' +
+          '</section>'
         : '';
       var takesHtml = takeOrder.map(function (takeId, takeIndex) {
         var take = takes[takeId];

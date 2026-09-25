@@ -297,6 +297,9 @@
     return requestJson('/fs/inference').then(function (payload) {
       state.queue = payload.queue || { jobs: [], paused: false, pauseReason: '' };
       render();
+      window.dispatchEvent(new CustomEvent('webcap:inference-queue-snapshot', {
+        detail: { queue: state.queue }
+      }));
       return state.queue;
     }).catch(function (err) {
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Inference Queue', err);
@@ -387,6 +390,7 @@
 
   window.syncInferenceQueueSurface = syncSurface;
   window.refreshInferenceQueue = refresh;
+  window.getInferenceQueueSnapshot = function () { return state.queue; };
   window.setInferenceQueueOpen = setOpen;
   bind();
   if (typeof window.deriveShellNavigationState === 'function') {

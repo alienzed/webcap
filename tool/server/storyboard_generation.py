@@ -10,6 +10,7 @@ from . import inference_runtime
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
+    discard_terminal_and_recent as execution_discard_terminal_and_recent,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     recover_lane as execution_recover_lane,
@@ -415,6 +416,7 @@ def reconcile_startup():
                 continue
             execution_cancel_queued(legacy_job_id)
 
+        execution_discard_terminal_and_recent(LEGACY_EXECUTION_LANE)
         _startup_reconciled = True
 
 

@@ -3,6 +3,8 @@
   var supportedTestModels = {};
   var testModelsLoaded = false;
   var pollTimer = null;
+  var lastActivityRefreshAt = 0;
+  var lastSessionsRefreshAt = 0;
   var prepared = null;
   var launchFolder = '';
   var currentSession = '';
@@ -351,6 +353,7 @@
   }
 
   function refreshActivityButton() {
+    lastActivityRefreshAt = Date.now();
     var folder = String(state && state.folder || '');
     var url = '/fs/test_generations/activity' + (folder ? ('?folder=' + encodeURIComponent(folder)) : '');
     return fetch(url).then(function (response) {
@@ -362,6 +365,11 @@
     }).catch(function () {
       return null;
     });
+  }
+
+  function refreshActivityButtonIfDue(intervalMs) {
+    if ((Date.now() - lastActivityRefreshAt) < Number(intervalMs || 0)) return Promise.resolve(testActivity);
+    return refreshActivityButton();
   }
 
   function openTestBenchFolder(folder, useSetSource) {
@@ -921,6 +929,7 @@
   }
 
   function refreshSessions() {
+    lastSessionsRefreshAt = Date.now();
     var modelId = currentTestModelId();
     return Promise.all([
       request('test_sessions', { modelId: modelId }),
@@ -932,6 +941,13 @@
       renderSessions(sessionPayload.sessions, queuedTestJobs);
       return { sessions: sessionPayload.sessions || [], jobs: queuedTestJobs };
     });
+  }
+
+  function refreshSessionsIfDue(intervalMs) {
+    if ((Date.now() - lastSessionsRefreshAt) < Number(intervalMs || 0)) {
+      return Promise.resolve({ jobs: queuedTestJobs });
+    }
+    return refreshSessions();
   }
 
   function cancelQueuedTest(jobId) {
@@ -2038,7 +2054,7 @@
     if (!isOpen()) return;
     request('test_status', { modelId: currentTestModelId() }).then(function (status) {
       syncActiveRunControls(status);
-      refreshActivityButton();
+      refreshActivityButtonIfDue(5000);
       if (status && (status.status === 'running' || status.status === 'stopping')) showSessionError = true;
       var activeSession = String(status && status.session || '');
       var selectedWasLive = !!(
@@ -2060,7 +2076,7 @@
 
       return previewRefresh.then(function () {
         if (status && (status.status === 'running' || status.status === 'stopping')) {
-          if (queuedTestJobs.length) refreshSessions().catch(showError);
+          if (queuedTestJobs.length) refreshSessionsIfDue(5000).catch(showError);
           pollTimer = setTimeout(pollStatus, 2000);
           return null;
         }

@@ -1038,6 +1038,10 @@
   function directorJobRequest(jobId) {
     return requestJson('/fs/director/job?job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
       if (!payload.job) throw new Error('Prompt Assistant job response is missing its job.');
+      trackTransientLlmJob(payload.job);
+      if (['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(String(payload.job.status || '')) !== -1) {
+        reportTransientLlmTiming(payload.job);
+      }
       return payload.job;
     });
   }
@@ -1063,6 +1067,7 @@
 
   function queueDirectorRequest(payload) {
     return postJson('/fs/generate/director', payload).then(function (response) {
+      trackTransientLlmJob(response.job);
       return waitForDirectorJob(response.job);
     });
   }
@@ -1354,6 +1359,7 @@
       requestJson('/fs/director/activity'),
       requestJson('/fs/system_status').catch(function () { return null; })
     ]).then(function (values) {
+      observeTransientLlmActivity(values[0]);
       renderDirectorActivity(values[0], values[1]);
     }).catch(function () {
       renderDirectorActivity({ phase: 'preparing', active: true }, null);

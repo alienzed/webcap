@@ -722,10 +722,17 @@ def storyboard_assembly_route():
             story_id = str(request.args.get("story") or "").strip()
             return jsonify({"ok": True, "export": storyboard_current_export(story_id)})
         data = request.get_json(silent=True) or {}
-        return jsonify({
-            "ok": True,
-            "export": storyboard_export_selected_sequence(str(data.get("storyId") or "").strip()),
-        })
+        export = storyboard_export_selected_sequence(
+            str(data.get("storyId") or "").strip(),
+            encode=bool(data.get("encode")),
+        )
+        if isinstance(export, dict) and export.get("requiresEncoding"):
+            return jsonify({
+                "ok": True,
+                "requiresEncoding": True,
+                "warnings": export.get("warnings") or [],
+            })
+        return jsonify({"ok": True, "export": export})
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:

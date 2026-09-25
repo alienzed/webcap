@@ -266,34 +266,54 @@
     return parts.join(' · ') || 'Empty';
   }
 
-  function createQueueRow(label, key, queue) {
-    var row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'activity-monitor-queue-row';
-    var copy = document.createElement('span');
-    copy.innerHTML = '<strong></strong><small></small>';
-    copy.querySelector('strong').textContent = label;
-    copy.querySelector('small').textContent = queueText(queue, key !== 'training');
-    var chevron = document.createElement('span');
-    chevron.className = 'activity-monitor-chevron';
-    chevron.textContent = key === 'director' ? '' : '›';
-    row.appendChild(copy);
-    row.appendChild(chevron);
+  function queueHasWork(queue, includeRunning) {
+    queue = queue || {};
+    return !!(
+      (includeRunning && Number(queue.running || 0)) ||
+      Number(queue.queued || 0) ||
+      Number(queue.backlog || 0) ||
+      queue.paused
+    );
+  }
 
-    if (key === 'inference') {
-      row.onclick = function () {
+  function createQueueStatus(label, key, queue) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'activity-monitor-queue-status';
+
+    var labelEl = document.createElement('strong');
+    labelEl.textContent = label;
+    var statusEl = document.createElement('span');
+    statusEl.textContent = queueText(queue, key !== 'training');
+    button.appendChild(labelEl);
+    button.appendChild(statusEl);
+
+    var hasWork = queueHasWork(queue, key !== 'training');
+    if (key === 'inference' && hasWork) {
+      button.onclick = function () {
         setOpen(false);
-        if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(true);
+        window.setInferenceQueueOpen(true);
       };
-    } else if (key === 'training') {
-      row.onclick = function () {
+      button.title = 'Open Inference Queue';
+    } else if (key === 'training' && hasWork) {
+      button.onclick = function () {
         setOpen(false);
-        if (typeof window.openTrainingSurface === 'function') window.openTrainingSurface('global');
+        window.openTrainingSurface('global');
       };
+      button.title = 'Open Training';
     } else {
-      row.disabled = true;
-      row.title = 'Director requests are serialized automatically.';
+      button.disabled = true;
+      if (key === 'director' && hasWork) button.title = 'Director requests are shown under Now.';
     }
+    return button;
+  }
+
+  function createQueueStatusBar(queues) {
+    var row = document.createElement('div');
+    row.className = 'activity-monitor-queue-status-bar';
+    row.appendChild(createQueueStatus('Inference', 'inference', queues.inference));
+    row.appendChild(createQueueStatus('Training', 'training', queues.training));
+    row.appendChild(createQueueStatus('Director', 'director', queues.director));
     return row;
   }
 
@@ -358,12 +378,9 @@
       recent.slice(0, 12).forEach(function (item) { recentSection.appendChild(createRecentRow(item)); });
     }
 
-    var queueSection = appendSection(host, 'Queues', 'summaries only');
-    queueSection.appendChild(createQueueRow('Inference', 'inference', queues.inference));
-    queueSection.appendChild(createQueueRow('Training', 'training', queues.training));
-    if (Number((queues.director || {}).running || 0) || Number((queues.director || {}).queued || 0) || (queues.director || {}).paused) {
-      queueSection.appendChild(createQueueRow('Director', 'director', queues.director));
-    }
+    var queueSection = appendSection(host, 'Queue Status', '');
+    queueSection.classList.add('activity-monitor-queue-section');
+    queueSection.appendChild(createQueueStatusBar(queues));
   }
 
   function refresh() {
@@ -406,9 +423,14 @@
   function bind() {
     var toggle = el('activity-monitor-rail-btn');
     var close = el('activity-monitor-close');
-    if (!toggle || !close) return;
+    var drawer = el('activity-monitor-drawer');
+    if (!toggle || !close || !drawer) return;
     toggle.onclick = function () { setOpen(!state.open); };
     close.onclick = function () { setOpen(false); };
+    document.addEventListener('pointerdown', function (event) {
+      if (!state.open || drawer.contains(event.target) || toggle.contains(event.target)) return;
+      setOpen(false);
+    });
     window.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && state.open) setOpen(false);
     });

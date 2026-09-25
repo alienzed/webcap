@@ -9,7 +9,7 @@ import shutil
 import threading
 import time
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .folder_state_store import read_folder_state
@@ -69,6 +69,7 @@ def browse_source(model_id=None, source=None, set_name=""):
         "modelId": model.PROFILE_ID,
         "modelLabel": str(model.profile["label"]),
         "defaultSource": default_source,
+        "ownerFolder": _deterministic_source_owner(model, resolved_source),
     })
     return payload
 
@@ -583,6 +584,34 @@ def _is_webcap_staged_lora(lora_file, model):
         return int(payload.get("sourceEpoch")) >= 0
     except (TypeError, ValueError):
         return False
+
+
+def _deterministic_source_owner(model, source):
+    try:
+        directory = test_source_path(model.STAGING_KEY, str(source or "").strip())
+        loras = _lora_files(directory) if directory.is_dir() else []
+    except (OSError, ValueError):
+        return ""
+    if not loras:
+        return ""
+
+    owners = set()
+    for lora in loras:
+        if not _is_webcap_staged_lora(lora, model):
+            return ""
+        payload = _staged_lora_provenance(lora)
+        owner = str(payload.get("sourceFolder") or "").strip().replace("\\", "/").strip("/")
+        relative = PurePosixPath(owner)
+        if (
+            not owner
+            or relative.is_absolute()
+            or any(part in ("", ".", "..") for part in relative.parts)
+        ):
+            return ""
+        owners.add(relative.as_posix())
+        if len(owners) > 1:
+            return ""
+    return next(iter(owners)) if len(owners) == 1 else ""
 
 
 def _new_session_seed():

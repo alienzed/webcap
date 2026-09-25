@@ -208,8 +208,9 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert "at least two Scenes" not in prompt
     assert "between 9 and 15 seconds" in prompt
     assert "normally aiming for 10-15 seconds" in prompt
-    assert "compact edited sequence" in prompt
-    assert "multiple shots, cuts, or distinct visual beats by default" in prompt
+    assert "prioritize coherent, substantial Scenes over mechanically hitting the count" in prompt
+    assert "Combine small related beats when they fit naturally" in prompt
+    assert "multiple meaningful shots, cuts, or distinct visual beats when the material supports them" in prompt
     assert scene_schema["properties"]["suggestedDurationSeconds"]["minimum"] == 9
     assert scene_schema["properties"]["suggestedDurationSeconds"]["maximum"] == 15
     assert "invent natural dialogue" in prompt
@@ -318,8 +319,8 @@ def test_develop_story_h3_rules_do_not_conflict_with_structured_creative_task():
 def test_character_continuity_is_authoritative_without_lora_or_media_reasoning():
     prompt = storyboard_llm_contract.build_request(_story(), "", "develop_story")["prompt"]
 
-    assert prompt.count("RECURRING CHARACTERS STAY THE SAME PEOPLE.") == 1
-    assert "Preserve established identity across independent Scenes." in prompt
+    assert prompt.count("PRESERVE FACTS AND CONTINUITY.") == 1
+    assert "Recurring characters and locations must remain visually reproducible" in prompt
     assert "broad racial or ethnic appearance" in prompt
     assert "eye color" in prompt
     assert "hair length" in prompt
@@ -394,11 +395,9 @@ def test_scene_local_prompt_does_not_solicit_unsolicited_advice():
 def test_director_context_prioritizes_filmmaking_without_forcing_classical_coverage():
     prompt = storyboard_llm_contract.build_request(_story(), "", "develop_story")["prompt"]
 
-    assert "DIRECT THE FILM FIRST; WRITE THE GENERATION PROMPT SECOND." in prompt
-    assert "Think like a director" in prompt
-    assert "CREATIVE INTENT OUTRANKS DEFAULT FILM GRAMMAR." in prompt
-    assert "They are tools, not mandatory recipes." in prompt
-    assert "montage, abstraction, surrealism, discontinuity" in prompt
-    assert "TREAT GENERATION LIMITS AS PRODUCTION CONSTRAINTS, NOT STORY INSTRUCTIONS." in prompt
-    assert "preserve the underlying narrative, visual idea, and intended experience" in prompt
-    assert "not a mandatory master/medium/close-up recipe" in prompt
+    assert "DIRECT THE FILM FIRST." in prompt
+    assert "Creative intent outranks default film grammar" in prompt
+    assert "montage, abstraction, static tableaux, discontinuity" in prompt
+    assert "USE EACH GENERATION UNIT WELL." in prompt
+    assert "A single continuous shot is valid when uninterrupted time better serves the Scene." in prompt
+    assert "Do not default to portrait-style coverage or a fixed master/medium/close-up recipe." in prompt

@@ -347,6 +347,8 @@ def _advance_queue():
                 return None
             reserved_here = True
 
+        from .storyboard_llm_runtime import clear_stop_request
+        clear_stop_request()
         claimed = execution_claim_next(EXECUTION_LANE)
         if claimed is None:
             if reserved_here:

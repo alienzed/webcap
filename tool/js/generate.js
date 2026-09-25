@@ -299,7 +299,11 @@
 
       generateState.lorasByModel[resultModelId] = Array.isArray(result.loras)
         ? result.loras.map(function (item) {
-            return { name: String(item.name || ''), strength: Number(item.strength) };
+            var strength = Number(item.strength);
+            return {
+              name: String(item.name || ''),
+              strength: isFinite(strength) ? strength : 1
+            };
           }).filter(function (item) { return item.name; })
         : [];
       saveLoras();

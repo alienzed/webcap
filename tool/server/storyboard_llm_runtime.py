@@ -1,5 +1,6 @@
 import atexit
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -16,7 +17,7 @@ from . import config as app_config
 LLAMA_HOST = "127.0.0.1"
 DEFAULT_PORT = 8189
 DEFAULT_CONTEXT_SIZE = None
-DEFAULT_MAX_TOKENS = None
+DEFAULT_MAX_TOKENS = 8192
 GPU_RESERVATION_OWNER = "llm"
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 
@@ -35,6 +36,7 @@ _server_settings_signature = None
 _process_lock = threading.RLock()
 _request_lock = threading.RLock()
 _activity_lock = threading.Lock()
+_logger = logging.getLogger(__name__)
 _activity = {
     "active": False,
     "phase": "idle",
@@ -114,7 +116,7 @@ def _director_config():
     raw_context_size = director.get("context_size", DEFAULT_CONTEXT_SIZE)
     context_size = None if raw_context_size in (None, "") else int(raw_context_size)
     raw_max_tokens = director.get("max_tokens", DEFAULT_MAX_TOKENS)
-    max_tokens = None if raw_max_tokens in (None, "") else int(raw_max_tokens)
+    max_tokens = DEFAULT_MAX_TOKENS if raw_max_tokens in (None, "") else int(raw_max_tokens)
 
     if mode not in {"local", "remote"}:
         raise ValueError("Storyboard Director mode must be local or remote.")
@@ -702,12 +704,21 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
             _free_comfy_models()
             _ensure_local_model_loaded(model_id)
             _set_activity("generating", model_id=model_id)
-            response = _http_json(
-                "/v1/chat/completions",
-                method="POST",
-                payload=payload,
-                timeout=10 * 60,
-            )
+            try:
+                response = _http_json(
+                    "/v1/chat/completions",
+                    method="POST",
+                    payload=payload,
+                    timeout=10 * 60,
+                )
+            except Exception:
+                tail = _log_tail()
+                if tail:
+                    _logger.error(
+                        "llama.cpp chat request failed. Recent llama-server output:\n%s",
+                        tail,
+                    )
+                raise
             result = _completion_result(response, model_id)
             completed = True
             return result

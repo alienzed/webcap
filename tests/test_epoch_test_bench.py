@@ -825,6 +825,31 @@ def test_committed_test_result_is_recognized_after_queue_job_is_still_active(tmp
     assert outcome["result"]["mediaFile"] == "epoch.png"
 
 
+def test_transient_test_cancel_remains_recoverable_after_receipt_is_lost(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+
+    bench._cancel_shared_pending_job(
+        child_id,
+        session_directory=session,
+        reduce_total=True,
+    )
+    execution_queue.clear_transient_receipts(inference_runner.EXECUTION_LANE)
+
+    visible = bench._sync_inference_session(session)
+
+    assert visible["status"] == "complete"
+    assert visible["total"] == 0
+    assert child_id in (bench._read_status(session).get("cancelledJobIds") or [])
+
+
 def test_missing_candidate_rendition_skips_without_failure_card(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
     payload = bench.enqueue(

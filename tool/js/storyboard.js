@@ -1867,6 +1867,16 @@
         '<div class="storyboard-sequence-empty">Select a Take in one or more Scenes to build the sequence.</div>';
       return;
     }
+
+    var selectedSeconds = selected.reduce(function (total, item) {
+      var seconds = Number(item.take && item.take.durationSeconds);
+      if (!Number.isFinite(seconds) || seconds <= 0) seconds = Number(item.scene && item.scene.durationSeconds);
+      return total + (Number.isFinite(seconds) && seconds > 0 ? seconds : 0);
+    }, 0);
+    var selectedSecondsLabel = selectedSeconds > 0
+      ? String(Math.round(selectedSeconds * 10) / 10) + 's'
+      : '';
+
     var assembly = storyState.sequenceExport;
     var assemblyCurrent = assemblyMatchesSelection(assembly, selected) && assembly.current !== false;
     var assemblyStatus = '';
@@ -1877,27 +1887,46 @@
     if (assemblyCurrent) {
       var outputUrl = '/fs/storyboard/media?story=' + encodeURIComponent(assembly.storyId) +
         '&path=' + encodeURIComponent(assembly.mediaPath || ('exports/' + assembly.media));
-      outputHtml = '<div class="storyboard-sequence-output"><video src="' + escapeHtml(outputUrl) +
-        '" controls preload="metadata"></video></div>';
+      outputHtml = '<div class="storyboard-sequence-output">' +
+        '<div class="storyboard-sequence-output-label">Export preview</div>' +
+        '<video src="' + escapeHtml(outputUrl) + '" controls preload="metadata"></video></div>';
     }
 
-    host.innerHTML = '<header class="storyboard-sequence-header"><div><strong>Selected sequence</strong><span>' +
+    host.innerHTML = '<header class="storyboard-sequence-header"><div class="storyboard-sequence-heading-copy"><strong>Selected sequence</strong><span>' +
       selected.length + ' selected Take' + (selected.length === 1 ? '' : 's') +
+      (selectedSecondsLabel ? ' · ' + selectedSecondsLabel : '') +
       '</span></div><div class="storyboard-sequence-actions">' +
+      '<span class="storyboard-save-state" data-sequence-status>' + assemblyStatus + '</span>' +
       '<button type="button" class="review-captions-btn" data-sequence-toggle aria-expanded="' + (storyState.sequenceCollapsed ? 'false' : 'true') + '">' +
         (storyState.sequenceCollapsed ? 'Show' : 'Hide') +
       '</button>' +
       '<button type="button" class="storyboard-primary-btn" data-sequence-export>Export Sequence</button>' +
-      '<span class="storyboard-save-state" data-sequence-status>' + assemblyStatus + '</span>' +
       '</div></header><div class="storyboard-sequence-body' + (storyState.sequenceCollapsed ? ' hidden' : '') + '">' +
-      outputHtml + '<div class="storyboard-sequence-list">' +
-      selected.map(function (item) {
-        return '<article class="storyboard-sequence-card">' +
-          '<div class="storyboard-sequence-label">Scene ' + String(item.number).padStart(2, '0') + ' · ' +
-            escapeHtml(item.scene.title || 'Untitled Scene') + '</div>' +
-          '<div class="storyboard-sequence-media">' + takePreviewHtml(story.id, item.sceneId, item.take) + '</div>' +
-        '</article>';
-      }).join('') + '</div></div>';
+      outputHtml +
+      '<section class="storyboard-sequence-timeline" aria-label="Selected Takes timeline">' +
+        '<div class="storyboard-sequence-timeline-header"><strong>Timeline</strong><span>' +
+          selected.length + ' clip' + (selected.length === 1 ? '' : 's') +
+          (selectedSecondsLabel ? ' · ' + selectedSecondsLabel : '') +
+        '</span></div>' +
+        '<div class="storyboard-sequence-list">' +
+        selected.map(function (item) {
+          var seconds = Number(item.take && item.take.durationSeconds);
+          if (!Number.isFinite(seconds) || seconds <= 0) seconds = Number(item.scene && item.scene.durationSeconds);
+          var duration = Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds * 10) / 10 : 10;
+          var durationLabel = Number.isFinite(seconds) && seconds > 0 ? String(duration) + 's' : '';
+          var title = item.scene.title || 'Untitled Scene';
+          return '<article class="storyboard-sequence-card" style="--sequence-clip-seconds:' + String(duration) + '">' +
+            '<div class="storyboard-sequence-label">' +
+              '<span>Scene ' + String(item.number).padStart(2, '0') + '</span>' +
+              '<strong title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</strong>' +
+              (durationLabel ? '<em>' + escapeHtml(durationLabel) + '</em>' : '') +
+            '</div>' +
+            '<div class="storyboard-sequence-media">' + takePreviewHtml(story.id, item.sceneId, item.take) + '</div>' +
+          '</article>';
+        }).join('') +
+        '</div>' +
+      '</section>' +
+      '</div>';
   }
 
   function refreshSequenceExport(storyId) {

@@ -1039,3 +1039,20 @@ def test_storyboard_refine_completion_is_scene_specific_persistent_and_self_clea
     assert "target.operation === 'refine_prompt'" in storyboard
     assert "currentScene.durationSeconds = savedScene.durationSeconds;" in storyboard
     assert "currentDuration.value = savedScene.durationSeconds == null ? '' : savedScene.durationSeconds;" in storyboard
+
+
+
+def test_storyboard_sequence_view_uses_lightweight_editor_timeline():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'class="storyboard-sequence-timeline"' in storyboard
+    assert 'class="storyboard-sequence-timeline-header"' in storyboard
+    assert '--sequence-clip-seconds:' in storyboard
+    assert "durationSeconds" in storyboard
+    assert "Export preview" in storyboard
+    assert ".storyboard-sequence-timeline {" in css
+    assert ".storyboard-sequence-card {" in css
+    assert "calc(var(--sequence-clip-seconds) * 18px)" in css
+    assert ".storyboard-sequence-label {" in css
+    assert ".storyboard-sequence-output-label {" in css

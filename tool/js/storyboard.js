@@ -2853,7 +2853,7 @@
             '<section class="storyboard-inspector-section storyboard-generation-inspector">' +
               '<div class="storyboard-inspector-section-heading"><strong>Generation</strong></div>' +
               '<div class="storyboard-generation-settings">' +
-                '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="4" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 6)) + '"></label>' +
+                '<label class="storyboard-field" title="Scene-specific clip duration."><span>Duration (s)</span><input type="number" min="9" max="15" step="0.1" data-scene-field="durationSeconds" value="' + escapeHtml(sceneValue(scene, 'durationSeconds', 10)) + '"></label>' +
                 '<label class="storyboard-field" title="Inherit the Story aspect ratio unless this Scene needs an override."><span>Aspect ratio</span><select data-scene-field="aspectRatio">' +
                   '<option value=""' + (sceneAspectRatio === '' ? ' selected' : '') + '>Inherit · ' + escapeHtml(inheritedAspectRatio) + '</option>' +
                   ['1:1 (Square)', '2:3 (Portrait Photo)', '3:2 (Photo)', '3:4 (Portrait Standard)', '4:3 (Standard)', '9:16 (Portrait Widescreen)', '16:9 (Widescreen)', '21:9 (Ultrawide)'].map(function (value) {
@@ -3395,7 +3395,7 @@
     flushPendingSaves().then(function () { return request({
       operation: 'add_scene',
       storyId: storyState.story.id,
-      scene: { title: 'New Scene', durationSeconds: 6, seedMode: 'random' }
+      scene: { title: 'New Scene', durationSeconds: 10, seedMode: 'random' }
     }); }).then(function (payload) {
       storyState.story = payload.story;
       storyState.sceneViewMode = 'focus';

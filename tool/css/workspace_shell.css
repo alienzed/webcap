@@ -1726,3 +1726,25 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
     width: min(350px, calc(100% - 54px));
   }
 }
+
+
+/* Inference queue polish */
+.inference-queue-header-copy { min-width: 0; display: grid; gap: 2px; }
+.inference-queue-header-actions { display: flex; align-items: center; gap: 6px; }
+.inference-queue-pause-toggle { width: auto; min-height: 28px; padding: 3px 9px; font-size: 11px; white-space: nowrap; }
+.inference-queue-counts { color: var(--text); font-size: 11px; font-weight: 650; }
+.inference-queue-counts.hidden { display: none; }
+.inference-queue-row { grid-template-columns: 62px minmax(0, 1fr) auto; min-height: 58px; padding: 9px 10px; }
+.inference-queue-position { padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 999px; background: var(--panel-soft); text-align: center; white-space: nowrap; }
+.inference-queue-row.status-running .inference-queue-position,
+.inference-queue-row.status-starting .inference-queue-position { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--text); }
+.inference-queue-row.status-backlog .inference-queue-position { color: var(--muted); }
+.inference-queue-copy { gap: 2px; }
+.inference-queue-copy strong { font-size: 13px; }
+.inference-queue-copy span,
+.inference-queue-copy small { font-size: 11px; line-height: 1.25; }
+.inference-queue-actions { justify-content: flex-end; }
+.inference-queue-actions .inference-queue-icon-action { width: 28px; min-width: 28px; padding: 0; font-size: 14px; }
+.inference-backlog-heading { margin-top: 7px; padding: 8px 4px 3px; }
+.inference-backlog-heading strong { font-size: 12px; }
+.inference-queue-empty { min-height: 64px; display: grid; place-items: center; margin: 2px; border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--panel-soft) 58%, transparent); }

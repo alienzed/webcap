@@ -808,7 +808,8 @@ def action(operation, job_id="", direction="", position=None):
                 "queue": queue,
                 "resumeBlocked": True,
                 "resumeBlockReason": str(
-                    queue.get("pauseReason")
+                    queue.get("waitReason")
+                    or queue.get("pauseReason")
                     or "Inference queue is waiting for ComfyUI provider cleanup."
                 ),
             }

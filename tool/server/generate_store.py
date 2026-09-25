@@ -174,6 +174,8 @@ def list_results(limit=100):
         except (OSError, json.JSONDecodeError):
             continue
         if isinstance(payload, dict):
+            payload = dict(payload)
+            payload["storageId"] = manifest.parent.parent.name + "/" + manifest.parent.name
             found.append(payload)
     found.sort(key=lambda item: int(item.get("createdAt") or 0), reverse=True)
     return found[:max(1, min(int(limit or 100), 500))]

@@ -36,6 +36,7 @@ def _default_lane():
         "activeJobId": "",
         "jobs": [],
         "recent": [],
+        "guards": {},
     }
 
 
@@ -86,6 +87,11 @@ def _lane(state, lane_name, create=True):
         lane["recent"] = []
     elif not isinstance(recent, list):
         raise RuntimeError("Execution queue lane recent receipts are invalid: " + lane_name)
+    guards = lane.get("guards")
+    if guards is None:
+        lane["guards"] = {}
+    elif not isinstance(guards, dict):
+        raise RuntimeError("Execution queue lane guards are invalid: " + lane_name)
     lane.setdefault("paused", False)
     lane.setdefault("pauseReason", "")
     lane.setdefault("activeJobId", "")
@@ -129,6 +135,33 @@ def _record_recent(lane, job, keep=80):
     recent.append(receipt)
     if len(recent) > keep:
         del recent[:-keep]
+
+
+def lane_guard(lane_name, name, default=None):
+    name = str(name or "").strip()
+    if not name:
+        raise ValueError("Execution queue lane guard name is required.")
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name, create=False) or _default_lane()
+        guards = lane.get("guards") if isinstance(lane.get("guards"), dict) else {}
+        return copy.deepcopy(guards.get(name, default))
+
+
+def set_lane_guard(lane_name, name, value):
+    name = str(name or "").strip()
+    if not name:
+        raise ValueError("Execution queue lane guard name is required.")
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name)
+        guards = lane.setdefault("guards", {})
+        if value is None:
+            guards.pop(name, None)
+        else:
+            guards[name] = copy.deepcopy(value)
+        _write_state(state)
+        return copy.deepcopy(guards.get(name))
 
 
 def recent_snapshot(lane_name, limit=30):

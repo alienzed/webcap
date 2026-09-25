@@ -778,7 +778,8 @@ function wireTrainingWorkspace() {
     var actionJobId = event.target.getAttribute('data-training-history-action');
     var clearId = event.target.getAttribute('data-training-history-clear');
     if (candidateId) {
-      openTrainingCandidates(getTrainingRunnerJobById(candidateId));
+      var candidateJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === candidateId; })[0];
+      openTrainingCandidates(candidateJob);
       return;
     }
     if (outputJobId) {

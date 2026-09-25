@@ -588,6 +588,8 @@ def test_test_generations_enters_from_the_current_set_and_keeps_explicit_source_
     assert "function loadLastTestSource(modelId)" not in script
     assert "function saveLastTestSource(modelId, source)" not in script
     assert "function chooseTestSource(source)" in script
+    choose_source = script.split("function chooseTestSource(source)", 1)[1].split("function request(", 1)[0]
+    assert "pendingTestSource = testSource;" in choose_source
     assert "function openTestBenchForSetFolder(folder)" in script
     assert "if (useSetSource) pendingTestSource = null;" in script
     assert "testSource = null;" in script

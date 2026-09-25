@@ -1446,18 +1446,18 @@ def delete_scene(story_id, scene_id):
         _story_dir(story_id) / "references" / scene_id,
     ]
     staged_dirs = []
-    for artifact_dir in artifact_dirs:
-        if not artifact_dir.exists() and not artifact_dir.is_symlink():
-            continue
-        if artifact_dir.is_symlink() or not artifact_dir.is_dir():
-            raise RuntimeError("Storyboard Scene generated artifact folder is invalid.")
-        staged_dir = artifact_dir.with_name(
-            "." + artifact_dir.name + ".removing-" + uuid.uuid4().hex[:12]
-        )
-        os.replace(artifact_dir, staged_dir)
-        staged_dirs.append((artifact_dir, staged_dir))
-
     try:
+        for artifact_dir in artifact_dirs:
+            if not artifact_dir.exists() and not artifact_dir.is_symlink():
+                continue
+            if artifact_dir.is_symlink() or not artifact_dir.is_dir():
+                raise RuntimeError("Storyboard Scene generated artifact folder is invalid.")
+            staged_dir = artifact_dir.with_name(
+                "." + artifact_dir.name + ".removing-" + uuid.uuid4().hex[:12]
+            )
+            os.replace(artifact_dir, staged_dir)
+            staged_dirs.append((artifact_dir, staged_dir))
+
         _write_json_atomic(_story_path(story_id), story)
     except Exception:
         for artifact_dir, staged_dir in reversed(staged_dirs):

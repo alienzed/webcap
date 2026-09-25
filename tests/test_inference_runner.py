@@ -18,6 +18,7 @@ def inference_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
     monkeypatch.setattr(app_config, "output_root", lambda: Path(tmp_path) / "output")
     execution_queue._resource_owner = ""
+    execution_queue.clear_transient_receipts()
     inference_runner._startup_reconciled = True
     with inference_runner._provider_hold_lock:
         inference_runner._provider_cleanup_holds.clear()
@@ -94,8 +95,12 @@ def test_inference_clear_all_cancels_pending_but_not_active(inference_root, monk
 
     assert result["cleared"] == 2
     assert execution_queue.get_job(active["id"])["status"] == "running"
-    assert execution_queue.get_job(queued["id"])["status"] == "cancelled"
-    assert execution_queue.get_job(backlog["id"])["status"] == "cancelled"
+    assert inference_runner.job_status(queued["id"])["status"] == "cancelled"
+    assert inference_runner.job_status(backlog["id"])["status"] == "cancelled"
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(queued["id"])
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(backlog["id"])
     with inference_runner._backlog_lock:
         assert backlog["id"] not in inference_runner._armed_backlog_ids
 
@@ -142,7 +147,7 @@ def test_inference_runner_executes_claimed_generate_job(inference_root, monkeypa
 
     inference_runner._execute_claimed(queued["id"])
 
-    finished = execution_queue.get_job(queued["id"])
+    finished = inference_runner.job_status(queued["id"])
     assert finished["status"] == "completed"
     assert finished["result"]["modelId"] == "minimax_h3"
 
@@ -163,7 +168,7 @@ def test_inference_yields_retained_director_after_reserving_gpu(inference_root, 
 
     def execute(job_id):
         calls.append("execute")
-        execution_queue.finish_job(job_id, status="completed")
+        execution_queue.finish_job_transient(job_id, status="completed")
 
     monkeypatch.setattr(inference_runner, "_reserve_gpu", reserve)
     monkeypatch.setattr(inference_runner, "_release_gpu", release)
@@ -177,7 +182,7 @@ def test_inference_yields_retained_director_after_reserving_gpu(inference_root, 
     inference_runner._advance_queue()
 
     assert calls == ["reserve", "yield-director", "execute", "release"]
-    assert execution_queue.get_job(queued["jobId"])["status"] == "completed"
+    assert inference_runner.job_status(queued["jobId"])["status"] == "completed"
 
 
 def test_inference_defers_without_pausing_if_director_runtime_is_busy(inference_root, monkeypatch):
@@ -232,7 +237,7 @@ def test_inference_retries_if_retained_director_cannot_yield_yet(inference_root,
             raise RuntimeError("unload failed")
 
     def execute(job_id):
-        execution_queue.finish_job(job_id, status="completed")
+        execution_queue.finish_job_transient(job_id, status="completed")
 
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -301,7 +306,9 @@ def test_stop_storyboard_jobs_cancels_only_matching_queued_jobs(inference_root):
 
     inference_runner.stop_storyboard_jobs("story-delete")
 
-    assert execution_queue.get_job(matching["jobId"])["status"] == "cancelled"
+    assert inference_runner.job_status(matching["jobId"])["status"] == "cancelled"
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(matching["jobId"])
     assert execution_queue.get_job(other_story["jobId"])["status"] == "queued"
     assert execution_queue.get_job(generate["jobId"])["status"] == "queued"
 
@@ -353,7 +360,7 @@ def test_inference_runner_honors_stop_requested_during_start(inference_root, mon
 
     inference_runner._execute_claimed(queued["id"])
 
-    finished = execution_queue.get_job(queued["id"])
+    finished = inference_runner.job_status(queued["id"])
     assert finished["status"] == "stopped"
     assert called == []
 
@@ -398,7 +405,7 @@ def test_inference_runner_executes_claimed_storyboard_job(inference_root, monkey
 
     inference_runner._execute_claimed(queued["jobId"])
 
-    finished = execution_queue.get_job(queued["jobId"])
+    finished = inference_runner.job_status(queued["jobId"])
     assert finished["status"] == "completed"
     assert finished["result"]["takeId"] == "take-1"
     assert captured["context"]["storyId"] == "story-1"
@@ -471,7 +478,7 @@ def test_inference_runner_executes_claimed_test_rendition(inference_root, monkey
 
     inference_runner._execute_claimed(queued["jobId"])
 
-    finished = execution_queue.get_job(queued["jobId"])
+    finished = inference_runner.job_status(queued["jobId"])
     assert finished["status"] == "completed"
     assert finished["result"]["session"] == "session-1"
     assert captured["context"]["candidateFile"] == "epoch20.safetensors"
@@ -532,7 +539,7 @@ def test_inference_runner_cancels_provider_after_unexpected_post_launch_failure(
 
     inference_runner._advance_queue()
 
-    finished = execution_queue.get_job(queued["id"])
+    finished = inference_runner.job_status(queued["id"])
     assert finished["status"] == "failed"
     assert cancelled == ["provider-123"]
 
@@ -563,7 +570,7 @@ def test_inference_runner_does_not_cancel_provider_already_terminal(inference_ro
 
     inference_runner._advance_queue()
 
-    assert execution_queue.get_job(queued["id"])["status"] == "failed"
+    assert inference_runner.job_status(queued["id"])["status"] == "failed"
     assert cancelled == []
 
 def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconfirmed(inference_root, monkeypatch):
@@ -592,7 +599,7 @@ def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconf
 
     inference_runner._advance_queue()
 
-    finished = execution_queue.get_job(queued["id"])
+    finished = inference_runner.job_status(queued["id"])
     snapshot = inference_runner.snapshot()
     assert finished["status"] == "failed"
     assert snapshot["paused"] is False
@@ -842,12 +849,12 @@ def test_inference_armed_backlog_promotes_when_gpu_becomes_available(inference_r
     monkeypatch.setattr(
         inference_runner,
         "_execute_claimed",
-        lambda job_id: execution_queue.finish_job(job_id, status="completed"),
+        lambda job_id: execution_queue.finish_job_transient(job_id, status="completed"),
     )
 
     inference_runner._advance_queue()
 
-    assert execution_queue.get_job(backlog["id"])["status"] == "completed"
+    assert inference_runner.job_status(backlog["id"])["status"] == "completed"
     assert backlog["id"] not in inference_runner._armed_backlog_snapshot()
 
 
@@ -961,7 +968,10 @@ def test_inference_startup_reconciles_active_provider_before_training_can_claim_
 
     inference_runner.prepare_startup_backlog()
 
-    assert execution_queue.get_job(queued["id"])["status"] == "interrupted"
+    restarted = execution_queue.get_job(queued["id"], include_payload=True)
+    assert restarted["status"] == "backlog"
+    assert restarted["details"] == {}
+    assert restarted["startedAt"] is None
     assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
     with inference_runner._provider_hold_lock:
         assert inference_runner._provider_cleanup_holds == {"provider-live"}
@@ -1005,7 +1015,7 @@ def test_inference_fifo_does_not_let_new_queued_work_overtake_armed_backlog(
 
     def finish(job_id):
         completed.append(job_id)
-        execution_queue.finish_job(job_id, status="completed")
+        execution_queue.finish_job_transient(job_id, status="completed")
 
     monkeypatch.setattr(inference_runner, "_execute_claimed", finish)
 

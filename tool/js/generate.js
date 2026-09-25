@@ -883,7 +883,20 @@
     }
 
     var modelId = String(activity && activity.model || '');
-    if (generateState.director.activityLoadModelId !== modelId) {
+    var runtimeBaseline = activity && activity.loadBaseline && typeof activity.loadBaseline === 'object'
+      ? activity.loadBaseline
+      : null;
+    var runtimeRamBytes = runtimeBaseline ? Number(runtimeBaseline.ramBytes) : NaN;
+    var runtimeVramBytes = runtimeBaseline ? Number(runtimeBaseline.vramBytes) : NaN;
+    var hasRuntimeBaseline = isFinite(runtimeRamBytes) && isFinite(runtimeVramBytes);
+
+    if (hasRuntimeBaseline) {
+      generateState.director.activityLoadModelId = modelId;
+      generateState.director.activityLoadBaseline = {
+        ramBytes: runtimeRamBytes,
+        vramBytes: runtimeVramBytes
+      };
+    } else if (generateState.director.activityLoadModelId !== modelId) {
       generateState.director.activityLoadModelId = modelId;
       generateState.director.activityLoadBaseline = generateState.director.activityLastMemory || sample;
     } else if (!generateState.director.activityLoadBaseline && sample) {

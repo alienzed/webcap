@@ -177,17 +177,37 @@ def _generate_items(cache):
         for directory in sorted(day.iterdir(), key=lambda p: p.name, reverse=True):
             if not directory.is_dir() or directory.is_symlink():
                 continue
-            manifest = directory / MANIFEST_NAME
-            if not manifest.is_file():
-                continue
-            try:
-                payload = json.loads(manifest.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if not isinstance(payload, dict) or str(payload.get("jobId") or "") != directory.name:
-                continue
             item_id = day.name + "/" + directory.name
+            manifest = directory / MANIFEST_NAME
+            payload = None
+            if manifest.is_file() and not manifest.is_symlink():
+                try:
+                    candidate = json.loads(manifest.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    candidate = None
+                if isinstance(candidate, dict) and str(candidate.get("jobId") or "") == directory.name:
+                    payload = candidate
+
             active = directory.name in active_jobs
+            if payload is None:
+                rows.append(_item(
+                    "generate",
+                    item_id,
+                    directory.name,
+                    directory,
+                    kind="Generation residual",
+                    status=("active / incomplete" if active else "incomplete / unrecognized"),
+                    purgeable=False,
+                    protected_reason=(
+                        "Referenced by active Generate work."
+                        if active else
+                        "Generation ownership is incomplete or cannot be proven; inspect before cleanup."
+                    ),
+                    meta={"jobId": directory.name, "residual": True},
+                    cache=cache,
+                ))
+                continue
+
             rows.append(_item(
                 "generate",
                 item_id,
@@ -239,6 +259,40 @@ def _storyboard_items(cache):
         story_root = root / story_id
         if story_root.is_symlink() or not story_root.is_dir():
             continue
+        export_dir = story_root / "exports"
+        export_media = export_dir / "selected-sequence.mp4"
+        export_manifest = export_dir / "selected-sequence.json"
+        if (
+            export_dir.is_dir()
+            and not export_dir.is_symlink()
+            and export_media.is_file()
+            and not export_media.is_symlink()
+            and export_manifest.is_file()
+            and not export_manifest.is_symlink()
+        ):
+            try:
+                export_payload = json.loads(export_manifest.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                export_payload = None
+            if isinstance(export_payload, dict) and str(export_payload.get("storyId") or "") == story_id:
+                rows.append(_item(
+                    "storyboard",
+                    "export/" + story_id,
+                    str(summary.get("title") or story_id) + " / Selected sequence",
+                    export_dir,
+                    kind="Sequence export",
+                    status=("current" if export_payload.get("selection") else "exported"),
+                    purgeable=False,
+                    protected_reason="Sequence exports are managed from Storyboard; Storage currently provides accounting and inspection only.",
+                    meta={
+                        "storyId": story_id,
+                        "storyTitle": str(summary.get("title") or story_id),
+                        "createdAt": export_payload.get("createdAt"),
+                        "itemCount": len(export_payload.get("selection") or []),
+                    },
+                    cache=cache,
+                ))
+
         scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
         removed_scenes = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
         for scene_source, scene_map in (("active", scenes), ("removed", removed_scenes)):
@@ -972,7 +1026,7 @@ def _safe_recursive_stats(path, cancel_check=None, progress=None):
 def _safe_recursive_size(path):
     return _safe_recursive_stats(path)[0]
 
-def _resolve_generate(item_id):
+def _resolve_generate(item_id, *, require_manifest=False):
     parts = PurePosixPath(str(item_id or "")).parts
     if len(parts) != 2 or any(part in {"", ".", ".."} for part in parts):
         raise ValueError("Generation storage ID is invalid.")
@@ -983,14 +1037,18 @@ def _resolve_generate(item_id):
         raise ValueError("Generation storage path is symlinked.")
     root = raw_root.resolve()
     directory = raw_directory.resolve()
-    if directory.parent.parent != root:
-        raise ValueError("Generation storage ID escaped the managed root.")
-    manifest = directory / MANIFEST_NAME
-    if not directory.is_dir() or manifest.is_symlink() or not manifest.is_file():
+    if directory.parent.parent != root or not directory.is_dir():
         raise FileNotFoundError("Generation result is unavailable.")
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict) or str(payload.get("jobId") or "") != parts[1]:
-        raise RuntimeError("Generation manifest does not own this directory.")
+    if require_manifest:
+        manifest = directory / MANIFEST_NAME
+        if manifest.is_symlink() or not manifest.is_file():
+            raise RuntimeError("Generation ownership could not be proven.")
+        try:
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError("Generation ownership could not be proven.") from exc
+        if not isinstance(payload, dict) or str(payload.get("jobId") or "") != parts[1]:
+            raise RuntimeError("Generation ownership could not be proven.")
     return directory
 
 
@@ -1151,6 +1209,33 @@ def _resolve_storyboard_take(item_id):
     return path, story, scene, take
 
 
+def _resolve_storyboard_export(item_id):
+    parts = PurePosixPath(str(item_id or "")).parts
+    if len(parts) != 2 or parts[0] != "export" or not parts[1] or Path(parts[1]).name != parts[1]:
+        raise ValueError("Storyboard export storage ID is invalid.")
+    story_id = parts[1]
+    load_story(story_id)
+    raw_story_root = storyboard_root() / story_id
+    raw_export_dir = raw_story_root / "exports"
+    if raw_story_root.is_symlink() or raw_export_dir.is_symlink():
+        raise ValueError("Storyboard export storage path is symlinked.")
+    story_root = raw_story_root.resolve()
+    export_dir = raw_export_dir.resolve()
+    if export_dir.parent != story_root or not export_dir.is_dir():
+        raise FileNotFoundError("Storyboard export is unavailable.")
+    media = export_dir / "selected-sequence.mp4"
+    manifest = export_dir / "selected-sequence.json"
+    if media.is_symlink() or manifest.is_symlink() or not media.is_file() or not manifest.is_file():
+        raise FileNotFoundError("Storyboard export is incomplete.")
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Storyboard export manifest is unreadable.") from exc
+    if not isinstance(payload, dict) or str(payload.get("storyId") or "") != story_id:
+        raise RuntimeError("Storyboard export manifest does not match its Story.")
+    return export_dir
+
+
 def resolve_item(area, item_id, folder=""):
     area = str(area or "").strip()
     if area == "training":
@@ -1162,6 +1247,8 @@ def resolve_item(area, item_id, folder=""):
     if area == "generate":
         return _resolve_generate(item_id)
     if area == "storyboard":
+        if str(item_id or "").startswith("export/"):
+            return _resolve_storyboard_export(item_id)
         return _resolve_storyboard_take(item_id)[0]
     if area == "set":
         folder = str(folder or "").strip()
@@ -1584,7 +1671,7 @@ def purge(area, item_id, folder=""):
         except FileNotFoundError:
             pass
     elif area == "generate":
-        path = _resolve_generate(item_id)
+        path = _resolve_generate(item_id, require_manifest=True)
         job_id = path.name
         if job_id in _active_generate_job_ids():
             raise RuntimeError("Generation result is still referenced by active Generate work.")

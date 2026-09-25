@@ -1234,7 +1234,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   margin-top: 4px;
   overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1289,7 +1289,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .activity-monitor-section-heading strong {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .065em;
   text-transform: uppercase;
@@ -1297,7 +1297,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .activity-monitor-section-heading span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .activity-monitor-card {
@@ -1350,21 +1350,21 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .activity-monitor-copy strong {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
 .activity-monitor-copy span {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.3;
 }
 
 .activity-monitor-copy small {
   margin-top: 4px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.25;
 }
 
@@ -1385,13 +1385,13 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .activity-monitor-open {
   align-self: center;
-  min-height: 29px;
+  min-height: 31px;
   padding: 4px 9px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: transparent;
   color: var(--text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
   cursor: pointer;
 }
@@ -1404,140 +1404,62 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .activity-monitor-recent-row,
-.activity-monitor-queue-row {
-  width: 100%;
+.activity-monitor-queue-section {
+  margin-bottom: 4px;
+}
+
+.activity-monitor-queue-status-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 7px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--border);
+}
+
+.activity-monitor-queue-status {
+  min-width: 0;
+  min-height: 48px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  padding: 7px 9px;
   border: 0;
+  background: var(--panel-soft);
   color: var(--text);
   font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
-.activity-monitor-recent-row {
-  min-width: 0;
-  min-height: 43px;
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 34px;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 7px;
-  border-radius: 7px;
-  background: transparent;
-  text-align: left;
-}
-
-.activity-monitor-recent-row + .activity-monitor-recent-row {
-  border-top: 1px solid color-mix(in srgb, var(--border) 52%, transparent);
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
-
-.activity-monitor-recent-row:hover,
-.activity-monitor-recent-row:focus-visible {
+.activity-monitor-queue-status:hover:not(:disabled),
+.activity-monitor-queue-status:focus-visible:not(:disabled) {
   background: var(--hover);
   outline: none;
 }
 
-.activity-monitor-recent-icon {
-  width: 20px;
-  height: 20px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, #68bc8d 12%, transparent);
-  color: #68bc8d;
-  font-size: 12px;
-  font-weight: 900;
-  text-align: center;
+.activity-monitor-queue-status:disabled {
+  cursor: default;
 }
 
-.activity-monitor-recent-row.failed .activity-monitor-recent-icon {
-  background: color-mix(in srgb, #e87777 12%, transparent);
-  color: #e87777;
-}
-
-.activity-monitor-recent-copy {
-  min-width: 0;
-}
-
-.activity-monitor-recent-copy strong,
-.activity-monitor-recent-copy small {
-  display: block;
+.activity-monitor-queue-status strong,
+.activity-monitor-queue-status span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.activity-monitor-recent-copy strong {
-  font-size: 12px;
-  font-weight: 720;
-  line-height: 1.25;
+.activity-monitor-queue-status strong {
+  font-size: 11.5px;
+  line-height: 1.15;
 }
 
-.activity-monitor-recent-copy small {
-  margin-top: 2px;
+.activity-monitor-queue-status span {
   color: var(--muted);
-  font-size: 10.5px;
-  line-height: 1.2;
-}
-
-.activity-monitor-recent-row time {
-  justify-self: end;
-  color: var(--muted);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-
-.activity-monitor-queue-row {
-  min-height: 50px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  margin-top: 7px;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--panel-soft);
-  text-align: left;
-}
-
-.activity-monitor-queue-row:hover:not(:disabled),
-.activity-monitor-queue-row:focus-visible:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
-  background: var(--hover);
-  outline: none;
-}
-
-.activity-monitor-queue-row:disabled {
-  cursor: default;
-  opacity: .84;
-}
-
-.activity-monitor-queue-row > span:first-child {
-  min-width: 0;
-}
-
-.activity-monitor-queue-row strong,
-.activity-monitor-queue-row small {
-  display: block;
-}
-
-.activity-monitor-queue-row strong {
-  font-size: 12.5px;
-  line-height: 1.2;
-}
-
-.activity-monitor-queue-row small {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 10.5px;
-  line-height: 1.2;
-}
-
-.activity-monitor-chevron {
-  color: var(--muted);
-  font-size: 18px;
-  line-height: 1;
+  font-size: 11px;
+  line-height: 1.15;
 }
 
 .activity-monitor-empty {

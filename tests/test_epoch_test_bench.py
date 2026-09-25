@@ -818,6 +818,7 @@ def test_committed_test_result_is_recognized_after_queue_job_is_still_active(tmp
         }]
         status["completed"] = 1
         bench._atomic_write_json(session / "test.json", status)
+    (session / "epoch.png").write_bytes(b"image")
 
     outcome = bench.committed_inference_outcome(child)
 
@@ -845,6 +846,33 @@ def test_test_cancel_marker_prevents_replay_if_process_dies_before_queue_removal
     assert execution_queue.get_job(child_id)["status"] in {"queued", "backlog"}
     assert outcome["status"] == "cancelled"
     assert bench._read_status(session)["total"] == 0
+
+
+def test_test_result_without_media_is_not_treated_as_committed(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+    child = execution_queue.get_job(child_id)
+
+    with bench._status_lock:
+        status = bench._read_status(session) or {}
+        status["results"] = [{
+            "jobId": child_id,
+            "kind": "lora",
+            "sourceLoRA": candidates[0].name,
+            "candidateFile": candidates[0].name,
+            "mediaFile": "missing.png",
+        }]
+        status["completed"] = 1
+        bench._atomic_write_json(session / "test.json", status)
+
+    assert bench.committed_inference_outcome(child) is None
 
 
 def test_transient_test_cancel_remains_recoverable_after_receipt_is_lost(tmp_path, monkeypatch):

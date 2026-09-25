@@ -36,7 +36,9 @@ def test_generate_is_first_class_static_activity():
     assert "uploadReference(file)" in script
 
     assert ".app-frame.workspace-generate-open > .app" in css
-    assert ".generate-authoring" in css
+    assert ".generate-create-view" in css
+    assert ".generate-stage-panel" in css
+    assert ".generate-takes-panel" in css
     assert ".generate-queue-panel" not in html
     assert ".generate-results" in css
 
@@ -253,3 +255,22 @@ def test_generate_has_lightroom_style_create_and_library_modes():
     assert ".generate-stage-panel {" in css
     assert ".generate-takes-panel {" in css
     assert ".generate-library-view {" in css
+
+
+
+def test_generate_redesign_required_wiring_fails_loudly():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "throw new Error('Generations active preview markup is missing.')" in script
+    assert "throw new Error('Generations Takes markup is missing.')" in script
+    assert "throw new Error('Generations Library markup is missing.')" in script
+    assert "throw new Error('Generate inference job is missing its job ID.')" in script
+    assert "throw new Error('Generate result is missing its stable identity.')" in script
+
+
+def test_generate_redesign_does_not_keep_dead_pre_redesign_layout_css():
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert ".generate-authoring" not in css
+    assert ".generate-results-panel" not in css
+    assert ".generate-results-heading" not in css

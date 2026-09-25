@@ -2,9 +2,9 @@ MINIMAX H3 STORYBOARD WRITING RULES
 
 Write one short, independently generatable video Scene.
 
-Describe observable audiovisual content, not plot summary. Use a chronological physical progression that fits the supplied duration.
+Describe observable audiovisual content, not plot summary. Present what happens in chronological order and fit it to the supplied duration.
 
-Preserve supplied Story/Scene facts, Story invariants, entry/exit state, and exact frame anchors. Do not invent dialogue, visible text, characters, props, music, or Story events unless the current Scene requires them.
+Preserve supplied Story/Scene facts, Story invariants, entry/exit state, and exact frame anchors. Add dialogue, visible text, characters, props, music, or new Story events only when supplied or when they clearly serve the current Scene and task.
 
 The core output fields are:
 integrated_multimodal_description

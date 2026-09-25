@@ -38,12 +38,14 @@ The substrate owns these mechanics and state transitions. It does not know how t
 State transitions are explicit:
 
 ```text
-queued -> starting -> running -> completed / failed / stopped
-                      \
-                       -> stopping -> stopped
+backlog <-> queued
+   |         |
+   +-------> starting -> running -> completed / failed / stopped
+                         \
+                          -> stopping -> stopped
 ```
 
-Only queued jobs can be cancelled directly. Only active jobs can be stopped or finished.
+Queue and Backlog are pending states and may be cancelled directly. Only active jobs can be stopped or finished.
 
 ## Inference target
 

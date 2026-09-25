@@ -205,3 +205,11 @@ def test_generate_errors_keep_detail_in_console_and_use_concise_setup_badge():
 def test_generate_defaults_new_lora_strength_to_point_nine():
     js = Path("tool/js/generate.js").read_text(encoding="utf-8")
     assert "items.push({ name: name, strength: 0.9 });" in js
+
+
+def test_generate_results_have_permanent_delete_action():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "data-generate-delete-storage-id" in script
+    assert "Permanently delete this generation and all of its artifacts?" in script
+    assert "postJson('/fs/generate/result/delete'" in script

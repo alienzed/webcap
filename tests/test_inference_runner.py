@@ -882,10 +882,13 @@ def test_inference_enqueue_backlogs_behind_unpaused_training_queue(inference_roo
 
     assert job["status"] == "backlog"
     assert job["armed"] is True
+    assert training_runner.reserve_gpu_for_external_work("test-owner") is False
 
     training_state["queuePaused"] = True
     training_runner._write_state(training_state)
     assert training_runner.external_gpu_work_block_reason(inference_runner.GPU_RESERVATION_OWNER) == ""
+    assert training_runner.reserve_gpu_for_external_work("test-owner") is True
+    training_runner.release_gpu_for_external_work("test-owner")
 
 
 

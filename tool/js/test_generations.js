@@ -96,6 +96,7 @@
 
   function chooseTestSource(source) {
     testSource = String(source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    pendingTestSource = testSource;
     currentSession = '';
     currentSessionFolder = '';
     currentSessionModel = '';

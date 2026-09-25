@@ -842,6 +842,13 @@ def committed_inference_outcome(job):
             "error": "",
         }
 
+    if job_id in {str(value) for value in (status.get("cancelledJobIds") or [])}:
+        return {
+            "status": "cancelled",
+            "result": {},
+            "error": "",
+        }
+
     for failure in status.get("failures") if isinstance(status.get("failures"), list) else []:
         if isinstance(failure, dict) and str(failure.get("jobId") or "") == job_id:
             return {

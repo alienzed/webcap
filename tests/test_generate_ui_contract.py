@@ -274,3 +274,13 @@ def test_generate_redesign_does_not_keep_dead_pre_redesign_layout_css():
     assert ".generate-authoring" not in css
     assert ".generate-results-panel" not in css
     assert ".generate-results-heading" not in css
+
+def test_generate_displays_live_and_persisted_generation_elapsed_time():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "generate_store.py").read_text(encoding="utf-8")
+
+    assert "function formatGenerationElapsedMs(value)" in script
+    assert "var startedAt = Number(job && job.startedAt || 0);" in script
+    assert "formatGenerationElapsedMs(Date.now() - (startedAt * 1000))" in script
+    assert "formatGenerationElapsedMs(result && result.elapsedMs)" in script
+    assert '"elapsedMs": int(elapsed_ms or 0)' in store

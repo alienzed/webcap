@@ -16,7 +16,7 @@ Every execution job has:
 
 - a stable job ID and lane
 - an immutable payload snapshot captured when queued
-- queued, starting, running, stopping, and terminal lifecycle states
+- backlog / queued pending states, starting, running, stopping, and terminal lifecycle states
 - queue position and FIFO ordering
 - created, started, updated, and finished timestamps
 - generic metadata, runtime details, result data, and errors
@@ -119,7 +119,7 @@ Test still owns:
 - Grid/Compare/rating UX;
 - missing-candidate skip behavior.
 
-The common inference runner owns scheduling, GPU acquisition/release, provider polling/cancellation, and lifecycle transitions. The full Generation Queue exposes each Test rendition individually, while the Test workspace continues to show the Session as the useful comparison unit.
+The common inference runner owns scheduling, GPU acquisition/release, provider polling/cancellation, and lifecycle transitions. The global Inference Queue exposes each Test rendition individually, while the Test workspace continues to show the Session as the useful comparison unit.
 
 ### LLM
 

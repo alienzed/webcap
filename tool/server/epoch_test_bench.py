@@ -1184,6 +1184,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                     "source": str(request.get("source") or ""),
                 },
                 label=label,
+                deferred=bool(legacy_job_id),
             )
             queued_ids.append(job["jobId"])
             with _status_lock:

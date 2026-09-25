@@ -310,6 +310,18 @@
       return;
     }
 
+    var queuedJobs = jobs.filter(function (job) { return String(job.status || '') === 'queued'; });
+    var activeJobs = jobs.filter(function (job) {
+      var status = String(job.status || '');
+      return status !== 'queued' && status !== 'backlog';
+    });
+
+    activeJobs.forEach(function (job) {
+      var row = createRow(job);
+      syncRow(row, job, queued);
+      host.appendChild(row);
+    });
+
     if (queued && !backlogJobs.length) {
       var queuedHeading = document.createElement('div');
       queuedHeading.className = 'inference-backlog-heading inference-queued-heading';
@@ -336,7 +348,7 @@
       host.appendChild(queuedHeading);
     }
 
-    jobs.filter(function (job) { return String(job.status || '') !== 'backlog'; }).forEach(function (job) {
+    queuedJobs.forEach(function (job) {
       var row = createRow(job);
       syncRow(row, job, queued);
       host.appendChild(row);

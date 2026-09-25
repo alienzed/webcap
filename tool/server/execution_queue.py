@@ -429,23 +429,6 @@ def cancel_pending(job_id):
     return _cancel_pending(job_id, PENDING_STATUSES)
 
 
-def promote_backlog(job_id):
-    now = time.time()
-    with _lock:
-        state = _read_state()
-        lane_name, job = _find_job(state, job_id)
-        if job is None:
-            raise FileNotFoundError("Execution queue job does not exist.")
-        if job.get("status") != "backlog":
-            raise ValueError("Only backlogged execution jobs can be queued.")
-        lane = _lane(state, lane_name)
-        job["status"] = "queued"
-        job["updatedAt"] = now
-        _refresh_positions(lane)
-        _write_state(state)
-        return _public_job(job)
-
-
 def shelve_queued(lane_name):
     now = time.time()
     with _lock:

@@ -259,6 +259,61 @@
     return settings;
   }
 
+  function restoreResultConfiguration(result) {
+    if (!result) throw new Error('Generation result is required.');
+
+    var resultModelId = String(result.modelId || '');
+    var modelAvailable = generateState.models.some(function (model) {
+      return String(model.id) === resultModelId;
+    });
+    if (resultModelId && modelAvailable) {
+      generateState.modelId = resultModelId;
+      el('generate-model').value = resultModelId;
+      window.localStorage.setItem('webcap.generate.model', resultModelId);
+      renderModelForm();
+    } else if (resultModelId && typeof window.reportConsoleWarning === 'function') {
+      window.reportConsoleWarning(
+        'Generate',
+        'Opened generation uses unavailable Base Model: ' + resultModelId + '. Preview opened without restoring model-specific settings.'
+      );
+    }
+
+    var prompt = el('generate-prompt');
+    prompt.value = String(result.sourcePrompt || result.resolvedPrompt || '');
+    prompt.dataset.modelId = String(generateState.modelId || '');
+    window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, prompt.value);
+
+    if (modelAvailable) {
+      var settings = result.settings && typeof result.settings === 'object' ? result.settings : {};
+      [
+        ['aspectRatio', 'generate-aspect'],
+        ['megapixels', 'generate-megapixels'],
+        ['duration', 'generate-duration'],
+        ['dimensions', 'generate-dimensions'],
+        ['seed', 'generate-seed']
+      ].forEach(function (entry) {
+        if (!Object.prototype.hasOwnProperty.call(settings, entry[0])) return;
+        var control = el(entry[1]);
+        if (control) control.value = String(settings[entry[0]]);
+      });
+
+      generateState.lorasByModel[resultModelId] = Array.isArray(result.loras)
+        ? result.loras.map(function (item) {
+            return { name: String(item.name || ''), strength: Number(item.strength) };
+          }).filter(function (item) { return item.name; })
+        : [];
+      saveLoras();
+      renderLoras();
+    }
+
+    var wildcards = el('generate-wildcards');
+    if (wildcards) wildcards.checked = !!result.wildcardsEnabled;
+    generateState.promptLibrary.activeId = '';
+    generateState.director.previousPrompt = null;
+    setDirectorStatus('');
+    renderDirector();
+  }
+
   function uploadReference(file) {
     var body = new FormData();
     body.append('file', file);
@@ -1581,6 +1636,7 @@
       var key = String(openButton.dataset.generateOpenResultKey || '');
       var result = generateState.results.find(function (item) { return resultKey(item) === key; });
       if (!result) return;
+      restoreResultConfiguration(result);
       renderActiveResult(result);
       setGenerateViewMode('create');
     });

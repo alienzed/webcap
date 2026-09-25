@@ -1027,6 +1027,34 @@ def test_inference_restart_does_not_requeue_generate_job_whose_product_already_c
     assert inference_runner.snapshot()["backlogCount"] == 0
 
 
+def test_inference_restart_resolves_previously_shelved_job_if_product_already_exists(
+    inference_root, monkeypatch
+):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "references": {}}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    monkeypatch.setattr(
+        generate_store,
+        "result_for_job",
+        lambda job_id: {
+            "jobId": job_id,
+            "mediaPath": "generations/day/" + job_id + "/result.png",
+            "manifestPath": "generations/day/" + job_id + "/manifest.json",
+        },
+    )
+    inference_runner._startup_reconciled = False
+
+    inference_runner.prepare_startup_backlog()
+
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(queued["id"])
+    assert inference_runner.job_status(queued["id"])["status"] == "completed"
+    assert inference_runner.snapshot()["backlogCount"] == 0
+
+
 def test_inference_restart_preserves_explicit_stop_instead_of_backlogging_it(
     inference_root, monkeypatch
 ):

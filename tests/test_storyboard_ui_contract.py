@@ -725,6 +725,30 @@ def test_storyboard_visual_atmosphere_has_editable_presets():
     assert ".storyboard-style-preset" in css
 
 
+def test_storyboard_visual_atmosphere_presets_cover_distinctive_styles():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    for preset_id in (
+        "fashion-runway-editorial",
+        "luxury-fashion-film",
+        "studio-beauty-campaign",
+        "theatrical-stage",
+        "retro-70s-celluloid",
+        "retro-80s-neon",
+        "y2k-gloss",
+        "sun-drenched-mediterranean",
+        "pastel-pop",
+        "minimal-architectural",
+        "clinical-sterile",
+        "romantic-soft-focus",
+        "surreal-dream-logic",
+        "expressionist-shadow",
+        "coastal-natural-light",
+        "kinetic-music-video",
+    ):
+        assert "id: '" + preset_id + "'" in storyboard
+
+
 def test_storyboard_can_define_character_and_location_invariants_from_concept():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

@@ -1441,7 +1441,7 @@
       }
       setStatus('Ready.');
     }).catch(function (err) {
-      reportError(err, conciseGenerateError(err, 'Setup unavailable'));
+      reportError(err, 'Settings unavailable');
     });
   }
 

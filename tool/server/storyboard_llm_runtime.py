@@ -17,7 +17,7 @@ from . import config as app_config
 LLAMA_HOST = "127.0.0.1"
 DEFAULT_PORT = 8189
 DEFAULT_CONTEXT_SIZE = None
-DEFAULT_MAX_TOKENS = 8192
+DEFAULT_MAX_TOKENS = None
 GPU_RESERVATION_OWNER = "llm"
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 
@@ -116,7 +116,7 @@ def _director_config():
     raw_context_size = director.get("context_size", DEFAULT_CONTEXT_SIZE)
     context_size = None if raw_context_size in (None, "") else int(raw_context_size)
     raw_max_tokens = director.get("max_tokens", DEFAULT_MAX_TOKENS)
-    max_tokens = DEFAULT_MAX_TOKENS if raw_max_tokens in (None, "") else int(raw_max_tokens)
+    max_tokens = None if raw_max_tokens in (None, "") else int(raw_max_tokens)
 
     if mode not in {"local", "remote"}:
         raise ValueError("Storyboard Director mode must be local or remote.")
@@ -629,6 +629,17 @@ def release_loaded_model_for_gpu_work():
         _request_lock.release()
 
 
+def _operation_max_tokens(operation):
+    operation = str(operation or "").strip()
+    # Short prose expansion should never consume an effectively unbounded
+    # completion budget. Whole-story development intentionally remains Auto
+    # because its structured multi-Scene response can legitimately exceed
+    # the former 8192-token global ceiling.
+    return {
+        "expand_concept": 4096,
+    }.get(operation)
+
+
 def _sampling_profile(operation):
     operation = str(operation or "").strip()
     profiles = {
@@ -795,6 +806,10 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 "response_schema": contract.get("response_schema"),
                 "sampling": _sampling_profile(operation),
             }
+            if settings.get("max_tokens") is None:
+                operation_max_tokens = _operation_max_tokens(operation)
+                if operation_max_tokens is not None:
+                    chat_kwargs["max_tokens"] = operation_max_tokens
             if gpu_reserved:
                 chat_kwargs["gpu_reserved"] = True
             result = chat(

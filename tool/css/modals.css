@@ -71,10 +71,16 @@
   border: none;
   font-size: 20px;
   cursor: pointer;
-  color: #666;
+  color: var(--muted);
   padding: 0;
   width: 24px;
   height: 24px;
+}
+
+.modal-close-btn:hover,
+.modal-close-btn:focus-visible {
+  color: var(--text);
+  outline: none;
 }
 
 .modal-body {
@@ -1047,6 +1053,12 @@ html[data-theme="dark"] .app-settings-radio-label {
   width: 28px;
   height: 28px;
   padding: 0;
+  color: var(--muted);
+}
+
+#crop-cancel-x:hover,
+#crop-cancel-x:focus-visible {
+  color: var(--text);
 }
 
 .crop-ratio-btn {
@@ -1916,4 +1928,13 @@ html[data-theme="dark"] .app-settings-radio-label {
 .report-preview .fail-link:hover,
 .report-preview .token-link:hover {
   text-decoration: underline;
+}
+
+#app-settings-close-btn {
+  color: var(--muted);
+}
+
+#app-settings-close-btn:hover,
+#app-settings-close-btn:focus-visible {
+  color: var(--text);
 }

@@ -2110,7 +2110,7 @@
 }
 
 .storyboard-take-footer {
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   margin-top: 8px;
 }
@@ -2132,8 +2132,26 @@
 }
 
 .storyboard-take-identity input {
+  width: min(100%, 260px);
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
   font-size: 12px;
-  padding: 6px 7px;
+}
+
+.storyboard-take-identity input::placeholder {
+  color: var(--muted);
+  opacity: .72;
+}
+
+.storyboard-take-identity input:hover,
+.storyboard-take-identity input:focus {
+  border-bottom-color: var(--border);
+  color: var(--text);
+  outline: none;
 }
 
 .storyboard-take-rating {

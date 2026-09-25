@@ -1027,6 +1027,36 @@ def test_inference_restart_does_not_requeue_generate_job_whose_product_already_c
     assert inference_runner.snapshot()["backlogCount"] == 0
 
 
+def test_inference_restart_preserves_explicit_stop_instead_of_backlogging_it(
+    inference_root, monkeypatch
+):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(
+        queued["id"],
+        details={"providerJobId": "provider-stop", "providerStatus": "in_progress"},
+    )
+    execution_queue.request_stop(queued["id"])
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait_status",
+        lambda _provider_id: "cancelled",
+    )
+    inference_runner._startup_reconciled = False
+
+    inference_runner.prepare_startup_backlog()
+
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(queued["id"])
+    stopped = inference_runner.job_status(queued["id"])
+    assert stopped["status"] == "stopped"
+    assert inference_runner.snapshot()["backlogCount"] == 0
+
+
 def test_inference_fifo_does_not_let_new_queued_work_overtake_armed_backlog(
     inference_root, monkeypatch
 ):

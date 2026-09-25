@@ -8,6 +8,7 @@ from .execution_queue import (
     cancel_pending_transient as execution_cancel_pending_transient,
     clear_lane as execution_clear_lane,
     claim_next as execution_claim_next,
+    consume_terminal_job as execution_consume_terminal_job,
     enqueue as execution_enqueue,
     finish_job_transient as execution_finish_job_transient,
     get_job as execution_get_job,
@@ -546,6 +547,11 @@ def job_status(job_id, consume=False):
     job_id = str(job_id or "").strip()
     try:
         job = execution_get_job(job_id)
+        if (
+            consume
+            and str(job.get("status") or "") in {"completed", "failed", "cancelled", "stopped", "interrupted"}
+        ):
+            job = execution_consume_terminal_job(job_id)
     except FileNotFoundError:
         job = execution_transient_receipt(job_id, consume=consume)
     return _job_view(job)

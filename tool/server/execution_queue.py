@@ -475,12 +475,12 @@ def finish_job_transient(job_id, status="completed", result=None, error=""):
         if isinstance(result, dict):
             job.setdefault("result", {}).update(copy.deepcopy(result))
         receipt = _public_job(job)
-        _remember_transient_receipt(receipt)
         lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
         if lane.get("activeJobId") == job["id"]:
             lane["activeJobId"] = ""
         _refresh_positions(lane)
         _write_state(state)
+        _remember_transient_receipt(receipt)
         return receipt
 
 
@@ -500,10 +500,10 @@ def cancel_pending_transient(job_id):
         job["updatedAt"] = now
         job["requestedAction"] = ""
         receipt = _public_job(job)
-        _remember_transient_receipt(receipt)
         lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
         _refresh_positions(lane)
         _write_state(state)
+        _remember_transient_receipt(receipt)
         return receipt
 
 
@@ -524,11 +524,12 @@ def cancel_all_pending_transient(lane_name):
             job["updatedAt"] = now
             job["requestedAction"] = ""
             receipt = _public_job(job)
-            _remember_transient_receipt(receipt)
             cancelled.append(receipt)
         lane["jobs"] = kept
         _refresh_positions(lane)
         _write_state(state)
+        for receipt in cancelled:
+            _remember_transient_receipt(receipt)
         return cancelled
 
 

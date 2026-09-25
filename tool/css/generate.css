@@ -338,12 +338,12 @@
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
   padding: 6px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--panel-soft);
   color: var(--text);
   font: inherit;
@@ -385,7 +385,7 @@
 
 .generate-take-copy {
   min-width: 0;
-  align-self: center;
+  padding: 0 2px 2px;
 }
 
 .generate-take-copy strong,
@@ -688,6 +688,15 @@
     flex-wrap: wrap;
     justify-content: flex-end;
   }
+
+  .generate-create-view {
+    grid-template-columns: minmax(320px, 350px) minmax(0, 1fr) minmax(210px, 240px);
+  }
+
+  .generate-create-view.takes-collapsed {
+    grid-template-columns: minmax(320px, 350px) minmax(0, 1fr) 54px;
+  }
+
   .generate-authoring {
     grid-template-columns: minmax(460px, 1.4fr) 330px;
   }
@@ -695,10 +704,72 @@
 
 @media (max-width: 1100px) {
   .generate-workspace {
-    display: block;
+    overflow: hidden;
+  }
+
+  .generate-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .generate-view-toggle {
+    grid-column: 2;
+  }
+
+  .generate-create-view,
+  .generate-create-view.takes-collapsed {
+    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+  }
+
+  .generate-takes-panel {
+    display: none;
+  }
+
+  .generate-authoring {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .generate-workspace {
     overflow: auto;
   }
-  .generate-authoring {
+
+  .generate-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .generate-view-toggle {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .generate-create-view,
+  .generate-create-view.takes-collapsed {
+    height: auto;
+    min-height: 100%;
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .generate-create-controls,
+  .generate-stage-panel {
+    overflow: visible;
+    border-right: 0;
+  }
+
+  .generate-stage-panel {
+    min-height: 520px;
+  }
+
+  .generate-library-view {
+    overflow: visible;
+  }
+
+  .generate-results {
     grid-template-columns: 1fr;
   }
 }

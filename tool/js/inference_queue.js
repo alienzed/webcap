@@ -19,8 +19,7 @@
     var jobs = Array.isArray(state.queue.jobs) ? state.queue.jobs : [];
     return jobs.some(function (job) {
       var status = String(job.status || '');
-      return ['queued', 'starting', 'running', 'stopping'].indexOf(status) !== -1 ||
-        (status === 'backlog' && !!job.armed);
+      return ['queued', 'backlog', 'starting', 'running', 'stopping'].indexOf(status) !== -1;
     });
   }
 
@@ -73,7 +72,7 @@
   function jobStatusLabel(job) {
     var status = String(job && job.status || '');
     if (status === 'queued') return job.queuePosition ? 'Queue #' + String(job.queuePosition) : 'Queued';
-    if (status === 'backlog') return job.armed ? 'Waiting' : 'Backlog';
+    if (status === 'backlog') return 'Backlog';
     if (status === 'starting') return 'Starting';
     if (status === 'running') return 'Running';
     if (status === 'stopping') return 'Stopping';
@@ -111,9 +110,8 @@
     var queued = jobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
     var backlogJobs = jobs.filter(function (job) { return String(job.status || '') === 'backlog'; });
     var backlog = backlogJobs.length;
-    var armedBacklog = backlogJobs.filter(function (job) { return !!job.armed; }).length;
     var count = running + queued + backlog;
-    var activeCount = running + queued + armedBacklog;
+    var activeCount = state.queue.paused ? running : count;
     var title = [
       running ? String(running) + ' running' : '',
       queued ? String(queued) + ' queued' : '',
@@ -188,9 +186,6 @@
     if (detail) {
       var detailText = jobDetail(job);
       var age = formatJobAge(job);
-      if (status === 'backlog' && job.armed) {
-        detailText = [detailText, 'Eligible when GPU is free'].filter(Boolean).join(' · ');
-      }
       if (age) {
         detailText = [detailText, (['starting', 'running', 'stopping'].indexOf(status) !== -1 ? 'Active ' : 'Waiting ') + age].filter(Boolean).join(' · ');
       }
@@ -210,14 +205,13 @@
     if (actions) {
       actions.innerHTML = '';
       if (status === 'backlog') {
-        var run = document.createElement('button');
-        run.type = 'button';
-        run.className = 'review-captions-btn';
-        run.dataset.inferenceQueueAction = 'run_backlog';
-        run.dataset.jobId = String(job.jobId || '');
-        run.textContent = job.armed ? 'Waiting' : 'Run';
-        run.disabled = !!job.armed;
-        actions.appendChild(run);
+        var addToQueue = document.createElement('button');
+        addToQueue.type = 'button';
+        addToQueue.className = 'review-captions-btn';
+        addToQueue.dataset.inferenceQueueAction = 'add_to_queue';
+        addToQueue.dataset.jobId = String(job.jobId || '');
+        addToQueue.textContent = 'Add to Queue';
+        actions.appendChild(addToQueue);
 
         var backlogCancel = document.createElement('button');
         backlogCancel.type = 'button';
@@ -277,7 +271,9 @@
     var drawer = el('inference-queue-drawer');
     var host = el('inference-queue-list');
     var summary = el('inference-queue-summary');
-    if (!drawer || !host || !summary) return;
+    var pauseButton = el('inference-queue-pause');
+    var clearButton = el('inference-queue-clear');
+    if (!drawer || !host || !summary || !pauseButton || !clearButton) return;
 
     drawer.classList.toggle('hidden', !state.open);
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
@@ -300,6 +296,9 @@
     var hasPending = jobs.some(function (job) {
       return ['queued', 'backlog'].indexOf(String(job.status || '')) !== -1;
     });
+    pauseButton.textContent = state.queue.paused ? 'Resume' : 'Pause';
+    pauseButton.dataset.inferenceQueueAction = state.queue.paused ? 'resume_queue' : 'pause_queue';
+    clearButton.disabled = !hasPending;
 
     host.innerHTML = '';
     if (!jobs.length) {
@@ -322,13 +321,13 @@
       host.appendChild(row);
     });
 
-    if (queued && !backlogJobs.length) {
+    if (queued) {
       var queuedHeading = document.createElement('div');
       queuedHeading.className = 'inference-backlog-heading inference-queued-heading';
 
       var queuedCopy = document.createElement('div');
       var queuedTitle = document.createElement('strong');
-      queuedTitle.textContent = 'Queued';
+      queuedTitle.textContent = 'Queue';
       var queuedCount = document.createElement('span');
       queuedCount.textContent = String(queued);
       queuedCopy.appendChild(queuedTitle);
@@ -337,13 +336,12 @@
 
       var queuedActions = document.createElement('div');
       queuedActions.className = 'inference-queue-section-actions';
-      var queuedClearAll = document.createElement('button');
-      queuedClearAll.type = 'button';
-      queuedClearAll.className = 'review-captions-btn';
-      queuedClearAll.dataset.inferenceQueueAction = 'clear_all';
-      queuedClearAll.textContent = 'Clear all';
-      queuedClearAll.title = 'Cancel all queued and backlogged inference';
-      queuedActions.appendChild(queuedClearAll);
+      var moveAll = document.createElement('button');
+      moveAll.type = 'button';
+      moveAll.className = 'review-captions-btn';
+      moveAll.dataset.inferenceQueueAction = 'move_all_to_backlog';
+      moveAll.textContent = 'Move all to Backlog';
+      queuedActions.appendChild(moveAll);
       queuedHeading.appendChild(queuedActions);
       host.appendChild(queuedHeading);
     }
@@ -366,27 +364,6 @@
       headingCopy.appendChild(headingCount);
       heading.appendChild(headingCopy);
 
-      var headingActions = document.createElement('div');
-      headingActions.className = 'inference-queue-section-actions';
-
-      var runAll = document.createElement('button');
-      runAll.type = 'button';
-      runAll.className = 'review-captions-btn';
-      runAll.dataset.inferenceQueueAction = 'run_all_backlog';
-      runAll.textContent = 'Run all';
-      runAll.disabled = backlogJobs.every(function (job) { return !!job.armed; });
-      headingActions.appendChild(runAll);
-
-      var clearAll = document.createElement('button');
-      clearAll.type = 'button';
-      clearAll.className = 'review-captions-btn';
-      clearAll.dataset.inferenceQueueAction = 'clear_all';
-      clearAll.textContent = 'Clear all';
-      clearAll.title = 'Cancel all queued and backlogged inference';
-      clearAll.disabled = !hasPending;
-      headingActions.appendChild(clearAll);
-
-      heading.appendChild(headingActions);
       host.appendChild(heading);
 
       backlogJobs.forEach(function (job) {
@@ -483,13 +460,19 @@
     var toggles = document.querySelectorAll('[data-inference-queue-toggle]');
     var drawer = el('inference-queue-drawer');
     var close = el('inference-queue-close');
+    var pause = el('inference-queue-pause');
+    var clear = el('inference-queue-clear');
     var list = el('inference-queue-list');
-    if (!toggles.length || !drawer || !close || !list) return;
+    if (!toggles.length || !drawer || !close || !pause || !clear || !list) return;
 
     Array.prototype.forEach.call(toggles, function (toggle) {
       toggle.onclick = function () { setOpen(!state.open); };
     });
     close.onclick = function () { setOpen(false); };
+    pause.onclick = function () {
+      action(pause.dataset.inferenceQueueAction || 'pause_queue');
+    };
+    clear.onclick = function () { action('clear_all'); };
     list.onclick = function (event) {
       var actionButton = event.target.closest('[data-inference-queue-action]');
       if (actionButton) {

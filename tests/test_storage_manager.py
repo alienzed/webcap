@@ -7,6 +7,15 @@ from tool.server import generate_store, storage_manager
 from tool.server import app as app_module
 
 
+@pytest.fixture(autouse=True)
+def isolate_storage_output_root(monkeypatch):
+    monkeypatch.setattr(
+        storage_manager.app_config,
+        "output_root",
+        lambda: Path(storage_manager.app_config.FS_ROOT) / "output",
+    )
+
+
 def _write_json(path, payload):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")

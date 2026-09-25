@@ -298,6 +298,9 @@
     });
     pauseButton.textContent = state.queue.paused ? 'Resume' : 'Pause';
     pauseButton.dataset.inferenceQueueAction = state.queue.paused ? 'resume_queue' : 'pause_queue';
+    pauseButton.title = state.queue.paused
+      ? 'Resume inference scheduling'
+      : 'Pause inference scheduling after the current job';
     clearButton.disabled = !hasPending;
 
     host.innerHTML = '';

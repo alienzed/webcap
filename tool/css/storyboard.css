@@ -2230,10 +2230,68 @@
   color: var(--danger, #f87171);
 }
 
+.storyboard-removed-takes {
+  margin-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+}
+
+.storyboard-removed-takes-header {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 0 5px;
+}
+
+.storyboard-removed-takes-header strong {
+  font-size: 12px;
+}
+
+.storyboard-removed-takes-header span {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.storyboard-removed-takes-list {
+  display: grid;
+}
+
+.storyboard-removed-take-row {
+  min-width: 0;
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
+}
+
+.storyboard-removed-take-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .storyboard-removed-take-actions {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.storyboard-removed-take-actions .review-captions-btn {
+  width: auto;
+  min-height: 28px;
+  padding: 3px 9px;
+  white-space: nowrap;
 }
 
 @container (min-width: 1450px) {

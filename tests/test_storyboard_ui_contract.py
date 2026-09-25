@@ -149,6 +149,7 @@ def test_storyboard_scene_removal_is_recoverable():
     assert '"removedScenes"' in store
     assert 'scene["removedAt"]' in store
     assert "def restore_scene" in store
+    assert "generated Takes will be permanently deleted" in storyboard
 
 
 def test_storyboard_document_records_file_based_guardrails():

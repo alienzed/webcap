@@ -13,6 +13,7 @@ from .execution_queue import (
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     recover_lane as execution_recover_lane,
+    transient_receipt as execution_transient_receipt,
     update_job as execution_update_job,
 )
 from .inference_models import get_inference_model
@@ -285,11 +286,20 @@ def _generation_job(job):
 
 def _storyboard_job(job_id, consume=False):
     job_id = str(job_id or "").strip()
-    job = execution_get_job(job_id)
+    durable = True
+    try:
+        job = execution_get_job(job_id)
+    except FileNotFoundError:
+        durable = False
+        job = execution_transient_receipt(job_id, consume=consume)
     metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
     if metadata.get("client") != "storyboard":
         raise ValueError("Inference job does not belong to Storyboard.")
-    if consume and str(job.get("status") or "") in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
+    if (
+        durable
+        and consume
+        and str(job.get("status") or "") in {"completed", "failed", "cancelled", "stopped", "interrupted"}
+    ):
         job = execution_consume_terminal_job(job_id)
     return job
 

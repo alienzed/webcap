@@ -1,6 +1,5 @@
 import time
 
-from .execution_queue import recent_snapshot as execution_recent_snapshot
 from .inference_runner import snapshot as inference_snapshot
 from .llm_runner import snapshot as llm_snapshot
 from .storage_manager import scan_status as storage_scan_status
@@ -142,10 +141,10 @@ def activity_snapshot(limit=20):
             "bytesScanned": int(scan.get("bytesScanned") or 0),
         })
 
-    recent = []
-    recent.extend(_execution_item("inference", job) for job in execution_recent_snapshot("inference", limit=limit))
-    recent.extend(_execution_item("llm", job) for job in execution_recent_snapshot("llm", limit=limit))
-    recent.extend(_training_recent(limit))
+    # Inference and LLM completion receipts are intentionally session-only.
+    # Durable Recent history is reserved for workflows where history itself is
+    # useful, such as Training (plus the current storage scan receipt below).
+    recent = _training_recent(limit)
 
     if str(scan.get("status") or "") in {"completed", "failed", "cancelled"} and scan.get("finishedAt"):
         recent.append({

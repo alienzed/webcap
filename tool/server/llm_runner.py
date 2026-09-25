@@ -5,16 +5,17 @@ import threading
 import time
 
 from .execution_queue import (
-    cancel_queued as execution_cancel_queued,
+    cancel_pending_transient as execution_cancel_pending_transient,
+    clear_lane as execution_clear_lane,
     consume_terminal_job as execution_consume_terminal_job,
     claim_next as execution_claim_next,
     enqueue as execution_enqueue,
-    finish_job as execution_finish_job,
+    finish_job_transient as execution_finish_job_transient,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
-    recover_lane as execution_recover_lane,
+    transient_receipt as execution_transient_receipt,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
     resource_owner as execution_resource_owner,
@@ -74,10 +75,10 @@ def _ensure_execution_reconciled():
     with _reconcile_lock:
         if _startup_reconciled:
             return
-        execution_recover_lane(
-            EXECUTION_LANE,
-            reason="LLM execution was interrupted by a WebCap restart.",
-        )
+        # LLM requests are session work, not durable history or restartable
+        # backlog. Successfully applied Story/prompt state already lives in its
+        # real store; everything else is intentionally forgotten on restart.
+        execution_clear_lane(EXECUTION_LANE)
         _startup_reconciled = True
 
 
@@ -285,7 +286,7 @@ def _execute_claimed(job_id, gpu_reserved):
 
     running = execution_mark_running(job_id, details={"phase": "preparing"})
     if str(running.get("status") or "") == "stopping":
-        execution_finish_job(job_id, status="stopped", error="LLM request stopped before execution.")
+        execution_finish_job_transient(job_id, status="stopped", error="LLM request stopped before execution.")
         return
 
     from .storyboard_llm_runtime import run_contract
@@ -303,7 +304,7 @@ def _execute_claimed(job_id, gpu_reserved):
 
     current = execution_get_job(job_id)
     if str(current.get("status") or "") == "stopping":
-        execution_finish_job(job_id, status="stopped", error="LLM request stopped.")
+        execution_finish_job_transient(job_id, status="stopped", error="LLM request stopped.")
         return
 
     try:
@@ -322,7 +323,7 @@ def _execute_claimed(job_id, gpu_reserved):
             "WebCap ingest failed after a successful model response: " + str(exc)
         ) from exc
 
-    execution_finish_job(job_id, status="completed", result=result)
+    execution_finish_job_transient(job_id, status="completed", result=result)
 
 
 def _advance_queue():
@@ -370,15 +371,15 @@ def _advance_queue():
             current = execution_get_job(job_id)
             current_status = str(current.get("status") or "")
             if current_status == "stopping":
-                execution_finish_job(job_id, status="stopped", error="LLM request stopped.")
+                execution_finish_job_transient(job_id, status="stopped", error="LLM request stopped.")
             elif current_status in {"starting", "running"}:
-                execution_finish_job(job_id, status="failed", error=str(exc))
+                execution_finish_job_transient(job_id, status="failed", error=str(exc))
             _logger.exception("Queued LLM job failed.")
         finally:
             if release_gpu:
                 _release_gpu()
 
-        return _job_view(execution_get_job(job_id))
+        return _job_view(execution_transient_receipt(job_id))
 
 
 def _monitor_has_work():
@@ -544,9 +545,15 @@ def enqueue(client, model_id, contract, context=None, label=""):
 
 def job_status(job_id, consume=False):
     job_id = str(job_id or "").strip()
-    job = execution_get_job(job_id)
-    if consume and str(job.get("status") or "") in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
-        job = execution_consume_terminal_job(job_id)
+    try:
+        job = execution_get_job(job_id)
+        if (
+            consume
+            and str(job.get("status") or "") in {"completed", "failed", "cancelled", "stopped", "interrupted"}
+        ):
+            job = execution_consume_terminal_job(job_id)
+    except FileNotFoundError:
+        job = execution_transient_receipt(job_id, consume=consume)
     return _job_view(job)
 
 
@@ -620,12 +627,12 @@ def action(operation, job_id="", direction="", position=None):
     operation = str(operation or "").strip()
     job_id = str(job_id or "").strip()
     if operation == "cancel":
-        return {"job": _job_view(execution_cancel_queued(job_id))}
+        return {"job": _job_view(execution_cancel_pending_transient(job_id))}
     if operation in {"stop", "stop_or_cancel"}:
         current = execution_get_job(job_id)
         status = str(current.get("status") or "")
         if operation == "stop_or_cancel" and status == "queued":
-            return {"job": _job_view(execution_cancel_queued(job_id))}
+            return {"job": _job_view(execution_cancel_pending_transient(job_id))}
         if status not in {"starting", "running", "stopping"}:
             raise ValueError("Only queued or active LLM jobs can be stopped.")
         from .storyboard_llm_runtime import assert_hard_stop_supported, stop_owned_server

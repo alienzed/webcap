@@ -2151,6 +2151,18 @@
     options[next].scrollIntoView({ block: 'nearest' });
   }
 
+  function positionLoraPickerMenu(picker, menu) {
+    var pickerRect = picker.getBoundingClientRect();
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    var below = Math.max(0, viewportHeight - pickerRect.bottom - 8);
+    var above = Math.max(0, pickerRect.top - 8);
+    var opensUp = below < 180 && above > below;
+    var available = opensUp ? above : below;
+
+    menu.classList.toggle('opens-up', opensUp);
+    menu.style.maxHeight = String(Math.max(40, Math.min(220, Math.floor(available - 4)))) + 'px';
+  }
+
   function renderLoraPickerMenu(picker) {
     var menu = loraPickerMenuFor(picker);
     if (!menu) throw new Error('LoRA picker menu is missing.');
@@ -2162,6 +2174,7 @@
         }).join('')
       : '<div class="storyboard-lora-picker-empty">No matching LoRAs</div>';
     menu.classList.remove('hidden');
+    positionLoraPickerMenu(picker, menu);
     picker.setAttribute('aria-expanded', 'true');
     setLoraPickerActive(menu, matches.length ? 0 : -1);
   }
@@ -2170,6 +2183,8 @@
     var menu = loraPickerMenuFor(picker);
     if (!menu) return;
     menu.classList.add('hidden');
+    menu.classList.remove('opens-up');
+    menu.style.maxHeight = '';
     menu.dataset.activeIndex = '-1';
     picker.setAttribute('aria-expanded', 'false');
   }

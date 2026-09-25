@@ -166,7 +166,7 @@ def _active_generate_job_ids():
 
 
 def _generate_items(cache):
-    root = Path(app_config.FS_ROOT) / "output" / "generations"
+    root = app_config.output_root() / "generations"
     active_jobs = _active_generate_job_ids()
     rows = []
     if not root.is_dir():
@@ -976,7 +976,7 @@ def _resolve_generate(item_id):
     parts = PurePosixPath(str(item_id or "")).parts
     if len(parts) != 2 or any(part in {"", ".", ".."} for part in parts):
         raise ValueError("Generation storage ID is invalid.")
-    raw_root = Path(app_config.FS_ROOT) / "output" / "generations"
+    raw_root = app_config.output_root() / "generations"
     raw_day = raw_root / parts[0]
     raw_directory = raw_day / parts[1]
     if raw_root.is_symlink() or raw_day.is_symlink() or raw_directory.is_symlink():

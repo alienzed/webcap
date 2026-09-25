@@ -527,6 +527,7 @@ def test_legacy_storyboard_queue_migration_is_restart_idempotent(storyboard_fs):
         "story-1",
         "scene-1",
         migrated_from_job_id=legacy["id"],
+        deferred=True,
     )
 
     storyboard_generation.reconcile_startup()

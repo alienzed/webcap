@@ -238,6 +238,28 @@ def test_generate_enqueue_failure_cleans_uploaded_references(monkeypatch):
     }]
 
 
+def test_generate_list_normalizes_legacy_manifest_paths(tmp_path, monkeypatch):
+    monkeypatch.setattr(generate_store.app_config, "FS_ROOT", tmp_path)
+    root = tmp_path / "output"
+    monkeypatch.setattr(generate_store.app_config, "output_root", lambda: root)
+
+    directory = root / "generations" / "2026-09-23" / "job-1"
+    directory.mkdir(parents=True)
+    (directory / "result.mp4").write_bytes(b"video")
+    (directory / "generation.json").write_text(
+        '{"version":1,"jobId":"job-1","createdAt":1,'
+        '"mediaPath":"output/generations/2026-09-23/job-1/result.mp4",'
+        '"manifestPath":"output/generations/2026-09-23/job-1/generation.json"}',
+        encoding="utf-8",
+    )
+
+    result = generate_store.list_results()[0]
+
+    assert result["mediaPath"] == "generations/2026-09-23/job-1/result.mp4"
+    assert result["manifestPath"] == "generations/2026-09-23/job-1/generation.json"
+    assert generate_store.resolve_result_media(result["mediaPath"]).read_bytes() == b"video"
+
+
 def test_generate_result_uses_configured_output_root_outside_fs_root(tmp_path, monkeypatch):
     fs_root = tmp_path / "sets"
     output_root = tmp_path / "creative"

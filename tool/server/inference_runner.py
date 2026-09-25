@@ -257,6 +257,51 @@ def _job_view(job):
     }
 
 
+def _committed_outcome_for_restart(job):
+    if not isinstance(job, dict):
+        return None
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    details = job.get("details") if isinstance(job.get("details"), dict) else {}
+    client = str(metadata.get("client") or "").strip()
+    job_id = str(job.get("id") or "").strip()
+
+    if client == "generate":
+        from .generate_store import result_for_job
+        result = result_for_job(job_id)
+        if result is not None:
+            return {"status": "completed", "result": result, "error": ""}
+        return None
+
+    if client == "storyboard":
+        story_id = str(metadata.get("storyId") or "").strip()
+        scene_id = str(metadata.get("sceneId") or "").strip()
+        if not story_id or not scene_id:
+            return None
+        from .storyboard_store import generated_take_for_job
+        try:
+            take = generated_take_for_job(
+                story_id,
+                scene_id,
+                job_id,
+                provider_job_id=str(details.get("providerJobId") or ""),
+            )
+        except FileNotFoundError:
+            return None
+        if take is not None:
+            return {
+                "status": "completed",
+                "result": {"takeId": str(take.get("id") or "")},
+                "error": "",
+            }
+        return None
+
+    if client == "test":
+        from .epoch_test_bench import committed_inference_outcome
+        return committed_inference_outcome(job)
+
+    return None
+
+
 def _ensure_execution_reconciled():
     global _startup_reconciled
     if _startup_reconciled:
@@ -271,9 +316,16 @@ def _ensure_execution_reconciled():
             job for job in prior.get("jobs", [])
             if str(job.get("status") or "") in {"starting", "running", "stopping"}
         ]
+        committed_outcomes = {}
+        for job in prior_active:
+            outcome = _committed_outcome_for_restart(job)
+            if outcome is not None:
+                committed_outcomes[str(job.get("id") or "")] = outcome
+
         # A WebCap restart does not recover provider execution. Stop any old
-        # ComfyUI work for GPU safety, then return the frozen WebCap request to
-        # inert Backlog so the user may explicitly run it again.
+        # ComfyUI work for GPU safety. Requests with no committed domain result
+        # return to inert Backlog; requests whose real product already landed
+        # are completed transiently so restart cannot duplicate that product.
         for job in prior_active:
             details = job.get("details") if isinstance(job.get("details"), dict) else {}
             prompt_id = str(details.get("providerJobId") or "").strip()
@@ -298,8 +350,28 @@ def _ensure_execution_reconciled():
                 )
                 _logger.exception("Could not cancel old inference provider job %s.", prompt_id)
 
-        execution_shelve_unfinished(EXECUTION_LANE)
+        # First purge only historical terminal state. This also clears any
+        # process-local receipts inherited earlier in this startup path.
         execution_discard_terminal_and_recent(EXECUTION_LANE)
+
+        for job in prior_active:
+            job_id = str(job.get("id") or "")
+            outcome = committed_outcomes.get(job_id)
+            if outcome is None:
+                continue
+            _cleanup_generate_job_references(job_id)
+            try:
+                execution_finish_job_transient(
+                    job_id,
+                    status=str(outcome.get("status") or "completed"),
+                    result=outcome.get("result") if isinstance(outcome.get("result"), dict) else None,
+                    error=str(outcome.get("error") or ""),
+                )
+            except FileNotFoundError:
+                # Another startup reconciliation path already resolved it.
+                pass
+
+        execution_shelve_unfinished(EXECUTION_LANE)
 
         with _provider_hold_lock:
             cleanup_pending = bool(_provider_cleanup_holds)

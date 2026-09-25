@@ -41,7 +41,6 @@ _activity = {
     "model": "",
     "operation": "",
     "modelSizeBytes": 0,
-    "loadBaseline": {},
     "contextSize": 0,
     "usage": {},
     "timings": {},
@@ -58,7 +57,6 @@ def _set_activity(
     active=None,
     error=None,
     model_size_bytes=None,
-    load_baseline=None,
     context_size=None,
     usage=None,
     timings=None,
@@ -69,7 +67,6 @@ def _set_activity(
             _activity["startedAt"] = now
             _activity["usage"] = {}
             _activity["timings"] = {}
-            _activity["loadBaseline"] = {}
         if active is False:
             _activity["active"] = False
         elif active is True:
@@ -84,8 +81,6 @@ def _set_activity(
                 _activity["modelSizeBytes"] = max(0, int(model_size_bytes or 0))
             except (TypeError, ValueError):
                 _activity["modelSizeBytes"] = 0
-        if load_baseline is not None:
-            _activity["loadBaseline"] = dict(load_baseline) if isinstance(load_baseline, dict) else {}
         if context_size is not None:
             try:
                 _activity["contextSize"] = max(0, int(context_size or 0))
@@ -579,58 +574,6 @@ def _model_status(model_id):
     return ""
 
 
-def _director_memory_sample():
-    ram_used_bytes = None
-    try:
-        if os.name == "nt":
-            import ctypes
-
-            class MEMORYSTATUSEX(ctypes.Structure):
-                _fields_ = [
-                    ("dwLength", ctypes.c_uint32),
-                    ("dwMemoryLoad", ctypes.c_uint32),
-                    ("ullTotalPhys", ctypes.c_uint64),
-                    ("ullAvailPhys", ctypes.c_uint64),
-                    ("ullTotalPageFile", ctypes.c_uint64),
-                    ("ullAvailPageFile", ctypes.c_uint64),
-                    ("ullTotalVirtual", ctypes.c_uint64),
-                    ("ullAvailVirtual", ctypes.c_uint64),
-                    ("ullAvailExtendedVirtual", ctypes.c_uint64),
-                ]
-
-            status = MEMORYSTATUSEX()
-            status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-            if ctypes.WinDLL("kernel32", use_last_error=True).GlobalMemoryStatusEx(ctypes.byref(status)):
-                ram_used_bytes = int(status.ullTotalPhys) - int(status.ullAvailPhys)
-        else:
-            page_size = int(os.sysconf("SC_PAGE_SIZE"))
-            total = page_size * int(os.sysconf("SC_PHYS_PAGES"))
-            available = page_size * int(os.sysconf("SC_AVPHYS_PAGES"))
-            if total > 0 and 0 <= available <= total:
-                ram_used_bytes = total - available
-    except (OSError, ValueError, AttributeError):
-        ram_used_bytes = None
-
-    vram_used_bytes = None
-    try:
-        from .training_preflight import gpu_snapshot
-        snapshot = gpu_snapshot()
-        gpus = snapshot.get("gpus") if isinstance(snapshot, dict) else None
-        if snapshot.get("available") and isinstance(gpus, list) and gpus:
-            vram_used_mib = float(gpus[0].get("memoryUsed"))
-            if vram_used_mib >= 0:
-                vram_used_bytes = int(vram_used_mib * 1024 * 1024)
-    except (OSError, ValueError, TypeError, AttributeError):
-        vram_used_bytes = None
-
-    baseline = {}
-    if ram_used_bytes is not None:
-        baseline["ramBytes"] = ram_used_bytes
-    if vram_used_bytes is not None:
-        baseline["vramBytes"] = vram_used_bytes
-    return baseline
-
-
 def _ensure_local_model_loaded(model_id):
     models = list_models(reload=False)
     selected = next((model for model in models if model["id"] == model_id), None)
@@ -643,7 +586,6 @@ def _ensure_local_model_loaded(model_id):
         "loading_model",
         model_id=model_id,
         model_size_bytes=_model_file_size(selected),
-        load_baseline=_director_memory_sample(),
     )
     for model in models:
         if model["id"] == model_id or model["status"] == "unloaded":

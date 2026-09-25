@@ -362,6 +362,12 @@ def _ensure_execution_reconciled():
         for job in prior_unfinished:
             job_id = str(job.get("id") or "")
             outcome = committed_outcomes.get(job_id)
+            if outcome is None and str(job.get("status") or "") == "stopping":
+                outcome = {
+                    "status": "stopped",
+                    "result": {},
+                    "error": "Inference stop was preserved across the WebCap restart.",
+                }
             if outcome is None:
                 continue
             _cleanup_generate_job_references(job_id)

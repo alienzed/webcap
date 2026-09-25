@@ -363,18 +363,18 @@ def claim_next(lane_name, runnable_backlog_ids=None, expected_job_id=""):
         lane = _lane(state, lane_name)
         if lane.get("paused") or lane.get("activeJobId"):
             return None
-        job = next(
-            (
-                item
-                for item in lane.get("jobs", [])
-                if item.get("status") == "queued"
-                or (
-                    item.get("status") == "backlog"
+        jobs = lane.get("jobs", [])
+        job = next((item for item in jobs if item.get("status") == "queued"), None)
+        if job is None:
+            job = next(
+                (
+                    item
+                    for item in jobs
+                    if item.get("status") == "backlog"
                     and str(item.get("id") or "") in runnable_backlog_ids
-                )
-            ),
-            None,
-        )
+                ),
+                None,
+            )
         if job is None:
             return None
         if expected_job_id and str(job.get("id") or "") != expected_job_id:
@@ -699,6 +699,31 @@ def shelve_queued(lane_name):
         _refresh_positions(lane)
         _write_state(state)
         return changed
+
+
+def promote_backlog(job_id):
+    """Move one backlogged job to the end of the runnable queue."""
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        if job.get("status") != "backlog":
+            raise ValueError("Only backlogged execution jobs can be added to the queue.")
+        lane = _lane(state, lane_name)
+        jobs = lane["jobs"]
+        jobs.remove(job)
+        insert_at = 0
+        for index, item in enumerate(jobs):
+            if item.get("status") in ACTIVE_STATUSES or item.get("status") == "queued":
+                insert_at = index + 1
+        job["status"] = "queued"
+        job["updatedAt"] = now
+        jobs.insert(insert_at, job)
+        _refresh_positions(lane)
+        _write_state(state)
+        return _public_job(job)
 
 
 def reorder_job(job_id, direction=None, position=None):

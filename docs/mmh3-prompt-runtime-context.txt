@@ -11,6 +11,8 @@ integrated_multimodal_description
 overall_soundscape
 non_diegetic_music
 
+For integrated_multimodal_description, normally organize the content so the model can quickly identify the Scene's subject, overall intent/progression, visual/camera treatment, and then the chronological shot-by-shot execution. The preferred example below demonstrates this as Subject, Overview, Style, then [Shot 1] and later timestamped shots. Follow that organization when it fits the Scene rather than collapsing everything into one undifferentiated paragraph; omit or adapt a concern only when it genuinely does not apply.
+
 Shot rules:
 - [Shot 1] has no timestamp.
 - Only later shots have cut timestamps.

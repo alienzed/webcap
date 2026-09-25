@@ -45,6 +45,7 @@ _provider_cleanup_holds = set()
 _provider_cleanup_reason = ""
 _backlog_lock = threading.Lock()
 _backlog_wait_reason = ""
+_backlog_drain_enabled = False
 _logger = logging.getLogger(__name__)
 
 
@@ -110,6 +111,9 @@ def _restore_provider_cleanup_guard():
 
 def prepare_startup_backlog():
     """Return all persisted unfinished inference work to Backlog."""
+    global _backlog_drain_enabled
+    with _backlog_lock:
+        _backlog_drain_enabled = False
     _set_backlog_wait_reason("")
     _restore_provider_cleanup_guard()
     _ensure_execution_reconciled()
@@ -458,7 +462,9 @@ def _advance_queue():
             (job for job in jobs if str(job.get("status") or "") == "queued"),
             None,
         )
-        if next_runnable is None:
+        with _backlog_lock:
+            drain_backlog = _backlog_drain_enabled
+        if next_runnable is None and drain_backlog:
             next_runnable = next(
                 (job for job in jobs if str(job.get("status") or "") == "backlog"),
                 None,
@@ -569,14 +575,17 @@ def _monitor_has_work():
             return True
     if snapshot.get("paused"):
         return False
+    with _backlog_lock:
+        drain_backlog = _backlog_drain_enabled
     return any(
-        str(job.get("status") or "") in {"queued", "backlog"}
+        str(job.get("status") or "") == "queued"
+        or (drain_backlog and str(job.get("status") or "") == "backlog")
         for job in snapshot.get("jobs", [])
     )
 
 
 def _monitor_loop():
-    global _monitor_thread
+    global _monitor_thread, _backlog_drain_enabled
     while True:
         try:
             _advance_queue()
@@ -585,6 +594,8 @@ def _monitor_loop():
 
         with _monitor_lock:
             if not _monitor_has_work():
+                with _backlog_lock:
+                    _backlog_drain_enabled = False
                 _monitor_thread = None
                 return
         time.sleep(2)
@@ -609,6 +620,9 @@ def start_observer():
 
 
 def _start_worker_for_requested_inference():
+    global _backlog_drain_enabled
+    with _backlog_lock:
+        _backlog_drain_enabled = True
     _ensure_monitor_started()
 
 

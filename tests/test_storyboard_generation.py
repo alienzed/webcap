@@ -9,6 +9,7 @@ from tool.server import storyboard_store
 @pytest.fixture
 def storyboard_fs(tmp_path, monkeypatch):
     monkeypatch.setattr(storyboard_store.app_config, "FS_ROOT", str(tmp_path))
+    monkeypatch.setattr(storyboard_store.app_config, "output_root", lambda: tmp_path / "output")
     execution_queue._resource_owner = ""
     storyboard_generation._startup_reconciled = False
     inference_runner._startup_reconciled = True

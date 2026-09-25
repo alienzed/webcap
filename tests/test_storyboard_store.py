@@ -338,6 +338,27 @@ def test_take_upload_freezes_scene_provenance_and_can_be_rated_and_selected(stor
     assert story["scenes"][scene["id"]]["selectedTakeId"] == take["id"]
 
 
+def test_generated_take_can_be_recovered_by_execution_job_identity(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"prompt": "Prompt."})
+    story, take = storyboard_store.add_take_upload(
+        story["id"],
+        scene["id"],
+        "render.mp4",
+        BytesIO(b"video"),
+        generation_job_id="job-123",
+    )
+
+    recovered = storyboard_store.generated_take_for_job(
+        story["id"],
+        scene["id"],
+        "job-123",
+    )
+
+    assert recovered["id"] == take["id"]
+    assert recovered["jobId"] == "job-123"
+
+
 def test_take_removal_is_reversible_without_deleting_media(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})

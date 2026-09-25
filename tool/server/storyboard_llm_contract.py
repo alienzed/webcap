@@ -29,7 +29,7 @@ def _prompt_response_schema(allow_duration=False):
     if allow_duration:
         schema["properties"]["durationSeconds"] = {
             "type": "number",
-            "minimum": 9,
+            "minimum": 6,
             "maximum": 15,
             "description": (
                 "Optional revised Scene duration in seconds. Include only when the requested refinement "
@@ -305,7 +305,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
             "Aim for " + str(target_scene_count) + " Scenes, but prioritize coherent, substantial Scenes over mechanically hitting the count. Combine small related beats when they fit naturally; split material when a separate Scene improves clarity, pacing, or generatability. "
-            "Keep every Scene between 9 and 15 seconds, normally aiming for 10-15 seconds. Use the available duration efficiently, normally with multiple meaningful shots, cuts, or distinct visual beats when the material supports them; use a single continuous shot when uninterrupted time is the stronger directorial choice. Preserve coherent progression appropriate to the concept, explicit entry/exit states, continuity where relevant, supplied Story facts, Story invariants, recurring character identity, wardrobe, location, and persistent visible state across the sequence. "
+            "Aim for about 10 seconds per Scene by default. Use up to 15 seconds when the Scene genuinely benefits from the extra time, and never propose less than 6 seconds. Use the available duration efficiently, normally with multiple meaningful shots, cuts, or distinct visual beats when the material supports them; use a single continuous shot when uninterrupted time is the stronger directorial choice. Preserve coherent progression appropriate to the concept, explicit entry/exit states, continuity where relevant, supplied Story facts, Story invariants, recurring character identity, wardrobe, location, and persistent visible state across the sequence. "
             "For every Scene, invariantRefs must contain the exact kind/title pairs of only the supplied character and location invariants actually present or materially relevant in that Scene; use an empty array when none apply. Do not introduce a character or location merely to justify a reference. WebCap will inject those invariant descriptions verbatim into the final H3 prompt, so do not rewrite their identity details merely for variety. "
             "Provide complete structured H3 content for every Scene now, not a placeholder; WebCap will render the exact model-facing field labels and spacing. Be creatively useful, but invent supporting performance, camera behavior, sound, dialogue, or music only when they serve the supplied concept; none is mandatory. "
             "Each Scene prompt must be independently generatable and follow the supplied H3 base prompt rules. "
@@ -440,7 +440,7 @@ def build_request(story, scene_id, operation, instruction=""):
             "[CURRENT TASK]\nApply this correction with the smallest coherent change:\n"
             + correction
             + "\n\nIf the requested change materially changes how much screen time this Scene needs, "
-            "include a revised durationSeconds between 9 and 15 seconds. "
+            "include a revised durationSeconds between 6 and 15 seconds, normally aiming for about 10 seconds unless the Scene clearly benefits from more time. "
             "Otherwise omit durationSeconds and keep the current duration unchanged."
         )
 

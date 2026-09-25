@@ -884,3 +884,13 @@ def test_test_source_selection_syncs_deterministic_owner_without_leaving_test_wo
     open_block = script.split("function openPane()", 1)[1].split("function startRun", 1)[0]
     assert "if (sourcePayload && sourcePayload.navigated) return null;" in open_block
     assert "if (!payload) return;" in open_block
+
+
+def test_test_source_candidates_keep_explicit_delete_control():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    block = script.split("function renderStagedFiles(payload)", 1)[1].split("function sessionStatusText", 1)[0]
+    assert "var removableFiles" not in block
+    assert "remove.dataset.fileName = String(fileName || '');" in block
+    assert "remove.title = 'Remove this Test candidate';" in block
+    assert "row.appendChild(remove);" in block

@@ -355,7 +355,7 @@ def _session_belongs_to_folder(folder_path, session_directory, payload=None):
     status = payload if isinstance(payload, dict) else (_read_status(session) or {})
     owner_folder = str(status.get("ownerFolder") or "").replace("\\", "/").strip("/")
     expected_owner = str(_relative_set_folder(folder_path) or "").replace("\\", "/").strip("/")
-    return bool(owner_folder) and owner_folder == expected_owner
+    return "ownerFolder" in status and owner_folder == expected_owner
 
 
 def _session_directories(folder_path):

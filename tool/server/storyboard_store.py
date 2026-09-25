@@ -1517,7 +1517,7 @@ def _scene_for_story(story, scene_id):
 
 
 @_serialized_mutation
-def add_take_upload(story_id, scene_id, filename, stream, effective_loras=None):
+def add_take_upload(story_id, scene_id, filename, stream, effective_loras=None, generation_job_id=""):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
     source_name = str(filename or "").strip()
@@ -1561,6 +1561,7 @@ def add_take_upload(story_id, scene_id, filename, stream, effective_loras=None):
         "references": copy.deepcopy(scene.get("references") or []),
         "workflowProfile": None,
         "providerJobId": None,
+        "jobId": str(generation_job_id or "").strip(),
         "label": "",
         "rating": None,
     }
@@ -1972,6 +1973,7 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
         "references",
         "workflowProfile",
         "providerJobId",
+        "jobId",
         "elapsedMs",
         "effectiveInput",
     ):
@@ -1983,6 +1985,22 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
     story["updatedAt"] = scene["updatedAt"]
     _write_json_atomic(_story_path(story_id), story)
     return story, take
+
+
+def generated_take_for_job(story_id, scene_id, job_id):
+    story = load_story(story_id)
+    scene_id, scene = _scene_for_story(story, scene_id)
+    wanted = str(job_id or "").strip()
+    if not wanted:
+        return None
+    for source in ("takes", "removedTakes"):
+        takes = scene.get(source) if isinstance(scene.get(source), dict) else {}
+        for take in takes.values():
+            if not isinstance(take, dict):
+                continue
+            if str(take.get("jobId") or "").strip() == wanted:
+                return copy.deepcopy(take)
+    return None
 
 
 @_serialized_mutation

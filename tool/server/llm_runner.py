@@ -301,6 +301,11 @@ def _execute_claimed(job_id, gpu_reserved):
             "Director/model stage failed before WebCap ingest: " + str(exc)
         ) from exc
 
+    current = execution_get_job(job_id)
+    if str(current.get("status") or "") == "stopping":
+        execution_finish_job(job_id, status="stopped", error="LLM request stopped.")
+        return
+
     try:
         result = _client_result(client, context, llm_result, job_id=job_id)
     except Exception as exc:
@@ -618,9 +623,10 @@ def action(operation, job_id="", direction="", position=None):
         current = execution_get_job(job_id)
         if str(current.get("status") or "") not in {"starting", "running", "stopping"}:
             raise ValueError("Only active LLM jobs can be stopped.")
+        from .storyboard_llm_runtime import assert_hard_stop_supported, stop_owned_server
+        assert_hard_stop_supported()
         if str(current.get("status") or "") != "stopping":
             execution_request_stop(job_id)
-        from .storyboard_llm_runtime import stop_owned_server
         stop_owned_server()
         return {"job": _job_view(execution_get_job(job_id))}
     if operation == "pause_queue":

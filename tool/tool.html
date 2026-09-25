@@ -1103,77 +1103,112 @@
                         <section id="generate-workspace" class="generate-workspace hidden" data-workspace-root="generate" aria-label="Generate workspace">
                 <header class="generate-toolbar">
                     <div class="generate-toolbar-copy">
-                        <strong>Generate</strong>
-                        <span>Standalone image and video inference, independent of Sets and Stories.</span>
+                        <strong>Generations</strong>
+                        <span>Create and browse standalone generated media.</span>
+                    </div>
+                    <div class="generate-view-toggle" role="group" aria-label="Generations view">
+                        <button id="generate-create-mode-btn" type="button" class="review-captions-btn active" aria-pressed="true">Create</button>
+                        <button id="generate-library-mode-btn" type="button" class="review-captions-btn" aria-pressed="false">Library</button>
                     </div>
                 </header>
                 <main class="generate-main">
-                    <section class="generate-authoring" aria-label="Generation setup">
-                        <div class="generate-prompt-panel">
+                    <section id="generate-create-view" class="generate-create-view" aria-label="Create">
+                        <aside class="generate-create-controls" aria-label="Generation controls">
+                            <div class="generate-prompt-panel">
                             <div class="generate-section-heading">
-                                <strong>Prompt</strong>
-                                <div class="generate-prompt-tools">
-                                    <label for="generate-director-model">Prompt Assistant</label>
-                                    <select id="generate-director-model" aria-label="Generate Prompt Assistant model"><option value="">Prompt Assistant unavailable</option></select>
-                                    <button id="generate-director-write" type="button" class="review-captions-btn" title="Turn the current idea into a polished model-ready prompt.">Expand Prompt</button>
-                                    <button id="generate-director-restore" type="button" class="review-captions-btn hidden">Restore Previous</button>
-                                </div>
+                            <strong>Prompt</strong>
+                            <div class="generate-prompt-tools">
+                            <label for="generate-director-model">Prompt Assistant</label>
+                            <select id="generate-director-model" aria-label="Generate Prompt Assistant model"><option value="">Prompt Assistant unavailable</option></select>
+                            <button id="generate-director-write" type="button" class="review-captions-btn" title="Turn the current idea into a polished model-ready prompt.">Expand Prompt</button>
+                            <button id="generate-director-restore" type="button" class="review-captions-btn hidden">Restore Previous</button>
+                            </div>
                             </div>
                             <textarea id="generate-prompt" class="generate-prompt" rows="12" placeholder="Describe what you want — a rough idea or a finished prompt."></textarea>
                             <div class="generate-director-actions">
-                                <input id="generate-director-instruction" type="text" placeholder="Tell the Prompt Assistant what to change…" aria-label="Prompt Assistant refinement instruction">
-                                <button id="generate-director-refine" type="button" class="review-captions-btn">Refine Prompt</button>
+                            <input id="generate-director-instruction" type="text" placeholder="Tell the Prompt Assistant what to change…" aria-label="Prompt Assistant refinement instruction">
+                            <button id="generate-director-refine" type="button" class="review-captions-btn">Refine Prompt</button>
                             </div>
                             <span id="generate-director-status" class="generate-director-status generate-prompt-status" aria-live="polite"></span>
                             <aside id="generate-director-activity" class="generate-director-activity hidden" aria-live="polite">
-                                <strong>Prompt Assistant</strong>
-                                <span id="generate-director-activity-phase">Preparing…</span>
-                                <span id="generate-director-activity-detail"></span>
-                                <div id="generate-director-model-load" class="director-model-load hidden" aria-live="polite">
-                                    <div class="director-model-load-copy"><span>Model</span><strong id="generate-director-model-load-label"></strong></div>
-                                    <div class="director-model-load-track" role="progressbar" aria-label="Approximate Director model load" aria-valuemin="0" aria-valuemax="100"><span id="generate-director-model-load-fill"></span></div>
-                                </div>
-                                <div id="generate-director-activity-trend" class="director-activity-trend" role="img" aria-label="RAM and VRAM history, waiting for samples">
-                                    <div class="director-activity-trend-legend"><span><i class="director-activity-trend-ram"></i>RAM</span><span><i class="director-activity-trend-vram"></i>VRAM</span><small>last minute · % used</small></div>
-                                    <svg viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path class="director-activity-trend-grid" d="M0 7.5H120 M0 15H120 M0 22.5H120"></path><path class="director-activity-trend-ram-line"></path><path class="director-activity-trend-vram-line"></path></svg>
-                                </div>
+                            <strong>Prompt Assistant</strong>
+                            <span id="generate-director-activity-phase">Preparing…</span>
+                            <span id="generate-director-activity-detail"></span>
+                            <div id="generate-director-model-load" class="director-model-load hidden" aria-live="polite">
+                            <div class="director-model-load-copy"><span>Model</span><strong id="generate-director-model-load-label"></strong></div>
+                            <div class="director-model-load-track" role="progressbar" aria-label="Approximate Director model load" aria-valuemin="0" aria-valuemax="100"><span id="generate-director-model-load-fill"></span></div>
+                            </div>
+                            <div id="generate-director-activity-trend" class="director-activity-trend" role="img" aria-label="RAM and VRAM history, waiting for samples">
+                            <div class="director-activity-trend-legend"><span><i class="director-activity-trend-ram"></i>RAM</span><span><i class="director-activity-trend-vram"></i>VRAM</span><small>last minute · % used</small></div>
+                            <svg viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path class="director-activity-trend-grid" d="M0 7.5H120 M0 15H120 M0 22.5H120"></path><path class="director-activity-trend-ram-line"></path><path class="director-activity-trend-vram-line"></path></svg>
+                            </div>
                             </aside>
-                        </div>
-                        <aside class="generate-inspector" aria-label="Generation controls">
+                            </div>
+                            <aside class="generate-inspector" aria-label="Generation controls">
                             <div class="generate-inspector-heading"><strong>Setup</strong><span id="generate-status" class="generate-status-badge hidden" aria-live="polite"></span></div>
                             <section class="generate-output-settings">
-                                <div class="generate-conditioning-heading"><strong>Output</strong></div>
-                                <label class="generate-field"><span>Base Model</span><select id="generate-model" aria-label="Generate Base Model"></select></label>
-                                <div class="generate-settings-grid">
-                                <label id="generate-field-aspectRatio" class="generate-field"><span>Aspect ratio</span><select id="generate-aspect"></select></label>
-                                <label id="generate-field-megapixels" class="generate-field"><span>Megapixels</span><input id="generate-megapixels" type="number" min="0.05" step="0.05"></label>
-                                <label id="generate-field-duration" class="generate-field"><span>Duration (s)</span><input id="generate-duration" type="number" min="4" max="15" step="0.1"></label>
-                                <label id="generate-field-dimensions" class="generate-field hidden"><span>Dimensions</span><select id="generate-dimensions"></select></label>
-                                <label id="generate-field-seed" class="generate-field"><span>Seed</span><input id="generate-seed" type="number" min="-1" step="1" value="-1"></label>
-                                </div>
-                                <label class="storyboard-inline-check"><input id="generate-wildcards" type="checkbox"> Resolve wildcard syntax</label>
+                            <div class="generate-conditioning-heading"><strong>Output</strong></div>
+                            <label class="generate-field"><span>Base Model</span><select id="generate-model" aria-label="Generate Base Model"></select></label>
+                            <div class="generate-settings-grid">
+                            <label id="generate-field-aspectRatio" class="generate-field"><span>Aspect ratio</span><select id="generate-aspect"></select></label>
+                            <label id="generate-field-megapixels" class="generate-field"><span>Megapixels</span><input id="generate-megapixels" type="number" min="0.05" step="0.05"></label>
+                            <label id="generate-field-duration" class="generate-field"><span>Duration (s)</span><input id="generate-duration" type="number" min="4" max="15" step="0.1"></label>
+                            <label id="generate-field-dimensions" class="generate-field hidden"><span>Dimensions</span><select id="generate-dimensions"></select></label>
+                            <label id="generate-field-seed" class="generate-field"><span>Seed</span><input id="generate-seed" type="number" min="-1" step="1" value="-1"></label>
+                            </div>
+                            <label class="storyboard-inline-check"><input id="generate-wildcards" type="checkbox"> Resolve wildcard syntax</label>
                             </section>
                             <section class="generate-conditioning">
-                                <div class="generate-conditioning-heading"><strong>LoRAs</strong><span id="generate-base-loras"></span></div>
-                                <div class="generate-lora-picker-row">
-                                    <input id="generate-lora-picker" class="generate-lora-picker" type="search" list="generate-lora-options" placeholder="Filter / choose LoRA…" autocomplete="off">
-                                    <datalist id="generate-lora-options"></datalist>
-                                    <button id="generate-lora-add" type="button" class="review-captions-btn">Add LoRA</button>
-                                </div>
-                                <div id="generate-lora-list" class="generate-lora-list"></div>
+                            <div class="generate-conditioning-heading"><strong>LoRAs</strong><span id="generate-base-loras"></span></div>
+                            <div class="generate-lora-picker-row">
+                            <input id="generate-lora-picker" class="generate-lora-picker" type="search" list="generate-lora-options" placeholder="Filter / choose LoRA…" autocomplete="off">
+                            <datalist id="generate-lora-options"></datalist>
+                            <button id="generate-lora-add" type="button" class="review-captions-btn">Add LoRA</button>
+                            </div>
+                            <div id="generate-lora-list" class="generate-lora-list"></div>
                             </section>
                             <section id="generate-references" class="generate-references hidden">
-                                <div class="generate-conditioning-heading"><strong>References</strong><span>Optional exact frame anchors</span></div>
-                                <label id="generate-reference-first_frame-field" class="generate-field hidden"><span>First frame</span><input id="generate-reference-first_frame" type="file" accept="image/*"></label>
-                                <label id="generate-reference-last_frame-field" class="generate-field hidden"><span>Last frame</span><input id="generate-reference-last_frame" type="file" accept="image/*"></label>
+                            <div class="generate-conditioning-heading"><strong>References</strong><span>Optional exact frame anchors</span></div>
+                            <label id="generate-reference-first_frame-field" class="generate-field hidden"><span>First frame</span><input id="generate-reference-first_frame" type="file" accept="image/*"></label>
+                            <label id="generate-reference-last_frame-field" class="generate-field hidden"><span>Last frame</span><input id="generate-reference-last_frame" type="file" accept="image/*"></label>
                             </section>
                             <div class="generate-run-row">
-                                <button id="generate-run-btn" type="button" class="storyboard-primary-btn generate-run-btn">Generate</button>
+                            <button id="generate-run-btn" type="button" class="storyboard-primary-btn generate-run-btn">Generate</button>
                             </div>
+                            </aside>
+                        </aside>
+                        <section class="generate-stage-panel" aria-label="Active generation preview">
+                            <header class="generate-stage-heading">
+                                <div>
+                                    <strong>Preview</strong>
+                                    <span id="generate-stage-summary">Your active Take appears here.</span>
+                                </div>
+                            </header>
+                            <div id="generate-active-preview" class="generate-active-preview">
+                                <div class="generate-stage-empty">
+                                    <strong>Ready to create</strong>
+                                    <span>Generate something or choose a Take.</span>
+                                </div>
+                            </div>
+                        </section>
+                        <aside id="generate-takes-panel" class="generate-takes-panel" aria-label="Takes">
+                            <header class="generate-takes-heading">
+                                <div>
+                                    <strong>Takes</strong>
+                                    <span id="generate-takes-summary">Recent generations</span>
+                                </div>
+                                <button id="generate-takes-collapse-btn" type="button" class="review-captions-btn" aria-expanded="true" title="Collapse Takes">Hide</button>
+                            </header>
+                            <div id="generate-takes" class="generate-takes"></div>
                         </aside>
                     </section>
-                    <section class="generate-results-panel" aria-label="Generate results">
-                        <div class="generate-results-heading"><strong>Results</strong><span>Persistent standalone generated media</span></div>
+                    <section id="generate-library-view" class="generate-library-view hidden" aria-label="Library">
+                        <header class="generate-library-heading">
+                            <div>
+                                <strong>Library</strong>
+                                <span id="generate-library-summary">Generated media</span>
+                            </div>
+                        </header>
                         <div id="generate-results" class="generate-results"></div>
                     </section>
                 </main>

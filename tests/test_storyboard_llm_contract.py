@@ -213,7 +213,7 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert "multiple meaningful shots, cuts, or distinct visual beats when the material supports them" in prompt
     assert scene_schema["properties"]["suggestedDurationSeconds"]["minimum"] == 9
     assert scene_schema["properties"]["suggestedDurationSeconds"]["maximum"] == 15
-    assert "invent natural dialogue" in prompt
+    assert "none is mandatory" in prompt
     assert "EXISTING SECOND PROMPT" not in prompt
 
 
@@ -277,10 +277,8 @@ def test_define_invariants_is_a_small_character_location_pass():
     item = schema["properties"]["invariants"]["items"]
     assert item["properties"]["kind"]["enum"] == ["character", "location"]
     assert "recurring characters and recurring locations" in prompt
-    assert "eye color" in prompt
-    assert "hair color" in prompt
-    assert "hair length" in prompt
-    assert "skin tone" in prompt
+    assert "stable visible traits that materially help reproduce" in prompt
+    assert "do not fill every category mechanically" in prompt
     assert "Do not plan Scenes." in prompt
     assert '"kind":"character"' in prompt
     assert '"kind":"location"' in prompt
@@ -321,9 +319,7 @@ def test_character_continuity_is_authoritative_without_lora_or_media_reasoning()
 
     assert prompt.count("PRESERVE FACTS AND CONTINUITY.") == 1
     assert "Recurring characters and locations must remain visually reproducible" in prompt
-    assert "broad racial or ethnic appearance" in prompt
-    assert "eye color" in prompt
-    assert "hair length" in prompt
+    assert "Do not vary established identity or continuity merely for novelty." in prompt
     assert "no LoRA" not in prompt
     assert "LoRA or exact" not in prompt
 
@@ -389,7 +385,7 @@ def test_scene_local_prompt_does_not_solicit_unsolicited_advice():
 
     assert "recommend a natural Scene split" not in prompt
     assert "state the missing fact" not in prompt
-    assert "Do not add unsolicited advice or commentary." in prompt
+    assert "return no unsolicited commentary" in prompt
 
 
 def test_director_context_prioritizes_filmmaking_without_forcing_classical_coverage():

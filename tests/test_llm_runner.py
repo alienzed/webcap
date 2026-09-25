@@ -16,6 +16,7 @@ def llm_root(tmp_path, monkeypatch):
     execution_queue._resource_owner = ""
     llm_runner._startup_reconciled = True
     llm_runner._monitor_thread = None
+    storyboard_llm_runtime.clear_stop_request()
     monkeypatch.setattr(llm_runner, "_ensure_monitor_started", lambda: None)
     return tmp_path
 
@@ -808,3 +809,63 @@ def test_llm_snapshot_explains_training_queue_priority(llm_root, monkeypatch):
     assert snapshot["queueDepth"] == 1
     assert snapshot["waitOwner"] == "training"
     assert snapshot["waitReason"].startswith("2 Training job(s) are queued")
+
+
+def test_llm_stop_or_cancel_cancels_queued_job_without_touching_runtime(llm_root, monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "stop_owned_server",
+        lambda: pytest.fail("Queued LLM work must cancel without killing llama.cpp."),
+    )
+    job = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+    )
+
+    result = llm_runner.action("stop_or_cancel", job_id=job["jobId"])
+
+    assert result["job"]["status"] == "cancelled"
+
+
+def test_llm_stop_or_cancel_hard_stops_active_local_job(llm_root, monkeypatch):
+    calls = []
+    job = execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"operation": "write_prompt", "prompt": "Expand."}, "clientContext": {}},
+        metadata={"client": "generate", "modelId": "qwen"},
+    )
+    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
+    execution_queue.mark_running(job["id"])
+    monkeypatch.setattr(storyboard_llm_runtime, "assert_hard_stop_supported", lambda: calls.append("assert"))
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_owned_server", lambda: calls.append("stop") or True)
+
+    result = llm_runner.action("stop_or_cancel", job_id=job["id"])
+
+    assert result["job"]["status"] == "stopping"
+    assert calls == ["assert", "stop"]
+
+
+def test_llm_stopping_after_model_return_skips_client_ingest(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    job = execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"operation": "write_prompt", "prompt": "Expand."}, "clientContext": {}},
+        metadata={"client": "generate", "modelId": "qwen"},
+    )
+    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
+
+    def stopped_result(*_args, **_kwargs):
+        execution_queue.request_stop(job["id"])
+        return {"text": "Do not ingest", "model": "qwen"}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_contract", stopped_result)
+    monkeypatch.setattr(
+        llm_runner,
+        "_client_result",
+        lambda *_args, **_kwargs: pytest.fail("Stopped LLM output must not be ingested."),
+    )
+
+    llm_runner._execute_claimed(job["id"], gpu_reserved=False)
+
+    assert llm_runner.job_status(job["id"])["status"] == "stopped"

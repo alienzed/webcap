@@ -114,6 +114,22 @@ def test_storyboard_route_is_independent_of_current_set(tmp_path, monkeypatch):
     assert reference.get_json()["reference"]["role"] == "first_frame"
     assert reference.get_json()["reference"]["mediaPath"] == take["mediaPath"]
 
+    blocked = client.post("/fs/storyboard", json={
+        "operation": "delete_scene",
+        "storyId": story["id"],
+        "sceneId": scene["id"],
+    })
+    assert blocked.status_code == 400
+    assert "used as another Scene reference" in blocked.get_json()["error"]
+
+    cleared = client.post("/fs/storyboard", json={
+        "operation": "clear_scene_reference",
+        "storyId": story["id"],
+        "sceneId": second["id"],
+        "role": "first_frame",
+    })
+    assert cleared.status_code == 200
+
     removed = client.post("/fs/storyboard", json={
         "operation": "delete_scene",
         "storyId": story["id"],
@@ -163,6 +179,40 @@ def test_storyboard_route_rejects_unknown_operation(tmp_path, monkeypatch):
 
     assert response.status_code == 400
     assert response.get_json() == {"ok": False, "error": "Unknown Storyboard operation."}
+
+
+def test_storyboard_scene_removal_is_blocked_while_take_generation_is_pending(monkeypatch):
+    monkeypatch.setattr(app_module, "llm_storyboard_target_busy", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_generation_queue",
+        lambda story_id: {
+            "jobs": [
+                {
+                    "jobId": "take-job",
+                    "storyId": story_id,
+                    "sceneId": "scene-1",
+                    "status": "running",
+                }
+            ]
+        },
+    )
+    touched = []
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_delete_scene",
+        lambda story_id, scene_id: touched.append((story_id, scene_id)) or {"id": story_id},
+    )
+
+    response = app_module.app.test_client().post("/fs/storyboard", json={
+        "operation": "delete_scene",
+        "storyId": "story-1",
+        "sceneId": "scene-1",
+    })
+
+    assert response.status_code == 400
+    assert "pending Take generation" in response.get_json()["error"]
+    assert touched == []
 
 
 def test_storyboard_generation_route_starts_and_reads_job(monkeypatch):

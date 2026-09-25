@@ -479,8 +479,9 @@
     function poll(current) {
       var status = String(current.status || '');
       if (status === 'completed') {
-        return applyRecoveredDirectorResult(current).then(function () {
-          return consumeDirectorJob(current.jobId);
+        return consumeDirectorJob(current.jobId).then(function () {
+          if (!libraryStory(current.storyId)) return;
+          return applyRecoveredDirectorResult(current);
         });
       }
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {

@@ -21,6 +21,11 @@
       activityLoadModelId: ''
     },
     trackedJobIds: loadTrackedGenerateJobs(),
+    results: [],
+    viewMode: window.localStorage.getItem('webcap.generate.viewMode') === 'library' ? 'library' : 'create',
+    activeResultKey: '',
+    activePendingJobId: '',
+    takesCollapsed: window.localStorage.getItem('webcap.generate.takesCollapsed') === '1',
     open: false,
     timer: 0
   };
@@ -339,6 +344,202 @@
     });
   }
 
+
+  function setGenerateViewMode(mode) {
+    mode = mode === 'library' ? 'library' : 'create';
+    generateState.viewMode = mode;
+    window.localStorage.setItem('webcap.generate.viewMode', mode);
+    var createView = el('generate-create-view');
+    var libraryView = el('generate-library-view');
+    var createButton = el('generate-create-mode-btn');
+    var libraryButton = el('generate-library-mode-btn');
+    if (!createView || !libraryView || !createButton || !libraryButton) {
+      throw new Error('Generations view switcher markup is missing.');
+    }
+    createView.classList.toggle('hidden', mode !== 'create');
+    libraryView.classList.toggle('hidden', mode !== 'library');
+    createButton.classList.toggle('active', mode === 'create');
+    libraryButton.classList.toggle('active', mode === 'library');
+    createButton.setAttribute('aria-pressed', mode === 'create' ? 'true' : 'false');
+    libraryButton.setAttribute('aria-pressed', mode === 'library' ? 'true' : 'false');
+  }
+
+  function setTakesCollapsed(collapsed) {
+    generateState.takesCollapsed = !!collapsed;
+    window.localStorage.setItem('webcap.generate.takesCollapsed', generateState.takesCollapsed ? '1' : '0');
+    var createView = el('generate-create-view');
+    var button = el('generate-takes-collapse-btn');
+    if (!createView || !button) throw new Error('Generations Takes controls are missing.');
+    createView.classList.toggle('takes-collapsed', generateState.takesCollapsed);
+    button.textContent = generateState.takesCollapsed ? 'Show' : 'Hide';
+    button.title = generateState.takesCollapsed ? 'Show Takes' : 'Collapse Takes';
+    button.setAttribute('aria-expanded', generateState.takesCollapsed ? 'false' : 'true');
+  }
+
+  function resultSummary(result) {
+    var settings = result && result.settings || {};
+    var summary = [];
+    if (settings.dimensions) summary.push(String(settings.dimensions).trim());
+    if (settings.aspectRatio) summary.push(String(settings.aspectRatio));
+    if (settings.duration) summary.push(String(settings.duration) + 's');
+    if (result && result.seed !== undefined && result.seed !== null) summary.push('Seed ' + result.seed);
+    return summary.join(' · ');
+  }
+
+  function resultMediaElement(result, controls) {
+    var src = '/fs/generate/media?path=' + encodeURIComponent(result.mediaPath || '');
+    if (result.mediaKind === 'video') {
+      var video = document.createElement('video');
+      video.controls = !!controls;
+      video.muted = !controls;
+      video.preload = 'metadata';
+      video.src = src;
+      return video;
+    }
+    var image = document.createElement('img');
+    image.loading = controls ? 'eager' : 'lazy';
+    image.src = src;
+    image.alt = '';
+    return image;
+  }
+
+  function renderActiveResult(result) {
+    var host = el('generate-active-preview');
+    var summary = el('generate-stage-summary');
+    if (!host || !summary) throw new Error('Generations active preview markup is missing.');
+    var key = resultKey(result);
+    if (!key) return;
+    generateState.activeResultKey = key;
+    generateState.activePendingJobId = '';
+    summary.textContent = [String(result.modelId || 'Generated'), resultSummary(result)].filter(Boolean).join(' · ');
+
+    if (String(host.dataset.resultKey || '') === key) return;
+    host.innerHTML = '';
+    host.dataset.resultKey = key;
+    host.removeAttribute('data-generation-job-id');
+
+    var media = document.createElement('div');
+    media.className = 'generate-stage-media';
+    media.appendChild(resultMediaElement(result, true));
+
+    var caption = document.createElement('div');
+    caption.className = 'generate-stage-caption';
+    var prompt = document.createElement('p');
+    prompt.textContent = String(result.resolvedPrompt || result.sourcePrompt || '');
+    prompt.title = prompt.textContent;
+    caption.appendChild(prompt);
+
+    host.appendChild(media);
+    host.appendChild(caption);
+    syncActiveTakeState();
+  }
+
+  function renderPendingStage(job) {
+    var host = el('generate-active-preview');
+    var summary = el('generate-stage-summary');
+    if (!host || !summary) throw new Error('Generations active preview markup is missing.');
+    var jobId = String(job && job.jobId || '');
+    if (!jobId) return;
+    generateState.activePendingJobId = jobId;
+    generateState.activeResultKey = '';
+    summary.textContent = [String(job.modelId || 'Generate'), generationPreviewStatus(job)].filter(Boolean).join(' · ');
+
+    if (String(host.dataset.generationJobId || '') !== jobId) {
+      host.innerHTML = '';
+      host.removeAttribute('data-result-key');
+      host.dataset.generationJobId = jobId;
+      var pending = document.createElement('div');
+      pending.className = 'generate-stage-pending';
+      pending.innerHTML = '<div class="generate-result-pending-indicator" aria-hidden="true"></div><strong data-generation-stage-status></strong><span>Your Take will appear here when it is ready.</span>';
+      host.appendChild(pending);
+    }
+    var statusNode = host.querySelector('[data-generation-stage-status]');
+    if (statusNode) statusNode.textContent = generationPreviewStatus(job);
+  }
+
+  function renderStageEmpty() {
+    var host = el('generate-active-preview');
+    var summary = el('generate-stage-summary');
+    if (!host || !summary) return;
+    if (generateState.activePendingJobId || generateState.activeResultKey) return;
+    host.innerHTML = '<div class="generate-stage-empty"><strong>Ready to create</strong><span>Generate something or choose a Take.</span></div>';
+    host.removeAttribute('data-result-key');
+    host.removeAttribute('data-generation-job-id');
+    summary.textContent = 'Your active Take appears here.';
+  }
+
+  function syncActiveTakeState() {
+    var host = el('generate-takes');
+    if (!host) return;
+    host.querySelectorAll('[data-generate-take-key]').forEach(function (card) {
+      card.classList.toggle('active', String(card.dataset.generateTakeKey || '') === String(generateState.activeResultKey || ''));
+    });
+  }
+
+  function buildTakeCard(result) {
+    var key = resultKey(result);
+    var card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'generate-take-card';
+    card.dataset.generateTakeKey = key;
+    card.title = String(result.resolvedPrompt || result.sourcePrompt || '');
+
+    var media = document.createElement('span');
+    media.className = 'generate-take-media';
+    media.appendChild(resultMediaElement(result, false));
+
+    var copy = document.createElement('span');
+    copy.className = 'generate-take-copy';
+    var model = document.createElement('strong');
+    model.textContent = String(result.modelId || 'Generated');
+    var details = document.createElement('small');
+    details.textContent = resultSummary(result);
+    copy.appendChild(model);
+    copy.appendChild(details);
+
+    card.appendChild(media);
+    card.appendChild(copy);
+    return card;
+  }
+
+  function renderTakes(results) {
+    var host = el('generate-takes');
+    var summary = el('generate-takes-summary');
+    if (!host || !summary) throw new Error('Generations Takes markup is missing.');
+    var items = Array.isArray(results) ? results : [];
+    summary.textContent = items.length ? String(items.length) + ' recent' : 'No Takes yet';
+
+    var desired = {};
+    items.forEach(function (result) {
+      desired[resultKey(result)] = result;
+    });
+    host.querySelectorAll('.generate-take-card[data-generate-take-key]').forEach(function (card) {
+      if (!desired[String(card.dataset.generateTakeKey || '')]) card.remove();
+    });
+
+    var before = host.querySelector('.generate-take-card.is-pending');
+    items.forEach(function (result) {
+      var key = resultKey(result);
+      if (!key) return;
+      var card = Array.prototype.find.call(
+        host.querySelectorAll('.generate-take-card[data-generate-take-key]'),
+        function (candidate) { return String(candidate.dataset.generateTakeKey || '') === key; }
+      );
+      if (!card) {
+        card = buildTakeCard(result);
+        host.insertBefore(card, before);
+      } else {
+        host.insertBefore(card, before);
+      }
+      before = card.nextSibling;
+    });
+
+    if (!generateState.activeResultKey && !generateState.activePendingJobId && items.length) {
+      renderActiveResult(items[0]);
+    } else {
+      syncActiveTakeState();
+    }
+  }
 
   function generationPreviewStatus(job) {
     var status = String(job && job.status || '');

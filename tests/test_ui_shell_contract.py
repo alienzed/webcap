@@ -661,3 +661,20 @@ def test_inference_drawer_exposes_backlog_without_treating_it_as_active_work():
     assert "toggle.classList.toggle('inference-active', activeCount > 0);" in inference
     assert "String(queue.backlog) + ' backlog'" in activity
     assert ".inference-backlog-heading" in css
+
+
+
+def test_activity_drawer_uses_readable_application_scale_typography():
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    activity = css.split(".activity-monitor-drawer {", 1)[1].split(".inference-queue-drawer {", 1)[0]
+    assert "width: min(440px, calc(100% - 60px));" in activity
+    assert ".activity-monitor-drawer-header strong" in activity
+    assert "font-size: 15px;" in activity
+    assert ".activity-monitor-recent-copy strong" in activity
+    assert "font-size: 12px;" in activity
+    assert ".activity-monitor-recent-copy small" in activity
+    assert "font-size: 10.5px;" in activity
+    assert ".activity-monitor-queue-row strong" in activity
+    assert "font-size: 12.5px;" in activity
+    assert "font-size: 9px;" not in activity

@@ -788,7 +788,41 @@ def test_stop_shared_test_session_cancels_pending_children_and_requests_active_s
 
     assert stopped["status"] == "stopping"
     assert execution_queue.get_job(child_ids[0])["status"] == "stopping"
-    assert [execution_queue.get_job(job_id)["status"] for job_id in child_ids[1:]] == ["cancelled", "cancelled"]
+    assert [execution_queue.transient_receipt(job_id)["status"] for job_id in child_ids[1:]] == ["cancelled", "cancelled"]
+    for job_id in child_ids[1:]:
+        with pytest.raises(FileNotFoundError):
+            execution_queue.get_job(job_id)
+
+
+def test_committed_test_result_is_recognized_after_queue_job_is_still_active(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+    child = execution_queue.get_job(child_id)
+
+    with bench._status_lock:
+        status = bench._read_status(session) or {}
+        status["results"] = [{
+            "jobId": child_id,
+            "kind": "lora",
+            "sourceLoRA": candidates[0].name,
+            "candidateFile": candidates[0].name,
+            "mediaFile": "epoch.png",
+        }]
+        status["completed"] = 1
+        bench._atomic_write_json(session / "test.json", status)
+
+    outcome = bench.committed_inference_outcome(child)
+
+    assert outcome["status"] == "completed"
+    assert outcome["result"]["session"] == session.name
+    assert outcome["result"]["mediaFile"] == "epoch.png"
 
 
 def test_missing_candidate_rendition_skips_without_failure_card(tmp_path, monkeypatch):

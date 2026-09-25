@@ -8,10 +8,63 @@ def test_director_capacity_defaults_defer_to_runtime():
     assert storyboard_llm_runtime.DEFAULT_MAX_TOKENS is None
 
 
-def test_operation_max_tokens_caps_only_short_concept_expansion():
-    assert storyboard_llm_runtime._operation_max_tokens("expand_concept") == 4096
-    assert storyboard_llm_runtime._operation_max_tokens("develop_story") is None
-    assert storyboard_llm_runtime._operation_max_tokens("write_prompt") is None
+def test_slot_snapshot_exposes_live_generation_progress(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "local"},
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda *args, **kwargs: [{
+            "id": 0,
+            "n_ctx": 32768,
+            "is_processing": True,
+            "n_prompt_tokens": 1200,
+            "n_prompt_tokens_processed": 1200,
+            "n_prompt_tokens_cache": 900,
+            "params": {"n_predict": -1, "max_tokens": -1},
+            "next_token": [{
+                "has_next_token": True,
+                "n_decoded": 456,
+            }],
+        }],
+    )
+
+    slot = storyboard_llm_runtime._slot_snapshot("director")
+
+    assert slot["slotId"] == 0
+    assert slot["contextSize"] == 32768
+    assert slot["promptTokens"] == 1200
+    assert slot["promptProcessed"] == 1200
+    assert slot["promptCached"] == 900
+    assert slot["generatedTokens"] == 456
+    assert slot["maxTokens"] == -1
+
+
+def test_slot_snapshot_accepts_documented_single_next_token_shape(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "local"},
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda *args, **kwargs: [{
+            "id": 0,
+            "n_ctx": 8192,
+            "is_processing": True,
+            "params": {"max_tokens": 2048},
+            "next_token": {"n_decoded": 12},
+        }],
+    )
+
+    slot = storyboard_llm_runtime._slot_snapshot("director")
+
+    assert slot["generatedTokens"] == 12
+    assert slot["maxTokens"] == 2048
 
 
 def test_completion_result_rejects_token_limit_truncation():
@@ -572,6 +625,52 @@ def test_owned_router_restarts_when_runtime_settings_change(tmp_path, monkeypatc
             8189,
             8192,
         )
+    finally:
+        if storyboard_llm_runtime._log_handle is not None:
+            storyboard_llm_runtime._log_handle.close()
+        storyboard_llm_runtime._log_handle = None
+        storyboard_llm_runtime._process = None
+        storyboard_llm_runtime._server_settings_signature = None
+
+
+def test_owned_router_enables_structured_llama_logging(tmp_path, monkeypatch):
+    calls = []
+    health = iter([False, True])
+
+    class FakeProcess:
+        def poll(self):
+            return None
+
+    storyboard_llm_runtime._process = None
+    storyboard_llm_runtime._log_handle = None
+    storyboard_llm_runtime._server_settings_signature = None
+
+    settings = {
+        "mode": "local",
+        "llama_server": "/new/llama-server",
+        "models_dir": tmp_path / "text_encoders",
+        "port": 8189,
+        "context_size": None,
+        "max_tokens": None,
+    }
+
+    def fake_popen(command, **_kwargs):
+        calls.append(command)
+        return FakeProcess()
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: settings)
+    monkeypatch.setattr(storyboard_llm_runtime, "_resolve_executable", lambda: "/new/llama-server")
+    monkeypatch.setattr(storyboard_llm_runtime, "_runtime_dir", lambda: tmp_path)
+    monkeypatch.setattr(storyboard_llm_runtime, "_health_ok", lambda: next(health))
+    monkeypatch.setattr(storyboard_llm_runtime.subprocess, "Popen", fake_popen)
+
+    try:
+        storyboard_llm_runtime._ensure_server()
+        command = calls[0]
+        assert command[command.index("--log-colors") + 1] == "off"
+        assert "--log-prefix" in command
+        assert "--log-timestamps" in command
+        assert command[command.index("--log-verbosity") + 1] == "3"
     finally:
         if storyboard_llm_runtime._log_handle is not None:
             storyboard_llm_runtime._log_handle.close()

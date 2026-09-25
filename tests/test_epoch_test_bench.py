@@ -1143,3 +1143,65 @@ def test_session_history_is_scoped_by_model_and_source(tmp_path, monkeypatch):
 
     assert [item["session"] for item in h3] == ["h3-session"]
     assert [item["session"] for item in krea] == ["krea-session"]
+
+
+
+def test_backlogged_partial_test_session_is_pending_not_running(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    session = tmp_path / bench.TEST_RESULTS_DIR / "session-backlog"
+    session.mkdir(parents=True)
+    child = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": bench.get_test_model().PROFILE_ID}},
+        metadata={
+            "client": "test",
+            "folder": ".",
+            "sessionId": session.name,
+            "candidateKind": "base",
+            "label": "Comparison · Base",
+        },
+        initial_status="backlog",
+    )
+    bench._atomic_write_json(session / "test.json", {
+        "status": "running",
+        "modelId": bench.get_test_model().PROFILE_ID,
+        "inferenceJobs": [child["id"]],
+        "results": [{"jobId": "completed-before-restart", "kind": "base", "mediaFile": "base.png"}],
+        "failures": [],
+        "completed": 1,
+        "failed": 0,
+        "total": 2,
+    })
+
+    visible = bench._sync_inference_session(session)
+
+    assert visible["status"] == "queued"
+    assert visible["running"] == 0
+    assert visible["queued"] == 1
+
+
+def test_legacy_test_migration_creates_inert_backlog(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    request, loras, include_base = bench._new_inference_request(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=True,
+    )
+
+    visible = bench._enqueue_frozen_test_request(
+        tmp_path,
+        request,
+        loras,
+        include_base,
+        legacy_job_id="legacy-test-job",
+    )
+
+    session = bench._session_directory(tmp_path, visible["session"])
+    jobs = [
+        execution_queue.get_job(job_id)
+        for job_id in bench._read_status(session)["inferenceJobs"]
+    ]
+    assert jobs
+    assert {job["status"] for job in jobs} == {"backlog"}
+    assert inference_runner._monitor_has_work() is False

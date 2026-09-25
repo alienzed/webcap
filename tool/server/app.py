@@ -646,8 +646,8 @@ def storyboard_route():
             story = storyboard_restore_previous_concept(story_id)
             return jsonify({"ok": True, "story": story})
         if operation == "restore_last_scene_repair":
-            if llm_storyboard_story_busy(story_id):
-                raise ValueError("Story has pending Director work.")
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
             story = storyboard_restore_scene_repairs(story_id)
             return jsonify({"ok": True, "story": story})
         if operation == "restore_previous_prompt":

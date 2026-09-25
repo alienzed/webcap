@@ -476,6 +476,7 @@ function syncApplicationShellContext() {
   var folder = String(state && state.folder || '');
   var workspaceTitle = document.getElementById('app-header-workspace-title');
   var workspaceContext = document.getElementById('app-header-workspace-context');
+  var workspaceActions = document.getElementById('app-header-workspace-actions');
   var modelControl = document.getElementById('app-header-model-control');
   var modelSelect = document.getElementById('app-header-model-profile-select');
   var previewHeader = document.getElementById('preview-header');
@@ -518,6 +519,9 @@ function syncApplicationShellContext() {
 
   if (workspaceContext) {
     workspaceContext.textContent = contextText;
+  }
+  if (workspaceActions) {
+    workspaceActions.classList.toggle('hidden', !storyboardOpen);
   }
 
   var previewContextRelevant = !generateOpen && !testOpen && !storyboardOpen && !storageOpen && (surface === 'default' || surface === 'focus');

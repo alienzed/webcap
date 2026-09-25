@@ -45,31 +45,35 @@ try {
 
 window.setRuntimeAppConfig = setRuntimeAppConfig;
 
-var DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model';
+var LEGACY_DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model';
 
-function getSharedDirectorModelPreference(legacyKey) {
+function getDirectorModelPreference(storageKey) {
+  var key = String(storageKey || '').trim();
+  if (!key) throw new Error('Director model preference key is required.');
   var selected = '';
   try {
-    selected = String(window.localStorage.getItem(DIRECTOR_MODEL_STORAGE_KEY) || '').trim();
-    if (!selected && legacyKey) {
-      selected = String(window.localStorage.getItem(String(legacyKey)) || '').trim();
-      if (selected) window.localStorage.setItem(DIRECTOR_MODEL_STORAGE_KEY, selected);
+    selected = String(window.localStorage.getItem(key) || '').trim();
+    if (!selected) {
+      selected = String(window.localStorage.getItem(LEGACY_DIRECTOR_MODEL_STORAGE_KEY) || '').trim();
+      if (selected) window.localStorage.setItem(key, selected);
     }
   } catch (_err) {}
   return selected;
 }
 
-function setSharedDirectorModelPreference(modelId) {
+function setDirectorModelPreference(storageKey, modelId) {
+  var key = String(storageKey || '').trim();
+  if (!key) throw new Error('Director model preference key is required.');
   var selected = String(modelId || '').trim();
   try {
-    if (selected) window.localStorage.setItem(DIRECTOR_MODEL_STORAGE_KEY, selected);
-    else window.localStorage.removeItem(DIRECTOR_MODEL_STORAGE_KEY);
+    if (selected) window.localStorage.setItem(key, selected);
+    else window.localStorage.removeItem(key);
   } catch (_err) {}
   return selected;
 }
 
-window.getSharedDirectorModelPreference = getSharedDirectorModelPreference;
-window.setSharedDirectorModelPreference = setSharedDirectorModelPreference;
+window.getDirectorModelPreference = getDirectorModelPreference;
+window.setDirectorModelPreference = setDirectorModelPreference;
 
 function debugLog() {
   if (!DEBUG) return;

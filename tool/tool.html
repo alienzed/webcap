@@ -42,6 +42,9 @@
                         <select id="app-header-model-profile-select" aria-label="Base Model"></select>
                     </label>
                 </div>
+                <div id="app-header-workspace-actions" class="app-header-workspace-actions hidden" aria-label="Workspace controls">
+                    <button id="storyboard-story-toggle" type="button" class="review-captions-btn hidden" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Overview</button>
+                </div>
                 <div id="app-header-global" class="app-header-global">
                     <div id="shell-gpu-status" class="shell-gpu-status hidden" aria-live="polite"></div>
                 </div>
@@ -1254,7 +1257,6 @@
                             <div class="storyboard-story-fields">
                                 <div class="storyboard-story-panel-heading">
                                     <strong>Story Overview</strong>
-                                    <button id="storyboard-story-toggle" type="button" class="review-captions-btn" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Overview</button>
                                 </div>
 
                                 <details class="storyboard-story-section" data-story-section="story" open>
@@ -1374,7 +1376,6 @@
                         <div class="storyboard-scene-workspace">
                             <div class="storyboard-scenes-heading">
                                 <div class="storyboard-scenes-heading-left">
-                                    <button id="storyboard-story-expand-toggle" type="button" class="review-captions-btn hidden" aria-expanded="false" aria-controls="storyboard-story-authoring">Show Overview</button>
                                     <div class="storyboard-scenes-heading-title"><strong id="storyboard-workspace-mode-title">Scenes</strong><span id="storyboard-progress-summary" class="storyboard-progress-summary"></span></div>
                                     <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn" title="Queue one new Take for every Scene in this Story.">Generate Scenes</button>
                                 </div>

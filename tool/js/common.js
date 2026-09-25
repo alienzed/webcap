@@ -75,6 +75,153 @@ function setDirectorModelPreference(storageKey, modelId) {
 window.getDirectorModelPreference = getDirectorModelPreference;
 window.setDirectorModelPreference = setDirectorModelPreference;
 
+// Ephemeral LLM timing instrumentation. Browser-memory only by design:
+// no localStorage, Story state, queue metadata, or history persistence.
+var transientLlmTimingJobs = {};
+
+function transientLlmNowSeconds() {
+  return Date.now() / 1000;
+}
+
+function transientLlmSeconds(value) {
+  var seconds = Number(value);
+  if (!isFinite(seconds) || seconds < 0) return '';
+  if (seconds < 10) {
+    return (Math.round(seconds * 10) / 10).toFixed(seconds < 1 ? 1 : 1).replace(/\.0$/, '') + 's';
+  }
+  return String(Math.round(seconds)) + 's';
+}
+
+function transientLlmOperationLabel(client, operation, status) {
+  var key = String(operation || '').trim();
+  var labels = {
+    expand_concept: 'Expanded concept',
+    define_invariants: 'Defined invariants',
+    develop_story: 'Developed story',
+    repair_scenes: 'Checked / repaired scenes',
+    write_prompt: String(client || '') === 'storyboard' ? 'Wrote scene prompt' : 'Expanded prompt',
+    refine_prompt: 'Refined prompt'
+  };
+  var label = labels[key] || (key ? key.replace(/_/g, ' ') : 'LLM call');
+  if (String(status || '') !== 'completed') label += ' failed';
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function trackTransientLlmJob(job) {
+  if (!job || !job.jobId) return null;
+  var jobId = String(job.jobId);
+  var entry = transientLlmTimingJobs[jobId];
+  if (!entry) {
+    entry = {
+      jobId: jobId,
+      client: String(job.client || ''),
+      operation: String(job.operation || ''),
+      modelId: String(job.modelId || ''),
+      createdAt: Number(job.createdAt) || 0,
+      startedAt: Number(job.startedAt) || 0,
+      finishedAt: Number(job.finishedAt) || 0,
+      phase: '',
+      phaseStartedAt: 0,
+      phases: {},
+      reported: false
+    };
+    transientLlmTimingJobs[jobId] = entry;
+  } else {
+    if (job.client) entry.client = String(job.client);
+    if (job.operation) entry.operation = String(job.operation);
+    if (job.modelId) entry.modelId = String(job.modelId);
+    if (Number(job.createdAt) > 0) entry.createdAt = Number(job.createdAt);
+    if (Number(job.startedAt) > 0) entry.startedAt = Number(job.startedAt);
+    if (Number(job.finishedAt) > 0) entry.finishedAt = Number(job.finishedAt);
+  }
+  return entry;
+}
+
+function observeTransientLlmActivity(activity) {
+  if (!activity || !activity.queue) return;
+  var queue = activity.queue;
+  var activeJobId = String(queue.activeJobId || '');
+  if (!activeJobId) return;
+  var jobs = Array.isArray(queue.jobs) ? queue.jobs : [];
+  var activeJob = jobs.find(function (job) {
+    return String(job && job.jobId || '') === activeJobId;
+  });
+  var entry = trackTransientLlmJob(activeJob || { jobId: activeJobId });
+  if (!entry) return;
+
+  var phase = String(activity.phase || '').trim();
+  if (!phase || phase === 'queued' || phase === 'complete' || phase === 'error') return;
+
+  var now = transientLlmNowSeconds();
+  if (entry.phase === phase) return;
+  if (entry.phase && entry.phaseStartedAt) {
+    entry.phases[entry.phase] = Number(entry.phases[entry.phase] || 0) + Math.max(0, now - entry.phaseStartedAt);
+  }
+  entry.phase = phase;
+  entry.phaseStartedAt = now;
+}
+
+function transientLlmGenerationSeconds(job, entry, runtimeSeconds) {
+  var result = job && job.result && typeof job.result === 'object' ? job.result : {};
+  var timings = result.timings && typeof result.timings === 'object' ? result.timings : {};
+  var promptMs = Number(timings.prompt_ms);
+  var predictedMs = Number(timings.predicted_ms);
+  var measured = 0;
+  if (isFinite(promptMs) && promptMs > 0) measured += promptMs;
+  if (isFinite(predictedMs) && predictedMs > 0) measured += predictedMs;
+  var seconds = measured > 0 ? measured / 1000 : Number(entry.phases.generating || 0);
+  if (!isFinite(seconds) || seconds <= 0) return 0;
+  if (runtimeSeconds > 0 && seconds > runtimeSeconds + 2) return Number(entry.phases.generating || 0);
+  return seconds;
+}
+
+function reportTransientLlmTiming(job) {
+  var entry = trackTransientLlmJob(job);
+  if (!entry || entry.reported) return;
+
+  var finishedAt = Number(job && job.finishedAt) || transientLlmNowSeconds();
+  if (entry.phase && entry.phaseStartedAt) {
+    entry.phases[entry.phase] = Number(entry.phases[entry.phase] || 0) + Math.max(0, finishedAt - entry.phaseStartedAt);
+    entry.phase = '';
+    entry.phaseStartedAt = 0;
+  }
+
+  var createdAt = Number(job && job.createdAt) || entry.createdAt;
+  var startedAt = Number(job && job.startedAt) || entry.startedAt;
+  var totalSeconds = createdAt > 0 ? Math.max(0, finishedAt - createdAt) : 0;
+  var runtimeSeconds = startedAt > 0 ? Math.max(0, finishedAt - startedAt) : totalSeconds;
+  var queueSeconds = createdAt > 0 && startedAt > 0 ? Math.max(0, startedAt - createdAt) : 0;
+  var loadingSeconds = Math.max(0, Number(entry.phases.loading_model || 0));
+  var generatingSeconds = transientLlmGenerationSeconds(job, entry, runtimeSeconds);
+  var preparingObserved =
+    Math.max(0, Number(entry.phases.preparing || 0)) +
+    Math.max(0, Number(entry.phases.freeing_comfy || 0));
+  var preparingSeconds = Math.max(0, runtimeSeconds - loadingSeconds - generatingSeconds);
+  if (!preparingSeconds && preparingObserved) preparingSeconds = preparingObserved;
+
+  var parts = [];
+  if (queueSeconds >= 0.5) parts.push('Queue: ' + transientLlmSeconds(queueSeconds));
+  if (preparingSeconds >= 0.5) parts.push('Preparing: ' + transientLlmSeconds(preparingSeconds));
+  if (loadingSeconds >= 0.5) parts.push('Loading: ' + transientLlmSeconds(loadingSeconds));
+  if (generatingSeconds > 0) parts.push('Generating: ' + transientLlmSeconds(generatingSeconds));
+  if (totalSeconds > 0) parts.push('Total: ' + transientLlmSeconds(totalSeconds));
+
+  entry.reported = true;
+  var source = entry.client === 'storyboard' ? 'Storyboard' : (entry.client === 'generate' ? 'Generate' : 'LLM');
+  var label = transientLlmOperationLabel(entry.client, entry.operation, job && job.status);
+  if (typeof reportConsoleInfo === 'function') {
+    reportConsoleInfo(source, label + (parts.length ? ' · ' + parts.join(' · ') : ''));
+  }
+
+  window.setTimeout(function () {
+    delete transientLlmTimingJobs[entry.jobId];
+  }, 30000);
+}
+
+window.trackTransientLlmJob = trackTransientLlmJob;
+window.observeTransientLlmActivity = observeTransientLlmActivity;
+window.reportTransientLlmTiming = reportTransientLlmTiming;
+
 function debugLog() {
   if (!DEBUG) return;
   if (arguments.length === 1) {

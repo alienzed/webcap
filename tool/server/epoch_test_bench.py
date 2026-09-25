@@ -14,7 +14,7 @@ from pathlib import Path
 from . import config as app_config
 from .folder_state_store import read_folder_state
 from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
-from .training_test_paths import browse_test_source, test_copy_path, test_source_path
+from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path
 from .execution_queue import (
     cancel_pending as execution_cancel_pending,
     cancel_queued as execution_cancel_queued,
@@ -59,13 +59,16 @@ def _resolved_test_directory(folder_path, model, source=None):
     return _test_directory(folder_path, model) if source is None else _test_directory(folder_path, model, source=source)
 
 
-def browse_source(model_id=None, source=""):
+def browse_source(model_id=None, source=None, set_name=""):
     model = get_test_model(model_id)
-    payload = browse_test_source(model.STAGING_KEY, source)
+    default_source = test_source_for_set(model.STAGING_KEY, set_name) if str(set_name or "").strip() else ""
+    resolved_source = default_source if source is None and default_source else str(source or "")
+    payload = browse_test_source(model.STAGING_KEY, resolved_source)
     payload.update({
         "operation": "test_source_browse",
         "modelId": model.PROFILE_ID,
         "modelLabel": str(model.profile["label"]),
+        "defaultSource": default_source,
     })
     return payload
 

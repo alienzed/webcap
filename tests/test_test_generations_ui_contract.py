@@ -580,18 +580,20 @@ def test_test_identity_is_owned_by_shell_header():
     assert "window.closeTestBenchActivity" in shell
 
 
-def test_test_generations_persists_model_scoped_test_source_and_keeps_set_handoff_explicit():
+def test_test_generations_enters_from_the_current_set_and_keeps_explicit_source_browsing():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    assert "function testSourceStorageKey(modelId)" in script
-    assert "webcap.test.source." in script
-    assert "function loadLastTestSource(modelId)" in script
-    assert "function saveLastTestSource(modelId, source)" in script
+    assert "webcap.test.source." not in script
+    assert "function loadLastTestSource(modelId)" not in script
+    assert "function saveLastTestSource(modelId, source)" not in script
     assert "function chooseTestSource(source)" in script
+    choose_source = script.split("function chooseTestSource(source)", 1)[1].split("function request(", 1)[0]
+    assert "pendingTestSource = testSource;" in choose_source
     assert "function openTestBenchForSetFolder(folder)" in script
-    assert "pendingTestSource = setFolderName(targetFolder);" in script
-    assert "savedSource === null ? setFolderName(launchFolder) : savedSource" in script
+    assert "if (useSetSource) pendingTestSource = null;" in script
+    assert "testSource = null;" in script
+    assert "'&setName=' + encodeURIComponent(setFolderName(launchFolder))" in script
     assert "resolvedCriteria.source = String(testSource || '')" in script
     assert 'id="test-generations-source-folders"' in html
     assert 'id="test-generations-source-path"' in html

@@ -1039,6 +1039,46 @@ def test_explicit_test_source_resolves_independently_of_set_folder(tmp_path, mon
 
     assert resolved == source
 
+def test_set_default_test_source_uses_the_same_relative_path_as_copy_to_test(monkeypatch):
+    monkeypatch.setattr(bench, "test_source_for_set", lambda _stage, set_name: "staged/" + set_name)
+    monkeypatch.setattr(
+        bench,
+        "browse_test_source",
+        lambda _stage, source: {
+            "source": source,
+            "parent": "staged",
+            "folders": [],
+            "files": ["epoch10.safetensors"],
+            "count": 1,
+        },
+    )
+
+    payload = bench.browse_source("minimax_h3", source=None, set_name="demo")
+
+    assert payload["source"] == "staged/demo"
+    assert payload["defaultSource"] == "staged/demo"
+
+
+def test_explicit_test_root_does_not_get_replaced_by_set_default(monkeypatch):
+    monkeypatch.setattr(bench, "test_source_for_set", lambda _stage, set_name: "staged/" + set_name)
+    monkeypatch.setattr(
+        bench,
+        "browse_test_source",
+        lambda _stage, source: {
+            "source": source,
+            "parent": "",
+            "folders": ["staged", "manual"],
+            "files": [],
+            "count": 0,
+        },
+    )
+
+    payload = bench.browse_source("minimax_h3", source="", set_name="demo")
+
+    assert payload["source"] == ""
+    assert payload["defaultSource"] == "staged/demo"
+
+
 
 def test_new_test_sessions_use_central_webcap_storage_and_record_source(tmp_path, monkeypatch):
     configure_execution_queue(monkeypatch, tmp_path)

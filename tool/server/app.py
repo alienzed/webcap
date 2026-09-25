@@ -1183,9 +1183,11 @@ def test_generations_models_route():
 @app.route("/fs/test_generations/source", methods=["GET"])
 def test_generations_source_route():
     try:
+        raw_source = request.args.get("source")
         payload = test_generations_browse_source(
             str(request.args.get("modelId") or "").strip(),
-            str(request.args.get("source") or "").strip(),
+            None if raw_source is None else str(raw_source).strip(),
+            str(request.args.get("setName") or "").strip(),
         )
         return jsonify({"ok": True, **payload})
     except FileNotFoundError as exc:

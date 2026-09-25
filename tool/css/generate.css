@@ -763,23 +763,39 @@
 
 .generate-result-delete {
   position: absolute;
-  z-index: 4;
-  top: 10px;
-  right: 10px;
-  width: auto;
-  min-height: 27px;
-  padding: 4px 8px;
-  opacity: .45;
-  color: var(--danger, #f87171);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  backdrop-filter: blur(6px);
-  transition: opacity 120ms ease;
+  top: 7px;
+  right: 7px;
+  z-index: 3;
+  display: grid;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 68%, transparent);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  opacity: .28;
+  cursor: pointer;
+  transition: opacity .12s ease, background .12s ease, border-color .12s ease, color .12s ease;
 }
 
 .generate-result-card:hover .generate-result-delete,
 .generate-result-delete:hover,
 .generate-result-delete:focus-visible {
   opacity: 1;
+}
+
+.generate-result-delete:hover,
+.generate-result-delete:focus-visible {
+  border-color: color-mix(in srgb, var(--danger, #f87171) 55%, var(--border));
+  background: color-mix(in srgb, var(--panel) 88%, var(--danger, #f87171) 12%);
+  color: var(--danger, #f87171);
+  outline: none;
 }
 
 

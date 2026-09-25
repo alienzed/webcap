@@ -881,8 +881,8 @@
 
     var deleteButton = document.createElement('button');
     deleteButton.type = 'button';
-    deleteButton.className = 'review-captions-btn generate-result-delete';
-    deleteButton.textContent = 'Delete';
+    deleteButton.className = 'generate-result-delete';
+    deleteButton.textContent = '×';
     deleteButton.title = 'Permanently delete this generation';
     deleteButton.setAttribute('aria-label', deleteButton.title);
     deleteButton.dataset.generateDeleteStorageId = String(result.storageId || '');

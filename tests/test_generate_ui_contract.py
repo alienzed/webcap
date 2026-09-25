@@ -228,6 +228,9 @@ def test_generate_library_cards_are_large_compact_and_rateable():
     assert "grid-template-columns: repeat(auto-fill, minmax(420px, 520px));" in css
     assert "min-height: 280px;" in css
     assert ".generate-result-card:hover .generate-result-delete" in css
+    assert "width: 28px;" in css
+    assert "opacity: .28;" in css
+    assert "deleteButton.textContent = '×';" in script
     assert "generate-result-primary" in script
     assert "data-generate-rating-value" in script
     assert "postJson('/fs/generate/result/rating'" in script

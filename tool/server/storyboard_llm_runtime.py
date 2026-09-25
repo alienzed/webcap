@@ -413,7 +413,11 @@ def list_models(reload=False):
     _ensure_server()
     settings = _director_config()
     suffix = "?reload=1" if reload and settings.get("mode", "local") == "local" else ""
-    return _normalize_models(_http_json("/models" + suffix, timeout=10))
+    models = _normalize_models(_http_json("/models" + suffix, timeout=10))
+    if settings.get("mode", "local") == "local":
+        for model in models:
+            model["sizeBytes"] = _model_file_size(model)
+    return models
 
 
 def status():

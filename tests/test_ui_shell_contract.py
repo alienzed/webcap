@@ -686,6 +686,19 @@ def test_caption_report_owns_a_large_inspectable_balance_wheel():
 
 
 
+def test_storyboard_removed_takes_use_compact_named_rows():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'class="storyboard-removed-takes-header"' in storyboard
+    assert 'class="storyboard-removed-take-row"' in storyboard
+    assert 'class="storyboard-removed-take-name"' in storyboard
+    assert '>Restore</button>' in storyboard
+    assert '">Restore ' not in storyboard
+    assert ".storyboard-removed-take-row {" in css
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in css
+
+
 def test_inference_drawer_exposes_backlog_without_treating_it_as_active_work():
     inference = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
     activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")

@@ -144,6 +144,19 @@ def test_inference_queue_polish_exposes_real_queue_actions_and_status():
     assert ".inference-queue-header-actions {" in css
 
 
+def test_storage_tests_bulk_delete_reuses_single_item_purge_safely():
+    storage = (ROOT / "tool" / "js" / "storage_manager.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storage_manager.css").read_text(encoding="utf-8")
+
+    assert "storage-bulk-delete-tests" in storage
+    assert "Delete completed (" in storage
+    assert "items.tests || []).filter(function (item) { return !!item.purgeable; })" in storage
+    assert "postJson('/fs/storage/purge'" in storage
+    assert "Each session is safety-checked again immediately before deletion." in storage
+    assert "skipped/failed (see Console)" in storage
+    assert ".storage-detail-actions" in css
+
+
 def test_console_has_one_stable_shell_host():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")

@@ -807,6 +807,14 @@ def test_storyboard_continuity_header_actions_do_not_toggle_disclosure():
     assert ".storyboard-invariants-actions" in css
 
 
+def test_storyboard_switching_stories_clears_stale_concept_lock():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    block = storyboard.split("function syncDirectorPendingControls()", 1)[1].split("\n  function ", 1)[0]
+    assert "setDirectorTargetProtected(conceptTarget, directorTargetPending(conceptTarget));" in block
+    assert "scenesTarget" not in block
+
+
 def test_storyboard_story_context_is_a_collapsible_middle_column():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

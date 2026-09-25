@@ -197,8 +197,8 @@ def _assemble(story_id, items):
         normalize_path_permissions(manifest_path)
         return {
             "storyId": story_id,
-            "folder": "output/storyboards/" + story_id + "/exports",
             "media": "selected-sequence.mp4",
+            "mediaPath": "exports/selected-sequence.mp4",
             "manifest": "exports/selected-sequence.json",
             "createdAt": manifest["createdAt"],
             "itemCount": len(items),
@@ -256,8 +256,8 @@ def current_export(story_id):
         ]
     return {
         "storyId": story_id,
-        "folder": "output/storyboards/" + story_id + "/exports",
         "media": "selected-sequence.mp4",
+        "mediaPath": "exports/selected-sequence.mp4",
         "manifest": "exports/selected-sequence.json",
         "createdAt": str(manifest.get("createdAt") or ""),
         "itemCount": len(selection),

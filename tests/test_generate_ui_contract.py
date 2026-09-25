@@ -359,3 +359,16 @@ def test_generate_prompt_library_is_local_file_backed_mvp():
     assert '@app.route("/fs/generate/prompt/delete", methods=["POST"])' in app
     assert 'app_config.output_root() / "prompts"' in store
     assert 'PROMPT_LIBRARY_NAME = "prompts.json"' in store
+
+
+def test_generate_prompt_assistant_activity_exposes_hard_stop_control():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    styles = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="generate-director-stop"' in html
+    assert "function stopDirectorJob()" in script
+    assert "operation: 'stop_or_cancel'" in script
+    assert "generateState.director.jobId" in script
+    assert "Prompt Assistant stopped." in script
+    assert ".director-stop-btn {" in styles

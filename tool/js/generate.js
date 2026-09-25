@@ -446,7 +446,6 @@
           ? 'Added to backlog.'
           : ('Queued' + (payload.job.queuePosition ? ' · #' + payload.job.queuePosition : '') + '.')
       );
-      if (typeof window.refreshInferenceQueue === 'function') window.refreshInferenceQueue();
       return typeof window.refreshInferenceQueue === 'function' ? window.refreshInferenceQueue() : null;
     }).catch(function (err) {
       reportError(err, conciseGenerateError(err, 'Generation failed'));

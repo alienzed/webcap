@@ -987,6 +987,22 @@ def generate_results_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/generate/result/delete", methods=["POST"])
+def generate_result_delete_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        storage_id = str(data.get("storageId") or "").strip()
+        if not storage_id:
+            raise ValueError("Generation storage ID is required.")
+        storage_purge("generate", storage_id)
+        return jsonify({"ok": True, "storageId": storage_id})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("GENERATE RESULT DELETE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/generate/media", methods=["GET"])
 def generate_media_route():
     try:

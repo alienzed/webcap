@@ -1129,6 +1129,63 @@ def test_new_test_sessions_use_central_webcap_storage_and_record_source(tmp_path
     assert not (set_folder / bench.TEST_RESULTS_DIR).exists()
 
 
+def test_central_test_sessions_are_scoped_to_their_owning_set(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    first_set = tmp_path / "sets" / "first"
+    second_set = tmp_path / "sets" / "second"
+    first_set.mkdir(parents=True)
+    second_set.mkdir(parents=True)
+
+    root = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR
+    first_session = root / "first-session"
+    second_session = root / "second-session"
+    first_session.mkdir(parents=True)
+    second_session.mkdir(parents=True)
+    bench._atomic_write_json(first_session / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "shared-source",
+        "ownerFolder": "sets/first",
+        "results": [],
+    })
+    bench._atomic_write_json(second_session / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "shared-source",
+        "ownerFolder": "sets/second",
+        "results": [],
+    })
+
+    assert [item["session"] for item in bench.list_sessions(first_set, source="shared-source")] == ["first-session"]
+    assert [item["session"] for item in bench.list_sessions(second_set, source="shared-source")] == ["second-session"]
+    assert bench.open_session(first_set, "first-session")["session"] == "first-session"
+    with pytest.raises(FileNotFoundError, match="this Set"):
+        bench.open_session(first_set, "second-session")
+
+
+def test_recent_test_sources_keep_same_source_separate_by_owning_set(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
+    root = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR
+    for name, owner in (("first-session", "sets/first"), ("second-session", "sets/second")):
+        session = root / name
+        session.mkdir(parents=True)
+        bench._atomic_write_json(session / "test.json", {
+            "status": "complete",
+            "modelId": "minimax_h3",
+            "source": "shared-source",
+            "ownerFolder": owner,
+            "results": [],
+        })
+
+    recent = bench.recent_test_sets()
+
+    assert {(item["folder"], item["source"], item["sessionCount"]) for item in recent} == {
+        ("sets/first", "shared-source", 1),
+        ("sets/second", "shared-source", 1),
+    }
+
+
 def test_recent_test_sources_are_derived_from_central_session_metadata(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})

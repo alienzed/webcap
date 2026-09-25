@@ -1517,7 +1517,15 @@ def _scene_for_story(story, scene_id):
 
 
 @_serialized_mutation
-def add_take_upload(story_id, scene_id, filename, stream, effective_loras=None, generation_job_id=""):
+def add_take_upload(
+    story_id,
+    scene_id,
+    filename,
+    stream,
+    effective_loras=None,
+    generation_job_id="",
+    generated_provenance=None,
+):
     story = load_story(story_id)
     scene_id, scene = _scene_for_story(story, scene_id)
     source_name = str(filename or "").strip()
@@ -1565,6 +1573,31 @@ def add_take_upload(story_id, scene_id, filename, stream, effective_loras=None, 
         "label": "",
         "rating": None,
     }
+    if generated_provenance is not None:
+        if not isinstance(generated_provenance, dict):
+            raise ValueError("Generated Take provenance must be an object.")
+        for key in (
+            "prompt",
+            "entryState",
+            "exitState",
+            "sourcePrompt",
+            "durationSeconds",
+            "seed",
+            "seedMode",
+            "aspectRatio",
+            "megapixels",
+            "loras",
+            "references",
+            "workflowProfile",
+            "providerJobId",
+            "jobId",
+            "elapsedMs",
+            "effectiveInput",
+        ):
+            if key in generated_provenance:
+                take[key] = copy.deepcopy(generated_provenance[key])
+        take["generated"] = True
+
     takes = scene.get("takes") if isinstance(scene.get("takes"), dict) else {}
     take_order = list(scene.get("takeOrder") or [])
     takes[take_id] = take

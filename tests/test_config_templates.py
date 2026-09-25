@@ -212,6 +212,15 @@ def test_training_repeat_reference_epochs_defaults_to_90():
     assert normalized["training"]["repeat_reference_epochs"] == 90
 
 
+def test_output_root_blank_uses_legacy_fs_output_location(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_module, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(config_module, "config", {
+        "filesystem": {"root": str(tmp_path), "output_root": "", "models": ""}
+    })
+
+    assert config_module.output_root() == tmp_path / "output"
+
+
 def test_filesystem_output_root_defaults_blank_and_preserves_configured_path():
     defaulted = config_module.validate_config_payload({
         "filesystem": {"root": "C:/training", "models": ""},

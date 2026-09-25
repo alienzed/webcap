@@ -262,3 +262,20 @@ def test_execution_queue_cancel_pending_accepts_backlog(queue_root):
     cancelled = execution_queue.cancel_pending(backlog["id"])
 
     assert cancelled["status"] == "cancelled"
+
+
+
+def test_execution_queue_expected_claim_refuses_a_changed_runnable_head(queue_root):
+    backlog = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
+    queued = execution_queue.enqueue("inference", {"n": 2})
+
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={backlog["id"]},
+        expected_job_id=queued["id"],
+    )
+
+    assert claimed is None
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+    assert execution_queue.get_job(queued["id"])["status"] == "queued"
+    assert execution_queue.lane_snapshot("inference")["activeJobId"] == ""

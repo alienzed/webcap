@@ -826,6 +826,27 @@ def test_committed_test_result_is_recognized_after_queue_job_is_still_active(tmp
     assert outcome["result"]["mediaFile"] == "epoch.png"
 
 
+def test_test_cancel_marker_prevents_replay_if_process_dies_before_queue_removal(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+    child = execution_queue.get_job(child_id)
+
+    bench._set_session_cancel_marker(session, child_id, True, reduce_total=True)
+
+    outcome = bench.committed_inference_outcome(child)
+
+    assert execution_queue.get_job(child_id)["status"] in {"queued", "backlog"}
+    assert outcome["status"] == "cancelled"
+    assert bench._read_status(session)["total"] == 0
+
+
 def test_transient_test_cancel_remains_recoverable_after_receipt_is_lost(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
     payload = bench.enqueue(

@@ -1274,10 +1274,10 @@
   function syncDirectorPendingControls() {
     var currentStoryId = storyState.story ? String(storyState.story.id || '') : '';
     var conceptTarget = { kind: 'concept', storyId: currentStoryId };
-    var scenesTarget = { kind: 'scenes', storyId: currentStoryId };
     var selector = el('storyboard-director-model');
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;
 
+    setDirectorTargetProtected(conceptTarget, directorTargetPending(conceptTarget));
     Object.keys(storyState.director.pendingTargets).forEach(function (key) {
       setDirectorTargetProtected(storyState.director.pendingTargets[key], true);
     });

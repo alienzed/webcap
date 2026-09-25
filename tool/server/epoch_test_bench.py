@@ -825,16 +825,24 @@ def committed_inference_outcome(job):
     status = _read_status(session_directory) or {}
 
     for result in status.get("results") if isinstance(status.get("results"), list) else []:
-        if isinstance(result, dict) and str(result.get("jobId") or "") == job_id:
-            return {
+        if not isinstance(result, dict) or str(result.get("jobId") or "") != job_id:
+            continue
+        media_file = str(result.get("mediaFile") or "").strip()
+        try:
+            committed_media = _session_result_path(session_directory, media_file)
+        except (ValueError, RuntimeError):
+            committed_media = None
+        if committed_media is None or not committed_media.is_file():
+            continue
+        return {
+            "status": "completed",
+            "result": {
                 "status": "completed",
-                "result": {
-                    "status": "completed",
-                    "session": session_id,
-                    "mediaFile": str(result.get("mediaFile") or ""),
-                },
-                "error": "",
-            }
+                "session": session_id,
+                "mediaFile": media_file,
+            },
+            "error": "",
+        }
 
     if job_id in {str(value) for value in (status.get("skippedJobIds") or [])}:
         return {

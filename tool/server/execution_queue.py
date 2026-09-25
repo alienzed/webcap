@@ -278,13 +278,14 @@ def resume_lane(lane_name):
         return lane_snapshot(lane_name)
 
 
-def claim_next(lane_name, runnable_backlog_ids=None):
+def claim_next(lane_name, runnable_backlog_ids=None, expected_job_id=""):
     now = time.time()
     runnable_backlog_ids = {
         str(job_id or "").strip()
         for job_id in (runnable_backlog_ids or ())
         if str(job_id or "").strip()
     }
+    expected_job_id = str(expected_job_id or "").strip()
     with _lock:
         state = _read_state()
         lane = _lane(state, lane_name)
@@ -303,6 +304,8 @@ def claim_next(lane_name, runnable_backlog_ids=None):
             None,
         )
         if job is None:
+            return None
+        if expected_job_id and str(job.get("id") or "") != expected_job_id:
             return None
         job["status"] = "starting"
         job["startedAt"] = now

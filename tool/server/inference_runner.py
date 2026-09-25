@@ -596,9 +596,11 @@ def _monitor_loop():
         time.sleep(2)
 
 
-def _ensure_monitor_started():
+def _ensure_monitor_started(drain_backlog=False):
     global _monitor_thread
     with _monitor_lock:
+        if drain_backlog:
+            _backlog_drain_enabled.set()
         if _monitor_thread and _monitor_thread.is_alive():
             return
         _monitor_thread = threading.Thread(
@@ -615,8 +617,7 @@ def start_observer():
 
 
 def _start_worker_for_requested_inference():
-    _backlog_drain_enabled.set()
-    _ensure_monitor_started()
+    _ensure_monitor_started(drain_backlog=True)
 
 
 def enqueue_generate(request, label=""):

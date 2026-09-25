@@ -261,9 +261,30 @@ def execute_inference(job_id, request, context):
 def _generation_job(job):
     if not isinstance(job, dict):
         return None
+    result = job.get("result") if isinstance(job.get("result"), dict) else {}
+
+    # inference_runner.action() returns its public job view rather than the raw
+    # execution_queue shape. Support both so action responses never need a
+    # second terminal-receipt lookup.
+    if "jobId" in job and "id" not in job:
+        return {
+            "jobId": str(job.get("jobId") or ""),
+            "storyId": str(job.get("storyId") or ""),
+            "sceneId": str(job.get("sceneId") or ""),
+            "status": str(job.get("status") or ""),
+            "queuedAt": job.get("createdAt"),
+            "startedAt": job.get("startedAt"),
+            "completedAt": job.get("finishedAt"),
+            "queuePosition": int(job.get("queuePosition") or 0),
+            "comfyJobId": str(job.get("providerJobId") or ""),
+            "comfyStatus": str(job.get("providerStatus") or ""),
+            "takeId": result.get("takeId"),
+            "requestedAction": str(job.get("requestedAction") or ""),
+            "error": str(job.get("error") or ""),
+        }
+
     metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
     details = job.get("details") if isinstance(job.get("details"), dict) else {}
-    result = job.get("result") if isinstance(job.get("result"), dict) else {}
     return {
         "jobId": str(job.get("id") or ""),
         "storyId": str(metadata.get("storyId") or ""),

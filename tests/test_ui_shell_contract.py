@@ -124,6 +124,26 @@ def test_global_activity_drawer_is_a_read_only_sibling_of_inference_queue():
     assert ".activity-monitor-queue-row" in css
 
 
+def test_inference_queue_polish_exposes_real_queue_actions_and_status():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    inference = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "inference_runner.py").read_text(encoding="utf-8")
+
+    assert 'id="inference-queue-pause-toggle"' in html
+    assert 'id="inference-queue-counts"' in html
+    assert "pause_queue" in inference
+    assert "resume_queue" in inference
+    assert "reorder_up" in inference
+    assert "reorder_down" in inference
+    assert "payload.direction" in inference
+    assert "document.addEventListener('pointerdown'" in inference
+    assert "function formatJobAge(job)" in inference
+    assert "queue.get(\"waitReason\")" in backend
+    assert ".inference-queue-position {" in css
+    assert ".inference-queue-header-actions {" in css
+
+
 def test_console_has_one_stable_shell_host():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")

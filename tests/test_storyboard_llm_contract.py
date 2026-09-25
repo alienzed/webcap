@@ -284,6 +284,7 @@ def test_define_invariants_is_a_small_character_location_pass():
 def test_expand_concept_is_creative_but_not_scene_planning():
     story = _story()
     story["concept"] = "Rise and fall of a New York gangster."
+    story["style"] = "High-fashion runway editorial."
 
     request = storyboard_llm_contract.build_request(story, "", "expand_concept")
     prompt = request["prompt"]
@@ -291,6 +292,10 @@ def test_expand_concept_is_creative_but_not_scene_planning():
     assert request["operation"] == "expand_concept"
     assert request["output"] == "text"
     assert "Rise and fall of a New York gangster." in prompt
+    assert "[STORY VISUAL / ATMOSPHERE]" in prompt
+    assert "High-fashion runway editorial." in prompt
+    assert "Treat the supplied Visual / Atmosphere as authoritative" in prompt
+    assert "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere" in prompt
     assert "Develop the narrative arc" in prompt
     assert "do not break the Story into Scenes yet" in prompt
     assert "do not write MiniMax H3 prompts" in prompt

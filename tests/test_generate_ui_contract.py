@@ -224,8 +224,31 @@ def test_generate_inference_creates_and_updates_pending_preview_card():
     assert "syncGenerationPreviewCard(payload.job);" in script
     assert "syncGenerationPreviewCard(job);" in script
     assert "dataset.generationJobId" in script
-    assert "generate-result-card is-pending" in script
+    assert "generate-take-card is-pending" in script
+    assert "renderPendingStage(job);" in script
     assert "generate-result-pending-indicator" in script
     assert "removeGenerationPreviewCard(jobId)" in script
-    assert ".generate-result-card.is-pending" in css
+    assert ".generate-take-card.is-pending" in css
     assert ".generate-result-pending-media" in css
+
+
+def test_generate_has_lightroom_style_create_and_library_modes():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert 'id="generate-create-mode-btn"' in html
+    assert 'id="generate-library-mode-btn"' in html
+    assert 'id="generate-create-view"' in html
+    assert 'id="generate-library-view"' in html
+    assert 'id="generate-active-preview"' in html
+    assert 'id="generate-takes"' in html
+    assert "function setGenerateViewMode(mode)" in script
+    assert "function renderActiveResult(result)" in script
+    assert "function renderTakes(results)" in script
+    assert "function setTakesCollapsed(collapsed)" in script
+    assert ".generate-create-view {" in css
+    assert "grid-template-columns: minmax(330px, 390px) minmax(0, 1fr) minmax(230px, 280px);" in css
+    assert ".generate-stage-panel {" in css
+    assert ".generate-takes-panel {" in css
+    assert ".generate-library-view {" in css

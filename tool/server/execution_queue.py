@@ -19,6 +19,8 @@ TERMINAL_STATUSES = {"completed", "failed", "cancelled", "stopped", "interrupted
 
 _lock = threading.RLock()
 _resource_owner = ""
+_transient_receipts = {}
+_TRANSIENT_RECEIPT_LIMIT = 200
 
 
 def _state_path():
@@ -135,6 +137,43 @@ def _record_recent(lane, job, keep=80):
     recent.append(receipt)
     if len(recent) > keep:
         del recent[:-keep]
+
+
+def _remember_transient_receipt(receipt):
+    if not isinstance(receipt, dict):
+        return
+    job_id = str(receipt.get("id") or "").strip()
+    if not job_id:
+        return
+    _transient_receipts[job_id] = copy.deepcopy(receipt)
+    while len(_transient_receipts) > _TRANSIENT_RECEIPT_LIMIT:
+        _transient_receipts.pop(next(iter(_transient_receipts)))
+
+
+def transient_receipt(job_id, consume=False):
+    job_id = str(job_id or "").strip()
+    with _lock:
+        receipt = _transient_receipts.get(job_id)
+        if receipt is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        result = copy.deepcopy(receipt)
+        if consume:
+            _transient_receipts.pop(job_id, None)
+        return result
+
+
+def clear_transient_receipts(lane_name=""):
+    lane_name = str(lane_name or "").strip()
+    with _lock:
+        if not lane_name:
+            _transient_receipts.clear()
+            return
+        remove_ids = [
+            job_id for job_id, receipt in _transient_receipts.items()
+            if str(receipt.get("lane") or "") == lane_name
+        ]
+        for job_id in remove_ids:
+            _transient_receipts.pop(job_id, None)
 
 
 def lane_guard(lane_name, name, default=None):
@@ -436,6 +475,7 @@ def finish_job_transient(job_id, status="completed", result=None, error=""):
         if isinstance(result, dict):
             job.setdefault("result", {}).update(copy.deepcopy(result))
         receipt = _public_job(job)
+        _remember_transient_receipt(receipt)
         lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
         if lane.get("activeJobId") == job["id"]:
             lane["activeJobId"] = ""
@@ -460,6 +500,7 @@ def cancel_pending_transient(job_id):
         job["updatedAt"] = now
         job["requestedAction"] = ""
         receipt = _public_job(job)
+        _remember_transient_receipt(receipt)
         lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
         _refresh_positions(lane)
         _write_state(state)
@@ -482,7 +523,9 @@ def cancel_all_pending_transient(lane_name):
             job["finishedAt"] = now
             job["updatedAt"] = now
             job["requestedAction"] = ""
-            cancelled.append(_public_job(job))
+            receipt = _public_job(job)
+            _remember_transient_receipt(receipt)
+            cancelled.append(receipt)
         lane["jobs"] = kept
         _refresh_positions(lane)
         _write_state(state)
@@ -520,6 +563,7 @@ def shelve_unfinished(lane_name):
 
 def discard_terminal_and_recent(lane_name):
     """Remove legacy terminal/history records while preserving unfinished work."""
+    clear_transient_receipts(lane_name)
     with _lock:
         state = _read_state()
         lane = _lane(state, lane_name)
@@ -534,6 +578,7 @@ def discard_terminal_and_recent(lane_name):
 
 def clear_lane(lane_name):
     """Discard all durable state for an execution lane."""
+    clear_transient_receipts(lane_name)
     with _lock:
         state = _read_state()
         state.setdefault("lanes", {}).pop(str(lane_name), None)

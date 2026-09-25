@@ -359,3 +359,21 @@ def test_generate_reference_cleanup_route_is_scoped_to_store_helper(monkeypatch)
         ".webcap_runtime/generate-references/ref-2/last.png",
     ]
 
+
+
+def test_generate_delete_route_uses_storage_purge(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        app_module,
+        "storage_purge",
+        lambda area, item_id, folder="": seen.append((area, item_id, folder)) or {"ok": True},
+    )
+    client = app_module.app.test_client()
+
+    response = client.post("/fs/generate/result/delete", json={
+        "storageId": "2026-09-24/job-1",
+    })
+
+    assert response.status_code == 200
+    assert response.get_json()["storageId"] == "2026-09-24/job-1"
+    assert seen == [("generate", "2026-09-24/job-1", "")]

@@ -350,7 +350,9 @@
       var status = String(current.status || '');
       if (status === 'completed') return Promise.resolve(current.result || {});
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
-        throw new Error(current.error || ('Storyboard Director job ' + status + '.'));
+        var terminalError = new Error(current.error || ('Storyboard Director job ' + status + '.'));
+        terminalError.jobStatus = status;
+        throw terminalError;
       }
       return new Promise(function (resolve) { setTimeout(resolve, directorJobPollDelay(current)); }).then(function () {
         return directorJobRequest(current.jobId, false);
@@ -620,6 +622,7 @@
       loading_model: 'Loading model…',
       generating: 'Generating response…',
       complete: 'Complete',
+      stopped: 'Stopped',
       error: 'Failed'
     };
     return labels[String(phase || '')] || 'Working…';
@@ -975,11 +978,19 @@
       var candidateTarget = directorTargetFromJob(candidate);
       return candidateTarget && directorTargetKey(candidateTarget) === targetKey;
     });
-    if (!job || String(job.status || '') !== 'queued') return activity;
-    if (String(queue.activeJobId || '') === String(job.jobId || '')) return activity;
+    if (!job) return activity;
+
+    var jobId = String(job.jobId || '');
+    var jobStatus = String(job.status || '');
+    if (jobStatus !== 'queued' || String(queue.activeJobId || '') === jobId) {
+      return Object.assign({}, activity || {}, {
+        jobId: jobId,
+        jobStatus: jobStatus
+      });
+    }
 
     var queuedPosition = Math.max(1, Number(job.queuePosition) || 1);
-    var activeAhead = queue.activeJobId && String(queue.activeJobId) !== String(job.jobId || '') ? 1 : 0;
+    var activeAhead = queue.activeJobId && String(queue.activeJobId) !== jobId ? 1 : 0;
     var ahead = Math.max(0, queuedPosition - 1 + activeAhead);
     var waitOwner = ahead > 0 ? 'llm' : String(queue.waitOwner || '');
     var waitReason = ahead > 0
@@ -996,7 +1007,9 @@
       queueAhead: ahead,
       queueDepth: Number(queue.queueDepth) || 0,
       waitOwner: waitOwner,
-      waitReason: waitReason
+      waitReason: waitReason,
+      jobId: jobId,
+      jobStatus: jobStatus
     });
   }
 
@@ -1020,11 +1033,20 @@
     var card = el('storyboard-director-activity');
     var phase = el('storyboard-director-activity-phase');
     var detail = el('storyboard-director-activity-detail');
-    if (!card || !phase || !detail) throw new Error('Storyboard Director activity markup is missing.');
+    var stop = el('storyboard-director-stop');
+    if (!card || !phase || !detail || !stop) throw new Error('Storyboard Director activity markup is missing.');
 
-    var terminal = activity && ['complete', 'error'].indexOf(String(activity.phase || '')) !== -1;
+    var phaseName = String(activity && activity.phase || '');
+    var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
     var visible = directorActivityActive() || (activity && activity.active) || terminal;
     card.classList.toggle('hidden', !visible);
+    var jobId = String(activity && activity.jobId || '');
+    var jobStatus = String(activity && activity.jobStatus || '');
+    var canStop = !!jobId && ['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(jobStatus) === -1;
+    stop.dataset.directorJobId = jobId;
+    stop.classList.toggle('hidden', !canStop);
+    stop.disabled = jobStatus === 'stopping';
+    stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
     positionDirectorActivity();
     if (!visible) return;
     updateDirectorTrend(system);
@@ -1131,6 +1153,36 @@
       if (!directorActivityActive()) return;
       if (storyState.director.activityTimer) clearTimeout(storyState.director.activityTimer);
       storyState.director.activityTimer = setTimeout(refreshDirectorActivity, 1500);
+    });
+  }
+
+  function directorWasStopped(err) {
+    return !!(err && ['stopped', 'cancelled'].indexOf(String(err.jobStatus || '')) !== -1);
+  }
+
+  function stopDirectorJob() {
+    var button = el('storyboard-director-stop');
+    var jobId = String(button && button.dataset.directorJobId || '');
+    if (!button || !jobId || button.disabled) return;
+    button.disabled = true;
+    button.textContent = 'Stopping…';
+    fetch('/fs/director/job', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation: 'stop_or_cancel', jobId: jobId })
+    }).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body || body.ok === false) {
+          throw new Error((body && body.error) || 'Director Stop failed.');
+        }
+        return body;
+      });
+    }).then(function () {
+      return refreshDirectorActivity();
+    }).catch(function (err) {
+      button.disabled = false;
+      button.textContent = 'Stop';
+      reportError(err);
     });
   }
 
@@ -1338,8 +1390,11 @@
         return consumeDirectorJob(payload.jobId);
       });
     }).catch(function (err) {
-      updateSceneDirectorStatus(sceneId, 'Director failed');
-      reportError(err);
+      if (directorWasStopped(err)) updateSceneDirectorStatus(sceneId, 'Director stopped');
+      else {
+        updateSceneDirectorStatus(sceneId, 'Director failed');
+        reportError(err);
+      }
     }).finally(function () {
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
@@ -1516,7 +1571,9 @@
         reportConsoleInfo('Storyboard', 'Defined ' + String(payload.addedCount || 0) + ' new Story invariant' + (Number(payload.addedCount || 0) === 1 ? '' : 's') + ' from the concept.');
         return consumeDirectorJob(payload.jobId);
       });
-    }).catch(reportError).finally(function () {
+    }).catch(function (err) {
+      if (!directorWasStopped(err)) reportError(err);
+    }).finally(function () {
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
     });
@@ -1561,8 +1618,11 @@
         return consumeDirectorJob(payload.jobId);
       });
     }).catch(function (err) {
-      setDevelopStatus('Concept expansion failed.');
-      reportError(err);
+      if (directorWasStopped(err)) setDevelopStatus('Concept expansion stopped.');
+      else {
+        setDevelopStatus('Concept expansion failed.');
+        reportError(err);
+      }
     }).finally(function () {
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
@@ -1645,8 +1705,11 @@
         return consumeDirectorJob(payload.jobId);
       });
     }).catch(function (err) {
-      setRepairStatus('Check & Repair failed.');
-      reportError(err);
+      if (directorWasStopped(err)) setRepairStatus('Check & Repair stopped.');
+      else {
+        setRepairStatus('Check & Repair failed.');
+        reportError(err);
+      }
     }).finally(function () {
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
@@ -1726,8 +1789,11 @@
         return consumeDirectorJob(payload.jobId);
       });
     }).catch(function (err) {
-      setDevelopStatus('Story development failed.');
-      reportError(err);
+      if (directorWasStopped(err)) setDevelopStatus('Story development stopped.');
+      else {
+        setDevelopStatus('Story development failed.');
+        reportError(err);
+      }
     }).finally(function () {
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
@@ -4268,6 +4334,10 @@
     sceneProgression.addEventListener('scroll', function () {
       closeSceneActionMenus();
     }, { passive: true });
+    el('storyboard-director-stop').onclick = function () {
+      stopDirectorJob();
+    };
+
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;
       setDirectorModelPreference('webcap.storyboard.directorModel', this.value);

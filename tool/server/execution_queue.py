@@ -416,6 +416,131 @@ def finish_job(job_id, status="completed", result=None, error=""):
         return _public_job(job)
 
 
+def finish_job_transient(job_id, status="completed", result=None, error=""):
+    """Finish an active job and remove it from durable queue state in one write."""
+    if status not in TERMINAL_STATUSES:
+        raise ValueError("Execution queue finish status must be terminal.")
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        if job.get("status") not in ACTIVE_STATUSES:
+            raise ValueError("Only an active execution job can be finished.")
+        lane = _lane(state, lane_name)
+        job["status"] = status
+        job["finishedAt"] = now
+        job["updatedAt"] = now
+        job["error"] = str(error or "")
+        if isinstance(result, dict):
+            job.setdefault("result", {}).update(copy.deepcopy(result))
+        receipt = _public_job(job)
+        lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+        if lane.get("activeJobId") == job["id"]:
+            lane["activeJobId"] = ""
+        _refresh_positions(lane)
+        _write_state(state)
+        return receipt
+
+
+def cancel_pending_transient(job_id):
+    """Cancel pending work without creating durable terminal history."""
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        if job.get("status") not in PENDING_STATUSES:
+            raise ValueError("Only pending execution jobs can be cancelled.")
+        lane = _lane(state, lane_name)
+        job["status"] = "cancelled"
+        job["finishedAt"] = now
+        job["updatedAt"] = now
+        job["requestedAction"] = ""
+        receipt = _public_job(job)
+        lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+        _refresh_positions(lane)
+        _write_state(state)
+        return receipt
+
+
+def cancel_all_pending_transient(lane_name):
+    """Cancel all pending work without creating durable terminal history."""
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name)
+        cancelled = []
+        kept = []
+        for job in lane.get("jobs", []):
+            if job.get("status") not in PENDING_STATUSES:
+                kept.append(job)
+                continue
+            job["status"] = "cancelled"
+            job["finishedAt"] = now
+            job["updatedAt"] = now
+            job["requestedAction"] = ""
+            cancelled.append(_public_job(job))
+        lane["jobs"] = kept
+        _refresh_positions(lane)
+        _write_state(state)
+        return cancelled
+
+
+def shelve_unfinished(lane_name):
+    """Return queued or formerly active work to inert backlog state."""
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name)
+        changed = []
+        for job in lane.get("jobs", []):
+            if job.get("status") not in (PENDING_STATUSES | ACTIVE_STATUSES):
+                continue
+            if job.get("status") == "backlog":
+                continue
+            job["status"] = "backlog"
+            job["queuePosition"] = 0
+            job["startedAt"] = None
+            job["finishedAt"] = None
+            job["error"] = ""
+            job["requestedAction"] = ""
+            job["details"] = {}
+            job["result"] = {}
+            job["updatedAt"] = now
+            changed.append(_public_job(job))
+        lane["activeJobId"] = ""
+        _refresh_positions(lane)
+        _write_state(state)
+    release_resource(lane_name)
+    return changed
+
+
+def discard_terminal_and_recent(lane_name):
+    """Remove legacy terminal/history records while preserving unfinished work."""
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name)
+        lane["jobs"] = [
+            job for job in lane.get("jobs", [])
+            if job.get("status") not in TERMINAL_STATUSES
+        ]
+        lane["recent"] = []
+        _refresh_positions(lane)
+        _write_state(state)
+
+
+def clear_lane(lane_name):
+    """Discard all durable state for an execution lane."""
+    with _lock:
+        state = _read_state()
+        state.setdefault("lanes", {}).pop(str(lane_name), None)
+        _write_state(state)
+    release_resource(lane_name)
+
+
 def request_stop(job_id):
     now = time.time()
     with _lock:

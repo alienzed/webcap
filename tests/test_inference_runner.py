@@ -689,6 +689,10 @@ def test_inference_restart_does_not_reanimate_historical_terminal_provider_hold(
     snapshot = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
     assert snapshot["paused"] is False
     assert snapshot["activeJobId"] == ""
+    assert snapshot["jobs"] == []
+    assert execution_queue.recent_snapshot(inference_runner.EXECUTION_LANE) == []
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(queued["id"])
     assert touched == []
     with inference_runner._provider_hold_lock:
         assert not inference_runner._provider_cleanup_holds

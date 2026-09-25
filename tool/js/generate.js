@@ -376,6 +376,24 @@
     button.setAttribute('aria-expanded', generateState.takesCollapsed ? 'false' : 'true');
   }
 
+  function formatGenerationElapsedMs(value) {
+    var ms = Number(value);
+    if (!isFinite(ms) || ms < 0) return '';
+    var totalSeconds = Math.max(0, Math.round(ms / 1000));
+    var hours = Math.floor(totalSeconds / 3600);
+    var minutes = Math.floor((totalSeconds % 3600) / 60);
+    var seconds = totalSeconds % 60;
+    if (hours) return hours + 'h ' + minutes + 'm';
+    if (minutes) return minutes + 'm ' + String(seconds).padStart(2, '0') + 's';
+    return seconds + 's';
+  }
+
+  function generationElapsed(job) {
+    var startedAt = Number(job && job.startedAt || 0);
+    if (!startedAt) return '';
+    return formatGenerationElapsedMs(Date.now() - (startedAt * 1000));
+  }
+
   function resultSummary(result) {
     var settings = result && result.settings || {};
     var summary = [];
@@ -383,6 +401,8 @@
     if (settings.aspectRatio) summary.push(String(settings.aspectRatio));
     if (settings.duration) summary.push(String(settings.duration) + 's');
     if (result && result.seed !== undefined && result.seed !== null) summary.push('Seed ' + result.seed);
+    var elapsed = formatGenerationElapsedMs(result && result.elapsedMs);
+    if (elapsed) summary.push(elapsed);
     return summary.join(' · ');
   }
 
@@ -543,9 +563,10 @@
     var queuePosition = Number(job && job.queuePosition || 0);
     if (status === 'backlog') return 'Backlog';
     if (status === 'queued') return 'Queued' + (queuePosition ? ' · #' + queuePosition : '');
-    if (status === 'starting') return 'Starting…';
-    if (status === 'stopping') return 'Stopping…';
-    return 'Generating…';
+    var elapsed = generationElapsed(job);
+    if (status === 'starting') return 'Starting…' + (elapsed ? ' · ' + elapsed : '');
+    if (status === 'stopping') return 'Stopping…' + (elapsed ? ' · ' + elapsed : '');
+    return 'Generating…' + (elapsed ? ' · ' + elapsed : '');
   }
 
   function generationPreviewCard(jobId) {

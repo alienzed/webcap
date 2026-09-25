@@ -1172,20 +1172,19 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         for index, candidate in enumerate(candidates, start=1):
             label_root = str(request.get("name") or "").strip() or session_directory.name
             label = label_root + " · " + candidate["label"]
-            job = enqueue_test(
-                request,
-                {
-                    "folder": folder,
-                    "sessionId": session_directory.name,
-                    "candidateKind": candidate["kind"],
-                    "candidateFile": candidate["file"],
-                    "candidateLabel": candidate["label"],
-                    "candidateIndex": index,
-                    "source": str(request.get("source") or ""),
-                },
-                label=label,
-                deferred=bool(legacy_job_id),
-            )
+            context = {
+                "folder": folder,
+                "sessionId": session_directory.name,
+                "candidateKind": candidate["kind"],
+                "candidateFile": candidate["file"],
+                "candidateLabel": candidate["label"],
+                "candidateIndex": index,
+                "source": str(request.get("source") or ""),
+            }
+            if legacy_job_id:
+                job = enqueue_test(request, context, label=label, deferred=True)
+            else:
+                job = enqueue_test(request, context, label=label)
             queued_ids.append(job["jobId"])
             with _status_lock:
                 current_status = _read_status(session_directory) or {}

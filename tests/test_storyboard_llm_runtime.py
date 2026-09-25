@@ -3,9 +3,15 @@ import pytest
 from tool.server import storyboard_llm_runtime
 
 
-def test_director_capacity_defaults_keep_safe_output_limit():
+def test_director_capacity_defaults_defer_to_runtime():
     assert storyboard_llm_runtime.DEFAULT_CONTEXT_SIZE is None
-    assert storyboard_llm_runtime.DEFAULT_MAX_TOKENS == 8192
+    assert storyboard_llm_runtime.DEFAULT_MAX_TOKENS is None
+
+
+def test_operation_max_tokens_caps_only_short_concept_expansion():
+    assert storyboard_llm_runtime._operation_max_tokens("expand_concept") == 4096
+    assert storyboard_llm_runtime._operation_max_tokens("develop_story") is None
+    assert storyboard_llm_runtime._operation_max_tokens("write_prompt") is None
 
 
 def test_completion_result_rejects_token_limit_truncation():
@@ -251,7 +257,7 @@ def test_chat_uses_selected_model_disables_thinking_retains_model_and_releases_g
     ]
 
 
-def test_chat_uses_safe_default_when_limit_is_auto(monkeypatch):
+def test_chat_omits_max_tokens_when_limit_is_auto(monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
     monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: None)
@@ -278,7 +284,7 @@ def test_chat_uses_safe_default_when_limit_is_auto(monkeypatch):
     result = storyboard_llm_runtime.chat("director", [{"role": "user", "content": "Write."}])
 
     assert result["text"] == "done"
-    assert captured["payload"]["max_tokens"] == 8192
+    assert "max_tokens" not in captured["payload"]
 
 
 def test_ensure_local_model_loaded_reuses_loaded_selection(monkeypatch):

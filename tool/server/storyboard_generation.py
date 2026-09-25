@@ -3,6 +3,7 @@ import io
 import logging
 import secrets
 import threading
+import time
 from pathlib import Path
 
 from . import inference_runtime
@@ -173,6 +174,7 @@ def execute_inference(job_id, request, context):
 
     model = get_inference_model(request.get("modelId"))
     template = model.load_template()
+    started = time.monotonic()
     uploaded = {}
     output_ref = None
     try:
@@ -207,6 +209,7 @@ def execute_inference(job_id, request, context):
             model.find_output_ref,
         )
         media = inference_runtime.download_output(output_ref)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
 
         _story, take = add_take_upload(
             story_id,
@@ -233,6 +236,7 @@ def execute_inference(job_id, request, context):
                 "references": copy.deepcopy(context.get("referenceRecords") or []),
                 "workflowProfile": "minimax_h3_inference_v1",
                 "providerJobId": provider_job_id,
+                "elapsedMs": elapsed_ms,
                 "effectiveInput": effective_input,
             },
         )

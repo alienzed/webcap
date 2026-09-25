@@ -347,11 +347,15 @@
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
         throw new Error(current.error || ('Storyboard Director job ' + status + '.'));
       }
-      return new Promise(function (resolve) { setTimeout(resolve, 750); }).then(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, directorJobPollDelay(current)); }).then(function () {
         return directorJobRequest(current.jobId, false);
       }).then(poll);
     }
     return poll(job);
+  }
+
+  function directorJobPollDelay(job) {
+    return String(job && job.status || '') === 'queued' ? 2000 : 1000;
   }
 
   function directorQueueSnapshot(includeTerminal) {
@@ -489,7 +493,7 @@
           throw new Error(current.error || ('Storyboard Director job ' + status + '.'));
         });
       }
-      return new Promise(function (resolve) { setTimeout(resolve, 750); }).then(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, directorJobPollDelay(current)); }).then(function () {
         return directorJobRequest(current.jobId, false);
       }).then(poll);
     }
@@ -3950,7 +3954,7 @@
         clearGenerationPoll(jobId);
         reportError(err);
       });
-    }, 2000);
+    }, delay);
   }
 
   function refreshGenerationQueue(storyId) {
@@ -3970,7 +3974,7 @@
       });
       syncStoryboardGenerationActivity();
       jobs.forEach(function (job) {
-        if (generationJobIsActive(job)) pollGeneration(storyId, job.jobId);
+        if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);
       });
       return payload.queue;
     });
@@ -4000,7 +4004,7 @@
       reportGenerationStatus(sceneId, job, previousJob);
       syncStoryboardGenerationActivity();
       if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(sceneId);
-      pollGeneration(storyId, job.jobId);
+      if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);
       return job;
     });
   }

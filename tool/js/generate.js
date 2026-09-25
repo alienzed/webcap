@@ -706,11 +706,20 @@
 
     var actions = document.createElement('div');
     actions.className = 'generate-result-actions';
+
+    var openButton = document.createElement('button');
+    openButton.type = 'button';
+    openButton.className = 'review-captions-btn';
+    openButton.textContent = 'Open';
+    openButton.dataset.generateOpenResultKey = resultKey(result);
+
     var deleteButton = document.createElement('button');
     deleteButton.type = 'button';
     deleteButton.className = 'review-captions-btn generate-result-delete';
     deleteButton.textContent = 'Delete';
     deleteButton.dataset.generateDeleteStorageId = String(result.storageId || '');
+
+    actions.appendChild(openButton);
     actions.appendChild(deleteButton);
 
     footer.appendChild(model);
@@ -1303,26 +1312,26 @@
       renderLoras();
     });
     el('generate-results').addEventListener('click', function (event) {
-      var button = event.target.closest('[data-generate-delete-storage-id]');
-      if (button) {
-        var storageId = String(button.dataset.generateDeleteStorageId || '').trim();
+      var deleteButton = event.target.closest('[data-generate-delete-storage-id]');
+      if (deleteButton) {
+        var storageId = String(deleteButton.dataset.generateDeleteStorageId || '').trim();
         if (!storageId) throw new Error('Generation result is missing its storage identity.');
         if (!window.confirm('Permanently delete this generation and all of its artifacts?')) return;
-        button.disabled = true;
+        deleteButton.disabled = true;
         postJson('/fs/generate/result/delete', { storageId: storageId }).then(function () {
-          var card = button.closest('.generate-result-card');
+          var card = deleteButton.closest('.generate-result-card');
           if (card) card.remove();
           return refreshResults();
         }).catch(function (err) {
-          button.disabled = false;
+          deleteButton.disabled = false;
           reportError(err, 'Delete failed');
         });
         return;
       }
 
-      var card = event.target.closest('.generate-result-card[data-result-key]');
-      if (!card) return;
-      var key = String(card.dataset.resultKey || '');
+      var openButton = event.target.closest('[data-generate-open-result-key]');
+      if (!openButton) return;
+      var key = String(openButton.dataset.generateOpenResultKey || '');
       var result = generateState.results.find(function (item) { return resultKey(item) === key; });
       if (!result) return;
       renderActiveResult(result);

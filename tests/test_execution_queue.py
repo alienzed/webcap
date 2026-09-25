@@ -10,6 +10,7 @@ from tool.server import execution_queue
 def queue_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
     execution_queue._resource_owner = ""
+    execution_queue.clear_transient_receipts()
     return tmp_path
 
 
@@ -107,6 +108,47 @@ def test_execution_queue_keeps_bounded_recent_receipt_after_terminal_delivery_is
     assert recent[0]["id"] == job["id"]
     assert recent[0]["status"] == "completed"
     assert recent[0]["metadata"]["client"] == "generate"
+
+
+def test_execution_queue_transient_finish_removes_durable_job_without_recent_history(queue_root):
+    job = execution_queue.enqueue("inference", {"n": 1}, metadata={"client": "generate"})
+    execution_queue.claim_next("inference")
+
+    finished = execution_queue.finish_job_transient(
+        job["id"],
+        status="completed",
+        result={"mediaPath": "output/clip.mp4"},
+    )
+
+    assert finished["status"] == "completed"
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(job["id"])
+    assert execution_queue.recent_snapshot("inference") == []
+    receipt = execution_queue.transient_receipt(job["id"], consume=True)
+    assert receipt["result"] == {"mediaPath": "output/clip.mp4"}
+    with pytest.raises(FileNotFoundError):
+        execution_queue.transient_receipt(job["id"])
+
+
+def test_execution_queue_shelves_active_work_back_to_clean_backlog(queue_root):
+    active = execution_queue.enqueue("inference", {"request": {"prompt": "again"}})
+    queued = execution_queue.enqueue("inference", {"request": {"prompt": "later"}})
+    execution_queue.claim_next("inference")
+    execution_queue.mark_running(
+        active["id"],
+        details={"providerJobId": "old-provider", "providerStatus": "in_progress"},
+    )
+
+    changed = execution_queue.shelve_unfinished("inference")
+
+    assert {job["id"] for job in changed} == {active["id"], queued["id"]}
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+    assert snapshot["activeJobId"] == ""
+    assert [job["status"] for job in snapshot["jobs"]] == ["backlog", "backlog"]
+    restored = execution_queue.get_job(active["id"], include_payload=True)
+    assert restored["payload"]["request"]["prompt"] == "again"
+    assert restored["details"] == {}
+    assert restored["startedAt"] is None
 
 
 def test_execution_queue_terminal_jobs_reject_runtime_updates(queue_root):

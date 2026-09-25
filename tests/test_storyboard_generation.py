@@ -410,6 +410,9 @@ def test_storyboard_cancel_response_does_not_depend_on_terminal_receipt_remainin
     cancelled = storyboard_generation.generation_action("cancel", queued["jobId"])
 
     assert cancelled["job"]["status"] == "cancelled"
+    assert cancelled["job"]["jobId"] == queued["jobId"]
+    assert cancelled["job"]["storyId"] == story["id"]
+    assert cancelled["job"]["sceneId"] == scene["id"]
     with pytest.raises(FileNotFoundError):
         execution_queue.transient_receipt(queued["jobId"])
 

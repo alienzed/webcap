@@ -5,6 +5,7 @@
     stories: [],
     story: null,
     saveTimer: 0,
+    pendingStorySave: null,
     sceneTimers: {},
     storySavePromise: null,
     storySaveError: null,
@@ -3067,11 +3068,17 @@
     return payload;
   }
 
-  function saveStoryNow() {
-    if (!storyState.story) return Promise.resolve();
+  function saveStoryNow(target) {
+    if (!target) {
+      if (!storyState.story) return Promise.resolve();
+      target = {
+        storyId: storyState.story.id,
+        payload: storyPayloadFromUi()
+      };
+    }
     setSaveState('Saving...');
-    var storyId = storyState.story.id;
-    var storyPayload = storyPayloadFromUi();
+    var storyId = target.storyId;
+    var storyPayload = target.payload;
     var previous = storyState.storySavePromise;
     var promise = (previous ? previous.catch(function () {}) : Promise.resolve()).then(function () {
       return request({
@@ -3097,11 +3104,18 @@
   }
 
   function scheduleStorySave() {
+    if (!storyState.story) return;
     if (storyState.saveTimer) clearTimeout(storyState.saveTimer);
+    storyState.pendingStorySave = {
+      storyId: storyState.story.id,
+      payload: storyPayloadFromUi()
+    };
     setSaveState('Unsaved changes');
     storyState.saveTimer = setTimeout(function () {
+      var target = storyState.pendingStorySave;
       storyState.saveTimer = 0;
-      saveStoryNow().catch(reportError);
+      storyState.pendingStorySave = null;
+      saveStoryNow(target).catch(reportError);
     }, 450);
   }
 
@@ -3176,11 +3190,18 @@
     return payload;
   }
 
-  function saveSceneNow(sceneId) {
-    if (!storyState.story) return Promise.resolve();
+  function saveSceneNow(sceneId, target) {
+    if (!target) {
+      if (!storyState.story) return Promise.resolve();
+      target = {
+        storyId: storyState.story.id,
+        sceneId: sceneId,
+        payload: scenePayloadFromUi(sceneId)
+      };
+    }
     setSaveState('Saving...');
-    var storyId = storyState.story.id;
-    var scenePayload = scenePayloadFromUi(sceneId);
+    var storyId = target.storyId;
+    var scenePayload = target.payload;
     var previous = storyState.sceneSavePromises[sceneId];
     var promise = (previous ? previous.catch(function () {}) : Promise.resolve()).then(function () {
       return request({
@@ -3207,24 +3228,35 @@
   }
 
   function scheduleSceneSave(sceneId) {
-    if (storyState.sceneTimers[sceneId]) clearTimeout(storyState.sceneTimers[sceneId]);
+    if (!storyState.story) return;
+    var existing = storyState.sceneTimers[sceneId];
+    if (existing) clearTimeout(existing.timer);
+    var target = {
+      storyId: storyState.story.id,
+      sceneId: sceneId,
+      payload: scenePayloadFromUi(sceneId)
+    };
     setSaveState('Unsaved changes');
-    storyState.sceneTimers[sceneId] = setTimeout(function () {
-      delete storyState.sceneTimers[sceneId];
-      saveSceneNow(sceneId).catch(reportError);
+    target.timer = setTimeout(function () {
+      if (storyState.sceneTimers[sceneId] === target) delete storyState.sceneTimers[sceneId];
+      saveSceneNow(sceneId, target).catch(reportError);
     }, 450);
+    storyState.sceneTimers[sceneId] = target;
   }
 
   function flushPendingSaves() {
     if (storyState.saveTimer) {
       clearTimeout(storyState.saveTimer);
       storyState.saveTimer = 0;
-      saveStoryNow();
+      var storyTarget = storyState.pendingStorySave;
+      storyState.pendingStorySave = null;
+      saveStoryNow(storyTarget);
     }
     Object.keys(storyState.sceneTimers).forEach(function (sceneId) {
-      clearTimeout(storyState.sceneTimers[sceneId]);
+      var target = storyState.sceneTimers[sceneId];
+      clearTimeout(target.timer);
       delete storyState.sceneTimers[sceneId];
-      saveSceneNow(sceneId);
+      saveSceneNow(sceneId, target);
     });
 
     var pending = [];

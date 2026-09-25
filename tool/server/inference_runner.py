@@ -16,6 +16,8 @@ from .execution_queue import (
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
+    promote_backlog as execution_promote_backlog,
+    shelve_queued as execution_shelve_queued,
     shelve_unfinished as execution_shelve_unfinished,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
@@ -42,7 +44,6 @@ _provider_hold_lock = threading.Lock()
 _provider_cleanup_holds = set()
 _provider_cleanup_reason = ""
 _backlog_lock = threading.Lock()
-_armed_backlog_ids = set()
 _backlog_wait_reason = ""
 _logger = logging.getLogger(__name__)
 
@@ -55,30 +56,6 @@ def _reserve_gpu():
 def _release_gpu():
     from .training_runner import release_gpu_for_external_work
     release_gpu_for_external_work(GPU_RESERVATION_OWNER)
-
-
-def _new_job_status():
-    from .training_runner import external_gpu_work_block_reason
-    return "backlog" if external_gpu_work_block_reason(GPU_RESERVATION_OWNER) else "queued"
-
-
-def _arm_backlog(job_id):
-    job_id = str(job_id or "").strip()
-    if not job_id:
-        return
-    with _backlog_lock:
-        _armed_backlog_ids.add(job_id)
-
-
-def _disarm_backlog(job_id):
-    job_id = str(job_id or "").strip()
-    with _backlog_lock:
-        _armed_backlog_ids.discard(job_id)
-
-
-def _armed_backlog_snapshot():
-    with _backlog_lock:
-        return set(_armed_backlog_ids)
 
 
 def _set_backlog_wait_reason(reason):
@@ -132,9 +109,7 @@ def _restore_provider_cleanup_guard():
 
 
 def prepare_startup_backlog():
-    """Return all persisted unfinished inference work to inert Backlog."""
-    with _backlog_lock:
-        _armed_backlog_ids.clear()
+    """Return all persisted unfinished inference work to Backlog."""
     _set_backlog_wait_reason("")
     _restore_provider_cleanup_guard()
     _ensure_execution_reconciled()
@@ -246,7 +221,6 @@ def _job_view(job):
         "candidateFile": str(metadata.get("candidateFile") or ""),
         "status": str(job.get("status") or ""),
         "queuePosition": int(job.get("queuePosition") or 0),
-        "armed": str(job.get("id") or "") in _armed_backlog_snapshot(),
         "createdAt": job.get("createdAt"),
         "startedAt": job.get("startedAt"),
         "finishedAt": job.get("finishedAt"),
@@ -480,18 +454,15 @@ def _advance_queue():
             return None
 
         jobs = snapshot.get("jobs", [])
-        armed_ids = _armed_backlog_snapshot()
         next_runnable = next(
-            (
-                job for job in jobs
-                if str(job.get("status") or "") == "queued"
-                or (
-                    str(job.get("status") or "") == "backlog"
-                    and str(job.get("id") or "") in armed_ids
-                )
-            ),
+            (job for job in jobs if str(job.get("status") or "") == "queued"),
             None,
         )
+        if next_runnable is None:
+            next_runnable = next(
+                (job for job in jobs if str(job.get("status") or "") == "backlog"),
+                None,
+            )
         if next_runnable is None:
             _set_backlog_wait_reason("")
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
@@ -539,14 +510,16 @@ def _advance_queue():
                 return None
 
         _set_backlog_wait_reason("")
-        claim_armed_ids = _armed_backlog_snapshot()
+        backlog_ids = {
+            str(job.get("id") or "")
+            for job in jobs
+            if str(job.get("status") or "") == "backlog"
+        }
         claimed = execution_claim_next(
             EXECUTION_LANE,
-            runnable_backlog_ids=claim_armed_ids,
+            runnable_backlog_ids=backlog_ids,
             expected_job_id=str(next_runnable.get("id") or ""),
         )
-        if claimed is not None and str(claimed.get("id") or "") in claim_armed_ids:
-            _disarm_backlog(claimed.get("id"))
         if claimed is None:
             if reserved_here:
                 _release_gpu()
@@ -596,13 +569,8 @@ def _monitor_has_work():
             return True
     if snapshot.get("paused"):
         return False
-    armed_ids = _armed_backlog_snapshot()
     return any(
-        str(job.get("status") or "") == "queued"
-        or (
-            str(job.get("status") or "") == "backlog"
-            and str(job.get("id") or "") in armed_ids
-        )
+        str(job.get("status") or "") in {"queued", "backlog"}
         for job in snapshot.get("jobs", [])
     )
 
@@ -646,7 +614,6 @@ def _start_worker_for_requested_inference():
 
 def enqueue_generate(request, label=""):
     _ensure_execution_reconciled()
-    status = _new_job_status()
     job = execution_enqueue(
         EXECUTION_LANE,
         {"request": copy.deepcopy(request)},
@@ -656,10 +623,8 @@ def enqueue_generate(request, label=""):
             "modelId": str(request.get("modelId") or ""),
             "mediaKind": str(request.get("mediaKind") or ""),
         },
-        initial_status=status,
+        initial_status="queued",
     )
-    if status == "backlog":
-        _arm_backlog(job["id"])
     _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
@@ -681,7 +646,7 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
     frozen_request = copy.deepcopy(request)
     for key in ("entryState", "exitState", "seedMode", "referenceRecords"):
         frozen_request.pop(key, None)
-    status = "backlog" if deferred else _new_job_status()
+    status = "backlog" if deferred else "queued"
     job = execution_enqueue(
         EXECUTION_LANE,
         {
@@ -699,8 +664,6 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
         },
         initial_status=status,
     )
-    if status == "backlog" and not deferred:
-        _arm_backlog(job["id"])
     if not deferred:
         _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
@@ -714,7 +677,7 @@ def enqueue_test(request, context, label="", deferred=False):
     candidate_kind = str(context.get("candidateKind") or "").strip()
     if not folder or not session_id or candidate_kind not in {"base", "lora"}:
         raise ValueError("Test inference requires folder, session, and candidate context.")
-    status = "backlog" if deferred else _new_job_status()
+    status = "backlog" if deferred else "queued"
     job = execution_enqueue(
         EXECUTION_LANE,
         {
@@ -734,8 +697,6 @@ def enqueue_test(request, context, label="", deferred=False):
         },
         initial_status=status,
     )
-    if status == "backlog" and not deferred:
-        _arm_backlog(job["id"])
     if not deferred:
         _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
@@ -748,7 +709,6 @@ def snapshot(include_terminal=False):
         provider_paused = bool(_provider_cleanup_holds)
         provider_reason = str(_provider_cleanup_reason or "")
     with _backlog_lock:
-        armed_ids = set(_armed_backlog_ids)
         wait_reason = str(_backlog_wait_reason or "")
     jobs = current.get("jobs", [])
     return {
@@ -756,11 +716,6 @@ def snapshot(include_terminal=False):
         "pauseReason": str(current.get("pauseReason") or ""),
         "activeJobId": str(current.get("activeJobId") or ""),
         "backlogCount": sum(1 for job in jobs if str(job.get("status") or "") == "backlog"),
-        "armedBacklogCount": sum(
-            1 for job in jobs
-            if str(job.get("status") or "") == "backlog"
-            and str(job.get("id") or "") in armed_ids
-        ),
         "waitReason": provider_reason if provider_paused else wait_reason,
         "jobs": [_job_view(job) for job in jobs],
     }
@@ -816,7 +771,6 @@ def stop_storyboard_jobs(story_id, timeout=15):
         status = str(job.get("status") or "")
         if status in {"queued", "backlog"}:
             execution_cancel_pending_transient(job_id)
-            _disarm_backlog(job_id)
         elif status in {"starting", "running"}:
             execution_request_stop(job_id)
             active_ids.append(job_id)
@@ -853,7 +807,6 @@ def action(operation, job_id="", direction="", position=None):
     if operation == "cancel":
         _cleanup_generate_job_references(job_id)
         job = execution_cancel_pending_transient(job_id)
-        _disarm_backlog(job_id)
         return {"job": _job_view(job)}
     if operation == "clear_all":
         pending = [
@@ -863,28 +816,14 @@ def action(operation, job_id="", direction="", position=None):
         for job in pending:
             _cleanup_generate_job_references(job.get("id"))
         cancelled = execution_cancel_all_pending_transient(EXECUTION_LANE)
-        for job in cancelled:
-            _disarm_backlog(job.get("id"))
         return {"queue": snapshot(), "cleared": len(cancelled)}
-    if operation == "run_backlog":
-        job = execution_get_job(job_id)
-        if str(job.get("status") or "") != "backlog":
-            raise ValueError("Only backlogged inference can be run.")
-        _arm_backlog(job_id)
+    if operation == "add_to_queue":
+        promoted = execution_promote_backlog(job_id)
         _start_worker_for_requested_inference()
-        return {"job": _job_view(execution_get_job(job_id)), "queue": snapshot()}
-    if operation == "run_all_backlog":
-        lane = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-        backlog_ids = [
-            str(job.get("id") or "")
-            for job in lane.get("jobs", [])
-            if str(job.get("status") or "") == "backlog"
-        ]
-        for backlog_id in backlog_ids:
-            _arm_backlog(backlog_id)
-        if backlog_ids:
-            _start_worker_for_requested_inference()
-        return {"queue": snapshot(), "armed": len(backlog_ids)}
+        return {"job": _job_view(promoted), "queue": snapshot()}
+    if operation == "move_all_to_backlog":
+        moved = execution_shelve_queued(EXECUTION_LANE)
+        return {"queue": snapshot(), "moved": len(moved)}
     if operation == "stop":
         return {"job": _job_view(execution_request_stop(job_id))}
     if operation == "pause_queue":

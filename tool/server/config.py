@@ -290,7 +290,8 @@ def validate_config_payload(payload):
         ("context_size", 1024, 1048576),
         ("max_tokens", 1, 262144),
     ):
-        value = director.get(key)
+        default_value = 16384 if key == "max_tokens" else None
+        value = director.get(key, default_value)
         if value is None:
             normalized_director[key] = None
             continue

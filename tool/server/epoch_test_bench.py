@@ -159,7 +159,7 @@ def recent_test_sets(limit=8):
             source = str(payload.get("source") or "").strip()
             model_id = str(payload.get("modelId") or payload.get("model") or "").strip()
             owner_folder = str(payload.get("ownerFolder") or "").strip()
-            key = (model_id, source)
+            key = (owner_folder, model_id, source)
             try:
                 modified = (session / "test.json").stat().st_mtime
             except OSError:
@@ -342,6 +342,22 @@ def _session_roots(folder_path):
     return unique
 
 
+def _session_belongs_to_folder(folder_path, session_directory, payload=None):
+    session = Path(session_directory).resolve()
+    legacy_root = _session_root(folder_path).resolve()
+    if session.parent == legacy_root:
+        return True
+
+    central_root = _central_session_root().resolve()
+    if session.parent != central_root:
+        return False
+
+    status = payload if isinstance(payload, dict) else (_read_status(session) or {})
+    owner_folder = str(status.get("ownerFolder") or "").replace("\\", "/").strip("/")
+    expected_owner = str(_relative_set_folder(folder_path) or "").replace("\\", "/").strip("/")
+    return bool(owner_folder) and owner_folder == expected_owner
+
+
 def _session_directories(folder_path):
     sessions = []
     seen_names = set()
@@ -355,6 +371,9 @@ def _session_directories(folder_path):
                 or not session.is_dir()
                 or not (session / "test.json").is_file()
             ):
+                continue
+            payload = _read_status(session) or {}
+            if not _session_belongs_to_folder(folder_path, session, payload):
                 continue
             seen_names.add(session.name)
             sessions.append(session)
@@ -373,8 +392,10 @@ def _session_directory(folder_path, session_name):
         if session.parent != root:
             continue
         if session.is_dir() and not session.is_symlink() and (session / "test.json").is_file():
-            return session
-    raise FileNotFoundError("Test session does not exist: " + name)
+            payload = _read_status(session) or {}
+            if _session_belongs_to_folder(folder_path, session, payload):
+                return session
+    raise FileNotFoundError("Test session does not exist for this Set: " + name)
 
 
 def _new_session_directory(folder_path, model=None):

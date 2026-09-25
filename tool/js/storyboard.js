@@ -814,6 +814,7 @@
       return candidateTarget && directorTargetKey(candidateTarget) === targetKey;
     });
     if (!job || String(job.status || '') !== 'queued') return activity;
+    if (String(queue.activeJobId || '') === String(job.jobId || '')) return activity;
 
     var queuedPosition = Math.max(1, Number(job.queuePosition) || 1);
     var activeAhead = queue.activeJobId && String(queue.activeJobId) !== String(job.jobId || '') ? 1 : 0;

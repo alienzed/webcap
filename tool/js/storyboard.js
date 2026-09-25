@@ -3594,7 +3594,7 @@
   function deleteScene(sceneId) {
     var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
     var label = scene && scene.title ? scene.title : 'this Scene';
-    if (!window.confirm('Remove "' + label + '" from this Story? It will remain recoverable in Removed Scenes.')) return;
+    if (!window.confirm('Remove "' + label + '" from this Story? The Scene setup will remain recoverable, but its generated Takes will be permanently deleted.')) return;
     setSaveState('Saving...');
     flushPendingSaves().then(function () { return request({
       operation: 'delete_scene',

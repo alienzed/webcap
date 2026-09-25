@@ -251,7 +251,7 @@ def test_generate_has_lightroom_style_create_and_library_modes():
     assert "function setTakesCollapsed(collapsed)" in script
     assert "dataset.generateOpenResultKey" in script
     assert ".generate-create-view {" in css
-    assert "grid-template-columns: minmax(330px, 390px) minmax(0, 1fr) minmax(230px, 280px);" in css
+    assert "grid-template-columns: minmax(400px, 25%) minmax(0, 1fr) minmax(230px, 280px);" in css
     assert ".generate-stage-panel {" in css
     assert ".generate-takes-panel {" in css
     assert ".generate-library-view {" in css
@@ -284,3 +284,29 @@ def test_generate_displays_live_and_persisted_generation_elapsed_time():
     assert "formatGenerationElapsedMs(Date.now() - (startedAt * 1000))" in script
     assert "formatGenerationElapsedMs(result && result.elapsedMs)" in script
     assert '"elapsedMs": int(elapsed_ms or 0)' in store
+
+
+def test_generate_prompt_library_is_local_file_backed_mvp():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "generate_store.py").read_text(encoding="utf-8")
+    assert 'id="generate-prompt-save"' in html
+    assert 'id="generate-prompt-library-open"' in html
+    assert 'id="generate-prompt-library-search"' in html
+    assert 'id="generate-prompt-library-list"' in html
+    assert "function refreshPromptLibrary()" in script
+    assert "function saveCurrentPrompt()" in script
+    assert "function usePromptLibraryItem(promptId)" in script
+    assert "function renamePromptLibraryItem(promptId)" in script
+    assert "function deletePromptLibraryItem(promptId)" in script
+    assert "requestJson('/fs/generate/prompts')" in script
+    assert "postJson('/fs/generate/prompt'" in script
+    assert "postJson('/fs/generate/prompt/delete'" in script
+    assert ".generate-prompt-library-item {" in css
+    assert '@app.route("/fs/generate/prompts", methods=["GET"])' in app
+    assert '@app.route("/fs/generate/prompt", methods=["POST"])' in app
+    assert '@app.route("/fs/generate/prompt/delete", methods=["POST"])' in app
+    assert 'app_config.output_root() / "prompts"' in store
+    assert 'PROMPT_LIBRARY_NAME = "prompts.json"' in store

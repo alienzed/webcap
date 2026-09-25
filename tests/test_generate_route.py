@@ -442,3 +442,33 @@ def test_generate_delete_route_uses_storage_purge(monkeypatch):
     assert response.status_code == 200
     assert response.get_json()["storageId"] == "2026-09-24/job-1"
     assert seen == [("generate", "2026-09-24/job-1", "")]
+
+
+def test_generate_prompt_library_persists_under_output_root(tmp_path, monkeypatch):
+    output_root = tmp_path / "creative"
+    monkeypatch.setattr(generate_store.app_config, "output_root", lambda: output_root)
+    created = generate_store.save_prompt("Night street", "Two people walk through neon rain.")
+    updated = generate_store.save_prompt("Night street revised", "Two people walk slowly through neon rain.", prompt_id=created["id"])
+    assert generate_store.prompt_library_path() == output_root / "prompts" / "prompts.json"
+    assert updated["id"] == created["id"]
+    assert generate_store.list_prompts()[0]["name"] == "Night street revised"
+    removed = generate_store.delete_prompt(created["id"])
+    assert removed["id"] == created["id"]
+    assert generate_store.list_prompts() == []
+
+
+def test_generate_prompt_library_routes(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(app_module, "generate_list_prompts", lambda: [{"id": "prompt-1", "name": "Saved", "prompt": "Text"}])
+    monkeypatch.setattr(app_module, "generate_save_prompt", lambda name, prompt, prompt_id="": seen.update({"save": (name, prompt, prompt_id)}) or {"id": prompt_id or "prompt-2", "name": name, "prompt": prompt})
+    monkeypatch.setattr(app_module, "generate_delete_prompt", lambda prompt_id: seen.update({"delete": prompt_id}) or {"id": prompt_id})
+    client = app_module.app.test_client()
+    listed = client.get("/fs/generate/prompts")
+    assert listed.status_code == 200
+    assert listed.get_json()["prompts"][0]["id"] == "prompt-1"
+    saved = client.post("/fs/generate/prompt", json={"id": "prompt-1", "name": "Renamed", "prompt": "Updated text"})
+    assert saved.status_code == 200
+    assert seen["save"] == ("Renamed", "Updated text", "prompt-1")
+    deleted = client.post("/fs/generate/prompt/delete", json={"id": "prompt-1"})
+    assert deleted.status_code == 200
+    assert seen["delete"] == "prompt-1"

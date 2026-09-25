@@ -6,6 +6,7 @@
     unavailableModels: [],
     modelId: window.localStorage.getItem('webcap.generate.model') || '',
     lorasByModel: {},
+    promptLibrary: { items: [], open: false, activeId: '', query: '' },
     director: {
       models: [],
       modelId: '',
@@ -306,6 +307,116 @@
         throw err;
       });
     });
+  }
+
+  function promptLibraryItem(promptId) {
+    return generateState.promptLibrary.items.find(function (item) {
+      return String(item.id || '') === String(promptId || '');
+    }) || null;
+  }
+
+  function renderPromptLibrary() {
+    var host = el('generate-prompt-library-list');
+    if (!host) throw new Error('Generate Prompt Library markup is missing.');
+    var query = String(generateState.promptLibrary.query || '').trim().toLowerCase();
+    var items = generateState.promptLibrary.items.filter(function (item) {
+      if (!query) return true;
+      return (String(item.name || '') + '\n' + String(item.prompt || '')).toLowerCase().indexOf(query) !== -1;
+    });
+    if (!items.length) {
+      host.innerHTML = '<div class="generate-prompt-library-empty">' + (query ? 'No saved prompts match your search.' : 'No saved prompts yet.') + '</div>';
+      return;
+    }
+    host.innerHTML = items.map(function (item) {
+      var preview = String(item.prompt || '').replace(/\s+/g, ' ').trim();
+      if (preview.length > 150) preview = preview.slice(0, 147) + '…';
+      return '<article class="generate-prompt-library-item">' +
+        '<button type="button" class="generate-prompt-library-use" data-generate-prompt-use="' + escapeHtml(item.id) + '"><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(preview) + '</span></button>' +
+        '<div class="generate-prompt-library-item-actions">' +
+          '<button type="button" class="review-captions-btn" data-generate-prompt-rename="' + escapeHtml(item.id) + '">Rename</button>' +
+          '<button type="button" class="review-captions-btn generate-prompt-library-delete" data-generate-prompt-delete="' + escapeHtml(item.id) + '">Delete</button>' +
+        '</div></article>';
+    }).join('');
+  }
+
+  function refreshPromptLibrary() {
+    return requestJson('/fs/generate/prompts').then(function (payload) {
+      generateState.promptLibrary.items = Array.isArray(payload.prompts) ? payload.prompts : [];
+      renderPromptLibrary();
+      return generateState.promptLibrary.items;
+    });
+  }
+
+  function setPromptLibraryOpen(open) {
+    generateState.promptLibrary.open = !!open;
+    var editor = el('generate-prompt-editor');
+    var library = el('generate-prompt-library');
+    var button = el('generate-prompt-library-open');
+    if (!editor || !library || !button) throw new Error('Generate Prompt Library markup is missing.');
+    editor.classList.toggle('hidden', generateState.promptLibrary.open);
+    library.classList.toggle('hidden', !generateState.promptLibrary.open);
+    button.classList.toggle('active', generateState.promptLibrary.open);
+    button.setAttribute('aria-pressed', generateState.promptLibrary.open ? 'true' : 'false');
+    if (!generateState.promptLibrary.open) return Promise.resolve();
+    return refreshPromptLibrary().then(function () {
+      el('generate-prompt-library-search').focus();
+    }).catch(function (err) {
+      reportError(err, 'Prompt Library failed');
+    });
+  }
+
+  function suggestedPromptName(prompt) {
+    var firstLine = String(prompt || '').split(/\r?\n/)[0].replace(/\s+/g, ' ').trim();
+    if (!firstLine) return 'Saved Prompt';
+    return firstLine.length > 72 ? firstLine.slice(0, 69) + '…' : firstLine;
+  }
+
+  function saveCurrentPrompt() {
+    var prompt = String(el('generate-prompt').value || '').trim();
+    if (!prompt) throw new Error('Enter a prompt before saving it.');
+    var current = promptLibraryItem(generateState.promptLibrary.activeId);
+    var name = window.prompt('Prompt name', current ? String(current.name || '') : suggestedPromptName(prompt));
+    if (name === null) return Promise.resolve();
+    name = String(name || '').trim();
+    if (!name) throw new Error('Prompt name is required.');
+    return postJson('/fs/generate/prompt', { id: current ? current.id : '', name: name, prompt: prompt }).then(function (payload) {
+      generateState.promptLibrary.activeId = String(payload.prompt && payload.prompt.id || '');
+      return refreshPromptLibrary();
+    }).catch(function (err) { reportError(err, 'Save prompt failed'); });
+  }
+
+  function usePromptLibraryItem(promptId) {
+    var item = promptLibraryItem(promptId);
+    if (!item) throw new Error('Saved prompt is missing from the Prompt Library.');
+    var prompt = el('generate-prompt');
+    prompt.value = String(item.prompt || '');
+    window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, prompt.value);
+    generateState.promptLibrary.activeId = String(item.id || '');
+    generateState.director.previousPrompt = null;
+    setDirectorStatus('');
+    setPromptLibraryOpen(false);
+  }
+
+  function renamePromptLibraryItem(promptId) {
+    var item = promptLibraryItem(promptId);
+    if (!item) throw new Error('Saved prompt is missing from the Prompt Library.');
+    var name = window.prompt('Prompt name', String(item.name || ''));
+    if (name === null) return Promise.resolve();
+    name = String(name || '').trim();
+    if (!name) throw new Error('Prompt name is required.');
+    return postJson('/fs/generate/prompt', { id: item.id, name: name, prompt: item.prompt }).then(refreshPromptLibrary).catch(function (err) {
+      reportError(err, 'Rename prompt failed');
+    });
+  }
+
+  function deletePromptLibraryItem(promptId) {
+    var item = promptLibraryItem(promptId);
+    if (!item) throw new Error('Saved prompt is missing from the Prompt Library.');
+    if (!window.confirm('Delete saved prompt "' + String(item.name || 'Untitled') + '"?')) return Promise.resolve();
+    return postJson('/fs/generate/prompt/delete', { id: item.id }).then(function () {
+      if (String(generateState.promptLibrary.activeId || '') === String(item.id || '')) generateState.promptLibrary.activeId = '';
+      return refreshPromptLibrary();
+    }).catch(function (err) { reportError(err, 'Delete prompt failed'); });
   }
 
   function runGenerate() {
@@ -1283,6 +1394,7 @@
 
     el('generate-model').addEventListener('change', function () {
       generateState.modelId = this.value;
+      generateState.promptLibrary.activeId = '';
       generateState.director.previousPrompt = null;
       setDirectorStatus('');
       window.localStorage.setItem('webcap.generate.model', this.value);
@@ -1291,6 +1403,23 @@
     });
     el('generate-prompt').addEventListener('input', function () {
       window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, this.value);
+    });
+    el('generate-prompt-save').onclick = function () {
+      try { saveCurrentPrompt(); } catch (err) { reportError(err, 'Save prompt failed'); }
+    };
+    el('generate-prompt-library-open').onclick = function () { setPromptLibraryOpen(!generateState.promptLibrary.open); };
+    el('generate-prompt-library-back').onclick = function () { setPromptLibraryOpen(false); };
+    el('generate-prompt-library-search').addEventListener('input', function () {
+      generateState.promptLibrary.query = this.value;
+      renderPromptLibrary();
+    });
+    el('generate-prompt-library-list').addEventListener('click', function (event) {
+      var useButton = event.target.closest('[data-generate-prompt-use]');
+      if (useButton) { usePromptLibraryItem(useButton.dataset.generatePromptUse); return; }
+      var renameButton = event.target.closest('[data-generate-prompt-rename]');
+      if (renameButton) { renamePromptLibraryItem(renameButton.dataset.generatePromptRename); return; }
+      var deleteButton = event.target.closest('[data-generate-prompt-delete]');
+      if (deleteButton) deletePromptLibraryItem(deleteButton.dataset.generatePromptDelete);
     });
     el('generate-lora-add').onclick = function () {
       try { addLora(); } catch (err) { reportError(err); }

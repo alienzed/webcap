@@ -40,7 +40,7 @@ from .storyboard_assembly import current_export as storyboard_current_export, ex
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
-from .generate_store import cleanup_references as generate_cleanup_references, list_results as generate_list_results, resolve_result_media as generate_resolve_result_media, save_reference as generate_save_reference
+from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
 from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, prepare_startup_backlog as prepare_inference_startup_backlog, snapshot as inference_snapshot, stop_storyboard_jobs
 from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot, storyboard_story_busy as llm_storyboard_story_busy, storyboard_target_busy as llm_storyboard_target_busy
@@ -997,6 +997,41 @@ def generate_capabilities_route():
         return jsonify({"ok": True, **generate_capabilities()})
     except Exception as exc:
         app.logger.exception("GENERATE CAPABILITIES FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/prompts", methods=["GET"])
+def generate_prompts_route():
+    try:
+        return jsonify({"ok": True, "prompts": generate_list_prompts()})
+    except Exception as exc:
+        app.logger.exception("GENERATE PROMPT LIBRARY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/prompt", methods=["POST"])
+def generate_prompt_save_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        prompt = generate_save_prompt(data.get("name"), data.get("prompt"), prompt_id=data.get("id"))
+        return jsonify({"ok": True, "prompt": prompt})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("GENERATE PROMPT SAVE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/prompt/delete", methods=["POST"])
+def generate_prompt_delete_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        prompt = generate_delete_prompt(data.get("id"))
+        return jsonify({"ok": True, "prompt": prompt})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("GENERATE PROMPT DELETE FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

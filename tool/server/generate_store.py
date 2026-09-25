@@ -3,21 +3,95 @@ import logging
 import os
 import shutil
 import tempfile
+import threading
 import time
+import uuid
 from pathlib import Path
 
 from . import config as app_config
 
 
 MANIFEST_NAME = "generation.json"
+PROMPT_LIBRARY_VERSION = 1
+PROMPT_LIBRARY_NAME = "prompts.json"
 
 _logger = logging.getLogger(__name__)
+_PROMPT_LIBRARY_LOCK = threading.RLock()
 
 
 def generation_root():
     root = app_config.output_root() / "generations"
     root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+def prompt_library_path():
+    root = app_config.output_root() / "prompts"
+    root.mkdir(parents=True, exist_ok=True)
+    return root / PROMPT_LIBRARY_NAME
+
+
+def _read_prompt_library():
+    path = prompt_library_path()
+    if not path.is_file():
+        return {"version": PROMPT_LIBRARY_VERSION, "prompts": []}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Generate Prompt Library is unreadable.") from exc
+    if not isinstance(payload, dict) or payload.get("version") != PROMPT_LIBRARY_VERSION:
+        raise RuntimeError("Generate Prompt Library has an unsupported format.")
+    prompts = payload.get("prompts")
+    if not isinstance(prompts, list):
+        raise RuntimeError("Generate Prompt Library prompts must be an array.")
+    return payload
+
+
+def list_prompts():
+    with _PROMPT_LIBRARY_LOCK:
+        payload = _read_prompt_library()
+        prompts = [dict(item) for item in payload["prompts"] if isinstance(item, dict)]
+    prompts.sort(key=lambda item: int(item.get("updatedAt") or 0), reverse=True)
+    return prompts
+
+
+def save_prompt(name, prompt, prompt_id=""):
+    clean_name = str(name or "").strip()
+    clean_prompt = str(prompt or "").strip()
+    clean_id = str(prompt_id or "").strip()
+    if not clean_name:
+        raise ValueError("Prompt name is required.")
+    if not clean_prompt:
+        raise ValueError("Prompt text is required.")
+    with _PROMPT_LIBRARY_LOCK:
+        payload = _read_prompt_library()
+        now = int(time.time() * 1000)
+        if clean_id:
+            item = next((candidate for candidate in payload["prompts"] if isinstance(candidate, dict) and str(candidate.get("id") or "") == clean_id), None)
+            if item is None:
+                raise FileNotFoundError("Saved prompt does not exist.")
+            item["name"] = clean_name
+            item["prompt"] = clean_prompt
+            item["updatedAt"] = now
+        else:
+            item = {"id": uuid.uuid4().hex, "name": clean_name, "prompt": clean_prompt, "createdAt": now, "updatedAt": now}
+            payload["prompts"].append(item)
+        _atomic_write_json(prompt_library_path(), payload)
+        return dict(item)
+
+
+def delete_prompt(prompt_id):
+    clean_id = str(prompt_id or "").strip()
+    if not clean_id:
+        raise ValueError("Prompt ID is required.")
+    with _PROMPT_LIBRARY_LOCK:
+        payload = _read_prompt_library()
+        for index, item in enumerate(payload["prompts"]):
+            if isinstance(item, dict) and str(item.get("id") or "") == clean_id:
+                removed = payload["prompts"].pop(index)
+                _atomic_write_json(prompt_library_path(), payload)
+                return dict(removed)
+    raise FileNotFoundError("Saved prompt does not exist.")
 
 
 def reference_root():

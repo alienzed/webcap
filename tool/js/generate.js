@@ -750,11 +750,19 @@
   }
 
 
-  function refreshTrackedGenerateJobs() {
+  function refreshTrackedGenerateJobs(queue) {
     var ids = (generateState.trackedJobIds || []).slice();
     if (!ids.length) return Promise.resolve([]);
 
+    var activeById = {};
+    if (queue && Array.isArray(queue.jobs)) {
+      queue.jobs.forEach(function (job) {
+        activeById[String(job.jobId || '')] = job;
+      });
+    }
+
     return Promise.all(ids.map(function (jobId) {
+      if (activeById[jobId]) return Promise.resolve(activeById[jobId]);
       return requestJson('/fs/inference?job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
         return payload.job || null;
       }).catch(function (err) {
@@ -1330,11 +1338,8 @@
   function schedulePoll() {
     if (generateState.timer) clearTimeout(generateState.timer);
     generateState.timer = setTimeout(function () {
-      Promise.all([
-        refreshTrackedGenerateJobs(),
-        generateState.open ? refreshResults() : Promise.resolve()
-      ]).then(schedulePoll);
-    }, generateState.open ? 2000 : 5000);
+      (generateState.open ? refreshResults() : Promise.resolve()).then(schedulePoll);
+    }, generateState.open ? 5000 : 12000);
   }
 
   function openGenerateActivity() {
@@ -1462,6 +1467,12 @@
       saveLoras();
       renderLoras();
     });
+    window.addEventListener('webcap:inference-queue-snapshot', function (event) {
+      var queue = event && event.detail && event.detail.queue;
+      refreshTrackedGenerateJobs(queue).catch(function (err) {
+        reportError(err, 'Generation queue sync failed');
+      });
+    });
     el('generate-results').addEventListener('click', function (event) {
       var deleteButton = event.target.closest('[data-generate-delete-storage-id]');
       if (deleteButton) {
@@ -1494,4 +1505,9 @@
   window.openGenerateActivity = openGenerateActivity;
   window.closeGenerateActivity = closeGenerateActivity;
   bindUi();
+  if (typeof window.getInferenceQueueSnapshot === 'function') {
+    refreshTrackedGenerateJobs(window.getInferenceQueueSnapshot()).catch(function (err) {
+      reportError(err, 'Generation queue sync failed');
+    });
+  }
 })();

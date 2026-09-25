@@ -137,6 +137,7 @@ ui = {
   appSettingsResetBtn: document.getElementById('app-settings-reset-btn'),
   appSettingsStatusEl: document.getElementById('app-settings-status'),
   appSettingsRootEl: document.getElementById('app-settings-filesystem-root'),
+  appSettingsOutputRootEl: document.getElementById('app-settings-filesystem-output-root'),
   appSettingsModelsEl: document.getElementById('app-settings-filesystem-models'),
   appSettingsStoryboardDirectorModeEl: document.getElementById('app-settings-storyboard-director-mode'),
   appSettingsStoryboardEndpointEl: document.getElementById('app-settings-storyboard-endpoint'),

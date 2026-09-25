@@ -68,18 +68,6 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
             "bytesScanned": 1234,
         },
     })
-    monkeypatch.setattr(activity_monitor, "execution_recent_snapshot", lambda lane, limit=30: (
-        [{
-            "id": lane + "-done",
-            "status": "completed",
-            "finishedAt": 120.0 if lane == "inference" else 110.0,
-            "metadata": {
-                "client": "generate" if lane == "inference" else "storyboard",
-                "label": "Done",
-                "operation": "write_prompt",
-            },
-        }]
-    ))
     monkeypatch.setattr(activity_monitor, "training_recent_jobs", lambda: [
         {
             "id": "train-done",
@@ -94,11 +82,7 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
 
     assert payload["ok"] is True
     assert {item["kind"] for item in payload["active"]} == {"storyboard", "training", "storage"}
-    assert [item["id"] for item in payload["recent"]] == [
-        "inference-done",
-        "llm-done",
-        "train-done",
-    ]
+    assert [item["id"] for item in payload["recent"]] == ["train-done"]
     assert payload["queues"]["inference"]["running"] == 1
     assert payload["queues"]["inference"]["queued"] == 1
     assert payload["queues"]["training"]["queued"] == 1

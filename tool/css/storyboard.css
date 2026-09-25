@@ -653,7 +653,7 @@
 }
 
 .storyboard-scenes-heading-title strong {
-  font-size: 16px;
+  font-size: 19px;
 }
 
 .storyboard-scenes-heading-title {
@@ -2836,19 +2836,24 @@
 
 .storyboard-scenes-heading-left {
   min-width: 0;
-  display: flex;
-  align-items: center;
   justify-self: start;
-  gap: 12px;
 }
 
 .storyboard-scenes-heading-left .storyboard-scenes-heading-title {
   min-width: 0;
 }
 
-.storyboard-scenes-heading-left #storyboard-generate-scenes-btn {
+.storyboard-scenes-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.storyboard-scenes-title-row #storyboard-generate-scenes-btn {
   width: auto;
+  min-height: 30px;
   flex: 0 0 auto;
+  padding: 4px 10px;
   white-space: nowrap;
 }
 

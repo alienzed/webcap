@@ -517,7 +517,8 @@
       if (!desired[String(card.dataset.generateTakeKey || '')]) card.remove();
     });
 
-    var before = host.querySelector('.generate-take-card.is-pending');
+    var pendingCards = host.querySelectorAll('.generate-take-card.is-pending');
+    var anchor = pendingCards.length ? pendingCards[pendingCards.length - 1].nextSibling : host.firstChild;
     items.forEach(function (result) {
       var key = resultKey(result);
       if (!key) return;
@@ -525,13 +526,9 @@
         host.querySelectorAll('.generate-take-card[data-generate-take-key]'),
         function (candidate) { return String(candidate.dataset.generateTakeKey || '') === key; }
       );
-      if (!card) {
-        card = buildTakeCard(result);
-        host.insertBefore(card, before);
-      } else {
-        host.insertBefore(card, before);
-      }
-      before = card.nextSibling;
+      if (!card) card = buildTakeCard(result);
+      host.insertBefore(card, anchor);
+      anchor = card.nextSibling;
     });
 
     if (!generateState.activeResultKey && !generateState.activePendingJobId && items.length) {

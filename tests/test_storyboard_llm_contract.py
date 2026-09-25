@@ -111,7 +111,7 @@ def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
     assert "smallest coherent change" in prompt
     assert "materially changes how much screen time" in prompt
     assert "durationSeconds" in request["response_schema"]["properties"]
-    assert request["response_schema"]["properties"]["durationSeconds"]["minimum"] == 6
+    assert request["response_schema"]["properties"]["durationSeconds"]["minimum"] == 9
     assert request["response_schema"]["properties"]["durationSeconds"]["maximum"] == 15
     assert "durationSeconds" not in request["response_schema"]["required"]
     assert request["result_renderer"]["duration_field"] == "durationSeconds"
@@ -206,7 +206,12 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert "sharedContext" not in prompt
     assert "4 to 8 Scenes" not in prompt
     assert "at least two Scenes" not in prompt
-    assert "between 4 and 15 seconds" in prompt
+    assert "between 9 and 15 seconds" in prompt
+    assert "normally aiming for 10-15 seconds" in prompt
+    assert "compact edited sequence" in prompt
+    assert "multiple shots, cuts, or distinct visual beats by default" in prompt
+    assert scene_schema["properties"]["suggestedDurationSeconds"]["minimum"] == 9
+    assert scene_schema["properties"]["suggestedDurationSeconds"]["maximum"] == 15
     assert "invent natural dialogue" in prompt
     assert "EXISTING SECOND PROMPT" not in prompt
 

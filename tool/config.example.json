@@ -109,7 +109,7 @@
       "llama_server": "",
       "port": 8189,
       "context_size": null,
-      "max_tokens": null
+      "max_tokens": 16384
     }
   }
 }

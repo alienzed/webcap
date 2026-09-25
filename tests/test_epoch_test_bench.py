@@ -62,6 +62,43 @@ def test_new_session_seed_uses_portable_32_bit_range():
     assert 0 <= seed <= 4294967295
 
 
+def test_test_source_owner_requires_unanimous_webcap_provenance(tmp_path, monkeypatch):
+    model = bench.get_test_model()
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    monkeypatch.setattr(bench, "test_source_path", lambda _stage, _source="": staged)
+
+    def write_candidate(name, source_folder):
+        lora = staged / name
+        lora.write_bytes(b"weights")
+        lora.with_suffix(".webcap.json").write_text(json.dumps({
+            "version": 1,
+            "sourceJobId": name,
+            "sourceEpoch": 1,
+            "sourceFileName": name,
+            "sourceFolder": source_folder,
+            "stage": model.STAGING_KEY,
+        }), encoding="utf-8")
+        return lora
+
+    write_candidate("one.safetensors", "datasets/set-a")
+    write_candidate("two.safetensors", "datasets/set-a")
+    assert bench._deterministic_source_owner(model, "set-a") == "datasets/set-a"
+
+    write_candidate("three.safetensors", "datasets/set-b")
+    assert bench._deterministic_source_owner(model, "set-a") == ""
+
+
+def test_test_source_owner_refuses_missing_or_legacy_provenance(tmp_path, monkeypatch):
+    model = bench.get_test_model()
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    monkeypatch.setattr(bench, "test_source_path", lambda _stage, _source="": staged)
+
+    (staged / "legacy.safetensors").write_bytes(b"weights")
+    assert bench._deterministic_source_owner(model, "legacy") == ""
+
+
 def test_prepare_exposes_supported_test_aspect_ratios(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()

@@ -1761,9 +1761,7 @@
 
   function takeMediaUrl(storyId, sceneId, take) {
     var mediaPath = String(take && take.mediaPath ? take.mediaPath : '');
-    var filename = mediaPath.split('/').pop();
-    var folder = 'output/storyboards/' + storyId + '/takes/' + sceneId;
-    return '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(filename);
+    return '/fs/storyboard/media?story=' + encodeURIComponent(storyId) + '&path=' + encodeURIComponent(mediaPath);
   }
 
   function takePreviewHtml(storyId, sceneId, take) {
@@ -1877,8 +1875,8 @@
 
     var outputHtml = '';
     if (assemblyCurrent) {
-      var outputUrl = '/caption/media?folder=' + encodeURIComponent(assembly.folder) +
-        '&media=' + encodeURIComponent(assembly.media);
+      var outputUrl = '/fs/storyboard/media?story=' + encodeURIComponent(assembly.storyId) +
+        '&path=' + encodeURIComponent(assembly.mediaPath || ('exports/' + assembly.media));
       outputHtml = '<div class="storyboard-sequence-output"><video src="' + escapeHtml(outputUrl) +
         '" controls preload="metadata"></video></div>';
     }

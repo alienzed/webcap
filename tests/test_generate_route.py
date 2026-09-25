@@ -1,9 +1,20 @@
 from pathlib import Path
 from io import BytesIO
 
+import pytest
+
 from tool.server import app as app_module
 from tool.server import generate_generation
 from tool.server import generate_store
+
+
+@pytest.fixture(autouse=True)
+def isolate_generate_output_root(monkeypatch):
+    monkeypatch.setattr(
+        generate_store.app_config,
+        "output_root",
+        lambda: Path(generate_store.app_config.FS_ROOT) / "output",
+    )
 
 
 def test_generate_enqueue_is_global_and_uses_frozen_prepared_request(monkeypatch):

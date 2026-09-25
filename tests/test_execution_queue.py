@@ -279,3 +279,22 @@ def test_execution_queue_expected_claim_refuses_a_changed_runnable_head(queue_ro
     assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
     assert execution_queue.get_job(queued["id"])["status"] == "queued"
     assert execution_queue.lane_snapshot("inference")["activeJobId"] == ""
+
+
+
+def test_execution_queue_lane_guard_is_durable_and_explicitly_clearable(queue_root):
+    payload = {"providerJobIds": ["provider-1"], "reason": "cleanup pending"}
+
+    stored = execution_queue.set_lane_guard("inference", "providerCleanup", payload)
+
+    assert stored == payload
+    assert execution_queue.lane_guard("inference", "providerCleanup") == payload
+
+    payload["providerJobIds"].append("mutated-outside")
+    assert execution_queue.lane_guard("inference", "providerCleanup") == {
+        "providerJobIds": ["provider-1"],
+        "reason": "cleanup pending",
+    }
+
+    assert execution_queue.set_lane_guard("inference", "providerCleanup", None) is None
+    assert execution_queue.lane_guard("inference", "providerCleanup") is None

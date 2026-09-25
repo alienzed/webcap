@@ -342,6 +342,12 @@ def test_test_polling_keeps_active_worker_status_separate_from_selected_preview(
     assert "else if (selectedWasLive)" in poll
     assert "renderStatus(selectedStatus);" in poll
 
+    assert "refreshActivityButtonIfDue(5000);" in poll
+    assert "refreshSessionsIfDue(5000).catch(showError);" in poll
+    assert "pollTimer = setTimeout(pollStatus, 2000);" in poll
+    assert "function refreshActivityButtonIfDue(intervalMs)" in script
+    assert "function refreshSessionsIfDue(intervalMs)" in script
+
 
 def test_active_test_card_is_separate_from_selected_session_results():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

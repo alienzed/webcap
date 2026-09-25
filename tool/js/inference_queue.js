@@ -19,7 +19,7 @@
     var jobs = Array.isArray(state.queue.jobs) ? state.queue.jobs : [];
     return jobs.some(function (job) {
       var status = String(job.status || '');
-      return ['queued', 'backlog', 'starting', 'running', 'stopping'].indexOf(status) !== -1;
+      return ['queued', 'starting', 'running', 'stopping'].indexOf(status) !== -1;
     });
   }
 
@@ -111,7 +111,7 @@
     var backlogJobs = jobs.filter(function (job) { return String(job.status || '') === 'backlog'; });
     var backlog = backlogJobs.length;
     var count = running + queued + backlog;
-    var activeCount = state.queue.paused ? running : count;
+    var activeCount = state.queue.paused ? running : (running + queued);
     var title = [
       running ? String(running) + ' running' : '',
       queued ? String(queued) + ' queued' : '',

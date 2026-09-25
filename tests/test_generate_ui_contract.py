@@ -217,6 +217,13 @@ def test_generate_defaults_new_lora_strength_to_point_nine():
     assert "items.push({ name: name, strength: 0.9 });" in js
 
 
+def test_generate_library_open_does_not_overwrite_current_model_prompt_when_saved_model_is_unavailable():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "prompt.dataset.modelId = resultModelId || String(generateState.modelId || '');" in script
+    assert "window.localStorage.setItem('webcap.generate.prompt.' + resultModelId, prompt.value);" in script
+
+
 def test_generate_library_open_restores_saved_generation_configuration():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
 

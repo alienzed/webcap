@@ -373,6 +373,7 @@ def reconcile_startup():
                     scene_id,
                     label="Storyboard Take",
                     migrated_from_job_id=legacy_job_id,
+                    deferred=True,
                 )
             except Exception:
                 _logger.exception(

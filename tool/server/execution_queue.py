@@ -36,6 +36,7 @@ def _default_lane():
         "activeJobId": "",
         "jobs": [],
         "recent": [],
+        "guards": {},
     }
 
 
@@ -86,6 +87,11 @@ def _lane(state, lane_name, create=True):
         lane["recent"] = []
     elif not isinstance(recent, list):
         raise RuntimeError("Execution queue lane recent receipts are invalid: " + lane_name)
+    guards = lane.get("guards")
+    if guards is None:
+        lane["guards"] = {}
+    elif not isinstance(guards, dict):
+        raise RuntimeError("Execution queue lane guards are invalid: " + lane_name)
     lane.setdefault("paused", False)
     lane.setdefault("pauseReason", "")
     lane.setdefault("activeJobId", "")
@@ -129,6 +135,33 @@ def _record_recent(lane, job, keep=80):
     recent.append(receipt)
     if len(recent) > keep:
         del recent[:-keep]
+
+
+def lane_guard(lane_name, name, default=None):
+    name = str(name or "").strip()
+    if not name:
+        raise ValueError("Execution queue lane guard name is required.")
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name, create=False) or _default_lane()
+        guards = lane.get("guards") if isinstance(lane.get("guards"), dict) else {}
+        return copy.deepcopy(guards.get(name, default))
+
+
+def set_lane_guard(lane_name, name, value):
+    name = str(name or "").strip()
+    if not name:
+        raise ValueError("Execution queue lane guard name is required.")
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name)
+        guards = lane.setdefault("guards", {})
+        if value is None:
+            guards.pop(name, None)
+        else:
+            guards[name] = copy.deepcopy(value)
+        _write_state(state)
+        return copy.deepcopy(guards.get(name))
 
 
 def recent_snapshot(lane_name, limit=30):
@@ -278,15 +311,34 @@ def resume_lane(lane_name):
         return lane_snapshot(lane_name)
 
 
-def claim_next(lane_name):
+def claim_next(lane_name, runnable_backlog_ids=None, expected_job_id=""):
     now = time.time()
+    runnable_backlog_ids = {
+        str(job_id or "").strip()
+        for job_id in (runnable_backlog_ids or ())
+        if str(job_id or "").strip()
+    }
+    expected_job_id = str(expected_job_id or "").strip()
     with _lock:
         state = _read_state()
         lane = _lane(state, lane_name)
         if lane.get("paused") or lane.get("activeJobId"):
             return None
-        job = next((item for item in lane.get("jobs", []) if item.get("status") == "queued"), None)
+        job = next(
+            (
+                item
+                for item in lane.get("jobs", [])
+                if item.get("status") == "queued"
+                or (
+                    item.get("status") == "backlog"
+                    and str(item.get("id") or "") in runnable_backlog_ids
+                )
+            ),
+            None,
+        )
         if job is None:
+            return None
+        if expected_job_id and str(job.get("id") or "") != expected_job_id:
             return None
         job["status"] = "starting"
         job["startedAt"] = now
@@ -408,23 +460,6 @@ def cancel_queued(job_id):
 
 def cancel_pending(job_id):
     return _cancel_pending(job_id, PENDING_STATUSES)
-
-
-def promote_backlog(job_id):
-    now = time.time()
-    with _lock:
-        state = _read_state()
-        lane_name, job = _find_job(state, job_id)
-        if job is None:
-            raise FileNotFoundError("Execution queue job does not exist.")
-        if job.get("status") != "backlog":
-            raise ValueError("Only backlogged execution jobs can be queued.")
-        lane = _lane(state, lane_name)
-        job["status"] = "queued"
-        job["updatedAt"] = now
-        _refresh_positions(lane)
-        _write_state(state)
-        return _public_job(job)
 
 
 def shelve_queued(lane_name):

@@ -176,7 +176,7 @@ def test_execution_queue_reorders_mixed_inference_client_jobs(queue_root):
     assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2, 3]
 
 
-def test_execution_queue_backlog_is_not_claimable_until_promoted(queue_root):
+def test_execution_queue_backlog_is_claimable_only_when_explicitly_runnable(queue_root):
     backlog = execution_queue.enqueue(
         "inference",
         {"request": {"prompt": "later"}},
@@ -189,10 +189,57 @@ def test_execution_queue_backlog_is_not_claimable_until_promoted(queue_root):
     assert snapshot["jobs"][0]["queuePosition"] == 0
     assert execution_queue.claim_next("inference") is None
 
-    promoted = execution_queue.promote_backlog(backlog["id"])
-    assert promoted["status"] == "queued"
-    assert promoted["queuePosition"] == 1
-    assert execution_queue.claim_next("inference")["id"] == backlog["id"]
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={backlog["id"]},
+    )
+    assert claimed["id"] == backlog["id"]
+    assert claimed["status"] == "starting"
+
+
+def test_execution_queue_preserves_fifo_across_armed_backlog_and_queued_work(queue_root):
+    first = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
+    second = execution_queue.enqueue("inference", {"n": 2}, initial_status="backlog")
+    third = execution_queue.enqueue("inference", {"n": 3})
+
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={first["id"], second["id"]},
+    )
+    assert claimed["id"] == first["id"]
+    execution_queue.finish_job(first["id"], status="completed")
+
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={second["id"]},
+    )
+    assert claimed["id"] == second["id"]
+    execution_queue.finish_job(second["id"], status="completed")
+
+    assert execution_queue.claim_next("inference")["id"] == third["id"]
+
+
+def test_execution_queue_inert_backlog_does_not_block_new_queued_work(queue_root):
+    backlog = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
+    queued = execution_queue.enqueue("inference", {"n": 2})
+
+    claimed = execution_queue.claim_next("inference")
+
+    assert claimed["id"] == queued["id"]
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+
+
+def test_execution_queue_cancelled_backlog_cannot_be_claimed_from_stale_runnable_set(queue_root):
+    backlog = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
+    queued = execution_queue.enqueue("inference", {"n": 2})
+    execution_queue.cancel_pending(backlog["id"])
+
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={backlog["id"]},
+    )
+
+    assert claimed["id"] == queued["id"]
 
 
 def test_execution_queue_shelves_only_queued_work(queue_root):
@@ -215,3 +262,39 @@ def test_execution_queue_cancel_pending_accepts_backlog(queue_root):
     cancelled = execution_queue.cancel_pending(backlog["id"])
 
     assert cancelled["status"] == "cancelled"
+
+
+
+def test_execution_queue_expected_claim_refuses_a_changed_runnable_head(queue_root):
+    backlog = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
+    queued = execution_queue.enqueue("inference", {"n": 2})
+
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={backlog["id"]},
+        expected_job_id=queued["id"],
+    )
+
+    assert claimed is None
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+    assert execution_queue.get_job(queued["id"])["status"] == "queued"
+    assert execution_queue.lane_snapshot("inference")["activeJobId"] == ""
+
+
+
+def test_execution_queue_lane_guard_is_durable_and_explicitly_clearable(queue_root):
+    payload = {"providerJobIds": ["provider-1"], "reason": "cleanup pending"}
+
+    stored = execution_queue.set_lane_guard("inference", "providerCleanup", payload)
+
+    assert stored == payload
+    assert execution_queue.lane_guard("inference", "providerCleanup") == payload
+
+    payload["providerJobIds"].append("mutated-outside")
+    assert execution_queue.lane_guard("inference", "providerCleanup") == {
+        "providerJobIds": ["provider-1"],
+        "reason": "cleanup pending",
+    }
+
+    assert execution_queue.set_lane_guard("inference", "providerCleanup", None) is None
+    assert execution_queue.lane_guard("inference", "providerCleanup") is None

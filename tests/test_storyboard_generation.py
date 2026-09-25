@@ -527,6 +527,7 @@ def test_legacy_storyboard_queue_migration_is_restart_idempotent(storyboard_fs):
         "story-1",
         "scene-1",
         migrated_from_job_id=legacy["id"],
+        deferred=True,
     )
 
     storyboard_generation.reconcile_startup()
@@ -539,6 +540,8 @@ def test_legacy_storyboard_queue_migration_is_restart_idempotent(storyboard_fs):
         if (job.get("metadata") or {}).get("migratedFromJobId") == legacy["id"]
     ]
     assert len(migrated) == 1
+    assert migrated[0]["status"] == "backlog"
+    assert inference_runner._monitor_has_work() is False
 
 def test_storyboard_generation_cleans_owned_comfy_reference_inputs_after_capture(storyboard_fs, monkeypatch):
     story = storyboard_store.create_story({"title": "Story"})

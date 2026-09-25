@@ -872,13 +872,14 @@ def _sync_inference_session(session_directory):
             ),
             None,
         )
-        queued = [job for job in jobs if str(job.get("status") or "") in {"backlog", "queued"}]
+        pending = [job for job in jobs if str(job.get("status") or "") in {"backlog", "queued"}]
+        queued = [job for job in pending if str(job.get("status") or "") == "queued"]
         completed = len(status.get("results") if isinstance(status.get("results"), list) else [])
         failed = len(status.get("failures") if isinstance(status.get("failures"), list) else [])
         visible = dict(status)
         visible["completed"] = completed
         visible["failed"] = failed
-        visible["queued"] = len(queued)
+        visible["queued"] = len(pending)
         visible["running"] = 1 if active is not None else 0
         visible["session"] = Path(session_directory).name
         visible["resultFolder"] = visible.get("resultFolder") or _relative_to_fs_root(session_directory)
@@ -901,8 +902,11 @@ def _sync_inference_session(session_directory):
 
         if stopping_session:
             terminal_status = "stopped"
-        elif queued:
-            terminal_status = "running" if (completed or failed) else "queued"
+        elif pending:
+            # Backlog has no active provider work. A partially completed session
+            # with only backlogged children must not masquerade as running after
+            # restart or while it is waiting behind Training.
+            terminal_status = "running" if queued and (completed or failed) else "queued"
         else:
             terminal_status = "complete"
 
@@ -1172,19 +1176,19 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         for index, candidate in enumerate(candidates, start=1):
             label_root = str(request.get("name") or "").strip() or session_directory.name
             label = label_root + " · " + candidate["label"]
-            job = enqueue_test(
-                request,
-                {
-                    "folder": folder,
-                    "sessionId": session_directory.name,
-                    "candidateKind": candidate["kind"],
-                    "candidateFile": candidate["file"],
-                    "candidateLabel": candidate["label"],
-                    "candidateIndex": index,
-                    "source": str(request.get("source") or ""),
-                },
-                label=label,
-            )
+            context = {
+                "folder": folder,
+                "sessionId": session_directory.name,
+                "candidateKind": candidate["kind"],
+                "candidateFile": candidate["file"],
+                "candidateLabel": candidate["label"],
+                "candidateIndex": index,
+                "source": str(request.get("source") or ""),
+            }
+            if legacy_job_id:
+                job = enqueue_test(request, context, label=label, deferred=True)
+            else:
+                job = enqueue_test(request, context, label=label)
             queued_ids.append(job["jobId"])
             with _status_lock:
                 current_status = _read_status(session_directory) or {}

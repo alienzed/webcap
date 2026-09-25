@@ -10,14 +10,15 @@ from .execution_queue import (
     enqueue as execution_enqueue,
     finish_job as execution_finish_job,
     get_job as execution_get_job,
+    lane_guard as execution_lane_guard,
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
-    promote_backlog as execution_promote_backlog,
     recover_lane as execution_recover_lane,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
     shelve_queued as execution_shelve_queued,
+    set_lane_guard as execution_set_lane_guard,
     update_job as execution_update_job,
     reserve_resource as execution_reserve_resource,
     resource_owner as execution_resource_owner,
@@ -27,6 +28,7 @@ from .execution_queue import (
 
 EXECUTION_LANE = "inference"
 GPU_RESERVATION_OWNER = EXECUTION_LANE
+PROVIDER_CLEANUP_GUARD = "providerCleanup"
 
 _dispatch_lock = threading.Lock()
 _reconcile_lock = threading.Lock()
@@ -82,12 +84,68 @@ def _set_backlog_wait_reason(reason):
         _backlog_wait_reason = str(reason or "")
 
 
+def _persist_provider_cleanup_guard_locked():
+    if _provider_cleanup_holds:
+        execution_set_lane_guard(
+            EXECUTION_LANE,
+            PROVIDER_CLEANUP_GUARD,
+            {
+                "providerJobIds": sorted(_provider_cleanup_holds),
+                "reason": str(
+                    _provider_cleanup_reason
+                    or "Inference is waiting for ComfyUI provider cleanup."
+                ),
+            },
+        )
+    else:
+        execution_set_lane_guard(EXECUTION_LANE, PROVIDER_CLEANUP_GUARD, None)
+
+
+def _restore_provider_cleanup_guard():
+    payload = execution_lane_guard(EXECUTION_LANE, PROVIDER_CLEANUP_GUARD)
+    if payload is None:
+        return
+    if not isinstance(payload, dict):
+        raise RuntimeError("Inference provider cleanup guard is invalid.")
+    raw_ids = payload.get("providerJobIds")
+    if not isinstance(raw_ids, list):
+        raise RuntimeError("Inference provider cleanup guard job IDs are invalid.")
+    provider_ids = {
+        str(provider_id or "").strip()
+        for provider_id in raw_ids
+        if str(provider_id or "").strip()
+    }
+    if not provider_ids:
+        execution_set_lane_guard(EXECUTION_LANE, PROVIDER_CLEANUP_GUARD, None)
+        return
+    reason = str(
+        payload.get("reason")
+        or "Inference is waiting for ComfyUI provider cleanup."
+    )
+    global _provider_cleanup_reason
+    with _provider_hold_lock:
+        _provider_cleanup_holds.update(provider_ids)
+        _provider_cleanup_reason = reason
+
+
 def prepare_startup_backlog():
-    """Shelf persisted queued inference without starting runtime work."""
+    """Shelf persisted pending work and reconcile only interrupted active work."""
     with _backlog_lock:
         _armed_backlog_ids.clear()
     _set_backlog_wait_reason("")
-    return execution_shelve_queued(EXECUTION_LANE)
+    _restore_provider_cleanup_guard()
+    shelved = execution_shelve_queued(EXECUTION_LANE)
+    _ensure_execution_reconciled()
+
+    with _provider_hold_lock:
+        cleanup_pending = bool(_provider_cleanup_holds)
+    if cleanup_pending:
+        _reconcile_provider_cleanup_holds()
+        with _provider_hold_lock:
+            cleanup_pending = bool(_provider_cleanup_holds)
+        if cleanup_pending:
+            _ensure_monitor_started()
+    return shelved
 
 
 def hold_provider_cleanup(provider_job_id, reason):
@@ -100,6 +158,7 @@ def hold_provider_cleanup(provider_job_id, reason):
         _provider_cleanup_reason = str(
             reason or "Inference is waiting for ComfyUI provider cleanup."
         )
+        _persist_provider_cleanup_guard_locked()
 
 
 def _clear_obsolete_persisted_provider_pause():
@@ -125,13 +184,13 @@ def _reconcile_provider_cleanup_holds():
 
     from . import inference_runtime
     unresolved = []
-    provider_active = False
     for provider_job_id in pending:
         try:
             job = inference_runtime.read_job(provider_job_id)
         except Exception:
+            unresolved.append(provider_job_id)
             _logger.warning(
-                "Could not verify held inference provider job %s; clearing the runtime hold.",
+                "Could not verify held inference provider job %s; retaining the GPU hold.",
                 provider_job_id,
                 exc_info=True,
             )
@@ -139,7 +198,6 @@ def _reconcile_provider_cleanup_holds():
         status = str(job.get("status") or "").strip().lower() if isinstance(job, dict) else ""
         if job is not None and status not in {"completed", "failed", "cancelled"}:
             unresolved.append(provider_job_id)
-            provider_active = True
 
     global _provider_cleanup_reason
     with _provider_hold_lock:
@@ -147,9 +205,16 @@ def _reconcile_provider_cleanup_holds():
         remaining = bool(_provider_cleanup_holds)
         if not remaining:
             _provider_cleanup_reason = ""
+        _persist_provider_cleanup_guard_locked()
     if remaining:
-        if provider_active and not execution_resource_owner():
+        owner = execution_resource_owner()
+        if not owner:
             execution_reserve_resource(GPU_RESERVATION_OWNER)
+        elif owner != GPU_RESERVATION_OWNER:
+            _logger.error(
+                "Inference provider cleanup is unresolved while the shared GPU is owned by %s.",
+                owner,
+            )
         return False
 
     if execution_resource_owner() == GPU_RESERVATION_OWNER:
@@ -236,10 +301,22 @@ def _ensure_execution_reconciled():
                 )
                 _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
 
-        interrupted = execution_recover_lane(
+        execution_recover_lane(
             EXECUTION_LANE,
             reason="Inference was interrupted by a WebCap restart.",
         )
+
+        with _provider_hold_lock:
+            cleanup_pending = bool(_provider_cleanup_holds)
+        if cleanup_pending:
+            owner = execution_resource_owner()
+            if not owner:
+                execution_reserve_resource(GPU_RESERVATION_OWNER)
+            elif owner != GPU_RESERVATION_OWNER:
+                _logger.error(
+                    "Interrupted inference provider cleanup is unresolved while the shared GPU is owned by %s.",
+                    owner,
+                )
 
         _startup_reconciled = True
 
@@ -310,23 +387,31 @@ def _advance_queue():
     _ensure_execution_reconciled()
     with _dispatch_lock:
         snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-        if snapshot.get("paused") or snapshot.get("activeJobId"):
-            return None
 
+        # Provider cleanup is a GPU-safety obligation, not schedulable queue
+        # work. Keep reconciling it even when the user has paused inference.
         with _provider_hold_lock:
             cleanup_pending = bool(_provider_cleanup_holds)
         if cleanup_pending and not _reconcile_provider_cleanup_holds():
             return None
 
+        if snapshot.get("paused") or snapshot.get("activeJobId"):
+            return None
+
         jobs = snapshot.get("jobs", [])
-        queued = [job for job in jobs if job.get("status") == "queued"]
         armed_ids = _armed_backlog_snapshot()
-        armed_backlog = [
-            job for job in jobs
-            if job.get("status") == "backlog" and str(job.get("id") or "") in armed_ids
-        ]
-        armed_backlog.sort(key=lambda job: float(job.get("createdAt") or 0))
-        if not queued and not armed_backlog:
+        next_runnable = next(
+            (
+                job for job in jobs
+                if str(job.get("status") or "") == "queued"
+                or (
+                    str(job.get("status") or "") == "backlog"
+                    and str(job.get("id") or "") in armed_ids
+                )
+            ),
+            None,
+        )
+        if next_runnable is None:
             _set_backlog_wait_reason("")
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
@@ -362,7 +447,7 @@ def _advance_queue():
             )
             return None
 
-        if not queued and armed_backlog:
+        if str(next_runnable.get("status") or "") == "backlog":
             try:
                 from . import inference_runtime
                 inference_runtime.system_stats()
@@ -371,11 +456,16 @@ def _advance_queue():
                 if execution_resource_owner() == GPU_RESERVATION_OWNER:
                     _release_gpu()
                 return None
-            promoted = execution_promote_backlog(str(armed_backlog[0].get("id") or ""))
-            _disarm_backlog(promoted.get("id"))
 
         _set_backlog_wait_reason("")
-        claimed = execution_claim_next(EXECUTION_LANE)
+        claim_armed_ids = _armed_backlog_snapshot()
+        claimed = execution_claim_next(
+            EXECUTION_LANE,
+            runnable_backlog_ids=claim_armed_ids,
+            expected_job_id=str(next_runnable.get("id") or ""),
+        )
+        if claimed is not None and str(claimed.get("id") or "") in claim_armed_ids:
+            _disarm_backlog(claimed.get("id"))
         if claimed is None:
             if reserved_here:
                 _release_gpu()
@@ -419,11 +509,11 @@ def _monitor_has_work():
     snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
     if snapshot.get("activeJobId"):
         return True
-    if snapshot.get("paused"):
-        return False
     with _provider_hold_lock:
         if _provider_cleanup_holds:
             return True
+    if snapshot.get("paused"):
+        return False
     armed_ids = _armed_backlog_snapshot()
     return any(
         str(job.get("status") or "") == "queued"
@@ -492,7 +582,7 @@ def enqueue_generate(request, label=""):
     return _job_view(execution_get_job(job["id"]))
 
 
-def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_id=""):
+def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_id="", deferred=False):
     _ensure_execution_reconciled()
     story_id = str(story_id or "").strip()
     scene_id = str(scene_id or "").strip()
@@ -509,7 +599,7 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
     frozen_request = copy.deepcopy(request)
     for key in ("entryState", "exitState", "seedMode", "referenceRecords"):
         frozen_request.pop(key, None)
-    status = _new_job_status()
+    status = "backlog" if deferred else _new_job_status()
     job = execution_enqueue(
         EXECUTION_LANE,
         {
@@ -527,13 +617,14 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
         },
         initial_status=status,
     )
-    if status == "backlog":
+    if status == "backlog" and not deferred:
         _arm_backlog(job["id"])
-    _start_worker_for_requested_inference()
+    if not deferred:
+        _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
 
-def enqueue_test(request, context, label=""):
+def enqueue_test(request, context, label="", deferred=False):
     _ensure_execution_reconciled()
     context = copy.deepcopy(context) if isinstance(context, dict) else {}
     folder = str(context.get("folder") or "").strip()
@@ -541,7 +632,7 @@ def enqueue_test(request, context, label=""):
     candidate_kind = str(context.get("candidateKind") or "").strip()
     if not folder or not session_id or candidate_kind not in {"base", "lora"}:
         raise ValueError("Test inference requires folder, session, and candidate context.")
-    status = _new_job_status()
+    status = "backlog" if deferred else _new_job_status()
     job = execution_enqueue(
         EXECUTION_LANE,
         {
@@ -561,9 +652,10 @@ def enqueue_test(request, context, label=""):
         },
         initial_status=status,
     )
-    if status == "backlog":
+    if status == "backlog" and not deferred:
         _arm_backlog(job["id"])
-    _start_worker_for_requested_inference()
+    if not deferred:
+        _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
 

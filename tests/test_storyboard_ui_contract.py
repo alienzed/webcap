@@ -859,11 +859,12 @@ def test_storyboard_continuity_header_actions_do_not_toggle_disclosure():
     assert ".storyboard-invariants-actions" in css
 
 
-def test_storyboard_switching_stories_clears_stale_concept_lock():
+def test_storyboard_switching_stories_clears_stale_director_locks():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     block = storyboard.split("function syncDirectorPendingControls()", 1)[1].split("\n  function ", 1)[0]
     assert "setDirectorTargetProtected(conceptTarget, directorTargetPending(conceptTarget));" in block
+    assert "setDirectorTargetProtected(repairTarget, directorTargetPending(repairTarget));" in block
     assert "scenesTarget" not in block
 
 

@@ -3360,6 +3360,8 @@
       takeId: takeId
     }); }).then(function (payload) {
       storyState.story = payload.story;
+      storyState.sequenceEncodingWarnings = [];
+      storyState.sequenceWarningsVisible = false;
       renderStory();
       setSaveState('Saved');
     }).catch(reportError);

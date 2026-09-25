@@ -2607,7 +2607,6 @@
         '</div>' +
         ratingHtml +
         '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
-        '<button type="button" class="review-captions-btn storyboard-take-delete" data-take-action="delete" data-take-id="' + escapeHtml(takeId) + '">Delete</button>' +
       '</div>' +
       takeEffectiveInputHtml(take) +
     '</article>';

@@ -68,6 +68,7 @@
 .app-header {
   grid-area: header;
   min-width: 0;
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
@@ -78,11 +79,30 @@
 }
 
 .app-header-context,
+.app-header-workspace-actions,
 .app-header-global {
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.app-header-workspace-actions {
+  position: absolute;
+  left: calc(42px + 255px + 320px);
+  top: 50%;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+}
+
+.app-header-workspace-actions.hidden {
+  display: none;
+}
+
+.app-header-workspace-actions .review-captions-btn {
+  min-height: 26px;
+  padding: 3px 9px;
+  white-space: nowrap;
 }
 
 .app-header-context {
@@ -879,6 +899,10 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     padding-inline: 8px;
+  }
+
+  .app-header-workspace-actions {
+    left: 50%;
   }
 
   .app-header-global {

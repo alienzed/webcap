@@ -26,6 +26,9 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
     assert 'latestTrainingCandidateStageJob' not in (ROOT / "tool" / "js" / "training_candidates.js").read_text(encoding="utf-8")
     assert 'data-training-history-candidates=' in history
     assert workspace.count('openTrainingCandidates(') >= 3
+    assert "var candidateJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === candidateId; })[0];" in workspace
+    assert "openTrainingCandidates(candidateJob);" in workspace
+    assert "openTrainingCandidates(getTrainingRunnerJobById(candidateId));" not in workspace
 
 
 def test_candidate_ui_is_manual_read_only_charting():

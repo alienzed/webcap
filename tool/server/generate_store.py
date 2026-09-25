@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 
 
 def generation_root():
-    root = Path(app_config.FS_ROOT) / "output" / "generations"
+    root = app_config.output_root() / "generations"
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -109,9 +109,9 @@ def persist_result(job_id, request, output_ref, media_bytes, provider_job_id, el
         media_path = directory / media_name
         media_path.write_bytes(media_bytes)
 
-        root = Path(app_config.FS_ROOT)
-        relative_media = str(media_path.relative_to(root)).replace("\\", "/")
-        relative_manifest = str((directory / MANIFEST_NAME).relative_to(root)).replace("\\", "/")
+        root = app_config.output_root().resolve()
+        relative_media = str(media_path.resolve().relative_to(root)).replace("\\", "/")
+        relative_manifest = str((directory / MANIFEST_NAME).resolve().relative_to(root)).replace("\\", "/")
 
         persisted_references = {}
         source_references = request.get("references") if isinstance(request.get("references"), dict) else {}
@@ -124,7 +124,7 @@ def persist_result(job_id, request, output_ref, media_bytes, provider_job_id, el
             persisted_references[str(role)] = str(target.relative_to(root)).replace("\\", "/")
 
         payload = {
-            "version": 1,
+            "version": 2,
             "jobId": str(job_id),
             "createdAt": created_at,
             "modelId": str(request.get("modelId") or ""),
@@ -165,6 +165,34 @@ def persist_result(job_id, request, output_ref, media_bytes, provider_job_id, el
             _logger.exception("Could not clean partial Generate result directory %s.", directory)
         raise
 
+def _output_relative(path):
+    return str(Path(path).resolve().relative_to(app_config.output_root().resolve())).replace("\\", "/")
+
+
+def _listed_result_payload(manifest, payload):
+    listed = dict(payload)
+    directory = manifest.parent
+    media_name = Path(str(listed.get("mediaPath") or "")).name
+    media_path = directory / media_name if media_name else None
+    if media_path is not None and media_path.is_file():
+        listed["mediaPath"] = _output_relative(media_path)
+    listed["manifestPath"] = _output_relative(manifest)
+
+    references = listed.get("references") if isinstance(listed.get("references"), dict) else {}
+    normalized_references = {}
+    for role, stored_path in references.items():
+        name = Path(str(stored_path or "")).name
+        candidate = directory / "references" / name if name else None
+        normalized_references[str(role)] = (
+            _output_relative(candidate)
+            if candidate is not None and candidate.is_file()
+            else str(stored_path or "")
+        )
+    listed["references"] = normalized_references
+    listed["storageId"] = manifest.parent.parent.name + "/" + manifest.parent.name
+    return listed
+
+
 def list_results(limit=100):
     found = []
     root = generation_root()
@@ -174,9 +202,7 @@ def list_results(limit=100):
         except (OSError, json.JSONDecodeError):
             continue
         if isinstance(payload, dict):
-            payload = dict(payload)
-            payload["storageId"] = manifest.parent.parent.name + "/" + manifest.parent.name
-            found.append(payload)
+            found.append(_listed_result_payload(manifest, payload))
     found.sort(key=lambda item: int(item.get("createdAt") or 0), reverse=True)
     return found[:max(1, min(int(limit or 100), 500))]
 
@@ -185,7 +211,7 @@ def resolve_result_media(relative_path):
     value = str(relative_path or "").strip()
     if not value:
         raise ValueError("Generate media path is empty.")
-    candidate = (Path(app_config.FS_ROOT) / value).resolve()
+    candidate = (app_config.output_root() / value).resolve()
     root = generation_root().resolve()
     try:
         candidate.relative_to(root)

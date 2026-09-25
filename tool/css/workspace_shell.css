@@ -1530,6 +1530,19 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   white-space: nowrap;
 }
 
+.inference-queue-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inference-queue-header-actions .review-captions-btn {
+  width: auto;
+  min-height: 28px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
 .inference-queue-close {
   width: 28px;
   min-width: 28px;

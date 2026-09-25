@@ -462,6 +462,26 @@ def cancel_pending(job_id):
     return _cancel_pending(job_id, PENDING_STATUSES)
 
 
+def cancel_all_pending(lane_name):
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name)
+        cancelled = []
+        for job in lane.get("jobs", []):
+            if job.get("status") not in PENDING_STATUSES:
+                continue
+            job["status"] = "cancelled"
+            job["finishedAt"] = now
+            job["updatedAt"] = now
+            job["requestedAction"] = ""
+            _record_recent(lane, job)
+            cancelled.append(_public_job(job))
+        _refresh_positions(lane)
+        _write_state(state)
+        return cancelled
+
+
 def shelve_queued(lane_name):
     now = time.time()
     with _lock:

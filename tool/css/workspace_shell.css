@@ -89,10 +89,10 @@
 
 .app-header-workspace-actions {
   position: absolute;
-  left: calc(42px + 255px + 320px);
+  left: calc(42px + 255px + 22px);
   top: 50%;
   z-index: 2;
-  transform: translate(-50%, -50%);
+  transform: translateY(-50%);
 }
 
 .app-header-workspace-actions.hidden {
@@ -894,21 +894,11 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
   color: #94a3b8;
 }
 
-@media (max-width: 1700px) {
-  .app-header-workspace-actions {
-    left: calc(42px + 255px + 280px);
-  }
-}
-
 @media (max-width: 1180px) {
   .app-header {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     padding-inline: 8px;
-  }
-
-  .app-header-workspace-actions {
-    left: 50%;
   }
 
   .app-header-global {
@@ -941,6 +931,10 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
 @media (max-width: 880px) {
   .app-frame {
     grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .app-header-workspace-actions {
+    left: calc(38px + 255px + 22px);
   }
 
   .activity-rail {

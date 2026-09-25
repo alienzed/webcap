@@ -429,6 +429,10 @@
     if (state.open && typeof window.setActivityDrawerOpen === 'function') {
       window.setActivityDrawerOpen(false);
     }
+    if (state.open) {
+      refresh().then(schedule);
+      return;
+    }
     render();
     schedule();
   }

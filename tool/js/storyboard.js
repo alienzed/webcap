@@ -1721,11 +1721,6 @@
   function restoreLastRepair() {
     if (!storyState.story || !storyState.story.previousSceneRepair) return;
     var storyId = storyState.story.id;
-    var target = { kind: 'repair', storyId: storyId };
-    if (directorTargetBlocked(target)) {
-      reportError(new Error('This Story has pending Director work.'));
-      return;
-    }
     setRepairStatus('Restoring last repair…');
     flushPendingSaves().then(function () {
       return request({

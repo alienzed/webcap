@@ -1191,10 +1191,11 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   z-index: 72;
   top: 10px;
   right: 10px;
-  bottom: calc(var(--shell-status-height) + 10px);
+  bottom: auto;
   width: min(440px, calc(100% - 60px));
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  max-height: min(70vh, calc(100vh - var(--shell-status-height) - 20px));
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1481,12 +1482,13 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   position: absolute;
   top: 42px;
   right: 10px;
-  bottom: calc(var(--shell-status-height) + 10px);
+  bottom: auto;
   z-index: 55;
   width: min(390px, calc(100% - 62px));
+  max-height: min(70vh, calc(100vh - var(--shell-status-height) - 52px));
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1700,7 +1702,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .app-frame.shell-immersive > .inference-queue-drawer {
   top: 10px;
   right: 10px;
-  bottom: calc(var(--shell-status-height) + 10px);
+  bottom: auto;
+  max-height: min(70vh, calc(100vh - var(--shell-status-height) - 20px));
 }
 
 @media (max-width: 720px) {

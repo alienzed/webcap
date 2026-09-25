@@ -529,7 +529,6 @@
     var scores = payload && payload.candidateScores && typeof payload.candidateScores === 'object'
       ? payload.candidateScores
       : {};
-    var removableFiles = payload && Array.isArray(payload.removableFiles) ? payload.removableFiles : [];
     if (!(selectedCandidates instanceof Set)) {
       var savedSettings = savedTestModelState().settings;
       var savedSelection = state
@@ -618,18 +617,16 @@
       detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
       copy.appendChild(name);
       if (detail.textContent) copy.appendChild(detail);
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'test-generations-remove-candidate';
+      remove.dataset.fileName = String(fileName || '');
+      remove.title = 'Remove this Test candidate';
+      remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
+      remove.textContent = '×';
       row.appendChild(include);
       row.appendChild(copy);
-      if (removableFiles.indexOf(String(fileName || '')) !== -1) {
-        var remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'test-generations-remove-candidate';
-        remove.dataset.fileName = String(fileName || '');
-        remove.title = 'Remove this WebCap-staged Test candidate';
-        remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
-        remove.textContent = '×';
-        row.appendChild(remove);
-      }
+      row.appendChild(remove);
       host.appendChild(row);
     });
     syncCandidateMasterSelect(files);

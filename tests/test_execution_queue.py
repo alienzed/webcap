@@ -264,6 +264,21 @@ def test_execution_queue_cancel_pending_accepts_backlog(queue_root):
     assert cancelled["status"] == "cancelled"
 
 
+def test_execution_queue_cancel_all_pending_leaves_active_job_alone(queue_root):
+    active = execution_queue.enqueue("inference", {"n": 1})
+    queued = execution_queue.enqueue("inference", {"n": 2})
+    backlog = execution_queue.enqueue("inference", {"n": 3}, initial_status="backlog")
+    execution_queue.claim_next("inference")
+    execution_queue.mark_running(active["id"])
+
+    cancelled = execution_queue.cancel_all_pending("inference")
+
+    assert {job["id"] for job in cancelled} == {queued["id"], backlog["id"]}
+    assert execution_queue.get_job(active["id"])["status"] == "running"
+    assert execution_queue.get_job(queued["id"])["status"] == "cancelled"
+    assert execution_queue.get_job(backlog["id"])["status"] == "cancelled"
+
+
 
 def test_execution_queue_expected_claim_refuses_a_changed_runnable_head(queue_root):
     backlog = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")

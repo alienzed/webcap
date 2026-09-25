@@ -205,3 +205,19 @@ def test_generate_errors_keep_detail_in_console_and_use_concise_setup_badge():
 def test_generate_defaults_new_lora_strength_to_point_nine():
     js = Path("tool/js/generate.js").read_text(encoding="utf-8")
     assert "items.push({ name: name, strength: 0.9 });" in js
+
+
+
+def test_generate_inference_creates_and_updates_pending_preview_card():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert "function syncGenerationPreviewCard(job)" in script
+    assert "syncGenerationPreviewCard(payload.job);" in script
+    assert "syncGenerationPreviewCard(job);" in script
+    assert "data-generation-job-id" in script or "dataset.generationJobId" in script
+    assert "generate-result-card is-pending" in script
+    assert "generate-result-pending-indicator" in script
+    assert "removeGenerationPreviewCard(jobId)" in script
+    assert ".generate-result-card.is-pending" in css
+    assert ".generate-result-pending-media" in css

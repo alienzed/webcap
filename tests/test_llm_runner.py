@@ -200,6 +200,56 @@ def test_storyboard_llm_rejects_stale_contract_before_applying_result(llm_root, 
     assert stored["style"] == "Changed while Director was running."
 
 
+def test_storyboard_develop_rejects_changed_story_inputs_before_replacing_scenes(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "Original concept.",
+        "style": "Original style.",
+        "targetSceneCount": 1,
+    })
+    story, original_scene = storyboard_store.add_scene(story["id"], {
+        "title": "Original Scene",
+        "summary": "Keep this if the Director result becomes stale.",
+    })
+    from tool.server.storyboard_llm_contract import build_request
+
+    contract = build_request(story, "", "develop_story")
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+
+    def run_and_change_story(*_args, **_kwargs):
+        storyboard_store.update_story(story["id"], {"style": "Changed while Director was running."})
+        return {
+            "text": '{"scenes":[]}',
+            "data": {"sharedContext": [], "scenes": []},
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_contract", run_and_change_story)
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        contract,
+        context={
+            "storyId": story["id"],
+            "sceneId": "",
+            "operation": "develop_story",
+            "replaceExisting": True,
+            "sourceInstruction": "",
+        },
+    )
+
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    stored = storyboard_store.load_story(story["id"])
+    assert finished["status"] == "failed"
+    assert "inputs changed while the request was running" in finished["error"]
+    assert stored["sceneOrder"] == [original_scene["id"]]
+    assert stored["scenes"][original_scene["id"]]["title"] == "Original Scene"
+
+
 def test_storyboard_scene_refine_rejects_changed_duration_instead_of_overwriting_it(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story", "style": "Grounded."})
     story, scene = storyboard_store.add_scene(story["id"], {

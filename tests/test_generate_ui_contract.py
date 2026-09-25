@@ -134,6 +134,10 @@ def test_generate_prompt_assistant_has_non_modal_live_activity():
     assert "requestJson('/fs/system_status')" in script
     assert "Loading model…" in script
     assert "Generating response…" in script
+    assert "function directorLiveStats(activity)" in script
+    assert "activity.slot" in script
+    assert "' generated'" in script
+    assert "' output Auto'" in script
     assert ".generate-director-activity" in css
     assert 'position: absolute;' in css
     assert "#generate-director-activity-trend svg" in css

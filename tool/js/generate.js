@@ -19,7 +19,8 @@
       activityHistory: [],
       activityLastMemory: null,
       activityLoadBaseline: null,
-      activityLoadModelId: ''
+      activityLoadModelId: '',
+      activitySlotSample: null
     },
     trackedJobIds: loadTrackedGenerateJobs(),
     results: [],
@@ -1089,6 +1090,55 @@
     return isFinite(value) && value >= 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
   }
 
+  function directorTokenCount(value) {
+    var count = Number(value);
+    if (!isFinite(count) || count < 0) return '';
+    if (count < 1000) return String(Math.round(count));
+    if (count < 10000) return (count / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return Math.round(count / 1000) + 'k';
+  }
+
+  function directorLiveStats(activity) {
+    var slot = activity && activity.slot && typeof activity.slot === 'object' ? activity.slot : null;
+    if (!slot || String(activity.phase || '') !== 'generating') {
+      generateState.director.activitySlotSample = null;
+      return [];
+    }
+
+    var now = Date.now();
+    var generated = Number(slot.generatedTokens);
+    var promptTokens = Number(slot.promptTokens);
+    var promptProcessed = Number(slot.promptProcessed);
+    var contextSize = Number(slot.contextSize || activity.contextSize);
+    var maxTokens = Number(slot.maxTokens);
+    var parts = [];
+
+    if (isFinite(generated) && generated >= 0) {
+      var previous = generateState.director.activitySlotSample;
+      if (previous && generated >= previous.tokens && now > previous.time) {
+        var speed = (generated - previous.tokens) / ((now - previous.time) / 1000);
+        if (isFinite(speed) && speed > 0) parts.push((speed >= 10 ? speed.toFixed(0) : speed.toFixed(1)) + ' tok/s');
+      }
+      generateState.director.activitySlotSample = { tokens: generated, time: now };
+      parts.unshift(directorTokenCount(generated) + ' generated');
+    }
+
+    if (isFinite(promptTokens) && promptTokens > 0) {
+      if (isFinite(promptProcessed) && promptProcessed >= 0 && promptProcessed < promptTokens) {
+        parts.push(directorTokenCount(promptProcessed) + '/' + directorTokenCount(promptTokens) + ' prompt');
+      } else {
+        parts.push(directorTokenCount(promptTokens) + ' prompt');
+      }
+    }
+
+    if (isFinite(contextSize) && contextSize > 0) {
+      var used = (isFinite(promptTokens) ? promptTokens : 0) + (isFinite(generated) ? generated : 0);
+      parts.push(directorTokenCount(used) + '/' + directorTokenCount(contextSize) + ' ctx');
+    }
+    if (isFinite(maxTokens)) parts.push(maxTokens < 0 ? 'output Auto' : ('max ' + directorTokenCount(maxTokens) + ' out'));
+    return parts;
+  }
+
   function directorMemorySample(system) {
     var gpu = system && system.gpu;
     var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
@@ -1246,6 +1296,9 @@
     if (startedAt) {
       parts.push('<span>' + escapeHtml(String(Math.max(0, Math.round(Date.now() / 1000 - startedAt))) + 's elapsed') + '</span>');
     }
+    directorLiveStats(activity).forEach(function (stat) {
+      parts.push('<span>' + escapeHtml(stat) + '</span>');
+    });
 
     var gpu = system && system.gpu;
     var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
@@ -1303,6 +1356,7 @@
   function startDirectorActivity() {
     generateState.director.activityStartedAt = Date.now() / 1000;
     generateState.director.activityHistory = [];
+    generateState.director.activitySlotSample = null;
     renderDirectorActivity({ phase: 'preparing', active: true, startedAt: generateState.director.activityStartedAt }, null);
     refreshDirectorActivity();
   }

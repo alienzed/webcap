@@ -4,6 +4,7 @@ import threading
 import time
 
 from .execution_queue import (
+    cancel_all_pending as execution_cancel_all_pending,
     cancel_pending as execution_cancel_pending,
     consume_terminal_job as execution_consume_terminal_job,
     claim_next as execution_claim_next,
@@ -763,6 +764,13 @@ def action(operation, job_id="", direction="", position=None):
         _disarm_backlog(job_id)
         _cleanup_generate_job_references(job_id)
         return {"job": _job_view(job)}
+    if operation == "clear_all":
+        cancelled = execution_cancel_all_pending(EXECUTION_LANE)
+        for job in cancelled:
+            cancelled_id = str(job.get("id") or "")
+            _disarm_backlog(cancelled_id)
+            _cleanup_generate_job_references(cancelled_id)
+        return {"queue": snapshot(), "cleared": len(cancelled)}
     if operation == "run_backlog":
         job = execution_get_job(job_id)
         if str(job.get("status") or "") != "backlog":

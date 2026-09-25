@@ -852,9 +852,51 @@ def committed_inference_outcome(job):
     return None
 
 
-def _cancel_shared_pending_job(job_id):
+def _set_session_cancel_marker(session_directory, job_id, present, reduce_total=False):
+    if session_directory is None:
+        return False
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        return False
+    with _status_lock:
+        status = _read_status(session_directory) or {}
+        cancelled = set(str(value) for value in (status.get("cancelledJobIds") or []))
+        changed = False
+        if present and job_id not in cancelled:
+            cancelled.add(job_id)
+            if reduce_total:
+                status["total"] = max(0, int(status.get("total") or 0) - 1)
+            changed = True
+        elif not present and job_id in cancelled:
+            cancelled.remove(job_id)
+            if reduce_total:
+                status["total"] = int(status.get("total") or 0) + 1
+            changed = True
+        if changed:
+            status["cancelledJobIds"] = sorted(cancelled)
+            _atomic_write_json(_status_path(session_directory), status)
+        return changed
+
+
+def _cancel_shared_pending_job(job_id, session_directory=None, reduce_total=False):
     from .inference_runner import action as inference_action
-    return inference_action("cancel", job_id=str(job_id or "").strip())["job"]
+    marked = _set_session_cancel_marker(
+        session_directory,
+        job_id,
+        True,
+        reduce_total=reduce_total,
+    )
+    try:
+        return inference_action("cancel", job_id=str(job_id or "").strip())["job"]
+    except Exception:
+        if marked:
+            _set_session_cancel_marker(
+                session_directory,
+                job_id,
+                False,
+                reduce_total=reduce_total,
+            )
+        raise
 
 
 def _session_job_records(status):
@@ -1315,7 +1357,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 queued_job = execution_get_job(job_id)
                 job_status = str(queued_job.get("status") or "")
                 if job_status in {"backlog", "queued"}:
-                    _cancel_shared_pending_job(job_id)
+                    _cancel_shared_pending_job(job_id, session_directory=session_directory)
                 elif job_status in {"starting", "running"}:
                     execution_request_stop(job_id)
                     rollback_pending = True
@@ -1429,7 +1471,7 @@ def reconcile_startup():
                                 child_job = execution_get_job(str(child_id))
                                 child_status = str(child_job.get("status") or "")
                                 if child_status in {"backlog", "queued"}:
-                                    _cancel_shared_pending_job(str(child_id))
+                                    _cancel_shared_pending_job(str(child_id), session_directory=session_directory)
                                 elif child_status in {"starting", "running"}:
                                     execution_request_stop(str(child_id))
                                     cleanup_pending = True
@@ -1571,7 +1613,11 @@ def cancel_queued(folder_path, job_id):
     status_payload = _read_status(session_directory) or {}
     for child in _session_job_records(status_payload):
         if str(child.get("status") or "") in {"backlog", "queued"}:
-            _cancel_shared_pending_job(str(child.get("id") or ""))
+            _cancel_shared_pending_job(
+                str(child.get("id") or ""),
+                session_directory=session_directory,
+                reduce_total=True,
+            )
     shutil.rmtree(session_directory)
     return {
         "operation": "test_queue_cancel",
@@ -1704,7 +1750,7 @@ def stop(folder_path, session_name=None, source=None):
         job_status = str(job.get("status") or "")
         job_id = str(job.get("id") or "")
         if job_status in {"backlog", "queued"}:
-            _cancel_shared_pending_job(job_id)
+            _cancel_shared_pending_job(job_id, session_directory=session_directory)
         elif job_status in {"starting", "running"}:
             execution_request_stop(job_id)
     return _sync_inference_session(session_directory)

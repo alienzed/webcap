@@ -20,7 +20,8 @@
       activityLastMemory: null,
       activityLoadBaseline: null,
       activityLoadModelId: '',
-      activitySlotSample: null
+      activitySlotSample: null,
+      jobId: ''
     },
     trackedJobIds: loadTrackedGenerateJobs(),
     results: [],
@@ -1056,7 +1057,9 @@
       var status = String(current.status || '');
       if (status === 'completed') return Promise.resolve(current.result || {});
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
-        throw new Error(current.error || ('Prompt Assistant job ' + status + '.'));
+        var terminalError = new Error(current.error || ('Prompt Assistant job ' + status + '.'));
+        terminalError.jobStatus = status;
+        throw terminalError;
       }
       return new Promise(function (resolve) { setTimeout(resolve, directorJobPollDelay(current)); }).then(function () {
         return directorJobRequest(current.jobId);
@@ -1068,7 +1071,50 @@
   function queueDirectorRequest(payload) {
     return postJson('/fs/generate/director', payload).then(function (response) {
       trackTransientLlmJob(response.job);
+      generateState.director.jobId = String(response.job && response.job.jobId || '');
       return waitForDirectorJob(response.job);
+    });
+  }
+
+  function directorActivityForCurrentJob(activity, queue) {
+    var jobId = String(generateState.director.jobId || '');
+    if (!jobId || !queue || !Array.isArray(queue.jobs)) return activity;
+    var job = queue.jobs.find(function (candidate) {
+      return String(candidate.jobId || '') === jobId;
+    });
+    if (!job) return Object.assign({}, activity || {}, { jobId: jobId });
+    if (String(job.status || '') === 'queued' && String(queue.activeJobId || '') !== jobId) {
+      return Object.assign({}, activity || {}, {
+        active: true,
+        phase: 'queued',
+        model: job.modelId || '',
+        operation: job.operation || '',
+        startedAt: job.createdAt,
+        jobId: jobId,
+        jobStatus: 'queued'
+      });
+    }
+    return Object.assign({}, activity || {}, {
+      jobId: jobId,
+      jobStatus: String(job.status || '')
+    });
+  }
+
+  function stopDirectorJob() {
+    var button = el('generate-director-stop');
+    var jobId = String(generateState.director.jobId || '');
+    if (!button || !jobId || button.disabled) return;
+    button.disabled = true;
+    button.textContent = 'Stopping…';
+    postJson('/fs/director/job', {
+      operation: 'stop_or_cancel',
+      jobId: jobId
+    }).then(function () {
+      return refreshDirectorActivity();
+    }).catch(function (err) {
+      button.disabled = false;
+      button.textContent = 'Stop';
+      reportError(err, 'Stop failed');
     });
   }
 
@@ -1296,11 +1342,19 @@
     var card = el('generate-director-activity');
     var phase = el('generate-director-activity-phase');
     var detail = el('generate-director-activity-detail');
-    if (!card || !phase || !detail) throw new Error('Prompt Assistant activity markup is missing.');
+    var stop = el('generate-director-stop');
+    if (!card || !phase || !detail || !stop) throw new Error('Prompt Assistant activity markup is missing.');
 
-    var terminal = activity && ['complete', 'error'].indexOf(String(activity.phase || '')) !== -1;
+    var phaseName = String(activity && activity.phase || '');
+    var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
     var visible = directorActivityActive() || (activity && activity.active) || terminal;
     card.classList.toggle('hidden', !visible);
+    var jobId = String(activity && activity.jobId || generateState.director.jobId || '');
+    var jobStatus = String(activity && activity.jobStatus || '');
+    var canStop = !!jobId && ['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(jobStatus) === -1;
+    stop.classList.toggle('hidden', !canStop);
+    stop.disabled = jobStatus === 'stopping';
+    stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
     if (!visible) return;
 
     positionDirectorActivity();
@@ -1360,7 +1414,7 @@
       requestJson('/fs/system_status').catch(function () { return null; })
     ]).then(function (values) {
       observeTransientLlmActivity(values[0]);
-      renderDirectorActivity(values[0], values[1]);
+      renderDirectorActivity(directorActivityForCurrentJob(values[0], values[0] && values[0].queue), values[1]);
     }).catch(function () {
       renderDirectorActivity({ phase: 'preparing', active: true }, null);
     }).then(function () {
@@ -1485,10 +1539,15 @@
       if (operation === 'refine_prompt') el('generate-director-instruction').value = '';
       setDirectorStatus(operation === 'write_prompt' ? 'Prompt expanded.' : 'Prompt refined.');
     }).catch(function (err) {
-      setDirectorStatus('Prompt Assistant failed.');
-      reportError(err);
+      if (err && ['stopped', 'cancelled'].indexOf(String(err.jobStatus || '')) !== -1) {
+        setDirectorStatus('Prompt Assistant stopped.');
+      } else {
+        setDirectorStatus('Prompt Assistant failed.');
+        reportError(err);
+      }
     }).then(function () {
       generateState.director.busy = false;
+      generateState.director.jobId = '';
       renderDirector();
       finishDirectorActivity();
     });
@@ -1624,6 +1683,9 @@
     };
     el('generate-director-restore').onclick = function () {
       restoreDirectorPrompt();
+    };
+    el('generate-director-stop').onclick = function () {
+      stopDirectorJob();
     };
     window.addEventListener('resize', function () {
       if (directorActivityActive()) positionDirectorActivity();

@@ -111,6 +111,32 @@ def test_overview_enumerates_known_producer_roots_without_measuring(monkeypatch,
     assert "workspace-wide Test inventory" in tests["note"]
 
 
+def test_storage_manager_finds_generations_in_configured_output_root(monkeypatch, tmp_path):
+    fs_root = tmp_path / "sets"
+    output_root = tmp_path / "creative"
+    fs_root.mkdir()
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(storage_manager.app_config, "output_root", lambda: output_root)
+
+    directory = output_root / "generations" / "2026-09-23" / "job-1"
+    directory.mkdir(parents=True)
+    (directory / "result.mp4").write_bytes(b"video")
+    _write_json(directory / "generation.json", {
+        "version": 2,
+        "jobId": "job-1",
+        "createdAt": 1,
+        "modelId": "minimax_h3",
+        "mediaKind": "video",
+        "sourcePrompt": "demo",
+        "mediaPath": "generations/2026-09-23/job-1/result.mp4",
+    })
+
+    payload = storage_manager.overview("")
+
+    assert len(payload["items"]["generate"]) == 1
+    assert payload["items"]["generate"][0]["id"] == "2026-09-23/job-1"
+
+
 def test_measure_is_item_scoped_and_cached(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     directory = _generation(tmp_path)

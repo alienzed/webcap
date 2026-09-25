@@ -993,3 +993,60 @@ def test_remote_server_url_preserves_openai_api_prefix(monkeypatch):
     )
 
     assert storyboard_llm_runtime._server_url("/models") == "http://director-box:11434/v1/models"
+
+
+def test_hard_stop_rejects_remote_runtime(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "remote"},
+    )
+
+    with pytest.raises(ValueError, match="only available for the local"):
+        storyboard_llm_runtime.assert_hard_stop_supported()
+
+
+def test_stop_owned_server_sets_stop_signal_and_terminates_owned_runtime(monkeypatch):
+    calls = []
+
+    class FakeProcess:
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_process", FakeProcess())
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "local"},
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_stop_server_locked",
+        lambda: calls.append("stop"),
+    )
+    storyboard_llm_runtime.clear_stop_request()
+
+    try:
+        assert storyboard_llm_runtime.stop_owned_server() is True
+        assert storyboard_llm_runtime._stop_requested.is_set()
+        assert calls == ["stop"]
+    finally:
+        storyboard_llm_runtime.clear_stop_request()
+
+
+def test_run_contract_honors_stop_requested_before_runtime_work(monkeypatch):
+    storyboard_llm_runtime._stop_requested.set()
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "chat",
+        lambda *_args, **_kwargs: pytest.fail("Stopped work must not enter chat."),
+    )
+
+    try:
+        with pytest.raises(RuntimeError, match="LLM request stopped"):
+            storyboard_llm_runtime.run_contract(
+                "qwen",
+                {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+            )
+    finally:
+        storyboard_llm_runtime.clear_stop_request()

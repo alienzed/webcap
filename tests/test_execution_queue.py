@@ -260,10 +260,18 @@ def test_execution_queue_backlog_is_claimable_only_when_explicitly_runnable(queu
     assert claimed["status"] == "starting"
 
 
-def test_execution_queue_preserves_fifo_across_armed_backlog_and_queued_work(queue_root):
+
+def test_execution_queue_prioritizes_queued_work_before_runnable_backlog(queue_root):
     first = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
     second = execution_queue.enqueue("inference", {"n": 2}, initial_status="backlog")
-    third = execution_queue.enqueue("inference", {"n": 3})
+    queued = execution_queue.enqueue("inference", {"n": 3})
+
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={first["id"], second["id"]},
+    )
+    assert claimed["id"] == queued["id"]
+    execution_queue.finish_job(queued["id"], status="completed")
 
     claimed = execution_queue.claim_next(
         "inference",
@@ -277,9 +285,6 @@ def test_execution_queue_preserves_fifo_across_armed_backlog_and_queued_work(que
         runnable_backlog_ids={second["id"]},
     )
     assert claimed["id"] == second["id"]
-    execution_queue.finish_job(second["id"], status="completed")
-
-    assert execution_queue.claim_next("inference")["id"] == third["id"]
 
 
 def test_execution_queue_inert_backlog_does_not_block_new_queued_work(queue_root):
@@ -319,6 +324,24 @@ def test_execution_queue_shelves_only_queued_work(queue_root):
     assert snapshot["jobs"][1]["id"] == backlog["id"]
 
 
+def test_execution_queue_promotes_backlog_to_end_of_queue(queue_root):
+    queued = execution_queue.enqueue("inference", {"n": 1})
+    backlog = execution_queue.enqueue("inference", {"n": 2}, initial_status="backlog")
+    another = execution_queue.enqueue("inference", {"n": 3})
+
+    promoted = execution_queue.promote_backlog(backlog["id"])
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+
+    assert promoted["status"] == "queued"
+    assert [job["id"] for job in snapshot["jobs"]] == [
+        queued["id"],
+        another["id"],
+        backlog["id"],
+    ]
+    assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2, 3]
+
+
+
 def test_execution_queue_cancel_pending_accepts_backlog(queue_root):
     backlog = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
 
@@ -343,7 +366,8 @@ def test_execution_queue_cancel_all_pending_leaves_active_job_alone(queue_root):
 
 
 
-def test_execution_queue_expected_claim_refuses_a_changed_runnable_head(queue_root):
+
+def test_execution_queue_expected_claim_uses_queue_priority(queue_root):
     backlog = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
     queued = execution_queue.enqueue("inference", {"n": 2})
 
@@ -353,11 +377,8 @@ def test_execution_queue_expected_claim_refuses_a_changed_runnable_head(queue_ro
         expected_job_id=queued["id"],
     )
 
-    assert claimed is None
+    assert claimed["id"] == queued["id"]
     assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
-    assert execution_queue.get_job(queued["id"])["status"] == "queued"
-    assert execution_queue.lane_snapshot("inference")["activeJobId"] == ""
-
 
 
 def test_execution_queue_lane_guard_is_durable_and_explicitly_clearable(queue_root):

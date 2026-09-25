@@ -4082,7 +4082,9 @@
       syncStoryboardGenerationActivity();
       if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(sceneId);
       if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);
-      return job;
+      return window.refreshInferenceQueue().then(function () {
+        return job;
+      });
     });
   }
 

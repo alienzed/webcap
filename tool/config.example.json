@@ -1,6 +1,7 @@
 {
   "filesystem": {
     "root": "C:\\path\\to\\training\\root",
+    "output_root": "",
     "models": "C:\\path\\to\\model\\root\\models"
   },
   "training": {

@@ -237,8 +237,12 @@ def test_repair_scenes_is_sparse_whole_story_patch_not_redevelopment():
     }
     assert "[CURRENT SCENE PLAN]" in prompt
     assert "Use perspective appropriate to each beat" in prompt
-    assert "sparse repair pass, not Story redevelopment" in prompt
-    assert "exact Scene count, order, titles, durations, references, LoRAs, seeds" in prompt
+    assert "Treat the instruction as authoritative" in prompt
+    assert "substantial rewriting inside affected Scenes" in prompt
+    assert "targeted repair pass, not Story redevelopment" in prompt
+    assert "exact Scene count, order, titles, durations, references, LoRAs, and seeds" in prompt
+    assert "Preserve unaffected Scenes and fields" in prompt
+    assert "fully satisfy the instruction" in prompt
     assert "Do not add, remove, merge, split, or reorder Scenes." in prompt
     assert "return each Scene at most once" in prompt
     assert "WebCap will render those itself" in prompt

@@ -278,7 +278,7 @@ def _committed_outcome_for_restart(job):
         scene_id = str(metadata.get("sceneId") or "").strip()
         if not story_id or not scene_id:
             return None
-        from .storyboard_store import generated_take_for_job
+        from .storyboard_store import generated_take_for_job, resolve_story_media
         try:
             take = generated_take_for_job(
                 story_id,
@@ -286,7 +286,9 @@ def _committed_outcome_for_restart(job):
                 job_id,
                 provider_job_id=str(details.get("providerJobId") or ""),
             )
-        except FileNotFoundError:
+            if take is not None:
+                resolve_story_media(story_id, take.get("mediaPath"))
+        except (FileNotFoundError, ValueError, RuntimeError):
             return None
         if take is not None:
             return {

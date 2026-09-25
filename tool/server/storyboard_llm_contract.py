@@ -276,7 +276,8 @@ def build_request(story, scene_id, operation, instruction=""):
             "[CURRENT TASK]\nExpand this Story concept into a richer creative overview that can drive later Scene planning. "
             "Develop the narrative arc, important characters, setting, conflict, progression, and ending direction when "
             "the seed supports them. Be creatively useful and fill in sensible connective material rather than asking "
-            "questions. Preserve explicit facts from the original concept, supplied visual atmosphere, and Story invariants. Do not break the Story into "
+            "questions. Preserve explicit facts from the original concept and Story invariants. Treat the supplied Visual / Atmosphere as authoritative: "
+            "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere in the expanded prose. Expand the narrative within it. Do not break the Story into "
             "Scenes yet and do not write MiniMax H3 prompts. Return only the expanded Story concept as polished prose."
         )
         return {

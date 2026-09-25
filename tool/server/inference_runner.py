@@ -396,11 +396,13 @@ def _advance_queue():
                 return None
 
         _set_backlog_wait_reason("")
+        claim_armed_ids = _armed_backlog_snapshot()
         claimed = execution_claim_next(
             EXECUTION_LANE,
-            runnable_backlog_ids=armed_ids,
+            runnable_backlog_ids=claim_armed_ids,
+            expected_job_id=str(next_runnable.get("id") or ""),
         )
-        if claimed is not None and str(claimed.get("id") or "") in armed_ids:
+        if claimed is not None and str(claimed.get("id") or "") in claim_armed_ids:
             _disarm_backlog(claimed.get("id"))
         if claimed is None:
             if reserved_here:

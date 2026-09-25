@@ -190,9 +190,11 @@ def validate_config_payload(payload):
         raise ValueError("Config.filesystem must be an object.")
 
     root = _as_clean_str(filesystem.get("root"), "filesystem.root")
+    output_root = str(filesystem.get("output_root") or "").strip()
     models = str(filesystem.get("models") or "").strip()
     out["filesystem"] = {
         "root": root,
+        "output_root": output_root,
         "models": models,
     }
 
@@ -418,6 +420,11 @@ def reload_runtime_config():
 
 def get_config_snapshot():
     return copy.deepcopy(config)
+
+
+def output_root():
+    configured = str((config.get("filesystem") or {}).get("output_root") or "").strip()
+    return Path(configured) if configured else Path(FS_ROOT) / "output"
 
 
 reload_runtime_config()

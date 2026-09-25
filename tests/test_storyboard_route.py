@@ -1,6 +1,13 @@
 from io import BytesIO
 
+import pytest
+
 from tool.server import app as app_module
+
+
+@pytest.fixture(autouse=True)
+def isolate_storyboard_output_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module.app_config, "output_root", lambda: tmp_path / "output")
 
 
 def test_storyboard_route_is_independent_of_current_set(tmp_path, monkeypatch):

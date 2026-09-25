@@ -1360,12 +1360,43 @@ def reorder_scenes(story_id, ordered_ids):
     return story
 
 
+def _assert_scene_takes_not_referenced_elsewhere(story, scene_id):
+    resolved_scene_id = str(scene_id or "").strip()
+    take_prefix = ("takes/" + resolved_scene_id + "/").replace("\\", "/")
+    reference_prefix = ("references/" + resolved_scene_id + "/").replace("\\", "/")
+    for scene_map in (story.get("scenes"), story.get("removedScenes")):
+        if not isinstance(scene_map, dict):
+            continue
+        for candidate_id, candidate_scene in scene_map.items():
+            if str(candidate_id) == str(scene_id):
+                continue
+            if not isinstance(candidate_scene, dict):
+                continue
+            for reference in candidate_scene.get("references") or []:
+                if not isinstance(reference, dict):
+                    continue
+                source_scene_id = str(reference.get("sourceSceneId") or "").strip()
+                media_path = str(reference.get("mediaPath") or "").replace("\\", "/").strip()
+                if (
+                    source_scene_id == resolved_scene_id
+                    or media_path.startswith(take_prefix)
+                    or media_path.startswith(reference_prefix)
+                ):
+                    raise RuntimeError(
+                        "Scene cannot be removed while one of its Takes is used as another Scene reference. "
+                        "Clear that reference first."
+                    )
+
+
 @_serialized_mutation
 def delete_scene(story_id, scene_id):
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     if scene_id not in scenes:
         raise FileNotFoundError("Scene does not exist.")
+
+    _assert_scene_takes_not_referenced_elsewhere(story, scene_id)
+
     scene_order = list(story.get("sceneOrder") or [])
     scene = dict(scenes.pop(scene_id))
     scene["removedAt"] = _utc_now()
@@ -1378,13 +1409,72 @@ def delete_scene(story_id, scene_id):
         "beforeId": scene["removedBeforeId"],
         "afterId": scene["removedAfterId"],
     }
+
+    # Removed Scenes retain their authored setup, but generated Takes are not
+    # history. Purge both active and previously removed Take metadata so a
+    # restored Scene starts clean.
+    scene["takes"] = {}
+    scene["removedTakes"] = {}
+    scene["takeOrder"] = []
+    scene["selectedTakeId"] = None
+    scene["references"] = [
+        reference
+        for reference in scene.get("references") or []
+        if not (
+            isinstance(reference, dict)
+            and (
+                str(reference.get("sourceSceneId") or "").strip() == str(scene_id)
+                or str(reference.get("mediaPath") or "").replace("\\", "/").startswith(
+                    "takes/" + str(scene_id) + "/"
+                )
+                or str(reference.get("mediaPath") or "").replace("\\", "/").startswith(
+                    "references/" + str(scene_id) + "/"
+                )
+            )
+        )
+    ]
+
     removed = story.get("removedScenes") if isinstance(story.get("removedScenes"), dict) else {}
     removed[scene_id] = scene
     story["removedScenes"] = removed
     story["sceneOrder"] = [value for value in story.get("sceneOrder") or [] if value != scene_id]
     story["scenes"] = scenes
     story["updatedAt"] = _utc_now()
-    _write_json_atomic(_story_path(story_id), story)
+
+    artifact_dirs = [
+        _story_dir(story_id) / "takes" / scene_id,
+        _story_dir(story_id) / "references" / scene_id,
+    ]
+    staged_dirs = []
+    for artifact_dir in artifact_dirs:
+        if not artifact_dir.exists() and not artifact_dir.is_symlink():
+            continue
+        if artifact_dir.is_symlink() or not artifact_dir.is_dir():
+            raise RuntimeError("Storyboard Scene generated artifact folder is invalid.")
+        staged_dir = artifact_dir.with_name(
+            "." + artifact_dir.name + ".removing-" + uuid.uuid4().hex[:12]
+        )
+        os.replace(artifact_dir, staged_dir)
+        staged_dirs.append((artifact_dir, staged_dir))
+
+    try:
+        _write_json_atomic(_story_path(story_id), story)
+    except Exception:
+        for artifact_dir, staged_dir in reversed(staged_dirs):
+            if staged_dir.exists():
+                os.replace(staged_dir, artifact_dir)
+        raise
+
+    for _artifact_dir, staged_dir in staged_dirs:
+        if not staged_dir.exists():
+            continue
+        try:
+            shutil.rmtree(staged_dir)
+        except OSError:
+            _logger.exception(
+                "Scene was removed but a staged generated artifact folder could not be cleaned: %s",
+                staged_dir,
+            )
     return story
 
 

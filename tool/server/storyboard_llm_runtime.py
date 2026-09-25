@@ -340,9 +340,13 @@ def _slot_snapshot(model_id=""):
         return {}
 
     params = slot.get("params") if isinstance(slot.get("params"), dict) else {}
-    next_token = slot.get("next_token") if isinstance(slot.get("next_token"), list) else []
-    token_state = next_token[0] if next_token and isinstance(next_token[0], dict) else {}
-    timings = slot.get("timings") if isinstance(slot.get("timings"), dict) else {}
+    raw_next_token = slot.get("next_token")
+    if isinstance(raw_next_token, list):
+        token_state = raw_next_token[0] if raw_next_token and isinstance(raw_next_token[0], dict) else {}
+    elif isinstance(raw_next_token, dict):
+        token_state = raw_next_token
+    else:
+        token_state = {}
 
     def _nonnegative_int(value):
         try:
@@ -356,13 +360,6 @@ def _slot_snapshot(model_id=""):
         except (TypeError, ValueError):
             return 0.0
         return result if result > 0 else 0.0
-
-    predicted_per_second = _positive_float(timings.get("predicted_per_second"))
-    if not predicted_per_second:
-        predicted_n = _nonnegative_int(timings.get("predicted_n"))
-        predicted_ms = _positive_float(timings.get("predicted_ms"))
-        if predicted_n and predicted_ms:
-            predicted_per_second = predicted_n / predicted_ms * 1000.0
 
     max_tokens = params.get("max_tokens", params.get("n_predict"))
     try:
@@ -378,7 +375,6 @@ def _slot_snapshot(model_id=""):
         "promptCached": _nonnegative_int(slot.get("n_prompt_tokens_cache")),
         "generatedTokens": _nonnegative_int(token_state.get("n_decoded")),
         "maxTokens": max_tokens,
-        "tokensPerSecond": predicted_per_second,
     }
 
 

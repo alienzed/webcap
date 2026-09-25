@@ -53,7 +53,7 @@ def _utc_now():
 
 
 def storyboard_root():
-    return Path(app_config.FS_ROOT).resolve() / "output" / STORYBOARD_DIRNAME
+    return app_config.output_root().resolve() / STORYBOARD_DIRNAME
 
 
 def _safe_story_id(value):

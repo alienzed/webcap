@@ -742,6 +742,34 @@ def test_inference_cleanup_hold_is_retained_when_provider_cannot_be_verified(inf
         assert inference_runner._provider_cleanup_holds == {"provider-stale"}
 
 
+def test_provider_cleanup_does_not_activate_restart_backlog(inference_root, monkeypatch):
+    backlog = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    inference_runner.hold_provider_cleanup(
+        "provider-stale",
+        "Inference is waiting: stale provider cleanup is pending.",
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "read_job",
+        lambda _provider_id: {"status": "completed"},
+    )
+    monkeypatch.setattr(
+        inference_runner,
+        "_execute_claimed",
+        lambda _job_id: pytest.fail("Restart backlog must stay dormant during cleanup."),
+    )
+
+    assert inference_runner._backlog_drain_enabled.is_set() is False
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+    assert inference_runner._monitor_has_work() is False
+
+
 def test_inference_monitor_self_reconciles_confirmed_provider_hold(inference_root, monkeypatch):
     inference_runner.hold_provider_cleanup(
         "provider-active",

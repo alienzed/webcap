@@ -586,6 +586,7 @@ def test_llm_restart_discards_all_outstanding_execution_state(llm_root):
     llm_runner.reconcile_startup()
 
     assert execution_queue.lane_snapshot(llm_runner.EXECUTION_LANE)["jobs"] == []
+    assert execution_queue.recent_snapshot(llm_runner.EXECUTION_LANE) == []
     with pytest.raises(FileNotFoundError):
         llm_runner.job_status(active["id"])
     with pytest.raises(FileNotFoundError):

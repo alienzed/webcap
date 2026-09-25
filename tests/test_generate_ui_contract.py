@@ -213,3 +213,19 @@ def test_generate_results_have_permanent_delete_action():
     assert "data-generate-delete-storage-id" in script
     assert "Permanently delete this generation and all of its artifacts?" in script
     assert "postJson('/fs/generate/result/delete'" in script
+
+
+
+def test_generate_inference_creates_and_updates_pending_preview_card():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert "function syncGenerationPreviewCard(job)" in script
+    assert "syncGenerationPreviewCard(payload.job);" in script
+    assert "syncGenerationPreviewCard(job);" in script
+    assert "dataset.generationJobId" in script
+    assert "generate-result-card is-pending" in script
+    assert "generate-result-pending-indicator" in script
+    assert "removeGenerationPreviewCard(jobId)" in script
+    assert ".generate-result-card.is-pending" in css
+    assert ".generate-result-pending-media" in css

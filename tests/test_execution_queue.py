@@ -176,7 +176,7 @@ def test_execution_queue_reorders_mixed_inference_client_jobs(queue_root):
     assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2, 3]
 
 
-def test_execution_queue_backlog_is_not_claimable_until_promoted(queue_root):
+def test_execution_queue_backlog_is_claimable_only_when_explicitly_runnable(queue_root):
     backlog = execution_queue.enqueue(
         "inference",
         {"request": {"prompt": "later"}},
@@ -189,10 +189,57 @@ def test_execution_queue_backlog_is_not_claimable_until_promoted(queue_root):
     assert snapshot["jobs"][0]["queuePosition"] == 0
     assert execution_queue.claim_next("inference") is None
 
-    promoted = execution_queue.promote_backlog(backlog["id"])
-    assert promoted["status"] == "queued"
-    assert promoted["queuePosition"] == 1
-    assert execution_queue.claim_next("inference")["id"] == backlog["id"]
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={backlog["id"]},
+    )
+    assert claimed["id"] == backlog["id"]
+    assert claimed["status"] == "starting"
+
+
+def test_execution_queue_preserves_fifo_across_armed_backlog_and_queued_work(queue_root):
+    first = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
+    second = execution_queue.enqueue("inference", {"n": 2}, initial_status="backlog")
+    third = execution_queue.enqueue("inference", {"n": 3})
+
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={first["id"], second["id"]},
+    )
+    assert claimed["id"] == first["id"]
+    execution_queue.finish_job(first["id"], status="completed")
+
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={second["id"]},
+    )
+    assert claimed["id"] == second["id"]
+    execution_queue.finish_job(second["id"], status="completed")
+
+    assert execution_queue.claim_next("inference")["id"] == third["id"]
+
+
+def test_execution_queue_inert_backlog_does_not_block_new_queued_work(queue_root):
+    backlog = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
+    queued = execution_queue.enqueue("inference", {"n": 2})
+
+    claimed = execution_queue.claim_next("inference")
+
+    assert claimed["id"] == queued["id"]
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+
+
+def test_execution_queue_cancelled_backlog_cannot_be_claimed_from_stale_runnable_set(queue_root):
+    backlog = execution_queue.enqueue("inference", {"n": 1}, initial_status="backlog")
+    queued = execution_queue.enqueue("inference", {"n": 2})
+    execution_queue.cancel_pending(backlog["id"])
+
+    claimed = execution_queue.claim_next(
+        "inference",
+        runnable_backlog_ids={backlog["id"]},
+    )
+
+    assert claimed["id"] == queued["id"]
 
 
 def test_execution_queue_shelves_only_queued_work(queue_root):

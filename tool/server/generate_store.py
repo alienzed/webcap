@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 from . import config as app_config
+from .folder_state_store import read_folder_state, set_media_rating
 
 
 MANIFEST_NAME = "generation.json"
@@ -243,6 +244,21 @@ def _output_relative(path):
     return str(Path(path).resolve().relative_to(app_config.output_root().resolve())).replace("\\", "/")
 
 
+def _result_directory(storage_id):
+    value = str(storage_id or "").strip().replace("\\", "/")
+    if not value:
+        raise ValueError("Generation storage ID is required.")
+    root = generation_root().resolve()
+    candidate = (root / value).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("Generation storage ID is outside the generation store.") from exc
+    if not candidate.is_dir():
+        raise FileNotFoundError("Generated result does not exist.")
+    return candidate
+
+
 def _listed_result_payload(manifest, payload):
     listed = dict(payload)
     directory = manifest.parent
@@ -264,7 +280,35 @@ def _listed_result_payload(manifest, payload):
         )
     listed["references"] = normalized_references
     listed["storageId"] = manifest.parent.parent.name + "/" + manifest.parent.name
+    state = read_folder_state(directory / ".webcap_state.json")
+    ratings = state.get("ratings_by_media") if isinstance(state.get("ratings_by_media"), dict) else {}
+    try:
+        listed["rating"] = max(0, min(5, int(ratings.get(media_name, 0) or 0)))
+    except (TypeError, ValueError):
+        listed["rating"] = 0
     return listed
+
+
+def rate_result(storage_id, rating):
+    directory = _result_directory(storage_id)
+    manifest_path = directory / MANIFEST_NAME
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise FileNotFoundError("Generation manifest does not exist.")
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Generation manifest is unreadable.") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("Generation manifest is not a JSON object.")
+    media_name = Path(str(payload.get("mediaPath") or "")).name
+    if not media_name:
+        raise ValueError("Generation manifest has no media path.")
+    normalized = set_media_rating(directory / ".webcap_state.json", media_name, rating)
+    return {
+        "storageId": str(storage_id or "").strip().replace("\\", "/"),
+        "mediaKey": media_name,
+        "rating": normalized,
+    }
 
 
 def list_results(limit=100):

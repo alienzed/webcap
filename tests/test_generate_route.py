@@ -426,6 +426,49 @@ def test_generate_reference_cleanup_route_is_scoped_to_store_helper(monkeypatch)
 
 
 
+def test_generate_result_rating_uses_generation_store(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(
+        app_module,
+        "generate_rate_result",
+        lambda storage_id, rating: seen.update({"storageId": storage_id, "rating": rating}) or {
+            "storageId": storage_id,
+            "mediaKey": "result.mp4",
+            "rating": 4,
+        },
+    )
+    client = app_module.app.test_client()
+
+    response = client.post("/fs/generate/result/rating", json={
+        "storageId": "2026-09-25/job-1",
+        "rating": 4,
+    })
+
+    assert response.status_code == 200
+    assert response.get_json()["rating"] == 4
+    assert seen == {"storageId": "2026-09-25/job-1", "rating": 4}
+
+
+def test_generate_result_rating_persists_in_canonical_media_state(tmp_path, monkeypatch):
+    output_root = tmp_path / "creative"
+    monkeypatch.setattr(generate_store.app_config, "output_root", lambda: output_root)
+    directory = output_root / "generations" / "2026-09-25" / "job-1"
+    directory.mkdir(parents=True)
+    (directory / "result.mp4").write_bytes(b"video")
+    (directory / "generation.json").write_text(
+        '{"version":2,"jobId":"job-1","createdAt":1,'
+        '"mediaPath":"generations/2026-09-25/job-1/result.mp4"}',
+        encoding="utf-8",
+    )
+
+    saved = generate_store.rate_result("2026-09-25/job-1", 4)
+    listed = generate_store.list_results()[0]
+
+    assert saved["rating"] == 4
+    assert listed["rating"] == 4
+    assert (directory / ".webcap_state.json").is_file()
+
+
 def test_generate_delete_route_uses_storage_purge(monkeypatch):
     seen = []
     monkeypatch.setattr(

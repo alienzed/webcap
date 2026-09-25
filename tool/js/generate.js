@@ -833,42 +833,78 @@
     if (settings.aspectRatio) summary.push(settings.aspectRatio);
     if (settings.duration) summary.push(settings.duration + 's');
     if (result.seed !== undefined && result.seed !== null) summary.push('Seed ' + result.seed);
+    var elapsed = formatGenerationElapsedMs(result && result.elapsedMs);
+    if (elapsed) summary.push(elapsed + ' render');
 
     var footer = document.createElement('div');
     footer.className = 'generate-result-footer';
+
+    var primary = document.createElement('div');
+    primary.className = 'generate-result-primary';
     var model = document.createElement('strong');
     model.textContent = String(result.modelId || 'Generated');
+    var utility = document.createElement('div');
+    utility.className = 'generate-result-utility';
+
+    var rating = document.createElement('div');
+    rating.className = 'generate-result-rating';
+    rating.setAttribute('aria-label', 'Rate this generation');
+    var currentRating = Math.max(0, Math.min(5, Number(result && result.rating || 0)));
+    for (var value = 1; value <= 5; value += 1) {
+      var star = document.createElement('button');
+      star.type = 'button';
+      star.className = 'generate-result-star' + (value <= currentRating ? ' active' : '');
+      star.dataset.generateRatingValue = String(value);
+      star.dataset.generateRatingStorageId = String(result.storageId || '');
+      star.title = 'Rate ' + value + ' star' + (value === 1 ? '' : 's');
+      star.setAttribute('aria-label', star.title);
+      star.textContent = value <= currentRating ? '★' : '☆';
+      rating.appendChild(star);
+    }
+
+    var openButton = document.createElement('button');
+    openButton.type = 'button';
+    openButton.className = 'review-captions-btn generate-result-open';
+    openButton.textContent = 'Open';
+    openButton.dataset.generateOpenResultKey = resultKey(result);
+
+    utility.appendChild(rating);
+    utility.appendChild(openButton);
+    primary.appendChild(model);
+    primary.appendChild(utility);
+
     var details = document.createElement('span');
     details.textContent = summary.join(' · ');
     var prompt = document.createElement('p');
     prompt.title = String(result.resolvedPrompt || '');
     prompt.textContent = String(result.resolvedPrompt || '');
 
-    var actions = document.createElement('div');
-    actions.className = 'generate-result-actions';
-
-    var openButton = document.createElement('button');
-    openButton.type = 'button';
-    openButton.className = 'review-captions-btn';
-    openButton.textContent = 'Open';
-    openButton.dataset.generateOpenResultKey = resultKey(result);
-
     var deleteButton = document.createElement('button');
     deleteButton.type = 'button';
     deleteButton.className = 'review-captions-btn generate-result-delete';
     deleteButton.textContent = 'Delete';
+    deleteButton.title = 'Permanently delete this generation';
+    deleteButton.setAttribute('aria-label', deleteButton.title);
     deleteButton.dataset.generateDeleteStorageId = String(result.storageId || '');
 
-    actions.appendChild(openButton);
-    actions.appendChild(deleteButton);
-
-    footer.appendChild(model);
+    footer.appendChild(primary);
     footer.appendChild(details);
     footer.appendChild(prompt);
-    footer.appendChild(actions);
     card.appendChild(mediaHost);
+    card.appendChild(deleteButton);
     card.appendChild(footer);
     return card;
+  }
+
+  function syncGenerateResultRating(storageId, rating) {
+    var value = Math.max(0, Math.min(5, Number(rating || 0)));
+    document.querySelectorAll('[data-generate-rating-storage-id]').forEach(function (star) {
+      if (String(star.dataset.generateRatingStorageId || '') !== String(storageId || '')) return;
+      var active = Number(star.dataset.generateRatingValue || 0) <= value;
+      star.classList.toggle('active', active);
+      star.textContent = active ? '★' : '☆';
+      star.disabled = false;
+    });
   }
 
   function renderResults(results) {
@@ -1489,6 +1525,36 @@
       });
     });
     el('generate-results').addEventListener('click', function (event) {
+      var ratingButton = event.target.closest('[data-generate-rating-value]');
+      if (ratingButton) {
+        var ratingStorageId = String(ratingButton.dataset.generateRatingStorageId || '').trim();
+        var ratingValue = Number(ratingButton.dataset.generateRatingValue || 0);
+        if (!ratingStorageId) throw new Error('Generation result is missing its storage identity.');
+        var ratingRow = ratingButton.closest('.generate-result-rating');
+        if (ratingRow) {
+          ratingRow.querySelectorAll('[data-generate-rating-value]').forEach(function (star) {
+            star.disabled = true;
+          });
+        }
+        postJson('/fs/generate/result/rating', {
+          storageId: ratingStorageId,
+          rating: ratingValue
+        }).then(function (payload) {
+          syncGenerateResultRating(ratingStorageId, payload && payload.rating);
+          generateState.results.forEach(function (result) {
+            if (String(result.storageId || '') === ratingStorageId) result.rating = payload.rating;
+          });
+        }).catch(function (err) {
+          if (ratingRow) {
+            ratingRow.querySelectorAll('[data-generate-rating-value]').forEach(function (star) {
+              star.disabled = false;
+            });
+          }
+          reportError(err, 'Rating failed');
+        });
+        return;
+      }
+
       var deleteButton = event.target.closest('[data-generate-delete-storage-id]');
       if (deleteButton) {
         var storageId = String(deleteButton.dataset.generateDeleteStorageId || '').trim();

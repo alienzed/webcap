@@ -219,6 +219,23 @@ def test_generate_results_have_permanent_delete_action():
     assert "postJson('/fs/generate/result/delete'" in script
 
 
+def test_generate_library_cards_are_large_compact_and_rateable():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "generate_store.py").read_text(encoding="utf-8")
+
+    assert "grid-template-columns: repeat(auto-fill, minmax(420px, 520px));" in css
+    assert "min-height: 280px;" in css
+    assert ".generate-result-card:hover .generate-result-delete" in css
+    assert "generate-result-primary" in script
+    assert "data-generate-rating-value" in script
+    assert "postJson('/fs/generate/result/rating'" in script
+    assert "elapsed + ' render'" in script
+    assert '@app.route("/fs/generate/result/rating", methods=["POST"])' in app
+    assert 'set_media_rating(directory / ".webcap_state.json", media_name, rating)' in store
+
+
 
 def test_generate_inference_creates_and_updates_pending_preview_card():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")

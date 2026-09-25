@@ -193,6 +193,20 @@
   gap: 2px;
 }
 
+.storage-detail-actions {
+  margin-left: auto;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.storage-detail-actions .review-captions-btn {
+  width: auto;
+  min-height: 32px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
 .storage-detail-header > div > span {
   color: var(--muted);
   font-size: 12px;

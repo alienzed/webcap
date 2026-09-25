@@ -39,15 +39,15 @@ def test_test_generations_route_dispatches_to_test_bench_with_existing_error_sha
     assert failure.get_json() == {"ok": False, "error": "bad test request"}
 
 
-def test_test_source_route_browses_selected_model_root(monkeypatch):
-    seen = {}
+def test_test_source_route_distinguishes_set_default_from_explicit_root(monkeypatch):
+    seen = []
 
-    def browse(model_id, source):
-        seen.update(modelId=model_id, source=source)
+    def browse(model_id, source, set_name):
+        seen.append({"modelId": model_id, "source": source, "setName": set_name})
         return {
             "operation": "test_source_browse",
             "modelId": model_id,
-            "source": source,
+            "source": "staged/demo" if source is None else source,
             "parent": "",
             "folders": ["run-a"],
             "files": ["epoch10.safetensors"],
@@ -57,8 +57,12 @@ def test_test_source_route_browses_selected_model_root(monkeypatch):
     monkeypatch.setattr(app_module, "test_generations_browse_source", browse)
     client = app_module.app.test_client()
 
-    response = client.get("/fs/test_generations/source?modelId=minimax_h3&source=archive")
+    default_response = client.get("/fs/test_generations/source?modelId=minimax_h3&setName=demo")
+    root_response = client.get("/fs/test_generations/source?modelId=minimax_h3&source=")
 
-    assert response.status_code == 200
-    assert seen == {"modelId": "minimax_h3", "source": "archive"}
-    assert response.get_json()["files"] == ["epoch10.safetensors"]
+    assert default_response.status_code == 200
+    assert root_response.status_code == 200
+    assert seen == [
+        {"modelId": "minimax_h3", "source": None, "setName": "demo"},
+        {"modelId": "minimax_h3", "source": "", "setName": ""},
+    ]

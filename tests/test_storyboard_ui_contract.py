@@ -369,6 +369,9 @@ def test_storyboard_director_requests_use_shared_llm_queue():
     runner = (ROOT / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
 
     assert "function waitForDirectorJob(job)" in storyboard
+    assert "function directorJobPollDelay(job)" in storyboard
+    assert "return String(job && job.status || '') === 'queued' ? 2000 : 1000;" in storyboard
+    assert "setTimeout(resolve, directorJobPollDelay(current))" in storyboard
     assert "'/fs/director/job?job='" in storyboard
     assert "queued: 'Queued…'" in storyboard
     assert "function directorActivityForTargetQueue(activity, queue)" in storyboard

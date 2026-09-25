@@ -139,8 +139,8 @@ def test_generate_uses_shared_director_preference_without_eager_preload():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     assert "DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model'" in common
-    assert "getSharedDirectorModelPreference('webcap.generate.directorModel')" in script
-    assert "setSharedDirectorModelPreference(this.value)" in script
+    assert "getDirectorModelPreference('webcap.generate.directorModel')" in script
+    assert "setDirectorModelPreference('webcap.generate.directorModel', this.value)" in script
     assert "scheduleDirectorPreload" not in script
     assert "preloadDirectorModel" not in script
     assert '@app.route("/fs/director/preload"' not in app

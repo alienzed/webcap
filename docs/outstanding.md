@@ -10,6 +10,8 @@ Last reviewed: 2026-09-24.
 
 ## Current Small Follow-up / Verification
 
+- **Storyboard Director model provenance / stale-output lead.** During GGUF smoke testing, a Qwen3 18B Strange Thoughts Scene-development run appeared to reproduce the previous Qwen3.8 27B Heretic Scene prompts exactly. Current code freezes the selected `modelId` into each queued job and records provenance in `story.development.model` / `scene.planDirectorModel`, so no obvious stale-model path is confirmed. If reproduced, first compare those persisted model fields against the selected model; if they still show the prior model, trace UI/request replacement. If they show the new model while output is duplicated, investigate llama.cpp model switching / prompt-cache behavior before changing Storyboard state logic.
+
 - Folder-state verification remains observational: reproduce ordinary caption filtering and verify SuperSet navigation, filtered training selection, prune/restore, and Smart Set creation against real Sets. No persistence redesign is planned unless a real loss path is reproduced.
 - Storyboard's current IA/runtime baseline is documented in `storyboard.md`; no additional Storyboard feature slice is queued from the recent polish pass.
 

@@ -1232,6 +1232,11 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
 }
 
+.storyboard-lora-picker-menu.opens-up {
+  top: auto;
+  bottom: calc(100% + 3px);
+}
+
 .storyboard-lora-picker-option,
 .storyboard-lora-picker-empty {
   display: block;

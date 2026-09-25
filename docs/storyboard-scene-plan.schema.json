@@ -47,8 +47,8 @@
           "suggestedDurationSeconds": {
             "type": "number",
             "exclusiveMinimum": 0,
-            "description": "Suggested MiniMax H3 clip duration in seconds. Prefer 10-15 seconds; 9 seconds is the hard floor.",
-            "minimum": 9,
+            "description": "Suggested MiniMax H3 clip duration in seconds. Aim for about 10 seconds by default, allow up to 15 seconds when the Scene benefits from the extra time, and never go below 6 seconds.",
+            "minimum": 6,
             "maximum": 15
           },
           "continuity": {

@@ -13,6 +13,7 @@ from tool.server import inference_runtime
 def configure_execution_queue(monkeypatch, tmp_path):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     execution_queue._resource_owner = ""
+    execution_queue.clear_transient_receipts()
     bench._startup_reconciled = False
     inference_runner._startup_reconciled = True
 
@@ -788,7 +789,115 @@ def test_stop_shared_test_session_cancels_pending_children_and_requests_active_s
 
     assert stopped["status"] == "stopping"
     assert execution_queue.get_job(child_ids[0])["status"] == "stopping"
-    assert [execution_queue.get_job(job_id)["status"] for job_id in child_ids[1:]] == ["cancelled", "cancelled"]
+    assert [execution_queue.transient_receipt(job_id)["status"] for job_id in child_ids[1:]] == ["cancelled", "cancelled"]
+    for job_id in child_ids[1:]:
+        with pytest.raises(FileNotFoundError):
+            execution_queue.get_job(job_id)
+
+
+def test_committed_test_result_is_recognized_after_queue_job_is_still_active(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+    child = execution_queue.get_job(child_id)
+
+    with bench._status_lock:
+        status = bench._read_status(session) or {}
+        status["results"] = [{
+            "jobId": child_id,
+            "kind": "lora",
+            "sourceLoRA": candidates[0].name,
+            "candidateFile": candidates[0].name,
+            "mediaFile": "epoch.png",
+        }]
+        status["completed"] = 1
+        bench._atomic_write_json(session / "test.json", status)
+    (session / "epoch.png").write_bytes(b"image")
+
+    outcome = bench.committed_inference_outcome(child)
+
+    assert outcome["status"] == "completed"
+    assert outcome["result"]["session"] == session.name
+    assert outcome["result"]["mediaFile"] == "epoch.png"
+
+
+def test_test_cancel_marker_prevents_replay_if_process_dies_before_queue_removal(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+    child = execution_queue.get_job(child_id)
+
+    bench._set_session_cancel_marker(session, child_id, True, reduce_total=True)
+
+    outcome = bench.committed_inference_outcome(child)
+
+    assert execution_queue.get_job(child_id)["status"] in {"queued", "backlog"}
+    assert outcome["status"] == "cancelled"
+    assert bench._read_status(session)["total"] == 0
+
+
+def test_test_result_without_media_is_not_treated_as_committed(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+    child = execution_queue.get_job(child_id)
+
+    with bench._status_lock:
+        status = bench._read_status(session) or {}
+        status["results"] = [{
+            "jobId": child_id,
+            "kind": "lora",
+            "sourceLoRA": candidates[0].name,
+            "candidateFile": candidates[0].name,
+            "mediaFile": "missing.png",
+        }]
+        status["completed"] = 1
+        bench._atomic_write_json(session / "test.json", status)
+
+    assert bench.committed_inference_outcome(child) is None
+
+
+def test_transient_test_cancel_remains_recoverable_after_receipt_is_lost(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    payload = bench.enqueue(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        include_base=False,
+    )
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    child_id = bench._read_status(session)["inferenceJobs"][0]
+
+    bench._cancel_shared_pending_job(
+        child_id,
+        session_directory=session,
+        reduce_total=True,
+    )
+    execution_queue.clear_transient_receipts(inference_runner.EXECUTION_LANE)
+
+    visible = bench._sync_inference_session(session)
+
+    assert visible["status"] == "complete"
+    assert visible["total"] == 0
+    assert child_id in (bench._read_status(session).get("cancelledJobIds") or [])
 
 
 def test_missing_candidate_rendition_skips_without_failure_card(tmp_path, monkeypatch):

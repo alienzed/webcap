@@ -6,6 +6,7 @@ from tool.server import config as app_config
 from tool.server import epoch_test_bench
 from tool.server import execution_queue
 from tool.server import generate_generation
+from tool.server import generate_store
 from tool.server import inference_runner
 from tool.server import inference_runtime
 from tool.server import storyboard_generation
@@ -985,6 +986,103 @@ def test_inference_startup_reconciles_active_provider_before_training_can_claim_
     )["providerJobIds"] == ["provider-live"]
     assert monitor_starts == [True]
     assert training_runner.reserve_gpu_for_external_work("training") is False
+
+
+def test_inference_restart_does_not_requeue_generate_job_whose_product_already_committed(
+    inference_root, monkeypatch
+):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "references": {}}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(
+        queued["id"],
+        details={"providerJobId": "provider-done", "providerStatus": "completed"},
+    )
+    monkeypatch.setattr(
+        generate_store,
+        "result_for_job",
+        lambda job_id: {
+            "jobId": job_id,
+            "mediaPath": "generations/day/" + job_id + "/result.png",
+            "manifestPath": "generations/day/" + job_id + "/manifest.json",
+        },
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait_status",
+        lambda _provider_id: "completed",
+    )
+    inference_runner._startup_reconciled = False
+
+    inference_runner.prepare_startup_backlog()
+
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(queued["id"])
+    receipt = inference_runner.job_status(queued["id"])
+    assert receipt["status"] == "completed"
+    assert receipt["result"]["mediaPath"].endswith("/result.png")
+    assert inference_runner.snapshot()["backlogCount"] == 0
+
+
+def test_inference_restart_resolves_previously_shelved_job_if_product_already_exists(
+    inference_root, monkeypatch
+):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "references": {}}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    monkeypatch.setattr(
+        generate_store,
+        "result_for_job",
+        lambda job_id: {
+            "jobId": job_id,
+            "mediaPath": "generations/day/" + job_id + "/result.png",
+            "manifestPath": "generations/day/" + job_id + "/manifest.json",
+        },
+    )
+    inference_runner._startup_reconciled = False
+
+    inference_runner.prepare_startup_backlog()
+
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(queued["id"])
+    assert inference_runner.job_status(queued["id"])["status"] == "completed"
+    assert inference_runner.snapshot()["backlogCount"] == 0
+
+
+def test_inference_restart_preserves_explicit_stop_instead_of_backlogging_it(
+    inference_root, monkeypatch
+):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(
+        queued["id"],
+        details={"providerJobId": "provider-stop", "providerStatus": "in_progress"},
+    )
+    execution_queue.request_stop(queued["id"])
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait_status",
+        lambda _provider_id: "cancelled",
+    )
+    inference_runner._startup_reconciled = False
+
+    inference_runner.prepare_startup_backlog()
+
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(queued["id"])
+    stopped = inference_runner.job_status(queued["id"])
+    assert stopped["status"] == "stopped"
+    assert inference_runner.snapshot()["backlogCount"] == 0
 
 
 def test_inference_fifo_does_not_let_new_queued_work_overtake_armed_backlog(

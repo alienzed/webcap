@@ -851,6 +851,32 @@ def test_llm_stop_or_cancel_hard_stops_active_local_job(llm_root, monkeypatch):
     assert calls == ["assert", "stop"]
 
 
+def test_llm_hard_stop_response_survives_worker_finishing_during_server_shutdown(llm_root, monkeypatch):
+    job = execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"operation": "write_prompt", "prompt": "Expand."}, "clientContext": {}},
+        metadata={"client": "generate", "modelId": "qwen"},
+    )
+    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
+    execution_queue.mark_running(job["id"])
+    monkeypatch.setattr(storyboard_llm_runtime, "assert_hard_stop_supported", lambda: None)
+
+    def finish_during_stop():
+        execution_queue.finish_job_transient(
+            job["id"],
+            status="stopped",
+            error="LLM request stopped.",
+        )
+        return True
+
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_owned_server", finish_during_stop)
+
+    result = llm_runner.action("stop_or_cancel", job_id=job["id"])
+
+    assert result["job"]["status"] == "stopping"
+    assert llm_runner.job_status(job["id"])["status"] == "stopped"
+
+
 def test_llm_stopping_after_model_return_skips_client_ingest(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
     job = execution_queue.enqueue(

@@ -240,6 +240,34 @@ def persist_result(job_id, request, output_ref, media_bytes, provider_job_id, el
             _logger.exception("Could not clean partial Generate result directory %s.", directory)
         raise
 
+def result_for_job(job_id):
+    wanted = str(job_id or "").strip()
+    if not wanted:
+        return None
+    root = generation_root()
+    if not root.is_dir():
+        return None
+    # Result directories are keyed by job ID under day folders. Probe the
+    # deterministic child path in each day directory instead of scanning every
+    # manifest.
+    for day_dir in root.iterdir():
+        if day_dir.is_symlink() or not day_dir.is_dir():
+            continue
+        manifest = day_dir / wanted / MANIFEST_NAME
+        if not manifest.is_file():
+            continue
+        try:
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict) and str(payload.get("jobId") or "") == wanted:
+            media_name = Path(str(payload.get("mediaPath") or "")).name
+            if not media_name or not (manifest.parent / media_name).is_file():
+                continue
+            return _listed_result_payload(manifest, payload)
+    return None
+
+
 def _output_relative(path):
     return str(Path(path).resolve().relative_to(app_config.output_root().resolve())).replace("\\", "/")
 

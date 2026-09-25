@@ -387,6 +387,36 @@ def test_storyboard_generation_exposes_only_cancel_and_stop(storyboard_fs):
         storyboard_generation.generation_action("pause_queue")
 
 
+def test_storyboard_cancel_response_does_not_depend_on_terminal_receipt_remaining(storyboard_fs, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "prompt": "Prompt.",
+        "durationSeconds": 6,
+        "aspectRatio": "4:3 (Standard)",
+        "megapixels": 0.2,
+        "seedMode": "fixed",
+        "seed": 1,
+    })
+    queued = storyboard_generation.start_generation(story["id"], scene["id"])
+    original_action = inference_runner.action
+
+    def consume_after_action(operation, job_id="", direction="", position=None):
+        payload = original_action(operation, job_id=job_id, direction=direction, position=position)
+        execution_queue.transient_receipt(job_id, consume=True)
+        return payload
+
+    monkeypatch.setattr(inference_runner, "action", consume_after_action)
+
+    cancelled = storyboard_generation.generation_action("cancel", queued["jobId"])
+
+    assert cancelled["job"]["status"] == "cancelled"
+    assert cancelled["job"]["jobId"] == queued["jobId"]
+    assert cancelled["job"]["storyId"] == story["id"]
+    assert cancelled["job"]["sceneId"] == scene["id"]
+    with pytest.raises(FileNotFoundError):
+        execution_queue.transient_receipt(queued["jobId"])
+
+
 def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboard_fs, monkeypatch):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {
@@ -534,8 +564,9 @@ def test_legacy_storyboard_queue_migration_is_restart_idempotent(storyboard_fs):
 
     storyboard_generation.reconcile_startup()
 
-    old = execution_queue.get_job(legacy["id"])
-    assert old["status"] == "cancelled"
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(legacy["id"])
+    assert execution_queue.recent_snapshot(storyboard_generation.LEGACY_EXECUTION_LANE) == []
     current = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
     migrated = [
         job for job in current["jobs"]

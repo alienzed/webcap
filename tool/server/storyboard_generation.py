@@ -10,6 +10,7 @@ from . import inference_runtime
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
+    discard_terminal_and_recent as execution_discard_terminal_and_recent,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     recover_lane as execution_recover_lane,
@@ -19,7 +20,6 @@ from .execution_queue import (
 from .inference_models import get_inference_model
 from .storyboard_store import (
     add_take_upload,
-    finalize_generated_take,
     load_story,
     resolve_scene_generation_defaults,
     resolve_scene_loras,
@@ -212,34 +212,32 @@ def execute_inference(job_id, request, context):
         media = inference_runtime.download_output(output_ref)
         elapsed_ms = int((time.monotonic() - started) * 1000)
 
+        provenance = {
+            "prompt": request["prompt"],
+            "entryState": str(context.get("entryState") or ""),
+            "exitState": str(context.get("exitState") or ""),
+            "sourcePrompt": request.get("sourcePrompt") or request["prompt"],
+            "durationSeconds": request["settings"]["duration"],
+            "seed": request["settings"]["seed"],
+            "seedMode": str(context.get("seedMode") or ""),
+            "aspectRatio": request["settings"]["aspectRatio"],
+            "megapixels": request["settings"]["megapixels"],
+            "loras": request.get("loras") or [],
+            "references": copy.deepcopy(context.get("referenceRecords") or []),
+            "workflowProfile": "minimax_h3_inference_v1",
+            "providerJobId": provider_job_id,
+            "jobId": str(job_id),
+            "elapsedMs": elapsed_ms,
+            "effectiveInput": effective_input,
+        }
         _story, take = add_take_upload(
             story_id,
             scene_id,
             output_ref.get("filename") or "render.mp4",
             io.BytesIO(media),
             effective_loras=request.get("loras") or [],
-        )
-        _story, take = finalize_generated_take(
-            story_id,
-            scene_id,
-            take["id"],
-            {
-                "prompt": request["prompt"],
-                "entryState": str(context.get("entryState") or ""),
-                "exitState": str(context.get("exitState") or ""),
-                "sourcePrompt": request.get("sourcePrompt") or request["prompt"],
-                "durationSeconds": request["settings"]["duration"],
-                "seed": request["settings"]["seed"],
-                "seedMode": str(context.get("seedMode") or ""),
-                "aspectRatio": request["settings"]["aspectRatio"],
-                "megapixels": request["settings"]["megapixels"],
-                "loras": request.get("loras") or [],
-                "references": copy.deepcopy(context.get("referenceRecords") or []),
-                "workflowProfile": "minimax_h3_inference_v1",
-                "providerJobId": provider_job_id,
-                "elapsedMs": elapsed_ms,
-                "effectiveInput": effective_input,
-            },
+            generation_job_id=job_id,
+            generated_provenance=provenance,
         )
         execution_update_job(job_id, details={"providerStatus": "completed"})
         return {"takeId": take["id"]}
@@ -264,9 +262,30 @@ def execute_inference(job_id, request, context):
 def _generation_job(job):
     if not isinstance(job, dict):
         return None
+    result = job.get("result") if isinstance(job.get("result"), dict) else {}
+
+    # inference_runner.action() returns its public job view rather than the raw
+    # execution_queue shape. Support both so action responses never need a
+    # second terminal-receipt lookup.
+    if "jobId" in job and "id" not in job:
+        return {
+            "jobId": str(job.get("jobId") or ""),
+            "storyId": str(job.get("storyId") or ""),
+            "sceneId": str(job.get("sceneId") or ""),
+            "status": str(job.get("status") or ""),
+            "queuedAt": job.get("createdAt"),
+            "startedAt": job.get("startedAt"),
+            "completedAt": job.get("finishedAt"),
+            "queuePosition": int(job.get("queuePosition") or 0),
+            "comfyJobId": str(job.get("providerJobId") or ""),
+            "comfyStatus": str(job.get("providerStatus") or ""),
+            "takeId": result.get("takeId"),
+            "requestedAction": str(job.get("requestedAction") or ""),
+            "error": str(job.get("error") or ""),
+        }
+
     metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
     details = job.get("details") if isinstance(job.get("details"), dict) else {}
-    result = job.get("result") if isinstance(job.get("result"), dict) else {}
     return {
         "jobId": str(job.get("id") or ""),
         "storyId": str(metadata.get("storyId") or ""),
@@ -397,6 +416,7 @@ def reconcile_startup():
                 continue
             execution_cancel_queued(legacy_job_id)
 
+        execution_discard_terminal_and_recent(LEGACY_EXECUTION_LANE)
         _startup_reconciled = True
 
 
@@ -458,4 +478,6 @@ def generation_action(operation, job_id="", direction=""):
         job_id=str(job.get("id") or ""),
         direction=direction,
     )
-    return {"job": _generation_job(_storyboard_job(payload["job"]["jobId"]))}
+    # The queue mutation already returns the authoritative immediate state.
+    # Do not re-fetch a transient receipt that another poll may consume first.
+    return {"job": _generation_job(payload["job"])}

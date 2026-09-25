@@ -16,13 +16,14 @@ from .folder_state_store import read_folder_state
 from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path
 from .execution_queue import (
-    cancel_pending as execution_cancel_pending,
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
+    discard_terminal_and_recent as execution_discard_terminal_and_recent,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     recover_lane as execution_recover_lane,
     request_stop as execution_request_stop,
+    transient_receipt as execution_transient_receipt,
     update_job as execution_update_job,
 )
 
@@ -809,6 +810,111 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     return request, loras, include_base is not False
 
 
+def committed_inference_outcome(job):
+    metadata = job.get("metadata") if isinstance(job, dict) and isinstance(job.get("metadata"), dict) else {}
+    job_id = str(job.get("id") or "").strip() if isinstance(job, dict) else ""
+    folder = str(metadata.get("folder") or "").strip()
+    session_id = str(metadata.get("sessionId") or "").strip()
+    if not job_id or not session_id:
+        return None
+    folder_path = app_config.safe_join_fs_root(folder) if folder else Path(app_config.FS_ROOT).resolve()
+    try:
+        session_directory = _session_directory(folder_path, session_id)
+    except FileNotFoundError:
+        return None
+    status = _read_status(session_directory) or {}
+
+    for result in status.get("results") if isinstance(status.get("results"), list) else []:
+        if not isinstance(result, dict) or str(result.get("jobId") or "") != job_id:
+            continue
+        media_file = str(result.get("mediaFile") or "").strip()
+        try:
+            committed_media = _session_result_path(session_directory, media_file)
+        except (ValueError, RuntimeError):
+            committed_media = None
+        if committed_media is None or not committed_media.is_file():
+            continue
+        return {
+            "status": "completed",
+            "result": {
+                "status": "completed",
+                "session": session_id,
+                "mediaFile": media_file,
+            },
+            "error": "",
+        }
+
+    if job_id in {str(value) for value in (status.get("skippedJobIds") or [])}:
+        return {
+            "status": "completed",
+            "result": {"status": "skipped", "session": session_id},
+            "error": "",
+        }
+
+    if job_id in {str(value) for value in (status.get("cancelledJobIds") or [])}:
+        return {
+            "status": "cancelled",
+            "result": {},
+            "error": "",
+        }
+
+    for failure in status.get("failures") if isinstance(status.get("failures"), list) else []:
+        if isinstance(failure, dict) and str(failure.get("jobId") or "") == job_id:
+            return {
+                "status": "failed",
+                "result": {},
+                "error": str(failure.get("error") or "Test generation failed."),
+            }
+    return None
+
+
+def _set_session_cancel_marker(session_directory, job_id, present, reduce_total=False):
+    if session_directory is None:
+        return False
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        return False
+    with _status_lock:
+        status = _read_status(session_directory) or {}
+        cancelled = set(str(value) for value in (status.get("cancelledJobIds") or []))
+        changed = False
+        if present and job_id not in cancelled:
+            cancelled.add(job_id)
+            if reduce_total:
+                status["total"] = max(0, int(status.get("total") or 0) - 1)
+            changed = True
+        elif not present and job_id in cancelled:
+            cancelled.remove(job_id)
+            if reduce_total:
+                status["total"] = int(status.get("total") or 0) + 1
+            changed = True
+        if changed:
+            status["cancelledJobIds"] = sorted(cancelled)
+            _atomic_write_json(_status_path(session_directory), status)
+        return changed
+
+
+def _cancel_shared_pending_job(job_id, session_directory=None, reduce_total=False):
+    from .inference_runner import action as inference_action
+    marked = _set_session_cancel_marker(
+        session_directory,
+        job_id,
+        True,
+        reduce_total=reduce_total,
+    )
+    try:
+        return inference_action("cancel", job_id=str(job_id or "").strip())["job"]
+    except Exception:
+        if marked:
+            _set_session_cancel_marker(
+                session_directory,
+                job_id,
+                False,
+                reduce_total=reduce_total,
+            )
+        raise
+
+
 def _session_job_records(status):
     job_ids = status.get("inferenceJobs") if isinstance(status.get("inferenceJobs"), list) else []
     results = status.get("results") if isinstance(status.get("results"), list) else []
@@ -836,6 +942,11 @@ def _session_job_records(status):
         try:
             jobs.append(execution_get_job(job_id))
         except FileNotFoundError as exc:
+            try:
+                jobs.append(execution_transient_receipt(job_id))
+                continue
+            except FileNotFoundError:
+                pass
             if job_id in terminal_job_ids or session_terminal:
                 continue
             raise RuntimeError(
@@ -975,10 +1086,14 @@ def _sync_inference_session(session_directory):
             for job in jobs:
                 if str(job.get("status") or "") not in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
                     continue
+                job_id = str(job.get("id") or "")
                 try:
-                    execution_consume_terminal_job(str(job.get("id") or ""))
+                    execution_consume_terminal_job(job_id)
                 except FileNotFoundError:
-                    pass
+                    try:
+                        execution_transient_receipt(job_id, consume=True)
+                    except FileNotFoundError:
+                        pass
         return visible
 
 def _record_skipped_inference(session_directory, job_id):
@@ -1258,7 +1373,11 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 queued_job = execution_get_job(job_id)
                 job_status = str(queued_job.get("status") or "")
                 if job_status in {"backlog", "queued"}:
-                    execution_cancel_pending(job_id)
+                    _cancel_shared_pending_job(
+                        job_id,
+                        session_directory=session_directory,
+                        reduce_total=True,
+                    )
                 elif job_status in {"starting", "running"}:
                     execution_request_stop(job_id)
                     rollback_pending = True
@@ -1372,7 +1491,11 @@ def reconcile_startup():
                                 child_job = execution_get_job(str(child_id))
                                 child_status = str(child_job.get("status") or "")
                                 if child_status in {"backlog", "queued"}:
-                                    execution_cancel_pending(str(child_id))
+                                    _cancel_shared_pending_job(
+                                        str(child_id),
+                                        session_directory=session_directory,
+                                        reduce_total=True,
+                                    )
                                 elif child_status in {"starting", "running"}:
                                     execution_request_stop(str(child_id))
                                     cleanup_pending = True
@@ -1427,6 +1550,7 @@ def reconcile_startup():
                     "Could not migrate legacy Test queue job %s; leaving it intact for manual recovery.",
                     legacy_job_id,
                 )
+        execution_discard_terminal_and_recent(LEGACY_EXECUTION_LANE)
         _startup_reconciled = True
 
 
@@ -1514,7 +1638,11 @@ def cancel_queued(folder_path, job_id):
     status_payload = _read_status(session_directory) or {}
     for child in _session_job_records(status_payload):
         if str(child.get("status") or "") in {"backlog", "queued"}:
-            execution_cancel_pending(str(child.get("id") or ""))
+            _cancel_shared_pending_job(
+                str(child.get("id") or ""),
+                session_directory=session_directory,
+                reduce_total=True,
+            )
     shutil.rmtree(session_directory)
     return {
         "operation": "test_queue_cancel",
@@ -1647,7 +1775,7 @@ def stop(folder_path, session_name=None, source=None):
         job_status = str(job.get("status") or "")
         job_id = str(job.get("id") or "")
         if job_status in {"backlog", "queued"}:
-            execution_cancel_pending(job_id)
+            _cancel_shared_pending_job(job_id, session_directory=session_directory)
         elif job_status in {"starting", "running"}:
             execution_request_stop(job_id)
     return _sync_inference_session(session_directory)

@@ -484,6 +484,36 @@ def finish_job_transient(job_id, status="completed", result=None, error=""):
         return receipt
 
 
+def resolve_job_transient(job_id, status="completed", result=None, error=""):
+    """Resolve pending or active work without creating durable terminal history."""
+    if status not in TERMINAL_STATUSES:
+        raise ValueError("Execution queue resolve status must be terminal.")
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        if job.get("status") not in (PENDING_STATUSES | ACTIVE_STATUSES):
+            raise ValueError("Only pending or active execution work can be resolved.")
+        lane = _lane(state, lane_name)
+        job["status"] = status
+        job["finishedAt"] = now
+        job["updatedAt"] = now
+        job["error"] = str(error or "")
+        job["requestedAction"] = ""
+        if isinstance(result, dict):
+            job.setdefault("result", {}).update(copy.deepcopy(result))
+        receipt = _public_job(job)
+        lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+        if lane.get("activeJobId") == job["id"]:
+            lane["activeJobId"] = ""
+        _refresh_positions(lane)
+        _write_state(state)
+        _remember_transient_receipt(receipt)
+        return receipt
+
+
 def cancel_pending_transient(job_id):
     """Cancel pending work without creating durable terminal history."""
     now = time.time()

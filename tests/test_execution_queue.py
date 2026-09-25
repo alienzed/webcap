@@ -130,6 +130,27 @@ def test_execution_queue_transient_finish_removes_durable_job_without_recent_his
         execution_queue.transient_receipt(job["id"])
 
 
+def test_execution_queue_can_resolve_committed_backlog_without_durable_history(queue_root):
+    job = execution_queue.enqueue(
+        "inference",
+        {"request": {"prompt": "already done"}},
+        metadata={"client": "generate"},
+        initial_status="backlog",
+    )
+
+    resolved = execution_queue.resolve_job_transient(
+        job["id"],
+        status="completed",
+        result={"mediaPath": "output/result.png"},
+    )
+
+    assert resolved["status"] == "completed"
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(job["id"])
+    assert execution_queue.recent_snapshot("inference") == []
+    assert execution_queue.transient_receipt(job["id"])["result"]["mediaPath"] == "output/result.png"
+
+
 def test_execution_queue_shelves_active_work_back_to_clean_backlog(queue_root):
     active = execution_queue.enqueue("inference", {"request": {"prompt": "again"}})
     queued = execution_queue.enqueue("inference", {"request": {"prompt": "later"}})

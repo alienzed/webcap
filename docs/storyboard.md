@@ -454,13 +454,14 @@ The first intentionally small assembly slice is now implemented. Storyboard uses
 - selected video Takes are frozen in Scene order when export starts;
 - Storyboard validates that their media streams match closely enough for a safe lossless splice;
 - ffmpeg's concat demuxer joins them with stream copy rather than silently resizing/re-encoding;
-- the result is written predictably to `exports/selected-sequence.mp4`;
+- the result is currently written predictably to `exports/selected-sequence.mp4`;
 - `exports/selected-sequence.json` records exactly which Scene/Take selections produced that export and is the durable export state after WebCap restarts;
 - the finished sequence is playable directly in the dedicated Sequence view;
 - if the user changes Take selection afterward, the previous export is visibly treated as stale rather than presented as current.
 
 Deliberately not implemented yet:
 
+- subsequent sequence exports should probably be retained as sequential/versioned exports instead of overwriting the single current `selected-sequence.mp4`, with the newest export clearly identified as current;
 - automatic normalization/re-encode for incompatible Takes;
 - transitions, gaps, trims, overlays, or a timeline editor;
 - alternate export profiles;

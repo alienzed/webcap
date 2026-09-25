@@ -247,6 +247,7 @@ def test_generate_has_lightroom_style_create_and_library_modes():
     assert "function renderActiveResult(result)" in script
     assert "function renderTakes(results)" in script
     assert "function setTakesCollapsed(collapsed)" in script
+    assert "dataset.generateOpenResultKey" in script
     assert ".generate-create-view {" in css
     assert "grid-template-columns: minmax(330px, 390px) minmax(0, 1fr) minmax(230px, 280px);" in css
     assert ".generate-stage-panel {" in css

@@ -12,6 +12,7 @@ from tool.server import storyboard_store
 @pytest.fixture
 def llm_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
+    monkeypatch.setattr(app_config, "output_root", lambda: Path(tmp_path) / "output")
     execution_queue._resource_owner = ""
     llm_runner._startup_reconciled = True
     llm_runner._monitor_thread = None

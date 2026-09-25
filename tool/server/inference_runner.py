@@ -19,6 +19,7 @@ from .execution_queue import (
     shelve_unfinished as execution_shelve_unfinished,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
+    resolve_job_transient as execution_resolve_job_transient,
     transient_receipt as execution_transient_receipt,
     set_lane_guard as execution_set_lane_guard,
     update_job as execution_update_job,
@@ -312,12 +313,16 @@ def _ensure_execution_reconciled():
 
         _clear_obsolete_persisted_provider_pause()
         prior = execution_lane_snapshot(EXECUTION_LANE, include_terminal=True)
-        prior_active = [
+        prior_unfinished = [
             job for job in prior.get("jobs", [])
+            if str(job.get("status") or "") in {"backlog", "queued", "starting", "running", "stopping"}
+        ]
+        prior_active = [
+            job for job in prior_unfinished
             if str(job.get("status") or "") in {"starting", "running", "stopping"}
         ]
         committed_outcomes = {}
-        for job in prior_active:
+        for job in prior_unfinished:
             outcome = _committed_outcome_for_restart(job)
             if outcome is not None:
                 committed_outcomes[str(job.get("id") or "")] = outcome
@@ -354,14 +359,14 @@ def _ensure_execution_reconciled():
         # process-local receipts inherited earlier in this startup path.
         execution_discard_terminal_and_recent(EXECUTION_LANE)
 
-        for job in prior_active:
+        for job in prior_unfinished:
             job_id = str(job.get("id") or "")
             outcome = committed_outcomes.get(job_id)
             if outcome is None:
                 continue
             _cleanup_generate_job_references(job_id)
             try:
-                execution_finish_job_transient(
+                execution_resolve_job_transient(
                     job_id,
                     status=str(outcome.get("status") or "completed"),
                     result=outcome.get("result") if isinstance(outcome.get("result"), dict) else None,

@@ -124,7 +124,7 @@ def test_generate_prompt_assistant_has_non_modal_live_activity():
     css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
-    assert ">Prompt Assistant</label>" in html
+    assert 'class="generate-prompt-tool-label">Assistant</span>' in html
     assert ">Expand Prompt</button>" in html
     assert ">Refine Prompt</button>" in html
     assert 'id="generate-director-activity"' in html

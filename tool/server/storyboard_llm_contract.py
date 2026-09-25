@@ -216,9 +216,7 @@ def build_request(story, scene_id, operation, instruction=""):
         concept = _clean(story.get("concept"))
         if not concept:
             raise ValueError("Story concept / overview is required to define Story invariants.")
-        blocks = [
-            "[DIRECTOR CONTEXT]\n" + director_context,
-        ]
+        blocks = []
         title = _clean(story.get("title"))
         if title:
             blocks.append("[STORY TITLE]\n" + title)
@@ -234,14 +232,14 @@ def build_request(story, scene_id, operation, instruction=""):
             "[CURRENT TASK]\nIdentify recurring characters and recurring locations from this Story concept that should "
             "have stable visual definitions across independently generated Scenes. Return only character and location "
             "invariants. Preserve explicit Story facts. For a recurring character, produce a concrete reusable physical "
-            "identity rather than a generic role. Include apparent age range, broad racial or ethnic appearance and skin "
-            "tone when useful to the intended fictional design, eye color, hair color, hair length, hair texture/style, "
-            "build/body proportions, face shape, and distinguishing visible features; include facial hair or other stable "
-            "traits when relevant. If the concept leaves these unspecified, choose one coherent design now and keep it "
-            "internally consistent. Omit scene-specific wardrobe unless the concept makes it a defining persistent feature. "
-            "For a recurring location, describe stable layout, architecture, materials, dominant colors, fixed features, "
-            "and baseline practical lighting when useful. If the concept clearly requires missing visual detail for "
-            "reproducibility, choose one sensible concrete detail and keep it grounded; do not invent plot events, "
+            "identity rather than a generic role. Include only stable visible traits that materially help reproduce the "
+            "intended design, such as age range, appearance or skin tone when relevant, hair, build, face shape, or "
+            "distinguishing features; do not fill every category mechanically. If the concept leaves needed visual identity "
+            "unspecified, choose a coherent grounded design and keep it internally consistent. Omit scene-specific wardrobe "
+            "unless the concept makes it a defining persistent feature. For a recurring location, describe only stable "
+            "physical details that materially help reproduce it, such as layout, architecture, materials, or fixed features. "
+            "If the concept clearly requires missing visual detail for reproducibility, choose a sensible concrete detail "
+            "and keep it grounded; do not invent plot events, "
             "relationships, one-off extras, or new locations. Do not plan Scenes.\n\n"
             "Return exactly this JSON shape:\n"
             "{\"invariants\":[{\"kind\":\"character\",\"title\":\"Elena\",\"text\":\"White woman in her early 30s with fair skin, hazel eyes, shoulder-length dark brown wavy hair, slim build, oval face, and a small mole beneath her left eye.\"},"
@@ -310,7 +308,7 @@ def build_request(story, scene_id, operation, instruction=""):
             "Aim for " + str(target_scene_count) + " Scenes, but prioritize coherent, substantial Scenes over mechanically hitting the count. Combine small related beats when they fit naturally; split material when a separate Scene improves clarity, pacing, or generatability. "
             "Keep every Scene between 9 and 15 seconds, normally aiming for 10-15 seconds. Use the available duration efficiently, normally with multiple meaningful shots, cuts, or distinct visual beats when the material supports them; use a single continuous shot when uninterrupted time is the stronger directorial choice. Preserve coherent narrative progression, explicit entry/exit continuity, supplied Story facts, Story invariants, recurring character identity, wardrobe, location, and persistent visible state across the sequence. "
             "For every Scene, invariantRefs must contain the exact kind/title pairs of only the supplied character and location invariants actually present or materially relevant in that Scene; use an empty array when none apply. Do not introduce a character or location merely to justify a reference. WebCap will inject those invariant descriptions verbatim into the final H3 prompt, so do not rewrite their identity details merely for variety. "
-            "Provide complete structured H3 content for every Scene now, not a placeholder; WebCap will render the exact model-facing field labels and spacing. Be creatively useful: invent natural dialogue, performance details, camera behavior, sound, and music when they improve the Story and remain consistent with the supplied material. "
+            "Provide complete structured H3 content for every Scene now, not a placeholder; WebCap will render the exact model-facing field labels and spacing. Be creatively useful, but invent supporting performance, camera behavior, sound, dialogue, or music only when they serve the supplied concept; none is mandatory. "
             "Each Scene prompt must be independently generatable and follow the supplied H3 base prompt rules. "
             "Return only JSON matching the supplied schema."
         )

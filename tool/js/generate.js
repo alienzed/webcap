@@ -552,10 +552,10 @@
   }
 
   function generationPreviewCard(jobId) {
-    var host = el('generate-results');
+    var host = el('generate-takes');
     if (!host) return null;
     var wanted = String(jobId || '');
-    var cards = host.querySelectorAll('.generate-result-card.is-pending[data-generation-job-id]');
+    var cards = host.querySelectorAll('.generate-take-card.is-pending[data-generation-job-id]');
     for (var index = 0; index < cards.length; index += 1) {
       if (String(cards[index].dataset.generationJobId || '') === wanted) return cards[index];
     }
@@ -565,10 +565,14 @@
   function removeGenerationPreviewCard(jobId) {
     var card = generationPreviewCard(jobId);
     if (card) card.remove();
+    if (String(generateState.activePendingJobId || '') === String(jobId || '')) {
+      generateState.activePendingJobId = '';
+      renderStageEmpty();
+    }
   }
 
   function syncGenerationPreviewCard(job) {
-    var host = el('generate-results');
+    var host = el('generate-takes');
     var jobId = String(job && job.jobId || '');
     if (!host || !jobId) return;
 
@@ -578,46 +582,41 @@
       return;
     }
 
-    var empty = host.querySelector('.generate-results-empty');
-    if (empty) empty.remove();
-
     var card = generationPreviewCard(jobId);
     if (!card) {
-      card = document.createElement('article');
-      card.className = 'generate-result-card is-pending';
+      card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'generate-take-card is-pending';
       card.dataset.generationJobId = jobId;
 
-      var mediaHost = document.createElement('div');
-      mediaHost.className = 'generate-result-media generate-result-pending-media';
-      var indicator = document.createElement('div');
+      var mediaHost = document.createElement('span');
+      mediaHost.className = 'generate-take-media generate-result-pending-media';
+      var indicator = document.createElement('span');
       indicator.className = 'generate-result-pending-indicator';
       indicator.setAttribute('aria-hidden', 'true');
-      var mediaStatus = document.createElement('strong');
-      mediaStatus.dataset.generationPreviewStatus = '1';
       mediaHost.appendChild(indicator);
-      mediaHost.appendChild(mediaStatus);
 
-      var footer = document.createElement('div');
-      footer.className = 'generate-result-footer';
+      var copy = document.createElement('span');
+      copy.className = 'generate-take-copy';
       var model = document.createElement('strong');
       model.dataset.generationPreviewModel = '1';
-      var details = document.createElement('span');
-      details.dataset.generationPreviewDetail = '1';
-      footer.appendChild(model);
-      footer.appendChild(details);
+      var details = document.createElement('small');
+      details.dataset.generationPreviewStatus = '1';
+      copy.appendChild(model);
+      copy.appendChild(details);
 
       card.appendChild(mediaHost);
-      card.appendChild(footer);
+      card.appendChild(copy);
       host.insertBefore(card, host.firstChild);
     }
 
     var statusText = generationPreviewStatus(job);
     var statusNode = card.querySelector('[data-generation-preview-status]');
     var modelNode = card.querySelector('[data-generation-preview-model]');
-    var detailNode = card.querySelector('[data-generation-preview-detail]');
     if (statusNode) statusNode.textContent = statusText;
     if (modelNode) modelNode.textContent = String(job.modelId || 'Generate');
-    if (detailNode) detailNode.textContent = String(job.providerStatus || '').replace(/_/g, ' ');
+
+    renderPendingStage(job);
   }
 
 
@@ -728,11 +727,20 @@
 
   function renderResults(results) {
     var host = el('generate-results');
-    if (!host) return;
+    var librarySummary = el('generate-library-summary');
+    if (!host || !librarySummary) return;
     var items = Array.isArray(results) ? results : [];
-    var cards = host.querySelectorAll('.generate-result-card[data-result-key]');
+    generateState.results = items;
+    librarySummary.textContent = items.length ? String(items.length) + ' generated item' + (items.length === 1 ? '' : 's') : 'No generated media yet';
+
+    var desired = {};
+    items.forEach(function (result) { desired[resultKey(result)] = result; });
+    host.querySelectorAll('.generate-result-card[data-result-key]').forEach(function (card) {
+      if (!desired[String(card.dataset.resultKey || '')]) card.remove();
+    });
+
     var existingKeys = {};
-    Array.prototype.forEach.call(cards, function (card) {
+    host.querySelectorAll('.generate-result-card[data-result-key]').forEach(function (card) {
       existingKeys[String(card.dataset.resultKey || '')] = true;
     });
 
@@ -752,12 +760,38 @@
       empty.textContent = 'Generated media will appear here.';
       host.appendChild(empty);
     }
+
+    renderTakes(items);
+    if (generateState.activePendingJobId) {
+      var completed = items.find(function (result) {
+        return String(result.jobId || '') === String(generateState.activePendingJobId || '');
+      });
+      if (completed) renderActiveResult(completed);
+    } else if (generateState.activeResultKey) {
+      var selected = items.find(function (result) {
+        return resultKey(result) === generateState.activeResultKey;
+      });
+      if (selected) renderActiveResult(selected);
+      else {
+        generateState.activeResultKey = '';
+        if (items.length) renderActiveResult(items[0]);
+        else renderStageEmpty();
+      }
+    } else if (items.length) {
+      renderActiveResult(items[0]);
+    } else {
+      renderStageEmpty();
+    }
   }
 
   function refreshResults() {
     return requestJson('/fs/generate/results?limit=60').then(function (payload) {
       renderResults(payload.results || []);
-    }).catch(reportError);
+      return payload.results || [];
+    }).catch(function (err) {
+      reportError(err);
+      return generateState.results;
+    });
   }
 
   function directorJobRequest(jobId) {
@@ -1174,6 +1208,8 @@
     generateState.director.modelId = getSharedDirectorModelPreference('webcap.generate.directorModel');
     frame.classList.add('workspace-generate-open');
     workspace.classList.remove('hidden');
+    setGenerateViewMode(generateState.viewMode);
+    setTakesCollapsed(generateState.takesCollapsed);
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     Promise.all([
@@ -1199,6 +1235,23 @@
   function bindUi() {
     var workspace = el('generate-workspace');
     if (!workspace) throw new Error('Generate workspace markup is missing.');
+
+    el('generate-create-mode-btn').onclick = function () {
+      setGenerateViewMode('create');
+    };
+    el('generate-library-mode-btn').onclick = function () {
+      setGenerateViewMode('library');
+    };
+    el('generate-takes-collapse-btn').onclick = function () {
+      setTakesCollapsed(!generateState.takesCollapsed);
+    };
+    el('generate-takes').addEventListener('click', function (event) {
+      var card = event.target.closest('[data-generate-take-key]');
+      if (!card) return;
+      var key = String(card.dataset.generateTakeKey || '');
+      var result = generateState.results.find(function (item) { return resultKey(item) === key; });
+      if (result) renderActiveResult(result);
+    });
 
     el('generate-model').addEventListener('change', function () {
       generateState.modelId = this.value;
@@ -1254,19 +1307,29 @@
     });
     el('generate-results').addEventListener('click', function (event) {
       var button = event.target.closest('[data-generate-delete-storage-id]');
-      if (!button) return;
-      var storageId = String(button.dataset.generateDeleteStorageId || '').trim();
-      if (!storageId) throw new Error('Generation result is missing its storage identity.');
-      if (!window.confirm('Permanently delete this generation and all of its artifacts?')) return;
-      button.disabled = true;
-      postJson('/fs/generate/result/delete', { storageId: storageId }).then(function () {
-        var card = button.closest('.generate-result-card');
-        if (card) card.remove();
-        return refreshResults();
-      }).catch(function (err) {
-        button.disabled = false;
-        reportError(err, 'Delete failed');
-      });
+      if (button) {
+        var storageId = String(button.dataset.generateDeleteStorageId || '').trim();
+        if (!storageId) throw new Error('Generation result is missing its storage identity.');
+        if (!window.confirm('Permanently delete this generation and all of its artifacts?')) return;
+        button.disabled = true;
+        postJson('/fs/generate/result/delete', { storageId: storageId }).then(function () {
+          var card = button.closest('.generate-result-card');
+          if (card) card.remove();
+          return refreshResults();
+        }).catch(function (err) {
+          button.disabled = false;
+          reportError(err, 'Delete failed');
+        });
+        return;
+      }
+
+      var card = event.target.closest('.generate-result-card[data-result-key]');
+      if (!card) return;
+      var key = String(card.dataset.resultKey || '');
+      var result = generateState.results.find(function (item) { return resultKey(item) === key; });
+      if (!result) return;
+      renderActiveResult(result);
+      setGenerateViewMode('create');
     });
     schedulePoll();
   }

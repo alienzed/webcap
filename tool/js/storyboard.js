@@ -2480,6 +2480,32 @@
     });
   }
 
+  function formatGenerationElapsedMs(value) {
+    var ms = Number(value);
+    if (!Number.isFinite(ms) || ms < 0) return '';
+    var totalSeconds = Math.max(0, Math.round(ms / 1000));
+    var hours = Math.floor(totalSeconds / 3600);
+    var minutes = Math.floor((totalSeconds % 3600) / 60);
+    var seconds = totalSeconds % 60;
+    if (hours) return hours + 'h ' + minutes + 'm';
+    if (minutes) return minutes + 'm ' + String(seconds).padStart(2, '0') + 's';
+    return seconds + 's';
+  }
+
+  function generationJobStatusText(job) {
+    var status = String(job && job.status || '');
+    var queuePosition = Number(job && job.queuePosition || 0);
+    if (status === 'backlog') return 'Backlog';
+    if (status === 'queued') return 'Queued' + (queuePosition ? ' · #' + queuePosition : '');
+    var startedAt = Number(job && job.startedAt || 0);
+    var elapsed = startedAt ? formatGenerationElapsedMs(Date.now() - (startedAt * 1000)) : '';
+    if (status === 'starting') return 'Starting…' + (elapsed ? ' · ' + elapsed : '');
+    if (status === 'stopping') return 'Stopping…' + (elapsed ? ' · ' + elapsed : '');
+    return 'Generating…' +
+      (job && job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : '') +
+      (elapsed ? ' · ' + elapsed : '');
+  }
+
   function takeMetaLabel(take) {
     var parts = [take && take.generated ? 'Generated' : 'Imported'];
     var createdAt = take && take.createdAt ? new Date(take.createdAt) : null;
@@ -2494,6 +2520,8 @@
     if (take && take.generated && take.seed !== undefined && take.seed !== null && take.seed !== '') {
       parts.push('Seed ' + String(take.seed));
     }
+    var elapsed = formatGenerationElapsedMs(take && take.elapsedMs);
+    if (elapsed) parts.push(elapsed);
     return parts.join(' · ');
   }
 
@@ -2567,16 +2595,7 @@
 
   function pendingTakeCardHtml(job, takeIndex) {
     var status = String(job && job.status || '');
-    var queuePosition = Number(job && job.queuePosition || 0);
-    var statusText = status === 'backlog'
-      ? 'Backlog'
-      : status === 'queued'
-        ? ('Queued' + (queuePosition ? ' · #' + queuePosition : ''))
-        : status === 'starting'
-          ? 'Starting…'
-          : status === 'stopping'
-            ? 'Stopping…'
-            : ('Generating…' + (job && job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : ''));
+    var statusText = generationJobStatusText(job);
     var action = (status === 'backlog' || status === 'queued')
       ? '<button type="button" class="review-captions-btn" data-generation-action="cancel" data-job-id="' + escapeHtml(job.jobId) + '">Cancel</button>'
       : (status === 'starting' || status === 'running')
@@ -3784,16 +3803,7 @@
     }
     if (!card) return;
     var status = String(job.status || '');
-    var queuePosition = Number(job.queuePosition || 0);
-    var statusText = status === 'backlog'
-      ? 'Backlog'
-      : status === 'queued'
-        ? ('Queued' + (queuePosition ? ' · #' + queuePosition : ''))
-        : status === 'starting'
-          ? 'Starting…'
-          : status === 'stopping'
-            ? 'Stopping…'
-            : ('Generating…' + (job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : ''));
+    var statusText = generationJobStatusText(job);
     var mediaStatus = card.querySelector('.storyboard-take-pending-media strong');
     var footerStatus = card.querySelector('.storyboard-take-identity span');
     if (mediaStatus) mediaStatus.textContent = statusText;

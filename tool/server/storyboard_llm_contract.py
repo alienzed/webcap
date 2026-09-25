@@ -29,7 +29,7 @@ def _prompt_response_schema(allow_duration=False):
     if allow_duration:
         schema["properties"]["durationSeconds"] = {
             "type": "number",
-            "minimum": 6,
+            "minimum": 9,
             "maximum": 15,
             "description": (
                 "Optional revised Scene duration in seconds. Include only when the requested refinement "
@@ -308,7 +308,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
             "Aim for " + str(target_scene_count) + " Scenes. Give each meaningful narrative beat its own generatable Scene and pace the material across the requested Scene count rather than compressing several beats together. "
-            "Keep every Scene between 4 and 15 seconds. Preserve coherent narrative progression, explicit entry/exit continuity, supplied Story facts, Story invariants, recurring character identity, wardrobe, location, and persistent visible state across the sequence. "
+            "Keep every Scene between 9 and 15 seconds, normally aiming for 10-15 seconds. Treat each Scene as a compact edited sequence: use multiple shots, cuts, or distinct visual beats by default, and use a single continuous shot only when it deliberately serves the Scene. Fold small beats into fuller Scenes rather than spending a generation on a brief isolated action. Preserve coherent narrative progression, explicit entry/exit continuity, supplied Story facts, Story invariants, recurring character identity, wardrobe, location, and persistent visible state across the sequence. "
             "For every Scene, invariantRefs must contain the exact kind/title pairs of only the supplied character and location invariants actually present or materially relevant in that Scene; use an empty array when none apply. Do not introduce a character or location merely to justify a reference. WebCap will inject those invariant descriptions verbatim into the final H3 prompt, so do not rewrite their identity details merely for variety. "
             "Provide complete structured H3 content for every Scene now, not a placeholder; WebCap will render the exact model-facing field labels and spacing. Be creatively useful: invent natural dialogue, performance details, camera behavior, sound, and music when they improve the Story and remain consistent with the supplied material. "
             "Each Scene prompt must be independently generatable and follow the supplied H3 base prompt rules. "

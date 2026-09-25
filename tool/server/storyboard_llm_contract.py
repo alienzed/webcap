@@ -343,10 +343,11 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append("[CURRENT SCENE PLAN]\n" + json.dumps(scene_plan, indent=2, ensure_ascii=False))
         blocks.append(
             "[USER REPAIR INSTRUCTION]\n" + correction
-            + "\n\n[CURRENT TASK]\nReview the whole current Scene plan against the user's instruction and heal only concrete problems. "
-            "This is a sparse repair pass, not Story redevelopment. Keep the exact Scene count, order, titles, durations, references, LoRAs, seeds, and narrative beats. "
-            "Do not add, remove, merge, split, or reorder Scenes. Do not rewrite an unaffected Scene or field for style or variety. "
-            "Return only the minimum field patches actually required. Allowed fields are summary, entryState, exitState, and prompt. "
+            + "\n\n[CURRENT TASK]\nApply the user's repair instruction to the whole current Scene plan. Treat the instruction as authoritative: "
+            "if it asks to change who or what appears, an action, framing, setting detail, continuity, or another existing Scene detail, make the requested change even when that requires substantial rewriting inside affected Scenes. "
+            "This is a targeted repair pass, not Story redevelopment. Keep the exact Scene count, order, titles, durations, references, LoRAs, and seeds. "
+            "Do not add, remove, merge, split, or reorder Scenes. Preserve unaffected Scenes and fields rather than rewriting them for style or variety. "
+            "Return every field patch needed to fully satisfy the instruction, and no unrelated changes. Allowed fields are summary, entryState, exitState, and prompt. "
             "Use the 1-based sceneNumber values supplied above; never invent or return WebCap IDs, and return each Scene at most once. "
             "If a generation prompt needs repair, return complete semantic H3 prompt content in fields.prompt using the supplied three-field structure; "
             "do not reproduce WebCap's app-owned Continuity anchors prefix or final field labels. WebCap will render those itself. "

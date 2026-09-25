@@ -227,6 +227,38 @@ def test_generate_enqueue_failure_cleans_uploaded_references(monkeypatch):
     }]
 
 
+def test_generate_result_uses_configured_output_root_outside_fs_root(tmp_path, monkeypatch):
+    fs_root = tmp_path / "sets"
+    output_root = tmp_path / "creative"
+    fs_root.mkdir()
+    monkeypatch.setattr(generate_store.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(generate_store.app_config, "output_root", lambda: output_root)
+
+    payload = generate_store.persist_result(
+        "job-1",
+        {
+            "modelId": "minimax_h3",
+            "mediaKind": "video",
+            "sourcePrompt": "idea",
+            "prompt": "resolved",
+            "settings": {"seed": 7},
+            "loras": [],
+            "references": {},
+            "wildcardsEnabled": False,
+            "workflowFile": "workflow.json",
+        },
+        {"filename": "render.mp4", "type": "output"},
+        b"video",
+        "provider-1",
+        123,
+    )
+
+    assert payload["mediaPath"].startswith("generations/")
+    assert payload["manifestPath"].startswith("generations/")
+    assert (output_root / payload["mediaPath"]).read_bytes() == b"video"
+    assert not (fs_root / "output" / "generations").exists()
+
+
 def test_generate_result_owns_reference_copy_before_transient_cleanup(tmp_path, monkeypatch):
     monkeypatch.setattr(generate_store.app_config, "FS_ROOT", tmp_path)
     source_dir = generate_store.reference_root() / "ref-1"

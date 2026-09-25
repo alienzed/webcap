@@ -1736,7 +1736,8 @@
       typeof reportConsoleInfo === 'function' &&
       text !== 'Saved' &&
       text !== 'Saving...' &&
-      text !== 'Unsaved changes'
+      text !== 'Unsaved changes' &&
+      text !== 'Loading...'
     ) {
       reportConsoleInfo('Storyboard', text);
     }

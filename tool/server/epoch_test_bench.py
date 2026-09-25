@@ -1373,7 +1373,11 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 queued_job = execution_get_job(job_id)
                 job_status = str(queued_job.get("status") or "")
                 if job_status in {"backlog", "queued"}:
-                    _cancel_shared_pending_job(job_id, session_directory=session_directory)
+                    _cancel_shared_pending_job(
+                        job_id,
+                        session_directory=session_directory,
+                        reduce_total=True,
+                    )
                 elif job_status in {"starting", "running"}:
                     execution_request_stop(job_id)
                     rollback_pending = True
@@ -1487,7 +1491,11 @@ def reconcile_startup():
                                 child_job = execution_get_job(str(child_id))
                                 child_status = str(child_job.get("status") or "")
                                 if child_status in {"backlog", "queued"}:
-                                    _cancel_shared_pending_job(str(child_id), session_directory=session_directory)
+                                    _cancel_shared_pending_job(
+                                        str(child_id),
+                                        session_directory=session_directory,
+                                        reduce_total=True,
+                                    )
                                 elif child_status in {"starting", "running"}:
                                     execution_request_stop(str(child_id))
                                     cleanup_pending = True

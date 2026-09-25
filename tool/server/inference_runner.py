@@ -288,7 +288,7 @@ def _ensure_execution_reconciled():
                 else:
                     hold_provider_cleanup(
                         prompt_id,
-                        "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
+                        "Inference is waiting: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
                     )
                     _logger.error(
                         "Interrupted inference provider job %s did not confirm cancellation.",
@@ -297,7 +297,7 @@ def _ensure_execution_reconciled():
             except Exception:
                 hold_provider_cleanup(
                     prompt_id,
-                    "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
+                    "Inference is waiting: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
                 )
                 _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
 

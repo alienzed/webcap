@@ -1498,10 +1498,12 @@
   function syncDirectorPendingControls() {
     var currentStoryId = storyState.story ? String(storyState.story.id || '') : '';
     var conceptTarget = { kind: 'concept', storyId: currentStoryId };
+    var repairTarget = { kind: 'repair', storyId: currentStoryId };
     var selector = el('storyboard-director-model');
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;
 
     setDirectorTargetProtected(conceptTarget, directorTargetPending(conceptTarget));
+    setDirectorTargetProtected(repairTarget, directorTargetPending(repairTarget));
     Object.keys(storyState.director.pendingTargets).forEach(function (key) {
       setDirectorTargetProtected(storyState.director.pendingTargets[key], true);
     });

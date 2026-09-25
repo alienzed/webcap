@@ -3694,11 +3694,15 @@
       var job = storyboardInferenceJob(rawJob);
       if (!job || !job.jobId) return;
       var previousJob = storyState.generationJobs[job.jobId] || null;
+      var changed = !previousJob ||
+        String(previousJob.status || '') !== String(job.status || '') ||
+        String(previousJob.comfyStatus || '') !== String(job.comfyStatus || '') ||
+        Number(previousJob.queuePosition || 0) !== Number(job.queuePosition || 0);
       storyState.generationJobs[job.jobId] = job;
       reportGenerationStatus(job.sceneId, job, previousJob);
-      syncSceneTakeDom(job.sceneId);
+      if (changed) syncSceneTakeDom(job.sceneId);
       if (generationJobIsExecuting(job)) {
-        clearGenerationPoll(job.jobId);
+        if (!generationJobIsExecuting(previousJob)) clearGenerationPoll(job.jobId);
         pollGeneration(storyId, job.jobId);
       }
     });

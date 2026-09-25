@@ -45,7 +45,7 @@ _provider_cleanup_holds = set()
 _provider_cleanup_reason = ""
 _backlog_lock = threading.Lock()
 _backlog_wait_reason = ""
-_backlog_drain_enabled = False
+_backlog_drain_enabled = threading.Event()
 _logger = logging.getLogger(__name__)
 
 
@@ -111,9 +111,7 @@ def _restore_provider_cleanup_guard():
 
 def prepare_startup_backlog():
     """Return all persisted unfinished inference work to Backlog."""
-    global _backlog_drain_enabled
-    with _backlog_lock:
-        _backlog_drain_enabled = False
+    _backlog_drain_enabled.clear()
     _set_backlog_wait_reason("")
     _restore_provider_cleanup_guard()
     _ensure_execution_reconciled()
@@ -462,8 +460,7 @@ def _advance_queue():
             (job for job in jobs if str(job.get("status") or "") == "queued"),
             None,
         )
-        with _backlog_lock:
-            drain_backlog = _backlog_drain_enabled
+        drain_backlog = _backlog_drain_enabled.is_set()
         if next_runnable is None and drain_backlog:
             next_runnable = next(
                 (job for job in jobs if str(job.get("status") or "") == "backlog"),
@@ -575,8 +572,7 @@ def _monitor_has_work():
             return True
     if snapshot.get("paused"):
         return False
-    with _backlog_lock:
-        drain_backlog = _backlog_drain_enabled
+    drain_backlog = _backlog_drain_enabled.is_set()
     return any(
         str(job.get("status") or "") == "queued"
         or (drain_backlog and str(job.get("status") or "") == "backlog")
@@ -585,7 +581,7 @@ def _monitor_has_work():
 
 
 def _monitor_loop():
-    global _monitor_thread, _backlog_drain_enabled
+    global _monitor_thread
     while True:
         try:
             _advance_queue()
@@ -594,8 +590,7 @@ def _monitor_loop():
 
         with _monitor_lock:
             if not _monitor_has_work():
-                with _backlog_lock:
-                    _backlog_drain_enabled = False
+                _backlog_drain_enabled.clear()
                 _monitor_thread = None
                 return
         time.sleep(2)
@@ -620,9 +615,7 @@ def start_observer():
 
 
 def _start_worker_for_requested_inference():
-    global _backlog_drain_enabled
-    with _backlog_lock:
-        _backlog_drain_enabled = True
+    _backlog_drain_enabled.set()
     _ensure_monitor_started()
 
 

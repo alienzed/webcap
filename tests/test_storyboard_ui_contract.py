@@ -1126,3 +1126,16 @@ def test_storyboard_sequence_encoding_warning_is_explicit_and_highlights_affecte
     assert 'storyState.sequenceEncodingWarnings = [];' in storyboard
     assert 'def _analyze_streams(items):' in assembly
     assert 'def _normalize_clip(' in assembly
+
+def test_storyboard_takes_display_live_and_persisted_generation_elapsed_time():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    generation = (ROOT / "tool" / "server" / "storyboard_generation.py").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+
+    assert "function formatGenerationElapsedMs(value)" in storyboard
+    assert "function generationJobStatusText(job)" in storyboard
+    assert "var startedAt = Number(job && job.startedAt || 0);" in storyboard
+    assert "formatGenerationElapsedMs(take && take.elapsedMs)" in storyboard
+    assert "elapsed_ms = int((time.monotonic() - started) * 1000)" in generation
+    assert '"elapsedMs": elapsed_ms' in generation
+    assert '"elapsedMs",' in store

@@ -169,7 +169,7 @@ def test_generate_tracks_terminal_jobs_while_shared_drawer_owns_live_queue_ui():
     queue = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
 
     assert "trackedJobIds: loadTrackedGenerateJobs()" in script
-    assert "function refreshTrackedGenerateJobs()" in script
+    assert "function refreshTrackedGenerateJobs(queue)" in script
     assert "requestJson('/fs/inference?job=' + encodeURIComponent(jobId) + '&consume=1')" in script
     assert "var generationError = new Error(" in script
     assert "reportError(generationError, conciseGenerateError(" in script
@@ -177,6 +177,8 @@ def test_generate_tracks_terminal_jobs_while_shared_drawer_owns_live_queue_ui():
     assert "function createRow(job)" in queue
     assert "dataset.inferenceJobId" in queue
     assert "function syncRow(row, job)" in queue
+    assert "webcap:inference-queue-snapshot" in script
+    assert "window.getInferenceQueueSnapshot" in queue
 
 def test_generate_partial_reference_uploads_have_a_cleanup_path():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")

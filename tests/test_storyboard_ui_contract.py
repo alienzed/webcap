@@ -1056,3 +1056,22 @@ def test_storyboard_sequence_view_uses_lightweight_editor_timeline():
     assert "calc(var(--sequence-clip-seconds) * 18px)" in css
     assert ".storyboard-sequence-label {" in css
     assert ".storyboard-sequence-output-label {" in css
+
+
+def test_storyboard_sequence_encoding_warning_is_explicit_and_highlights_affected_takes():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+    assembly = (ROOT / "tool" / "server" / "storyboard_assembly.py").read_text(encoding="utf-8")
+
+    assert "This requires encoding" in storyboard
+    assert "data-sequence-warnings" in storyboard
+    assert "data-sequence-encode" in storyboard
+    assert "storyState.sequenceEncodingWarnings" in storyboard
+    assert "warningByTake" in storyboard
+    assert "requires-encoding" in storyboard
+    assert ".storyboard-sequence-card.requires-encoding" in css
+    assert ".storyboard-sequence-card-warning" in css
+    assert 'encode: !!encode' in storyboard
+    assert 'storyState.sequenceEncodingWarnings = [];' in storyboard
+    assert 'def _analyze_streams(items):' in assembly
+    assert 'def _normalize_clip(' in assembly

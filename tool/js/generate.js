@@ -1099,7 +1099,7 @@
       ? generateState.director.modelId
       : String((generateState.director.models[0] || {}).id || '');
     generateState.director.modelId = chosen;
-    if (chosen) setSharedDirectorModelPreference(chosen);
+    if (chosen) setDirectorModelPreference('webcap.generate.directorModel', chosen);
     select.value = chosen;
     select.disabled = generateState.director.busy || !chosen;
     expand.disabled = generateState.director.busy || !chosen;
@@ -1211,7 +1211,7 @@
     if (typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
     if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
     generateState.open = true;
-    generateState.director.modelId = getSharedDirectorModelPreference('webcap.generate.directorModel');
+    generateState.director.modelId = getDirectorModelPreference('webcap.generate.directorModel');
     frame.classList.add('workspace-generate-open');
     workspace.classList.remove('hidden');
     setGenerateViewMode(generateState.viewMode);
@@ -1292,7 +1292,7 @@
     el('generate-director-model').addEventListener('change', function () {
       generateState.director.modelId = this.value;
       setDirectorStatus('');
-      setSharedDirectorModelPreference(this.value);
+      setDirectorModelPreference('webcap.generate.directorModel', this.value);
       renderDirector();
     });
     el('generate-lora-list').addEventListener('input', function (event) {

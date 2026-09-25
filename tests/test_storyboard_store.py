@@ -13,6 +13,18 @@ def storyboard_fs(tmp_path, monkeypatch):
     return tmp_path
 
 
+def test_storyboard_root_uses_configured_output_root_outside_fs_root(tmp_path, monkeypatch):
+    fs_root = tmp_path / "sets"
+    output_root = tmp_path / "creative"
+    fs_root.mkdir()
+    monkeypatch.setattr(storyboard_store.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(storyboard_store.app_config, "output_root", lambda: output_root)
+
+    story = storyboard_store.create_story({"title": "Outside"})
+    assert (output_root / "storyboards" / story["id"] / "story.json").is_file()
+    assert not (fs_root / "output" / "storyboards").exists()
+
+
 def _shared_context():
     return {
         "subjects": [{"id": "mara", "label": "Mara", "description": "Mara has a dark bob."}],

@@ -387,12 +387,15 @@ def _advance_queue():
     _ensure_execution_reconciled()
     with _dispatch_lock:
         snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-        if snapshot.get("paused") or snapshot.get("activeJobId"):
-            return None
 
+        # Provider cleanup is a GPU-safety obligation, not schedulable queue
+        # work. Keep reconciling it even when the user has paused inference.
         with _provider_hold_lock:
             cleanup_pending = bool(_provider_cleanup_holds)
         if cleanup_pending and not _reconcile_provider_cleanup_holds():
+            return None
+
+        if snapshot.get("paused") or snapshot.get("activeJobId"):
             return None
 
         jobs = snapshot.get("jobs", [])
@@ -506,11 +509,11 @@ def _monitor_has_work():
     snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
     if snapshot.get("activeJobId"):
         return True
-    if snapshot.get("paused"):
-        return False
     with _provider_hold_lock:
         if _provider_cleanup_holds:
             return True
+    if snapshot.get("paused"):
+        return False
     armed_ids = _armed_backlog_snapshot()
     return any(
         str(job.get("status") or "") == "queued"

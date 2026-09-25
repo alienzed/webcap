@@ -425,9 +425,19 @@
     prompt.title = String(result.resolvedPrompt || '');
     prompt.textContent = String(result.resolvedPrompt || '');
 
+    var actions = document.createElement('div');
+    actions.className = 'generate-result-actions';
+    var deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'review-captions-btn generate-result-delete';
+    deleteButton.textContent = 'Delete';
+    deleteButton.dataset.generateDeleteStorageId = String(result.storageId || '');
+    actions.appendChild(deleteButton);
+
     footer.appendChild(model);
     footer.appendChild(details);
     footer.appendChild(prompt);
+    footer.appendChild(actions);
     card.appendChild(mediaHost);
     card.appendChild(footer);
     return card;
@@ -958,6 +968,22 @@
       savedLoras(generateState.modelId).splice(Number(button.dataset.generateLoraRemove), 1);
       saveLoras();
       renderLoras();
+    });
+    el('generate-results').addEventListener('click', function (event) {
+      var button = event.target.closest('[data-generate-delete-storage-id]');
+      if (!button) return;
+      var storageId = String(button.dataset.generateDeleteStorageId || '').trim();
+      if (!storageId) throw new Error('Generation result is missing its storage identity.');
+      if (!window.confirm('Permanently delete this generation and all of its artifacts?')) return;
+      button.disabled = true;
+      postJson('/fs/generate/result/delete', { storageId: storageId }).then(function () {
+        var card = button.closest('.generate-result-card');
+        if (card) card.remove();
+        return refreshResults();
+      }).catch(function (err) {
+        button.disabled = false;
+        reportError(err, 'Delete failed');
+      });
     });
     schedulePoll();
   }

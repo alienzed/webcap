@@ -11,6 +11,7 @@ def storyboard_fs(tmp_path, monkeypatch):
     monkeypatch.setattr(storyboard_store.app_config, "FS_ROOT", str(tmp_path))
     monkeypatch.setattr(storyboard_store.app_config, "output_root", lambda: tmp_path / "output")
     execution_queue._resource_owner = ""
+    execution_queue.clear_transient_receipts()
     storyboard_generation._startup_reconciled = False
     inference_runner._startup_reconciled = True
     return tmp_path
@@ -31,7 +32,7 @@ def test_storyboard_terminal_generation_receipt_is_removed_when_consumed(storybo
         },
     )
     execution_queue.claim_next(inference_runner.EXECUTION_LANE)
-    execution_queue.finish_job(queued["id"], status="completed", result={"takeId": "take-1"})
+    execution_queue.finish_job_transient(queued["id"], status="completed", result={"takeId": "take-1"})
 
     delivered = storyboard_generation.generation_status(queued["id"], consume=True)
 

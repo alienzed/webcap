@@ -138,6 +138,34 @@ def test_generate_reference_upload_uses_generate_store(monkeypatch):
     assert response.get_json()["reference"]["name"] == "frame.png"
 
 
+def test_generate_capabilities_does_not_require_system_stats_probe(monkeypatch):
+    class FakeModel:
+        PROFILE_ID = "minimax_h3"
+        profile = {"label": "MiniMax H3"}
+
+    monkeypatch.setattr(
+        generate_generation.inference_runtime,
+        "system_stats",
+        lambda: (_ for _ in ()).throw(AssertionError("capabilities must not depend on telemetry")),
+    )
+    monkeypatch.setattr(
+        generate_generation,
+        "public_models",
+        lambda: [{"id": "minimax_h3", "label": "MiniMax H3"}],
+    )
+    monkeypatch.setattr(generate_generation, "get_inference_model", lambda _model_id: FakeModel())
+    monkeypatch.setattr(
+        generate_generation,
+        "_public_model",
+        lambda model: {"id": model.PROFILE_ID, "label": model.profile["label"]},
+    )
+
+    payload = generate_generation.capabilities()
+
+    assert payload["models"] == [{"id": "minimax_h3", "label": "MiniMax H3"}]
+    assert payload["unavailableModels"] == []
+
+
 def test_generate_capabilities_keeps_healthy_models_when_one_is_unavailable(monkeypatch):
     class FakeModel:
         def __init__(self, profile_id, label):

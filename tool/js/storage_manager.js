@@ -164,14 +164,17 @@
       return;
     }
     var rows = (groups[area] || []).slice().sort(itemSort);
-    var purgeableTests = area === 'tests' ? rows.filter(function (item) { return !!item.purgeable; }) : [];
+    var bulkConfig = bulkDeleteConfig(area);
+    var purgeableItems = bulkConfig
+      ? rows.filter(function (item) { return !!item.purgeable; })
+      : [];
     var bulkDelete = storageState.bulkDelete;
-    var bulkAction = area === 'tests' && purgeableTests.length
-      ? '<button type="button" class="review-captions-btn storage-delete-btn storage-bulk-delete-tests"' +
+    var bulkAction = bulkConfig && purgeableItems.length
+      ? '<button type="button" class="review-captions-btn storage-delete-btn storage-bulk-delete" data-storage-bulk-area="' + escapeHtml(area) + '"' +
         (bulkDelete ? ' disabled' : '') + '>' +
         escapeHtml(bulkDelete
           ? ('Deleting ' + String(bulkDelete.done) + ' / ' + String(bulkDelete.total) + '…')
-          : ('Delete completed (' + String(purgeableTests.length) + ')…')) +
+          : (bulkConfig.buttonLabel + ' (' + String(purgeableItems.length) + ')…')) +
         '</button>'
       : '';
     var empty = rows.length
@@ -361,35 +364,76 @@
     return window.confirm('Permanently delete this ' + label + '?\n\n' + item.label + sizeText + consequence + '\n\nThis cannot be undone.');
   }
 
-  function testItemsForBulkDelete() {
-    var groups = storageState.payload && storageState.payload.items || {};
-    return (groups.tests || []).filter(function (item) { return !!item.purgeable; });
+  function bulkDeleteConfig(area) {
+    var configs = {
+      tests: {
+        buttonLabel: 'Delete completed',
+        itemLabel: 'Test Session',
+        protectedLabel: 'active/protected session',
+        consequence: ''
+      },
+      staged: {
+        buttonLabel: 'Delete all copies',
+        itemLabel: 'staged Test LoRA copy',
+        protectedLabel: 'active/protected copy',
+        consequence: 'Source training epochs are not deleted.'
+      },
+      runtime: {
+        buttonLabel: 'Delete all temporary',
+        itemLabel: 'temporary runtime artifact',
+        protectedLabel: 'active/protected artifact',
+        consequence: 'This removes WebCap-owned H3 probes and Generate reference bundles that are currently safe to purge.'
+      },
+      comfy: {
+        buttonLabel: 'Delete all scratch',
+        itemLabel: 'ComfyUI scratch tree',
+        protectedLabel: 'active/protected scratch tree',
+        consequence: 'Only WebCap-prefixed provider scratch trees are included.'
+      },
+      generate: {
+        buttonLabel: 'Delete all completed',
+        itemLabel: 'completed Generation',
+        protectedLabel: 'active/protected Generation',
+        consequence: 'This permanently removes generated media and related artifacts for these completed Generations.'
+      }
+    };
+    return configs[String(area || '')] || null;
   }
 
-  function confirmBulkDeleteTests(items) {
-    var allTests = storageState.payload && storageState.payload.items && storageState.payload.items.tests || [];
-    var protectedCount = Math.max(0, allTests.length - items.length);
+  function bulkDeleteItems(area) {
+    var groups = storageState.payload && storageState.payload.items || {};
+    return (groups[area] || []).filter(function (item) { return !!item.purgeable; });
+  }
+
+  function confirmBulkDelete(area, items) {
+    var config = bulkDeleteConfig(area);
+    if (!config) return false;
+    var allItems = storageState.payload && storageState.payload.items && storageState.payload.items[area] || [];
+    var protectedCount = Math.max(0, allItems.length - items.length);
     var measured = items.filter(function (item) { return !!item.measured; });
     var measuredBytes = measured.reduce(function (total, item) {
       return total + Math.max(0, Number(item.bytes) || 0);
     }, 0);
     var lines = [
-      'Permanently delete ' + String(items.length) + ' completed Test Session' + (items.length === 1 ? '' : 's') + '?'
+      'Permanently delete ' + String(items.length) + ' ' + config.itemLabel + (items.length === 1 ? '' : 's') + '?'
     ];
     if (measured.length) lines.push('Measured reclaimable space: about ' + bytes(measuredBytes) + '.');
     if (protectedCount) {
-      lines.push(String(protectedCount) + ' active/protected session' + (protectedCount === 1 ? '' : 's') + ' will be kept.');
+      lines.push(String(protectedCount) + ' ' + config.protectedLabel + (protectedCount === 1 ? '' : 's') + ' will be kept.');
     }
-    lines.push('', 'Each session is safety-checked again immediately before deletion.', '', 'This cannot be undone.');
+    if (config.consequence) lines.push(config.consequence);
+    lines.push('', 'Each item is safety-checked again immediately before deletion.', '', 'This cannot be undone.');
     return window.confirm(lines.join('\n'));
   }
 
-  function bulkDeleteCompletedTests() {
-    if (storageState.bulkDelete) return Promise.resolve();
-    var items = testItemsForBulkDelete();
-    if (!items.length || !confirmBulkDeleteTests(items)) return Promise.resolve();
+  function bulkDeleteArea(area) {
+    area = String(area || '');
+    var config = bulkDeleteConfig(area);
+    if (!config || storageState.bulkDelete) return Promise.resolve();
+    var items = bulkDeleteItems(area);
+    if (!items.length || !confirmBulkDelete(area, items)) return Promise.resolve();
 
-    storageState.bulkDelete = { done: 0, total: items.length };
+    storageState.bulkDelete = { area: area, done: 0, total: items.length };
     renderItems();
 
     var deleted = 0;
@@ -406,7 +450,7 @@
         }).catch(function (err) {
           var message = String(err && err.message ? err.message : err || 'Delete failed.');
           failures.push({ label: String(item.label || item.id), error: message });
-          window.reportConsoleError('Storage', 'Could not delete Test Session "' + String(item.label || item.id) + '": ' + message);
+          window.reportConsoleError('Storage', 'Could not delete ' + config.itemLabel + ' "' + String(item.label || item.id) + '": ' + message);
         }).then(function () {
           storageState.bulkDelete.done += 1;
           renderItems();
@@ -419,7 +463,7 @@
       return refresh().then(function () {
         var status = el('storage-status');
         if (status) {
-          status.textContent = String(deleted) + ' Test Session' + (deleted === 1 ? '' : 's') + ' deleted' +
+          status.textContent = String(deleted) + ' ' + config.itemLabel + (deleted === 1 ? '' : 's') + ' deleted' +
             (failures.length ? ' · ' + String(failures.length) + ' skipped/failed (see Console)' : '') + '.';
         }
       });
@@ -444,8 +488,9 @@
       render();
       return;
     }
-    if (event.target.closest('.storage-bulk-delete-tests')) {
-      bulkDeleteCompletedTests();
+    var bulkDeleteButton = event.target.closest('[data-storage-bulk-area]');
+    if (bulkDeleteButton) {
+      bulkDeleteArea(bulkDeleteButton.getAttribute('data-storage-bulk-area') || '');
       return;
     }
     var button = event.target.closest('button[data-area][data-id]');

@@ -247,6 +247,13 @@
       ? String(state.queue.pauseReason || 'Inference is temporarily waiting.')
       : (String(state.queue.waitReason || '').trim() || counts || 'No inference work');
 
+    var clearAll = el('inference-queue-clear-all');
+    if (clearAll) {
+      clearAll.disabled = !jobs.some(function (job) {
+        return ['queued', 'backlog'].indexOf(String(job.status || '')) !== -1;
+      });
+    }
+
     host.innerHTML = '';
     if (!jobs.length) {
       var empty = document.createElement('div');
@@ -367,6 +374,7 @@
   function bind() {
     var toggles = document.querySelectorAll('[data-inference-queue-toggle]');
     var close = el('inference-queue-close');
+    var clearAll = el('inference-queue-clear-all');
     var list = el('inference-queue-list');
     if (!toggles.length || !close || !list) return;
 
@@ -374,6 +382,7 @@
       toggle.onclick = function () { setOpen(!state.open); };
     });
     close.onclick = function () { setOpen(false); };
+    if (clearAll) clearAll.onclick = function () { action('clear_all', ''); };
     list.onclick = function (event) {
       var actionButton = event.target.closest('[data-inference-queue-action]');
       if (actionButton) {

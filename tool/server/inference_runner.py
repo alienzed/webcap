@@ -4,21 +4,21 @@ import threading
 import time
 
 from .execution_queue import (
-    cancel_all_pending as execution_cancel_all_pending,
-    cancel_pending as execution_cancel_pending,
-    consume_terminal_job as execution_consume_terminal_job,
+    cancel_all_pending_transient as execution_cancel_all_pending_transient,
+    cancel_pending_transient as execution_cancel_pending_transient,
     claim_next as execution_claim_next,
     enqueue as execution_enqueue,
-    finish_job as execution_finish_job,
+    discard_terminal_and_recent as execution_discard_terminal_and_recent,
+    finish_job_transient as execution_finish_job_transient,
     get_job as execution_get_job,
     lane_guard as execution_lane_guard,
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
-    recover_lane as execution_recover_lane,
+    shelve_unfinished as execution_shelve_unfinished,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
-    shelve_queued as execution_shelve_queued,
+    transient_receipt as execution_transient_receipt,
     set_lane_guard as execution_set_lane_guard,
     update_job as execution_update_job,
     reserve_resource as execution_reserve_resource,
@@ -135,8 +135,8 @@ def prepare_startup_backlog():
         _armed_backlog_ids.clear()
     _set_backlog_wait_reason("")
     _restore_provider_cleanup_guard()
-    shelved = execution_shelve_queued(EXECUTION_LANE)
     _ensure_execution_reconciled()
+    shelved = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("jobs", [])
 
     with _provider_hold_lock:
         cleanup_pending = bool(_provider_cleanup_holds)
@@ -270,9 +270,9 @@ def _ensure_execution_reconciled():
             job for job in prior.get("jobs", [])
             if str(job.get("status") or "") in {"starting", "running", "stopping"}
         ]
-        # Reconcile provider state while active queue jobs are still mutable so
-        # the confirmed terminal provider status is persisted before the WebCap
-        # job itself is marked interrupted.
+        # A WebCap restart does not recover provider execution. Stop any old
+        # ComfyUI work for GPU safety, then return the frozen WebCap request to
+        # inert Backlog so the user may explicitly run it again.
         for job in prior_active:
             details = job.get("details") if isinstance(job.get("details"), dict) else {}
             prompt_id = str(details.get("providerJobId") or "").strip()
@@ -281,31 +281,24 @@ def _ensure_execution_reconciled():
             try:
                 from .inference_runtime import cancel_job_and_wait_status
                 terminal_status = cancel_job_and_wait_status(prompt_id)
-                if terminal_status:
-                    execution_update_job(
-                        str(job.get("id") or ""),
-                        details={"providerStatus": terminal_status},
-                    )
-                else:
+                if not terminal_status:
                     hold_provider_cleanup(
                         prompt_id,
-                        "Inference is waiting: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
+                        "Inference is waiting: old ComfyUI provider work could not be confirmed stopped after restart.",
                     )
                     _logger.error(
-                        "Interrupted inference provider job %s did not confirm cancellation.",
+                        "Old inference provider job %s did not confirm cancellation.",
                         prompt_id,
                     )
             except Exception:
                 hold_provider_cleanup(
                     prompt_id,
-                    "Inference is waiting: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
+                    "Inference is waiting: old ComfyUI provider work could not be confirmed stopped after restart.",
                 )
-                _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
+                _logger.exception("Could not cancel old inference provider job %s.", prompt_id)
 
-        execution_recover_lane(
-            EXECUTION_LANE,
-            reason="Inference was interrupted by a WebCap restart.",
-        )
+        execution_shelve_unfinished(EXECUTION_LANE)
+        execution_discard_terminal_and_recent(EXECUTION_LANE)
 
         with _provider_hold_lock:
             cleanup_pending = bool(_provider_cleanup_holds)
@@ -315,7 +308,7 @@ def _ensure_execution_reconciled():
                 execution_reserve_resource(GPU_RESERVATION_OWNER)
             elif owner != GPU_RESERVATION_OWNER:
                 _logger.error(
-                    "Interrupted inference provider cleanup is unresolved while the shared GPU is owned by %s.",
+                    "Old inference provider cleanup is unresolved while the shared GPU is owned by %s.",
                     owner,
                 )
 
@@ -337,7 +330,7 @@ def _execute_claimed(job_id):
 
     running = execution_mark_running(job_id, details={"providerStatus": "starting"})
     if str(running.get("status") or "") == "stopping":
-        execution_finish_job(job_id, status="stopped", error="Inference stopped before provider launch.")
+        execution_finish_job_transient(job_id, status="stopped", error="Inference stopped before provider launch.")
         _cleanup_generate_job_references(job_id)
         return
 
@@ -355,7 +348,7 @@ def _execute_claimed(job_id):
     else:
         raise RuntimeError("Unsupported inference client: " + (client or "empty"))
 
-    execution_finish_job(job_id, status="completed", result=result)
+    execution_finish_job_transient(job_id, status="completed", result=result)
 
 
 def _cancel_failed_provider(job):
@@ -482,7 +475,7 @@ def _advance_queue():
             status = str(current.get("status") or "")
             if isinstance(exc, InferenceStopped):
                 if status in {"starting", "running", "stopping"}:
-                    execution_finish_job(job_id, status=exc.status, error=str(exc))
+                    execution_finish_job_transient(job_id, status=exc.status, error=str(exc))
             else:
                 release_gpu = _cancel_failed_provider(current)
                 if not release_gpu:
@@ -497,7 +490,7 @@ def _advance_queue():
                         ),
                     )
                 if status in {"starting", "running", "stopping"}:
-                    execution_finish_job(job_id, status="failed", error=str(exc))
+                    execution_finish_job_transient(job_id, status="failed", error=str(exc))
                 _logger.exception("Queued inference job failed.")
         finally:
             _cleanup_generate_job_references(job_id)
@@ -687,9 +680,10 @@ def snapshot(include_terminal=False):
 
 def job_status(job_id, consume=False):
     job_id = str(job_id or "").strip()
-    job = execution_get_job(job_id)
-    if consume and str(job.get("status") or "") in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
-        job = execution_consume_terminal_job(job_id)
+    try:
+        job = execution_get_job(job_id)
+    except FileNotFoundError:
+        job = execution_transient_receipt(job_id, consume=consume)
     return _job_view(job)
 
 
@@ -760,16 +754,20 @@ def action(operation, job_id="", direction="", position=None):
     operation = str(operation or "").strip()
     job_id = str(job_id or "").strip()
     if operation == "cancel":
-        job = execution_cancel_pending(job_id)
-        _disarm_backlog(job_id)
         _cleanup_generate_job_references(job_id)
+        job = execution_cancel_pending_transient(job_id)
+        _disarm_backlog(job_id)
         return {"job": _job_view(job)}
     if operation == "clear_all":
-        cancelled = execution_cancel_all_pending(EXECUTION_LANE)
+        pending = [
+            job for job in execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("jobs", [])
+            if str(job.get("status") or "") in {"queued", "backlog"}
+        ]
+        for job in pending:
+            _cleanup_generate_job_references(job.get("id"))
+        cancelled = execution_cancel_all_pending_transient(EXECUTION_LANE)
         for job in cancelled:
-            cancelled_id = str(job.get("id") or "")
-            _disarm_backlog(cancelled_id)
-            _cleanup_generate_job_references(cancelled_id)
+            _disarm_backlog(job.get("id"))
         return {"queue": snapshot(), "cleared": len(cancelled)}
     if operation == "run_backlog":
         job = execution_get_job(job_id)

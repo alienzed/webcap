@@ -215,6 +215,9 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert scene_schema["properties"]["suggestedDurationSeconds"]["minimum"] == 9
     assert scene_schema["properties"]["suggestedDurationSeconds"]["maximum"] == 15
     assert "none is mandatory" in prompt
+    assert "roughly 120-250 words in each Scene's integrated multimodal description" in prompt
+    assert "ballpark targets, not minimums" in prompt
+    assert "do not keep elaborating once the Scene is fully described" in prompt
     assert "EXISTING SECOND PROMPT" not in prompt
 
 
@@ -309,6 +312,9 @@ def test_expand_concept_is_creative_but_not_scene_planning():
     assert "do not force conventional plot, conflict, or character arcs" in prompt
     assert "do not break the Story into Scenes yet" in prompt
     assert "do not write MiniMax H3 prompts" in prompt
+    assert "roughly 500-1000 words total" in prompt
+    assert "not a minimum to pad toward" in prompt
+    assert "Stop once the concept is fully developed." in prompt
 
 
 def test_develop_story_h3_rules_do_not_conflict_with_structured_creative_task():

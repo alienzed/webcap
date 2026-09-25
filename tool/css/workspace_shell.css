@@ -266,18 +266,18 @@
 
 .inference-queue-rail-badge {
   position: absolute;
-  top: 2px;
-  right: 1px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
+  top: 1px;
+  right: 0;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   background: var(--accent);
   color: var(--panel);
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1;
 }
@@ -309,10 +309,10 @@
 
 .activity-monitor-rail-badge {
   position: absolute;
-  top: 2px;
-  right: 1px;
-  min-width: 15px;
-  height: 15px;
+  top: 1px;
+  right: 0;
+  min-width: 18px;
+  height: 18px;
   padding: 0 4px;
   display: inline-flex;
   align-items: center;
@@ -321,7 +321,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 72%, #ffffff);
   color: #111;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 900;
   line-height: 1;
 }
@@ -1580,7 +1580,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .inference-queue-position {
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: capitalize;
   text-overflow: ellipsis;
@@ -1632,7 +1632,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .inference-queue-copy small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .inference-queue-actions {
@@ -1643,9 +1643,9 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .inference-queue-actions .review-captions-btn {
   width: auto;
-  min-height: 26px;
-  padding: 3px 7px;
-  font-size: 10px;
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -1676,15 +1676,15 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   border-radius: 999px;
   background: var(--panel);
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   text-align: center;
 }
 
 .inference-backlog-heading .review-captions-btn {
   width: auto;
-  min-height: 24px;
-  padding: 2px 7px;
-  font-size: 10px;
+  min-height: 27px;
+  padding: 2px 8px;
+  font-size: 11px;
 }
 
 .inference-queue-row.status-backlog {

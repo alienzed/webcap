@@ -49,6 +49,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.requirements || typeof out.requirements !== 'object') out.requirements = {};
   if (typeof out.debug !== 'boolean') out.debug = !!out.debug;
   if (!out.filesystem.root) out.filesystem.root = '';
+  if (!out.filesystem.output_root) out.filesystem.output_root = '';
   if (!out.filesystem.models) out.filesystem.models = '';
   if (!out.training.diffusion_pipe_wsl) out.training.diffusion_pipe_wsl = '';
   if (!out.training.wsl_distribution) out.training.wsl_distribution = '';
@@ -109,6 +110,7 @@ function renderAppSettingsJson(cfg) {
 function fillAppSettingsForm(cfg) {
   var c = normalizeAppConfigShape(cfg);
   if (ui.appSettingsRootEl) ui.appSettingsRootEl.value = c.filesystem.root || '';
+  if (ui.appSettingsOutputRootEl) ui.appSettingsOutputRootEl.value = c.filesystem.output_root || '';
   if (ui.appSettingsModelsEl) ui.appSettingsModelsEl.value = c.filesystem.models || '';
   if (ui.appSettingsTrainingDiffusionPipeWslEl) ui.appSettingsTrainingDiffusionPipeWslEl.value = c.training.diffusion_pipe_wsl || '';
   if (ui.appSettingsTrainingWslDistributionEl) ui.appSettingsTrainingWslDistributionEl.value = c.training.wsl_distribution || '';
@@ -142,6 +144,7 @@ function fillAppSettingsForm(cfg) {
 function collectAppSettingsFormConfig() {
   var base = normalizeAppConfigShape(appSettingsLoadedConfig || {});
   base.filesystem.root = ui.appSettingsRootEl ? ui.appSettingsRootEl.value : '';
+  base.filesystem.output_root = ui.appSettingsOutputRootEl ? ui.appSettingsOutputRootEl.value : '';
   base.filesystem.models = ui.appSettingsModelsEl ? ui.appSettingsModelsEl.value : '';
   base.debug = !!(ui.appSettingsDebugEl && ui.appSettingsDebugEl.checked);
   base.training.diffusion_pipe_wsl = ui.appSettingsTrainingDiffusionPipeWslEl ? ui.appSettingsTrainingDiffusionPipeWslEl.value : '';
@@ -507,6 +510,7 @@ function wireAppSettingsUi() {
 
   var syncFields = [
     ui.appSettingsRootEl,
+    ui.appSettingsOutputRootEl,
     ui.appSettingsModelsEl,
     ui.appSettingsTrainingDiffusionPipeWslEl,
     ui.appSettingsTrainingActivateScriptEl,

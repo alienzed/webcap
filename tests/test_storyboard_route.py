@@ -127,6 +127,25 @@ def test_storyboard_route_is_independent_of_current_set(tmp_path, monkeypatch):
     assert story_path.is_file()
 
 
+def test_storyboard_media_route_serves_from_configured_output_root(tmp_path, monkeypatch):
+    output_root = tmp_path / "creative"
+    story_dir = output_root / "storyboards" / "story-1"
+    story_dir.mkdir(parents=True)
+    media = story_dir / "takes" / "scene-1" / "take-1.mp4"
+    media.parent.mkdir(parents=True)
+    media.write_bytes(b"video")
+    monkeypatch.setattr(app_module.app_config, "output_root", lambda: output_root)
+
+    client = app_module.app.test_client()
+    response = client.get("/fs/storyboard/media", query_string={
+        "story": "story-1",
+        "path": "takes/scene-1/take-1.mp4",
+    })
+
+    assert response.status_code == 200
+    assert response.data == b"video"
+
+
 def test_storyboard_route_rejects_unknown_operation(tmp_path, monkeypatch):
     root = tmp_path / "root"
     root.mkdir()
@@ -169,16 +188,16 @@ def test_storyboard_generation_route_starts_and_reads_job(monkeypatch):
 def test_storyboard_assembly_route_exports_and_reads_current_export(monkeypatch):
     monkeypatch.setattr(app_module, "storyboard_export_selected_sequence", lambda story_id: {
         "storyId": story_id,
-        "folder": "output/storyboards/" + story_id + "/exports",
         "media": "selected-sequence.mp4",
+        "mediaPath": "exports/selected-sequence.mp4",
         "itemCount": 1,
         "selection": [{"sceneId": "scene-1", "takeId": "take-1"}],
         "current": True,
     })
     monkeypatch.setattr(app_module, "storyboard_current_export", lambda story_id: {
         "storyId": story_id,
-        "folder": "output/storyboards/" + story_id + "/exports",
         "media": "selected-sequence.mp4",
+        "mediaPath": "exports/selected-sequence.mp4",
         "itemCount": 1,
         "selection": [{"sceneId": "scene-1", "takeId": "take-1"}],
         "current": True,

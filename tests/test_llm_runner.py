@@ -14,6 +14,7 @@ def llm_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
     monkeypatch.setattr(app_config, "output_root", lambda: Path(tmp_path) / "output")
     execution_queue._resource_owner = ""
+    execution_queue.clear_transient_receipts()
     llm_runner._startup_reconciled = True
     llm_runner._monitor_thread = None
     monkeypatch.setattr(llm_runner, "_ensure_monitor_started", lambda: None)
@@ -69,7 +70,7 @@ def test_llm_terminal_receipt_is_removed_when_consumed(llm_root):
         metadata={"client": "generate", "modelId": "qwen"},
     )
     execution_queue.claim_next(llm_runner.EXECUTION_LANE)
-    execution_queue.finish_job(job["id"], status="completed", result={"result": "done"})
+    execution_queue.finish_job_transient(job["id"], status="completed", result={"result": "done"})
 
     delivered = llm_runner.job_status(job["id"], consume=True)
 
@@ -566,7 +567,7 @@ def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_r
     assert scene["invariantRefs"] == [{"kind": "character", "title": "Elena"}]
 
 
-def test_llm_restart_marks_only_active_work_interrupted(llm_root):
+def test_llm_restart_discards_all_outstanding_execution_state(llm_root):
     active = execution_queue.enqueue(
         llm_runner.EXECUTION_LANE,
         {"contract": {"prompt": "Active"}},
@@ -583,8 +584,11 @@ def test_llm_restart_marks_only_active_work_interrupted(llm_root):
     llm_runner._startup_reconciled = False
     llm_runner.reconcile_startup()
 
-    assert llm_runner.job_status(active["id"])["status"] == "interrupted"
-    assert llm_runner.job_status(queued["id"])["status"] == "queued"
+    assert execution_queue.lane_snapshot(llm_runner.EXECUTION_LANE)["jobs"] == []
+    with pytest.raises(FileNotFoundError):
+        llm_runner.job_status(active["id"])
+    with pytest.raises(FileNotFoundError):
+        llm_runner.job_status(queued["id"])
 
 
 def test_storyboard_scene_repair_renders_prompt_and_patches_only_returned_fields(llm_root, monkeypatch):

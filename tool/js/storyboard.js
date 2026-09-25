@@ -1027,11 +1027,10 @@
     if (!directorActivityActive()) return Promise.resolve();
     return Promise.all([
       directorActivityRequest('/fs/director/activity'),
-      directorActivityRequest('/fs/system_status').catch(function () { return null; }),
-      directorQueueSnapshot(false)
+      directorActivityRequest('/fs/system_status').catch(function () { return null; })
     ]).then(function (values) {
       storyState.director.activityErrorReported = false;
-      var scopedActivity = directorActivityForTargetQueue(values[0], values[2]);
+      var scopedActivity = directorActivityForTargetQueue(values[0], values[0] && values[0].queue);
       renderDirectorActivity(directorActivityForCurrentRun(scopedActivity), values[1]);
     }).catch(function (err) {
       var card = el('storyboard-director-activity');

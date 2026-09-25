@@ -146,6 +146,56 @@ def test_storage_manager_finds_generations_in_configured_output_root(monkeypatch
     assert payload["items"]["generate"][0]["id"] == "2026-09-23/job-1"
 
 
+def test_storage_manager_surfaces_incomplete_generation_as_non_purgeable_residual(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    directory = tmp_path / "output" / "generations" / "2026-09-25" / "job-incomplete"
+    directory.mkdir(parents=True)
+    (directory / "partial.mp4").write_bytes(b"partial")
+
+    item = storage_manager.overview("")["items"]["generate"][0]
+
+    assert item["id"] == "2026-09-25/job-incomplete"
+    assert item["kind"] == "Generation residual"
+    assert item["purgeable"] is False
+    assert "ownership is incomplete" in item["protectedReason"]
+
+    measured = storage_manager.measure("generate", item["id"])
+    assert measured["bytes"] >= len(b"partial")
+
+    with pytest.raises(RuntimeError, match="ownership could not be proven"):
+        storage_manager.purge("generate", item["id"])
+    assert directory.is_dir()
+
+
+def test_storage_manager_surfaces_storyboard_sequence_export_for_accounting(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    story_dir = _story(tmp_path)
+    export_dir = story_dir / "exports"
+    export_dir.mkdir()
+    (export_dir / "selected-sequence.mp4").write_bytes(b"sequence-video")
+    _write_json(export_dir / "selected-sequence.json", {
+        "version": 1,
+        "storyId": "story-demo",
+        "createdAt": "2026-09-25T12:00:00+00:00",
+        "output": "exports/selected-sequence.mp4",
+        "selection": [{"sceneId": "scene-1", "takeId": "take-1"}],
+        "items": [],
+    })
+
+    items = storage_manager.overview("")["items"]["storyboard"]
+    export = next(item for item in items if item["id"] == "export/story-demo")
+
+    assert export["kind"] == "Sequence export"
+    assert export["purgeable"] is False
+    assert export["meta"]["itemCount"] == 1
+    assert "managed from Storyboard" in export["protectedReason"]
+
+    measured = storage_manager.measure("storyboard", "export/story-demo")
+    assert measured["bytes"] >= len(b"sequence-video")
+    assert storage_manager.resolve_item("storyboard", "export/story-demo") == export_dir.resolve()
+
+
+
 def test_measure_is_item_scoped_and_cached(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     directory = _generation(tmp_path)

@@ -130,7 +130,7 @@ def _restore_provider_cleanup_guard():
 
 
 def prepare_startup_backlog():
-    """Shelf persisted pending work and reconcile only interrupted active work."""
+    """Return all persisted unfinished inference work to inert Backlog."""
     with _backlog_lock:
         _armed_backlog_ids.clear()
     _set_backlog_wait_reason("")
@@ -330,8 +330,8 @@ def _execute_claimed(job_id):
 
     running = execution_mark_running(job_id, details={"providerStatus": "starting"})
     if str(running.get("status") or "") == "stopping":
-        execution_finish_job_transient(job_id, status="stopped", error="Inference stopped before provider launch.")
         _cleanup_generate_job_references(job_id)
+        execution_finish_job_transient(job_id, status="stopped", error="Inference stopped before provider launch.")
         return
 
     if client == "generate":
@@ -348,6 +348,7 @@ def _execute_claimed(job_id):
     else:
         raise RuntimeError("Unsupported inference client: " + (client or "empty"))
 
+    _cleanup_generate_job_references(job_id)
     execution_finish_job_transient(job_id, status="completed", result=result)
 
 
@@ -475,6 +476,7 @@ def _advance_queue():
             status = str(current.get("status") or "")
             if isinstance(exc, InferenceStopped):
                 if status in {"starting", "running", "stopping"}:
+                    _cleanup_generate_job_references(job_id)
                     execution_finish_job_transient(job_id, status=exc.status, error=str(exc))
             else:
                 release_gpu = _cancel_failed_provider(current)
@@ -490,13 +492,13 @@ def _advance_queue():
                         ),
                     )
                 if status in {"starting", "running", "stopping"}:
+                    _cleanup_generate_job_references(job_id)
                     execution_finish_job_transient(job_id, status="failed", error=str(exc))
                 _logger.exception("Queued inference job failed.")
         finally:
-            _cleanup_generate_job_references(job_id)
             if release_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
-        return _job_view(execution_get_job(job_id))
+        return _job_view(execution_transient_receipt(job_id))
 
 
 def _monitor_has_work():
@@ -722,7 +724,7 @@ def stop_storyboard_jobs(story_id, timeout=15):
         job_id = str(job.get("id") or "")
         status = str(job.get("status") or "")
         if status in {"queued", "backlog"}:
-            execution_cancel_pending(job_id)
+            execution_cancel_pending_transient(job_id)
             _disarm_backlog(job_id)
         elif status in {"starting", "running"}:
             execution_request_stop(job_id)
@@ -737,7 +739,11 @@ def stop_storyboard_jobs(story_id, timeout=15):
     pending = set(active_ids)
     while pending:
         for job_id in list(pending):
-            status = str(execution_get_job(job_id).get("status") or "")
+            try:
+                status = str(job_status(job_id).get("status") or "")
+            except FileNotFoundError:
+                pending.remove(job_id)
+                continue
             if status in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
                 pending.remove(job_id)
         if not pending:

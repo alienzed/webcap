@@ -1035,6 +1035,12 @@ def test_storyboard_generate_scenes_reuses_existing_scene_generation_path():
     assert "el('storyboard-generate-scenes-btn').onclick = generateScenes;" in storyboard
     assert "return enqueueSceneGeneration(storyId, sceneId);" in storyboard
     assert ".storyboard-scenes-heading-actions" in css
+    heading = html.split('<div class="storyboard-scenes-heading">', 1)[1].split('</div>\n                            <div id="storyboard-scene-progression"', 1)[0]
+    left = heading.split('<div class="storyboard-scenes-heading-left">', 1)[1].split('</div>\n                                <div class="storyboard-view-toggle"', 1)[0]
+    actions = heading.split('<div class="storyboard-scenes-heading-actions">', 1)[1]
+    assert 'id="storyboard-generate-scenes-btn"' in left
+    assert 'id="storyboard-generate-scenes-btn"' not in actions
+    assert 'class="storyboard-director-header"' in actions
 
 
 def test_storyboard_generation_polling_preserves_existing_take_media_nodes():

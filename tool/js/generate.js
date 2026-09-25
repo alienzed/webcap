@@ -280,10 +280,9 @@
 
     var prompt = el('generate-prompt');
     prompt.value = String(result.sourcePrompt || result.resolvedPrompt || '');
-    prompt.dataset.modelId = String(generateState.modelId || '');
-    window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, prompt.value);
-
+    prompt.dataset.modelId = resultModelId || String(generateState.modelId || '');
     if (modelAvailable) {
+      window.localStorage.setItem('webcap.generate.prompt.' + resultModelId, prompt.value);
       var settings = result.settings && typeof result.settings === 'object' ? result.settings : {};
       [
         ['aspectRatio', 'generate-aspect'],

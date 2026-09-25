@@ -564,8 +564,9 @@ def test_legacy_storyboard_queue_migration_is_restart_idempotent(storyboard_fs):
 
     storyboard_generation.reconcile_startup()
 
-    old = execution_queue.get_job(legacy["id"])
-    assert old["status"] == "cancelled"
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(legacy["id"])
+    assert execution_queue.recent_snapshot(storyboard_generation.LEGACY_EXECUTION_LANE) == []
     current = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
     migrated = [
         job for job in current["jobs"]

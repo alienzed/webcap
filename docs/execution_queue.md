@@ -52,14 +52,18 @@ Generate, Storyboard Takes, and Test renditions are all short-form GPU inference
 That target means:
 
 - queue position is global across inference clients;
-- FIFO ordering is global unless the user explicitly reorders queued work;
-- valid inference may be queued while another inference job or Training owns the GPU;
-- GPU availability affects when work starts, not whether valid work may be queued;
-- a running inference job is not preempted;
-- each client may show a contextual projection of the same queue;
-- the Generate activity owns the full visual **Generation Queue** management surface.
+- new requested inference enters the ordered **Queue** even when Training, LLM, or another inference job owns the GPU;
+- **Backlog** is ordered parked work, used for restart-preserved inference and explicit queue parking;
+- the scheduler always takes Queue work before Backlog work, while preserving FIFO order inside each bucket;
+- when Queue is empty, Backlog drains automatically while inference scheduling is active;
+- a Backlog item may be explicitly added to the end of Queue when the user wants it sooner;
+- all queued work may be moved to Backlog without cancelling it;
+- Pause / Resume controls inference dispatch without moving jobs between Queue and Backlog;
+- a running inference job is never preempted;
+- each client may show a contextual projection of the same shared lane;
+- the global **Inference Queue** drawer is the authoritative scheduling-management surface.
 
-No automatic priorities, client weights, or fairness scheduler are required initially. Manual ordering is enough.
+No automatic client weights, fairness scheduler, or per-workspace scheduling controls are required. Queue-before-Backlog is the only priority rule.
 
 ## Migration state
 
@@ -164,7 +168,7 @@ Only one execution owner may hold the shared local GPU resource at a time.
 
 Training keeps its always-on observer because it is a long-running scheduler.
 
-Inference and LLM execution are demand-driven. WebCap startup does not contact ComfyUI or llama.cpp merely because the server is running. Enqueueing work reconciles the relevant durable lane and starts its worker; workers go dormant when their lane is idle or deliberately paused.
+Inference and LLM execution are demand-driven. WebCap startup does not contact ComfyUI or llama.cpp merely because the server is running. Persisted unfinished inference is reconciled into Backlog on restart without starting provider work. Enqueueing new inference or explicitly resuming inference starts its worker; once active, the worker drains Queue first and then Backlog. Workers go dormant when their lane is empty or deliberately paused.
 
 Queue reads are passive and must not become a dispatch mechanism. Navigating to Media, captioning, Training, Storyboard, Test, Generate, or another activity does not itself start provider work.
 
@@ -176,9 +180,10 @@ The permanent shell also exposes a read-only **Activity** drawer. Activity is a 
 
 The Activity drawer and Inference Queue drawer are sibling global surfaces: Activity answers **what is happening / what just finished**, while Inference Queue answers **what is scheduled and in what order**.
 
-- Generate exposes the full Generation Queue.
+- The Inference Queue drawer owns Queue / Backlog ordering, Pause / Resume, parking, promotion, cancellation, and stop controls.
+- Generate continues to show generation-specific state and results.
 - Storyboard projects its work as pending Take cards.
-- Test projects its work as Session progress/results.
+- Test projects its work as Session progress/results; a Test Session remains a domain grouping rather than a second scheduler.
 - Training keeps its own queue rows and progress.
 
 Storyboard and Test now use the common `inference` lane, so contextual queue positions are the same global positions shown by Generate. Contextual views may omit controls that do not fit their workflow, but they must not maintain competing queue state.

@@ -1589,10 +1589,10 @@ iframe {
 }
 
 .training-run-checkpoint-path {
-  min-height: 14px;
+  min-height: 16px;
   overflow-wrap: anywhere;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .training-run-stage-buttons {
@@ -1966,14 +1966,14 @@ iframe {
 
 .workspace-surface-training .training-runner-finish-schedule span {
   position: absolute;
-  right: -4px;
-  bottom: -5px;
-  min-width: 15px;
-  padding: 1px 3px;
+  right: -5px;
+  bottom: -6px;
+  min-width: 17px;
+  padding: 1px 4px;
   border-radius: 8px;
   background: var(--accent);
   color: var(--panel);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
 }
@@ -2823,7 +2823,7 @@ iframe {
   white-space: nowrap;
 }
 .test-generations-staged-copy strong { font-size: 12px; }
-.test-generations-staged-copy span { color: var(--muted); font-size: 10px; }
+.test-generations-staged-copy span { color: var(--muted); font-size: 11px; }
 .test-generations-base-row {
   padding-bottom: 5px;
   margin-bottom: 2px;
@@ -2854,7 +2854,7 @@ iframe {
   gap: 8px;
   padding: 0 2px 2px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: .05em;
 }
@@ -3126,7 +3126,7 @@ iframe {
 }
 .test-generations-video-time {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -3155,7 +3155,7 @@ iframe {
 .test-generations-result-error {
   overflow: hidden;
   color: var(--danger, #f87171);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3182,7 +3182,7 @@ iframe {
 .test-generations-result-elapsed {
   flex: 0 0 auto;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   white-space: nowrap;
 }
 .test-generations-result-secondary {
@@ -3196,7 +3196,7 @@ iframe {
   min-width: 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4086,11 +4086,11 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
 .training-folder-status {
   display: inline-block;
   margin-left: 5px;
-  padding: 1px 4px;
+  padding: 1px 5px;
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.2;
   text-transform: capitalize;
 }
@@ -4759,7 +4759,7 @@ html[data-theme="dark"] iframe {
   justify-content: space-between;
   gap: 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .director-model-load-copy span {
@@ -4771,7 +4771,7 @@ html[data-theme="dark"] iframe {
   min-width: 0;
   overflow: hidden;
   color: var(--text);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 750;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4804,7 +4804,7 @@ html[data-theme="dark"] iframe {
   align-items: center;
   gap: 9px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .director-activity-trend-legend span {
@@ -4812,7 +4812,7 @@ html[data-theme="dark"] iframe {
   align-items: center;
   gap: 4px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .director-activity-trend-legend i {
@@ -4828,7 +4828,7 @@ html[data-theme="dark"] iframe {
 
 .director-activity-trend-legend small {
   margin-left: auto;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .director-activity-trend svg {

@@ -47,8 +47,8 @@
           "suggestedDurationSeconds": {
             "type": "number",
             "exclusiveMinimum": 0,
-            "description": "Suggested MiniMax H3 clip duration in seconds for the current Storyboard workflow.",
-            "minimum": 4,
+            "description": "Suggested MiniMax H3 clip duration in seconds. Prefer 10-15 seconds; 9 seconds is the hard floor.",
+            "minimum": 9,
             "maximum": 15
           },
           "continuity": {

@@ -16,13 +16,13 @@ from .folder_state_store import read_folder_state
 from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path
 from .execution_queue import (
-    cancel_pending as execution_cancel_pending,
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
     recover_lane as execution_recover_lane,
     request_stop as execution_request_stop,
+    transient_receipt as execution_transient_receipt,
     update_job as execution_update_job,
 )
 
@@ -809,6 +809,11 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     return request, loras, include_base is not False
 
 
+def _cancel_shared_pending_job(job_id):
+    from .inference_runner import action as inference_action
+    return inference_action("cancel", job_id=str(job_id or "").strip())["job"]
+
+
 def _session_job_records(status):
     job_ids = status.get("inferenceJobs") if isinstance(status.get("inferenceJobs"), list) else []
     results = status.get("results") if isinstance(status.get("results"), list) else []
@@ -836,6 +841,11 @@ def _session_job_records(status):
         try:
             jobs.append(execution_get_job(job_id))
         except FileNotFoundError as exc:
+            try:
+                jobs.append(execution_transient_receipt(job_id))
+                continue
+            except FileNotFoundError:
+                pass
             if job_id in terminal_job_ids or session_terminal:
                 continue
             raise RuntimeError(
@@ -975,10 +985,14 @@ def _sync_inference_session(session_directory):
             for job in jobs:
                 if str(job.get("status") or "") not in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
                     continue
+                job_id = str(job.get("id") or "")
                 try:
-                    execution_consume_terminal_job(str(job.get("id") or ""))
+                    execution_consume_terminal_job(job_id)
                 except FileNotFoundError:
-                    pass
+                    try:
+                        execution_transient_receipt(job_id, consume=True)
+                    except FileNotFoundError:
+                        pass
         return visible
 
 def _record_skipped_inference(session_directory, job_id):
@@ -1258,7 +1272,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 queued_job = execution_get_job(job_id)
                 job_status = str(queued_job.get("status") or "")
                 if job_status in {"backlog", "queued"}:
-                    execution_cancel_pending(job_id)
+                    _cancel_shared_pending_job(job_id)
                 elif job_status in {"starting", "running"}:
                     execution_request_stop(job_id)
                     rollback_pending = True
@@ -1372,7 +1386,7 @@ def reconcile_startup():
                                 child_job = execution_get_job(str(child_id))
                                 child_status = str(child_job.get("status") or "")
                                 if child_status in {"backlog", "queued"}:
-                                    execution_cancel_pending(str(child_id))
+                                    _cancel_shared_pending_job(str(child_id))
                                 elif child_status in {"starting", "running"}:
                                     execution_request_stop(str(child_id))
                                     cleanup_pending = True
@@ -1514,7 +1528,7 @@ def cancel_queued(folder_path, job_id):
     status_payload = _read_status(session_directory) or {}
     for child in _session_job_records(status_payload):
         if str(child.get("status") or "") in {"backlog", "queued"}:
-            execution_cancel_pending(str(child.get("id") or ""))
+            _cancel_shared_pending_job(str(child.get("id") or ""))
     shutil.rmtree(session_directory)
     return {
         "operation": "test_queue_cancel",
@@ -1647,7 +1661,7 @@ def stop(folder_path, session_name=None, source=None):
         job_status = str(job.get("status") or "")
         job_id = str(job.get("id") or "")
         if job_status in {"backlog", "queued"}:
-            execution_cancel_pending(job_id)
+            _cancel_shared_pending_job(job_id)
         elif job_status in {"starting", "running"}:
             execution_request_stop(job_id)
     return _sync_inference_session(session_directory)

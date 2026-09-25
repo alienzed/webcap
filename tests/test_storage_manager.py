@@ -926,6 +926,29 @@ def test_generate_reference_bundle_refuses_unknown_or_symlinked_tokens(monkeypat
     assert outside.is_dir()
 
 
+def test_test_resolution_honors_explicit_set_folder_before_central_id_collision(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+
+    central = tmp_path / ".webcap" / "test-generations" / "same-id"
+    central.mkdir(parents=True)
+    _write_json(central / "test.json", {
+        "status": "completed",
+        "modelId": "minimax_h3",
+        "ownerFolder": "sets/central",
+    })
+
+    legacy = tmp_path / "sets" / "demo" / "test-generations" / "same-id"
+    legacy.mkdir(parents=True)
+    _write_json(legacy / "test.json", {
+        "status": "completed",
+        "modelId": "minimax_h3",
+    })
+
+    resolved = storage_manager._resolve_test("sets/demo", "same-id")
+
+    assert resolved == legacy.resolve()
+
+
 def test_storage_manager_lists_and_purges_central_test_sessions(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     session = tmp_path / ".webcap" / "test-generations" / "session-central"

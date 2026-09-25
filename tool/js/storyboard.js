@@ -692,12 +692,23 @@
 
     if (isFinite(generated) && generated >= 0) {
       var previous = storyState.director.activitySlotSample;
-      if (previous && generated >= previous.tokens && now > previous.time) {
+      var processed = isFinite(promptProcessed) ? promptProcessed : 0;
+      var changed = !previous || generated !== previous.tokens || processed !== previous.promptProcessed;
+      var lastChangeTime = previous ? previous.lastChangeTime : now;
+      if (previous && generated > previous.tokens && now > previous.time) {
         var speed = (generated - previous.tokens) / ((now - previous.time) / 1000);
         if (isFinite(speed) && speed > 0) parts.push((speed >= 10 ? speed.toFixed(0) : speed.toFixed(1)) + ' tok/s');
       }
-      storyState.director.activitySlotSample = { tokens: generated, time: now };
+      if (changed) lastChangeTime = now;
+      storyState.director.activitySlotSample = {
+        tokens: generated,
+        promptProcessed: processed,
+        time: now,
+        lastChangeTime: lastChangeTime
+      };
       parts.unshift(directorTokenCount(generated) + ' generated');
+      var stalledSeconds = Math.floor((now - lastChangeTime) / 1000);
+      if (stalledSeconds >= 30) parts.push('no token progress ' + String(stalledSeconds) + 's');
     }
 
     if (isFinite(promptTokens) && promptTokens > 0) {

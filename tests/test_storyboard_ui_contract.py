@@ -448,8 +448,8 @@ def test_storyboard_uses_shared_director_preference_without_eager_preload():
     common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     assert "DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model'" in common
-    assert "getSharedDirectorModelPreference('webcap.storyboard.directorModel')" in storyboard
-    assert "setSharedDirectorModelPreference(this.value)" in storyboard
+    assert "getDirectorModelPreference('webcap.storyboard.directorModel')" in storyboard
+    assert "setDirectorModelPreference('webcap.storyboard.directorModel', this.value)" in storyboard
     assert "scheduleDirectorPreload" not in storyboard
     assert "preloadDirectorModel" not in storyboard
 

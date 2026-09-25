@@ -1006,6 +1006,21 @@ def _resolve_test(folder, session_id):
     if not name or name in (".", "..") or "/" in name or "\\" in name:
         raise ValueError("Test Session storage ID is invalid.")
 
+    folder = str(folder or "").strip()
+    if folder:
+        raw_set_path = app_config.safe_join_fs_root(folder)
+        raw_root = raw_set_path / "test-generations"
+        raw_session = raw_root / name
+        if raw_root.is_symlink() or raw_session.is_symlink():
+            raise ValueError("Test Session storage path is symlinked.")
+        set_path = raw_set_path.resolve()
+        root = raw_root.resolve()
+        session = raw_session.resolve()
+        manifest = session / "test.json"
+        if root.parent != set_path or session.parent != root or manifest.is_symlink() or not manifest.is_file():
+            raise FileNotFoundError("Test Session is unavailable.")
+        return session
+
     central_root = _central_test_root()
     central_session = central_root / name
     if central_session.is_symlink():
@@ -1013,21 +1028,7 @@ def _resolve_test(folder, session_id):
     if central_session.is_dir() and (central_session / "test.json").is_file():
         return central_session.resolve()
 
-    folder = str(folder or "").strip()
-    if not folder:
-        raise FileNotFoundError("Test Session is unavailable.")
-    raw_set_path = app_config.safe_join_fs_root(folder)
-    raw_root = raw_set_path / "test-generations"
-    raw_session = raw_root / name
-    if raw_root.is_symlink() or raw_session.is_symlink():
-        raise ValueError("Test Session storage path is symlinked.")
-    set_path = raw_set_path.resolve()
-    root = raw_root.resolve()
-    session = raw_session.resolve()
-    manifest = session / "test.json"
-    if root.parent != set_path or session.parent != root or manifest.is_symlink() or not manifest.is_file():
-        raise FileNotFoundError("Test Session is unavailable.")
-    return session
+    raise FileNotFoundError("Test Session is unavailable.")
 
 
 def _resolve_h3_probe(item_id):

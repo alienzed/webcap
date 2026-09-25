@@ -275,6 +275,17 @@ def test_storyboard_director_tools_has_sparse_scene_healing_pass():
     assert 'llm_storyboard_target_busy(story_id, "repair")' in app
 
 
+def test_storyboard_restore_repair_does_not_use_story_wide_director_lock():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    restore = storyboard.split("function restoreLastRepair()", 1)[1].split("\n  function ", 1)[0]
+    assert "directorTargetBlocked" not in restore
+    route = app.split('if operation == "restore_last_scene_repair":', 1)[1].split('if operation == "restore_previous_prompt":', 1)[0]
+    assert 'llm_storyboard_target_busy(story_id, "scenes")' in route
+    assert "llm_storyboard_story_busy(story_id)" not in route
+
+
 def test_storyboard_can_develop_concept_directly_into_scenes():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

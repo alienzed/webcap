@@ -7,7 +7,8 @@
     payload: null,
     scan: null,
     scanPollTimer: null,
-    activeArea: ''
+    activeArea: '',
+    bulkDelete: null
   };
 
   function el(id) { return document.getElementById(id); }
@@ -163,6 +164,16 @@
       return;
     }
     var rows = (groups[area] || []).slice().sort(itemSort);
+    var purgeableTests = area === 'tests' ? rows.filter(function (item) { return !!item.purgeable; }) : [];
+    var bulkDelete = storageState.bulkDelete;
+    var bulkAction = area === 'tests' && purgeableTests.length
+      ? '<button type="button" class="review-captions-btn storage-delete-btn storage-bulk-delete-tests"' +
+        (bulkDelete ? ' disabled' : '') + '>' +
+        escapeHtml(bulkDelete
+          ? ('Deleting ' + String(bulkDelete.done) + ' / ' + String(bulkDelete.total) + '…')
+          : ('Delete completed (' + String(purgeableTests.length) + ')…')) +
+        '</button>'
+      : '';
     var empty = rows.length
       ? ''
       : '<div class="storage-empty">' + (area === 'tests'
@@ -189,6 +200,7 @@
         '<header class="storage-detail-header">' +
           '<button type="button" class="review-captions-btn storage-overview-back">‹ Overview</button>' +
           '<div><strong>' + escapeHtml(areaLabels[area] || area) + '</strong><span>' + rows.length + ' item' + (rows.length === 1 ? '' : 's') + ' · largest first</span></div>' +
+          '<div class="storage-detail-actions">' + bulkAction + '</div>' +
         '</header>' +
         '<section class="storage-section" data-storage-section="' + escapeHtml(area) + '">' +
           body + empty +
@@ -349,6 +361,73 @@
     return window.confirm('Permanently delete this ' + label + '?\n\n' + item.label + sizeText + consequence + '\n\nThis cannot be undone.');
   }
 
+  function testItemsForBulkDelete() {
+    var groups = storageState.payload && storageState.payload.items || {};
+    return (groups.tests || []).filter(function (item) { return !!item.purgeable; });
+  }
+
+  function confirmBulkDeleteTests(items) {
+    var allTests = storageState.payload && storageState.payload.items && storageState.payload.items.tests || [];
+    var protectedCount = Math.max(0, allTests.length - items.length);
+    var measured = items.filter(function (item) { return !!item.measured; });
+    var measuredBytes = measured.reduce(function (total, item) {
+      return total + Math.max(0, Number(item.bytes) || 0);
+    }, 0);
+    var lines = [
+      'Permanently delete ' + String(items.length) + ' completed Test Session' + (items.length === 1 ? '' : 's') + '?'
+    ];
+    if (measured.length) {
+      lines.push('Measured reclaimable space: about ' + bytes(measuredBytes) + '.');
+    }
+    if (protectedCount) {
+      lines.push(String(protectedCount) + ' active/protected session' + (protectedCount === 1 ? '' : 's') + ' will be kept.');
+    }
+    lines.push('', 'Each session is safety-checked again immediately before deletion.', '', 'This cannot be undone.');
+    return window.confirm(lines.join('\n'));
+  }
+
+  function bulkDeleteCompletedTests() {
+    if (storageState.bulkDelete) return Promise.resolve();
+    var items = testItemsForBulkDelete();
+    if (!items.length || !confirmBulkDeleteTests(items)) return Promise.resolve();
+
+    storageState.bulkDelete = { done: 0, total: items.length };
+    renderItems();
+
+    var deleted = 0;
+    var failures = [];
+    var chain = Promise.resolve();
+    items.forEach(function (item) {
+      chain = chain.then(function () {
+        return postJson('/fs/storage/purge', {
+          area: item.area,
+          id: item.id,
+          folder: item.folder || ''
+        }).then(function () {
+          deleted += 1;
+        }).catch(function (err) {
+          var message = String(err && err.message ? err.message : err || 'Delete failed.');
+          failures.push({ label: String(item.label || item.id), error: message });
+          window.reportConsoleError('Storage', 'Could not delete Test Session "' + String(item.label || item.id) + '": ' + message);
+        }).then(function () {
+          storageState.bulkDelete.done += 1;
+          renderItems();
+        });
+      });
+    });
+
+    return chain.then(function () {
+      storageState.bulkDelete = null;
+      return refresh().then(function () {
+        var status = el('storage-status');
+        if (status) {
+          status.textContent = String(deleted) + ' Test Session' + (deleted === 1 ? '' : 's') + ' deleted' +
+            (failures.length ? ' · ' + String(failures.length) + ' skipped/failed (see Console)' : '') + '.';
+        }
+      });
+    });
+  }
+
   function findItem(area, id, folder) {
     return allItems().find(function (item) {
       return item.area === area && item.id === id && String(item.folder || '') === String(folder || '');
@@ -365,6 +444,10 @@
     if (event.target.closest('.storage-overview-back')) {
       storageState.activeArea = '';
       render();
+      return;
+    }
+    if (event.target.closest('.storage-bulk-delete-tests')) {
+      bulkDeleteCompletedTests();
       return;
     }
     var button = event.target.closest('button[data-area][data-id]');

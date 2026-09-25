@@ -39,7 +39,6 @@ _activity_lock = threading.Lock()
 _log_relay_lock = threading.Lock()
 _log_relay_offset = 0
 _logger = logging.getLogger(__name__)
-_logger.setLevel(logging.INFO)
 _activity = {
     "active": False,
     "phase": "idle",
@@ -308,7 +307,7 @@ def _relay_log_updates():
         return
     for line in data.decode("utf-8", errors="replace").splitlines():
         if _llama_log_line_is_meaningful(line):
-            _logger.info("[llama.cpp] %s", line)
+            print("[llama.cpp] " + line, flush=True)
 
 
 def _slot_snapshot(model_id=""):
@@ -923,13 +922,14 @@ def run_contract(model_id, contract, gpu_reserved=False):
         )
         try:
             settings = _director_config()
-            _logger.info(
-                "Director request starting: operation=%s model=%s prompt_chars=%d context=%s max_output=%s",
-                operation or "unknown",
-                model_id,
-                len(prompt),
-                settings.get("context_size") if settings.get("context_size") is not None else "auto",
-                settings.get("max_tokens") if settings.get("max_tokens") is not None else "auto",
+            print(
+                "[Director] request starting: operation="
+                + (operation or "unknown")
+                + " model=" + model_id
+                + " prompt_chars=" + str(len(prompt))
+                + " context=" + str(settings.get("context_size") if settings.get("context_size") is not None else "auto")
+                + " max_output=" + str(settings.get("max_tokens") if settings.get("max_tokens") is not None else "auto"),
+                flush=True,
             )
             _set_activity(
                 "preparing",
@@ -985,12 +985,13 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 usage=result.get("usage"),
                 timings=result.get("timings"),
             )
-            _logger.info(
-                "Director request completed: operation=%s model=%s usage=%s timings=%s",
-                operation or "unknown",
-                model_id,
-                json.dumps(result.get("usage") or {}, ensure_ascii=False),
-                json.dumps(result.get("timings") or {}, ensure_ascii=False),
+            print(
+                "[Director] request completed: operation="
+                + (operation or "unknown")
+                + " model=" + model_id
+                + " usage=" + json.dumps(result.get("usage") or {}, ensure_ascii=False)
+                + " timings=" + json.dumps(result.get("timings") or {}, ensure_ascii=False),
+                flush=True,
             )
             _relay_log_updates()
             return result

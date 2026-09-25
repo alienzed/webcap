@@ -1050,3 +1050,49 @@ def test_run_contract_honors_stop_requested_before_runtime_work(monkeypatch):
             )
     finally:
         storyboard_llm_runtime.clear_stop_request()
+
+
+def test_chat_hard_stop_does_not_restart_or_unload_runtime(monkeypatch):
+    calls = []
+    storyboard_llm_runtime.clear_stop_request()
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
+    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "mode": "local",
+            "max_tokens": None,
+            "context_size": None,
+        },
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_model_status",
+        lambda _model_id: pytest.fail("Hard Stop must skip model cleanup that could restart llama.cpp."),
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_unload_model",
+        lambda _model_id: pytest.fail("Hard Stop must not try to unload from the killed llama.cpp server."),
+    )
+
+    def interrupted_completion(*_args, **_kwargs):
+        storyboard_llm_runtime._stop_requested.set()
+        calls.append("interrupted")
+        raise RuntimeError("connection closed")
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_http_json", interrupted_completion)
+
+    try:
+        with pytest.raises(RuntimeError, match="connection closed"):
+            storyboard_llm_runtime.chat(
+                "qwen",
+                [{"role": "user", "content": "Write."}],
+                gpu_reserved=True,
+            )
+        assert calls == ["interrupted"]
+    finally:
+        storyboard_llm_runtime.clear_stop_request()

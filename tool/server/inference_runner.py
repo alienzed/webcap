@@ -520,7 +520,7 @@ def enqueue_generate(request, label=""):
     return _job_view(execution_get_job(job["id"]))
 
 
-def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_id=""):
+def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_id="", deferred=False):
     _ensure_execution_reconciled()
     story_id = str(story_id or "").strip()
     scene_id = str(scene_id or "").strip()
@@ -537,7 +537,7 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
     frozen_request = copy.deepcopy(request)
     for key in ("entryState", "exitState", "seedMode", "referenceRecords"):
         frozen_request.pop(key, None)
-    status = _new_job_status()
+    status = "backlog" if deferred else _new_job_status()
     job = execution_enqueue(
         EXECUTION_LANE,
         {
@@ -555,13 +555,14 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
         },
         initial_status=status,
     )
-    if status == "backlog":
+    if status == "backlog" and not deferred:
         _arm_backlog(job["id"])
-    _start_worker_for_requested_inference()
+    if not deferred:
+        _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
 
-def enqueue_test(request, context, label=""):
+def enqueue_test(request, context, label="", deferred=False):
     _ensure_execution_reconciled()
     context = copy.deepcopy(context) if isinstance(context, dict) else {}
     folder = str(context.get("folder") or "").strip()
@@ -569,7 +570,7 @@ def enqueue_test(request, context, label=""):
     candidate_kind = str(context.get("candidateKind") or "").strip()
     if not folder or not session_id or candidate_kind not in {"base", "lora"}:
         raise ValueError("Test inference requires folder, session, and candidate context.")
-    status = _new_job_status()
+    status = "backlog" if deferred else _new_job_status()
     job = execution_enqueue(
         EXECUTION_LANE,
         {
@@ -589,9 +590,10 @@ def enqueue_test(request, context, label=""):
         },
         initial_status=status,
     )
-    if status == "backlog":
+    if status == "backlog" and not deferred:
         _arm_backlog(job["id"])
-    _start_worker_for_requested_inference()
+    if not deferred:
+        _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
 
 

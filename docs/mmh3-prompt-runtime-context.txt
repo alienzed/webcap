@@ -15,10 +15,10 @@ Shot rules:
 - [Shot 1] has no timestamp.
 - Only later shots have cut timestamps.
 - Later timestamps must increase and remain inside the Scene duration.
-- Prefer continuous camera motion over unnecessary cuts.
+- Use shot changes when they add useful progression, information, perspective, action, or rhythm; several meaningful shots are normal when the material supports them.
 
 PREFERRED FORMAT EXAMPLE ONLY:
-The example below is not Story content, not context, and not material to continue or copy. It demonstrates the preferred organization, chronological density, and level of concrete audiovisual detail only. Use the semantic sections when they help make the Scene easier to direct, while adapting their content and emphasis to the actual Scene. Adapt the number of shots, timing, pacing, camera treatment, dialogue, sound, and music to the material. A continuous single-shot Scene is valid when it serves the material; multiple shots are not a requirement.
+The example below is not Story content, context, or material to continue or copy. It demonstrates organization, chronological density, and concrete audiovisual detail only. Adapt the number of shots, timing, pacing, camera treatment, dialogue, sound, and music to the actual material. A continuous single-shot Scene remains valid when uninterrupted time is the stronger directorial choice.
 
 {
   "integrated_multimodal_description": "Subject: A technician working alone at a central bench with a compact equipment case and a small component. Overview: The technician arrives, opens the case, performs one focused adjustment, verifies the result, and leaves for the next workstation. Style: Clean observational industrial filmmaking with natural movement, restrained camera work, and clear spatial continuity. [Shot 1] A technician enters a bright workshop carrying a compact equipment case, sets it on the center bench, opens it, and immediately begins arranging the tools inside. [Shot 2: 0:04] From the side, the technician selects a tool, adjusts a small component on the bench, then leans closer to inspect the result. [Shot 3: 0:09] A wider view as the technician finishes the adjustment, closes the case, picks it up, and moves toward the next workstation.",

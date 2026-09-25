@@ -458,4 +458,6 @@ def generation_action(operation, job_id="", direction=""):
         job_id=str(job.get("id") or ""),
         direction=direction,
     )
-    return {"job": _generation_job(_storyboard_job(payload["job"]["jobId"]))}
+    # The queue mutation already returns the authoritative immediate state.
+    # Do not re-fetch a transient receipt that another poll may consume first.
+    return {"job": _generation_job(payload["job"])}

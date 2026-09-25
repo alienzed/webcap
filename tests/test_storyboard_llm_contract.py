@@ -56,6 +56,7 @@ def test_write_prompt_request_is_deliberately_local_and_manual_first():
     assert request["operation"] == "write_prompt"
     assert request["output"] == "json"
     assert "Rain-soaked neo-noir horror" in prompt
+    assert "[DIRECTOR CONTEXT]" in prompt
     assert "[STORY INVARIANTS]" in prompt
     assert "Character: Mara" in prompt
     assert "dark bob, pale raincoat" in prompt
@@ -298,9 +299,10 @@ def test_expand_concept_is_creative_but_not_scene_planning():
     assert "Rise and fall of a New York gangster." in prompt
     assert "[STORY VISUAL / ATMOSPHERE]" in prompt
     assert "High-fashion runway editorial." in prompt
+    assert "[DIRECTOR CONTEXT]" not in prompt
     assert "Treat the supplied Visual / Atmosphere as authoritative" in prompt
     assert "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere" in prompt
-    assert "Develop the narrative arc" in prompt
+    assert "do not force conventional plot, conflict, or character arcs" in prompt
     assert "do not break the Story into Scenes yet" in prompt
     assert "do not write MiniMax H3 prompts" in prompt
 

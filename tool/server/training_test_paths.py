@@ -32,9 +32,19 @@ def _configured_test_root(stage):
 
 
 def test_source_root(stage):
-    """Return the effective browsable Test LoRA root for a model stage."""
-    root, subfolder = _configured_test_root(stage)
-    return root / subfolder if subfolder else root
+    """Return the configured browsable Test LoRA root for a model stage."""
+    root, _subfolder = _configured_test_root(stage)
+    return root
+
+
+def test_source_for_set(stage, set_name):
+    """Return the Copy to Test destination for a Set, relative to the browsable Test root."""
+    selected_set_name = str(set_name or "").strip()
+    if not selected_set_name or selected_set_name in (".", ".."):
+        raise ValueError("The current set has no usable folder name.")
+    _root, subfolder = _configured_test_root(stage)
+    parts = ([subfolder] if subfolder else []) + [selected_set_name]
+    return PurePosixPath(*parts).as_posix()
 
 
 def test_source_path(stage, relative_path=""):

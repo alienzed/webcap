@@ -167,11 +167,30 @@ def test_storyboard_save_barrier_waits_for_inflight_autosaves():
 
     assert "storySavePromise: null" in storyboard
     assert "sceneSavePromises: {}" in storyboard
+    assert "pendingStorySave: null" in storyboard
     assert "var previous = storyState.storySavePromise;" in storyboard
-    assert "var previous = storyState.sceneSavePromises[sceneId];" in storyboard
+    assert "var saveKey = sceneSaveKey(storyId, sceneId);" in storyboard
+    assert "var previous = storyState.sceneSavePromises[saveKey];" in storyboard
     assert "return Promise.all(pending).then(function () {" in storyboard
-    assert "saveStoryNow().catch(reportError);" in storyboard
-    assert "saveSceneNow(sceneId).catch(reportError);" in storyboard
+    assert "saveStoryNow(storyTarget);" in storyboard
+    assert "saveSceneNow(target.sceneId, target);" in storyboard
+
+
+def test_storyboard_autosaves_capture_story_and_scene_identity_before_debounce():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    story_schedule = storyboard.split("function scheduleStorySave()", 1)[1].split("\n  function ", 1)[0]
+    assert "storyState.pendingStorySave = {" in story_schedule
+    assert "storyId: storyState.story.id" in story_schedule
+    assert "payload: storyPayloadFromUi()" in story_schedule
+    assert "saveStoryNow(target)" in story_schedule
+
+    scene_schedule = storyboard.split("function scheduleSceneSave(sceneId)", 1)[1].split("\n  function ", 1)[0]
+    assert "var saveKey = sceneSaveKey(storyId, sceneId);" in scene_schedule
+    assert "storyId: storyId" in scene_schedule
+    assert "sceneId: sceneId" in scene_schedule
+    assert "payload: scenePayloadFromUi(sceneId)" in scene_schedule
+    assert "saveSceneNow(sceneId, target)" in scene_schedule
 
 
 def test_storyboard_routine_autosave_state_does_not_pollute_global_console():
@@ -192,11 +211,11 @@ def test_storyboard_story_switching_and_save_results_are_story_scoped():
     assert "Storyboard Story response identity mismatch." in open_block
     assert open_block.index("requestId !== storyState.openStoryRequestId") < open_block.index("storyState.story = payload.story;")
 
-    story_save = storyboard.split("function saveStoryNow()", 1)[1].split("\n  function ", 1)[0]
+    story_save = storyboard.split("function saveStoryNow(target)", 1)[1].split("\n  function ", 1)[0]
     assert "String(storyState.story.id || '') === String(storyId)" in story_save
     assert story_save.index("String(storyState.story.id || '') === String(storyId)") < story_save.index("storyState.story = payload.story;")
 
-    scene_save = storyboard.split("function saveSceneNow(sceneId)", 1)[1].split("\n  function ", 1)[0]
+    scene_save = storyboard.split("function saveSceneNow(sceneId, target)", 1)[1].split("\n  function ", 1)[0]
     assert "String(storyState.story.id || '') === String(storyId)" in scene_save
     assert scene_save.index("String(storyState.story.id || '') === String(storyId)") < scene_save.index("storyState.story = payload.story;")
 

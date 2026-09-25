@@ -369,6 +369,8 @@
         storyState.story.development = canonical.development || null;
         storyState.story.updatedAt = canonical.updatedAt;
         storyState.sequenceExport = null;
+      storyState.sequenceEncodingWarnings = [];
+      storyState.sequenceWarningsVisible = false;
         renderScenes();
         renderStoryReadiness();
         var developButton = el('storyboard-develop-btn');
@@ -2865,6 +2867,8 @@
       if (previousStoryId !== payload.story.id && storyState.storyCollapsed) setStoryCollapsed(false);
       if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
       storyState.sequenceExport = null;
+      storyState.sequenceEncodingWarnings = [];
+      storyState.sequenceWarningsVisible = false;
       storyState.newTakeCounts = {};
       return refreshGenerationQueue(storyId).then(function () {
         if (requestId !== storyState.openStoryRequestId) return null;
@@ -2902,6 +2906,8 @@
       storyState.story = payload.story;
       if (storyState.storyCollapsed) setStoryCollapsed(false);
       storyState.sequenceExport = null;
+      storyState.sequenceEncodingWarnings = [];
+      storyState.sequenceWarningsVisible = false;
       storyState.newTakeCounts = {};
       storyState.generationJobs = {};
       Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
@@ -2931,6 +2937,8 @@
       if (deletedWasOpen) {
         storyState.story = null;
         storyState.sequenceExport = null;
+        storyState.sequenceEncodingWarnings = [];
+        storyState.sequenceWarningsVisible = false;
         storyState.newTakeCounts = {};
         storyState.activeSceneId = '';
         storyState.generationJobs = {};

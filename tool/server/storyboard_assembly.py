@@ -111,6 +111,154 @@ def _probe_stream_signature(path):
     ]
 
 
+
+def _stream_of_type(signature, stream_type):
+    return next(
+        (stream for stream in signature if stream.get("codec_type") == stream_type),
+        None,
+    )
+
+
+def _signature_key(signature):
+    return json.dumps(signature, sort_keys=True, separators=(",", ":"))
+
+
+def _stream_differences(signature, baseline):
+    differences = []
+    video = _stream_of_type(signature, "video")
+    expected_video = _stream_of_type(baseline, "video")
+    audio = _stream_of_type(signature, "audio")
+    expected_audio = _stream_of_type(baseline, "audio")
+
+    if video and expected_video:
+        actual_resolution = (video.get("width"), video.get("height"))
+        expected_resolution = (expected_video.get("width"), expected_video.get("height"))
+        if actual_resolution != expected_resolution:
+            differences.append(
+                "resolution "
+                + str(actual_resolution[0]) + "x" + str(actual_resolution[1])
+                + " (expected "
+                + str(expected_resolution[0]) + "x" + str(expected_resolution[1]) + ")"
+            )
+        for key, label in (
+            ("codec_name", "video codec"),
+            ("pix_fmt", "pixel format"),
+            ("r_frame_rate", "frame rate"),
+            ("time_base", "time base"),
+        ):
+            if video.get(key) != expected_video.get(key):
+                differences.append(
+                    label + " " + str(video.get(key) or "none")
+                    + " (expected " + str(expected_video.get(key) or "none") + ")"
+                )
+    elif video != expected_video:
+        differences.append("video stream presence differs")
+
+    if bool(audio) != bool(expected_audio):
+        differences.append("audio stream " + ("present" if audio else "missing")
+                           + " (expected " + ("present" if expected_audio else "none") + ")")
+    elif audio and expected_audio:
+        for key, label in (
+            ("codec_name", "audio codec"),
+            ("sample_rate", "audio sample rate"),
+            ("channels", "audio channels"),
+            ("channel_layout", "audio layout"),
+        ):
+            if audio.get(key) != expected_audio.get(key):
+                differences.append(
+                    label + " " + str(audio.get(key) or "none")
+                    + " (expected " + str(expected_audio.get(key) or "none") + ")"
+                )
+
+    if signature != baseline and not differences:
+        differences.append("media stream parameters differ")
+    return differences
+
+
+def _analyze_streams(items):
+    signatures = [_probe_stream_signature(item["sourcePath"]) for item in items]
+    keys = [_signature_key(signature) for signature in signatures]
+    counts = {key: keys.count(key) for key in set(keys)}
+    baseline_index = max(range(len(keys)), key=lambda index: (counts[keys[index]], -index))
+    baseline = signatures[baseline_index]
+    warnings = []
+    for item, signature in zip(items, signatures):
+        if signature == baseline:
+            continue
+        warnings.append({
+            "sceneId": item["sceneId"],
+            "sceneTitle": item["sceneTitle"],
+            "takeId": item["takeId"],
+            "mediaPath": item["mediaPath"],
+            "differences": _stream_differences(signature, baseline),
+        })
+    return {
+        "requiresEncoding": bool(warnings),
+        "baseline": baseline,
+        "signatures": signatures,
+        "warnings": warnings,
+    }
+
+
+def _normalize_clip(source, source_signature, baseline, destination):
+    target_video = _stream_of_type(baseline, "video")
+    if not target_video or not target_video.get("width") or not target_video.get("height"):
+        raise RuntimeError("Selected Takes do not expose a usable video resolution for encoding.")
+
+    width = int(target_video["width"])
+    height = int(target_video["height"])
+    frame_rate = str(target_video.get("r_frame_rate") or "").strip()
+    video_filter = (
+        "scale=" + str(width) + ":" + str(height)
+        + ":force_original_aspect_ratio=decrease,"
+        + "pad=" + str(width) + ":" + str(height) + ":(ow-iw)/2:(oh-ih)/2,"
+        + "setsar=1"
+    )
+    if frame_rate and frame_rate != "0/0":
+        video_filter += ",fps=" + frame_rate
+
+    target_audio = _stream_of_type(baseline, "audio")
+    source_audio = _stream_of_type(source_signature, "audio")
+    command = ["ffmpeg", "-y", "-i", str(source)]
+    synthetic_audio = False
+
+    if target_audio and not source_audio:
+        sample_rate = str(target_audio.get("sample_rate") or "48000")
+        channels = int(target_audio.get("channels") or 2)
+        layout = str(target_audio.get("channel_layout") or ("mono" if channels == 1 else "stereo"))
+        command.extend([
+            "-f", "lavfi",
+            "-i", "anullsrc=channel_layout=" + layout + ":sample_rate=" + sample_rate,
+        ])
+        synthetic_audio = True
+
+    command.extend([
+        "-map", "0:v:0",
+        "-vf", video_filter,
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-crf", "18",
+        "-preset", "medium",
+    ])
+
+    if target_audio:
+        command.extend(["-map", "1:a:0" if synthetic_audio else "0:a:0"])
+        command.extend([
+            "-c:a", "aac",
+            "-ar", str(target_audio.get("sample_rate") or "48000"),
+            "-ac", str(target_audio.get("channels") or 2),
+        ])
+        if synthetic_audio:
+            command.append("-shortest")
+    else:
+        command.append("-an")
+
+    command.extend(["-movflags", "+faststart", str(destination)])
+    proc = subprocess.run(command, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError("ffmpeg Take encoding failed: " + (proc.stderr or proc.stdout or "").strip())
+
+
 def _ffconcat_quote(path):
     return str(path).replace("'", "'\\''")
 
@@ -129,19 +277,25 @@ def _write_json_atomic(path, payload):
             os.unlink(tmp_name)
 
 
-def _assemble(story_id, items):
-    baseline = _probe_stream_signature(items[0]["sourcePath"])
-    for item in items[1:]:
-        if _probe_stream_signature(item["sourcePath"]) != baseline:
-            raise RuntimeError(
-                "Selected Takes do not have matching media streams. "
-                "This first assembly path only performs a lossless splice; choose Takes with matching "
-                "resolution/codec/audio settings rather than silently re-encoding them."
-            )
+def _assemble(story_id, items, *, analysis=None, encode=False):
+    analysis = analysis or _analyze_streams(items)
+    if analysis["requiresEncoding"] and not encode:
+        raise RuntimeError("Selected Takes require encoding before they can be assembled.")
 
     export_dir = _story_dir(story_id) / "exports"
     export_dir.mkdir(parents=True, exist_ok=True)
     destination = export_dir / "selected-sequence.mp4"
+
+    normalized_dir = None
+    sources = [item["sourcePath"] for item in items]
+    if analysis["requiresEncoding"]:
+        normalized_dir = tempfile.TemporaryDirectory(prefix=".selected-sequence-normalized-", dir=str(export_dir))
+        normalized_root = Path(normalized_dir.name)
+        sources = []
+        for index, (item, signature) in enumerate(zip(items, analysis["signatures"])):
+            normalized = normalized_root / ("clip-" + str(index).zfill(3) + ".mp4")
+            _normalize_clip(item["sourcePath"], signature, analysis["baseline"], normalized)
+            sources.append(normalized)
 
     list_fd, list_name = tempfile.mkstemp(prefix=".selected-sequence-", suffix=".ffconcat", dir=str(export_dir))
     out_fd, out_name = tempfile.mkstemp(prefix=".selected-sequence-", suffix=".mp4", dir=str(export_dir))
@@ -151,8 +305,8 @@ def _assemble(story_id, items):
     try:
         with os.fdopen(list_fd, "w", encoding="utf-8") as handle:
             handle.write("ffconcat version 1.0\n")
-            for item in items:
-                handle.write("file '" + _ffconcat_quote(item["sourcePath"]) + "'\n")
+            for source in sources:
+                handle.write("file '" + _ffconcat_quote(source) + "'\n")
 
         command = [
             "ffmpeg",
@@ -182,6 +336,7 @@ def _assemble(story_id, items):
             "createdAt": _utc_now(),
             "output": "exports/selected-sequence.mp4",
             "selection": selection,
+            "encoded": bool(analysis["requiresEncoding"]),
             "items": [
                 {
                     "sceneId": item["sceneId"],
@@ -203,6 +358,7 @@ def _assemble(story_id, items):
             "createdAt": manifest["createdAt"],
             "itemCount": len(items),
             "selection": selection,
+            "encoded": manifest["encoded"],
             "current": True,
         }
     finally:
@@ -216,14 +372,22 @@ def _assemble(story_id, items):
                 temp_output.unlink()
         except OSError:
             pass
+        if normalized_dir is not None:
+            normalized_dir.cleanup()
 
 
-def export_selected_sequence(story_id):
+def export_selected_sequence(story_id, *, encode=False):
     story_id = str(story_id or "").strip()
     if not story_id:
         raise ValueError("Story ID is required.")
     _story, items = selected_sequence(story_id)
-    return _assemble(story_id, items)
+    analysis = _analyze_streams(items)
+    if analysis["requiresEncoding"] and not encode:
+        return {
+            "requiresEncoding": True,
+            "warnings": analysis["warnings"],
+        }
+    return _assemble(story_id, items, analysis=analysis, encode=encode)
 
 
 def current_export(story_id):

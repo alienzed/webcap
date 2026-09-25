@@ -68,6 +68,38 @@ def test_inference_monitor_is_dormant_without_requested_work(inference_root):
     assert inference_runner._monitor_has_work() is True
 
 
+def test_inference_clear_all_cancels_pending_but_not_active(inference_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "_cleanup_generate_job_references", lambda _job_id: None)
+    active = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    backlog = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(active["id"])
+    inference_runner._arm_backlog(backlog["id"])
+
+    result = inference_runner.action("clear_all")
+
+    assert result["cleared"] == 2
+    assert execution_queue.get_job(active["id"])["status"] == "running"
+    assert execution_queue.get_job(queued["id"])["status"] == "cancelled"
+    assert execution_queue.get_job(backlog["id"])["status"] == "cancelled"
+    with inference_runner._backlog_lock:
+        assert backlog["id"] not in inference_runner._armed_backlog_ids
+
+
 def test_inference_snapshot_is_passive_and_does_not_reconcile_provider(inference_root, monkeypatch):
     inference_runner._startup_reconciled = False
     touched = []

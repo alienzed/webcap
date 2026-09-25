@@ -423,6 +423,10 @@ def test_storyboard_director_has_non_modal_live_activity():
     assert "directorActivityRequest('/fs/system_status')" in storyboard
     assert "Loading model…" in storyboard
     assert "Generating response…" in storyboard
+    assert "function directorLiveStats(activity)" in storyboard
+    assert "activity.slot" in storyboard
+    assert "' generated'" in storyboard
+    assert "' output Auto'" in storyboard
     assert ".storyboard-director-activity" in css
     assert "position: absolute;" in css
 

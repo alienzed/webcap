@@ -130,10 +130,8 @@ def reserve_gpu_for_external_work(owner):
         if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
             return False
         resource_owner = execution_resource_owner()
-        if resource_owner and resource_owner != owner:
+        if resource_owner:
             return False
-        if resource_owner == owner:
-            return True
         return reserve_execution_resource(owner)
 
 

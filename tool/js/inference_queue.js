@@ -277,9 +277,7 @@
     var drawer = el('inference-queue-drawer');
     var host = el('inference-queue-list');
     var summary = el('inference-queue-summary');
-    var countsEl = el('inference-queue-counts');
-    var pauseToggle = el('inference-queue-pause-toggle');
-    if (!drawer || !host || !summary || !countsEl || !pauseToggle) return;
+    if (!drawer || !host || !summary) return;
 
     drawer.classList.toggle('hidden', !state.open);
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
@@ -430,10 +428,11 @@
 
   function bind() {
     var toggles = document.querySelectorAll('[data-inference-queue-toggle]');
+    var drawer = el('inference-queue-drawer');
     var close = el('inference-queue-close');
     var clearAll = el('inference-queue-clear-all');
     var list = el('inference-queue-list');
-    if (!toggles.length || !close || !list) return;
+    if (!toggles.length || !drawer || !close || !list) return;
 
     Array.prototype.forEach.call(toggles, function (toggle) {
       toggle.onclick = function () { setOpen(!state.open); };

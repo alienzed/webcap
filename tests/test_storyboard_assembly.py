@@ -74,17 +74,47 @@ def test_assemble_losslessly_splices_matching_selected_takes(storyboard_fs, monk
     assert "0:v:0" in observed["command"]
 
 
-def test_assemble_rejects_mismatched_streams_instead_of_reencoding(storyboard_fs, monkeypatch):
-    story, _first_scene, _second_scene, _first_take, _second_take = _story_with_selected_videos()
-    _loaded, items = storyboard_assembly.selected_sequence(story["id"])
-    signatures = iter([
-        [{"codec_type": "video", "codec_name": "h264", "width": 768, "height": 768}],
-        [{"codec_type": "video", "codec_name": "h264", "width": 1280, "height": 720}],
-    ])
-    monkeypatch.setattr(storyboard_assembly, "_probe_stream_signature", lambda _path: next(signatures))
+def test_mismatched_streams_return_warnings_until_encoding_is_explicit(storyboard_fs, monkeypatch):
+    story, _first_scene, second_scene, _first_take, second_take = _story_with_selected_videos()
+    signatures = [
+        [{"codec_type": "video", "codec_name": "h264", "width": 768, "height": 768, "pix_fmt": "yuv420p", "r_frame_rate": "24/1"}],
+        [{"codec_type": "video", "codec_name": "h264", "width": 1280, "height": 720, "pix_fmt": "yuv420p", "r_frame_rate": "24/1"}],
+    ]
+    monkeypatch.setattr(storyboard_assembly, "_probe_stream_signature", lambda path: signatures[0] if path.name == "first.mp4" else signatures[1])
 
-    with pytest.raises(RuntimeError, match="lossless splice"):
-        storyboard_assembly._assemble(story["id"], items)
+    result = storyboard_assembly.export_selected_sequence(story["id"])
+
+    assert result["requiresEncoding"] is True
+    assert len(result["warnings"]) == 1
+    assert result["warnings"][0]["sceneId"] == second_scene["id"]
+    assert result["warnings"][0]["takeId"] == second_take["id"]
+    assert result["warnings"][0]["differences"] == ["resolution 1280x720 (expected 768x768)"]
+
+
+def test_explicit_encoding_normalizes_then_splices_mismatched_streams(storyboard_fs, monkeypatch):
+    story, _first_scene, _second_scene, _first_take, _second_take = _story_with_selected_videos()
+    signatures = [
+        [{"codec_type": "video", "codec_name": "h264", "width": 768, "height": 768, "pix_fmt": "yuv420p", "r_frame_rate": "24/1"}],
+        [{"codec_type": "video", "codec_name": "h264", "width": 1280, "height": 720, "pix_fmt": "yuv420p", "r_frame_rate": "24/1"}],
+    ]
+    monkeypatch.setattr(storyboard_assembly, "_probe_stream_signature", lambda path: signatures[0] if path.name == "first.mp4" else signatures[1])
+    monkeypatch.setattr(storyboard_assembly, "normalize_path_permissions", lambda _path: None)
+
+    commands = []
+
+    def fake_run(command, capture_output, text):
+        commands.append(command)
+        with open(command[-1], "wb") as handle:
+            handle.write(b"video")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(storyboard_assembly.subprocess, "run", fake_run)
+
+    output = storyboard_assembly.export_selected_sequence(story["id"], encode=True)
+
+    assert output["encoded"] is True
+    assert sum("libx264" in command for command in commands) == 2
+    assert commands[-1][commands[-1].index("-c") + 1] == "copy"
 
 
 def test_selected_sequence_rejects_non_video_take(storyboard_fs):

@@ -77,6 +77,7 @@ function normalizeAppConfigShape(cfg) {
   if (typeof out.storyboard.director.llama_server !== 'string') out.storyboard.director.llama_server = '';
   if (!Number.isInteger(out.storyboard.director.port)) out.storyboard.director.port = 8189;
   if (out.storyboard.director.context_size !== null && !Number.isInteger(out.storyboard.director.context_size)) out.storyboard.director.context_size = null;
+  if (!Object.prototype.hasOwnProperty.call(out.storyboard.director, 'max_tokens')) out.storyboard.director.max_tokens = 16384;
   if (out.storyboard.director.max_tokens !== null && !Number.isInteger(out.storyboard.director.max_tokens)) out.storyboard.director.max_tokens = null;
   if (typeof out.primer.template !== 'string') out.primer.template = '';
   if (!out.analysis || typeof out.analysis !== 'object') out.analysis = {};

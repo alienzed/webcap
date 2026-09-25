@@ -409,6 +409,10 @@ def assert_hard_stop_supported():
         return
 
 
+def clear_stop_request():
+    _stop_requested.clear()
+
+
 def stop_owned_server():
     assert_hard_stop_supported()
     _stop_requested.set()
@@ -936,7 +940,8 @@ def run_contract(model_id, contract, gpu_reserved=False):
 
     operation = str(contract.get("operation") or "").strip()
     with _request_lock:
-        _stop_requested.clear()
+        if _stop_requested.is_set():
+            raise RuntimeError("LLM request stopped.")
         _set_activity(
             "preparing",
             model_id=model_id,

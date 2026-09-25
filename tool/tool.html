@@ -1743,9 +1743,9 @@
                                     <span class="app-settings-note">Leave blank to let llama.cpp use the selected model's context.</span>
                                 </label>
                                 <label class="app-settings-field">
-                                    <span class="app-settings-field-label">Max output tokens override</span>
+                                    <span class="app-settings-field-label">Max output tokens</span>
                                     <input id="app-settings-storyboard-max-tokens" type="number" min="1" step="1" placeholder="Auto">
-                                    <span class="app-settings-note">Leave blank to let the runtime generate until completion or the available context is exhausted.</span>
+                                    <span class="app-settings-note">Defaults to 16384. Clear the field for Auto, or set another limit.</span>
                                 </label>
                             </div>
                             <p class="app-settings-help">Local mode discovers Director GGUFs from <code>&lt;Models Root&gt;/text_encoders</code>. Remote mode discovers models from the endpoint's <code>/models</code> API. Model selection stays in Storyboard.</p>

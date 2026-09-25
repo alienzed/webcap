@@ -936,8 +936,8 @@ def _validate_developed_plan(plan, target_scene_count=None, story_invariants=Non
         if isinstance(duration_value, bool) or not isinstance(duration_value, (int, float)):
             raise ValueError("Developed Story Scene duration must be numeric.")
         duration = float(duration_value)
-        if duration < 4 or duration > 15:
-            raise ValueError("Developed Story Scene duration must be between 4 and 15 seconds.")
+        if duration < 9 or duration > 15:
+            raise ValueError("Developed Story Scene duration must be between 9 and 15 seconds.")
 
         continuity = item.get("continuity")
         if not isinstance(continuity, dict) or not continuity_keys.issubset(continuity):
@@ -1065,8 +1065,8 @@ def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id="", op
             duration_override = float(duration_override)
         except (TypeError, ValueError) as exc:
             raise ValueError("Refined Scene duration must be numeric.") from exc
-        if duration_override < 6 or duration_override > 15:
-            raise ValueError("Refined Scene duration must be between 6 and 15 seconds.")
+        if duration_override < 9 or duration_override > 15:
+            raise ValueError("Refined Scene duration must be between 9 and 15 seconds.")
         scene_patch["durationSeconds"] = duration_override
 
     scene = _normalize_scene(scene_id, scene_patch, existing=current)

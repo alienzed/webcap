@@ -622,7 +622,7 @@
 
   function directorBytesGiB(bytes) {
     var value = Number(bytes);
-    return isFinite(value) && value >= 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
+    return isFinite(value) && value > 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
   }
 
   function directorTokenCount(value) {

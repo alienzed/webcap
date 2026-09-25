@@ -1192,14 +1192,15 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   top: 10px;
   right: 10px;
   bottom: calc(var(--shell-status-height) + 10px);
-  width: min(410px, calc(100% - 60px));
+  width: min(440px, calc(100% - 60px));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--panel);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, .34);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 98%, transparent);
+  box-shadow: 0 20px 54px rgba(0, 0, 0, .34);
+  backdrop-filter: blur(10px);
 }
 
 .activity-monitor-drawer.hidden {
@@ -1208,12 +1209,12 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .activity-monitor-drawer-header {
   min-width: 0;
-  min-height: 54px;
+  min-height: 62px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 11px 13px 11px 15px;
   border-bottom: 1px solid var(--border);
   background: var(--panel-soft);
 }
@@ -1224,26 +1225,28 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .activity-monitor-drawer-header strong {
   display: block;
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.15;
 }
 
 .activity-monitor-drawer-header span {
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .activity-monitor-close {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 7px;
   background: transparent;
   color: var(--muted);
   font-size: 20px;
@@ -1254,6 +1257,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .activity-monitor-close:hover,
 .activity-monitor-close:focus-visible {
   border-color: var(--border);
+  background: var(--hover);
   color: var(--text);
   outline: none;
 }
@@ -1261,11 +1265,11 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .activity-monitor-list {
   min-height: 0;
   overflow: auto;
-  padding: 11px;
+  padding: 13px 12px 15px;
 }
 
 .activity-monitor-section {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .activity-monitor-section:last-child {
@@ -1273,43 +1277,46 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .activity-monitor-section-heading {
-  min-height: 24px;
+  min-height: 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 2px 5px;
+  margin-bottom: 4px;
+  padding: 0 3px 7px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
 }
 
 .activity-monitor-section-heading strong {
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 850;
-  letter-spacing: .07em;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .065em;
   text-transform: uppercase;
 }
 
 .activity-monitor-section-heading span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .activity-monitor-card {
   min-width: 0;
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
   align-items: start;
-  gap: 9px;
-  margin-bottom: 7px;
-  padding: 10px;
+  gap: 10px;
+  margin-top: 7px;
+  padding: 11px 10px 11px 11px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 9px;
   background: var(--panel-soft);
 }
 
 .activity-monitor-card.status-running,
 .activity-monitor-card.status-starting {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 54%, var(--border));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 75%, transparent);
 }
 
 .activity-monitor-dot {
@@ -1322,6 +1329,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .activity-monitor-dot.active {
   background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .activity-monitor-dot.background {
@@ -1342,24 +1350,27 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .activity-monitor-copy strong {
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.25;
 }
 
 .activity-monitor-copy span {
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .activity-monitor-copy small {
-  margin-top: 3px;
+  margin-top: 4px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
+  line-height: 1.25;
 }
 
 .activity-monitor-progress {
-  height: 3px;
-  margin-top: 7px;
+  height: 4px;
+  margin-top: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--border-soft);
@@ -1374,20 +1385,20 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .activity-monitor-open {
   align-self: center;
-  min-height: 27px;
-  padding: 4px 8px;
+  min-height: 29px;
+  padding: 4px 9px;
   border: 1px solid var(--border);
-  border-left: 2px solid var(--accent);
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 750;
   cursor: pointer;
 }
 
 .activity-monitor-open:hover,
 .activity-monitor-open:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
   background: var(--hover);
   outline: none;
 }
@@ -1396,7 +1407,6 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .activity-monitor-queue-row {
   width: 100%;
   border: 0;
-  background: transparent;
   color: var(--text);
   font: inherit;
   cursor: pointer;
@@ -1404,14 +1414,21 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .activity-monitor-recent-row {
   min-width: 0;
-  min-height: 36px;
+  min-height: 43px;
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 1fr) 34px;
   align-items: center;
-  gap: 7px;
-  padding: 5px 7px;
-  border-radius: 6px;
+  gap: 8px;
+  padding: 6px 7px;
+  border-radius: 7px;
+  background: transparent;
   text-align: left;
+}
+
+.activity-monitor-recent-row + .activity-monitor-recent-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 52%, transparent);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 .activity-monitor-recent-row:hover,
@@ -1421,13 +1438,20 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .activity-monitor-recent-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, #68bc8d 12%, transparent);
   color: #68bc8d;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   text-align: center;
 }
 
 .activity-monitor-recent-row.failed .activity-monitor-recent-icon {
+  background: color-mix(in srgb, #e87777 12%, transparent);
   color: #e87777;
 }
 
@@ -1444,43 +1468,49 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .activity-monitor-recent-copy strong {
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.25;
 }
 
 .activity-monitor-recent-copy small {
-  margin-top: 1px;
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10.5px;
+  line-height: 1.2;
 }
 
 .activity-monitor-recent-row time {
+  justify-self: end;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .activity-monitor-queue-row {
-  min-height: 44px;
+  min-height: 50px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  padding: 8px 10px;
+  gap: 10px;
+  margin-top: 7px;
+  padding: 9px 11px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 9px;
   background: var(--panel-soft);
   text-align: left;
 }
 
 .activity-monitor-queue-row:hover:not(:disabled),
 .activity-monitor-queue-row:focus-visible:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
   background: var(--hover);
   outline: none;
 }
 
 .activity-monitor-queue-row:disabled {
   cursor: default;
-  opacity: .82;
+  opacity: .84;
 }
 
 .activity-monitor-queue-row > span:first-child {
@@ -1493,26 +1523,35 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .activity-monitor-queue-row strong {
-  font-size: 11px;
+  font-size: 12.5px;
+  line-height: 1.2;
 }
 
 .activity-monitor-queue-row small {
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10.5px;
+  line-height: 1.2;
 }
 
 .activity-monitor-chevron {
   color: var(--muted);
-  font-size: 16px;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .activity-monitor-empty {
-  padding: 14px 8px;
-  border: 1px dashed var(--border);
-  border-radius: 7px;
+  min-height: 52px;
+  display: grid;
+  place-items: center;
+  margin-top: 7px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 1.35;
   text-align: center;
 }
 

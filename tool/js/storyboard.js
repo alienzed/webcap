@@ -3013,6 +3013,16 @@
     flushPendingSaves().then(function () {
       return assemblyRequest({ storyId: storyId });
     }).then(function (payload) {
+      if (payload.requiresEncoding) {
+        if (storyState.story && storyState.story.id === storyId) {
+          storyState.sequenceEncodingWarnings = payload.warnings || [];
+          storyState.sequenceWarningsVisible = false;
+          renderSequencePreview();
+          setSaveState('Saved');
+          return;
+        }
+        throw new Error('This Story requires encoding. Open its Sequence view to review warnings and encode it.');
+      }
       if (storyState.story && storyState.story.id === storyId) {
         storyState.sequenceExport = payload.export || null;
         renderSequencePreview();

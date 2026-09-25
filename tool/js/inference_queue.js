@@ -65,9 +65,19 @@
 
   function jobDetail(job) {
     var parts = [];
-    if (job.modelId) parts.push(job.modelId);
-    if (job.providerStatus) parts.push(String(job.providerStatus).replace(/_/g, ' '));
+    if (job.modelId) parts.push(String(job.modelId).replace(/_/g, ' '));
+    if (job.providerStatus) parts.push('Provider ' + String(job.providerStatus).replace(/_/g, ' '));
     return parts.join(' · ');
+  }
+
+  function jobStatusLabel(job) {
+    var status = String(job && job.status || '');
+    if (status === 'queued') return job.queuePosition ? 'Queue #' + String(job.queuePosition) : 'Queued';
+    if (status === 'backlog') return job.armed ? 'Waiting' : 'Backlog';
+    if (status === 'starting') return 'Starting';
+    if (status === 'running') return 'Running';
+    if (status === 'stopping') return 'Stopping';
+    return status.replace(/_/g, ' ') || 'Unknown';
   }
 
   function syncShellInferenceState(jobs) {
@@ -155,9 +165,8 @@
     var status = String(job.status || '');
 
     if (position) {
-      position.textContent = status === 'queued' && job.queuePosition
-        ? '#' + String(job.queuePosition)
-        : (status === 'backlog' && job.armed ? 'waiting' : status.replace(/_/g, ' '));
+      position.textContent = jobStatusLabel(job);
+      position.title = position.textContent;
     }
     if (title) title.textContent = jobClientLabel(job);
     if (context) context.textContent = jobContext(job);
@@ -199,6 +208,27 @@
         backlogCancel.textContent = 'Cancel';
         actions.appendChild(backlogCancel);
       } else if (status === 'queued') {
+        var up = document.createElement('button');
+        up.type = 'button';
+        up.className = 'review-captions-btn inference-queue-icon-action';
+        up.dataset.inferenceQueueAction = 'reorder_up';
+        up.dataset.jobId = String(job.jobId || '');
+        up.textContent = '↑';
+        up.title = 'Move earlier';
+        up.setAttribute('aria-label', 'Move inference job earlier');
+        up.disabled = Number(job.queuePosition || 0) <= 1;
+        actions.appendChild(up);
+
+        var down = document.createElement('button');
+        down.type = 'button';
+        down.className = 'review-captions-btn inference-queue-icon-action';
+        down.dataset.inferenceQueueAction = 'reorder_down';
+        down.dataset.jobId = String(job.jobId || '');
+        down.textContent = '↓';
+        down.title = 'Move later';
+        down.setAttribute('aria-label', 'Move inference job later');
+        actions.appendChild(down);
+
         var cancel = document.createElement('button');
         cancel.type = 'button';
         cancel.className = 'review-captions-btn';
@@ -227,7 +257,9 @@
     var drawer = el('inference-queue-drawer');
     var host = el('inference-queue-list');
     var summary = el('inference-queue-summary');
-    if (!drawer || !host || !summary) return;
+    var countsEl = el('inference-queue-counts');
+    var pauseToggle = el('inference-queue-pause-toggle');
+    if (!drawer || !host || !summary || !countsEl || !pauseToggle) return;
 
     drawer.classList.toggle('hidden', !state.open);
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
@@ -243,9 +275,25 @@
       queued ? String(queued) + ' queued' : '',
       backlog ? String(backlog) + ' backlog' : ''
     ].filter(Boolean).join(' · ');
-    summary.textContent = state.queue.paused
-      ? String(state.queue.pauseReason || 'Inference is temporarily waiting.')
-      : (String(state.queue.waitReason || '').trim() || counts || 'No inference work');
+    var waitReason = String(state.queue.waitReason || '').trim();
+    if (state.queue.paused) {
+      summary.textContent = String(state.queue.pauseReason || 'Queue paused.');
+    } else if (waitReason) {
+      summary.textContent = waitReason;
+    } else {
+      summary.textContent = jobs.length ? 'Ready to run when resources are available.' : 'No inference work';
+    }
+    countsEl.textContent = counts;
+    countsEl.classList.toggle('hidden', !counts);
+
+    var hasSchedulable = jobs.some(function (job) {
+      return ['queued', 'backlog'].indexOf(String(job.status || '')) !== -1;
+    });
+    pauseToggle.classList.toggle('hidden', !state.queue.paused && !hasSchedulable);
+    pauseToggle.textContent = state.queue.paused ? 'Resume' : 'Pause';
+    pauseToggle.dataset.inferenceQueueAction = state.queue.paused ? 'resume_queue' : 'pause_queue';
+    pauseToggle.title = state.queue.paused ? 'Resume inference scheduling' : 'Pause queued inference after the current job';
+    pauseToggle.setAttribute('aria-label', pauseToggle.title);
 
     host.innerHTML = '';
     if (!jobs.length) {
@@ -351,10 +399,15 @@
   }
 
   function action(operation, jobId) {
-    return postJson('/fs/inference', {
+    var payload = {
       operation: operation,
       jobId: String(jobId || '')
-    }).then(function () {
+    };
+    if (operation === 'reorder_up' || operation === 'reorder_down') {
+      payload.operation = 'reorder';
+      payload.direction = operation === 'reorder_up' ? 'up' : 'down';
+    }
+    return postJson('/fs/inference', payload).then(function () {
       window.dispatchEvent(new CustomEvent('webcap:inference-queue-changed', {
         detail: { operation: operation, jobId: String(jobId || '') }
       }));
@@ -368,12 +421,18 @@
     var toggles = document.querySelectorAll('[data-inference-queue-toggle]');
     var close = el('inference-queue-close');
     var list = el('inference-queue-list');
-    if (!toggles.length || !close || !list) return;
+    var drawer = el('inference-queue-drawer');
+    var pauseToggle = el('inference-queue-pause-toggle');
+    if (!toggles.length || !close || !list || !drawer || !pauseToggle) return;
 
     Array.prototype.forEach.call(toggles, function (toggle) {
       toggle.onclick = function () { setOpen(!state.open); };
     });
     close.onclick = function () { setOpen(false); };
+    pauseToggle.onclick = function () {
+      var operation = String(pauseToggle.dataset.inferenceQueueAction || '');
+      if (operation) action(operation, '');
+    };
     list.onclick = function (event) {
       var actionButton = event.target.closest('[data-inference-queue-action]');
       if (actionButton) {
@@ -383,6 +442,12 @@
       var link = event.target.closest('[data-inference-queue-open]');
       if (link) openJobScreen(link);
     };
+    document.addEventListener('pointerdown', function (event) {
+      if (!state.open || drawer.contains(event.target)) return;
+      var toggle = event.target.closest('[data-inference-queue-toggle]');
+      if (toggle) return;
+      setOpen(false);
+    });
     window.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && state.open) setOpen(false);
     });

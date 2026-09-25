@@ -4823,6 +4823,8 @@ html[data-theme="dark"] iframe {
 
 .director-activity-trend-ram { background: #7db7ff; }
 .director-activity-trend-vram { background: #7dd3c7; }
+.director-activity-trend-gpu { background: #f6c85f; }
+.director-activity-trend-thermal { background: #ef8a62; }
 
 .director-activity-trend-legend small {
   margin-left: auto;
@@ -4838,7 +4840,9 @@ html[data-theme="dark"] iframe {
 
 .director-activity-trend-grid,
 .director-activity-trend-ram-line,
-.director-activity-trend-vram-line {
+.director-activity-trend-vram-line,
+.director-activity-trend-gpu-line,
+.director-activity-trend-thermal-line {
   fill: none;
   vector-effect: non-scaling-stroke;
 }
@@ -4856,5 +4860,15 @@ html[data-theme="dark"] iframe {
 
 .director-activity-trend-vram-line {
   stroke: #7dd3c7;
+  stroke-width: 1.7;
+}
+
+.director-activity-trend-gpu-line {
+  stroke: #f6c85f;
+  stroke-width: 1.7;
+}
+
+.director-activity-trend-thermal-line {
+  stroke: #ef8a62;
   stroke-width: 1.7;
 }

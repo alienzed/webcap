@@ -617,7 +617,20 @@
     }
 
     var modelId = String(activity && activity.model || '');
-    if (storyState.director.activityLoadModelId !== modelId) {
+    var runtimeBaseline = activity && activity.loadBaseline && typeof activity.loadBaseline === 'object'
+      ? activity.loadBaseline
+      : null;
+    var runtimeRamBytes = runtimeBaseline ? Number(runtimeBaseline.ramBytes) : NaN;
+    var runtimeVramBytes = runtimeBaseline ? Number(runtimeBaseline.vramBytes) : NaN;
+    var hasRuntimeBaseline = isFinite(runtimeRamBytes) && isFinite(runtimeVramBytes);
+
+    if (hasRuntimeBaseline) {
+      storyState.director.activityLoadModelId = modelId;
+      storyState.director.activityLoadBaseline = {
+        ramBytes: runtimeRamBytes,
+        vramBytes: runtimeVramBytes
+      };
+    } else if (storyState.director.activityLoadModelId !== modelId) {
       storyState.director.activityLoadModelId = modelId;
       storyState.director.activityLoadBaseline = storyState.director.activityLastMemory || sample;
     } else if (!storyState.director.activityLoadBaseline && sample) {

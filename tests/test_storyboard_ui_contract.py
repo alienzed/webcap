@@ -372,7 +372,8 @@ def test_storyboard_director_requests_use_shared_llm_queue():
     assert "'/fs/director/job?job='" in storyboard
     assert "queued: 'Queued…'" in storyboard
     assert "function directorActivityForTargetQueue(activity, queue)" in storyboard
-    assert "directorQueueSnapshot(false)" in storyboard
+    assert "values[0] && values[0].queue" in storyboard
+    assert '"queue": queue' in app
     assert "'Next in queue'" in storyboard
     assert "'Queue #'" in storyboard
     assert "'Waiting for Director'" in storyboard
@@ -1040,6 +1041,9 @@ def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     assert "function syncGenerationJobCard(job)" in storyboard
+    assert "webcap:inference-queue-snapshot" in storyboard
+    assert "function syncStoryboardInferenceSnapshot(queue)" in storyboard
+    assert "var delay = generationJobIsExecuting(current) ? 2000 : 8000;" in storyboard
     assert "syncGenerationJobCard(job);" in storyboard
     assert "card.querySelector('.storyboard-take-pending-media strong')" in storyboard
     active_block = storyboard.split("if (generationJobIsActive(job)) {", 1)[1].split("return;", 1)[0]

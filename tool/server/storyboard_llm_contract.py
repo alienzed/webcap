@@ -242,8 +242,8 @@ def build_request(story, scene_id, operation, instruction=""):
             "and keep it grounded; do not invent plot events, "
             "relationships, one-off extras, or new locations. Do not plan Scenes.\n\n"
             "Return exactly this JSON shape:\n"
-            "{\"invariants\":[{\"kind\":\"character\",\"title\":\"Elena\",\"text\":\"White woman in her early 30s with fair skin, hazel eyes, shoulder-length dark brown wavy hair, slim build, oval face, and a small mole beneath her left eye.\"},"
-            "{\"kind\":\"location\",\"title\":\"Elena's apartment\",\"text\":\"Small older apartment with faded green walls, narrow rooms, dark wood trim, and warm practical lamps.\"}]}\n"
+            "{\"invariants\":[{\"kind\":\"character\",\"title\":\"Elena\",\"text\":\"Woman in her early 30s with shoulder-length dark brown wavy hair, slim build, oval face, and a small mole beneath her left eye.\"},"
+            "{\"kind\":\"location\",\"title\":\"Elena's apartment\",\"text\":\"Small older apartment with faded green walls, narrow rooms, dark wood trim, and two brass wall sconces.\"}]}\n"
             "If there are no useful recurring characters or locations, return {\"invariants\":[]}."
         )
         return {
@@ -257,9 +257,7 @@ def build_request(story, scene_id, operation, instruction=""):
         concept = _clean(story.get("concept"))
         if not concept:
             raise ValueError("Story concept / overview is required to expand a Story.")
-        blocks = [
-            "[DIRECTOR CONTEXT]\n" + director_context,
-        ]
+        blocks = []
         title = _clean(story.get("title"))
         if title:
             blocks.append("[STORY TITLE]\n" + title)
@@ -272,8 +270,9 @@ def build_request(story, scene_id, operation, instruction=""):
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append(
             "[CURRENT TASK]\nExpand this Story concept into a richer creative overview that can drive later Scene planning. "
-            "Develop the narrative arc, important characters, setting, conflict, progression, and ending direction when "
-            "the seed supports them. Be creatively useful and fill in sensible connective material rather than asking "
+            "Develop the experience, progression, subjects or characters, setting, themes, relationships, or ending direction "
+            "that the seed actually supports; do not force conventional plot, conflict, or character arcs onto a concept that "
+            "does not call for them. Be creatively useful and fill in sensible connective material rather than asking "
             "questions. Preserve explicit facts from the original concept and Story invariants. Treat the supplied Visual / Atmosphere as authoritative: "
             "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere in the expanded prose. Expand the narrative within it. Do not break the Story into "
             "Scenes yet and do not write MiniMax H3 prompts. Return only the expanded Story concept as polished prose."
@@ -306,7 +305,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
             "Aim for " + str(target_scene_count) + " Scenes, but prioritize coherent, substantial Scenes over mechanically hitting the count. Combine small related beats when they fit naturally; split material when a separate Scene improves clarity, pacing, or generatability. "
-            "Keep every Scene between 9 and 15 seconds, normally aiming for 10-15 seconds. Use the available duration efficiently, normally with multiple meaningful shots, cuts, or distinct visual beats when the material supports them; use a single continuous shot when uninterrupted time is the stronger directorial choice. Preserve coherent narrative progression, explicit entry/exit continuity, supplied Story facts, Story invariants, recurring character identity, wardrobe, location, and persistent visible state across the sequence. "
+            "Keep every Scene between 9 and 15 seconds, normally aiming for 10-15 seconds. Use the available duration efficiently, normally with multiple meaningful shots, cuts, or distinct visual beats when the material supports them; use a single continuous shot when uninterrupted time is the stronger directorial choice. Preserve coherent progression appropriate to the concept, explicit entry/exit states, continuity where relevant, supplied Story facts, Story invariants, recurring character identity, wardrobe, location, and persistent visible state across the sequence. "
             "For every Scene, invariantRefs must contain the exact kind/title pairs of only the supplied character and location invariants actually present or materially relevant in that Scene; use an empty array when none apply. Do not introduce a character or location merely to justify a reference. WebCap will inject those invariant descriptions verbatim into the final H3 prompt, so do not rewrite their identity details merely for variety. "
             "Provide complete structured H3 content for every Scene now, not a placeholder; WebCap will render the exact model-facing field labels and spacing. Be creatively useful, but invent supporting performance, camera behavior, sound, dialogue, or music only when they serve the supplied concept; none is mandatory. "
             "Each Scene prompt must be independently generatable and follow the supplied H3 base prompt rules. "

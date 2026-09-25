@@ -3123,6 +3123,10 @@
     return document.querySelector('.storyboard-scene[data-scene-id="' + CSS.escape(sceneId) + '"]');
   }
 
+  function sceneSaveKey(storyId, sceneId) {
+    return String(storyId || '') + ':' + String(sceneId || '');
+  }
+
   function scenePayloadFromUi(sceneId) {
     var root = sceneElement(sceneId);
     if (!root) throw new Error('Scene editor is missing for ' + sceneId + '.');
@@ -3202,7 +3206,8 @@
     setSaveState('Saving...');
     var storyId = target.storyId;
     var scenePayload = target.payload;
-    var previous = storyState.sceneSavePromises[sceneId];
+    var saveKey = sceneSaveKey(storyId, sceneId);
+    var previous = storyState.sceneSavePromises[saveKey];
     var promise = (previous ? previous.catch(function () {}) : Promise.resolve()).then(function () {
       return request({
         operation: 'update_scene',
@@ -3215,33 +3220,35 @@
         storyState.story = payload.story;
         setSaveState('Saved');
       }
-      if (storyState.sceneSavePromises[sceneId] === promise) delete storyState.sceneSaveErrors[sceneId];
+      if (storyState.sceneSavePromises[saveKey] === promise) delete storyState.sceneSaveErrors[saveKey];
       return refreshLibrary();
     }).catch(function (err) {
-      if (storyState.sceneSavePromises[sceneId] === promise) storyState.sceneSaveErrors[sceneId] = err;
+      if (storyState.sceneSavePromises[saveKey] === promise) storyState.sceneSaveErrors[saveKey] = err;
       throw err;
     }).finally(function () {
-      if (storyState.sceneSavePromises[sceneId] === promise) delete storyState.sceneSavePromises[sceneId];
+      if (storyState.sceneSavePromises[saveKey] === promise) delete storyState.sceneSavePromises[saveKey];
     });
-    storyState.sceneSavePromises[sceneId] = promise;
+    storyState.sceneSavePromises[saveKey] = promise;
     return promise;
   }
 
   function scheduleSceneSave(sceneId) {
     if (!storyState.story) return;
-    var existing = storyState.sceneTimers[sceneId];
+    var storyId = storyState.story.id;
+    var saveKey = sceneSaveKey(storyId, sceneId);
+    var existing = storyState.sceneTimers[saveKey];
     if (existing) clearTimeout(existing.timer);
     var target = {
-      storyId: storyState.story.id,
+      storyId: storyId,
       sceneId: sceneId,
       payload: scenePayloadFromUi(sceneId)
     };
     setSaveState('Unsaved changes');
     target.timer = setTimeout(function () {
-      if (storyState.sceneTimers[sceneId] === target) delete storyState.sceneTimers[sceneId];
+      if (storyState.sceneTimers[saveKey] === target) delete storyState.sceneTimers[saveKey];
       saveSceneNow(sceneId, target).catch(reportError);
     }, 450);
-    storyState.sceneTimers[sceneId] = target;
+    storyState.sceneTimers[saveKey] = target;
   }
 
   function flushPendingSaves() {
@@ -3252,23 +3259,23 @@
       storyState.pendingStorySave = null;
       saveStoryNow(storyTarget);
     }
-    Object.keys(storyState.sceneTimers).forEach(function (sceneId) {
-      var target = storyState.sceneTimers[sceneId];
+    Object.keys(storyState.sceneTimers).forEach(function (saveKey) {
+      var target = storyState.sceneTimers[saveKey];
       clearTimeout(target.timer);
-      delete storyState.sceneTimers[sceneId];
-      saveSceneNow(sceneId, target);
+      delete storyState.sceneTimers[saveKey];
+      saveSceneNow(target.sceneId, target);
     });
 
     var pending = [];
     if (storyState.storySavePromise) pending.push(storyState.storySavePromise);
-    Object.keys(storyState.sceneSavePromises).forEach(function (sceneId) {
-      pending.push(storyState.sceneSavePromises[sceneId]);
+    Object.keys(storyState.sceneSavePromises).forEach(function (saveKey) {
+      pending.push(storyState.sceneSavePromises[saveKey]);
     });
 
     return Promise.all(pending).then(function () {
       if (storyState.storySaveError) throw storyState.storySaveError;
-      var failedSceneIds = Object.keys(storyState.sceneSaveErrors);
-      if (failedSceneIds.length) throw storyState.sceneSaveErrors[failedSceneIds[0]];
+      var failedSaveKeys = Object.keys(storyState.sceneSaveErrors);
+      if (failedSaveKeys.length) throw storyState.sceneSaveErrors[failedSaveKeys[0]];
     });
   }
 

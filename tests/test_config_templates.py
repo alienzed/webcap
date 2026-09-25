@@ -212,6 +212,24 @@ def test_training_repeat_reference_epochs_defaults_to_90():
     assert normalized["training"]["repeat_reference_epochs"] == 90
 
 
+def test_filesystem_output_root_defaults_blank_and_preserves_configured_path():
+    defaulted = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "training": {},
+    })
+    assert defaulted["filesystem"]["output_root"] == ""
+
+    configured = config_module.validate_config_payload({
+        "filesystem": {
+            "root": "C:/training",
+            "output_root": "W:/webcap-output",
+            "models": "",
+        },
+        "training": {},
+    })
+    assert configured["filesystem"]["output_root"] == "W:/webcap-output"
+
+
 def test_storyboard_director_limits_default_to_auto_and_accept_overrides():
     normalized = config_module.validate_config_payload({
         "filesystem": {"root": "C:/training", "models": ""},

@@ -215,7 +215,7 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert scene_schema["properties"]["suggestedDurationSeconds"]["minimum"] == 9
     assert scene_schema["properties"]["suggestedDurationSeconds"]["maximum"] == 15
     assert "none is mandatory" in prompt
-    assert "roughly 120-250 words in each Scene's integrated multimodal description" in prompt
+    assert "roughly 200-400 words in each Scene's integrated multimodal description" in prompt
     assert "ballpark targets, not minimums" in prompt
     assert "do not keep elaborating once the Scene is fully described" in prompt
     assert "EXISTING SECOND PROMPT" not in prompt

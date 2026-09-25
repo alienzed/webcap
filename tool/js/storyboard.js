@@ -45,7 +45,8 @@
       activityLoadBaseline: null,
       activityLoadModelId: '',
       activityTarget: null,
-      activityErrorReported: false
+      activityErrorReported: false,
+      activitySlotSample: null
     }
   };
 
@@ -674,6 +675,47 @@
     return parts;
   }
 
+  function directorLiveStats(activity) {
+    var slot = activity && activity.slot && typeof activity.slot === 'object' ? activity.slot : null;
+    if (!slot || String(activity.phase || '') !== 'generating') {
+      storyState.director.activitySlotSample = null;
+      return [];
+    }
+
+    var now = Date.now();
+    var generated = Number(slot.generatedTokens);
+    var promptTokens = Number(slot.promptTokens);
+    var promptProcessed = Number(slot.promptProcessed);
+    var contextSize = Number(slot.contextSize || activity.contextSize);
+    var maxTokens = Number(slot.maxTokens);
+    var parts = [];
+
+    if (isFinite(generated) && generated >= 0) {
+      var previous = storyState.director.activitySlotSample;
+      if (previous && generated >= previous.tokens && now > previous.time) {
+        var speed = (generated - previous.tokens) / ((now - previous.time) / 1000);
+        if (isFinite(speed) && speed > 0) parts.push((speed >= 10 ? speed.toFixed(0) : speed.toFixed(1)) + ' tok/s');
+      }
+      storyState.director.activitySlotSample = { tokens: generated, time: now };
+      parts.unshift(directorTokenCount(generated) + ' generated');
+    }
+
+    if (isFinite(promptTokens) && promptTokens > 0) {
+      if (isFinite(promptProcessed) && promptProcessed >= 0 && promptProcessed < promptTokens) {
+        parts.push(directorTokenCount(promptProcessed) + '/' + directorTokenCount(promptTokens) + ' prompt');
+      } else {
+        parts.push(directorTokenCount(promptTokens) + ' prompt');
+      }
+    }
+
+    if (isFinite(contextSize) && contextSize > 0) {
+      var used = (isFinite(promptTokens) ? promptTokens : 0) + (isFinite(generated) ? generated : 0);
+      parts.push(directorTokenCount(used) + '/' + directorTokenCount(contextSize) + ' ctx');
+    }
+    if (isFinite(maxTokens)) parts.push(maxTokens < 0 ? 'output Auto' : ('max ' + directorTokenCount(maxTokens) + ' out'));
+    return parts;
+  }
+
   function directorMemorySample(system) {
     var gpu = system && system.gpu;
     var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
@@ -987,6 +1029,10 @@
       directorCompletionStats(activity).forEach(function (stat) {
         parts.push('<span>' + escapeHtml(stat) + '</span>');
       });
+    } else {
+      directorLiveStats(activity).forEach(function (stat) {
+        parts.push('<span>' + escapeHtml(stat) + '</span>');
+      });
     }
 
     var gpu = system && system.gpu;
@@ -1075,6 +1121,7 @@
     if (storyState.director.pendingOrder.length === 1) {
       storyState.director.activityStartedAt = Date.now() / 1000;
       storyState.director.activityHistory = [];
+      storyState.director.activitySlotSample = null;
       storyState.director.activityErrorReported = false;
       renderDirectorActivity({ phase: 'preparing', active: true, startedAt: storyState.director.activityStartedAt }, null);
     } else {

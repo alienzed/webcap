@@ -218,8 +218,6 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None, s
     candidate = test_directory / name
     sidecar = candidate.with_suffix(".webcap.json")
 
-    if resolved_source is not None and candidate.is_file() and not _is_webcap_staged_lora(candidate, model):
-        raise ValueError("Only WebCap-staged Test candidates can be removed from Test Generations.")
     if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
         raise RuntimeError("Staged Test candidate is not a regular file: " + name)
     if sidecar.is_symlink() or (sidecar.exists() and not sidecar.is_file()):

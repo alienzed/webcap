@@ -268,9 +268,8 @@ def _log_tail():
 def _llama_log_line_is_meaningful(line):
     normalized = str(line or "").casefold()
     return any(token in normalized for token in (
-        " error",
-        " warning",
-        " warn",
+        "error",
+        "warn",
         "cuda",
         "cpu",
         "offload",
@@ -353,13 +352,6 @@ def _slot_snapshot(model_id=""):
             return max(0, int(value))
         except (TypeError, ValueError):
             return 0
-
-    def _positive_float(value):
-        try:
-            result = float(value)
-        except (TypeError, ValueError):
-            return 0.0
-        return result if result > 0 else 0.0
 
     max_tokens = params.get("max_tokens", params.get("n_predict"))
     try:

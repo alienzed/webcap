@@ -1115,7 +1115,7 @@
 
     var localStartedAt = Number(storyState.director.activityStartedAt) || 0;
     var phase = String(activity.phase || '');
-    var terminal = ['complete', 'error'].indexOf(phase) !== -1;
+    var terminal = ['complete', 'error', 'stopped'].indexOf(phase) !== -1;
     if (!localStartedAt || !terminal) return activity;
 
     var activityTime = Math.max(
@@ -1210,7 +1210,7 @@
     directorActivityRequest('/fs/director/activity').then(function (activity) {
       var localStartedAt = Number(storyState.director.activityStartedAt) || 0;
       var phase = String(activity && activity.phase || '');
-      var terminal = ['complete', 'error'].indexOf(phase) !== -1;
+      var terminal = ['complete', 'error', 'stopped'].indexOf(phase) !== -1;
       var activityTime = Math.max(
         Number(activity && activity.startedAt) || 0,
         Number(activity && activity.updatedAt) || 0

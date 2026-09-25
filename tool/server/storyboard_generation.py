@@ -218,6 +218,7 @@ def execute_inference(job_id, request, context):
             output_ref.get("filename") or "render.mp4",
             io.BytesIO(media),
             effective_loras=request.get("loras") or [],
+            generation_job_id=job_id,
         )
         _story, take = finalize_generated_take(
             story_id,
@@ -237,6 +238,7 @@ def execute_inference(job_id, request, context):
                 "references": copy.deepcopy(context.get("referenceRecords") or []),
                 "workflowProfile": "minimax_h3_inference_v1",
                 "providerJobId": provider_job_id,
+                "jobId": str(job_id),
                 "elapsedMs": elapsed_ms,
                 "effectiveInput": effective_input,
             },

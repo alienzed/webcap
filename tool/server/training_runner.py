@@ -119,9 +119,22 @@ def reserve_gpu_for_external_work(owner):
     owner = str(owner or "").strip()
     if not owner:
         raise ValueError("GPU reservation owner is required.")
-    if external_gpu_work_block_reason(owner):
-        return False
-    return reserve_execution_resource(owner)
+    # Keep Training state inspection and the shared-resource claim in one
+    # critical section. Otherwise Training can become runnable between the
+    # admission check and inference reserving the GPU.
+    with _lock:
+        state = _read_state()
+        jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
+        if any(job.get("status") in ACTIVE_STATUSES for job in jobs):
+            return False
+        if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
+            return False
+        resource_owner = execution_resource_owner()
+        if resource_owner and resource_owner != owner:
+            return False
+        if resource_owner == owner:
+            return True
+        return reserve_execution_resource(owner)
 
 
 def gpu_reservation_block_reason(owner):

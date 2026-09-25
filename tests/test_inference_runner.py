@@ -16,6 +16,7 @@ from tool.server import training_runner
 @pytest.fixture
 def inference_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
+    monkeypatch.setattr(app_config, "output_root", lambda: Path(tmp_path) / "output")
     execution_queue._resource_owner = ""
     inference_runner._startup_reconciled = True
     with inference_runner._provider_hold_lock:

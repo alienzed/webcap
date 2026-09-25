@@ -686,6 +686,19 @@ def test_caption_report_owns_a_large_inspectable_balance_wheel():
 
 
 
+def test_test_generations_sessions_use_standard_work_item_anatomy():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "test-generations-session-state" in script
+    assert "status-queued" in script
+    assert "ensureGroup('history', 'History'" in script
+    assert "grid-template-columns: 68px minmax(0, 1fr) auto;" in css
+    assert ".test-generations-session-state {" in css
+    assert "min-height: 58px;" in css
+    assert "min-height: 29px;" in css
+
+
 def test_storyboard_generate_action_sits_with_scenes_title():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")

@@ -752,14 +752,22 @@
 
   function updateDirectorTrend(system) {
     var graph = el('storyboard-director-activity-trend');
-    if (!graph) throw new Error('Storyboard Director memory history markup is missing.');
+    if (!graph) throw new Error('Storyboard Director system history markup is missing.');
     var gpu = system && system.gpu;
     var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
     var ram = system && system.ram;
     var vramPercent = primary ? Number(primary.memoryUsed) / Number(primary.memoryTotal) * 100 : NaN;
     var ramPercent = ram && ram.available ? Number(ram.used) / Number(ram.total) * 100 : NaN;
-    if (isFinite(vramPercent) && isFinite(ramPercent)) {
-      storyState.director.activityHistory.push({ time: Date.now(), ram: ramPercent, vram: vramPercent });
+    var gpuPercent = primary ? Number(primary.utilization) : NaN;
+    var gpuTemperature = primary ? Number(primary.temperature) : NaN;
+    if (isFinite(vramPercent) || isFinite(ramPercent) || isFinite(gpuPercent) || isFinite(gpuTemperature)) {
+      storyState.director.activityHistory.push({
+        time: Date.now(),
+        ram: ramPercent,
+        vram: vramPercent,
+        gpu: gpuPercent,
+        thermal: gpuTemperature
+      });
       if (storyState.director.activityHistory.length > 40) storyState.director.activityHistory.shift();
     }
     var cutoff = Date.now() - 60000;
@@ -767,12 +775,20 @@
     var history = storyState.director.activityHistory;
     graph.querySelector('.director-activity-trend-ram-line').setAttribute('d', directorTrendPath(history, 'ram'));
     graph.querySelector('.director-activity-trend-vram-line').setAttribute('d', directorTrendPath(history, 'vram'));
+    graph.querySelector('.director-activity-trend-gpu-line').setAttribute('d', directorTrendPath(history, 'gpu'));
+    graph.querySelector('.director-activity-trend-thermal-line').setAttribute('d', directorTrendPath(history, 'thermal'));
     var latest = history[history.length - 1];
-    graph.setAttribute('aria-label', latest
-      ? 'RAM and VRAM use history for the last minute. Latest: RAM ' + Math.round(latest.ram) + '%, VRAM ' + Math.round(latest.vram) + '%. ' + history.length + ' samples.'
-      : 'RAM and VRAM history, waiting for samples');
+    var latestParts = [];
+    if (latest) {
+      if (isFinite(latest.ram)) latestParts.push('RAM ' + Math.round(latest.ram) + '%');
+      if (isFinite(latest.vram)) latestParts.push('VRAM ' + Math.round(latest.vram) + '%');
+      if (isFinite(latest.gpu)) latestParts.push('GPU ' + Math.round(latest.gpu) + '%');
+      if (isFinite(latest.thermal)) latestParts.push('GPU temperature ' + Math.round(latest.thermal) + '°C');
+    }
+    graph.setAttribute('aria-label', latestParts.length
+      ? 'System history for the last minute. Latest: ' + latestParts.join(', ') + '. ' + history.length + ' samples.'
+      : 'System history, waiting for samples');
   }
-
   function directorActivityTargetElement() {
     var target = storyState.director.activityTarget || {};
     var currentStoryId = storyState.story ? String(storyState.story.id || '') : '';

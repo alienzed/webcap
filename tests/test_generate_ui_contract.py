@@ -206,6 +206,7 @@ def test_generate_errors_keep_detail_in_console_and_use_concise_setup_badge():
     assert "window.reportConsoleError('Generate', message)" in script
     assert "setStatus(uiMessage, 'error')" in script
     assert "ComfyUI unavailable" in script
+    assert "reportError(err, 'Settings unavailable')" in script
     assert 'id="generate-status" class="generate-status-badge hidden"' in html
     assert ".generate-status-badge.is-error" in css
 

@@ -820,8 +820,9 @@
   .generate-create-view.takes-collapsed {
     grid-template-columns: minmax(380px, 25%) minmax(0, 1fr) 54px;
   }
+}
 
-  @media (max-width: 1100px) {
+@media (max-width: 1100px) {
   .generate-workspace {
     overflow: hidden;
   }
@@ -842,8 +843,9 @@
   .generate-takes-panel {
     display: none;
   }
+}
 
-  @media (max-width: 760px) {
+@media (max-width: 760px) {
   .generate-prompt-tools {
     grid-template-columns: 1fr auto;
   }

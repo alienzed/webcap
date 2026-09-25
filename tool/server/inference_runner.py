@@ -288,7 +288,7 @@ def _ensure_execution_reconciled():
                 else:
                     hold_provider_cleanup(
                         prompt_id,
-                        "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
+                        "Inference is waiting: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
                     )
                     _logger.error(
                         "Interrupted inference provider job %s did not confirm cancellation.",
@@ -297,7 +297,7 @@ def _ensure_execution_reconciled():
             except Exception:
                 hold_provider_cleanup(
                     prompt_id,
-                    "Queue paused: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
+                    "Inference is waiting: interrupted ComfyUI provider work could not be confirmed stopped after restart.",
                 )
                 _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
 
@@ -670,12 +670,8 @@ def snapshot(include_terminal=False):
         wait_reason = str(_backlog_wait_reason or "")
     jobs = current.get("jobs", [])
     return {
-        "paused": bool(current.get("paused")) or provider_paused,
-        "pauseReason": (
-            provider_reason
-            if provider_paused
-            else str(current.get("pauseReason") or "")
-        ),
+        "paused": bool(current.get("paused")),
+        "pauseReason": str(current.get("pauseReason") or ""),
         "activeJobId": str(current.get("activeJobId") or ""),
         "backlogCount": sum(1 for job in jobs if str(job.get("status") or "") == "backlog"),
         "armedBacklogCount": sum(
@@ -683,7 +679,7 @@ def snapshot(include_terminal=False):
             if str(job.get("status") or "") == "backlog"
             and str(job.get("id") or "") in armed_ids
         ),
-        "waitReason": wait_reason,
+        "waitReason": provider_reason if provider_paused else wait_reason,
         "jobs": [_job_view(job) for job in jobs],
     }
 

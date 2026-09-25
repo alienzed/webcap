@@ -63,7 +63,7 @@ def test_inference_monitor_is_dormant_without_requested_work(inference_root):
 
     inference_runner.hold_provider_cleanup(
         "provider-stale",
-        "Queue paused: stale provider cleanup is pending.",
+        "Inference is waiting for stale provider cleanup.",
     )
     assert inference_runner._monitor_has_work() is True
 
@@ -563,8 +563,9 @@ def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconf
     finished = execution_queue.get_job(queued["id"])
     snapshot = inference_runner.snapshot()
     assert finished["status"] == "failed"
-    assert snapshot["paused"] is True
-    assert "could not be confirmed stopped" in snapshot["pauseReason"]
+    assert snapshot["paused"] is False
+    assert snapshot["pauseReason"] == ""
+    assert "could not be confirmed stopped" in snapshot["waitReason"]
     persisted = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
     assert persisted["paused"] is False
     assert persisted["pauseReason"] == ""
@@ -681,7 +682,7 @@ def test_inference_resume_clears_pause_even_while_other_gpu_owner_is_active(infe
 def test_inference_cleanup_hold_is_retained_when_provider_cannot_be_verified(inference_root, monkeypatch):
     inference_runner.hold_provider_cleanup(
         "provider-stale",
-        "Queue paused: stale provider cleanup is pending.",
+        "Inference is waiting: stale provider cleanup is pending.",
     )
     calls = []
 
@@ -695,7 +696,8 @@ def test_inference_cleanup_hold_is_retained_when_provider_cannot_be_verified(inf
 
     assert calls == ["provider-stale"]
     assert result["resumeBlocked"] is True
-    assert result["queue"]["paused"] is True
+    assert result["queue"]["paused"] is False
+    assert "provider cleanup" in result["queue"]["waitReason"]
     assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
     assert inference_runner._monitor_has_work() is True
     with inference_runner._provider_hold_lock:
@@ -705,7 +707,7 @@ def test_inference_cleanup_hold_is_retained_when_provider_cannot_be_verified(inf
 def test_inference_monitor_self_reconciles_confirmed_provider_hold(inference_root, monkeypatch):
     inference_runner.hold_provider_cleanup(
         "provider-active",
-        "Queue paused: provider cleanup is pending.",
+        "Inference is waiting: provider cleanup is pending.",
     )
     states = iter([
         {"status": "in_progress"},
@@ -724,7 +726,7 @@ def test_inference_monitor_self_reconciles_confirmed_provider_hold(inference_roo
 def test_inference_resume_protects_gpu_when_provider_is_confirmed_active(inference_root, monkeypatch):
     inference_runner.hold_provider_cleanup(
         "provider-active",
-        "Queue paused: provider cleanup is pending.",
+        "Inference is waiting: provider cleanup is pending.",
     )
     calls = []
     monkeypatch.setattr(
@@ -736,7 +738,8 @@ def test_inference_resume_protects_gpu_when_provider_is_confirmed_active(inferen
     result = inference_runner.action("resume_queue")
 
     assert calls == ["provider-active"]
-    assert result["queue"]["paused"] is True
+    assert result["queue"]["paused"] is False
+    assert "provider cleanup" in result["queue"]["waitReason"]
     assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
 
 
@@ -1060,7 +1063,7 @@ def test_inference_provider_cleanup_guard_survives_second_restart(
 ):
     inference_runner.hold_provider_cleanup(
         "provider-live",
-        "Queue paused: provider cleanup is pending.",
+        "Inference is waiting: provider cleanup is pending.",
     )
     execution_queue._resource_owner = ""
     with inference_runner._provider_hold_lock:
@@ -1106,7 +1109,7 @@ def test_provider_cleanup_continues_while_inference_queue_is_user_paused(
     execution_queue.pause_lane(inference_runner.EXECUTION_LANE)
     inference_runner.hold_provider_cleanup(
         "provider-live",
-        "Queue paused: provider cleanup is pending.",
+        "Inference is waiting: provider cleanup is pending.",
     )
     states = iter([
         {"status": "in_progress"},

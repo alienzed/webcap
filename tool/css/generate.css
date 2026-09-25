@@ -682,6 +682,24 @@
   text-overflow: ellipsis;
 }
 
+.generate-result-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.generate-result-actions .review-captions-btn {
+  width: auto;
+  white-space: nowrap;
+}
+
+.generate-result-delete {
+  color: var(--danger, #f87171);
+}
+
+
 
 @media (max-width: 1500px) {
   .generate-prompt-tools {

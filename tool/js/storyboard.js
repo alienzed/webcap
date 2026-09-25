@@ -335,6 +335,10 @@
         if (!response.ok || !body || !body.ok || !body.job) {
           throw new Error((body && body.error) || 'Storyboard Director job request failed.');
         }
+        trackTransientLlmJob(body.job);
+        if (['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(String(body.job.status || '')) !== -1) {
+          reportTransientLlmTiming(body.job);
+        }
         return body.job;
       });
     });
@@ -526,6 +530,7 @@
           throw new Error((body && body.error) || 'Storyboard Director request failed.');
         }
         if (payload && body.job) {
+          trackTransientLlmJob(body.job);
           return waitForDirectorJob(body.job).then(function (result) {
             result.jobId = body.job.jobId;
             if (payload.operation !== 'expand_concept' && payload.operation !== 'develop_story') return result;
@@ -1111,6 +1116,7 @@
       directorActivityRequest('/fs/system_status').catch(function () { return null; })
     ]).then(function (values) {
       storyState.director.activityErrorReported = false;
+      observeTransientLlmActivity(values[0]);
       var scopedActivity = directorActivityForTargetQueue(values[0], values[0] && values[0].queue);
       renderDirectorActivity(directorActivityForCurrentRun(scopedActivity), values[1]);
     }).catch(function (err) {

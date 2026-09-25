@@ -82,22 +82,21 @@
 }
 
 .generate-prompt-tools {
-  margin-left: auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
-.generate-prompt-tools label {
+.generate-prompt-tool-label {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
 .generate-prompt-tools select {
-  min-width: 180px;
-  max-width: 280px;
+  min-width: 0;
 }
 
 .generate-main {
@@ -146,17 +145,7 @@
 }
 
 .generate-create-controls .generate-prompt-tools {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.generate-create-controls .generate-prompt-tools label {
   width: 100%;
-}
-
-.generate-create-controls .generate-prompt-tools select {
-  flex: 1 1 150px;
-  min-width: 0;
 }
 
 .generate-create-controls .generate-prompt {
@@ -536,6 +525,22 @@
   margin-top: -4px;
 }
 
+.generate-prompt-option {
+  justify-self: start;
+  margin: -3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.generate-inspector-heading {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.generate-output-settings {
+  padding-bottom: 2px;
+}
+
 .generate-director-actions input,
 .generate-prompt-tools select,
 .generate-inspector input,
@@ -577,14 +582,12 @@
 }
 
 .generate-run-row {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
+  display: grid;
 }
 
 .generate-run-btn {
-  min-width: 150px;
+  width: 100%;
+  min-height: 42px;
   padding: 10px 16px;
 }
 
@@ -802,8 +805,12 @@
 
 @media (max-width: 1500px) {
   .generate-prompt-tools {
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .generate-prompt-tools #generate-director-restore:not(.hidden) {
+    grid-column: 2 / -1;
+    justify-self: end;
   }
 
   .generate-create-view {
@@ -837,6 +844,18 @@
   }
 
   @media (max-width: 760px) {
+  .generate-prompt-tools {
+    grid-template-columns: 1fr auto;
+  }
+
+  .generate-prompt-tool-label {
+    grid-column: 1 / -1;
+  }
+
+  .generate-prompt-tools #generate-director-restore:not(.hidden) {
+    grid-column: 1 / -1;
+  }
+
   .generate-workspace {
     overflow: auto;
   }

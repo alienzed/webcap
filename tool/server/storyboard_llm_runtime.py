@@ -39,6 +39,7 @@ _activity_lock = threading.Lock()
 _log_relay_lock = threading.Lock()
 _log_relay_offset = 0
 _logger = logging.getLogger(__name__)
+_logger.setLevel(logging.INFO)
 _activity = {
     "active": False,
     "phase": "idle",

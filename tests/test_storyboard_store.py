@@ -414,6 +414,31 @@ def test_removed_scene_discards_its_takes_but_keeps_scene_setup(storyboard_fs):
     assert restored["scenes"][scene["id"]]["takes"] == {}
 
 
+def test_scene_removal_restores_staged_media_if_metadata_write_fails(storyboard_fs, monkeypatch):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "take.mp4", BytesIO(b"video")
+    )
+    media = storyboard_store.resolve_story_media(story["id"], take["mediaPath"])
+    real_write = storyboard_store._write_json_atomic
+
+    def fail_delete_write(path, payload):
+        if payload.get("removedScenes", {}).get(scene["id"]):
+            raise OSError("simulated metadata write failure")
+        return real_write(path, payload)
+
+    monkeypatch.setattr(storyboard_store, "_write_json_atomic", fail_delete_write)
+
+    with pytest.raises(OSError, match="simulated metadata write failure"):
+        storyboard_store.delete_scene(story["id"], scene["id"])
+
+    assert media.is_file()
+    saved = storyboard_store.load_story(story["id"])
+    assert scene["id"] in saved["scenes"]
+    assert take["id"] in saved["scenes"][scene["id"]]["takes"]
+
+
 def test_scene_removal_refuses_to_break_take_reference_used_by_another_scene(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, source = storyboard_store.add_scene(story["id"], {"title": "Source"})

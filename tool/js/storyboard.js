@@ -1726,14 +1726,11 @@
     window.localStorage.setItem('webcap.storyboard.storyCollapsed', storyState.storyCollapsed ? '1' : '0');
     var authoring = el('storyboard-story-authoring');
     var editor = el('storyboard-editor-content');
-    var collapseButton = el('storyboard-story-toggle');
-    var expandButton = el('storyboard-story-expand-toggle');
+    var toggleButton = el('storyboard-story-toggle');
     authoring.classList.toggle('hidden', storyState.storyCollapsed);
     editor.classList.toggle('story-collapsed', storyState.storyCollapsed);
-    collapseButton.classList.toggle('hidden', storyState.storyCollapsed);
-    collapseButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
-    expandButton.classList.toggle('hidden', !storyState.storyCollapsed);
-    expandButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
+    toggleButton.textContent = storyState.storyCollapsed ? 'Show Overview' : 'Hide Overview';
+    toggleButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
   }
 
   function ensureActiveScene(order) {
@@ -2922,14 +2919,17 @@
   function renderStory() {
     var empty = el('storyboard-editor-empty');
     var editor = el('storyboard-editor-content');
+    var overviewToggle = el('storyboard-story-toggle');
     if (!storyState.story) {
       if (empty) empty.classList.remove('hidden');
       if (editor) editor.classList.add('hidden');
+      overviewToggle.classList.add('hidden');
       setSaveState('');
       return;
     }
     if (empty) empty.classList.add('hidden');
     if (editor) editor.classList.remove('hidden');
+    overviewToggle.classList.remove('hidden');
 
     el('storyboard-story-title').value = storyState.story.title || '';
     el('storyboard-story-concept').value = storyState.story.concept || '';
@@ -4136,8 +4136,7 @@
     initStorySections();
 
     el('storyboard-new-btn').onclick = createStory;
-    el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(true); };
-    el('storyboard-story-expand-toggle').onclick = function () { setStoryCollapsed(false); };
+    el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };

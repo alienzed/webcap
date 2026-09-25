@@ -689,11 +689,15 @@ def test_inference_drawer_exposes_backlog_without_treating_it_as_active_work():
 
     assert "run_backlog" in inference
     assert "run_all_backlog" in inference
+    assert "data.inferenceQueueAction = 'clear_all'" not in inference
+    assert "dataset.inferenceQueueAction = 'clear_all'" in inference
+    assert "inference-queue-section-actions" in inference
     assert "Eligible when GPU is free" in inference
     assert "var activeCount = running + queued + armedBacklog;" in inference
     assert "toggle.classList.toggle('inference-active', activeCount > 0);" in inference
     assert "String(queue.backlog) + ' backlog'" in activity
     assert ".inference-backlog-heading" in css
+    assert "width: min(560px, calc(100% - 62px));" in css
 
 
 

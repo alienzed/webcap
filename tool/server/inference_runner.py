@@ -13,7 +13,6 @@ from .execution_queue import (
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
-    promote_backlog as execution_promote_backlog,
     recover_lane as execution_recover_lane,
     reorder_job as execution_reorder_job,
     request_stop as execution_request_stop,
@@ -83,11 +82,13 @@ def _set_backlog_wait_reason(reason):
 
 
 def prepare_startup_backlog():
-    """Shelf persisted queued inference without starting runtime work."""
+    """Shelf persisted pending work and reconcile only interrupted active work."""
     with _backlog_lock:
         _armed_backlog_ids.clear()
     _set_backlog_wait_reason("")
-    return execution_shelve_queued(EXECUTION_LANE)
+    shelved = execution_shelve_queued(EXECUTION_LANE)
+    _ensure_execution_reconciled()
+    return shelved
 
 
 def hold_provider_cleanup(provider_job_id, reason):
@@ -130,8 +131,9 @@ def _reconcile_provider_cleanup_holds():
         try:
             job = inference_runtime.read_job(provider_job_id)
         except Exception:
+            unresolved.append(provider_job_id)
             _logger.warning(
-                "Could not verify held inference provider job %s; clearing the runtime hold.",
+                "Could not verify held inference provider job %s; retaining the GPU hold.",
                 provider_job_id,
                 exc_info=True,
             )
@@ -148,8 +150,14 @@ def _reconcile_provider_cleanup_holds():
         if not remaining:
             _provider_cleanup_reason = ""
     if remaining:
-        if provider_active and not execution_resource_owner():
+        owner = execution_resource_owner()
+        if not owner:
             execution_reserve_resource(GPU_RESERVATION_OWNER)
+        elif owner != GPU_RESERVATION_OWNER:
+            _logger.error(
+                "Inference provider cleanup is unresolved while the shared GPU is owned by %s.",
+                owner,
+            )
         return False
 
     if execution_resource_owner() == GPU_RESERVATION_OWNER:
@@ -236,10 +244,22 @@ def _ensure_execution_reconciled():
                 )
                 _logger.exception("Could not cancel interrupted inference provider job %s.", prompt_id)
 
-        interrupted = execution_recover_lane(
+        execution_recover_lane(
             EXECUTION_LANE,
             reason="Inference was interrupted by a WebCap restart.",
         )
+
+        with _provider_hold_lock:
+            cleanup_pending = bool(_provider_cleanup_holds)
+        if cleanup_pending:
+            owner = execution_resource_owner()
+            if not owner:
+                execution_reserve_resource(GPU_RESERVATION_OWNER)
+            elif owner != GPU_RESERVATION_OWNER:
+                _logger.error(
+                    "Interrupted inference provider cleanup is unresolved while the shared GPU is owned by %s.",
+                    owner,
+                )
 
         _startup_reconciled = True
 
@@ -319,14 +339,19 @@ def _advance_queue():
             return None
 
         jobs = snapshot.get("jobs", [])
-        queued = [job for job in jobs if job.get("status") == "queued"]
         armed_ids = _armed_backlog_snapshot()
-        armed_backlog = [
-            job for job in jobs
-            if job.get("status") == "backlog" and str(job.get("id") or "") in armed_ids
-        ]
-        armed_backlog.sort(key=lambda job: float(job.get("createdAt") or 0))
-        if not queued and not armed_backlog:
+        next_runnable = next(
+            (
+                job for job in jobs
+                if str(job.get("status") or "") == "queued"
+                or (
+                    str(job.get("status") or "") == "backlog"
+                    and str(job.get("id") or "") in armed_ids
+                )
+            ),
+            None,
+        )
+        if next_runnable is None:
             _set_backlog_wait_reason("")
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
@@ -362,7 +387,7 @@ def _advance_queue():
             )
             return None
 
-        if not queued and armed_backlog:
+        if str(next_runnable.get("status") or "") == "backlog":
             try:
                 from . import inference_runtime
                 inference_runtime.system_stats()
@@ -371,11 +396,14 @@ def _advance_queue():
                 if execution_resource_owner() == GPU_RESERVATION_OWNER:
                     _release_gpu()
                 return None
-            promoted = execution_promote_backlog(str(armed_backlog[0].get("id") or ""))
-            _disarm_backlog(promoted.get("id"))
 
         _set_backlog_wait_reason("")
-        claimed = execution_claim_next(EXECUTION_LANE)
+        claimed = execution_claim_next(
+            EXECUTION_LANE,
+            runnable_backlog_ids=armed_ids,
+        )
+        if claimed is not None and str(claimed.get("id") or "") in armed_ids:
+            _disarm_backlog(claimed.get("id"))
         if claimed is None:
             if reserved_here:
                 _release_gpu()

@@ -80,6 +80,21 @@
     return status.replace(/_/g, ' ') || 'Unknown';
   }
 
+  function formatJobAge(job) {
+    var status = String(job && job.status || '');
+    var since = ['starting', 'running', 'stopping'].indexOf(status) !== -1
+      ? Number(job.startedAt || 0)
+      : Number(job.createdAt || 0);
+    if (!since) return '';
+    var seconds = Math.max(0, Math.round(Date.now() / 1000 - since));
+    if (seconds < 60) return String(seconds) + 's';
+    var minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return String(minutes) + 'm';
+    var hours = Math.floor(minutes / 60);
+    var remainder = minutes % 60;
+    return String(hours) + 'h' + (remainder ? ' ' + String(remainder) + 'm' : '');
+  }
+
   function syncShellInferenceState(jobs) {
     var running = jobs.some(function (job) {
       return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
@@ -155,7 +170,7 @@
     return row;
   }
 
-  function syncRow(row, job) {
+  function syncRow(row, job, queuedCount) {
     row.className = 'inference-queue-row status-' + String(job.status || '');
     var position = row.querySelector('[data-queue-position]');
     var title = row.querySelector('[data-queue-title]');
@@ -172,8 +187,12 @@
     if (context) context.textContent = jobContext(job);
     if (detail) {
       var detailText = jobDetail(job);
+      var age = formatJobAge(job);
       if (status === 'backlog' && job.armed) {
         detailText = [detailText, 'Eligible when GPU is free'].filter(Boolean).join(' · ');
+      }
+      if (age) {
+        detailText = [detailText, (['starting', 'running', 'stopping'].indexOf(status) !== -1 ? 'Active ' : 'Waiting ') + age].filter(Boolean).join(' · ');
       }
       detail.textContent = detailText;
     }
@@ -227,6 +246,7 @@
         down.textContent = '↓';
         down.title = 'Move later';
         down.setAttribute('aria-label', 'Move inference job later');
+        down.disabled = Number(job.queuePosition || 0) >= Number(queuedCount || 0);
         actions.appendChild(down);
 
         var cancel = document.createElement('button');
@@ -306,7 +326,7 @@
 
     jobs.filter(function (job) { return String(job.status || '') !== 'backlog'; }).forEach(function (job) {
       var row = createRow(job);
-      syncRow(row, job);
+      syncRow(row, job, queued);
       host.appendChild(row);
     });
 
@@ -333,7 +353,7 @@
 
       backlogJobs.forEach(function (job) {
         var row = createRow(job);
-        syncRow(row, job);
+        syncRow(row, job, queued);
         host.appendChild(row);
       });
     }

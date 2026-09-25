@@ -19,7 +19,6 @@ from .execution_queue import (
 from .inference_models import get_inference_model
 from .storyboard_store import (
     add_take_upload,
-    finalize_generated_take,
     load_story,
     resolve_scene_generation_defaults,
     resolve_scene_loras,
@@ -212,6 +211,24 @@ def execute_inference(job_id, request, context):
         media = inference_runtime.download_output(output_ref)
         elapsed_ms = int((time.monotonic() - started) * 1000)
 
+        provenance = {
+            "prompt": request["prompt"],
+            "entryState": str(context.get("entryState") or ""),
+            "exitState": str(context.get("exitState") or ""),
+            "sourcePrompt": request.get("sourcePrompt") or request["prompt"],
+            "durationSeconds": request["settings"]["duration"],
+            "seed": request["settings"]["seed"],
+            "seedMode": str(context.get("seedMode") or ""),
+            "aspectRatio": request["settings"]["aspectRatio"],
+            "megapixels": request["settings"]["megapixels"],
+            "loras": request.get("loras") or [],
+            "references": copy.deepcopy(context.get("referenceRecords") or []),
+            "workflowProfile": "minimax_h3_inference_v1",
+            "providerJobId": provider_job_id,
+            "jobId": str(job_id),
+            "elapsedMs": elapsed_ms,
+            "effectiveInput": effective_input,
+        }
         _story, take = add_take_upload(
             story_id,
             scene_id,
@@ -219,29 +236,7 @@ def execute_inference(job_id, request, context):
             io.BytesIO(media),
             effective_loras=request.get("loras") or [],
             generation_job_id=job_id,
-        )
-        _story, take = finalize_generated_take(
-            story_id,
-            scene_id,
-            take["id"],
-            {
-                "prompt": request["prompt"],
-                "entryState": str(context.get("entryState") or ""),
-                "exitState": str(context.get("exitState") or ""),
-                "sourcePrompt": request.get("sourcePrompt") or request["prompt"],
-                "durationSeconds": request["settings"]["duration"],
-                "seed": request["settings"]["seed"],
-                "seedMode": str(context.get("seedMode") or ""),
-                "aspectRatio": request["settings"]["aspectRatio"],
-                "megapixels": request["settings"]["megapixels"],
-                "loras": request.get("loras") or [],
-                "references": copy.deepcopy(context.get("referenceRecords") or []),
-                "workflowProfile": "minimax_h3_inference_v1",
-                "providerJobId": provider_job_id,
-                "jobId": str(job_id),
-                "elapsedMs": elapsed_ms,
-                "effectiveInput": effective_input,
-            },
+            generated_provenance=provenance,
         )
         execution_update_job(job_id, details={"providerStatus": "completed"})
         return {"takeId": take["id"]}

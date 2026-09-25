@@ -239,20 +239,26 @@ def test_filesystem_output_root_defaults_blank_and_preserves_configured_path():
     assert configured["filesystem"]["output_root"] == "W:/webcap-output"
 
 
-def test_storyboard_director_limits_default_to_auto_and_accept_overrides():
+def test_storyboard_director_limits_default_output_and_accept_overrides():
     normalized = config_module.validate_config_payload({
         "filesystem": {"root": "C:/training", "models": ""},
         "storyboard": {"director": {}},
     })
     assert normalized["storyboard"]["director"]["context_size"] is None
-    assert normalized["storyboard"]["director"]["max_tokens"] is None
+    assert normalized["storyboard"]["director"]["max_tokens"] == 16384
+
+    automatic = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "storyboard": {"director": {"max_tokens": None}},
+    })
+    assert automatic["storyboard"]["director"]["max_tokens"] is None
 
     overridden = config_module.validate_config_payload({
         "filesystem": {"root": "C:/training", "models": ""},
-        "storyboard": {"director": {"context_size": 32768, "max_tokens": 16384}},
+        "storyboard": {"director": {"context_size": 32768, "max_tokens": 8192}},
     })
     assert overridden["storyboard"]["director"]["context_size"] == 32768
-    assert overridden["storyboard"]["director"]["max_tokens"] == 16384
+    assert overridden["storyboard"]["director"]["max_tokens"] == 8192
 
 
 def test_training_repeat_reference_epochs_must_be_positive_integer():

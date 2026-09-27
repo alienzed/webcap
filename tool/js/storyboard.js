@@ -995,6 +995,9 @@
     var targetKey = directorTargetKey(target);
     var job = queue.jobs.find(function (candidate) {
       var candidateTarget = directorTargetFromJob(candidate);
+      if (target.kind === 'story-action') {
+        return candidateTarget && String(candidateTarget.storyId || '') === String(target.storyId || '');
+      }
       return candidateTarget && directorTargetKey(candidateTarget) === targetKey;
     });
     if (!job) return activity;
@@ -1370,9 +1373,7 @@
     });
   }
 
-  function requestSceneDirector(sceneId, operation, instruction) {
-    var storyId = storyState.story.id;
-    var modelId = storyState.director.modelId;
+  function requestSceneDirector(storyId, sceneId, operation, instruction, modelId) {
     return directorRequest({
       storyId: storyId,
       sceneId: sceneId,
@@ -1386,7 +1387,38 @@
         operation: operation,
         jobId: payload.jobId
       }).then(function () {
-        return consumeDirectorJob(payload.jobId);
+        return consumeDirectorJob(payload.jobId).then(function () {
+          return payload;
+        });
+      });
+    });
+  }
+
+  function runSceneDirectorPass(storyId, sceneIds, instruction, modelId, onScene) {
+    return sceneIds.reduce(function (promise, sceneId, index) {
+      return promise.then(function () {
+        if (onScene) onScene(sceneId, index);
+        return requestSceneDirector(storyId, sceneId, 'refine_prompt', instruction, modelId);
+      });
+    }, Promise.resolve());
+  }
+
+  function requestStoryDirector(storyId, operation, modelId, replaceExisting) {
+    var requestPayload = {
+      storyId: storyId,
+      operation: operation,
+      model: modelId
+    };
+    if (operation === 'develop_story') requestPayload.replaceExisting = !!replaceExisting;
+    return directorRequest(requestPayload).then(function (payload) {
+      return applyDirectorResultToVisibleStory({
+        storyId: storyId,
+        operation: operation,
+        jobId: payload.jobId
+      }).then(function () {
+        return consumeDirectorJob(payload.jobId).then(function () {
+          return payload;
+        });
       });
     });
   }
@@ -1420,7 +1452,7 @@
     updateSceneDirectorStatus(sceneId, 'Director working…');
     startDirectorActivity();
     flushPendingSaves().then(function () {
-      return requestSceneDirector(sceneId, operation, instruction);
+      return requestSceneDirector(storyId, sceneId, operation, instruction, storyState.director.modelId);
     }).catch(function (err) {
       if (directorWasStopped(err)) updateSceneDirectorStatus(sceneId, 'Director stopped');
       else {
@@ -1757,8 +1789,12 @@
     setDirectorPending(directorTarget, true);
     startDirectorActivity();
     flushPendingSaves().then(function () {
-      return sceneIds.reduce(function (promise, sceneId, index) {
-        return promise.then(function () {
+      return runSceneDirectorPass(
+        storyId,
+        sceneIds,
+        instruction,
+        storyState.director.modelId,
+        function (sceneId, index) {
           var scene = storyState.story && storyState.story.scenes
             ? storyState.story.scenes[sceneId]
             : null;
@@ -1766,9 +1802,8 @@
             'Checking Scene ' + String(index + 1) + ' / ' + String(sceneIds.length)
             + (scene && scene.title ? ' · ' + scene.title : '')
           );
-          return requestSceneDirector(sceneId, 'refine_prompt', instruction);
-        });
-      }, Promise.resolve());
+        }
+      );
     }).then(function () {
       if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
         storyState.story.repairComplete = true;
@@ -1898,12 +1933,14 @@
       String(action.storyId || '') === String(storyState.story.id || '')
     );
     button.classList.toggle('hidden', visible && action.active);
+    button.disabled = !!(action && action.active && !visible);
     card.classList.toggle('hidden', !visible);
     if (!visible) return;
 
     phase.textContent = action.phase || 'Preparing';
     detail.textContent = action.detail || '';
-    elapsed.textContent = storyActionElapsed((Date.now() / 1000) - Number(action.startedAt || Date.now() / 1000));
+    elapsed.textContent = storyActionElapsed((Date.now() / 1000) - Number(action.startedAt || Date.now() / 1000))
+      + (action.modelId ? ' · ' + action.modelId : '');
     cancel.classList.toggle('hidden', !action.active);
     if (action.active) storyState.storyActionTimer = setTimeout(renderStoryAction, 1000);
   }
@@ -1915,6 +1952,135 @@
     action.detail = 'Stopping…';
     renderStoryAction();
     stopDirectorJob();
+  }
+
+  function requireStoryAction(action) {
+    if (storyState.storyAction !== action || action.cancelled) {
+      var err = new Error('First Cut stopped.');
+      err.storyActionStopped = true;
+      throw err;
+    }
+  }
+
+  function updateStoryAction(action, phase, detail) {
+    if (storyState.storyAction !== action) return;
+    action.phase = phase;
+    action.detail = detail || '';
+    renderStoryAction();
+  }
+
+  function startFirstCut() {
+    if (!storyState.story) return;
+    if (storyState.storyAction && storyState.storyAction.active) {
+      reportError(new Error('Another First Cut is already running.'));
+      return;
+    }
+    var storyId = String(storyState.story.id || '');
+    var modelId = String(storyState.director.modelId || '');
+    if (!modelId) {
+      reportError(new Error('Choose a Storyboard Director model first.'));
+      return;
+    }
+    var directorTarget = { kind: 'story-action', storyId: storyId };
+    if (directorTargetBlocked(directorTarget)) {
+      reportError(new Error('This Story already has Director work in progress.'));
+      return;
+    }
+
+    var action = {
+      storyId: storyId,
+      modelId: modelId,
+      active: true,
+      cancelled: false,
+      startedAt: Date.now() / 1000,
+      phase: 'Preparing',
+      detail: ''
+    };
+    var replaceExisting = Array.isArray(storyState.story.sceneOrder) && storyState.story.sceneOrder.length > 0;
+    storyState.storyAction = action;
+    setDirectorPending(directorTarget, true);
+    startDirectorActivity();
+    renderStoryAction();
+
+    flushPendingSaves().then(function () {
+      requireStoryAction(action);
+      updateStoryAction(action, 'Expanding Concept', '');
+      return requestStoryDirector(storyId, 'expand_concept', modelId, false);
+    }).then(function () {
+      requireStoryAction(action);
+      updateStoryAction(action, 'Defining Continuity', '');
+      return requestStoryDirector(storyId, 'define_invariants', modelId, false);
+    }).then(function () {
+      requireStoryAction(action);
+      updateStoryAction(action, 'Developing Scenes', '');
+      return requestStoryDirector(storyId, 'develop_story', modelId, replaceExisting);
+    }).then(function () {
+      requireStoryAction(action);
+      return request(null, 'story=' + encodeURIComponent(storyId));
+    }).then(function (payload) {
+      requireStoryAction(action);
+      var actionStory = payload.story;
+      var sceneIds = Array.isArray(actionStory && actionStory.sceneOrder)
+        ? actionStory.sceneOrder.slice()
+        : [];
+      action.sceneCount = sceneIds.length;
+      updateStoryAction(action, 'Refining Scenes', '0 / ' + String(sceneIds.length));
+      return runSceneDirectorPass(
+        storyId,
+        sceneIds,
+        DIRECTOR_PASS_PRESETS.continuity.instruction,
+        modelId,
+        function (sceneId, index) {
+          requireStoryAction(action);
+          var scene = actionStory.scenes && actionStory.scenes[sceneId];
+          updateStoryAction(
+            action,
+            'Refining Scenes',
+            String(index + 1) + ' / ' + String(sceneIds.length)
+              + (scene && scene.title ? ' · ' + scene.title : '')
+          );
+        }
+      ).then(function () {
+        return sceneIds;
+      });
+    }).then(function (sceneIds) {
+      requireStoryAction(action);
+      updateStoryAction(action, 'Queuing First Takes', '0 / ' + String(sceneIds.length));
+      return sceneIds.reduce(function (promise, sceneId, index) {
+        return promise.then(function () {
+          requireStoryAction(action);
+          updateStoryAction(
+            action,
+            'Queuing First Takes',
+            String(index + 1) + ' / ' + String(sceneIds.length)
+          );
+          return enqueueSceneGeneration(storyId, sceneId);
+        });
+      }, Promise.resolve());
+    }).then(function () {
+      requireStoryAction(action);
+      action.active = false;
+      action.phase = 'Complete';
+      action.detail = 'First Takes queued.';
+      setDevelopStatus('First Cut queued one Take for every Scene.');
+      renderStoryAction();
+      return refreshLibrary();
+    }).catch(function (err) {
+      action.active = false;
+      if (action.cancelled || err.storyActionStopped || directorWasStopped(err)) {
+        action.phase = 'Stopped';
+        action.detail = 'Completed steps were kept.';
+      } else {
+        action.phase = 'Failed';
+        action.detail = String(err && err.message ? err.message : err);
+        reportError(err);
+      }
+      renderStoryAction();
+    }).finally(function () {
+      setDirectorPending(directorTarget, false);
+      finishDirectorActivity();
+      renderStoryAction();
+    });
   }
 
   function setSaveState(text) {
@@ -4456,6 +4622,7 @@
       stopDirectorJob();
     };
     el('storyboard-story-action-cancel').onclick = cancelStoryAction;
+    el('storyboard-first-cut-btn').onclick = startFirstCut;
 
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;

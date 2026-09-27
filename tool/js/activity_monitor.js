@@ -304,8 +304,8 @@
     toast.appendChild(copy);
     toast.appendChild(close);
     host.prepend(toast);
-    while (host.children.length > 4) host.lastElementChild.remove();
-    timer = setTimeout(dismiss, failed ? 10000 : 6500);
+    while (host.children.length > 3) host.lastElementChild.remove();
+    timer = setTimeout(dismiss, failed ? 8000 : 5000);
   }
 
   function notifyRecent(items) {

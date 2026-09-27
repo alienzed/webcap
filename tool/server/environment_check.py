@@ -305,15 +305,28 @@ def build_environment_report(config=None):
     return _finalize(checks, settings)
 
 
-def _finalize(checks, settings):
-    required_failures = [item for item in checks if item["required"] and not item["ok"]]
-    optional_failures = [item for item in checks if not item["required"] and not item["ok"]]
+def _group_summary(checks, group):
+    rows = [item for item in checks if item["group"] == group]
+    required_failures = [item for item in rows if item["required"] and not item["ok"]]
+    optional_failures = [item for item in rows if not item["required"] and not item["ok"]]
     return {
-        "ok": not required_failures,
+        "ready": not required_failures,
+        "requiredFailures": len(required_failures),
+        "optionalFailures": len(optional_failures),
+        "passed": len([item for item in rows if item["ok"]]),
+        "total": len(rows),
+    }
+
+
+def _finalize(checks, settings):
+    core = _group_summary(checks, "core")
+    training = _group_summary(checks, "training")
+    return {
+        "ok": core["ready"],
         "checks": checks,
         "summary": {
-            "requiredFailures": len(required_failures),
-            "optionalFailures": len(optional_failures),
+            "core": core,
+            "training": training,
             "passed": len([item for item in checks if item["ok"]]),
             "total": len(checks),
         },

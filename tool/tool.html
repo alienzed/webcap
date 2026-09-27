@@ -1646,6 +1646,17 @@
                         </section>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Environment Check</div>
+                                <div class="app-settings-section-copy">Inspect this WebCap installation and the configured training runtime without requiring a dataset or generated training files.</div>
+                            </div>
+                            <div class="app-settings-environment-actions">
+                                <button id="app-settings-environment-run-btn" type="button" class="review-captions-btn">Check Environment</button>
+                                <span id="app-settings-environment-summary" class="app-settings-environment-summary">Not checked yet.</span>
+                            </div>
+                            <div id="app-settings-environment-results" class="app-settings-environment-results hidden" aria-live="polite"></div>
+                        </section>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Copy to Test</div>
                                 <div class="app-settings-section-copy">Destination roots used when copying a saved candidate LoRA for testing.</div>
                             </div>

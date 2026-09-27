@@ -1258,6 +1258,17 @@
                             <div class="storyboard-story-fields">
                                 <div class="storyboard-story-panel-heading">
                                     <strong>Story Overview</strong>
+                                    <div class="storyboard-story-action-wrap">
+                                        <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn" title="Take this Story from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
+                                        <div id="storyboard-story-action-card" class="storyboard-story-action-card hidden" aria-live="polite">
+                                            <div class="storyboard-story-action-copy">
+                                                <strong id="storyboard-story-action-phase">Preparing</strong>
+                                                <span id="storyboard-story-action-detail"></span>
+                                                <small id="storyboard-story-action-elapsed">0s</small>
+                                            </div>
+                                            <button id="storyboard-story-action-cancel" data-story-action-cancel type="button" class="review-captions-btn">Cancel</button>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <details class="storyboard-story-section" data-story-section="story" open>

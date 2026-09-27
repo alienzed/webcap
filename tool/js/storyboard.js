@@ -24,6 +24,7 @@
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
     directorPassMode: 'custom',
     storyAction: null,
+    storyActionTimer: 0,
     generationCapabilities: {
       loras: [],
       baseLoras: [],
@@ -1869,6 +1870,53 @@
     });
   }
 
+  function storyActionElapsed(seconds) {
+    seconds = Math.max(0, Math.floor(Number(seconds) || 0));
+    var minutes = Math.floor(seconds / 60);
+    var remainder = seconds % 60;
+    return minutes ? (String(minutes) + 'm ' + String(remainder) + 's') : (String(remainder) + 's');
+  }
+
+  function renderStoryAction() {
+    if (storyState.storyActionTimer) clearTimeout(storyState.storyActionTimer);
+    storyState.storyActionTimer = 0;
+
+    var button = el('storyboard-first-cut-btn');
+    var card = el('storyboard-story-action-card');
+    var phase = el('storyboard-story-action-phase');
+    var detail = el('storyboard-story-action-detail');
+    var elapsed = el('storyboard-story-action-elapsed');
+    var cancel = el('storyboard-story-action-cancel');
+    if (!button || !card || !phase || !detail || !elapsed || !cancel) {
+      throw new Error('Storyboard Story action card markup is missing.');
+    }
+
+    var action = storyState.storyAction;
+    var visible = !!(
+      action &&
+      storyState.story &&
+      String(action.storyId || '') === String(storyState.story.id || '')
+    );
+    button.classList.toggle('hidden', visible && action.active);
+    card.classList.toggle('hidden', !visible);
+    if (!visible) return;
+
+    phase.textContent = action.phase || 'Preparing';
+    detail.textContent = action.detail || '';
+    elapsed.textContent = storyActionElapsed((Date.now() / 1000) - Number(action.startedAt || Date.now() / 1000));
+    cancel.classList.toggle('hidden', !action.active);
+    if (action.active) storyState.storyActionTimer = setTimeout(renderStoryAction, 1000);
+  }
+
+  function cancelStoryAction() {
+    var action = storyState.storyAction;
+    if (!action || !action.active) return;
+    action.cancelled = true;
+    action.detail = 'Stopping…';
+    renderStoryAction();
+    stopDirectorJob();
+  }
+
   function setSaveState(text) {
     var node = el('storyboard-save-state');
     if (node) node.textContent = text || '';
@@ -3175,6 +3223,7 @@
     syncDirectorPendingControls();
     renderSequencePreview();
     renderLibrary();
+    renderStoryAction();
   }
 
   function refreshLibrary() {
@@ -4406,6 +4455,7 @@
     el('storyboard-director-stop').onclick = function () {
       stopDirectorJob();
     };
+    el('storyboard-story-action-cancel').onclick = cancelStoryAction;
 
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;

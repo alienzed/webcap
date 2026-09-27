@@ -2829,6 +2829,69 @@
   font-size: 22px;
 }
 
+.storyboard-story-action-wrap {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+#storyboard-first-cut-btn {
+  width: auto;
+  min-height: 34px;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.storyboard-story-action-card {
+  min-width: 280px;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.storyboard-story-action-card.hidden {
+  display: none;
+}
+
+.storyboard-story-action-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 2px;
+}
+
+.storyboard-story-action-copy > strong,
+.storyboard-story-action-copy > span,
+.storyboard-story-action-copy > small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storyboard-story-action-copy > strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.storyboard-story-action-copy > span,
+.storyboard-story-action-copy > small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+#storyboard-story-action-cancel {
+  width: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .storyboard-scenes-heading {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }

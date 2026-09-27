@@ -223,14 +223,14 @@ def _previous_handoff(story, scene_id):
 
 
 
-def _neighbor_scene_context(story, scene_id, offset):
+def _previous_scene_context(story, scene_id):
     order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
     if scene_id not in order:
         return ""
-    index = order.index(scene_id) + offset
-    if index < 0 or index >= len(order):
+    index = order.index(scene_id)
+    if index <= 0:
         return ""
-    scene = (story.get("scenes") or {}).get(order[index])
+    scene = (story.get("scenes") or {}).get(order[index - 1])
     if not isinstance(scene, dict):
         return ""
     fields = (
@@ -422,8 +422,7 @@ def build_request(story, scene_id, operation, instruction=""):
     scene_context = _scene_context(scene)
     shared_context = _scene_shared_context_text(story, scene)
     previous_handoff = _previous_handoff(story, scene_id)
-    previous_scene_context = _neighbor_scene_context(story, scene_id, -1)
-    next_scene_context = _neighbor_scene_context(story, scene_id, 1)
+    previous_scene_context = _previous_scene_context(story, scene_id)
     h3_mode = mode_from_reference_roles(_reference_roles(scene))
     h3_output = final_shape(h3_mode, scene.get("durationSeconds"))
 
@@ -485,12 +484,6 @@ def build_request(story, scene_id, operation, instruction=""):
                 + previous_scene_context
                 + "\n\nUse this only to understand what immediately precedes the current Scene. Do not modify or repeat the previous Scene."
             )
-        if next_scene_context:
-            blocks.append(
-                "[NEXT SCENE - CONTEXT ONLY]\n"
-                + next_scene_context
-                + "\n\nUse this only to understand where the Story is going next. Do not modify or preempt the next Scene."
-            )
         blocks.append("[EXISTING PROMPT]\n" + existing_prompt)
         blocks.append(
             "[H3 WRITING RULES]\n" + h3_runtime_context
@@ -504,9 +497,11 @@ def build_request(story, scene_id, operation, instruction=""):
             + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. If the correction does not apply to this Scene, return changed=false and omit all revision fields. If it does apply, return changed=true, all three prompt semantic field values, plus only any optional Scene fields the correction actually requires. WebCap owns the final labels and alignment syntax."
         )
         blocks.append(
-            "[CURRENT TASK]\nApply this correction with the smallest coherent change to this Scene:\n"
+            "[CURRENT TASK]\nApply the requested correction faithfully to this Scene:\n"
             + correction
-            + "\n\nYou may revise the Scene summary / intent, entry state, or exit state only when the correction requires it; "
+            + "\n\nMake the changes needed to satisfy the instruction while maintaining the Scene's intended action, chronology, and forward progression. "
+            "When the instruction itself calls for changing that progression, carry out that change directly. "
+            "You may revise the Scene summary / intent, entry state, or exit state when the correction requires it; "
             "otherwise omit those fields and preserve them exactly. Revise the generation prompt only as much as needed to keep it coherent with any Scene-field change. "
             "If the requested change materially changes how much screen time this Scene needs, "
             "include a revised durationSeconds between 6 and 15 seconds, normally aiming for about 10 seconds unless the Scene clearly benefits from more time. "

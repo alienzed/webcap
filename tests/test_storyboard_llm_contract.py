@@ -113,10 +113,11 @@ def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
     assert "[PREVIOUS SCENE - CONTEXT ONLY]" in prompt
     assert "OLD FIRST PROMPT" in prompt
     assert "She is just inside the closed front door" in prompt
-    assert "[NEXT SCENE - CONTEXT ONLY]" in prompt
-    assert "UNRELATED SCENE PROMPT MUST NOT LEAK" in prompt
+    assert "[NEXT SCENE - CONTEXT ONLY]" not in prompt
+    assert "UNRELATED SCENE PROMPT MUST NOT LEAK" not in prompt
     assert "Keep the camera behind her until she notices the footprints." in prompt
-    assert "smallest coherent change" in prompt
+    assert "Apply the requested correction faithfully to this Scene" in prompt
+    assert "maintaining the Scene's intended action, chronology, and forward progression" in prompt
     assert "materially changes how much screen time" in prompt
     assert "durationSeconds" in request["response_schema"]["properties"]
     assert request["response_schema"]["properties"]["durationSeconds"]["minimum"] == 6

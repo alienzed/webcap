@@ -63,7 +63,7 @@
 
   var DIRECTOR_PASS_PRESETS = {
     continuity: {
-      instruction: 'Review this Scene against the Story overview, visual atmosphere, continuity invariants, and neighboring Scenes. Repair only meaningful continuity gaps, contradictions, missing generation-critical context, or prompt omissions. Preserve the Scene\'s intended action, chronology, and narrative purpose. Do not rewrite merely for style or variety. If it is already coherent and complete, leave it unchanged.'
+      instruction: 'Review this Scene against the Story overview, visual atmosphere, continuity invariants, and the preceding Scene. Repair meaningful continuity gaps, contradictions, missing generation-critical context, or prompt omissions while preserving the Scene\'s intended action, chronology, and narrative purpose. If it is already coherent and complete, leave it unchanged.'
     }
   };
 

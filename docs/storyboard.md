@@ -495,7 +495,7 @@ The current operations are deliberately explicit rather than chat-like:
 - `expand_concept`: Story title + current concept + style; returns richer concept prose and does not create Scenes.
 - `develop_story`: Story concept + style + concise H3 rules; returns schema-constrained JSON containing the complete ordered Scene structure and initial H3 prompt for every Scene.
 - `write_prompt`: Story style + current Scene + only a useful previous exit-state handoff + the concise H3 output contract.
-- `refine_prompt`: Story concept, visual atmosphere, relevant continuity, the current Scene, and compact previous/next Scene context plus the existing prompt and one explicit correction. Only the current Scene may change. The Director may revise its intent, entry/exit state, prompt, or duration when the instruction requires it, and can explicitly return no change.
+- `refine_prompt`: Story concept, visual atmosphere, relevant continuity, the current Scene, and compact previous-Scene context plus the existing prompt and one explicit correction. Only the current Scene may change. The Director may revise its intent, entry/exit state, prompt, or duration when the instruction requires it, and can explicitly return no change.
 
 The contract module does not call a provider. The llama.cpp runtime consumes its returned prompt, so context assembly and leakage boundaries stay testable independently from model quality/runtime behavior.
 

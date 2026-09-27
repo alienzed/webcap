@@ -10,7 +10,9 @@ def test_environment_report_stops_training_checks_when_runtime_path_missing(monk
 
     report = environment_check.build_environment_report({"training": {}})
 
-    assert report["ok"] is False
+    assert report["ok"] is True
+    assert report["summary"]["core"]["ready"] is True
+    assert report["summary"]["training"]["ready"] is False
     failed = {item["id"] for item in report["checks"] if not item["ok"]}
     assert "training_cwd_configured" in failed
     assert "training_python" not in {item["id"] for item in report["checks"]}

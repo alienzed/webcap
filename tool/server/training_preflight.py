@@ -3,8 +3,12 @@ import json
 import shlex
 import shutil
 import time
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 from . import config as app_config
 from .caption_ops import _caption_name_for_media

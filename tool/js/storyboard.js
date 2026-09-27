@@ -23,6 +23,7 @@
     openStoryRequestId: 0,
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
     directorPassMode: 'custom',
+    storyAction: null,
     generationCapabilities: {
       loras: [],
       baseLoras: [],
@@ -1477,6 +1478,7 @@
     if (target.kind === 'concept') return 'story-concept:' + storyId;
     if (target.kind === 'scenes') return 'story-scenes:' + storyId;
     if (target.kind === 'repair') return 'story-repair:' + storyId;
+    if (target.kind === 'story-action') return 'story-action:' + storyId;
     if (target.kind === 'scene-prompt' && target.sceneId) {
       return 'scene-prompt:' + storyId + ':' + String(target.sceneId);
     }
@@ -1490,6 +1492,7 @@
 
   function directorTargetsConflict(a, b) {
     if (!a || !b || String(a.storyId || '') !== String(b.storyId || '')) return false;
+    if (a.kind === 'story-action' || b.kind === 'story-action') return true;
     if (a.kind === 'scene-prompt' && b.kind === 'scene-prompt') {
       return String(a.sceneId || '') === String(b.sceneId || '');
     }
@@ -1507,6 +1510,26 @@
   function setDirectorTargetProtected(target, protectedState) {
     target = target || {};
     if (!storyState.story || String(target.storyId || '') !== String(storyState.story.id || '')) return;
+    if (target.kind === 'story-action') {
+      document.querySelectorAll(
+        '#storyboard-story-authoring button, #storyboard-story-authoring input, #storyboard-story-authoring select, #storyboard-story-authoring textarea, ' +
+        '#storyboard-scenes-list button, #storyboard-scenes-list input, #storyboard-scenes-list select, #storyboard-scenes-list textarea, ' +
+        '#storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add], ' +
+        '#storyboard-generate-scenes-btn, #storyboard-director-model'
+      ).forEach(function (control) {
+        if (control.matches('[data-story-action-cancel]')) return;
+        if (protectedState) {
+          if (!control.disabled) {
+            control.disabled = true;
+            control.dataset.storyActionDisabled = '1';
+          }
+        } else if (control.dataset.storyActionDisabled === '1') {
+          control.disabled = false;
+          delete control.dataset.storyActionDisabled;
+        }
+      });
+      return;
+    }
     if (target.kind === 'concept') {
       var concept = el('storyboard-story-concept');
       if (concept) concept.disabled = !!protectedState;

@@ -216,6 +216,31 @@ def _previous_handoff(story, scene_id):
     return exit_state
 
 
+
+def _neighbor_scene_context(story, scene_id, offset):
+    order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
+    if scene_id not in order:
+        return ""
+    index = order.index(scene_id) + offset
+    if index < 0 or index >= len(order):
+        return ""
+    scene = (story.get("scenes") or {}).get(order[index])
+    if not isinstance(scene, dict):
+        return ""
+    fields = (
+        ("Title", scene.get("title")),
+        ("Summary / intent", scene.get("summary")),
+        ("Entry state", scene.get("entryState")),
+        ("Exit state", scene.get("exitState")),
+        ("Generation prompt", scene.get("prompt")),
+    )
+    return "\n".join(
+        label + ": " + _clean(value)
+        for label, value in fields
+        if _clean(value)
+    )
+
+
 def build_request(story, scene_id, operation, instruction=""):
     if not isinstance(story, dict):
         raise ValueError("Story data must be an object.")
@@ -391,6 +416,8 @@ def build_request(story, scene_id, operation, instruction=""):
     scene_context = _scene_context(scene)
     shared_context = _scene_shared_context_text(story, scene)
     previous_handoff = _previous_handoff(story, scene_id)
+    previous_scene_context = _neighbor_scene_context(story, scene_id, -1)
+    next_scene_context = _neighbor_scene_context(story, scene_id, 1)
     h3_mode = mode_from_reference_roles(_reference_roles(scene))
     h3_output = final_shape(h3_mode, scene.get("durationSeconds"))
 
@@ -443,6 +470,21 @@ def build_request(story, scene_id, operation, instruction=""):
             raise ValueError("Scene generation prompt is required to refine a prompt.")
         if not correction:
             raise ValueError("A refinement instruction is required.")
+        concept = _clean(story.get("concept"))
+        if concept:
+            blocks.append("[STORY CONCEPT / OVERVIEW]\n" + concept)
+        if previous_scene_context:
+            blocks.append(
+                "[PREVIOUS SCENE - CONTEXT ONLY]\n"
+                + previous_scene_context
+                + "\n\nUse this only to understand what immediately precedes the current Scene. Do not modify or repeat the previous Scene."
+            )
+        if next_scene_context:
+            blocks.append(
+                "[NEXT SCENE - CONTEXT ONLY]\n"
+                + next_scene_context
+                + "\n\nUse this only to understand where the Story is going next. Do not modify or preempt the next Scene."
+            )
         blocks.append("[EXISTING PROMPT]\n" + existing_prompt)
         blocks.append(
             "[H3 WRITING RULES]\n" + h3_runtime_context

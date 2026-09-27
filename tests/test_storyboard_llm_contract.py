@@ -108,6 +108,13 @@ def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
     prompt = request["prompt"]
 
     assert "EXISTING SECOND PROMPT" in prompt
+    assert "[STORY CONCEPT / OVERVIEW]" in prompt
+    assert "A long concept that should not be sent for a local prompt-writing operation." in prompt
+    assert "[PREVIOUS SCENE - CONTEXT ONLY]" in prompt
+    assert "OLD FIRST PROMPT" in prompt
+    assert "She is just inside the closed front door" in prompt
+    assert "[NEXT SCENE - CONTEXT ONLY]" in prompt
+    assert "UNRELATED SCENE PROMPT MUST NOT LEAK" in prompt
     assert "Keep the camera behind her until she notices the footprints." in prompt
     assert "smallest coherent change" in prompt
     assert "materially changes how much screen time" in prompt
@@ -121,7 +128,7 @@ def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
     assert "exitState" not in request["response_schema"]["required"]
     assert "You may revise the Scene summary / intent, entry state, or exit state only when the correction requires it" in prompt
     assert request["result_renderer"]["duration_field"] == "durationSeconds"
-    assert "UNRELATED SCENE PROMPT MUST NOT LEAK" not in prompt
+    assert "TAKE DATA MUST NOT LEAK" not in prompt
     assert "OTHER TAKE DATA MUST NOT LEAK" not in prompt
 
 

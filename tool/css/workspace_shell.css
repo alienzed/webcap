@@ -1508,7 +1508,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   right: 10px;
   bottom: auto;
   z-index: 55;
-  width: min(560px, calc(100% - 62px));
+  width: min(620px, calc(100% - 62px));
   max-height: min(70vh, calc(100vh - var(--shell-status-height) - 52px));
   min-height: 0;
   display: flex;
@@ -1526,44 +1526,48 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .inference-queue-drawer-header {
-  min-height: 52px;
+  min-height: 62px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 9px 11px 9px 13px;
+  gap: 14px;
+  padding: 11px 13px 11px 15px;
   border-bottom: 1px solid var(--border);
   background: var(--panel-soft);
 }
 
-.inference-queue-drawer-header > div {
+.inference-queue-header-copy {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .inference-queue-drawer-header strong {
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.15;
 }
 
 .inference-queue-drawer-header span {
   overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .inference-queue-header-actions {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 
 .inference-queue-header-actions .review-captions-btn {
   width: auto;
-  min-height: 28px;
-  padding: 3px 8px;
+  min-height: 31px;
+  padding: 4px 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -1591,10 +1595,10 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .inference-queue-list {
   min-height: 0;
   overflow: auto;
-  padding: 12px;
+  padding: 14px;
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 10px;
 }
 
 .inference-queue-row {
@@ -1659,17 +1663,20 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .inference-queue-copy strong {
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 1.25;
 }
 
 .inference-queue-copy span {
   color: var(--text);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .inference-queue-copy small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .inference-queue-actions {
@@ -1680,9 +1687,9 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .inference-queue-actions .review-captions-btn {
   width: auto;
-  min-height: 28px;
-  padding: 3px 8px;
-  font-size: 11px;
+  min-height: 31px;
+  padding: 4px 9px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -1704,16 +1711,17 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .inference-backlog-heading strong {
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 .inference-backlog-heading span {
-  min-width: 20px;
-  padding: 1px 6px;
+  min-width: 22px;
+  padding: 2px 7px;
   border-radius: 999px;
   background: var(--panel);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -1729,9 +1737,10 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .inference-queue-empty {
-  padding: 18px 10px;
+  padding: 22px 14px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.35;
   text-align: center;
 }
 
@@ -1753,24 +1762,18 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 
 /* Inference queue polish */
-.inference-queue-header-copy { min-width: 0; display: grid; gap: 2px; }
-.inference-queue-header-actions { display: flex; align-items: center; gap: 6px; }
-.inference-queue-pause-toggle { width: auto; min-height: 28px; padding: 3px 9px; font-size: 11px; white-space: nowrap; }
-.inference-queue-counts { color: var(--text); font-size: 11px; font-weight: 650; }
+.inference-queue-pause-toggle { width: auto; min-height: 31px; padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+.inference-queue-counts { color: var(--text); font-size: 12px; font-weight: 650; }
 .inference-queue-counts.hidden { display: none; }
-.inference-queue-row { grid-template-columns: 72px minmax(0, 1fr) auto; min-height: 64px; padding: 11px 12px; gap: 12px; }
-.inference-queue-position { padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 999px; background: var(--panel-soft); text-align: center; white-space: nowrap; }
+.inference-queue-row { grid-template-columns: 78px minmax(0, 1fr) auto; min-height: 70px; padding: 12px 13px; gap: 13px; border-radius: 9px; }
+.inference-queue-position { padding: 4px 7px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 999px; background: var(--panel-soft); font-size: 12px; text-align: center; white-space: nowrap; }
 .inference-queue-row.status-running .inference-queue-position,
 .inference-queue-row.status-starting .inference-queue-position { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--text); }
 .inference-queue-row.status-backlog .inference-queue-position { color: var(--muted); }
-.inference-queue-copy { gap: 2px; }
-.inference-queue-copy strong { font-size: 13px; }
-.inference-queue-copy span,
-.inference-queue-copy small { font-size: 11px; line-height: 1.25; }
-.inference-queue-actions { justify-content: flex-end; }
-.inference-queue-actions .inference-queue-icon-action { width: 28px; min-width: 28px; padding: 0; font-size: 14px; }
-.inference-backlog-heading { min-height: 38px; margin-top: 7px; padding: 8px 4px 5px; }
-.inference-backlog-heading strong { font-size: 12px; }
+.inference-queue-copy { gap: 3px; }
+.inference-queue-actions { justify-content: flex-end; gap: 6px; }
+.inference-queue-actions .inference-queue-icon-action { width: 31px; min-width: 31px; min-height: 31px; padding: 0; font-size: 15px; }
+.inference-backlog-heading { min-height: 42px; margin-top: 8px; padding: 9px 4px 6px; }
 .inference-queue-section-actions { display: flex; align-items: center; gap: 7px; }
-.inference-queue-section-actions .review-captions-btn { width: auto; min-height: 29px; padding: 3px 9px; white-space: nowrap; }
-.inference-queue-empty { min-height: 64px; display: grid; place-items: center; margin: 2px; border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--panel-soft) 58%, transparent); }
+.inference-queue-section-actions .review-captions-btn { width: auto; min-height: 31px; padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+.inference-queue-empty { min-height: 78px; display: grid; place-items: center; margin: 2px; border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--panel-soft) 58%, transparent); }

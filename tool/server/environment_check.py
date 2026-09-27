@@ -5,7 +5,11 @@ import shlex
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
 
+from . import inference_runtime
 from .training_runtime import (
     activation_prefix,
     build_runtime_command,
@@ -17,6 +21,9 @@ from .training_runtime import (
     uses_native_wsl_shell,
     wsl_executable,
 )
+
+
+GROUPS = ("core", "training", "inference", "director", "optional_analysis")
 
 
 def _check(check_id, group, required, ok, message, details="", guidance=""):
@@ -47,12 +54,12 @@ def _host_command(args, timeout=10):
         return 1, "", str(exc)
 
 
-def _python_package_check(package_name, label):
+def _python_package_check(package_name, label, group="optional_analysis", required=False):
     available = importlib.util.find_spec(package_name) is not None
     return _check(
         "package_" + package_name.replace("-", "_"),
-        "core",
-        False,
+        group,
+        required,
         available,
         label + " is installed." if available else label + " is not installed.",
         "",
@@ -87,58 +94,182 @@ def _parse_json_output(stdout):
     return json.loads(text.splitlines()[-1])
 
 
-def build_environment_report(config=None):
-    source = config if isinstance(config, dict) else {}
-    training = source.get("training") if isinstance(source.get("training"), dict) else {}
-    settings = training_runtime_settings(training)
-    checks = []
+def _http_json(url, timeout=3):
+    request = urllib.request.Request(str(url), method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = response.read()
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise ConnectionError(str(exc)) from exc
+    if not body:
+        return {}
+    try:
+        return json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Endpoint returned invalid JSON.") from exc
 
-    python_ok = sys.version_info >= (3, 10)
-    checks.append(_check(
-        "host_python",
-        "core",
-        True,
-        python_ok,
-        "WebCap Python " + sys.version.split()[0] + (" is supported." if python_ok else " is too old."),
-        sys.executable,
-        "Install Python 3.10 or newer, create a fresh environment, then reinstall requirements.txt." if not python_ok else "",
-    ))
 
-    pip_code, pip_out, pip_err = _host_command([sys.executable, "-m", "pip", "--version"])
-    checks.append(_check(
-        "host_pip",
-        "core",
-        True,
-        pip_code == 0,
-        "pip is available." if pip_code == 0 else "pip is not available in the WebCap Python environment.",
-        (pip_out + pip_err).strip(),
-        "Bootstrap pip for this Python installation, then run python -m pip install -r requirements.txt." if pip_code != 0 else "",
-    ))
-
-    for executable, required, guidance in (
-        ("ffmpeg", False, "Install FFmpeg and make ffmpeg available on PATH for media/video workflows."),
-        ("ffprobe", False, "Install FFmpeg and make ffprobe available on PATH for media metadata and video workflows."),
-        ("deface", False, "Install WebCap requirements and ensure the deface console command is available on PATH for defacing workflows."),
-    ):
-        path = shutil.which(executable)
-        checks.append(_check(
-            "host_" + executable,
-            "core",
-            required,
-            bool(path),
-            executable + (" is available." if path else " is not available."),
-            path or "",
-            "" if path else guidance,
-        ))
-
+def _append_optional_analysis_checks(checks):
     for package_name, label in (
         ("mediapipe", "MediaPipe"),
         ("rembg", "rembg"),
         ("onnxruntime", "ONNX Runtime"),
+        ("deface", "deface / CenterFace"),
         ("tensorboard", "TensorBoard"),
     ):
         checks.append(_python_package_check(package_name, label))
 
+    deface_path = shutil.which("deface")
+    checks.append(_check(
+        "analysis_deface_command",
+        "optional_analysis",
+        False,
+        bool(deface_path),
+        "deface command is available." if deface_path else "deface command is not available.",
+        deface_path or "",
+        "Run python -m pip install -r requirements.txt in the WebCap environment." if not deface_path else "",
+    ))
+
+    model_root = Path(__file__).resolve().parents[1] / "vendor" / "mediapipe" / "models"
+    missing_models = [
+        name
+        for name in ("face_landmarker.task", "pose_landmarker_lite.task")
+        if not (model_root / name).is_file()
+    ]
+    checks.append(_check(
+        "analysis_mediapipe_models",
+        "optional_analysis",
+        False,
+        not missing_models,
+        "WebCap MediaPipe task models are available." if not missing_models else "WebCap MediaPipe task models are missing.",
+        ", ".join(missing_models),
+        "Restore the vendored MediaPipe model files from the WebCap repository." if missing_models else "",
+    ))
+
+
+def _append_inference_checks(checks):
+    try:
+        stats = inference_runtime.system_stats()
+        details = ""
+        if isinstance(stats, dict):
+            system = stats.get("system") if isinstance(stats.get("system"), dict) else {}
+            devices = stats.get("devices") if isinstance(stats.get("devices"), list) else []
+            parts = []
+            if system.get("os"):
+                parts.append(str(system.get("os")))
+            if devices:
+                names = [str(item.get("name") or item.get("type") or "").strip() for item in devices if isinstance(item, dict)]
+                names = [name for name in names if name]
+                if names:
+                    parts.append(", ".join(names))
+            details = " · ".join(parts)
+        checks.append(_check(
+            "inference_comfyui",
+            "inference",
+            True,
+            True,
+            "ComfyUI API is reachable.",
+            details or inference_runtime.COMFY_BASE_URL,
+            "",
+        ))
+    except Exception as exc:
+        checks.append(_check(
+            "inference_comfyui",
+            "inference",
+            True,
+            False,
+            "ComfyUI API is not reachable.",
+            str(exc),
+            "Start/configure ComfyUI and verify " + inference_runtime.COMFY_BASE_URL + "/system_stats responds.",
+        ))
+
+
+def _append_director_checks(checks, source):
+    storyboard = source.get("storyboard") if isinstance(source.get("storyboard"), dict) else {}
+    director = storyboard.get("director") if isinstance(storyboard.get("director"), dict) else {}
+    filesystem = source.get("filesystem") if isinstance(source.get("filesystem"), dict) else {}
+    mode = str(director.get("mode") or "local").strip().lower()
+
+    checks.append(_check(
+        "director_mode",
+        "director",
+        True,
+        mode in {"local", "remote"},
+        "Storyboard Director mode is " + mode + "." if mode in {"local", "remote"} else "Storyboard Director mode is invalid.",
+        "",
+        "Set Storyboard Director mode to local or remote." if mode not in {"local", "remote"} else "",
+    ))
+    if mode not in {"local", "remote"}:
+        return
+
+    if mode == "remote":
+        endpoint = str(director.get("endpoint") or "").strip().rstrip("/")
+        configured = endpoint.startswith(("http://", "https://"))
+        checks.append(_check(
+            "director_remote_config",
+            "director",
+            True,
+            configured,
+            "Remote Director endpoint is configured." if configured else "Remote Director endpoint is not configured.",
+            endpoint,
+            "Set an OpenAI-compatible endpoint in App Settings > Storyboard." if not configured else "",
+        ))
+        if configured:
+            try:
+                payload = _http_json(endpoint + "/models", timeout=3)
+                checks.append(_check(
+                    "director_remote_endpoint",
+                    "director",
+                    True,
+                    isinstance(payload, dict),
+                    "Remote Director endpoint is reachable.",
+                    endpoint + "/models",
+                    "",
+                ))
+            except Exception as exc:
+                checks.append(_check(
+                    "director_remote_endpoint",
+                    "director",
+                    True,
+                    False,
+                    "Remote Director endpoint is not reachable.",
+                    str(exc),
+                    "Verify the configured OpenAI-compatible endpoint and its /models route.",
+                ))
+        return
+
+    configured_executable = str(director.get("llama_server") or "").strip()
+    if configured_executable:
+        executable = Path(configured_executable).expanduser()
+        executable_ok = executable.is_file()
+        executable_details = str(executable)
+    else:
+        discovered = shutil.which("llama-server")
+        executable_ok = bool(discovered)
+        executable_details = discovered or ""
+    checks.append(_check(
+        "director_llama_server",
+        "director",
+        True,
+        executable_ok,
+        "llama-server is available." if executable_ok else "llama-server is not available.",
+        executable_details,
+        "Install a recent llama.cpp build or configure App Settings > Storyboard > llama-server executable." if not executable_ok else "",
+    ))
+
+    models_root = str(filesystem.get("models") or "").strip()
+    checks.append(_check(
+        "director_models_root",
+        "director",
+        True,
+        bool(models_root),
+        "WebCap Model Root is configured." if models_root else "WebCap Model Root is not configured.",
+        models_root,
+        "Set Models Root in App Settings so local Director GGUF files can be discovered." if not models_root else "",
+    ))
+
+
+def _append_training_checks(checks, settings):
     shell_path = shutil.which("bash") if uses_native_wsl_shell() else wsl_executable()
     shell_label = "Current Linux shell" if uses_native_wsl_shell() else "WSL"
     checks.append(_check(
@@ -178,7 +309,7 @@ def build_environment_report(config=None):
         ))
 
     if not shell_path or not cwd:
-        return _finalize(checks, settings)
+        return
 
     checks.append(_training_check(
         "training_cwd",
@@ -214,8 +345,6 @@ def build_environment_report(config=None):
             False,
             True,
             "Training will use the existing shell environment.",
-            "",
-            "",
         ))
 
     runtime_python = build_runtime_command(settings, "python -c " + shlex.quote(
@@ -302,6 +431,54 @@ def build_environment_report(config=None):
         "Verify the NVIDIA Windows/Linux driver exposes nvidia-smi inside WSL; H3 calibration and GPU diagnostics depend on it." if code != 0 else "",
     ))
 
+
+def build_environment_report(config=None):
+    source = config if isinstance(config, dict) else {}
+    training = source.get("training") if isinstance(source.get("training"), dict) else {}
+    settings = training_runtime_settings(training)
+    checks = []
+
+    python_ok = sys.version_info >= (3, 10)
+    checks.append(_check(
+        "host_python",
+        "core",
+        True,
+        python_ok,
+        "WebCap Python " + sys.version.split()[0] + (" is supported." if python_ok else " is too old."),
+        sys.executable,
+        "Install Python 3.10 or newer, create a fresh environment, then reinstall requirements.txt." if not python_ok else "",
+    ))
+
+    pip_code, pip_out, pip_err = _host_command([sys.executable, "-m", "pip", "--version"])
+    checks.append(_check(
+        "host_pip",
+        "core",
+        True,
+        pip_code == 0,
+        "pip is available." if pip_code == 0 else "pip is not available in the WebCap Python environment.",
+        (pip_out + pip_err).strip(),
+        "Bootstrap pip for this Python installation, then run python -m pip install -r requirements.txt." if pip_code != 0 else "",
+    ))
+
+    checks.append(_python_package_check("flask", "Flask", group="core", required=True))
+    checks.append(_python_package_check("PIL", "Pillow", group="core", required=True))
+
+    for executable in ("ffmpeg", "ffprobe"):
+        path = shutil.which(executable)
+        checks.append(_check(
+            "host_" + executable,
+            "core",
+            True,
+            bool(path),
+            executable + (" is available." if path else " is not available."),
+            path or "",
+            "" if path else "Install FFmpeg and make " + executable + " available on PATH.",
+        ))
+
+    _append_optional_analysis_checks(checks)
+    _append_inference_checks(checks)
+    _append_director_checks(checks, source)
+    _append_training_checks(checks, settings)
     return _finalize(checks, settings)
 
 
@@ -319,14 +496,12 @@ def _group_summary(checks, group):
 
 
 def _finalize(checks, settings):
-    core = _group_summary(checks, "core")
-    training = _group_summary(checks, "training")
+    summaries = {group: _group_summary(checks, group) for group in GROUPS}
     return {
-        "ok": core["ready"],
+        "ok": summaries["core"]["ready"],
         "checks": checks,
         "summary": {
-            "core": core,
-            "training": training,
+            **summaries,
             "passed": len([item for item in checks if item["ok"]]),
             "total": len(checks),
         },

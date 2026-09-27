@@ -308,6 +308,30 @@
   gap: 8px;
 }
 
+.app-settings-environment-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app-settings-environment-group + .app-settings-environment-group {
+  margin-top: 4px;
+}
+
+.app-settings-environment-group-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+  font-size: 12px;
+}
+
+.app-settings-environment-group-header span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .app-settings-environment-check {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);

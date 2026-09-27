@@ -303,7 +303,11 @@ function renderEnvironmentCheck(payload) {
     var checks = payload.checks.filter(function (check) { return check.group === groupName; });
     if (!checks.length) return '';
     var groupSummary = summary[groupName] || {};
-    var groupState = groupSummary.ready ? 'Ready' : (Number(groupSummary.requiredFailures || 0) + ' issue(s)');
+    var requiredFailures = Number(groupSummary.requiredFailures || 0);
+    var optionalFailures = Number(groupSummary.optionalFailures || 0);
+    var groupState = requiredFailures
+      ? (requiredFailures + ' issue(s)')
+      : (optionalFailures ? ('Ready · ' + optionalFailures + ' optional unavailable') : 'Ready');
     var rows = checks.map(function (check) {
       var stateClass = check.ok ? 'ok' : (check.required ? 'failed' : 'optional');
       var detail = check.details ? '<div class="app-settings-environment-detail">' + escapeHtml(check.details) + '</div>' : '';

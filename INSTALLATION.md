@@ -27,6 +27,28 @@ Python dependencies are installed from `requirements.txt`.
 
 Python 3.10 is supported; WebCap uses the `tomli` compatibility package there because the standard-library `tomllib` module was introduced in Python 3.11.
 
+### Ubuntu / WSL system packages
+
+On a normal Ubuntu or WSL Ubuntu installation, the common system-level prerequisites can be installed with:
+
+```bash
+sudo apt update
+sudo apt install -y git python3 python3-venv python3-pip ffmpeg curl
+```
+
+Validate them before installing WebCap:
+
+```bash
+git --version
+python3 --version
+python3 -m pip --version
+ffmpeg -version
+ffprobe -version
+curl --version
+```
+
+The commands only establish the ordinary host tools. GPU training dependencies are handled separately below.
+
 ### Recommended
 
 Use a dedicated Python virtual environment rather than installing WebCap packages globally.
@@ -364,14 +386,375 @@ An installation helper failing must not make an otherwise working WebCap install
 
 # Optional components
 
-WebCap has additional optional runtimes for inference, testing, local Director models, and analysis features.
+The following features are optional at the product level. Some of their Python packages are nevertheless included in WebCap's normal `requirements.txt` today. This section documents the **current repository**, not a future packaging scheme.
 
-Those dependencies are intentionally not folded into the MH3 training baseline. They should be installed and validated according to the feature that needs them.
+## 18. Dependency map
 
-This document will expand as those optional environments are reviewed.
+| Capability | Current dependency | Where it runs | Current install ownership | Future setup posture |
+| --- | --- | --- | --- | --- |
+| Core media/video | FFmpeg / FFprobe | WebCap host | System package | Safe to detect and offer normal package-manager install |
+| Background remove / blur | `rembg` + ONNX Runtime | WebCap Python | `requirements.txt` | Safe to install/repair with WebCap Python requirements |
+| Face Focus / Deface | `deface` / CenterFace | WebCap Python | `requirements.txt` | Safe to install/repair with WebCap Python requirements |
+| Selection pose / expression | MediaPipe | WebCap Python | `requirements.txt` | Safe to install/repair with WebCap Python requirements |
+| Training history metrics | TensorBoard | WebCap Python | `requirements.txt` | Safe to install/repair with WebCap Python requirements |
+| Storyboard Director, local | CUDA-enabled llama.cpp `llama-server` | Local machine / WSL topology | External runtime | Detect first; offer explicit build/install choices |
+| Storyboard Director, remote | OpenAI-compatible HTTP endpoint | External service | User-managed | Validate endpoint only; nothing to install |
+| Generate / Storyboard Takes / Test Generations | ComfyUI API | Local or reachable provider | External runtime | Detect/configure separately; do not install into WebCap's Python env |
+| Managed MH3 training | Diffusion Pipe + DeepSpeed + CUDA PyTorch | WSL2/Linux | External training env | Guided/optional install; GPU stack requires explicit confirmation |
+| Model files | GGUF / safetensors / VAEs / text encoders / LoRAs | User model storage | User-managed | Detect paths and explain missing files; avoid surprise multi-GB downloads |
+
+## 19. Validate WebCap Python dependencies
+
+After activating WebCap's own virtual environment:
+
+```bash
+python -c "import flask, PIL; print('WebCap core Python imports OK')"
+python -c "import rembg, onnxruntime; print('rembg / ONNX Runtime OK')"
+python -c "import mediapipe; print('MediaPipe', mediapipe.__version__)"
+python -c "from deface.centerface import CenterFace; print('deface / CenterFace OK')"
+python -c "import tensorboard; print('TensorBoard', tensorboard.__version__)"
+```
+
+Validate console tools:
+
+```bash
+command -v ffmpeg
+command -v ffprobe
+command -v deface
+tensorboard --version
+```
+
+If these fail in a clean WebCap environment, the normal repair is:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Do not create separate MediaPipe/rembg/deface environments unless a platform-specific conflict actually requires one.
+
+### rembg model download
+
+WebCap currently uses rembg's `u2net_human_seg` model. The Python package can be installed ahead of time, but rembg may obtain model data on first use depending on the local rembg cache state.
+
+That makes the package itself a good auto-install candidate, while model acquisition should be surfaced as a potentially networked first-use/setup action rather than hidden behind an unrelated media button.
+
+## 20. Local Storyboard Director: llama.cpp
+
+WebCap's local Director looks for a `llama-server` executable or an explicit **App Settings → Storyboard → llama-server executable** path.
+
+A normal CUDA-enabled Linux/WSL build is:
+
+```bash
+sudo apt update
+sudo apt install -y git cmake build-essential
+
+git clone https://github.com/ggml-org/llama.cpp
+cd llama.cpp
+
+cmake -B build -DGGML_CUDA=ON
+cmake --build build --config Release -t llama-server -j
+```
+
+The resulting binary is normally:
+
+```text
+./build/bin/llama-server
+```
+
+Validate it:
+
+```bash
+./build/bin/llama-server --version
+```
+
+If you want it discoverable without an explicit WebCap path, place or link it somewhere on `PATH`, then validate:
+
+```bash
+command -v llama-server
+llama-server --version
+```
+
+WebCap itself owns starting/stopping its configured local Director process. You do **not** need to manually leave a llama.cpp server running when using local Director mode.
+
+### CPU-only llama.cpp
+
+A CPU-only build is possible:
+
+```bash
+cmake -B build
+cmake --build build --config Release -t llama-server -j
+```
+
+This is useful for compatibility testing but may be impractically slow for the large Director models normally used with Storyboard.
+
+### Remote Director
+
+No local llama.cpp installation is required when **Director Mode = Remote**.
+
+Validate an OpenAI-compatible endpoint outside WebCap with an endpoint-appropriate request. For a conventional server exposing `/v1/models`:
+
+```bash
+curl -fsS http://HOST:PORT/v1/models
+```
+
+Then configure the endpoint in **App Settings → Storyboard**.
+
+Because remote providers differ, WebCap should validate the configured endpoint/capabilities rather than attempting to install or modify the remote service.
+
+## 21. ComfyUI inference provider
+
+WebCap uses a reachable ComfyUI HTTP API for Generate, Storyboard inference/Takes, and Test Generations.
+
+WebCap currently expects the local provider at:
+
+```text
+http://127.0.0.1:8188
+```
+
+On the established Windows + WSL topology, WebCap can also use Windows `curl.exe` from WSL when communicating with that local Windows ComfyUI instance.
+
+### Recommended ownership
+
+ComfyUI should have its **own environment**. Do not install ComfyUI's PyTorch stack into WebCap's Python virtual environment.
+
+For most Windows users, the official ComfyUI Desktop/portable distributions are the easiest route.
+
+For a manual Linux installation, use a dedicated environment. The exact current PyTorch command is hardware-sensitive, so check current ComfyUI/PyTorch guidance before installing it. A conventional flow is:
+
+```bash
+git clone https://github.com/Comfy-Org/ComfyUI.git
+cd ComfyUI
+
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+
+# Install the current GPU-appropriate PyTorch build first.
+# Then:
+python -m pip install -r requirements.txt
+```
+
+Run ComfyUI:
+
+```bash
+python main.py
+```
+
+Validate the exact API endpoint WebCap uses for provider discovery:
+
+```bash
+curl -fsS http://127.0.0.1:8188/system_stats
+```
+
+A JSON response confirms that the basic provider API is reachable.
+
+WebCap also validates required model/node names when preparing inference. A reachable ComfyUI server can therefore still be **feature-incomplete** if the selected workflow's model files or nodes are absent.
+
+### Current NVIDIA note
+
+ComfyUI's upstream installation guidance changes with PyTorch/CUDA support and GPU generations. Do not freeze a WebCap-owned ComfyUI Torch command into an installer unless it is fetched/maintained deliberately.
+
+This is a strong candidate for:
+
+1. detecting the GPU;
+2. detecting an existing working ComfyUI first;
+3. offering the current upstream installation path;
+4. running any proposed command only after the user sees it;
+5. validating `/system_stats` afterward.
+
+## 22. Optional Python analysis features
+
+### MediaPipe selection analysis
+
+Package installation is already covered by:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Validation:
+
+```bash
+python -c "import mediapipe as mp; print(mp.__version__)"
+```
+
+WebCap also ships the MediaPipe task model files it expects under its vendored model directory, so this feature does not require a separate model download in the normal repository checkout.
+
+### Deface / Face Focus
+
+Validation:
+
+```bash
+python -c "from deface.centerface import CenterFace; CenterFace(backend='auto'); print('CenterFace OK')"
+command -v deface
+```
+
+### rembg background operations
+
+Validation:
+
+```bash
+python -c "import rembg, onnxruntime; print('rembg / ONNX Runtime OK')"
+```
+
+Actual segmentation-model readiness is best proven by a small real background-removal operation because the model cache may not exist until first use.
+
+### TensorBoard
+
+Validation:
+
+```bash
+tensorboard --version
+python -c "import tensorboard; print(tensorboard.__version__)"
+```
+
+TensorBoard is used by WebCap's training-analysis/history tooling; it is not the training launcher itself.
+
+---
+
+# Auto-install roadmap
+
+The installation document and Environment Check should describe the **same dependency graph**. That gives WebCap a deterministic path toward optional setup assistance without creating a second source of truth.
+
+## 23. Installation states
+
+Each dependency should eventually expose one of these states:
+
+- **Ready** — detected and validated.
+- **Missing** — nothing usable detected.
+- **Misconfigured** — installed, but WebCap is pointed at the wrong path/environment.
+- **Incompatible** — present but failed a functional validation.
+- **Not configured** — optional feature has never been set up.
+- **Unknown** — validation could not establish a safe conclusion.
+
+Version differences alone should not produce **Incompatible** when the actual functional probe passes.
+
+## 24. Automation classes
+
+### Class A — safe to automate
+
+These are deterministic and easy to validate afterward:
+
+- copy `config.example.json` to `config.json`;
+- create WebCap directories;
+- create a WebCap virtual environment;
+- install/repair `requirements.txt`;
+- install ordinary Ubuntu packages such as Git, FFmpeg, curl, CMake, and build-essential after explicit user approval;
+- clone/update Diffusion Pipe;
+- clone/update llama.cpp;
+- build llama.cpp from an explicitly selected CPU/CUDA configuration;
+- re-run Environment Check.
+
+Every command should still be shown and logged.
+
+### Class B — automate only inside an explicitly selected environment
+
+These are reasonable once ownership is unambiguous:
+
+- create the Diffusion Pipe Conda environment with Python 3.12;
+- install Diffusion Pipe's `requirements.txt`;
+- install/update ComfyUI's own `requirements.txt`;
+- install known optional Python packages into their owning environment.
+
+WebCap must display the exact environment/path being modified before proceeding.
+
+### Class C — guided, hardware-sensitive install
+
+These should be optional and require confirmation of the proposed command:
+
+- PyTorch CUDA/ROCm/XPU builds;
+- CUDA/NVCC packages;
+- GPU-specific llama.cpp builds;
+- ComfyUI GPU runtime;
+- Flash Attention or other compiled model-specific packages.
+
+For these, WebCap should prefer current upstream guidance and **functional validation** over a hard-coded historical version matrix.
+
+### Class D — detect/configure, do not silently install
+
+- NVIDIA/AMD/Intel system drivers;
+- WSL2 itself when administrator/reboot operations are required;
+- remote Director services;
+- large model/checkpoint downloads;
+- licensed/gated model files;
+- user-owned ComfyUI custom-node ecosystems.
+
+WebCap can explain, link, validate, and perhaps launch an explicit external installer, but these should not happen as hidden prerequisites.
+
+## 25. Proposed setup-assistant workflow
+
+A future **Setup Assistant** can be straightforward:
+
+1. Run Environment Check.
+2. Group results by **Core**, **Training**, **Inference**, **Director**, and **Optional Analysis**.
+3. For each missing item, show:
+   - what it is used for;
+   - whether it is required for the user's selected feature;
+   - detected/current state;
+   - proposed install/repair command;
+   - target environment/path;
+   - **Install / Copy Command / Skip**.
+4. Run only the selected step.
+5. Stream stdout/stderr visibly.
+6. Re-run that dependency's validation.
+7. Mark it Ready only when the functional probe succeeds.
+8. Continue with the next selected dependency.
+
+There is no need for a large package-management abstraction. The setup assistant can remain a finite list of explicit, app-owned installation recipes paired with explicit validation probes.
+
+## 26. Failure contract for assisted installs
+
+An attempted install is allowed to fail.
+
+When it does, WebCap should:
+
+- stop the current install step;
+- leave unrelated setup steps available;
+- show the exact command that ran;
+- show the real exit code;
+- preserve stdout/stderr in the WebCap Console;
+- explain which validation still fails;
+- provide a **Copy Error / Copy Diagnostics** action;
+- suggest searching the exact error in current upstream issues/documentation;
+- suggest giving the copied diagnostic block to an up-to-date interactive assistant such as ChatGPT.
+
+A useful copied diagnostic block should contain, where relevant:
+
+```text
+WebCap version / commit:
+Operating system:
+WSL distribution:
+GPU:
+NVIDIA driver:
+Python:
+Python executable:
+PyTorch:
+PyTorch CUDA build:
+CUDA available:
+nvidia-smi:
+Target environment:
+Command attempted:
+Exit code:
+Error output:
+```
+
+The user should never have to transcribe a truncated toast or screenshot an error to get help.
+
+## 27. Principle for version policy
+
+WebCap should maintain:
+
+- **minimums** only where there is a real known lower bound;
+- **reference versions** for combinations we have actually used or upstream explicitly documents;
+- **functional probes** wherever newer/different versions may still work.
+
+This is especially important for PyTorch, CUDA, ComfyUI, llama.cpp, and DeepSpeed. The environment checker should say **different but working** rather than **wrong version** whenever the required capability is demonstrably present.
 
 ## Upstream references
 
 - Diffusion Pipe: https://github.com/tdrussell/diffusion-pipe
 - Diffusion Pipe supported models: https://github.com/tdrussell/diffusion-pipe/blob/main/docs/supported_models.md
 - MiniMax H3 example: https://github.com/tdrussell/diffusion-pipe/blob/main/examples/minimax_h3_example.toml
+- llama.cpp: https://github.com/ggml-org/llama.cpp
+- llama.cpp server: https://github.com/ggml-org/llama.cpp/tree/master/tools/server
+- ComfyUI: https://github.com/Comfy-Org/ComfyUI

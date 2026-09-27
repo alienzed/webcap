@@ -315,6 +315,7 @@ function runEnvironmentCheck() {
     })
     .then(renderEnvironmentCheck)
     .catch(function (error) {
+      reportConsoleError('Environment Check', error);
       if (ui.appSettingsEnvironmentSummaryEl) ui.appSettingsEnvironmentSummaryEl.textContent = 'Environment check failed.';
       if (ui.appSettingsEnvironmentResultsEl) {
         ui.appSettingsEnvironmentResultsEl.innerHTML = '<div class="app-settings-environment-check failed"><span class="app-settings-environment-mark">!</span><span><strong>' + escapeHtml(error.message || String(error)) + '</strong></span></div>';

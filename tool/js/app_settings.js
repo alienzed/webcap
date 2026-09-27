@@ -276,6 +276,80 @@ function resetH3CalibrationSettings() {
   });
 }
 
+function renderEnvironmentCheck(payload) {
+  var summaryEl = ui.appSettingsEnvironmentSummaryEl;
+  var resultsEl = ui.appSettingsEnvironmentResultsEl;
+  if (!summaryEl || !resultsEl) return;
+  if (!payload || !Array.isArray(payload.checks)) {
+    summaryEl.textContent = 'Environment check did not return a valid report.';
+    resultsEl.innerHTML = '';
+    resultsEl.classList.add('hidden');
+    return;
+  }
+  var summary = payload.summary || {};
+  var groupOrder = ['core', 'training', 'inference', 'director', 'optional_analysis'];
+  var groupLabels = {
+    core: 'Core',
+    training: 'Training',
+    inference: 'Inference',
+    director: 'Director',
+    optional_analysis: 'Optional Analysis'
+  };
+  var core = summary.core || {};
+  summaryEl.textContent = core.ready
+    ? ('WebCap ready · ' + Number(summary.passed || 0) + '/' + Number(summary.total || 0) + ' checks passed')
+    : (Number(core.requiredFailures || 0) + ' core issue(s) · ' + Number(summary.passed || 0) + '/' + Number(summary.total || 0) + ' checks passed');
+  resultsEl.innerHTML = groupOrder.map(function (groupName) {
+    var checks = payload.checks.filter(function (check) { return check.group === groupName; });
+    if (!checks.length) return '';
+    var groupSummary = summary[groupName] || {};
+    var requiredFailures = Number(groupSummary.requiredFailures || 0);
+    var optionalFailures = Number(groupSummary.optionalFailures || 0);
+    var groupState = requiredFailures
+      ? (requiredFailures + ' issue(s)')
+      : (optionalFailures ? ('Ready · ' + optionalFailures + ' optional unavailable') : 'Ready');
+    var rows = checks.map(function (check) {
+      var stateClass = check.ok ? 'ok' : (check.required ? 'failed' : 'optional');
+      var detail = check.details ? '<div class="app-settings-environment-detail">' + escapeHtml(check.details) + '</div>' : '';
+      var guidance = check.guidance ? '<div class="app-settings-environment-guidance">' + escapeHtml(check.guidance) + '</div>' : '';
+      return '<div class="app-settings-environment-check ' + stateClass + '">' +
+        '<span class="app-settings-environment-mark">' + (check.ok ? '&#10003;' : '!') + '</span>' +
+        '<span><strong>' + escapeHtml(check.message || check.id) + '</strong>' + detail + guidance + '</span>' +
+        '</div>';
+    }).join('');
+    return '<section class="app-settings-environment-group">' +
+      '<div class="app-settings-environment-group-header"><strong>' + escapeHtml(groupLabels[groupName] || groupName) + '</strong><span>' + escapeHtml(groupState) + '</span></div>' +
+      rows +
+      '</section>';
+  }).join('');
+  resultsEl.classList.remove('hidden');
+}
+
+function runEnvironmentCheck() {
+  var button = ui.appSettingsEnvironmentRunBtnEl;
+  if (button) button.disabled = true;
+  if (ui.appSettingsEnvironmentSummaryEl) ui.appSettingsEnvironmentSummaryEl.textContent = 'Checking...';
+  fetch('/app/environment')
+    .then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok) throw new Error(payload && payload.error ? payload.error : 'Environment check failed.');
+        return payload;
+      });
+    })
+    .then(renderEnvironmentCheck)
+    .catch(function (error) {
+      reportConsoleError('Environment Check', error);
+      if (ui.appSettingsEnvironmentSummaryEl) ui.appSettingsEnvironmentSummaryEl.textContent = 'Environment check failed.';
+      if (ui.appSettingsEnvironmentResultsEl) {
+        ui.appSettingsEnvironmentResultsEl.innerHTML = '<div class="app-settings-environment-check failed"><span class="app-settings-environment-mark">!</span><span><strong>' + escapeHtml(error.message || String(error)) + '</strong></span></div>';
+        ui.appSettingsEnvironmentResultsEl.classList.remove('hidden');
+      }
+    })
+    .finally(function () {
+      if (button) button.disabled = false;
+    });
+}
+
 function closeAppSettingsModal() {
   if (!ui.appSettingsModalEl) return;
   ui.appSettingsModalEl.classList.add('hidden');
@@ -478,6 +552,7 @@ function wireAppSettingsUi() {
   if (h3Stop) h3Stop.onclick = stopH3Calibration;
   if (h3Reset) h3Reset.onclick = resetH3CalibrationSettings;
   if (h3Console) h3Console.onclick = showConsolePanel;
+  if (ui.appSettingsEnvironmentRunBtnEl) ui.appSettingsEnvironmentRunBtnEl.onclick = runEnvironmentCheck;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
     button.onclick = function () {
       setAppSettingsTab(button.getAttribute('data-app-settings-tab'), false);

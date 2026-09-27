@@ -23,6 +23,7 @@ from .smart_set import create_set_from_results_response, smart_set_materialize_r
 from .prune_candidates import prune_candidates_response
 from .duplicate_candidates import duplicate_candidates_response
 from .training_setup import ensure_training_setup
+from .environment_check import build_environment_report
 from .epoch_test_bench import (
     activity_snapshot as test_generations_activity_snapshot,
     browse_source as test_generations_browse_source,
@@ -371,6 +372,15 @@ def static_files(filename):
     if filename.startswith("templates/"):
         return send_from_directory(TEMPLATES_DIR, filename[10:])
     return send_from_directory(TOOL_DIR, filename)
+
+
+@app.route("/app/environment", methods=["GET"])
+def app_environment():
+    try:
+        return jsonify(build_environment_report(app_config.load_config_from_disk()))
+    except Exception as exc:
+        app.logger.exception("ENVIRONMENT CHECK FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 @app.route("/app/config", methods=["GET"])

@@ -1,7 +1,13 @@
 from tool.server import environment_check
 
 
+def _stub_optional_probes(monkeypatch):
+    monkeypatch.setattr(environment_check.inference_runtime, "system_stats", lambda: {"system": {"os": "test"}, "devices": []})
+    monkeypatch.setattr(environment_check, "_http_json", lambda *args, **kwargs: {"data": []})
+
+
 def test_environment_report_stops_training_checks_when_runtime_path_missing(monkeypatch):
+    _stub_optional_probes(monkeypatch)
     monkeypatch.setattr(environment_check, "uses_native_wsl_shell", lambda: False)
     monkeypatch.setattr(environment_check, "wsl_executable", lambda: "wsl.exe")
     monkeypatch.setattr(environment_check.shutil, "which", lambda name: "/usr/bin/" + name if name in {"ffmpeg", "ffprobe", "deface"} else None)
@@ -19,6 +25,7 @@ def test_environment_report_stops_training_checks_when_runtime_path_missing(monk
 
 
 def test_environment_report_flags_partial_conda_configuration(monkeypatch):
+    _stub_optional_probes(monkeypatch)
     monkeypatch.setattr(environment_check, "uses_native_wsl_shell", lambda: False)
     monkeypatch.setattr(environment_check, "wsl_executable", lambda: "wsl.exe")
     monkeypatch.setattr(environment_check.shutil, "which", lambda name: None)
@@ -39,6 +46,7 @@ def test_environment_report_flags_partial_conda_configuration(monkeypatch):
 
 
 def test_environment_report_surfaces_training_versions(monkeypatch):
+    _stub_optional_probes(monkeypatch)
     monkeypatch.setattr(environment_check, "uses_native_wsl_shell", lambda: False)
     monkeypatch.setattr(environment_check, "wsl_executable", lambda: "wsl.exe")
     monkeypatch.setattr(environment_check.shutil, "which", lambda name: "/usr/bin/" + name if name in {"ffmpeg", "ffprobe", "deface"} else None)
@@ -70,3 +78,47 @@ def test_environment_report_surfaces_training_versions(monkeypatch):
     assert checks["training_torch_cuda"]["ok"] is True
     assert "torch 2.12.0" in checks["training_torch_cuda"]["details"]
     assert "RTX 5090" in checks["training_torch_cuda"]["details"]
+
+
+def test_environment_report_groups_optional_capabilities(monkeypatch):
+    monkeypatch.setattr(environment_check, "uses_native_wsl_shell", lambda: False)
+    monkeypatch.setattr(environment_check, "wsl_executable", lambda: None)
+    monkeypatch.setattr(environment_check.shutil, "which", lambda name: "/usr/bin/" + name if name in {"ffmpeg", "ffprobe", "deface", "llama-server"} else None)
+    monkeypatch.setattr(environment_check, "_host_command", lambda *args, **kwargs: (0, "pip 25", ""))
+    monkeypatch.setattr(environment_check.importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(environment_check.inference_runtime, "system_stats", lambda: {"system": {"os": "Windows"}, "devices": [{"name": "RTX 5090"}]})
+
+    report = environment_check.build_environment_report({
+        "filesystem": {"models": "C:\\models"},
+        "storyboard": {"director": {"mode": "local"}},
+        "training": {},
+    })
+
+    assert report["summary"]["inference"]["ready"] is True
+    assert report["summary"]["director"]["ready"] is True
+    assert report["summary"]["optional_analysis"]["ready"] is True
+    checks = {item["id"]: item for item in report["checks"]}
+    assert checks["inference_comfyui"]["group"] == "inference"
+    assert checks["director_llama_server"]["ok"] is True
+    assert checks["package_mediapipe"]["group"] == "optional_analysis"
+
+
+def test_environment_report_remote_director_failure_is_group_local(monkeypatch):
+    monkeypatch.setattr(environment_check, "uses_native_wsl_shell", lambda: False)
+    monkeypatch.setattr(environment_check, "wsl_executable", lambda: None)
+    monkeypatch.setattr(environment_check.shutil, "which", lambda name: "/usr/bin/" + name if name in {"ffmpeg", "ffprobe"} else None)
+    monkeypatch.setattr(environment_check, "_host_command", lambda *args, **kwargs: (0, "pip 25", ""))
+    monkeypatch.setattr(environment_check.importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(environment_check.inference_runtime, "system_stats", lambda: (_ for _ in ()).throw(ConnectionError("offline")))
+    monkeypatch.setattr(environment_check, "_http_json", lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("remote offline")))
+
+    report = environment_check.build_environment_report({
+        "storyboard": {"director": {"mode": "remote", "endpoint": "http://director.example/v1"}},
+        "training": {},
+    })
+
+    assert report["ok"] is True
+    assert report["summary"]["director"]["ready"] is False
+    assert report["summary"]["inference"]["ready"] is False
+    checks = {item["id"]: item for item in report["checks"]}
+    assert "remote offline" in checks["director_remote_endpoint"]["details"]

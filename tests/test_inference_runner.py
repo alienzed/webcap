@@ -508,11 +508,16 @@ def test_inference_snapshot_projects_test_rendition_context(inference_root):
     assert job["candidateKind"] == "base"
     assert job["label"] == "Comparison · Base"
 
-def test_inference_runner_cancels_provider_after_unexpected_post_launch_failure(inference_root, monkeypatch):
+def test_inference_runner_pauses_and_preserves_head_job_after_unexpected_post_launch_failure(inference_root, monkeypatch):
     queued = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,
         {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
         metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    waiting = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Waiting"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
     )
 
     def fail_after_launch(job_id):
@@ -532,14 +537,19 @@ def test_inference_runner_cancels_provider_after_unexpected_post_launch_failure(
     monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
     monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
 
-    inference_runner._advance_queue()
+    result = inference_runner._advance_queue()
 
-    finished = inference_runner.job_status(queued["id"])
-    assert finished["status"] == "failed"
+    snapshot = inference_runner.snapshot()
+    assert result["jobId"] == queued["id"]
+    assert result["status"] == "queued"
+    assert snapshot["paused"] is True
+    assert "provider polling exploded" in snapshot["pauseReason"]
+    assert [job["jobId"] for job in snapshot["jobs"]] == [queued["id"], waiting["id"]]
+    assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2]
     assert cancelled == ["provider-123"]
 
 
-def test_inference_runner_does_not_cancel_provider_already_terminal(inference_root, monkeypatch):
+def test_inference_runner_preserves_job_when_provider_already_terminal(inference_root, monkeypatch):
     queued = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,
         {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
@@ -565,7 +575,8 @@ def test_inference_runner_does_not_cancel_provider_already_terminal(inference_ro
 
     inference_runner._advance_queue()
 
-    assert inference_runner.job_status(queued["id"])["status"] == "failed"
+    assert inference_runner.job_status(queued["id"])["status"] == "queued"
+    assert inference_runner.snapshot()["paused"] is True
     assert cancelled == []
 
 def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconfirmed(inference_root, monkeypatch):
@@ -596,18 +607,20 @@ def test_inference_runner_pauses_and_retains_gpu_when_provider_cleanup_is_unconf
 
     finished = inference_runner.job_status(queued["id"])
     snapshot = inference_runner.snapshot()
-    assert finished["status"] == "failed"
-    assert snapshot["paused"] is False
-    assert snapshot["pauseReason"] == ""
+    assert finished["status"] == "queued"
+    assert snapshot["paused"] is True
+    assert "provider polling exploded" in snapshot["pauseReason"]
     assert "could not be confirmed stopped" in snapshot["waitReason"]
     persisted = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)
-    assert persisted["paused"] is False
-    assert persisted["pauseReason"] == ""
+    assert persisted["paused"] is True
+    assert persisted["activeJobId"] == ""
+    assert [job["id"] for job in persisted["jobs"]] == [queued["id"], waiting["id"]]
     assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
 
-    execution_queue.resume_lane(inference_runner.EXECUTION_LANE)
-    inference_runner._advance_queue()
+    result = inference_runner.action("resume_queue")
 
+    assert result["resumeBlocked"] is True
+    assert execution_queue.get_job(queued["id"])["status"] == "queued"
     assert execution_queue.get_job(waiting["id"])["status"] == "queued"
     assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
 

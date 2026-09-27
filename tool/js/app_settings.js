@@ -276,6 +276,56 @@ function resetH3CalibrationSettings() {
   });
 }
 
+function renderEnvironmentCheck(payload) {
+  var summaryEl = ui.appSettingsEnvironmentSummaryEl;
+  var resultsEl = ui.appSettingsEnvironmentResultsEl;
+  if (!summaryEl || !resultsEl) return;
+  if (!payload || !Array.isArray(payload.checks)) {
+    summaryEl.textContent = 'Environment check did not return a valid report.';
+    resultsEl.innerHTML = '';
+    resultsEl.classList.add('hidden');
+    return;
+  }
+  var summary = payload.summary || {};
+  summaryEl.textContent = payload.ok
+    ? ('Ready · ' + Number(summary.passed || 0) + '/' + Number(summary.total || 0) + ' checks passed')
+    : (Number(summary.requiredFailures || 0) + ' required issue(s) · ' + Number(summary.optionalFailures || 0) + ' optional issue(s)');
+  resultsEl.innerHTML = payload.checks.map(function (check) {
+    var stateClass = check.ok ? 'ok' : (check.required ? 'failed' : 'optional');
+    var detail = check.details ? '<div class="app-settings-environment-detail">' + escapeHtml(check.details) + '</div>' : '';
+    var guidance = check.guidance ? '<div class="app-settings-environment-guidance">' + escapeHtml(check.guidance) + '</div>' : '';
+    return '<div class="app-settings-environment-check ' + stateClass + '">' +
+      '<span class="app-settings-environment-mark">' + (check.ok ? '&#10003;' : '!') + '</span>' +
+      '<span><strong>' + escapeHtml(check.message || check.id) + '</strong>' + detail + guidance + '</span>' +
+      '</div>';
+  }).join('');
+  resultsEl.classList.remove('hidden');
+}
+
+function runEnvironmentCheck() {
+  var button = ui.appSettingsEnvironmentRunBtnEl;
+  if (button) button.disabled = true;
+  if (ui.appSettingsEnvironmentSummaryEl) ui.appSettingsEnvironmentSummaryEl.textContent = 'Checking...';
+  fetch('/app/environment')
+    .then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok) throw new Error(payload && payload.error ? payload.error : 'Environment check failed.');
+        return payload;
+      });
+    })
+    .then(renderEnvironmentCheck)
+    .catch(function (error) {
+      if (ui.appSettingsEnvironmentSummaryEl) ui.appSettingsEnvironmentSummaryEl.textContent = 'Environment check failed.';
+      if (ui.appSettingsEnvironmentResultsEl) {
+        ui.appSettingsEnvironmentResultsEl.innerHTML = '<div class="app-settings-environment-check failed"><span class="app-settings-environment-mark">!</span><span><strong>' + escapeHtml(error.message || String(error)) + '</strong></span></div>';
+        ui.appSettingsEnvironmentResultsEl.classList.remove('hidden');
+      }
+    })
+    .finally(function () {
+      if (button) button.disabled = false;
+    });
+}
+
 function closeAppSettingsModal() {
   if (!ui.appSettingsModalEl) return;
   ui.appSettingsModalEl.classList.add('hidden');
@@ -478,6 +528,7 @@ function wireAppSettingsUi() {
   if (h3Stop) h3Stop.onclick = stopH3Calibration;
   if (h3Reset) h3Reset.onclick = resetH3CalibrationSettings;
   if (h3Console) h3Console.onclick = showConsolePanel;
+  if (ui.appSettingsEnvironmentRunBtnEl) ui.appSettingsEnvironmentRunBtnEl.onclick = runEnvironmentCheck;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
     button.onclick = function () {
       setAppSettingsTab(button.getAttribute('data-app-settings-tab'), false);

@@ -223,6 +223,16 @@
     return ['failed', 'interrupted'].indexOf(String(status || '')) !== -1 ? 'failed' : 'complete';
   }
 
+  function recentStatusLabel(status) {
+    status = String(status || '');
+    if (status === 'failed') return 'failed';
+    if (status === 'interrupted') return 'interrupted';
+    if (status === 'cancelled') return 'cancelled';
+    if (status === 'stopped') return 'stopped';
+    if (status === 'finished_early') return 'finished early';
+    return 'completed';
+  }
+
   function createRecentRow(item) {
     var button = document.createElement('button');
     button.type = 'button';
@@ -236,7 +246,7 @@
     var copy = document.createElement('span');
     copy.className = 'activity-monitor-recent-copy';
     var title = document.createElement('strong');
-    title.textContent = activityTitle(item) + (String(item.status || '') === 'failed' ? ' failed' : ' completed');
+    title.textContent = activityTitle(item) + ' ' + recentStatusLabel(item.status);
     var detail = document.createElement('small');
     detail.textContent = item.error || activityDetail(item) || String(item.status || '').replace(/_/g, ' ');
     copy.appendChild(title);
@@ -274,7 +284,7 @@
     var copy = document.createElement('div');
     copy.className = 'activity-toast-copy';
     var title = document.createElement('strong');
-    title.textContent = activityTitle(item) + (failed ? ' failed' : ' completed');
+    title.textContent = activityTitle(item) + ' ' + recentStatusLabel(item.status);
     var detail = document.createElement('span');
     detail.textContent = item.error || activityDetail(item) || '';
     copy.appendChild(title);

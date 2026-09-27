@@ -1258,6 +1258,17 @@
                             <div class="storyboard-story-fields">
                                 <div class="storyboard-story-panel-heading">
                                     <strong>Story Overview</strong>
+                                    <div class="storyboard-story-action-wrap">
+                                        <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn" title="Take this Story from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
+                                        <div id="storyboard-story-action-card" class="storyboard-story-action-card hidden" aria-live="polite">
+                                            <div class="storyboard-story-action-copy">
+                                                <strong id="storyboard-story-action-phase">Preparing</strong>
+                                                <span id="storyboard-story-action-detail"></span>
+                                                <small id="storyboard-story-action-elapsed">0s</small>
+                                            </div>
+                                            <button id="storyboard-story-action-cancel" data-story-action-cancel type="button" class="review-captions-btn">Cancel</button>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <details class="storyboard-story-section" data-story-section="story" open>
@@ -1325,7 +1336,14 @@
                                     <div class="storyboard-story-section-body">
                                         <div class="storyboard-director-repair">
                                             <label class="storyboard-field">
-                                                <span>Check &amp; Repair Scenes</span>
+                                                <span>Director pass</span>
+                                                <select id="storyboard-director-pass-mode">
+                                                    <option value="custom">Custom repair</option>
+                                                    <option value="continuity">Continuity &amp; prompt refinement</option>
+                                                </select>
+                                            </label>
+                                            <label class="storyboard-field">
+                                                <span>Instruction</span>
                                                 <textarea id="storyboard-repair-instruction" rows="3" placeholder="Tell the Director what tendency or problem to check across the current Scene plan…"></textarea>
                                             </label>
                                             <div class="storyboard-director-repair-actions">
@@ -1333,7 +1351,7 @@
                                                 <button id="storyboard-restore-repair-btn" type="button" class="review-captions-btn hidden">Restore Last Repair</button>
                                                 <span id="storyboard-repair-status" class="storyboard-save-state" aria-live="polite"></span>
                                             </div>
-                                            <span class="storyboard-reference-empty">Healing pass only: keep the Scene plan, patch only what the instruction actually requires.</span>
+                                            <span class="storyboard-reference-empty">Runs Scene by Scene. Each Scene keeps its place in the plan and changes only when the instruction requires it.</span>
                                         </div>
                                     </div>
                                 </details>

@@ -1291,6 +1291,21 @@ def test_scene_refine_completion_is_persisted_only_for_successful_refine(storybo
     assert refined_scene_fields["entryState"] == "Revised entry."
     assert refined_scene_fields["exitState"] == "Revised exit."
     assert refined_scene_fields["prompt"] == "Scene-aware refined prompt."
+    assert refined_scene_fields["previousRevision"] == {
+        "summary": "",
+        "entryState": "",
+        "exitState": "",
+        "prompt": "Longer refined prompt.",
+        "durationSeconds": 12.0,
+    }
+
+    _, restored_scene_fields = storyboard_store.restore_previous_prompt(story["id"], scene["id"])
+    assert restored_scene_fields["summary"] == ""
+    assert restored_scene_fields["entryState"] == ""
+    assert restored_scene_fields["exitState"] == ""
+    assert restored_scene_fields["prompt"] == "Longer refined prompt."
+    assert restored_scene_fields["durationSeconds"] == 12
+    assert restored_scene_fields["previousRevision"]["summary"] == "Revised Scene intent."
 
     with pytest.raises(ValueError, match="between 6 and 15"):
         storyboard_store.apply_director_prompt(

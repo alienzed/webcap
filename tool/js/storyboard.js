@@ -439,7 +439,7 @@
           if (currentExit) currentExit.value = savedScene.exitState || '';
           if (currentPrompt) currentPrompt.value = savedScene.prompt || '';
           if (currentDuration) currentDuration.value = savedScene.durationSeconds == null ? '' : savedScene.durationSeconds;
-          if (operation === 'refine_prompt') {
+          if (operation === 'refine_prompt' && job.clearCorrection !== false) {
             var currentCorrection = currentRoot && currentRoot.querySelector('[data-director-correction]');
             if (currentCorrection) currentCorrection.value = '';
           }
@@ -1378,7 +1378,7 @@
     });
   }
 
-  function requestSceneDirector(storyId, sceneId, operation, instruction, modelId) {
+  function requestSceneDirector(storyId, sceneId, operation, instruction, modelId, clearCorrection) {
     return directorRequest({
       storyId: storyId,
       sceneId: sceneId,
@@ -1390,7 +1390,8 @@
         storyId: storyId,
         sceneId: sceneId,
         operation: operation,
-        jobId: payload.jobId
+        jobId: payload.jobId,
+        clearCorrection: clearCorrection
       }).then(function () {
         return consumeDirectorJob(payload.jobId).then(function () {
           return payload;
@@ -1403,7 +1404,7 @@
     return sceneIds.reduce(function (promise, sceneId, index) {
       return promise.then(function () {
         if (onScene) onScene(sceneId, index);
-        return requestSceneDirector(storyId, sceneId, 'refine_prompt', instruction, modelId);
+        return requestSceneDirector(storyId, sceneId, 'refine_prompt', instruction, modelId, false);
       });
     }, Promise.resolve());
   }
@@ -1458,7 +1459,7 @@
     updateSceneDirectorStatus(sceneId, 'Director working…');
     startDirectorActivity();
     flushPendingSaves().then(function () {
-      return requestSceneDirector(storyId, sceneId, operation, instruction, storyState.director.modelId);
+      return requestSceneDirector(storyId, sceneId, operation, instruction, storyState.director.modelId, true);
     }).catch(function (err) {
       if (directorWasStopped(err)) updateSceneDirectorStatus(sceneId, 'Director stopped');
       else {
@@ -1483,8 +1484,7 @@
 
   function syncRepairRestore() {
     var button = el('storyboard-restore-repair-btn');
-    if (!button) return;
-    button.classList.toggle('hidden', !storyState.story || !storyState.story.previousSceneRepair);
+    if (button) button.classList.add('hidden');
   }
 
   function syncRepairState() {
@@ -1593,7 +1593,8 @@
       if (repairButton) repairButton.disabled = !!protectedState;
       if (restoreButton) restoreButton.disabled = !!protectedState;
       document.querySelectorAll(
-        '#storyboard-story-concept, #storyboard-story-style, ' +
+        '#storyboard-story-concept, #storyboard-story-style, #storyboard-story-style-preset, ' +
+        '#storyboard-expand-concept-btn, #storyboard-restore-concept-btn, #storyboard-develop-btn, ' +
         '#storyboard-invariant-define, #storyboard-invariant-add, ' +
         '#storyboard-invariants-list input, #storyboard-invariants-list select, #storyboard-invariants-list textarea, #storyboard-invariants-list button, ' +
         '#storyboard-scenes-list [data-scene-field="title"], ' +
@@ -1604,7 +1605,9 @@
         '#storyboard-scenes-list [data-scene-field="durationSeconds"], ' +
         '#storyboard-scenes-list [data-reference-clear], #storyboard-scenes-list [data-reference-role], ' +
         '#storyboard-scenes-list [data-reference-source], #storyboard-scenes-list [data-reference-frame], ' +
-        '#storyboard-scenes-list [data-reference-apply], #storyboard-scenes-list [data-reference-upload]'
+        '#storyboard-scenes-list [data-reference-apply], #storyboard-scenes-list [data-reference-upload], ' +
+        '#storyboard-scenes-list [data-director-write], #storyboard-scenes-list [data-director-refine], #storyboard-scenes-list [data-director-restore], ' +
+        '#storyboard-scenes-list [data-scene-action], #storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add]'
       ).forEach(function (field) {
         field.disabled = !!protectedState;
       });

@@ -81,7 +81,7 @@
 
 .storyboard-story-row.active {
   border-color: var(--border);
-  background: var(--panel-soft);
+  background: var(--panel);
 }
 
 .storyboard-story-open {

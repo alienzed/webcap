@@ -302,6 +302,62 @@ def test_storyboard_scene_refine_rejects_changed_duration_instead_of_overwriting
     assert stored_scene["prompt"] == "Original prompt."
 
 
+def test_storyboard_scene_refine_no_change_does_not_mutate_scene(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "A person crosses a quiet room.",
+        "style": "Grounded naturalism.",
+    })
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "title": "Crossing",
+        "summary": "A person crosses the room.",
+        "entryState": "At the doorway.",
+        "exitState": "At the window.",
+        "prompt": "Original prompt stays exactly as written.",
+        "durationSeconds": 10,
+    })
+    from tool.server.storyboard_llm_contract import build_request
+
+    contract = build_request(
+        story,
+        scene["id"],
+        "refine_prompt",
+        instruction="Remove a barista if one appears in this Scene.",
+    )
+    before = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "text": before["prompt"],
+            "data": {"changed": False},
+            "noChange": True,
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        contract,
+        context={
+            "storyId": story["id"],
+            "sceneId": scene["id"],
+            "operation": "refine_prompt",
+            "sourceInstruction": "Remove a barista if one appears in this Scene.",
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    after = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
+    assert finished["status"] == "completed"
+    assert after == before
+
+
 def test_storyboard_llm_job_applies_expanded_concept_before_completion(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story", "concept": "Short concept."})
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)

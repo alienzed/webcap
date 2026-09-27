@@ -60,7 +60,7 @@ Durable navigation location is reflected in the URL hash. Refreshing a route suc
 - `pip`
 - `ffmpeg` and `ffprobe` available in `PATH`
 
-Python dependencies are listed in [`requirements.txt`](requirements.txt), including Flask, Pillow, deface, MediaPipe, rembg, and ONNX Runtime.
+Python dependencies are listed in [`requirements.txt`](requirements.txt), including Flask, Pillow, deface, MediaPipe, rembg, and ONNX Runtime. Python 3.10 uses the lightweight `tomli` compatibility package for TOML parsing.
 
 ### Managed training
 
@@ -126,7 +126,7 @@ Start from [`tool/config.example.json`](tool/config.example.json). The important
 - `set_destinations.presets` — Create Set destination shortcuts.
 - `requirements` / `vocabulary` — global annotation baseline/catalog data.
 
-App Settings exposes the normal settings UI plus advanced raw JSON editing.
+App Settings exposes the normal settings UI plus advanced raw JSON editing. **App Settings → Training → Environment Check** can inspect the WebCap Python environment, common media tools, WSL/Diffusion Pipe configuration, DeepSpeed, PyTorch/CUDA visibility, and NVIDIA telemetry without requiring a dataset. It reports remediation guidance but does not automatically rewrite CUDA/PyTorch packages.
 
 ## Run
 

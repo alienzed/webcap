@@ -301,6 +301,8 @@
     pauseButton.title = state.queue.paused
       ? 'Resume inference scheduling'
       : 'Pause inference scheduling after the current job';
+    pauseButton.classList.toggle('hidden', !jobs.length && !state.queue.paused);
+    clearButton.classList.toggle('hidden', !hasPending);
     clearButton.disabled = !hasPending;
 
     host.innerHTML = '';

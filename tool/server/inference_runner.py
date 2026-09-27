@@ -555,7 +555,6 @@ def _advance_queue():
                         ),
                     )
                 if status in {"starting", "running", "stopping"}:
-                    _cleanup_generate_job_references(job_id)
                     execution_requeue_active_and_pause(
                         job_id,
                         "Inference paused after an execution error: " + str(exc),

@@ -453,7 +453,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[H3 OUTPUT CONTRACT]\n"
             + h3_output
-            + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. WebCap owns the final labels and alignment syntax; return only the three revised semantic field values through the supplied JSON schema."
+            + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. WebCap owns the final labels and alignment syntax; return the three prompt semantic field values plus only any optional Scene fields the correction actually requires through the supplied JSON schema."
         )
         blocks.append(
             "[CURRENT TASK]\nApply this correction with the smallest coherent change to this Scene:\n"

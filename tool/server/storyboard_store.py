@@ -1039,7 +1039,16 @@ def update_scene(story_id, scene_id, payload):
 
 
 @_serialized_mutation
-def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id="", operation="", duration_override=None):
+def apply_director_prompt(
+    story_id,
+    scene_id,
+    prompt,
+    model_id="",
+    job_id="",
+    operation="",
+    duration_override=None,
+    scene_fields=None,
+):
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     current = scenes.get(scene_id)
@@ -1049,15 +1058,31 @@ def apply_director_prompt(story_id, scene_id, prompt, model_id="", job_id="", op
     if not generated.strip():
         raise ValueError("Storyboard Director returned an empty Scene prompt.")
 
+    operation = str(operation or "").strip()
     scene_patch = {
         "prompt": generated,
         "previousPrompt": str(current.get("prompt") or ""),
         "promptDirectorModel": str(model_id or "").strip(),
         "promptDirectorJobId": str(job_id or "").strip(),
-        "refineComplete": str(operation or "").strip() == "refine_prompt",
+        "refineComplete": operation == "refine_prompt",
     }
+    if scene_fields:
+        if operation != "refine_prompt":
+            raise ValueError("Only Scene refinement may revise Scene authoring fields.")
+        if not isinstance(scene_fields, dict):
+            raise ValueError("Refined Scene fields must be an object.")
+        for key in ("summary", "entryState", "exitState"):
+            if key not in scene_fields:
+                continue
+            value = scene_fields[key]
+            if not isinstance(value, str):
+                raise ValueError("Refined Scene " + key + " must be text.")
+            if key == "summary" and not value.strip():
+                raise ValueError("Refined Scene summary must not be empty.")
+            scene_patch[key] = value
+
     if duration_override is not None:
-        if str(operation or "").strip() != "refine_prompt":
+        if operation != "refine_prompt":
             raise ValueError("Only Scene refinement may return a duration override.")
         if isinstance(duration_override, bool):
             raise ValueError("Refined Scene duration must be numeric.")

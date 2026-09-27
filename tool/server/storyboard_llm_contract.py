@@ -24,8 +24,22 @@ def _clean(value):
     return str(value or "").strip()
 
 
-def _prompt_response_schema(allow_duration=False):
+def _prompt_response_schema(allow_duration=False, allow_scene_fields=False):
     schema = content_schema()
+    if allow_scene_fields:
+        schema["properties"]["summary"] = {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional revised Scene intent. Include only when the requested refinement requires it.",
+        }
+        schema["properties"]["entryState"] = {
+            "type": "string",
+            "description": "Optional revised Scene entry state.",
+        }
+        schema["properties"]["exitState"] = {
+            "type": "string",
+            "description": "Optional revised Scene exit state.",
+        }
     if allow_duration:
         schema["properties"]["durationSeconds"] = {
             "type": "number",
@@ -442,9 +456,11 @@ def build_request(story, scene_id, operation, instruction=""):
             + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. WebCap owns the final labels and alignment syntax; return only the three revised semantic field values through the supplied JSON schema."
         )
         blocks.append(
-            "[CURRENT TASK]\nApply this correction with the smallest coherent change:\n"
+            "[CURRENT TASK]\nApply this correction with the smallest coherent change to this Scene:\n"
             + correction
-            + "\n\nIf the requested change materially changes how much screen time this Scene needs, "
+            + "\n\nYou may revise the Scene summary / intent, entry state, or exit state only when the correction requires it; "
+            "otherwise omit those fields and preserve them exactly. Revise the generation prompt only as much as needed to keep it coherent with any Scene-field change. "
+            "If the requested change materially changes how much screen time this Scene needs, "
             "include a revised durationSeconds between 6 and 15 seconds, normally aiming for about 10 seconds unless the Scene clearly benefits from more time. "
             "Otherwise omit durationSeconds and keep the current duration unchanged."
         )
@@ -464,6 +480,9 @@ def build_request(story, scene_id, operation, instruction=""):
         "operation": operation,
         "output": "json",
         "prompt": "\n\n".join(blocks).strip() + "\n",
-        "response_schema": _prompt_response_schema(allow_duration=operation == "refine_prompt"),
+        "response_schema": _prompt_response_schema(
+            allow_duration=operation == "refine_prompt",
+            allow_scene_fields=operation == "refine_prompt",
+        ),
         "result_renderer": result_renderer,
     }

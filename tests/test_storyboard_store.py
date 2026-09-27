@@ -1274,6 +1274,24 @@ def test_scene_refine_completion_is_persisted_only_for_successful_refine(storybo
     )
     assert refined_with_duration["durationSeconds"] == 12
 
+    _, refined_scene_fields = storyboard_store.apply_director_prompt(
+        story["id"],
+        scene["id"],
+        "Scene-aware refined prompt.",
+        model_id="director.gguf",
+        job_id="job-refine-fields",
+        operation="refine_prompt",
+        scene_fields={
+            "summary": "Revised Scene intent.",
+            "entryState": "Revised entry.",
+            "exitState": "Revised exit.",
+        },
+    )
+    assert refined_scene_fields["summary"] == "Revised Scene intent."
+    assert refined_scene_fields["entryState"] == "Revised entry."
+    assert refined_scene_fields["exitState"] == "Revised exit."
+    assert refined_scene_fields["prompt"] == "Scene-aware refined prompt."
+
     with pytest.raises(ValueError, match="between 6 and 15"):
         storyboard_store.apply_director_prompt(
             story["id"],

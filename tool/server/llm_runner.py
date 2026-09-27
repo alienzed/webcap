@@ -264,6 +264,11 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         if not scene_id:
             raise RuntimeError("Storyboard Scene Director job is missing its Scene ID.")
         from .storyboard_store import apply_director_prompt
+        scene_fields = {}
+        if operation == "refine_prompt" and isinstance(llm_result.get("data"), dict):
+            for key in ("summary", "entryState", "exitState"):
+                if key in llm_result["data"]:
+                    scene_fields[key] = llm_result["data"][key]
         story, scene = apply_director_prompt(
             story_id,
             scene_id,
@@ -272,6 +277,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             job_id=job_id,
             operation=operation,
             duration_override=llm_result.get("durationOverride"),
+            scene_fields=scene_fields,
         )
         return {
             "storyId": story["id"],

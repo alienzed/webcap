@@ -287,20 +287,36 @@ function renderEnvironmentCheck(payload) {
     return;
   }
   var summary = payload.summary || {};
+  var groupOrder = ['core', 'training', 'inference', 'director', 'optional_analysis'];
+  var groupLabels = {
+    core: 'Core',
+    training: 'Training',
+    inference: 'Inference',
+    director: 'Director',
+    optional_analysis: 'Optional Analysis'
+  };
   var core = summary.core || {};
-  var training = summary.training || {};
-  summaryEl.textContent =
-    (core.ready ? 'WebCap ready' : (Number(core.requiredFailures || 0) + ' core issue(s)')) +
-    ' · ' +
-    (training.ready ? 'Training ready' : (Number(training.requiredFailures || 0) + ' training setup issue(s)'));
-  resultsEl.innerHTML = payload.checks.map(function (check) {
-    var stateClass = check.ok ? 'ok' : (check.required ? 'failed' : 'optional');
-    var detail = check.details ? '<div class="app-settings-environment-detail">' + escapeHtml(check.details) + '</div>' : '';
-    var guidance = check.guidance ? '<div class="app-settings-environment-guidance">' + escapeHtml(check.guidance) + '</div>' : '';
-    return '<div class="app-settings-environment-check ' + stateClass + '">' +
-      '<span class="app-settings-environment-mark">' + (check.ok ? '&#10003;' : '!') + '</span>' +
-      '<span><strong>' + escapeHtml(check.message || check.id) + '</strong>' + detail + guidance + '</span>' +
-      '</div>';
+  summaryEl.textContent = core.ready
+    ? ('WebCap ready · ' + Number(summary.passed || 0) + '/' + Number(summary.total || 0) + ' checks passed')
+    : (Number(core.requiredFailures || 0) + ' core issue(s) · ' + Number(summary.passed || 0) + '/' + Number(summary.total || 0) + ' checks passed');
+  resultsEl.innerHTML = groupOrder.map(function (groupName) {
+    var checks = payload.checks.filter(function (check) { return check.group === groupName; });
+    if (!checks.length) return '';
+    var groupSummary = summary[groupName] || {};
+    var groupState = groupSummary.ready ? 'Ready' : (Number(groupSummary.requiredFailures || 0) + ' issue(s)');
+    var rows = checks.map(function (check) {
+      var stateClass = check.ok ? 'ok' : (check.required ? 'failed' : 'optional');
+      var detail = check.details ? '<div class="app-settings-environment-detail">' + escapeHtml(check.details) + '</div>' : '';
+      var guidance = check.guidance ? '<div class="app-settings-environment-guidance">' + escapeHtml(check.guidance) + '</div>' : '';
+      return '<div class="app-settings-environment-check ' + stateClass + '">' +
+        '<span class="app-settings-environment-mark">' + (check.ok ? '&#10003;' : '!') + '</span>' +
+        '<span><strong>' + escapeHtml(check.message || check.id) + '</strong>' + detail + guidance + '</span>' +
+        '</div>';
+    }).join('');
+    return '<section class="app-settings-environment-group">' +
+      '<div class="app-settings-environment-group-header"><strong>' + escapeHtml(groupLabels[groupName] || groupName) + '</strong><span>' + escapeHtml(groupState) + '</span></div>' +
+      rows +
+      '</section>';
   }).join('');
   resultsEl.classList.remove('hidden');
 }

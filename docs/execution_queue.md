@@ -61,6 +61,7 @@ That target means:
 - a Backlog item may be explicitly added to the end of Queue when the user wants it sooner;
 - all queued work may be moved to Backlog without cancelling it;
 - Pause / Resume controls inference dispatch without moving jobs between Queue and Backlog;
+- unexpected inference execution errors pause dispatch and return the current request to the head of Queue instead of consuming it or advancing to later work;
 - a running inference job is never preempted;
 - each client may show a contextual projection of the same shared lane;
 - the global **Inference Queue** drawer is the authoritative scheduling-management surface.

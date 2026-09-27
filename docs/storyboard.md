@@ -437,14 +437,12 @@ Current runtime slice:
 
 Next candidates after real usage:
 
-- Story-aware Scene enhancement/rewrite with compact whole-Story context;
 - AI-assisted split/insert/merge operations for evolving creative structure;
 - one semantic audit using `docs/storyboard-plan-audit.schema.json` and at most one bounded repair pass if quality warrants the extra inference;
-- continuity review;
 - branching/version UX only if actual production use proves simple recoverable replacement is insufficient;
 - lightweight conversational UI only if explicit bounded actions stop being enough.
 
-Manual editing remains available everywhere except the exact field or active Scene plan currently owned by a pending Director job. Unrelated Stories, Scenes, Story fields, and app activities remain usable while Director work is queued or running.
+Manual editing remains available everywhere except the exact field or active Scene plan currently owned by a pending Director job. A sequential Director pass protects the Story/Scene context it is actively reviewing, and First Cut protects its Story for the duration of the orchestration. Other Stories and app activities remain usable.
 
 ### Phase 6 - Assembly and production polish
 
@@ -497,11 +495,15 @@ The current operations are deliberately explicit rather than chat-like:
 - `expand_concept`: Story title + current concept + style; returns richer concept prose and does not create Scenes.
 - `develop_story`: Story concept + style + concise H3 rules; returns schema-constrained JSON containing the complete ordered Scene structure and initial H3 prompt for every Scene.
 - `write_prompt`: Story style + current Scene + only a useful previous exit-state handoff + the concise H3 output contract.
-- `refine_prompt`: the same local Scene context plus the existing prompt and one explicit correction. The contract asks for the smallest coherent revision rather than a creative rewrite.
+- `refine_prompt`: Story concept, visual atmosphere, relevant continuity, the current Scene, and compact previous/next Scene context plus the existing prompt and one explicit correction. Only the current Scene may change. The Director may revise its intent, entry/exit state, prompt, or duration when the instruction requires it, and can explicitly return no change.
 
 The contract module does not call a provider. The llama.cpp runtime consumes its returned prompt, so context assembly and leakage boundaries stay testable independently from model quality/runtime behavior.
 
 Entry and exit state remain manual first-class Scene fields. Whole-Story development now proposes them initially, while the user can still edit them directly at any time.
+
+**Director passes** use the same Scene refinement primitive sequentially rather than sending the whole plan through a second repair mechanism. WebCap walks Scene order, sends the same pass instruction to each Scene, waits for that Scene to commit, then builds the next request from the updated Story. The LLM decides whether the instruction applies to the current Scene; WebCap does not interpret the instruction. Custom repair and continuity/prompt refinement are presets over this same mechanism.
+
+**First Cut** is ephemeral Story-scoped frontend orchestration over existing bounded actions: Expand Concept -> Define Continuity -> Develop Scenes -> continuity/prompt Director pass -> queue one first Take per Scene. The selected Director model is frozen for the run, completed stages remain committed if the run is stopped, and the Story unlocks once all first Takes are accepted by the normal inference queue. The orchestration state itself is not written to `story.json`.
 
 
 ## Director runtime setup

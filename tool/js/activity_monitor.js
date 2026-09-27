@@ -316,6 +316,15 @@
       if (state.notified[key]) return;
       state.notified[key] = true;
       toastRecent(item);
+
+      var message = activityTitle(item) + ' ' + recentStatusLabel(item.status);
+      var detail = item.error || activityDetail(item) || '';
+      if (detail) message += ' · ' + detail;
+      if (recentStatusClass(item.status) === 'failed') {
+        window.reportConsoleError('Activity', message);
+      } else {
+        window.reportConsoleInfo('Activity', message);
+      }
     });
   }
 

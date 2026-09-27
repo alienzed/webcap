@@ -81,6 +81,8 @@ The current Test Bench expects a reachable local ComfyUI API using the shipped M
 
 ## Install
 
+For a complete setup guide, including the MiniMax H3 reference training environment, see [`INSTALLATION.md`](INSTALLATION.md).
+
 ```bash
 git clone https://github.com/alienzed/webcap.git
 cd webcap

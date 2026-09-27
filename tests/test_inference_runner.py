@@ -508,6 +508,41 @@ def test_inference_snapshot_projects_test_rendition_context(inference_root):
     assert job["candidateKind"] == "base"
     assert job["label"] == "Comparison · Base"
 
+def test_inference_runner_pauses_without_consuming_queue_when_comfyui_is_unavailable(inference_root, monkeypatch):
+    first = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "First"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    second = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Second"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+
+    def unavailable(job_id):
+        execution_queue.mark_running(job_id, details={"providerStatus": "starting"})
+        raise RuntimeError("ComfyUI unavailable")
+
+    monkeypatch.setattr(inference_runner, "_execute_claimed", unavailable)
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
+    monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
+
+    inference_runner._advance_queue()
+
+    snapshot = inference_runner.snapshot()
+    assert snapshot["paused"] is True
+    assert "ComfyUI unavailable" in snapshot["pauseReason"]
+    assert [job["jobId"] for job in snapshot["jobs"]] == [first["id"], second["id"]]
+    assert [job["status"] for job in snapshot["jobs"]] == ["queued", "queued"]
+    assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2]
+
+    inference_runner._advance_queue()
+    unchanged = inference_runner.snapshot()
+    assert [job["jobId"] for job in unchanged["jobs"]] == [first["id"], second["id"]]
+    assert [job["queuePosition"] for job in unchanged["jobs"]] == [1, 2]
+
+
 def test_inference_runner_pauses_and_preserves_head_job_after_unexpected_post_launch_failure(inference_root, monkeypatch):
     queued = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,
@@ -654,6 +689,23 @@ def test_inference_snapshot_migrates_obsolete_persisted_provider_pause_without_p
     assert snapshot["pauseReason"] == ""
     assert snapshot["jobs"] == []
     assert touched == []
+
+
+def test_inference_snapshot_does_not_clear_execution_error_pause(inference_root):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    execution_queue.pause_lane(
+        inference_runner.EXECUTION_LANE,
+        reason="Inference paused after an execution error: ComfyUI provider unavailable",
+    )
+
+    snapshot = inference_runner.snapshot(include_terminal=False)
+
+    assert snapshot["paused"] is True
+    assert snapshot["jobs"][0]["jobId"] == queued["id"]
 
 
 def test_inference_startup_clears_exact_obsolete_historical_pause_when_lane_is_empty(inference_root):

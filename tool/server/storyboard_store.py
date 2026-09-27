@@ -507,6 +507,19 @@ def _normalize_scene(scene_id, value, existing=None):
             if isinstance(value.get("previousPrompt"), str)
             else (current.get("previousPrompt") if isinstance(current.get("previousPrompt"), str) else None)
         ),
+        "previousRevision": (
+            copy.deepcopy(value.get("previousRevision"))
+            if isinstance(value.get("previousRevision"), dict)
+            else (
+                None
+                if "previousRevision" in value
+                else (
+                    copy.deepcopy(current.get("previousRevision"))
+                    if isinstance(current.get("previousRevision"), dict)
+                    else None
+                )
+            )
+        ),
         "promptDirectorModel": str(value.get("promptDirectorModel", current.get("promptDirectorModel", "")) or "").strip(),
         "promptDirectorJobId": str(value.get("promptDirectorJobId", current.get("promptDirectorJobId", "")) or "").strip(),
         "refineComplete": refine_complete,
@@ -1062,6 +1075,17 @@ def apply_director_prompt(
     scene_patch = {
         "prompt": generated,
         "previousPrompt": str(current.get("prompt") or ""),
+        "previousRevision": (
+            {
+                "summary": str(current.get("summary") or ""),
+                "entryState": str(current.get("entryState") or ""),
+                "exitState": str(current.get("exitState") or ""),
+                "prompt": str(current.get("prompt") or ""),
+                "durationSeconds": current.get("durationSeconds"),
+            }
+            if operation == "refine_prompt"
+            else None
+        ),
         "promptDirectorModel": str(model_id or "").strip(),
         "promptDirectorJobId": str(job_id or "").strip(),
         "refineComplete": operation == "refine_prompt",
@@ -1311,17 +1335,35 @@ def restore_previous_prompt(story_id, scene_id):
     current = scenes.get(scene_id)
     if not isinstance(current, dict):
         raise FileNotFoundError("Scene does not exist.")
-    previous = current.get("previousPrompt")
-    if not isinstance(previous, str):
-        raise FileNotFoundError("No previous Scene prompt is available.")
-
-    scene = _normalize_scene(scene_id, {
-        "prompt": previous,
-        "previousPrompt": str(current.get("prompt") or ""),
-        "promptDirectorModel": "",
-        "promptDirectorJobId": "",
-        "refineComplete": False,
-    }, existing=current)
+    previous_revision = current.get("previousRevision")
+    if isinstance(previous_revision, dict):
+        current_revision = {
+            "summary": str(current.get("summary") or ""),
+            "entryState": str(current.get("entryState") or ""),
+            "exitState": str(current.get("exitState") or ""),
+            "prompt": str(current.get("prompt") or ""),
+            "durationSeconds": current.get("durationSeconds"),
+        }
+        scene = _normalize_scene(scene_id, {
+            **previous_revision,
+            "previousPrompt": str(current.get("prompt") or ""),
+            "previousRevision": current_revision,
+            "promptDirectorModel": "",
+            "promptDirectorJobId": "",
+            "refineComplete": False,
+        }, existing=current)
+    else:
+        previous = current.get("previousPrompt")
+        if not isinstance(previous, str):
+            raise FileNotFoundError("No previous Scene prompt is available.")
+        scene = _normalize_scene(scene_id, {
+            "prompt": previous,
+            "previousPrompt": str(current.get("prompt") or ""),
+            "previousRevision": None,
+            "promptDirectorModel": "",
+            "promptDirectorJobId": "",
+            "refineComplete": False,
+        }, existing=current)
     scenes[scene_id] = scene
     story["scenes"] = scenes
     story["updatedAt"] = _utc_now()

@@ -408,16 +408,26 @@
         var savedScene = canonical && canonical.scenes ? canonical.scenes[sceneId] : null;
         var currentScene = storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
         if (savedScene && currentScene) {
+          currentScene.summary = savedScene.summary;
+          currentScene.entryState = savedScene.entryState;
+          currentScene.exitState = savedScene.exitState;
           currentScene.prompt = savedScene.prompt;
           currentScene.previousPrompt = savedScene.previousPrompt;
+          currentScene.previousRevision = savedScene.previousRevision || null;
           currentScene.promptDirectorModel = savedScene.promptDirectorModel;
           currentScene.promptDirectorJobId = savedScene.promptDirectorJobId;
           currentScene.refineComplete = !!savedScene.refineComplete;
           currentScene.durationSeconds = savedScene.durationSeconds;
           currentScene.updatedAt = savedScene.updatedAt;
           var currentRoot = sceneElement(sceneId);
+          var currentSummary = currentRoot && currentRoot.querySelector('[data-scene-field="summary"]');
+          var currentEntry = currentRoot && currentRoot.querySelector('[data-scene-field="entryState"]');
+          var currentExit = currentRoot && currentRoot.querySelector('[data-scene-field="exitState"]');
           var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
           var currentDuration = currentRoot && currentRoot.querySelector('[data-scene-field="durationSeconds"]');
+          if (currentSummary) currentSummary.value = savedScene.summary || '';
+          if (currentEntry) currentEntry.value = savedScene.entryState || '';
+          if (currentExit) currentExit.value = savedScene.exitState || '';
           if (currentPrompt) currentPrompt.value = savedScene.prompt || '';
           if (currentDuration) currentDuration.value = savedScene.durationSeconds == null ? '' : savedScene.durationSeconds;
           if (operation === 'refine_prompt') {
@@ -1284,9 +1294,18 @@
       if (!storyState.story || String(storyState.story.id || '') !== String(storyId)) return;
       storyState.story.scenes[sceneId] = payload.scene;
       var root = sceneElement(sceneId);
+      var summary = root && root.querySelector('[data-scene-field="summary"]');
+      var entry = root && root.querySelector('[data-scene-field="entryState"]');
+      var exit = root && root.querySelector('[data-scene-field="exitState"]');
       var prompt = root && root.querySelector('[data-scene-field="prompt"]');
+      var duration = root && root.querySelector('[data-scene-field="durationSeconds"]');
+      if (summary) summary.value = payload.scene.summary || '';
+      if (entry) entry.value = payload.scene.entryState || '';
+      if (exit) exit.value = payload.scene.exitState || '';
       if (prompt) prompt.value = payload.scene.prompt || '';
+      if (duration) duration.value = payload.scene.durationSeconds == null ? '' : payload.scene.durationSeconds;
       syncSceneDirectorRestore(sceneId);
+      syncSceneRefineState(sceneId);
       updateSceneDirectorStatus(sceneId, 'Previous prompt restored.');
       setSaveState('Saved');
     }).catch(reportError);
@@ -2945,7 +2964,7 @@
                   '<button type="button" class="review-captions-btn" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
                   '<button type="button" class="review-captions-btn' +
                     (typeof scene.previousPrompt === 'string' ? '' : ' hidden') +
-                    '" data-director-restore title="Restore the prompt from before the last Director edit.">Restore Previous</button>' +
+                    '" data-director-restore title="Restore the Scene state from before the last Director edit.">Restore Previous</button>' +
                 '</div>' +
               '</div>' +
               '<textarea class="storyboard-prompt-textarea" data-scene-field="prompt" rows="7" placeholder="Full model-facing prompt. Write it directly or let the Director draft it from the Scene intent.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea>' +

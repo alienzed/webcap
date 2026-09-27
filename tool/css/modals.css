@@ -290,6 +290,52 @@
   align-items: start;
 }
 
+.app-settings-environment-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.app-settings-environment-summary {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.app-settings-environment-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-settings-environment-check {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.app-settings-environment-check.ok .app-settings-environment-mark { color: #15803d; }
+.app-settings-environment-check.failed .app-settings-environment-mark { color: #b91c1c; }
+.app-settings-environment-check.optional .app-settings-environment-mark { color: #b45309; }
+
+.app-settings-environment-detail {
+  margin-top: 2px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.app-settings-environment-guidance {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
 .app-settings-field {
   display: flex;
   flex-direction: column;
@@ -1937,4 +1983,9 @@ html[data-theme="dark"] .app-settings-radio-label {
 #app-settings-close-btn:hover,
 #app-settings-close-btn:focus-visible {
   color: var(--text);
+}
+
+html[data-theme="dark"] .app-settings-environment-check {
+  background: #0f172a;
+  border-color: var(--border);
 }

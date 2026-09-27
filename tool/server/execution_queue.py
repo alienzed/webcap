@@ -428,6 +428,33 @@ def update_job(job_id, details):
         return _public_job(job)
 
 
+def requeue_active_and_pause(job_id, reason):
+    """Return one active job to pending state and pause its lane atomically."""
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        if job.get("status") not in ACTIVE_STATUSES:
+            raise ValueError("Only active execution work can be returned to the queue.")
+        lane = _lane(state, lane_name)
+        job["status"] = "queued"
+        job["startedAt"] = None
+        job["finishedAt"] = None
+        job["error"] = ""
+        job["requestedAction"] = ""
+        job["details"] = {}
+        job["result"] = {}
+        job["updatedAt"] = now
+        lane["activeJobId"] = ""
+        lane["paused"] = True
+        lane["pauseReason"] = str(reason or "Queue paused after an execution error.")
+        _refresh_positions(lane)
+        _write_state(state)
+        return _public_job(job)
+
+
 def finish_job(job_id, status="completed", result=None, error=""):
     if status not in TERMINAL_STATUSES:
         raise ValueError("Execution queue finish status must be terminal.")

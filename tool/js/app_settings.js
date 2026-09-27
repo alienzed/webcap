@@ -287,9 +287,12 @@ function renderEnvironmentCheck(payload) {
     return;
   }
   var summary = payload.summary || {};
-  summaryEl.textContent = payload.ok
-    ? ('Ready · ' + Number(summary.passed || 0) + '/' + Number(summary.total || 0) + ' checks passed')
-    : (Number(summary.requiredFailures || 0) + ' required issue(s) · ' + Number(summary.optionalFailures || 0) + ' optional issue(s)');
+  var core = summary.core || {};
+  var training = summary.training || {};
+  summaryEl.textContent =
+    (core.ready ? 'WebCap ready' : (Number(core.requiredFailures || 0) + ' core issue(s)')) +
+    ' · ' +
+    (training.ready ? 'Training ready' : (Number(training.requiredFailures || 0) + ' training setup issue(s)'));
   resultsEl.innerHTML = payload.checks.map(function (check) {
     var stateClass = check.ok ? 'ok' : (check.required ? 'failed' : 'optional');
     var detail = check.details ? '<div class="app-settings-environment-detail">' + escapeHtml(check.details) + '</div>' : '';

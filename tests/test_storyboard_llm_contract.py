@@ -121,13 +121,17 @@ def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
     assert "durationSeconds" in request["response_schema"]["properties"]
     assert request["response_schema"]["properties"]["durationSeconds"]["minimum"] == 6
     assert request["response_schema"]["properties"]["durationSeconds"]["maximum"] == 15
-    assert "durationSeconds" not in request["response_schema"]["required"]
+    assert request["response_schema"]["required"] == ["changed"]
+    assert request["response_schema"]["properties"]["changed"]["type"] == "boolean"
     assert {"summary", "entryState", "exitState"}.issubset(request["response_schema"]["properties"])
     assert "summary" not in request["response_schema"]["required"]
     assert "entryState" not in request["response_schema"]["required"]
     assert "exitState" not in request["response_schema"]["required"]
     assert "You may revise the Scene summary / intent, entry state, or exit state only when the correction requires it" in prompt
     assert request["result_renderer"]["duration_field"] == "durationSeconds"
+    assert request["result_renderer"]["allow_unchanged"] is True
+    assert request["result_renderer"]["existing_prompt"] == "EXISTING SECOND PROMPT"
+    assert "return changed=false and omit all revision fields" in prompt
     assert "TAKE DATA MUST NOT LEAK" not in prompt
     assert "OTHER TAKE DATA MUST NOT LEAK" not in prompt
 

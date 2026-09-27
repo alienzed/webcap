@@ -535,6 +535,11 @@
     return directorQueueSnapshot(true).then(function (queue) {
       (queue.jobs || []).forEach(function (job) {
         if (!job || job.client !== 'storyboard') return;
+        if (
+          storyState.storyAction &&
+          storyState.storyAction.active &&
+          String(storyState.storyAction.storyId || '') === String(job.storyId || '')
+        ) return;
         var target = directorTargetFromJob(job);
         if (target && !directorTargetPending(target)) watchRecoveredDirectorJob(job);
       });
@@ -1416,6 +1421,7 @@
         operation: operation,
         jobId: payload.jobId
       }).then(function () {
+        syncDirectorPendingControls();
         return consumeDirectorJob(payload.jobId).then(function () {
           return payload;
         });
@@ -1587,10 +1593,18 @@
       if (repairButton) repairButton.disabled = !!protectedState;
       if (restoreButton) restoreButton.disabled = !!protectedState;
       document.querySelectorAll(
+        '#storyboard-story-concept, #storyboard-story-style, ' +
+        '#storyboard-invariant-define, #storyboard-invariant-add, ' +
+        '#storyboard-invariants-list input, #storyboard-invariants-list select, #storyboard-invariants-list textarea, #storyboard-invariants-list button, ' +
+        '#storyboard-scenes-list [data-scene-field="title"], ' +
         '#storyboard-scenes-list [data-scene-field="summary"], ' +
         '#storyboard-scenes-list [data-scene-field="entryState"], ' +
         '#storyboard-scenes-list [data-scene-field="exitState"], ' +
-        '#storyboard-scenes-list [data-scene-field="prompt"]'
+        '#storyboard-scenes-list [data-scene-field="prompt"], ' +
+        '#storyboard-scenes-list [data-scene-field="durationSeconds"], ' +
+        '#storyboard-scenes-list [data-reference-clear], #storyboard-scenes-list [data-reference-role], ' +
+        '#storyboard-scenes-list [data-reference-source], #storyboard-scenes-list [data-reference-frame], ' +
+        '#storyboard-scenes-list [data-reference-apply], #storyboard-scenes-list [data-reference-upload]'
       ).forEach(function (field) {
         field.disabled = !!protectedState;
       });
@@ -2023,6 +2037,7 @@
       var sceneIds = Array.isArray(actionStory && actionStory.sceneOrder)
         ? actionStory.sceneOrder.slice()
         : [];
+      if (!sceneIds.length) throw new Error('First Cut developed no Scenes.');
       action.sceneCount = sceneIds.length;
       updateStoryAction(action, 'Refining Scenes', '0 / ' + String(sceneIds.length));
       return runSceneDirectorPass(

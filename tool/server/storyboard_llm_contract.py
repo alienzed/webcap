@@ -24,8 +24,14 @@ def _clean(value):
     return str(value or "").strip()
 
 
-def _prompt_response_schema(allow_duration=False, allow_scene_fields=False):
+def _prompt_response_schema(allow_duration=False, allow_scene_fields=False, allow_unchanged=False):
     schema = content_schema()
+    if allow_unchanged:
+        schema["properties"]["changed"] = {
+            "type": "boolean",
+            "description": "False only when the requested refinement does not require any change to this Scene.",
+        }
+        schema["required"] = ["changed"]
     if allow_scene_fields:
         schema["properties"]["summary"] = {
             "type": "string",
@@ -495,7 +501,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[H3 OUTPUT CONTRACT]\n"
             + h3_output
-            + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. WebCap owns the final labels and alignment syntax; return the three prompt semantic field values plus only any optional Scene fields the correction actually requires through the supplied JSON schema."
+            + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. If the correction does not apply to this Scene, return changed=false and omit all revision fields. If it does apply, return changed=true, all three prompt semantic field values, plus only any optional Scene fields the correction actually requires. WebCap owns the final labels and alignment syntax."
         )
         blocks.append(
             "[CURRENT TASK]\nApply this correction with the smallest coherent change to this Scene:\n"
@@ -517,6 +523,8 @@ def build_request(story, scene_id, operation, instruction=""):
     }
     if operation == "refine_prompt":
         result_renderer["duration_field"] = "durationSeconds"
+        result_renderer["allow_unchanged"] = True
+        result_renderer["existing_prompt"] = existing_prompt
 
     return {
         "operation": operation,
@@ -525,6 +533,7 @@ def build_request(story, scene_id, operation, instruction=""):
         "response_schema": _prompt_response_schema(
             allow_duration=operation == "refine_prompt",
             allow_scene_fields=operation == "refine_prompt",
+            allow_unchanged=operation == "refine_prompt",
         ),
         "result_renderer": result_renderer,
     }

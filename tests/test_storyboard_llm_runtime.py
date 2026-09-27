@@ -539,6 +539,39 @@ def test_run_contract_exposes_lifecycle_activity(monkeypatch):
     assert final["phase"] == "complete"
 
 
+def test_run_contract_preserves_existing_prompt_for_explicit_refine_no_change(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "chat",
+        lambda *_args, **_kwargs: {"text": '{"changed": false}', "model": "qwen-large"},
+    )
+
+    result = storyboard_llm_runtime.run_contract(
+        "qwen-large",
+        {
+            "operation": "refine_prompt",
+            "prompt": "Review this Scene.",
+            "output": "json",
+            "response_schema": {
+                "type": "object",
+                "required": ["changed"],
+                "properties": {"changed": {"type": "boolean"}},
+            },
+            "result_renderer": {
+                "type": "h3_base",
+                "mode": "T2VA",
+                "duration": 10,
+                "allow_unchanged": True,
+                "existing_prompt": "Existing prompt stays byte-for-byte unchanged.",
+            },
+        },
+    )
+
+    assert result["noChange"] is True
+    assert result["text"] == "Existing prompt stays byte-for-byte unchanged."
+    assert result["data"] == {"changed": False}
+
+
 def test_run_contract_requires_prompt(monkeypatch):
     with pytest.raises(ValueError, match="prompt is empty"):
         storyboard_llm_runtime.run_contract("model", {"prompt": ""})

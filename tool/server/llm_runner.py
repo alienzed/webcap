@@ -263,22 +263,29 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         scene_id = str(context.get("sceneId") or "").strip()
         if not scene_id:
             raise RuntimeError("Storyboard Scene Director job is missing its Scene ID.")
-        from .storyboard_store import apply_director_prompt
-        scene_fields = {}
-        if operation == "refine_prompt" and isinstance(llm_result.get("data"), dict):
-            for key in ("summary", "entryState", "exitState"):
-                if key in llm_result["data"]:
-                    scene_fields[key] = llm_result["data"][key]
-        story, scene = apply_director_prompt(
-            story_id,
-            scene_id,
-            llm_result.get("text"),
-            model_id=llm_result["model"],
-            job_id=job_id,
-            operation=operation,
-            duration_override=llm_result.get("durationOverride"),
-            scene_fields=scene_fields,
-        )
+        if operation == "refine_prompt" and llm_result.get("noChange"):
+            from .storyboard_store import load_story
+            story = load_story(story_id)
+            scene = (story.get("scenes") or {}).get(scene_id)
+            if not isinstance(scene, dict):
+                raise FileNotFoundError("Scene does not exist.")
+        else:
+            from .storyboard_store import apply_director_prompt
+            scene_fields = {}
+            if operation == "refine_prompt" and isinstance(llm_result.get("data"), dict):
+                for key in ("summary", "entryState", "exitState"):
+                    if key in llm_result["data"]:
+                        scene_fields[key] = llm_result["data"][key]
+            story, scene = apply_director_prompt(
+                story_id,
+                scene_id,
+                llm_result.get("text"),
+                model_id=llm_result["model"],
+                job_id=job_id,
+                operation=operation,
+                duration_override=llm_result.get("durationOverride"),
+                scene_fields=scene_fields,
+            )
         return {
             "storyId": story["id"],
             "sceneId": scene["id"],

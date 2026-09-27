@@ -543,6 +543,43 @@ def test_inference_runner_pauses_without_consuming_queue_when_comfyui_is_unavail
     assert [job["queuePosition"] for job in unchanged["jobs"]] == [1, 2]
 
 
+def test_inference_resume_retries_preserved_head_before_later_work(inference_root, monkeypatch):
+    first = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "First"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    second = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Second"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    attempts = []
+
+    def execute(job_id):
+        attempts.append(job_id)
+        execution_queue.mark_running(job_id)
+        if len(attempts) == 1:
+            raise RuntimeError("first attempt failed")
+        execution_queue.finish_job_transient(job_id, status="completed")
+
+    monkeypatch.setattr(inference_runner, "_execute_claimed", execute)
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
+    monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
+
+    inference_runner._advance_queue()
+    assert attempts == [first["id"]]
+    assert inference_runner.snapshot()["paused"] is True
+
+    result = inference_runner.action("resume_queue")
+    assert result["resumed"] is True
+    inference_runner._advance_queue()
+
+    assert attempts == [first["id"], first["id"]]
+    assert execution_queue.get_job(second["id"])["status"] == "queued"
+
+
 def test_inference_runner_pauses_and_preserves_head_job_after_unexpected_post_launch_failure(inference_root, monkeypatch):
     queued = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,

@@ -149,6 +149,7 @@ def _clear_obsolete_persisted_provider_pause():
     lowered = reason.lower()
     if (
         current.get("paused")
+        and not lowered.startswith("inference paused after an execution error:")
         and (
             "comfyui provider" in lowered
             or "provider cleanup" in lowered

@@ -172,6 +172,34 @@ def test_execution_queue_shelves_active_work_back_to_clean_backlog(queue_root):
     assert restored["startedAt"] is None
 
 
+def test_execution_queue_requeues_active_job_and_pauses_lane(queue_root):
+    first = execution_queue.enqueue("inference", {"request": {"prompt": "first"}})
+    second = execution_queue.enqueue("inference", {"request": {"prompt": "second"}})
+    execution_queue.claim_next("inference")
+    execution_queue.mark_running(
+        first["id"],
+        details={"providerJobId": "provider-1", "providerStatus": "in_progress"},
+    )
+
+    restored = execution_queue.requeue_active_and_pause(
+        first["id"],
+        "Inference paused after an execution error: boom",
+    )
+
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+    assert restored["status"] == "queued"
+    assert snapshot["paused"] is True
+    assert snapshot["pauseReason"] == "Inference paused after an execution error: boom"
+    assert snapshot["activeJobId"] == ""
+    assert [job["id"] for job in snapshot["jobs"]] == [first["id"], second["id"]]
+    assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2]
+    stored = execution_queue.get_job(first["id"], include_payload=True)
+    assert stored["payload"]["request"]["prompt"] == "first"
+    assert stored["startedAt"] is None
+    assert stored["details"] == {}
+    assert execution_queue.claim_next("inference") is None
+
+
 def test_execution_queue_terminal_jobs_reject_runtime_updates(queue_root):
     job = execution_queue.enqueue("takes", {"n": 1})
     execution_queue.claim_next("takes")

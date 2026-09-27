@@ -20,6 +20,7 @@ from .execution_queue import (
     shelve_queued as execution_shelve_queued,
     shelve_unfinished as execution_shelve_unfinished,
     reorder_job as execution_reorder_job,
+    requeue_active_and_pause as execution_requeue_active_and_pause,
     request_stop as execution_request_stop,
     resolve_job_transient as execution_resolve_job_transient,
     transient_receipt as execution_transient_receipt,
@@ -549,18 +550,24 @@ def _advance_queue():
                     hold_provider_cleanup(
                         provider_job_id,
                         (
-                            "Queue paused: ComfyUI provider work could not be confirmed stopped after an inference failure. "
+                            "Inference paused: ComfyUI provider work could not be confirmed stopped after an inference error. "
                             "Resolve the provider job before resuming."
                         ),
                     )
                 if status in {"starting", "running", "stopping"}:
                     _cleanup_generate_job_references(job_id)
-                    execution_finish_job_transient(job_id, status="failed", error=str(exc))
-                _logger.exception("Queued inference job failed.")
+                    execution_requeue_active_and_pause(
+                        job_id,
+                        "Inference paused after an execution error: " + str(exc),
+                    )
+                _logger.exception("Queued inference attempt failed; inference was paused and the job was preserved.")
         finally:
             if release_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
-        return _job_view(execution_transient_receipt(job_id))
+        try:
+            return _job_view(execution_get_job(job_id))
+        except FileNotFoundError:
+            return _job_view(execution_transient_receipt(job_id))
 
 
 def _monitor_has_work():

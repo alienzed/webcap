@@ -1361,6 +1361,27 @@
     });
   }
 
+  function requestSceneDirector(sceneId, operation, instruction) {
+    var storyId = storyState.story.id;
+    var modelId = storyState.director.modelId;
+    return directorRequest({
+      storyId: storyId,
+      sceneId: sceneId,
+      operation: operation,
+      model: modelId,
+      instruction: instruction || ''
+    }).then(function (payload) {
+      return applyDirectorResultToVisibleStory({
+        storyId: storyId,
+        sceneId: sceneId,
+        operation: operation,
+        jobId: payload.jobId
+      }).then(function () {
+        return consumeDirectorJob(payload.jobId);
+      });
+    });
+  }
+
   function runDirector(sceneId, operation) {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
@@ -1369,8 +1390,7 @@
       reportError(new Error('That Scene prompt already has Director work pending.'));
       return;
     }
-    var modelId = storyState.director.modelId;
-    if (!modelId) {
+    if (!storyState.director.modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
       return;
     }
@@ -1387,27 +1407,11 @@
       }
     }
 
-    var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     updateSceneDirectorStatus(sceneId, 'Director working…');
     startDirectorActivity();
-    saveBarrier.then(function () {
-      return directorRequest({
-        storyId: storyId,
-        sceneId: sceneId,
-        operation: operation,
-        model: modelId,
-        instruction: instruction
-      });
-    }).then(function (payload) {
-      return applyDirectorResultToVisibleStory({
-        storyId: storyId,
-        sceneId: sceneId,
-        operation: operation,
-        jobId: payload.jobId
-      }).then(function () {
-        return consumeDirectorJob(payload.jobId);
-      });
+    flushPendingSaves().then(function () {
+      return requestSceneDirector(sceneId, operation, instruction);
     }).catch(function (err) {
       if (directorWasStopped(err)) updateSceneDirectorStatus(sceneId, 'Director stopped');
       else {
@@ -1501,8 +1505,10 @@
     if (target.kind === 'repair') {
       var instruction = el('storyboard-repair-instruction');
       var repairButton = el('storyboard-repair-scenes-btn');
+      var restoreButton = el('storyboard-restore-repair-btn');
       if (instruction) instruction.disabled = !!protectedState;
       if (repairButton) repairButton.disabled = !!protectedState;
+      if (restoreButton) restoreButton.disabled = !!protectedState;
       document.querySelectorAll(
         '#storyboard-scenes-list [data-scene-field="summary"], ' +
         '#storyboard-scenes-list [data-scene-field="entryState"], ' +
@@ -1686,12 +1692,14 @@
       reportError(new Error('This Story already has Director work that conflicts with Check & Repair.'));
       return;
     }
-    var modelId = storyState.director.modelId;
-    if (!modelId) {
+    if (!storyState.director.modelId) {
       reportError(new Error('Choose a Storyboard Director model first.'));
       return;
     }
-    if (!Array.isArray(storyState.story.sceneOrder) || !storyState.story.sceneOrder.length) {
+    var sceneIds = Array.isArray(storyState.story.sceneOrder)
+      ? storyState.story.sceneOrder.slice()
+      : [];
+    if (!sceneIds.length) {
       setRepairStatus('Develop Scenes first.');
       return;
     }
@@ -1701,30 +1709,27 @@
       return;
     }
 
-    var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
-    setRepairStatus('Director is checking the current Scene plan…');
     startDirectorActivity();
-    saveBarrier.then(function () {
-      return directorRequest({
-        storyId: storyId,
-        operation: 'repair_scenes',
-        model: modelId,
-        instruction: instruction
-      });
-    }).then(function (payload) {
-      return applyDirectorResultToVisibleStory({
-        storyId: storyId,
-        operation: 'repair_scenes',
-        jobId: payload.jobId
-      }).then(function () {
-        var changedScenes = Number(payload.changedSceneCount || 0);
-        var changedFields = Number(payload.changedFieldCount || 0);
-        setRepairStatus(changedScenes
-          ? ('Repaired ' + String(changedScenes) + ' Scene' + (changedScenes === 1 ? '' : 's') + ' · ' + String(changedFields) + ' field' + (changedFields === 1 ? '' : 's') + '.')
-          : 'No repairs were needed.');
-        return consumeDirectorJob(payload.jobId);
-      });
+    flushPendingSaves().then(function () {
+      return sceneIds.reduce(function (promise, sceneId, index) {
+        return promise.then(function () {
+          var scene = storyState.story && storyState.story.scenes
+            ? storyState.story.scenes[sceneId]
+            : null;
+          setRepairStatus(
+            'Checking Scene ' + String(index + 1) + ' / ' + String(sceneIds.length)
+            + (scene && scene.title ? ' · ' + scene.title : '')
+          );
+          return requestSceneDirector(sceneId, 'refine_prompt', instruction);
+        });
+      }, Promise.resolve());
+    }).then(function () {
+      if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
+        storyState.story.repairComplete = true;
+        scheduleStorySave();
+      }
+      setRepairStatus('Checked & repaired ' + String(sceneIds.length) + ' Scenes.');
     }).catch(function (err) {
       if (directorWasStopped(err)) setRepairStatus('Check & Repair stopped.');
       else {

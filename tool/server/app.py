@@ -235,7 +235,7 @@ def fs_system_status():
 @app.route("/fs/activity", methods=["GET"])
 def fs_activity():
     try:
-        return jsonify(activity_snapshot(request.args.get("limit", 20)))
+        return jsonify(activity_snapshot(request.args.get("limit", 20), request.args.get("since", 0)))
     except Exception as exc:
         app.logger.exception("ACTIVITY SNAPSHOT FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400

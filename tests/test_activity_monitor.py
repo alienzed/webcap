@@ -68,6 +68,7 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
             "bytesScanned": 1234,
         },
     })
+    monkeypatch.setattr(activity_monitor, "execution_recent_snapshot", lambda lane, limit=30: [])
     monkeypatch.setattr(activity_monitor, "training_recent_jobs", lambda: [
         {
             "id": "train-done",
@@ -87,3 +88,22 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
     assert payload["queues"]["inference"]["queued"] == 1
     assert payload["queues"]["training"]["queued"] == 1
     assert payload["queues"]["director"]["queued"] == 1
+
+
+def test_activity_recent_is_limited_to_client_session(monkeypatch):
+    monkeypatch.setattr(activity_monitor, "inference_snapshot", lambda include_terminal=False: {"paused": False, "pauseReason": "", "jobs": []})
+    monkeypatch.setattr(activity_monitor, "llm_snapshot", lambda include_terminal=False: {"paused": False, "pauseReason": "", "jobs": []})
+    monkeypatch.setattr(activity_monitor, "training_status_response", lambda: ({"ok": True, "queuePaused": False, "queuePauseReason": "", "jobs": []}, 200))
+    monkeypatch.setattr(activity_monitor, "storage_scan_status", lambda: {"ok": True, "scan": {}})
+    monkeypatch.setattr(activity_monitor, "execution_recent_snapshot", lambda lane, limit=30: [
+        {"id": lane + "-old", "status": "completed", "finishedAt": 90.0, "metadata": {"client": "generate" if lane == "inference" else "storyboard"}},
+        {"id": lane + "-new", "status": "failed" if lane == "llm" else "completed", "finishedAt": 110.0, "error": "boom" if lane == "llm" else "", "metadata": {"client": "generate" if lane == "inference" else "storyboard"}},
+    ])
+    monkeypatch.setattr(activity_monitor, "training_recent_jobs", lambda: [
+        {"id": "training-old", "status": "completed", "finishedAt": 80.0},
+        {"id": "training-new", "status": "completed", "finishedAt": 120.0},
+    ])
+
+    payload = activity_monitor.activity_snapshot(limit=10, since=100.0)
+
+    assert [item["id"] for item in payload["recent"]] == ["training-new", "llm-new", "inference-new"]

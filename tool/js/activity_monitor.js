@@ -1,32 +1,27 @@
 (function () {
   'use strict';
 
-  var LAST_SEEN_KEY = 'webcap.activity.lastSeen';
+  var sessionStartedAt = Date.now() / 1000;
   var state = {
     open: false,
     payload: { active: [], recent: [], queues: {} },
     timer: 0,
     pending: false,
-    lastSeen: loadLastSeen(),
-    openedAt: 0
+    lastSeen: sessionStartedAt,
+    openedAt: 0,
+    notified: Object.create(null)
   };
 
   function el(id) { return document.getElementById(id); }
 
-  function loadLastSeen() {
-    try {
-      var value = Number(window.localStorage.getItem(LAST_SEEN_KEY));
-      return isFinite(value) && value > 0 ? value : Date.now() / 1000;
-    } catch (err) {
-      return Date.now() / 1000;
-    }
-  }
-
   function storeLastSeen(value) {
     state.lastSeen = Number(value) || Date.now() / 1000;
-    try {
-      window.localStorage.setItem(LAST_SEEN_KEY, String(state.lastSeen));
-    } catch (err) {}
+  }
+
+  function sessionRecent() {
+    return (Array.isArray(state.payload.recent) ? state.payload.recent : []).filter(function (item) {
+      return finishedAt(item) >= sessionStartedAt;
+    });
   }
 
   function requestJson(url) {
@@ -46,7 +41,7 @@
   }
 
   function unseenCount() {
-    return (state.payload.recent || []).filter(function (item) {
+    return sessionRecent().filter(function (item) {
       return finishedAt(item) > state.lastSeen;
     }).length;
   }
@@ -256,6 +251,64 @@
     return button;
   }
 
+  function recentKey(item) {
+    return [String(item.lane || item.kind || ''), String(item.id || ''), String(finishedAt(item))].join(':');
+  }
+
+  function toastRecent(item) {
+    var failed = recentStatusClass(item.status) === 'failed';
+    var host = el('activity-toast-stack');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'activity-toast-stack';
+      host.className = 'activity-toast-stack';
+      host.setAttribute('aria-live', 'polite');
+      host.setAttribute('aria-label', 'Notifications');
+      el('app-overlay-root').appendChild(host);
+    }
+    var toast = document.createElement('div');
+    toast.className = 'activity-toast ' + (failed ? 'failed' : 'complete');
+    var icon = document.createElement('span');
+    icon.className = 'activity-toast-icon';
+    icon.textContent = failed ? '!' : '✓';
+    var copy = document.createElement('div');
+    copy.className = 'activity-toast-copy';
+    var title = document.createElement('strong');
+    title.textContent = activityTitle(item) + (failed ? ' failed' : ' completed');
+    var detail = document.createElement('span');
+    detail.textContent = item.error || activityDetail(item) || '';
+    copy.appendChild(title);
+    if (detail.textContent) copy.appendChild(detail);
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'activity-toast-close';
+    close.setAttribute('aria-label', 'Dismiss notification');
+    close.textContent = '×';
+    var timer = 0;
+    function dismiss() {
+      if (timer) clearTimeout(timer);
+      toast.remove();
+    }
+    close.onclick = dismiss;
+    toast.appendChild(icon);
+    toast.appendChild(copy);
+    toast.appendChild(close);
+    host.prepend(toast);
+    while (host.children.length > 4) host.lastElementChild.remove();
+    timer = setTimeout(dismiss, failed ? 10000 : 6500);
+  }
+
+  function notifyRecent(items) {
+    items.forEach(function (item) {
+      var status = String(item.status || '');
+      if (['completed', 'finished_early', 'failed', 'interrupted'].indexOf(status) === -1) return;
+      var key = recentKey(item);
+      if (state.notified[key]) return;
+      state.notified[key] = true;
+      toastRecent(item);
+    });
+  }
+
   function queueText(queue, includeRunning) {
     queue = queue || {};
     var parts = [];
@@ -335,7 +388,7 @@
 
   function render() {
     var active = Array.isArray(state.payload.active) ? state.payload.active : [];
-    var recent = Array.isArray(state.payload.recent) ? state.payload.recent : [];
+    var recent = sessionRecent();
     var queues = state.payload.queues || {};
     var drawer = el('activity-monitor-drawer');
     var host = el('activity-monitor-list');
@@ -354,7 +407,7 @@
     badge.classList.toggle('hidden', unseen === 0 || state.open);
     summary.textContent = active.length
       ? String(active.length) + ' active · ' + (unseen ? String(unseen) + ' new' : 'up to date')
-      : (unseen ? String(unseen) + ' completed since your last check' : 'Now and recently completed work');
+      : (unseen ? String(unseen) + ' new this session' : 'Current work and this session');
 
     host.innerHTML = '';
 
@@ -386,8 +439,9 @@
   function refresh() {
     if (state.pending) return Promise.resolve(state.payload);
     state.pending = true;
-    return requestJson('/fs/activity?limit=24').then(function (payload) {
+    return requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
       state.payload = payload;
+      notifyRecent(sessionRecent());
       render();
       return payload;
     }).catch(function (err) {

@@ -1,5 +1,6 @@
 import time
 
+from .execution_queue import recent_snapshot as execution_recent_snapshot
 from .inference_runner import snapshot as inference_snapshot
 from .llm_runner import snapshot as llm_snapshot
 from .storage_manager import scan_status as storage_scan_status
@@ -80,11 +81,11 @@ def _training_active_and_queue():
     }
 
 
-def _training_recent(limit):
+def _training_recent(limit, since=0.0):
     items = []
     for job in training_recent_jobs():
         status = str(job.get("status") or "")
-        if status not in _TERMINAL_STATUSES:
+        if status not in _TERMINAL_STATUSES or _finished_at(job) < since:
             continue
         items.append({
             "id": str(job.get("id") or ""),
@@ -103,11 +104,25 @@ def _training_recent(limit):
     return items[:limit]
 
 
-def activity_snapshot(limit=20):
+def _execution_recent(lane, limit, since=0.0):
+    items = []
+    for job in execution_recent_snapshot(lane, limit=limit):
+        status = str(job.get("status") or "")
+        if status not in _TERMINAL_STATUSES or _finished_at(job) < since:
+            continue
+        items.append(_execution_item(lane, job))
+    return items
+
+
+def activity_snapshot(limit=20, since=0):
     try:
         limit = max(1, min(int(limit), 50))
     except (TypeError, ValueError):
         limit = 20
+    try:
+        since = max(0.0, float(since or 0))
+    except (TypeError, ValueError):
+        since = 0.0
 
     inference = inference_snapshot(include_terminal=False)
     llm = llm_snapshot(include_terminal=False)
@@ -141,12 +156,19 @@ def activity_snapshot(limit=20):
             "bytesScanned": int(scan.get("bytesScanned") or 0),
         })
 
-    # Inference and LLM completion receipts are intentionally session-only.
-    # Durable Recent history is reserved for workflows where history itself is
-    # useful, such as Training (plus the current storage scan receipt below).
-    recent = _training_recent(limit)
+    # Recent is a client-session view. Persisted receipts are filtered to the
+    # caller's session start rather than becoming durable Activity history.
+    recent = (
+        _execution_recent("inference", limit, since)
+        + _execution_recent("llm", limit, since)
+        + _training_recent(limit, since)
+    )
 
-    if str(scan.get("status") or "") in {"completed", "failed", "cancelled"} and scan.get("finishedAt"):
+    if (
+        str(scan.get("status") or "") in {"completed", "failed", "cancelled"}
+        and scan.get("finishedAt")
+        and _finished_at(scan) >= since
+    ):
         recent.append({
             "id": str(scan.get("id") or "storage-scan"),
             "kind": "storage",

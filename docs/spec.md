@@ -18,12 +18,12 @@ Key set-owned artifacts are:
 
 WebCap has a permanent outer shell around the feature workspaces.
 
-- **Activity rail:** Prep, Training, and Test are major activities. Console, Settings, Help, and immersive mode also live in the permanent rail. Review, Grid, Focus, Config, Run Log, Candidate Analysis, Test sessions, and Compare remain workspace-owned views rather than top-level activities.
+- **Activity rail:** Prep, Generate, Training, Test, Storyboard, and Storage are major activities. Activity, Inference Queue, Console, Settings, Help, and immersive mode also live in the permanent rail. Review, Grid, Focus, Config, Run Log, Candidate Analysis, Test sessions, and Compare remain workspace-owned views rather than top-level activities.
 - **Header:** current folder/set breadcrumb, workspace identity, and the single editable **Base Model** selector are shell-owned. Historical Training/Test artifacts retain their own recorded model identity even when the current working model differs.
-- **Status and background work:** transient application feedback is shown in a floating bottom-left shell status. The general multiline console has one stable shell host. The header continuously exposes workload state (**Idle**, **Training**, or **Testing**), GPU utilization/VRAM when available, and free disk space. Training/Test remain feature-owned even though their system status is globally visible.
+- **Status and background work:** transient application feedback is shown in a floating bottom-left shell status. The general multiline console has one stable shell host. The header continuously exposes workload state (**Idle**, **Training**, **Testing**, or **Generating**), GPU utilization/VRAM when available, and free disk space. Feature work remains domain-owned even though its operational status is globally visible.
 - **Overlay root:** true modals use the single static `#app-overlay-root`; feature code does not reparent modal nodes at runtime.
-- **Workspace roots:** Prep, Review, Training, and Test have explicit stable roots. Grid and Focus are surface modes within the Prep-owned workspace model.
-- **Reload location:** URL hash routing owns durable folder + major-workspace location. Supported durable routes are Prep, Training, Test, Review, and Grid, with Training global/set scope. Transient UI state is not persisted in the route.
+- **Workspace roots:** Prep, Review, Training, Test, Generate, Storyboard, and Storage have explicit stable roots. Grid and Focus are surface modes within the Prep-owned workspace model.
+- **Reload location:** URL hash routing owns durable folder + major-workspace location. Supported durable routes are Prep, Generate, Training, Test, Storyboard, Storage, Review, and Grid, with Training global/set scope. Transient UI state is not persisted in the route.
 
 The shell owns navigation/context presentation. Feature-local tabs, selections, queues, sessions, artifact details, and modal state remain feature-owned.
 
@@ -70,7 +70,7 @@ The logical run also owns `jobs/` and `output/`. The bundle contains grouped med
 
 Managed Resume is shallow current-set discovery; Custom Resume validates an explicit checkpoint directly and creates a new logical run. The manual command path uses the same capture materializer but never launches a process.
 
-Training History is a lightweight metadata index stored in `.webcap_training/recent_runs.json`. It never infers rows merely because output folders exist; recorded filesystem paths only enrich known history rows with current availability/actions. Test Generations uses a separate session/FIFO flow and is not part of the Training Queue or Training History.
+Training History is a lightweight metadata index stored in `.webcap_training/recent_runs.json`. It never infers rows merely because output folders exist; recorded filesystem paths only enrich known history rows with current availability/actions. Test Generations is not part of the Training Queue or Training History: Test owns Session aggregation/results, while each Base/candidate rendition is scheduled through the shared `inference` lane alongside Generate and Storyboard Takes. Prompt Assistant / Director requests use the separate shared `llm` lane; Training retains its specialized queue and all three classes share one exclusive local GPU resource.
 
 ## Guardrails
 

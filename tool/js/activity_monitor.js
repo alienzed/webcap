@@ -474,9 +474,7 @@
         activeErrorKeys[key] = true;
         if (state.reportedErrors[key]) return;
         state.reportedErrors[key] = true;
-        if (typeof window.reportConsoleError === 'function') {
-          window.reportConsoleError('Activity', String(item.area || 'Activity') + ' unavailable: ' + String(item.error || 'Unknown error'));
-        }
+        window.reportConsoleError('Activity', String(item.area || 'Activity') + ' unavailable: ' + String(item.error || 'Unknown error'));
       });
       Object.keys(state.reportedErrors).forEach(function (key) {
         if (!activeErrorKeys[key]) delete state.reportedErrors[key];

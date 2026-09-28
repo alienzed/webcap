@@ -56,6 +56,13 @@ def _host_command(args, timeout=10):
 
 def _python_package_check(package_name, label, group="optional_analysis", required=False):
     available = importlib.util.find_spec(package_name) is not None
+    guidance = ""
+    if not available:
+        guidance = (
+            "Use Settings > Advanced > Install / Repair Python Requirements."
+            if not required
+            else "Run python -m pip install -r requirements.txt in the WebCap environment."
+        )
     return _check(
         "package_" + package_name.replace("-", "_"),
         group,
@@ -63,7 +70,7 @@ def _python_package_check(package_name, label, group="optional_analysis", requir
         available,
         label + " is installed." if available else label + " is not installed.",
         "",
-        "Run python -m pip install -r requirements.txt in the WebCap environment." if not available else "",
+        guidance,
     )
 
 
@@ -115,6 +122,7 @@ def _append_optional_analysis_checks(checks):
         ("rembg", "rembg"),
         ("onnxruntime", "ONNX Runtime"),
         ("deface", "deface / CenterFace"),
+        ("imageio", "imageio"),
         ("tensorboard", "TensorBoard"),
     ):
         checks.append(_python_package_check(package_name, label))
@@ -127,7 +135,7 @@ def _append_optional_analysis_checks(checks):
         bool(deface_path),
         "deface command is available." if deface_path else "deface command is not available.",
         deface_path or "",
-        "Run python -m pip install -r requirements.txt in the WebCap environment." if not deface_path else "",
+        "Use Settings > Advanced > Install / Repair Python Requirements." if not deface_path else "",
     ))
 
     model_root = Path(__file__).resolve().parents[1] / "vendor" / "mediapipe" / "models"

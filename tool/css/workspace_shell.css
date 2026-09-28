@@ -1915,8 +1915,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   z-index: 74;
   top: 10px;
   right: 10px;
+  bottom: calc(var(--shell-status-height) + 10px);
   width: min(560px, calc(100% - 60px));
-  max-height: min(78vh, calc(100vh - var(--shell-status-height) - 20px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2020,6 +2020,85 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   height: 32px;
 }
 
+.director-chat-progress {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 8px;
+  padding: 9px 14px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  background: color-mix(in srgb, var(--panel-soft) 82%, transparent);
+}
+
+.director-chat-progress.hidden {
+  display: none;
+}
+
+.director-chat-progress-copy {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.director-chat-progress-copy strong {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.director-chat-progress-copy span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.director-chat-progress-copy time {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.director-chat-progress-track {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 74%, transparent);
+}
+
+.director-chat-progress-track span {
+  display: block;
+  width: 34%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: director-chat-progress-slide 1.15s ease-in-out infinite;
+}
+
+.director-chat-progress[data-phase="error"] .director-chat-progress-track span {
+  width: 100%;
+  animation: none;
+  background: var(--danger, #f87171);
+}
+
+@keyframes director-chat-progress-slide {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(310%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .director-chat-progress-track span {
+    width: 100%;
+    animation: none;
+  }
+}
+
 .director-chat-messages {
   min-height: 180px;
   flex: 1 1 auto;
@@ -2106,7 +2185,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   margin-top: 8px;
 }
 
-.director-chat-status {
+.director-chat-composer-hint {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
@@ -2127,7 +2206,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .app-frame.shell-immersive > .director-chat-drawer {
   top: 10px;
   right: 10px;
-  max-height: min(78vh, calc(100vh - var(--shell-status-height) - 20px));
+  bottom: calc(var(--shell-status-height) + 10px);
 }
 
 @media (max-width: 720px) {

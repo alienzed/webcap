@@ -24,6 +24,7 @@
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
     directorPassMode: 'custom',
     storyAction: null,
+    storyActionQueue: [],
     storyActionTimer: 0,
     generationCapabilities: {
       loras: [],
@@ -1548,6 +1549,7 @@
   }
 
   function directorTargetBlocked(target) {
+    if (target && target.kind !== 'story-action' && queuedFirstCutForStory(target.storyId)) return true;
     return Object.keys(storyState.director.pendingTargets).some(function (key) {
       return directorTargetsConflict(target, storyState.director.pendingTargets[key]);
     });
@@ -1944,6 +1946,41 @@
     return minutes ? (String(minutes) + 'm ' + String(remainder) + 's') : (String(remainder) + 's');
   }
 
+  function queuedFirstCutForStory(storyId) {
+    storyId = String(storyId || '');
+    return storyState.storyActionQueue.find(function (action) {
+      return !action.cancelled && String(action.storyId || '') === storyId;
+    }) || null;
+  }
+
+  function firstCutQueuePosition(action) {
+    var index = storyState.storyActionQueue.indexOf(action);
+    return index < 0 ? 0 : index + 1;
+  }
+
+  function firstCutQueueDisplayPosition(action) {
+    return firstCutQueuePosition(action) + (
+      storyState.storyAction && storyState.storyAction.active ? 1 : 0
+    );
+  }
+
+  function removeQueuedFirstCut(storyId) {
+    storyId = String(storyId || '');
+    var removed = null;
+    storyState.storyActionQueue = storyState.storyActionQueue.filter(function (action) {
+      if (!removed && String(action.storyId || '') === storyId) {
+        removed = action;
+        return false;
+      }
+      return true;
+    });
+    if (removed) {
+      removed.queued = false;
+      removed.cancelled = true;
+    }
+    return removed;
+  }
+
   function renderStoryAction() {
     if (storyState.storyActionTimer) clearTimeout(storyState.storyActionTimer);
     storyState.storyActionTimer = 0;
@@ -1958,16 +1995,35 @@
       throw new Error('Storyboard Story action card markup is missing.');
     }
 
-    var action = storyState.storyAction;
-    var visible = !!(
-      action &&
-      storyState.story &&
-      String(action.storyId || '') === String(storyState.story.id || '')
-    );
-    button.classList.toggle('hidden', visible && action.active);
-    button.disabled = !!(action && action.active && !visible);
-    card.classList.toggle('hidden', !visible);
-    if (!visible) return;
+    var currentStoryId = storyState.story ? String(storyState.story.id || '') : '';
+    var activeAction = storyState.storyAction;
+    var queuedAction = queuedFirstCutForStory(currentStoryId);
+    var action = activeAction && String(activeAction.storyId || '') === currentStoryId
+      ? activeAction
+      : queuedAction;
+    var queued = !!(action && action.queued);
+    var anotherRunning = !!(activeAction && activeAction.active);
+
+    button.textContent = anotherRunning ? 'Queue First Cut' : 'First Cut';
+    button.classList.toggle('hidden', !!(action && (action.active || queued)));
+    button.disabled = false;
+    card.classList.toggle('hidden', !action);
+    if (!action) return;
+
+    if (queued) {
+      var displayPosition = firstCutQueueDisplayPosition(action);
+      var ahead = Math.max(0, displayPosition - 1);
+      phase.textContent = 'Queued · #' + String(displayPosition);
+      detail.textContent = ahead
+        ? String(ahead) + ' First Cut' + (ahead === 1 ? '' : 's') + ' ahead.'
+        : 'Next First Cut.';
+      elapsed.textContent = storyActionElapsed(
+        (Date.now() / 1000) - Number(action.queuedAt || Date.now() / 1000)
+      ) + ' queued' + (action.modelId ? ' · ' + action.modelId : '');
+      cancel.classList.remove('hidden');
+      storyState.storyActionTimer = setTimeout(renderStoryAction, 1000);
+      return;
+    }
 
     phase.textContent = action.phase || 'Preparing';
     detail.textContent = action.detail || '';
@@ -1978,8 +2034,17 @@
   }
 
   function cancelStoryAction() {
+    var visibleStoryId = storyState.story ? String(storyState.story.id || '') : '';
+    var queued = queuedFirstCutForStory(visibleStoryId);
+    if (queued) {
+      removeQueuedFirstCut(visibleStoryId);
+      renderLibrary();
+      renderStoryAction();
+      return;
+    }
+
     var action = storyState.storyAction;
-    if (!action || !action.active) return;
+    if (!action || !action.active || String(action.storyId || '') !== visibleStoryId) return;
     action.cancelled = true;
     action.detail = 'Stopping…';
     renderStoryAction();
@@ -2001,41 +2066,48 @@
     renderStoryAction();
   }
 
-  function startFirstCut() {
-    if (!storyState.story) return;
+  function runFirstCut(action) {
+    if (!action || action.cancelled) return;
     if (storyState.storyAction && storyState.storyAction.active) {
-      reportError(new Error('Another First Cut is already running.'));
-      return;
+      throw new Error('Cannot start a second First Cut while one is active.');
     }
-    var storyId = String(storyState.story.id || '');
-    var modelId = String(storyState.director.modelId || '');
-    if (!modelId) {
-      reportError(new Error('Choose a Storyboard Director model first.'));
-      return;
-    }
+
+    var storyId = String(action.storyId || '');
+    var modelId = String(action.modelId || '');
     var directorTarget = { kind: 'story-action', storyId: storyId };
     if (directorTargetBlocked(directorTarget)) {
-      reportError(new Error('This Story already has Director work in progress.'));
+      action.active = false;
+      action.queued = false;
+      action.phase = 'Failed';
+      action.detail = 'This Story has Director work in progress.';
+      storyState.storyAction = action;
+      reportError(new Error('Queued First Cut could not start because this Story has Director work in progress.'));
+      renderLibrary();
+      renderStoryAction();
+      startNextFirstCut();
       return;
     }
 
-    var action = {
-      storyId: storyId,
-      modelId: modelId,
-      active: true,
-      cancelled: false,
-      startedAt: Date.now() / 1000,
-      phase: 'Preparing',
-      detail: ''
-    };
-    var replaceExisting = Array.isArray(storyState.story.sceneOrder) && storyState.story.sceneOrder.length > 0;
+    action.active = true;
+    action.queued = false;
+    action.cancelled = false;
+    action.startedAt = Date.now() / 1000;
+    action.phase = 'Preparing';
+    action.detail = '';
     storyState.storyAction = action;
     setDirectorPending(directorTarget, true);
     startDirectorActivity();
+    renderLibrary();
     renderStoryAction();
 
+    var replaceExisting = false;
     flushPendingSaves().then(function () {
       requireStoryAction(action);
+      return request(null, 'story=' + encodeURIComponent(storyId));
+    }).then(function (payload) {
+      requireStoryAction(action);
+      var actionStory = payload.story;
+      replaceExisting = Array.isArray(actionStory && actionStory.sceneOrder) && actionStory.sceneOrder.length > 0;
       updateStoryAction(action, 'Expanding Concept', '');
       return requestStoryDirector(storyId, 'expand_concept', modelId, false);
     }).then(function () {
@@ -2112,8 +2184,71 @@
     }).finally(function () {
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
+      renderLibrary();
       renderStoryAction();
+      startNextFirstCut();
     });
+  }
+
+  function startNextFirstCut() {
+    if (storyState.storyAction && storyState.storyAction.active) return;
+    var next = null;
+    while (storyState.storyActionQueue.length && !next) {
+      var candidate = storyState.storyActionQueue.shift();
+      if (!candidate.cancelled) next = candidate;
+    }
+    renderLibrary();
+    renderStoryAction();
+    if (next) runFirstCut(next);
+  }
+
+  function startFirstCut() {
+    if (!storyState.story) return;
+
+    var storyId = String(storyState.story.id || '');
+    if (
+      (storyState.storyAction && storyState.storyAction.active
+        && String(storyState.storyAction.storyId || '') === storyId)
+      || queuedFirstCutForStory(storyId)
+    ) {
+      reportError(new Error('This Story already has a First Cut running or queued.'));
+      return;
+    }
+
+    var modelId = String(storyState.director.modelId || '');
+    if (!modelId) {
+      reportError(new Error('Choose a Storyboard Director model first.'));
+      return;
+    }
+
+    var directorTarget = { kind: 'story-action', storyId: storyId };
+    if (directorTargetBlocked(directorTarget)) {
+      reportError(new Error('This Story already has Director work in progress.'));
+      return;
+    }
+
+    var action = {
+      storyId: storyId,
+      modelId: modelId,
+      active: false,
+      queued: false,
+      cancelled: false,
+      queuedAt: Date.now() / 1000,
+      startedAt: 0,
+      phase: 'Preparing',
+      detail: ''
+    };
+
+    if (storyState.storyAction && storyState.storyAction.active) {
+      action.queued = true;
+      action.phase = 'Queued';
+      storyState.storyActionQueue.push(action);
+      renderLibrary();
+      renderStoryAction();
+      return;
+    }
+
+    runFirstCut(action);
   }
 
   function setSaveState(text) {
@@ -2617,6 +2752,12 @@
       return items.map(function (story) {
         var active = storyState.story && storyState.story.id === story.id;
         var meta = [];
+        var activeFirstCut = storyState.storyAction
+          && storyState.storyAction.active
+          && String(storyState.storyAction.storyId || '') === String(story.id || '');
+        var queuedFirstCut = queuedFirstCutForStory(story.id);
+        if (activeFirstCut) meta.push('First Cut running');
+        else if (queuedFirstCut) meta.push('First Cut queued #' + String(firstCutQueueDisplayPosition(queuedFirstCut)));
         if (story.status && story.status !== 'active') meta.push(story.status);
         meta.push(String(Number(story.sceneCount || 0)) + ' scene' + (Number(story.sceneCount || 0) === 1 ? '' : 's'));
         return '<div class="storyboard-story-row' + (active ? ' active' : '') + '" data-story-id="' + escapeHtml(story.id) + '">' +
@@ -3546,6 +3687,7 @@
         storyId: storyId
       });
     }).then(function () {
+      removeQueuedFirstCut(storyId);
       if (deletedWasOpen) {
         storyState.story = null;
         storyState.sequenceExport = null;

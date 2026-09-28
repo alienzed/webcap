@@ -1336,12 +1336,14 @@
       var resultFolder = String(session.resultFolder || '');
       var open = ensureButton(actions, 'open', 'review-captions-btn', 'Open');
       open.dataset.sessionFolderOpen = resultFolder;
-      open.disabled = !resultFolder;
+      open.dataset.sessionReveal = resultFolder ? '' : name;
+      open.disabled = !resultFolder && !name;
 
       var rate = ensureButton(actions, 'rate', 'review-captions-btn', 'Rate');
       rate.dataset.sessionRate = resultFolder;
+      rate.dataset.sessionRateOpen = resultFolder ? '' : name;
       var unrated = Number(session.unrated || 0);
-      rate.classList.toggle('hidden', !resultFolder || unrated <= 0);
+      rate.classList.toggle('hidden', unrated <= 0);
 
       if (active) {
         removeControl(actions, 'delete');
@@ -2641,6 +2643,23 @@
     }
   }
 
+  function revealTestSession(sessionName) {
+    var name = String(sessionName || '').trim();
+    if (!name) return Promise.resolve();
+    return fetch('/fs/storage/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'tests', id: name, folder: '' })
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Could not open Test session folder.');
+        }
+        return payload;
+      });
+    });
+  }
+
   function openResultsFolder(folder, options) {
     var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
     if (!targetFolder || !state || !state.dirStack || !state.dirStack.length) return;
@@ -3149,14 +3168,22 @@
         stopRun(sessionStop);
         return;
       }
-      var folderOpen = event.target.closest('[data-session-folder-open]');
+      var folderOpen = event.target.closest('[data-session-folder-open], [data-session-reveal]');
       if (folderOpen) {
-        openResultsFolder(folderOpen.dataset.sessionFolderOpen);
+        if (folderOpen.dataset.sessionFolderOpen) {
+          openResultsFolder(folderOpen.dataset.sessionFolderOpen);
+        } else {
+          revealTestSession(folderOpen.dataset.sessionReveal).catch(showError);
+        }
         return;
       }
-      var rate = event.target.closest('[data-session-rate]');
+      var rate = event.target.closest('[data-session-rate], [data-session-rate-open]');
       if (rate) {
-        openResultsFolder(rate.dataset.sessionRate, { rateItems: true });
+        if (rate.dataset.sessionRate) {
+          openResultsFolder(rate.dataset.sessionRate, { rateItems: true });
+        } else if (rate.dataset.sessionRateOpen) {
+          openSession(rate.dataset.sessionRateOpen);
+        }
         return;
       }
       var remove = event.target.closest('[data-session-delete]');

@@ -954,3 +954,13 @@ def test_test_result_grid_identity_is_session_scoped_when_output_root_is_externa
 
     assert "var resultScope = sessionName + '|' + resultFolder;" in block
     assert "host.dataset.resultScope = resultScope;" in block
+
+
+def test_external_output_test_sessions_keep_open_and_rate_actions():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "open.dataset.sessionReveal = resultFolder ? '' : name;" in script
+    assert "rate.dataset.sessionRateOpen = resultFolder ? '' : name;" in script
+    assert "function revealTestSession(sessionName)" in script
+    assert "body: JSON.stringify({ area: 'tests', id: name, folder: '' })" in script
+    assert "openSession(rate.dataset.sessionRateOpen);" in script

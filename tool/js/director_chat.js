@@ -136,6 +136,8 @@
     state.messages.push({ role: 'user', content: content });
     input.value = '';
     state.pending = true;
+    var status = el('director-chat-status');
+    if (status) status.textContent = 'Generating…';
     renderMessages();
     syncControls();
 
@@ -152,8 +154,8 @@
       state.elapsedByAssistantIndex[state.messages.length - 1] = performance.now() - startedAt;
     }).catch(function (err) {
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Director Chat', err);
-      var status = el('director-chat-status');
-      if (status) status.textContent = String(err && err.message ? err.message : err);
+      var statusEl = el('director-chat-status');
+      if (statusEl) statusEl.textContent = String(err && err.message ? err.message : err);
     }).then(function () {
       state.pending = false;
       renderMessages();

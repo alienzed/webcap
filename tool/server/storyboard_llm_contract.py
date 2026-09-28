@@ -31,7 +31,7 @@ def _prompt_response_schema(allow_duration=False, allow_scene_fields=False, allo
             "type": "boolean",
             "description": "False only when the requested refinement does not require any change to this Scene.",
         }
-        schema["required"] = ["changed"]
+        schema["required"] = ["changed"] + schema["required"]
     if allow_scene_fields:
         schema["properties"]["summary"] = {
             "type": "string",
@@ -494,7 +494,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[H3 OUTPUT CONTRACT]\n"
             + h3_output
-            + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. If the correction does not apply to this Scene, return changed=false and omit all revision fields. If it does apply, return changed=true, all three prompt semantic field values, plus only any optional Scene fields the correction actually requires. WebCap owns the final labels and alignment syntax."
+            + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. If the correction does not apply to this Scene, return changed=false, reproduce the three existing prompt semantic fields unchanged, and omit optional Scene fields. If it does apply, return changed=true, all three revised prompt semantic field values, plus only any optional Scene fields the correction actually requires. WebCap owns the final labels and alignment syntax."
         )
         blocks.append(
             "[CURRENT TASK]\nApply the requested correction faithfully to this Scene:\n"

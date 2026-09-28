@@ -122,7 +122,12 @@ def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
     assert "durationSeconds" in request["response_schema"]["properties"]
     assert request["response_schema"]["properties"]["durationSeconds"]["minimum"] == 6
     assert request["response_schema"]["properties"]["durationSeconds"]["maximum"] == 15
-    assert request["response_schema"]["required"] == ["changed"]
+    assert request["response_schema"]["required"] == [
+        "changed",
+        "integrated_multimodal_description",
+        "overall_soundscape",
+        "non_diegetic_music",
+    ]
     assert request["response_schema"]["properties"]["changed"]["type"] == "boolean"
     assert {"summary", "entryState", "exitState"}.issubset(request["response_schema"]["properties"])
     assert "summary" not in request["response_schema"]["required"]
@@ -132,7 +137,7 @@ def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
     assert request["result_renderer"]["duration_field"] == "durationSeconds"
     assert request["result_renderer"]["allow_unchanged"] is True
     assert request["result_renderer"]["existing_prompt"] == "EXISTING SECOND PROMPT"
-    assert "return changed=false and omit all revision fields" in prompt
+    assert "return changed=false, reproduce the three existing prompt semantic fields unchanged" in prompt
     assert "TAKE DATA MUST NOT LEAK" not in prompt
     assert "OTHER TAKE DATA MUST NOT LEAK" not in prompt
 

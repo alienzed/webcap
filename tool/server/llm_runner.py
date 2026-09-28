@@ -112,6 +112,14 @@ def _assert_storyboard_contract_current(context, frozen_contract):
 
 
 def _client_result(client, context, llm_result, job_id="", frozen_contract=None):
+    if client == "chat":
+        return {
+            "text": llm_result["text"],
+            "model": llm_result["model"],
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if client == "generate":
         return {
             "result": llm_result["text"],
@@ -341,9 +349,16 @@ def _execute_claimed(job_id, gpu_reserved):
         execution_finish_job_transient(job_id, status="stopped", error="LLM request stopped before execution.")
         return
 
-    from .storyboard_llm_runtime import run_contract
+    from .storyboard_llm_runtime import run_contract, run_freeform_chat
     try:
-        llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
+        if client == "chat":
+            llm_result = run_freeform_chat(
+                model_id,
+                contract.get("messages"),
+                gpu_reserved=bool(gpu_reserved),
+            )
+        else:
+            llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
     except Exception as exc:
         _logger.exception(
             "Director/model stage failed before WebCap ingest.\n"
@@ -565,7 +580,7 @@ def enqueue(client, model_id, contract, context=None, label=""):
     _ensure_execution_reconciled()
     client = str(client or "").strip()
     model_id = str(model_id or "").strip()
-    if client not in {"storyboard", "generate", "test"}:
+    if client not in {"storyboard", "generate", "test", "chat"}:
         raise ValueError("Unsupported LLM client: " + (client or "empty"))
     if not model_id:
         raise ValueError("LLM model is required.")

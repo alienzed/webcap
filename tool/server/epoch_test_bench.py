@@ -883,15 +883,13 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     # source prompt + seed and resolve it when the job is actually runnable.
     prompt_needs_resolve = False
     try:
-        inference_runtime.system_stats()
-    except Exception:
-        resolved_prompt = prompt
-        prompt_needs_resolve = True
-    else:
         resolved_prompt = inference_runtime.resolve_wildcard_prompt(
             prompt,
             normalized_settings["seed"],
         )
+    except (ConnectionError, TimeoutError):
+        resolved_prompt = prompt
+        prompt_needs_resolve = True
     request = {
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,

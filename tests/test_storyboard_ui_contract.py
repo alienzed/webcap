@@ -1069,6 +1069,8 @@ def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
     assert "function syncGenerationJobCard(job)" in storyboard
     assert "webcap:inference-queue-snapshot" in storyboard
     assert "function syncStoryboardInferenceSnapshot(queue)" in storyboard
+    assert "var seenJobIds = Object.create(null);" in storyboard
+    assert "delete storyState.generationJobs[jobId];" in storyboard
     assert "var delay = generationJobIsExecuting(current) ? 2000 : 8000;" in storyboard
     assert "}, delay);" in storyboard
     assert "if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);" in storyboard

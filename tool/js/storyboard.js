@@ -2981,6 +2981,27 @@
     });
   }
 
+  function generationJobPreviewPrimary(job) {
+    var status = String(job && job.status || '');
+    if (status === 'backlog') return 'Backlog';
+    if (status === 'queued') return 'Queued';
+    if (status === 'starting') return 'Starting…';
+    if (status === 'stopping') return 'Stopping…';
+    return 'Generating…';
+  }
+
+  function generationJobPreviewDetail(job) {
+    var parts = [];
+    var progress = formatInferenceProgress(job && job.progress);
+    if (progress) parts.push(progress);
+    var startedAt = Number(job && job.startedAt || 0);
+    if (startedAt > 0) {
+      var elapsed = formatInferenceElapsedMs(Date.now() - (startedAt * 1000));
+      if (elapsed) parts.push(elapsed);
+    }
+    return parts.join(' · ');
+  }
+
   function takeMetaLabel(take) {
     var parts = [take && take.generated ? 'Generated' : 'Imported'];
     var createdAt = take && take.createdAt ? new Date(take.createdAt) : null;
@@ -3075,8 +3096,10 @@
       : (status === 'starting' || status === 'running')
         ? '<button type="button" class="review-captions-btn" data-generation-action="stop" data-job-id="' + escapeHtml(job.jobId) + '">Stop</button>'
         : '';
+    var previewPrimary = generationJobPreviewPrimary(job);
+    var previewDetail = generationJobPreviewDetail(job);
     return '<article class="storyboard-take storyboard-take-pending" data-generation-job-id="' + escapeHtml(job.jobId) + '">' +
-      '<div class="storyboard-take-media storyboard-take-pending-media"><div class="storyboard-take-pending-indicator" aria-hidden="true"></div><strong>' + escapeHtml(statusText) + '</strong></div>' +
+      '<div class="storyboard-take-media storyboard-take-pending-media"><div class="storyboard-take-pending-indicator" aria-hidden="true"></div><strong>' + escapeHtml(previewPrimary) + '</strong><span class="storyboard-take-pending-detail">' + escapeHtml(previewDetail) + '</span></div>' +
       '<div class="storyboard-take-footer storyboard-take-pending-footer">' +
         '<div class="storyboard-take-identity"><strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong><span>' + escapeHtml(statusText) + '</span></div>' +
         action +
@@ -4355,8 +4378,10 @@
     var status = String(job.status || '');
     var statusText = generationJobStatusText(job);
     var mediaStatus = card.querySelector('.storyboard-take-pending-media strong');
+    var mediaDetail = card.querySelector('.storyboard-take-pending-detail');
     var footerStatus = card.querySelector('.storyboard-take-identity span');
-    if (mediaStatus) mediaStatus.textContent = statusText;
+    if (mediaStatus) mediaStatus.textContent = generationJobPreviewPrimary(job);
+    if (mediaDetail) mediaDetail.textContent = generationJobPreviewDetail(job);
     if (footerStatus) footerStatus.textContent = statusText;
 
     var actionHost = card.querySelector('.storyboard-take-pending-footer');

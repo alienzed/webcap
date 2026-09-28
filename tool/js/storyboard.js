@@ -595,10 +595,7 @@
 
     select.disabled = false;
     select.innerHTML = models.map(function (model) {
-      var label = model.label || model.id;
-      var size = directorBytesGiB(model.sizeBytes);
-      if (size) label += ' · ' + size;
-      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(label) + '</option>';
+      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(formatDirectorModelLabel(model)) + '</option>';
     }).join('');
 
     var selected = storyState.director.modelId;

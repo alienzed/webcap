@@ -717,6 +717,34 @@ def test_enqueue_creates_one_common_inference_job_per_rendition(tmp_path, monkey
     assert [job["queuePosition"] for job in jobs] == [1, 2, 3]
 
 
+def test_test_enqueue_survives_comfyui_unavailable_and_defers_wildcard_resolution(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    monkeypatch.setattr(
+        inference_runtime,
+        "system_stats",
+        lambda: (_ for _ in ()).throw(ConnectionError("offline")),
+    )
+
+    payload = bench.enqueue(
+        tmp_path,
+        "person in {studio|rooftop}",
+        selected_files=[candidates[0].name],
+        include_base=True,
+    )
+
+    assert payload["queued"] is True
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    manifest = bench._read_status(session)
+    child_payloads = [
+        execution_queue.get_job(job_id, include_payload=True)["payload"]["request"]
+        for job_id in manifest["inferenceJobs"]
+    ]
+    assert len(child_payloads) == 2
+    assert {item["prompt"] for item in child_payloads} == {"person in {studio|rooftop}"}
+    assert {item["promptNeedsResolve"] for item in child_payloads} == {True}
+    assert {item["settings"]["seed"] for item in child_payloads} == {77}
+
+
 def test_test_session_children_share_frozen_prompt_seed_and_workflow(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
 

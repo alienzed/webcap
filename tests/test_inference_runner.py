@@ -1487,3 +1487,18 @@ def test_provider_cleanup_continues_while_inference_queue_is_user_paused(
     assert execution_queue.resource_owner() == ""
     assert inference_runner._monitor_has_work() is False
     assert execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE)["paused"] is True
+
+
+def test_read_job_treats_only_http_404_as_missing(monkeypatch):
+    def missing(*_args, **_kwargs):
+        raise inference_runtime.ComfyHttpError(404, '{"error":"Job not found"}')
+
+    monkeypatch.setattr(inference_runtime, "_read_json_response", missing)
+    assert inference_runtime.read_job("00000000-0000-0000-0000-000000000000") is None
+
+    def failed(*_args, **_kwargs):
+        raise inference_runtime.ComfyHttpError(500, '{"error":"boom"}')
+
+    monkeypatch.setattr(inference_runtime, "_read_json_response", failed)
+    with pytest.raises(inference_runtime.ComfyHttpError):
+        inference_runtime.read_job("00000000-0000-0000-0000-000000000000")

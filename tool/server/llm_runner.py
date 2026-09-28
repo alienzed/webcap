@@ -503,39 +503,6 @@ def _storyboard_target(context, operation):
     return None
 
 
-def _storyboard_targets_conflict(a, b):
-    if not a or not b or a["storyId"] != b["storyId"]:
-        return False
-    if a["kind"] == "scene-prompt" and b["kind"] == "scene-prompt":
-        return a["sceneId"] == b["sceneId"]
-    if a["kind"] == "repair" or b["kind"] == "repair":
-        return True
-    if a["kind"] == "scenes" or b["kind"] == "scenes":
-        return True
-    if a["kind"] == "concept" and b["kind"] == "concept":
-        return True
-    return False
-
-
-def _assert_storyboard_target_available(context, operation):
-    wanted = _storyboard_target(context, operation)
-    if wanted is None:
-        raise ValueError("Storyboard Director target is invalid.")
-    current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-    for job in current.get("jobs", []):
-        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
-        if str(metadata.get("client") or "") != "storyboard":
-            continue
-        existing = _storyboard_target(
-            {
-                "storyId": metadata.get("storyId"),
-                "sceneId": metadata.get("sceneId"),
-            },
-            metadata.get("operation"),
-        )
-        if _storyboard_targets_conflict(wanted, existing):
-            raise ValueError("Storyboard Director target already has pending work.")
-
 
 def storyboard_target_busy(story_id, kind, scene_id=""):
     wanted = {
@@ -589,8 +556,6 @@ def enqueue(client, model_id, contract, context=None, label=""):
 
     context = copy.deepcopy(context) if isinstance(context, dict) else {}
     with _enqueue_lock:
-        if client == "storyboard":
-            _assert_storyboard_target_available(context, contract.get("operation"))
         job = execution_enqueue(
             EXECUTION_LANE,
             {

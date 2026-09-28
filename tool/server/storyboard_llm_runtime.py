@@ -649,7 +649,7 @@ def _ensure_server():
 def _normalize_models(payload):
     raw_models = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(raw_models, list):
-        raise RuntimeError("Storyboard Director endpoint did not return a model list.")
+        raise RuntimeError("Director endpoint did not return a model list.")
     models = []
     for entry in raw_models:
         if not isinstance(entry, dict):
@@ -683,13 +683,13 @@ def _model_file_size(model):
     raw_path = str(model.get("path") or "").strip()
     filename = PureWindowsPath(raw_path).name if raw_path else str(model.get("id") or "").strip()
     if not filename:
-        raise FileNotFoundError("Storyboard Director model filename is missing.")
+        raise FileNotFoundError("Director model filename is missing.")
     if not filename.casefold().endswith(".gguf"):
         filename += ".gguf"
 
     models_dir = _director_config().get("models_dir")
     if models_dir is None:
-        raise RuntimeError("Storyboard Director models directory is unavailable.")
+        raise RuntimeError("Director models directory is unavailable.")
 
     path = Path(models_dir) / filename
     try:
@@ -758,7 +758,7 @@ def _model_record(model_id):
     for model in models:
         if model["id"] == model_id:
             return model
-    raise FileNotFoundError("Storyboard Director model is not available from the active runtime: " + model_id)
+    raise FileNotFoundError("Director model is not available from the active runtime: " + model_id)
 
 
 def _wait_for_model(model_id, wanted, timeout=180):
@@ -793,7 +793,7 @@ def _reserve_gpu():
     from .training_runner import gpu_reservation_block_reason, reserve_gpu_for_external_work
     if not reserve_gpu_for_external_work(GPU_RESERVATION_OWNER):
         reason = gpu_reservation_block_reason(GPU_RESERVATION_OWNER)
-        raise RuntimeError("Storyboard Director could not reserve the shared GPU resource: " + reason)
+        raise RuntimeError("Director runtime could not reserve the shared GPU resource: " + reason)
 
 
 def _release_gpu():
@@ -873,7 +873,7 @@ def _ensure_local_model_loaded(model_id):
     models = list_models(reload=False)
     selected = next((model for model in models if model["id"] == model_id), None)
     if selected is None:
-        raise FileNotFoundError("Storyboard Director model is not available from the active runtime: " + model_id)
+        raise FileNotFoundError("Director model is not available from the active runtime: " + model_id)
     if selected["status"] == "loaded":
         return False
 
@@ -1046,11 +1046,11 @@ def _completion_result(response, model_id):
     message = choice.get("message") if isinstance(choice, dict) else None
     content = str(message.get("content") or "").strip() if isinstance(message, dict) else ""
     if not content:
-        raise RuntimeError("Storyboard Director returned an empty response.")
+        raise RuntimeError("Director runtime returned an empty response.")
     finish_reason = str(choice.get("finish_reason") or "").strip().lower() if isinstance(choice, dict) else ""
     if finish_reason in {"length", "max_tokens"}:
         raise RuntimeError(
-            "Storyboard Director output was truncated because the runtime reached its available token/context limit."
+            "Director output was truncated because the runtime reached its available token/context limit."
         )
     return {
         "text": content,

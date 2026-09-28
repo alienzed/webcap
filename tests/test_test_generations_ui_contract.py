@@ -339,9 +339,9 @@ def test_test_polling_keeps_active_worker_status_separate_from_selected_preview(
 
     assert "syncActiveTestCard(status);" in poll
     assert "if (currentSession === activeSession)" in poll
-    assert "else if (currentSession)" in poll
+    assert "else if (selectedPreviewLive)" in poll
     assert "renderStatus(selectedStatus);" in poll
-    assert "selectedWasLive" not in poll
+    assert "selectedPreviewLive" in poll
 
     assert "refreshActivityButtonIfDue(5000);" in poll
     assert "refreshSessionsIfDue(5000).catch(showError);" in poll
@@ -975,7 +975,7 @@ def test_test_generations_background_updates_never_choose_a_session():
     poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
     assert "selectSessionStatus(" not in poll
     assert "if (currentSession === activeSession)" in poll
-    assert "else if (currentSession)" in poll
+    assert "else if (selectedPreviewLive)" in poll
 
     start = script.split("function startRun()", 1)[1].split("function stopRun", 1)[0]
     assert "selectSessionStatus(" not in start

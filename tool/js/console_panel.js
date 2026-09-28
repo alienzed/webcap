@@ -24,9 +24,17 @@ function setConsolePanelVisible(visible) {
   if (frame) frame.classList.toggle('console-open', expanded);
 }
 
+function scrollConsolePanelToBottom() {
+  var logEl = getConsolePanelLogEl();
+  if (!logEl) return;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
 function appendToConsolePanel(msg) {
   var logEl = getConsolePanelLogEl();
   if (!logEl) return;
+  var followTail = isConsolePanelVisible() &&
+    (logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight <= 24);
   var div = document.createElement('div');
   div.textContent = String(msg);
   logEl.appendChild(div);
@@ -35,8 +43,7 @@ function appendToConsolePanel(msg) {
   while (logEl.childNodes.length > maxLines) {
     logEl.removeChild(logEl.firstChild);
   }
-  // Always scroll to bottom after append
-  logEl.scrollTop = logEl.scrollHeight;
+  if (followTail) scrollConsolePanelToBottom();
 }
 
 function markConsoleAttention(active) {
@@ -84,6 +91,7 @@ function syncConsoleToggleButton() {
 function showConsolePanel() {
   if (!ui.consolePanelEl) return;
   setConsolePanelVisible(true);
+  requestAnimationFrame(scrollConsolePanelToBottom);
   markConsoleAttention(false);
   syncConsoleToggleButton();
 }
@@ -92,7 +100,10 @@ function toggleConsolePanel() {
   if (!ui.consolePanelEl) return;
   var willShow = !isConsolePanelVisible();
   setConsolePanelVisible(willShow);
-  if (willShow) markConsoleAttention(false);
+  if (willShow) {
+    requestAnimationFrame(scrollConsolePanelToBottom);
+    markConsoleAttention(false);
+  }
   syncConsoleToggleButton();
 }
 

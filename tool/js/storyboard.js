@@ -4366,8 +4366,16 @@
         }
         control.title = 'Remove this Story from the First Cut queue before adding new Take generation.';
       } else if (control.dataset.firstCutQueuedDisabled === '1') {
-        control.disabled = false;
         delete control.dataset.firstCutQueuedDisabled;
+        var activeFirstCut = storyState.storyAction
+          && storyState.storyAction.active
+          && String(storyState.storyAction.storyId || '') === storyId;
+        if (activeFirstCut) {
+          control.disabled = true;
+          control.dataset.storyActionDisabled = '1';
+        } else {
+          control.disabled = false;
+        }
         if (control.matches('[data-scene-generate]')) {
           control.title = 'Queue a new Take from the current saved Scene.';
         } else {

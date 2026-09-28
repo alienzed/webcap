@@ -47,8 +47,15 @@ _logger = logging.getLogger(__name__)
 
 
 def generation_capabilities():
+    model = get_inference_model("minimax_h3")
     try:
-        inference_runtime.system_stats()
+        template = model.load_template()
+        available = model.available_lora_names(inference_runtime.available_names)
+        resolved = model.resolve_assets(
+            template,
+            inference_runtime.available_names,
+            inference_runtime.resolve_name,
+        )
     except (ConnectionError, TimeoutError):
         return {
             "available": False,
@@ -57,14 +64,6 @@ def generation_capabilities():
             "baseLoras": [],
         }
 
-    model = get_inference_model("minimax_h3")
-    template = model.load_template()
-    available = model.available_lora_names(inference_runtime.available_names)
-    resolved = model.resolve_assets(
-        template,
-        inference_runtime.available_names,
-        inference_runtime.resolve_name,
-    )
     base_loras = model.base_loras(resolved)
     base_keys = {str(name).replace("\\", "/").casefold() for name in base_loras}
     selectable = [

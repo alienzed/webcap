@@ -2948,9 +2948,14 @@
             currentSessionFolder = '';
             currentSessionModel = '';
             currentSessionSource = '';
-            renderStatus(initialStatus);
+            if (initialStatus && initialStatus.session) selectSessionStatus(initialStatus);
+            else renderStatus(initialStatus);
           })
-        : Promise.resolve(renderStatus(initialStatus));
+        : Promise.resolve(
+            initialStatus && initialStatus.session
+              ? selectSessionStatus(initialStatus)
+              : renderStatus(initialStatus)
+          );
       previewReady.then(function () {
         return refreshSessions();
       }).then(function () {
@@ -3046,7 +3051,8 @@
         currentSessionModel = '';
         currentSessionSource = '';
         showSessionError = false;
-        renderStatus(payload.latest || { status: 'idle' });
+        if (payload.latest && payload.latest.session) selectSessionStatus(payload.latest);
+        else renderStatus({ status: 'idle' });
       }
     });
   }

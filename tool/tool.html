@@ -1590,85 +1590,72 @@
                 <div class="app-settings-header">
                     <div class="app-settings-title-wrap">
                         <strong>App Settings</strong>
-                        <div class="app-settings-subtitle">General, training, Storyboard, and advanced configuration.</div>
+                        <div class="app-settings-subtitle">Workspace, training, Director, and advanced configuration.</div>
                     </div>
                     <button id="app-settings-close-btn" type="button" title="Close" aria-label="Close app settings">×</button>
                 </div>
                 <div class="app-settings-tabs" role="tablist" aria-label="App settings sections">
-                    <button id="app-settings-tab-general" type="button" class="app-settings-tab active" data-app-settings-tab="general" role="tab" aria-selected="true" aria-controls="app-settings-panel-general">General</button>
+                    <button id="app-settings-tab-workspace" type="button" class="app-settings-tab active" data-app-settings-tab="workspace" role="tab" aria-selected="true" aria-controls="app-settings-panel-workspace">Workspace</button>
                     <button id="app-settings-tab-training" type="button" class="app-settings-tab" data-app-settings-tab="training" role="tab" aria-selected="false" aria-controls="app-settings-panel-training" tabindex="-1">Training</button>
-                    <button id="app-settings-tab-storyboard" type="button" class="app-settings-tab" data-app-settings-tab="storyboard" role="tab" aria-selected="false" aria-controls="app-settings-panel-storyboard" tabindex="-1">Storyboard</button>
+                    <button id="app-settings-tab-director" type="button" class="app-settings-tab" data-app-settings-tab="director" role="tab" aria-selected="false" aria-controls="app-settings-panel-director" tabindex="-1">Director</button>
                     <button id="app-settings-tab-advanced" type="button" class="app-settings-tab" data-app-settings-tab="advanced" role="tab" aria-selected="false" aria-controls="app-settings-panel-advanced" tabindex="-1">Advanced</button>
                 </div>
                 <div class="app-settings-tab-panels">
-                    <div id="app-settings-panel-general" class="app-settings-panel" data-app-settings-panel="general" role="tabpanel" aria-labelledby="app-settings-tab-general">
+                    <div id="app-settings-panel-workspace" class="app-settings-panel" data-app-settings-panel="workspace" role="tabpanel" aria-labelledby="app-settings-tab-workspace">
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Library</div>
-                                <div class="app-settings-section-copy">The local workspace containing media sets and their WebCap files.</div>
+                                <div class="app-settings-section-title">Storage</div>
+                                <div class="app-settings-section-copy">Where WebCap reads working sets, writes generated output, and finds shared models.</div>
                             </div>
-                            <label class="app-settings-field app-settings-field-wide">
-                                <span class="app-settings-field-label">Filesystem Root</span>
-                                <input id="app-settings-filesystem-root" type="text" placeholder="C:\path\to\training">
-                            </label>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-field app-settings-field-wide">
+                                    <span class="app-settings-field-label">Media / Dataset Root</span>
+                                    <input id="app-settings-filesystem-root" type="text" placeholder="C:\path\to\training">
+                                </label>
+                                <label class="app-settings-field app-settings-field-wide">
+                                    <span class="app-settings-field-label">Output Root</span>
+                                    <input id="app-settings-filesystem-output-root" type="text" placeholder="W:\\path\\to\\webcap-output">
+                                    <span class="app-settings-note">Leave blank to use &lt;Media / Dataset Root&gt;\output. Existing generated media is not moved automatically.</span>
+                                </label>
+                                <label class="app-settings-field app-settings-field-wide">
+                                    <span class="app-settings-field-label">Models Root</span>
+                                    <input id="app-settings-filesystem-models" type="text" placeholder="C:\path\to\models">
+                                    <span class="app-settings-note">Shared model storage used by training and Director model discovery.</span>
+                                </label>
+                            </div>
                         </section>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Creative Output</div>
-                                <div class="app-settings-section-copy">Global WebCap-owned generated media, Test Generations, and Storyboards, independent of Sets and training data.</div>
+                                <div class="app-settings-section-title">Appearance</div>
+                                <div class="app-settings-section-copy">Display preferences stored in this browser.</div>
                             </div>
-                            <label class="app-settings-field app-settings-field-wide">
-                                <span class="app-settings-field-label">Output Root</span>
-                                <input id="app-settings-filesystem-output-root" type="text" placeholder="W:\\path\\to\\webcap-output">
-                                <span class="app-settings-note">Leave blank to use &lt;Filesystem Root&gt;\output. Existing Generations, Test sessions, and Storyboards are not moved automatically when this changes.</span>
-                            </label>
+                            <div class="app-settings-field">
+                                <span class="app-settings-field-label">Theme</span>
+                                <div class="app-settings-theme-row">
+                                    <button id="app-settings-theme-btn" type="button" class="app-settings-theme-btn">Dark</button>
+                                    <span class="app-settings-theme-note">Stored in this browser.</span>
+                                </div>
+                            </div>
                         </section>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Caption Editor</div>
-                                <div class="app-settings-section-copy">Used when a folder does not have its own saved caption template.</div>
+                                <div class="app-settings-section-title">Caption Defaults</div>
+                                <div class="app-settings-section-copy">App-wide fallback used when a folder does not define its own caption template.</div>
                             </div>
                             <label class="app-settings-field app-settings-field-wide">
                                 <span class="app-settings-field-label">Default Caption Template</span>
-                                <textarea id="app-settings-primer-template" rows="6" class="app-settings-caption-template" spellcheck="false" placeholder="{position }{surface, }{setting, }{body, }"></textarea>
-                                <span class="app-settings-note">Leave blank to fall back to the built-in starter template.</span>
+                                <textarea id="app-settings-primer-template" rows="5" class="app-settings-caption-template" spellcheck="false" placeholder="{position }{surface, }{setting, }{body, }"></textarea>
+                                <span class="app-settings-note">Leave blank to use the built-in starter template.</span>
                             </label>
-                        </section>
-                        <section class="app-settings-section">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Analysis &amp; Appearance</div>
-                                <div class="app-settings-section-copy">Optional local analyzers plus browser-scoped display state.</div>
-                            </div>
-                            <div class="app-settings-form-grid">
-                                <label class="app-settings-toggle">
-                                    <input id="app-settings-enable-face-analysis" type="checkbox">
-                                    <span>Enable Face Focus analysis</span>
-                                </label>
-                                <label class="app-settings-toggle">
-                                    <input id="app-settings-enable-mediapipe-analysis" type="checkbox">
-                                    <span>Enable MediaPipe selection pose analysis</span>
-                                </label>
-                                <div class="app-settings-field">
-                                    <span class="app-settings-field-label">Theme</span>
-                                    <div class="app-settings-theme-row">
-                                        <button id="app-settings-theme-btn" type="button" class="app-settings-theme-btn">Dark</button>
-                                        <span class="app-settings-theme-note">Stored in this browser.</span>
-                                    </div>
-                                </div>
-                            </div>
                         </section>
                     </div>
                     <div id="app-settings-panel-training" class="app-settings-panel hidden" data-app-settings-panel="training" role="tabpanel" aria-labelledby="app-settings-tab-training">
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Training Runtime</div>
-                                <div class="app-settings-section-copy">Model storage and the Diffusion Pipe environment used to build and launch training commands.</div>
+                                <div class="app-settings-section-title">Runtime</div>
+                                <div class="app-settings-section-copy">The Diffusion Pipe environment used to build and launch training commands.</div>
                             </div>
                             <div class="app-settings-form-grid">
-                                <label class="app-settings-field">
-                                    <span class="app-settings-field-label">Models Root</span>
-                                    <input id="app-settings-filesystem-models" type="text" placeholder="C:\path\to\models">
-                                </label>
                                 <label class="app-settings-field">
                                     <span class="app-settings-field-label">Diffusion Pipe WSL</span>
                                     <input id="app-settings-training-diffusion-pipe-wsl" type="text" placeholder="/path/to/diffusion-pipe">
@@ -1690,26 +1677,39 @@
                                     <input id="app-settings-training-activate-script" type="text" placeholder="/path/to/diffusion-pipe/.venv/bin/activate">
                                 </label>
                                 <label class="app-settings-field" title="Used to calculate dataset repeats. Actual run epochs do not affect repeat planning.">
-                                    <span class="app-settings-field-label">Repeat reference epochs</span>
+                                    <span class="app-settings-field-label">Repeat Reference Epochs</span>
                                     <input id="app-settings-training-repeat-reference-epochs" type="number" min="1" step="1" value="90">
                                 </label>
                             </div>
                         </section>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Environment Check</div>
-                                <div class="app-settings-section-copy">Inspect this WebCap installation and the configured training runtime without requiring a dataset or generated training files.</div>
+                                <div class="app-settings-section-title">Models</div>
+                                <div class="app-settings-section-copy">Choose which models appear when creating new training runs. Existing files and runs are unaffected.</div>
                             </div>
-                            <div class="app-settings-environment-actions">
-                                <button id="app-settings-environment-run-btn" type="button" class="review-captions-btn">Check Environment</button>
-                                <span id="app-settings-environment-summary" class="app-settings-environment-summary">Not checked yet.</span>
+                            <div class="app-settings-form-grid">
+                                <div class="app-settings-model-option">
+                                    <label class="app-settings-toggle"><input id="app-settings-training-profile-wan22" type="checkbox"><span>Wan 2.2 T2V</span></label>
+                                    <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                                </div>
+                                <div class="app-settings-model-option">
+                                    <label class="app-settings-toggle"><input id="app-settings-training-profile-krea2" type="checkbox"><span>Krea2 Raw</span></label>
+                                    <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/Krea-2" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                                </div>
+                                <div class="app-settings-model-option">
+                                    <label class="app-settings-toggle"><input id="app-settings-training-profile-wan21" type="checkbox"><span>Wan 2.1 T2V 14B</span></label>
+                                    <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.1-T2V-14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                                </div>
+                                <div class="app-settings-model-option">
+                                    <label class="app-settings-toggle"><input id="app-settings-training-profile-h3" type="checkbox"><span>MiniMax H3</span></label>
+                                    <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/MiniMax-H3" target="_blank" rel="noopener noreferrer">HF files ↗</a>
+                                </div>
                             </div>
-                            <div id="app-settings-environment-results" class="app-settings-environment-results hidden" aria-live="polite"></div>
                         </section>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Copy to Test</div>
-                                <div class="app-settings-section-copy">Destination roots used when copying a saved candidate LoRA for testing.</div>
+                                <div class="app-settings-section-title">Testing</div>
+                                <div class="app-settings-section-copy">Destination roots used when copying saved candidate LoRAs for testing.</div>
                             </div>
                             <div class="app-settings-form-grid">
                                 <label class="app-settings-field"><span class="app-settings-field-label">H3 Root</span><input id="app-settings-training-test-copy-h3-root" type="text" placeholder="/path/to/lora-root"></label>
@@ -1718,64 +1718,38 @@
                                 <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 High Root</span><input id="app-settings-training-test-copy-hi-root" type="text" placeholder="/path/to/lora-root"></label>
                                 <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 Low Root</span><input id="app-settings-training-test-copy-lo-root" type="text" placeholder="/path/to/lora-root"></label>
                                 <label class="app-settings-field"><span class="app-settings-field-label">Optional Subfolder</span><input id="app-settings-training-test-copy-subfolder" type="text" placeholder="az"></label>
-                                <p class="app-settings-help app-settings-field-wide">Example: <code>/path/to/lora-root/az/my-set/adapter_model_epoch12.safetensors</code>. The optional subfolder is one folder name only.</p>
                             </div>
-                        </section>
-                        <section class="app-settings-section">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Training Models</div>
-                                <div class="app-settings-section-copy">Choose which models appear when creating new training runs. Existing files and runs are unaffected.</div>
-                            </div>
-                            <div class="app-settings-form-grid">
-                                <div class="app-settings-model-option">
-                                    <label class="app-settings-toggle">
-                                        <input id="app-settings-training-profile-wan22" type="checkbox">
-                                        <span>Wan 2.2 T2V</span>
-                                    </label>
-                                    <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
-                                </div>
-                                <div class="app-settings-model-option">
-                                    <label class="app-settings-toggle">
-                                        <input id="app-settings-training-profile-krea2" type="checkbox">
-                                        <span>Krea2 Raw</span>
-                                    </label>
-                                    <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/Krea-2" target="_blank" rel="noopener noreferrer">HF files ↗</a>
-                                </div>
-                                <div class="app-settings-model-option">
-                                    <label class="app-settings-toggle">
-                                        <input id="app-settings-training-profile-wan21" type="checkbox">
-                                        <span>Wan 2.1 T2V 14B</span>
-                                    </label>
-                                    <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.1-T2V-14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
-                                </div>
-                                <div class="app-settings-model-option">
-                                    <label class="app-settings-toggle">
-                                        <input id="app-settings-training-profile-h3" type="checkbox">
-                                        <span>MiniMax H3</span>
-                                    </label>
-                                    <a class="app-settings-model-link" href="https://huggingface.co/Comfy-Org/MiniMax-H3" target="_blank" rel="noopener noreferrer">HF files ↗</a>
-                                </div>
-                            </div>
+                            <p class="app-settings-help">Example: <code>/path/to/lora-root/az/my-set/adapter_model_epoch12.safetensors</code>. The optional subfolder is one folder name only.</p>
                         </section>
                         <section class="app-settings-section" id="h3-calibration-settings">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">H3 calibration</div>
-                                <div class="app-settings-section-copy">Tests H3 video buckets on this training hardware. Calibration can approach OOM; concurrent GPU work makes results unreliable.</div>
+                                <div class="app-settings-section-title">Hardware Calibration</div>
+                                <div class="app-settings-section-copy">Test H3 video buckets on this training hardware. Calibration can approach OOM; concurrent GPU work makes results unreliable.</div>
                             </div>
                             <div id="h3-calibration-summary" class="app-settings-help">Loading calibration status…</div>
-                            <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Calibration source from current folder</span><select id="h3-calibration-source"></select></label>
-                            <div class="app-settings-actions"><button id="h3-calibration-run-btn" type="button">Run calibration</button><button id="h3-calibration-stop-btn" type="button" class="hidden">Stop</button><button id="h3-calibration-reset-btn" type="button" class="hidden">Reset calibration</button><button id="h3-calibration-console-btn" type="button">Show console</button></div>
+                            <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Calibration Source From Current Folder</span><select id="h3-calibration-source"></select></label>
+                            <div class="app-settings-actions app-settings-actions-inline"><button id="h3-calibration-run-btn" type="button">Run Calibration</button><button id="h3-calibration-stop-btn" type="button" class="hidden">Stop</button><button id="h3-calibration-reset-btn" type="button" class="hidden">Reset Calibration</button><button id="h3-calibration-console-btn" type="button">Show Console</button></div>
                             <details class="app-settings-advanced">
                                 <summary>Calibration Results</summary>
                                 <div id="h3-calibration-results"><p class="app-settings-help">No saved calibration results.</p></div>
                             </details>
                         </section>
+                        <details class="app-settings-advanced app-settings-section-disclosure">
+                            <summary>Advanced Training</summary>
+                            <div class="app-settings-disclosure-body">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-training-h3-split-cache-phase" type="checkbox">
+                                    <span>Split H3 cache and training phases</span>
+                                </label>
+                                <p class="app-settings-help">Troubleshooting fallback: run a separate cache-only process before H3 training.</p>
+                            </div>
+                        </details>
                     </div>
-                    <div id="app-settings-panel-storyboard" class="app-settings-panel hidden" data-app-settings-panel="storyboard" role="tabpanel" aria-labelledby="app-settings-tab-storyboard">
+                    <div id="app-settings-panel-director" class="app-settings-panel hidden" data-app-settings-panel="director" role="tabpanel" aria-labelledby="app-settings-tab-director">
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Storyboard Director</div>
-                                <div class="app-settings-section-copy">Use WebCap-managed llama.cpp locally, or connect to a remote OpenAI-compatible endpoint such as Ollama.</div>
+                                <div class="app-settings-section-title">Director Runtime</div>
+                                <div class="app-settings-section-copy">Use WebCap-managed llama.cpp locally, or connect to a remote OpenAI-compatible endpoint.</div>
                             </div>
                             <div class="app-settings-form-grid">
                                 <label class="app-settings-field">
@@ -1786,42 +1760,50 @@
                                     </select>
                                 </label>
                                 <label class="app-settings-field app-settings-field-wide">
-                                    <span class="app-settings-field-label">Remote endpoint</span>
+                                    <span class="app-settings-field-label">Remote Endpoint</span>
                                     <input id="app-settings-storyboard-endpoint" type="text" placeholder="http://192.168.1.20:11434/v1">
-                                    <span class="app-settings-note">Used only in Remote mode. Include the API prefix, usually <code>/v1</code>.</span>
+                                    <span class="app-settings-note">Remote mode only. Include the API prefix, usually <code>/v1</code>.</span>
                                 </label>
-                            </div>
-                            <label class="app-settings-field app-settings-field-wide">
-                                <span class="app-settings-field-label">llama-server executable</span>
-                                <input id="app-settings-storyboard-llama-server" type="text" placeholder="~/llama.cpp/build/bin/llama-server">
-                                <span class="app-settings-note">Local mode only. Use the path visible to WebCap. If llama.cpp was built under <code>~/llama.cpp</code>, the usual output is <code>~/llama.cpp/build/bin/llama-server</code>.</span>
-                            </label>
-                            <div class="app-settings-form-grid">
+                                <label class="app-settings-field app-settings-field-wide">
+                                    <span class="app-settings-field-label">llama-server Executable</span>
+                                    <input id="app-settings-storyboard-llama-server" type="text" placeholder="~/llama.cpp/build/bin/llama-server">
+                                    <span class="app-settings-note">Local mode only. Use the path visible to WebCap.</span>
+                                </label>
                                 <label class="app-settings-field">
                                     <span class="app-settings-field-label">Port</span>
                                     <input id="app-settings-storyboard-port" type="number" min="1" max="65535" step="1" value="8189">
                                 </label>
-                                <label class="app-settings-field">
-                                    <span class="app-settings-field-label">Context size override</span>
-                                    <input id="app-settings-storyboard-context-size" type="number" min="1024" step="1" placeholder="Auto">
-                                    <span class="app-settings-note">Leave blank to let llama.cpp use the selected model's context.</span>
-                                </label>
-                                <label class="app-settings-field">
-                                    <span class="app-settings-field-label">Max output tokens</span>
-                                    <input id="app-settings-storyboard-max-tokens" type="number" min="1" step="1" placeholder="Auto">
-                                    <span class="app-settings-note">Defaults to 16384. Clear the field for Auto, or set another limit.</span>
-                                </label>
                             </div>
-                            <p class="app-settings-help">Local mode discovers Director GGUFs from <code>&lt;Models Root&gt;/text_encoders</code>. Remote mode discovers models from the endpoint's <code>/models</code> API. Model selection stays in Storyboard.</p>
+                            <details class="app-settings-advanced">
+                                <summary>Runtime Overrides</summary>
+                                <div class="app-settings-disclosure-body app-settings-form-grid">
+                                    <label class="app-settings-field">
+                                        <span class="app-settings-field-label">Context Size Override</span>
+                                        <input id="app-settings-storyboard-context-size" type="number" min="1024" step="1" placeholder="Auto">
+                                        <span class="app-settings-note">Leave blank to use the selected model's context.</span>
+                                    </label>
+                                    <label class="app-settings-field">
+                                        <span class="app-settings-field-label">Max Output Tokens</span>
+                                        <input id="app-settings-storyboard-max-tokens" type="number" min="1" step="1" placeholder="Auto">
+                                        <span class="app-settings-note">Defaults to 16384. Clear for Auto.</span>
+                                    </label>
+                                </div>
+                            </details>
+                            <p class="app-settings-help">Local mode discovers GGUFs from <code>&lt;Models Root&gt;/text_encoders</code>. Remote mode discovers models from the endpoint's <code>/models</code> API. Model selection stays in Storyboard.</p>
                             <p class="app-settings-help">Use <strong>Save + Reboot</strong> after changing Director runtime settings.</p>
                         </section>
                     </div>
                     <div id="app-settings-panel-advanced" class="app-settings-panel hidden" data-app-settings-panel="advanced" role="tabpanel" aria-labelledby="app-settings-tab-advanced">
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Diagnostics</div>
-                                <div class="app-settings-section-copy">Additional application logging for development and troubleshooting.</div>
+                                <div class="app-settings-section-title">Environment &amp; Diagnostics</div>
+                                <div class="app-settings-section-copy">Inspect the whole WebCap installation and enable additional logging when troubleshooting.</div>
                             </div>
+                            <div class="app-settings-environment-actions">
+                                <button id="app-settings-environment-run-btn" type="button" class="review-captions-btn">Check Environment</button>
+                                <span id="app-settings-environment-summary" class="app-settings-environment-summary">Not checked yet.</span>
+                            </div>
+                            <div id="app-settings-environment-results" class="app-settings-environment-results hidden" aria-live="polite"></div>
                             <label class="app-settings-toggle">
                                 <input id="app-settings-debug" type="checkbox">
                                 <span>Debug mode</span>
@@ -1829,30 +1811,33 @@
                         </section>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">H3 troubleshooting</div>
-                                <div class="app-settings-section-copy">Optional fallback launch behavior for MiniMax H3.</div>
+                                <div class="app-settings-section-title">Optional Analysis</div>
+                                <div class="app-settings-section-copy">Local analysis features that are not required for the core WebCap workflow.</div>
                             </div>
-                            <label class="app-settings-toggle">
-                                <input id="app-settings-training-h3-split-cache-phase" type="checkbox">
-                                <span>Split H3 cache and training phases</span>
-                            </label>
-                            <p class="app-settings-help">Fallback mode: run a separate cache-only process before training.</p>
-                        </section>
-                        <section class="app-settings-section">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Raw Configuration</div>
-                                <div class="app-settings-section-copy">Edit the complete config JSON directly. Leaving this field replaces values shown on the other tabs.</div>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-enable-face-analysis" type="checkbox">
+                                    <span>Enable Face Focus analysis</span>
+                                </label>
+                                <label class="app-settings-toggle">
+                                    <input id="app-settings-enable-mediapipe-analysis" type="checkbox">
+                                    <span>Enable MediaPipe selection pose analysis</span>
+                                </label>
                             </div>
-                            <textarea id="app-settings-json" rows="12" spellcheck="false" aria-label="Advanced configuration JSON"></textarea>
                         </section>
+                        <details class="app-settings-advanced app-settings-section-disclosure">
+                            <summary>Raw Configuration</summary>
+                            <div class="app-settings-disclosure-body">
+                                <p class="app-settings-help">Edit the complete config JSON directly. Values here replace the corresponding fields shown on the other tabs.</p>
+                                <textarea id="app-settings-json" rows="12" spellcheck="false" aria-label="Advanced configuration JSON"></textarea>
+                            </div>
+                        </details>
                         <section class="app-settings-section app-settings-danger-zone">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Reset App</div>
                                 <div class="app-settings-section-copy">Restore stock requirement terms and remove custom global requirement terms.</div>
                             </div>
-                            <div>
-                                <button id="app-settings-reset-btn" type="button" class="app-settings-reset-btn">Reset App</button>
-                            </div>
+                            <div><button id="app-settings-reset-btn" type="button" class="app-settings-reset-btn">Reset App</button></div>
                         </section>
                     </div>
                 </div>

@@ -981,10 +981,7 @@ def _debug_llm_request(settings, model_id, messages, payload, response_schema):
     if not app_config.FS_DEBUG:
         return
     mode = str(settings.get("mode") or "local")
-    if mode == "remote":
-        provider = "ollama" if _remote_is_ollama() else "openai-compatible"
-    else:
-        provider = "llama.cpp"
+    provider = "remote" if mode == "remote" else "llama.cpp"
     message_chars = sum(
         len(str(message.get("content") or ""))
         for message in messages

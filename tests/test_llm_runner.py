@@ -22,6 +22,37 @@ def llm_root(tmp_path, monkeypatch):
     return tmp_path
 
 
+def test_llm_test_job_returns_structured_analysis_without_side_effects(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "text": '{"wildcard":"subject {standing|sitting}","stableTerms":["subject"],"variationGroups":[{"label":"pose","options":["standing","sitting"]}]}',
+            "data": {
+                "wildcard": "subject {standing|sitting}",
+                "stableTerms": ["subject"],
+                "variationGroups": [{"label": "pose", "options": ["standing", "sitting"]}],
+            },
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "test",
+        "qwen",
+        {"operation": "analyze_caption_wildcard", "prompt": "Analyze.", "output": "json"},
+        label="Test wildcard",
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["result"]["analysis"]["wildcard"] == "subject {standing|sitting}"
+
+
 def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)

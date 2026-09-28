@@ -120,6 +120,14 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
+    if client == "test":
+        return {
+            "analysis": copy.deepcopy(llm_result.get("data")),
+            "model": llm_result["model"],
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if client != "storyboard":
         raise RuntimeError("Unsupported LLM client: " + (client or "empty"))
 
@@ -553,7 +561,7 @@ def enqueue(client, model_id, contract, context=None, label=""):
     _ensure_execution_reconciled()
     client = str(client or "").strip()
     model_id = str(model_id or "").strip()
-    if client not in {"storyboard", "generate"}:
+    if client not in {"storyboard", "generate", "test"}:
         raise ValueError("Unsupported LLM client: " + (client or "empty"))
     if not model_id:
         raise ValueError("LLM model is required.")

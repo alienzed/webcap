@@ -1031,6 +1031,63 @@ def test_remote_ollama_model_sizes_use_native_tags_endpoint(monkeypatch):
     }
 
 
+def test_remote_ollama_running_model_exposes_vram_and_context(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_remote_native_http_json",
+        lambda path, timeout=2: {
+            "models": [
+                {
+                    "name": "qwen3:8b",
+                    "size": 5279023104,
+                    "size_vram": 4294967296,
+                    "context_length": 32768,
+                },
+            ]
+        },
+    )
+
+    assert storyboard_llm_runtime._ollama_running_model("qwen3:8b") == {
+        "sizeBytes": 5279023104,
+        "vramBytes": 4294967296,
+        "contextSize": 32768,
+    }
+
+
+def test_remote_activity_exposes_provider_vram_and_context(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "remote", "endpoint": "http://director-box:11434/v1"},
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda refresh=False: True)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_ollama_running_model",
+        lambda model_id: {
+            "sizeBytes": 5279023104,
+            "vramBytes": 4294967296,
+            "contextSize": 32768,
+        },
+    )
+    storyboard_llm_runtime._set_activity(
+        "generating",
+        model_id="qwen3:8b",
+        operation="develop_story",
+        active=True,
+        model_size_bytes=0,
+        context_size=0,
+    )
+
+    activity = storyboard_llm_runtime.activity_status()
+
+    assert activity["runtimeMode"] == "remote"
+    assert activity["runtimeProvider"] == "ollama"
+    assert activity["remoteModelVramBytes"] == 4294967296
+    assert activity["modelSizeBytes"] == 5279023104
+    assert activity["contextSize"] == 32768
+
+
 def test_remote_ollama_list_models_enriches_openai_models_with_sizes(monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
     monkeypatch.setattr(

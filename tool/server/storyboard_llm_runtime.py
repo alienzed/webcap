@@ -977,6 +977,106 @@ def _sampling_profile(operation):
     }
 
 
+def _debug_llm_request(settings, model_id, messages, payload, response_schema):
+    if not app_config.FS_DEBUG:
+        return
+    mode = str(settings.get("mode") or "local")
+    if mode == "remote":
+        provider = "ollama" if _remote_is_ollama() else "openai-compatible"
+    else:
+        provider = "llama.cpp"
+    message_chars = sum(
+        len(str(message.get("content") or ""))
+        for message in messages
+        if isinstance(message, dict)
+    )
+    app_config.debug_print(
+        "[Director Debug] request="
+        + json.dumps(
+            {
+                "mode": mode,
+                "provider": provider,
+                "model": model_id,
+                "messages": len(messages),
+                "message_chars": message_chars,
+                "configured_context": settings.get("context_size"),
+                "max_tokens": payload.get("max_tokens", "runtime-default"),
+                "response_schema": response_schema is not None,
+                "temperature": payload.get("temperature"),
+                "top_p": payload.get("top_p"),
+                "presence_penalty": payload.get("presence_penalty"),
+                "frequency_penalty": payload.get("frequency_penalty"),
+                "top_k": payload.get("top_k", "runtime-default"),
+                "min_p": payload.get("min_p", "runtime-default"),
+                "repeat_penalty": payload.get("repeat_penalty", "runtime-default"),
+                "reasoning_effort": payload.get("reasoning_effort", "runtime-default"),
+                "enable_thinking": (
+                    payload.get("chat_template_kwargs", {}).get("enable_thinking")
+                    if isinstance(payload.get("chat_template_kwargs"), dict)
+                    else "runtime-default"
+                ),
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+
+
+def _debug_llm_response(response, model_id, elapsed_seconds):
+    if not app_config.FS_DEBUG:
+        return
+    choices = response.get("choices") if isinstance(response, dict) else None
+    choice = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
+    message = choice.get("message") if isinstance(choice, dict) else {}
+    content = str(message.get("content") or "") if isinstance(message, dict) else ""
+    backend_timings = {}
+    if isinstance(response, dict):
+        for key in (
+            "load_duration",
+            "prompt_eval_count",
+            "prompt_eval_duration",
+            "eval_count",
+            "eval_duration",
+            "total_duration",
+        ):
+            if key in response:
+                backend_timings[key] = response.get(key)
+    app_config.debug_print(
+        "[Director Debug] response="
+        + json.dumps(
+            {
+                "model": model_id,
+                "request_seconds": round(float(elapsed_seconds), 3),
+                "finish_reason": str(choice.get("finish_reason") or ""),
+                "response_chars": len(content),
+                "usage": response.get("usage") if isinstance(response, dict) else None,
+                "timings": response.get("timings") if isinstance(response, dict) else None,
+                "backend_timings": backend_timings or None,
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+
+
+def _debug_llm_failure(model_id, elapsed_seconds, exc):
+    if not app_config.FS_DEBUG:
+        return
+    app_config.debug_print(
+        "[Director Debug] failure="
+        + json.dumps(
+            {
+                "model": model_id,
+                "request_seconds": round(float(elapsed_seconds), 3),
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+
+
 def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director messages are required.")
@@ -1017,17 +1117,25 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                 },
             }
 
+        _debug_llm_request(settings, model_id, messages, payload, response_schema)
+
         if settings.get("mode", "local") == "remote":
             if _stop_requested.is_set():
                 raise RuntimeError("LLM request stopped.")
             _set_activity("generating", model_id=model_id)
             request_json = _remote_http_json_cancellable if _remote_is_ollama() else _http_json
-            response = request_json(
-                "/chat/completions",
-                method="POST",
-                payload=payload,
-                timeout=10 * 60,
-            )
+            request_started = time.perf_counter()
+            try:
+                response = request_json(
+                    "/chat/completions",
+                    method="POST",
+                    payload=payload,
+                    timeout=10 * 60,
+                )
+            except Exception as exc:
+                _debug_llm_failure(model_id, time.perf_counter() - request_started, exc)
+                raise
+            _debug_llm_response(response, model_id, time.perf_counter() - request_started)
             return _completion_result(response, model_id)
 
         if not gpu_reserved:
@@ -1040,6 +1148,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
             _ensure_local_model_loaded(model_id)
             _relay_log_updates()
             _set_activity("generating", model_id=model_id)
+            request_started = time.perf_counter()
             try:
                 response = _http_json(
                     "/v1/chat/completions",
@@ -1047,7 +1156,8 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                     payload=payload,
                     timeout=10 * 60,
                 )
-            except Exception:
+            except Exception as exc:
+                _debug_llm_failure(model_id, time.perf_counter() - request_started, exc)
                 tail = _log_tail()
                 if tail:
                     _logger.error(
@@ -1055,6 +1165,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                         tail,
                     )
                 raise
+            _debug_llm_response(response, model_id, time.perf_counter() - request_started)
             _relay_log_updates()
             result = _completion_result(response, model_id)
             completed = True

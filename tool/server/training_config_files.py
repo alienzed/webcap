@@ -3,8 +3,12 @@ import math
 import os
 import re
 import tempfile
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 from . import config as app_config
 from .originals import MEDIA_ALL_EXTS

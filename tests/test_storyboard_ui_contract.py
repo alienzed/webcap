@@ -840,7 +840,7 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'class="storyboard-invariants-header"' not in continuity_section
     assert 'id="storyboard-invariants-list"' in continuity_section
     assert 'id="storyboard-develop-btn"' not in director_section
-    assert html.index('id="storyboard-develop-btn"') < html.index('data-story-section="director"')
+    assert html.index('id="storyboard-develop-btn"') > html.index('data-story-section="director"')
     assert 'id="storyboard-repair-instruction"' in director_section
     assert 'id="storyboard-repair-scenes-btn"' in director_section
     assert 'id="storyboard-restore-repair-btn"' in director_section

@@ -11,6 +11,8 @@ import urllib.request
 import uuid
 from pathlib import Path, PureWindowsPath
 
+import websocket
+
 from . import config as app_config
 from .execution_queue import get_job as execution_get_job, update_job as execution_update_job
 
@@ -181,12 +183,20 @@ def resolve_wildcard_prompt(prompt, seed):
     return resolved
 
 
+def _progress_client_id(prompt_id):
+    return "webcap-" + str(prompt_id or "").strip()
+
+
 def queue_workflow(workflow):
     prompt_id = str(uuid.uuid4())
     response = _read_json_response(
         COMFY_BASE_URL + "/prompt",
         method="POST",
-        payload={"prompt": workflow, "prompt_id": prompt_id},
+        payload={
+            "prompt": workflow,
+            "prompt_id": prompt_id,
+            "client_id": _progress_client_id(prompt_id),
+        },
     )
     returned_id = str(response.get("prompt_id") or "").strip() if isinstance(response, dict) else ""
     if returned_id != prompt_id:
@@ -205,6 +215,97 @@ def read_job(prompt_id):
     if not isinstance(payload, dict):
         raise RuntimeError("ComfyUI returned invalid inference job status.")
     return payload
+
+
+def _progress_socket_url(prompt_id):
+    parsed = urllib.parse.urlsplit(COMFY_BASE_URL)
+    scheme = "wss" if parsed.scheme == "https" else "ws"
+    query = urllib.parse.urlencode({"clientId": _progress_client_id(prompt_id)})
+    return urllib.parse.urlunsplit((scheme, parsed.netloc, "/ws", query, ""))
+
+
+def _open_progress_socket(prompt_id):
+    try:
+        sock = websocket.create_connection(_progress_socket_url(prompt_id), timeout=1)
+        sock.settimeout(0.01)
+        return sock
+    except Exception:
+        _logger.debug("ComfyUI progress WebSocket is unavailable; continuing without live progress.", exc_info=True)
+        return None
+
+
+def _progress_from_message(message, prompt_id):
+    if not isinstance(message, str):
+        return {}
+    try:
+        payload = json.loads(message)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+
+    event_type = str(payload.get("type") or "")
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    if str(data.get("prompt_id") or "") != str(prompt_id or ""):
+        return {}
+
+    if event_type == "progress":
+        node = str(data.get("node") or "").strip()
+        value = data.get("value")
+        maximum = data.get("max")
+    elif event_type == "progress_state":
+        nodes = data.get("nodes") if isinstance(data.get("nodes"), dict) else {}
+        running = [
+            node
+            for node in nodes.values()
+            if isinstance(node, dict) and str(node.get("state") or "").lower() == "running"
+        ]
+        if not running:
+            return {}
+        current = running[-1]
+        node = str(current.get("display_node_id") or current.get("node_id") or "").strip()
+        value = current.get("value")
+        maximum = current.get("max")
+    else:
+        return {}
+
+    try:
+        value = float(value)
+        maximum = float(maximum)
+    except (TypeError, ValueError):
+        return {}
+    if maximum <= 0 or value < 0:
+        return {}
+
+    progress = {
+        "value": value,
+        "max": maximum,
+        "percent": round(max(0.0, min(100.0, (value / maximum) * 100.0)), 1),
+    }
+    if value.is_integer():
+        progress["step"] = int(value)
+    if maximum.is_integer():
+        progress["steps"] = int(maximum)
+    if node:
+        progress["node"] = node
+    return progress
+
+
+def _drain_progress_socket(sock, prompt_id):
+    if sock is None:
+        return {}
+    latest = {}
+    while True:
+        try:
+            message = sock.recv()
+        except websocket.WebSocketTimeoutException:
+            break
+        except Exception:
+            raise
+        progress = _progress_from_message(message, prompt_id)
+        if progress:
+            latest = progress
+    return latest
 
 
 def cancel_job(prompt_id):
@@ -270,51 +371,78 @@ def _format_error(job):
 def wait_for_output(prompt_id, execution_job_id, find_output_ref):
     deadline = time.monotonic() + GENERATION_TIMEOUT_SECONDS
     missing_since = None
-    while True:
-        if time.monotonic() >= deadline:
-            raise RuntimeError("Timed out waiting for ComfyUI inference to finish.")
+    progress_socket = _open_progress_socket(prompt_id)
+    try:
+        while True:
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Timed out waiting for ComfyUI inference to finish.")
 
-        queue_job = execution_get_job(execution_job_id)
-        requested_action = str(queue_job.get("requestedAction") or "")
-        if requested_action in ("stop", "cancel"):
-            provider_status = cancel_job_and_wait_status(prompt_id)
-            if not provider_status:
-                raise RuntimeError(
-                    "ComfyUI did not confirm inference cancellation; the Generation Queue must remain paused."
+            queue_job = execution_get_job(execution_job_id)
+            requested_action = str(queue_job.get("requestedAction") or "")
+            if requested_action in ("stop", "cancel"):
+                provider_status = cancel_job_and_wait_status(prompt_id)
+                if not provider_status:
+                    raise RuntimeError(
+                        "ComfyUI did not confirm inference cancellation; the Generation Queue must remain paused."
+                    )
+                execution_update_job(
+                    execution_job_id,
+                    details={"providerStatus": provider_status},
                 )
-            execution_update_job(
-                execution_job_id,
-                details={"providerStatus": provider_status},
-            )
-            status = "cancelled" if requested_action == "cancel" else "stopped"
-            raise InferenceStopped(status, "Inference " + status + ".")
+                status = "cancelled" if requested_action == "cancel" else "stopped"
+                raise InferenceStopped(status, "Inference " + status + ".")
 
-        job = read_job(prompt_id)
-        if job is None:
-            if missing_since is None:
-                missing_since = time.monotonic()
-            if time.monotonic() - missing_since >= COMFY_JOB_MISSING_GRACE_SECONDS:
-                raise RuntimeError("ComfyUI lost inference job " + prompt_id + "; ComfyUI may have restarted.")
-            time.sleep(2)
-            continue
+            if progress_socket is not None:
+                try:
+                    progress = _drain_progress_socket(progress_socket, prompt_id)
+                except Exception:
+                    _logger.debug(
+                        "ComfyUI progress WebSocket closed; continuing with status polling.",
+                        exc_info=True,
+                    )
+                    try:
+                        progress_socket.close()
+                    except Exception:
+                        pass
+                    progress_socket = None
+                    progress = {}
+                if progress:
+                    execution_update_job(
+                        execution_job_id,
+                        details={"providerProgress": progress},
+                    )
 
-        missing_since = None
-        status = str(job.get("status") or "").strip().lower()
-        execution_update_job(execution_job_id, details={"providerStatus": status})
-        if status in ("pending", "in_progress"):
-            time.sleep(2)
-            continue
-        if status == "failed":
-            raise RuntimeError(_format_error(job))
-        if status == "cancelled":
-            raise InferenceStopped("cancelled", "ComfyUI cancelled this inference.")
-        if status == "completed":
-            output = find_output_ref(job.get("outputs") or {})
-            if not output:
-                raise RuntimeError("ComfyUI completed inference without a supported output.")
-            return output
-        raise RuntimeError("ComfyUI returned unknown inference status: " + (status or "empty") + ".")
+            job = read_job(prompt_id)
+            if job is None:
+                if missing_since is None:
+                    missing_since = time.monotonic()
+                if time.monotonic() - missing_since >= COMFY_JOB_MISSING_GRACE_SECONDS:
+                    raise RuntimeError("ComfyUI lost inference job " + prompt_id + "; ComfyUI may have restarted.")
+                time.sleep(2)
+                continue
 
+            missing_since = None
+            status = str(job.get("status") or "").strip().lower()
+            execution_update_job(execution_job_id, details={"providerStatus": status})
+            if status in ("pending", "in_progress"):
+                time.sleep(2)
+                continue
+            if status == "failed":
+                raise RuntimeError(_format_error(job))
+            if status == "cancelled":
+                raise InferenceStopped("cancelled", "ComfyUI cancelled this inference.")
+            if status == "completed":
+                output = find_output_ref(job.get("outputs") or {})
+                if not output:
+                    raise RuntimeError("ComfyUI completed inference without a supported output.")
+                return output
+            raise RuntimeError("ComfyUI returned unknown inference status: " + (status or "empty") + ".")
+    finally:
+        if progress_socket is not None:
+            try:
+                progress_socket.close()
+            except Exception:
+                pass
 
 def download_output(output_ref):
     query = urllib.parse.urlencode({

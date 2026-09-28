@@ -7,3 +7,5 @@ rembg
 onnxruntime
 tensorboard>=2.21,<3
 tomli; python_version < "3.11"
+
+websocket-client>=1.8,<2

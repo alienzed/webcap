@@ -1085,11 +1085,13 @@ def _sync_inference_session(session_directory):
             visible["candidateStartedAt"] = int(started_at * 1000) if started_at else None
             visible["comfyJobId"] = str(details.get("providerJobId") or "")
             visible["comfyStatus"] = str(details.get("providerStatus") or "")
+            visible["progress"] = copy.deepcopy(details.get("providerProgress") or {})
             return visible
 
         visible["current"] = ""
         visible["comfyJobId"] = ""
         visible["comfyStatus"] = ""
+        visible["progress"] = {}
         visible["candidateStartedAt"] = None
 
         if stopping_session:

@@ -232,6 +232,7 @@ def _job_view(job):
         "requestedAction": str(job.get("requestedAction") or ""),
         "providerJobId": str(details.get("providerJobId") or ""),
         "providerStatus": str(details.get("providerStatus") or ""),
+        "progress": copy.deepcopy(details.get("providerProgress") or {}),
         "result": copy.deepcopy(result),
         "error": str(job.get("error") or ""),
     }

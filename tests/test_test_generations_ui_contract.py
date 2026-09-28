@@ -313,7 +313,7 @@ def test_test_bench_activity_rail_and_live_session_contract():
     assert "data-session-stop" not in script
     assert ".disabled = !!disabled" not in controls_block
 
-    assert "if (!currentSession || currentSession === activeSession)" in script
+    assert "if (currentSession === activeSession)" in script
     assert "savedPrompt.trim()" in script
     assert "saveTestBenchState(prompt);" in script
     assert "if (nextSeed) nextSeed.value = String(randomSeed());" in script
@@ -328,8 +328,8 @@ def test_selected_test_session_rehydrates_across_navigation_and_queue_handoff():
     assert "currentSessionFolder === launchFolder" in script
     assert "currentSessionModel === requestedModelId" in script
     assert "request('test_open_session', { session: rememberedSession })" in script
-    assert "var selectedWasLive = !!(" in script
-    assert "currentSession !== activeSession" in script
+    assert "function selectSessionStatus(status)" in script
+    assert "currentSession = String(status.session || '');" in script
     assert "request('test_open_session', { session: currentSession })" in script
 
 
@@ -338,9 +338,10 @@ def test_test_polling_keeps_active_worker_status_separate_from_selected_preview(
     poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
 
     assert "syncActiveTestCard(status);" in poll
-    assert "if (!currentSession || currentSession === activeSession)" in poll
-    assert "else if (selectedWasLive)" in poll
+    assert "if (currentSession === activeSession)" in poll
+    assert "else if (currentSession)" in poll
     assert "renderStatus(selectedStatus);" in poll
+    assert "selectedWasLive" not in poll
 
     assert "refreshActivityButtonIfDue(5000);" in poll
     assert "refreshSessionsIfDue(5000).catch(showError);" in poll
@@ -964,3 +965,35 @@ def test_external_output_test_sessions_keep_open_and_rate_actions():
     assert "function revealTestSession(sessionName)" in script
     assert "body: JSON.stringify({ area: 'tests', id: name, folder: '' })" in script
     assert "openSession(rate.dataset.sessionRateOpen);" in script
+
+def test_test_generations_background_updates_never_choose_a_session():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    render = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
+    assert "currentSession =" not in render
+
+    poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
+    assert "selectSessionStatus(" not in poll
+    assert "if (currentSession === activeSession)" in poll
+    assert "else if (currentSession)" in poll
+
+    start = script.split("function startRun()", 1)[1].split("function stopRun", 1)[0]
+    assert "selectSessionStatus(" not in start
+    assert "if (currentSession === String(startedStatus.session || '')) renderStatus(startedStatus);" in start
+
+    activity = script.split("function openTestBenchActivity(target)", 1)[1].split("function openTestBenchActivityMenu", 1)[0]
+    assert "testActivity.active[0]" not in activity
+
+
+def test_test_generations_selection_changes_only_at_explicit_navigation_seams():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "function selectSessionStatus(status)" in script
+    open_session = script.split("function openSession(sessionName)", 1)[1].split("function deleteSession", 1)[0]
+    assert "selectSessionStatus(status);" in open_session
+
+    open_pane = script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
+    assert "selectSessionStatus(selectedStatus);" in open_pane
+    assert "initialStatus && initialStatus.session" in open_pane
+    assert "? selectSessionStatus(initialStatus)" in open_pane
+

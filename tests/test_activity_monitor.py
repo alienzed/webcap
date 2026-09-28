@@ -111,7 +111,7 @@ def test_activity_recent_is_limited_to_client_session(monkeypatch):
 
 def test_activity_snapshot_keeps_other_domains_when_execution_state_is_unavailable(monkeypatch):
     def unavailable(*args, **kwargs):
-        raise RuntimeError("execution queue unavailable")
+        raise activity_monitor.ExecutionQueueStateError("execution queue unavailable")
 
     monkeypatch.setattr(activity_monitor, "inference_snapshot", unavailable)
     monkeypatch.setattr(activity_monitor, "llm_snapshot", unavailable)

@@ -431,15 +431,18 @@ def test_execution_queue_lane_guard_is_durable_and_explicitly_clearable(queue_ro
     assert execution_queue.lane_guard("inference", "providerCleanup") is None
 
 
-def test_execution_queue_unreadable_state_is_not_treated_as_empty(queue_root):
+def test_execution_queue_unreadable_runtime_state_is_moved_aside(queue_root):
     state_path = queue_root / ".webcap" / "execution_queue.json"
     state_path.parent.mkdir(parents=True)
     state_path.write_text("{not-json", encoding="utf-8")
 
-    with pytest.raises(execution_queue.ExecutionQueueStateError, match="unreadable"):
-        execution_queue.lane_snapshot("inference")
+    snapshot = execution_queue.lane_snapshot("inference")
 
-    assert state_path.read_text(encoding="utf-8") == "{not-json"
+    assert snapshot["jobs"] == []
+    assert not state_path.exists()
+    backups = list(state_path.parent.glob("execution_queue.invalid-*.json"))
+    assert len(backups) == 1
+    assert backups[0].read_text(encoding="utf-8") == "{not-json"
 
 
 def test_execution_queue_inaccessible_state_is_not_treated_as_missing(queue_root, monkeypatch):

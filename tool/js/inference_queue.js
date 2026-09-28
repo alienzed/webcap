@@ -48,14 +48,26 @@
     return 'Generate';
   }
 
+  function testWildcardSummary(job) {
+    var values = Array.isArray(job && job.wildcardValues)
+      ? job.wildcardValues.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
+      : [];
+    if (!values.length) return '';
+    var visible = values.slice(0, 4);
+    if (values.length > visible.length) visible.push('+' + String(values.length - visible.length));
+    return visible.join(' · ');
+  }
+
   function jobContext(job) {
     var parts = [];
     if (job.client === 'storyboard') {
       if (job.label) parts.push(job.label);
       else if (job.sceneId) parts.push('Scene ' + job.sceneId);
     } else if (job.client === 'test') {
-      if (job.label) parts.push(job.label);
-      if (job.sessionId) parts.push(job.sessionId);
+      var wildcardSummary = testWildcardSummary(job);
+      if (wildcardSummary) parts.push(wildcardSummary);
+      else if (job.label) parts.push(job.label);
+      if (!wildcardSummary && job.sessionId) parts.push(job.sessionId);
     } else if (job.label) {
       parts.push(job.label);
     }
@@ -64,6 +76,10 @@
 
   function jobDetail(job) {
     var parts = [];
+    if (job.client === 'test' && job.wildcardValues && job.wildcardValues.length) {
+      if (job.candidateKind === 'base') parts.push('Base');
+      else if (job.candidateFile) parts.push(String(job.candidateFile));
+    }
     if (job.modelId) parts.push(String(job.modelId).replace(/_/g, ' '));
     if (job.providerStatus) parts.push('Provider ' + String(job.providerStatus).replace(/_/g, ' '));
     return parts.join(' · ');
@@ -182,7 +198,12 @@
       position.title = position.textContent;
     }
     if (title) title.textContent = jobClientLabel(job);
-    if (context) context.textContent = jobContext(job);
+    if (context) {
+      context.textContent = jobContext(job);
+      context.title = job.client === 'test' && Array.isArray(job.wildcardValues) && job.wildcardValues.length
+        ? job.wildcardValues.join(' · ')
+        : context.textContent;
+    }
     if (detail) {
       var detailText = jobDetail(job);
       var age = formatJobAge(job);

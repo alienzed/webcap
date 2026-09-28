@@ -431,6 +431,7 @@
 
   function setOpen(open) {
     state.open = !!open;
+    if (state.open && typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
     if (state.open && typeof window.setActivityDrawerOpen === 'function') {
       window.setActivityDrawerOpen(false);
     }

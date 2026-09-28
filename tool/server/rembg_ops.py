@@ -22,7 +22,13 @@ _REMBG_SESSION = None
 def _get_rembg_session():
     global _REMBG_SESSION
     if _REMBG_SESSION is None:
-        from rembg import new_session
+        try:
+            from rembg import new_session
+        except ImportError as exc:
+            raise RuntimeError(
+                "Background removal is unavailable because rembg is not installed. "
+                "Use Settings > Advanced > Install / Repair Python Requirements."
+            ) from exc
 
         _REMBG_SESSION = new_session(REMBG_MODEL_NAME)
     return _REMBG_SESSION
@@ -49,7 +55,13 @@ def _flatten_onto_background(image, background_rgb):
 
 
 def _run_rembg_cutout(work_image):
-    from rembg import remove
+    try:
+        from rembg import remove
+    except ImportError as exc:
+        raise RuntimeError(
+            "Background removal is unavailable because rembg is not installed. "
+            "Use Settings > Advanced > Install / Repair Python Requirements."
+        ) from exc
 
     processed = remove(work_image, session=_get_rembg_session())
     if not isinstance(processed, Image.Image):

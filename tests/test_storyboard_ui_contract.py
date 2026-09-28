@@ -1156,6 +1156,21 @@ def test_storyboard_roundoff_has_prompt_restore_manual_refs_and_readiness_summar
     assert "' needs selection'" in script
     assert "'s selected'" in script
 
+def test_storyboard_scene_cards_surface_unseen_manual_director_completion():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert "sceneCompletions: {}" in storyboard
+    assert "function markSceneDirectorCompletion(storyId, sceneId, operation)" in storyboard
+    assert "job.clearCorrection === true" in storyboard
+    assert "sceneDirectorCompletionHtml(sceneId)" in storyboard
+    assert "data-scene-director-completion" in storyboard
+    assert "Refine completed while you were elsewhere." in storyboard
+    assert "Write with Director completed while you were elsewhere." in storyboard
+    assert "clearSceneDirectorCompletion(storyState.story.id, sceneId);" in storyboard
+    assert ".storyboard-scene-progress-director-complete" in css
+
+
 def test_storyboard_refine_completion_is_scene_specific_persistent_and_self_clearing():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")

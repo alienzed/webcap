@@ -1640,6 +1640,7 @@
     Object.keys(storyState.director.pendingTargets).forEach(function (key) {
       setDirectorTargetProtected(storyState.director.pendingTargets[key], true);
     });
+    syncPlanReplacementControls();
   }
 
   function setDirectorPending(target, pending) {
@@ -2006,8 +2007,8 @@
 
     button.textContent = anotherRunning ? 'Queue First Cut' : 'First Cut';
     button.classList.toggle('hidden', !!(action && (action.active || queued)));
-    button.disabled = false;
     card.classList.toggle('hidden', !action);
+    syncPlanReplacementControls();
     if (!action) return;
 
     if (queued) {
@@ -4321,6 +4322,42 @@
     return !!job && ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
   }
 
+  function storyHasPendingGeneration(storyId) {
+    storyId = String(storyId || '');
+    return Object.keys(storyState.generationJobs).some(function (jobId) {
+      var job = storyState.generationJobs[jobId];
+      return job
+        && String(job.storyId || '') === storyId
+        && generationJobIsActive(job);
+    });
+  }
+
+  function syncPlanReplacementControls() {
+    if (!storyState.story) return;
+    var storyId = String(storyState.story.id || '');
+    var generationBlocked = storyHasPendingGeneration(storyId);
+    var developBlocked = generationBlocked || directorTargetBlocked({ kind: 'scenes', storyId: storyId });
+    var firstCutBlocked = generationBlocked || directorTargetBlocked({ kind: 'story-action', storyId: storyId });
+    var developButton = el('storyboard-develop-btn');
+    var firstCutButton = el('storyboard-first-cut-btn');
+
+    if (developButton) {
+      developButton.disabled = developBlocked;
+      developButton.title = generationBlocked
+        ? 'Wait for or cancel this Story\'s pending Take generation before replacing its Scene plan.'
+        : '';
+    }
+    if (firstCutButton) {
+      if (!firstCutButton.dataset.defaultTitle) {
+        firstCutButton.dataset.defaultTitle = firstCutButton.title || '';
+      }
+      firstCutButton.disabled = firstCutBlocked;
+      firstCutButton.title = generationBlocked
+        ? 'Wait for or cancel this Story\'s pending Take generation before starting First Cut.'
+        : firstCutButton.dataset.defaultTitle;
+    }
+  }
+
   function storyboardInferenceJob(job) {
     if (!job || String(job.client || '') !== 'storyboard') return null;
     return {
@@ -4374,6 +4411,7 @@
     });
 
     syncStoryboardGenerationActivity();
+    syncPlanReplacementControls();
   }
 
   function generationJobsForScene(sceneId) {
@@ -4618,6 +4656,7 @@
         storyState.generationJobs[job.jobId] = job;
       });
       syncStoryboardGenerationActivity();
+      syncPlanReplacementControls();
       jobs.forEach(function (job) {
         if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);
       });
@@ -4634,6 +4673,7 @@
         syncSceneTakeDom(payload.job.sceneId);
       }
       syncStoryboardGenerationActivity();
+      syncPlanReplacementControls();
       return payload;
     }).catch(reportError);
   }
@@ -4648,6 +4688,7 @@
       storyState.generationJobs[job.jobId] = job;
       reportGenerationStatus(sceneId, job, previousJob);
       syncStoryboardGenerationActivity();
+      syncPlanReplacementControls();
       if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(sceneId);
       if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);
       return window.refreshInferenceQueue().then(function () {

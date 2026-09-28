@@ -1758,11 +1758,27 @@
   line-height: 1;
 }
 
+.storyboard-scene-progress-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .storyboard-scene-progress-step strong {
+  min-width: 0;
   overflow: hidden;
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.storyboard-scene-progress-director-complete {
+  flex: 0 0 auto;
+  color: #22c55e;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .storyboard-scene-progress-menu {

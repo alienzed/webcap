@@ -100,7 +100,8 @@ function transientLlmOperationLabel(client, operation, status) {
     develop_story: 'Developed story',
     repair_scenes: 'Checked / repaired scenes',
     write_prompt: String(client || '') === 'storyboard' ? 'Wrote scene prompt' : 'Expanded prompt',
-    refine_prompt: 'Refined prompt'
+    refine_prompt: 'Refined prompt',
+    analyze_caption_wildcard: 'Generated wildcard caption'
   };
   var label = labels[key] || (key ? key.replace(/_/g, ' ') : 'LLM call');
   if (String(status || '') !== 'completed') label += ' failed';

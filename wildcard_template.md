@@ -1,11 +1,17 @@
 # Wildcard Template Planning
 
 ## Status
-`PARKED` (reviewed August 30, 2026)
+The deterministic Template Builder plan below remains parked.
 
-This plan is intentionally not final. No builder code or UI is currently
-implemented; resume it only if the caption-template workflow becomes a current
-priority.
+As of September 27, 2026, Test Generations has a smaller LLM-assisted workflow:
+- read the owning Set's existing media captions;
+- identify meaningful common terms and semantic dimensions that vary;
+- consolidate obvious synonymous wording without inventing new options;
+- propose one editable `{a|b|c}` wildcard caption;
+- show the common/variable analysis beside the proposal;
+- copy the proposal into the Test prompt only when the user explicitly chooses **Use as Prompt**.
+
+This workflow does not alter source captions or add a second persisted wildcard-template state model.
 
 ## Goal
 Design a deterministic wildcard-template builder for short captions where:

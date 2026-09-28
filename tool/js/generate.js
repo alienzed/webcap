@@ -1283,9 +1283,13 @@
     var graph = el('generate-director-activity-trend');
     if (!graph) throw new Error('Prompt Assistant system history markup is missing.');
     var remote = String(activity && activity.runtimeMode || '') === 'remote';
-    graph.classList.toggle('hidden', remote);
+    var legend = graph.querySelector('.director-activity-trend-legend');
+    var plot = graph.querySelector('svg');
+    if (legend) legend.classList.toggle('hidden', remote);
+    if (plot) plot.classList.toggle('hidden', remote);
     if (remote) {
       generateState.director.activityHistory = [];
+      graph.setAttribute('aria-label', 'Remote runtime telemetry');
       return;
     }
     var gpu = system && system.gpu;
@@ -1374,6 +1378,10 @@
     if (isRemote) {
       var provider = String(activity && activity.runtimeProvider || '').trim();
       parts.push('<span>' + escapeHtml(provider === 'ollama' ? 'Remote Ollama' : 'Remote') + '</span>');
+      var remoteModelSizeBytes = Number(activity && activity.modelSizeBytes);
+      if (isFinite(remoteModelSizeBytes) && remoteModelSizeBytes > 0) {
+        parts.push('<span>Model ' + escapeHtml(directorBytesGiB(remoteModelSizeBytes)) + '</span>');
+      }
       var remoteVramBytes = Number(activity && activity.remoteModelVramBytes);
       if (isFinite(remoteVramBytes) && remoteVramBytes > 0) {
         parts.push('<span title="VRAM allocated to the loaded remote model">Model VRAM ' + escapeHtml(directorBytesGiB(remoteVramBytes)) + '</span>');

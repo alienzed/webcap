@@ -1,11 +1,6 @@
 import math
 from pathlib import Path
 
-import mediapipe as mp
-from mediapipe.tasks.python import BaseOptions
-from mediapipe.tasks.python import vision
-
-
 SELECTION_POSE_VERSION = 1
 SELECTION_POSE_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
 SELECTION_FACE_MODEL_PATH = Path(__file__).resolve().parents[1] / "vendor" / "mediapipe" / "models" / "face_landmarker.task"
@@ -41,6 +36,15 @@ def _ensure_models_exist():
 def get_selection_pose_analyzers():
     global _FACE_LANDMARKER
     global _POSE_LANDMARKER
+    try:
+        import mediapipe as mp
+        from mediapipe.tasks.python import BaseOptions
+        from mediapipe.tasks.python import vision
+    except ImportError as exc:
+        raise RuntimeError(
+            "MediaPipe selection analysis is unavailable. "
+            "Use Settings > Advanced > Install / Repair Python Requirements."
+        ) from exc
     _ensure_models_exist()
     if _FACE_LANDMARKER is None:
         face_options = vision.FaceLandmarkerOptions(
@@ -72,6 +76,7 @@ def get_selection_pose_analyzers():
         )
         _POSE_LANDMARKER = vision.PoseLandmarker.create_from_options(pose_options)
     return {
+        "mediapipe": mp,
         "face_landmarker": _FACE_LANDMARKER,
         "pose_landmarker": _POSE_LANDMARKER,
     }
@@ -367,7 +372,7 @@ def _arm_position_from_pose(pose_landmarks):
 
 
 def analyze_image_selection_pose(file_path, analyzers):
-    mp_image = mp.Image.create_from_file(str(file_path))
+    mp_image = analyzers["mediapipe"].Image.create_from_file(str(file_path))
     face_landmarker = analyzers["face_landmarker"]
     pose_landmarker = analyzers["pose_landmarker"]
     face_result = face_landmarker.detect(mp_image)

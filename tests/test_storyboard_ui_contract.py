@@ -1218,3 +1218,22 @@ def test_storyboard_director_stop_dismisses_only_the_stopped_activity_target():
     assert "visible = !dismissed &&" in render_block
     assert "storyState.director.dismissedActivityTargetKey === key" in pending_block
 
+
+
+def test_storyboard_first_cut_lock_is_story_scoped_and_sequence_readiness_is_derived():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("\n  function ", 1)[0]
+    assert "String(target.storyId || '') !== String(storyState.story.id || '')" in protection
+    assert "#storyboard-story-authoring button, #storyboard-story-authoring input" in protection
+    assert "[data-story-action-cancel]" in protection
+
+    pending_controls = storyboard.split("function syncDirectorPendingControls()", 1)[1].split("\n  function ", 1)[0]
+    assert "document.querySelectorAll('[data-story-action-disabled=\"1\"]')" in pending_controls
+    assert "delete control.dataset.storyActionDisabled;" in pending_controls
+
+    readiness = storyboard.split("function renderStoryReadiness()", 1)[1].split("\n  function ", 1)[0]
+    assert "scenesWithTake" in readiness
+    assert "sequenceButton.classList.toggle('is-ready', sequenceReady);" in readiness
+    assert "#storyboard-scenes-sequence-btn.is-ready:not(.active)" in css

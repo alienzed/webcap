@@ -551,16 +551,24 @@ def _advance_queue():
                     hold_provider_cleanup(
                         provider_job_id,
                         (
-                            "Inference paused: ComfyUI provider work could not be confirmed stopped after an inference error. "
-                            "Resolve the provider job before resuming."
+                            "Inference is waiting: ComfyUI provider work could not be confirmed stopped after an inference error. "
+                            "Resolve the provider job before more GPU work starts."
                         ),
                     )
-                if status in {"starting", "running", "stopping"}:
+                if status == "stopping":
+                    _cleanup_generate_job_references(job_id)
+                    execution_finish_job_transient(
+                        job_id,
+                        status="stopped",
+                        error="Inference stopped after an execution error: " + str(exc),
+                    )
+                    _logger.exception("Inference stopped after an execution error.")
+                elif status in {"starting", "running"}:
                     execution_requeue_active_and_pause(
                         job_id,
                         "Inference paused after an execution error: " + str(exc),
                     )
-                _logger.exception("Queued inference attempt failed; inference was paused and the job was preserved.")
+                    _logger.exception("Queued inference attempt failed; inference was paused and the job was preserved.")
         finally:
             if release_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
@@ -750,21 +758,28 @@ def job_status(job_id, consume=False):
     return _job_view(job)
 
 
-def _cleanup_generate_job_references(job_id):
-    try:
-        stored = execution_get_job(str(job_id or "").strip(), include_payload=True)
-    except FileNotFoundError:
+def _cleanup_generate_references_from_job(stored):
+    if not isinstance(stored, dict):
         return
     metadata = stored.get("metadata") if isinstance(stored.get("metadata"), dict) else {}
     if metadata.get("client") != "generate":
         return
     payload = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
     request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+    job_id = str(stored.get("id") or "")
     try:
         from .generate_store import cleanup_references
         cleanup_references(request.get("references") or {})
     except Exception:
         _logger.exception("Could not clean transient Generate references for job %s.", job_id)
+
+
+def _cleanup_generate_job_references(job_id):
+    try:
+        stored = execution_get_job(str(job_id or "").strip(), include_payload=True)
+    except FileNotFoundError:
+        return
+    _cleanup_generate_references_from_job(stored)
 
 
 def stop_storyboard_jobs(story_id, timeout=15):
@@ -820,17 +835,19 @@ def action(operation, job_id="", direction="", position=None):
     operation = str(operation or "").strip()
     job_id = str(job_id or "").strip()
     if operation == "cancel":
-        _cleanup_generate_job_references(job_id)
+        stored = execution_get_job(job_id, include_payload=True)
         job = execution_cancel_pending_transient(job_id)
+        _cleanup_generate_references_from_job(stored)
         return {"job": _job_view(job)}
     if operation == "clear_all":
-        pending = [
-            job for job in execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("jobs", [])
+        pending = {
+            str(job.get("id") or ""): execution_get_job(job.get("id"), include_payload=True)
+            for job in execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("jobs", [])
             if str(job.get("status") or "") in {"queued", "backlog"}
-        ]
-        for job in pending:
-            _cleanup_generate_job_references(job.get("id"))
+        }
         cancelled = execution_cancel_all_pending_transient(EXECUTION_LANE)
+        for job in cancelled:
+            _cleanup_generate_references_from_job(pending.get(str(job.get("id") or "")))
         return {"queue": snapshot(), "cleared": len(cancelled)}
     if operation == "add_to_queue":
         promoted = execution_promote_backlog(job_id)

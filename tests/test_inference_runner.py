@@ -100,6 +100,72 @@ def test_inference_clear_all_cancels_pending_but_not_active(inference_root, monk
         execution_queue.get_job(queued["id"])
     with pytest.raises(FileNotFoundError):
         execution_queue.get_job(backlog["id"])
+def test_inference_cancel_does_not_cleanup_generate_inputs_if_dispatch_wins_race(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {
+            "request": {
+                "modelId": "krea2_raw",
+                "mediaKind": "image",
+                "references": {"first_frame": "tmp/reference.png"},
+            }
+        },
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    cleaned = []
+    real_cancel = inference_runner.execution_cancel_pending_transient
+
+    def dispatch_then_cancel(job_id):
+        execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+        return real_cancel(job_id)
+
+    monkeypatch.setattr(inference_runner, "execution_cancel_pending_transient", dispatch_then_cancel)
+    monkeypatch.setattr(
+        inference_runner,
+        "_cleanup_generate_references_from_job",
+        lambda stored: cleaned.append(stored["id"]),
+    )
+
+    with pytest.raises(ValueError, match="pending"):
+        inference_runner.action("cancel", job_id=queued["id"])
+
+    assert cleaned == []
+    assert execution_queue.get_job(queued["id"])["status"] == "starting"
+
+
+def test_inference_clear_all_cleans_only_jobs_it_actually_cancelled(inference_root, monkeypatch):
+    first = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "mediaKind": "image", "references": {"first_frame": "a.png"}}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    second = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "mediaKind": "image", "references": {"first_frame": "b.png"}}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    cleaned = []
+    real_clear = inference_runner.execution_cancel_all_pending_transient
+
+    def dispatch_then_clear(lane_name):
+        execution_queue.claim_next(lane_name)
+        return real_clear(lane_name)
+
+    monkeypatch.setattr(inference_runner, "execution_cancel_all_pending_transient", dispatch_then_clear)
+    monkeypatch.setattr(
+        inference_runner,
+        "_cleanup_generate_references_from_job",
+        lambda stored: cleaned.append(stored["id"]) if stored else None,
+    )
+
+    result = inference_runner.action("clear_all")
+
+    assert result["cleared"] == 1
+    assert cleaned == [second["id"]]
+    assert execution_queue.get_job(first["id"])["status"] == "starting"
+    assert inference_runner.job_status(second["id"])["status"] == "cancelled"
+
+
 def test_inference_snapshot_is_passive_and_does_not_reconcile_provider(inference_root, monkeypatch):
     inference_runner._startup_reconciled = False
     touched = []
@@ -358,6 +424,37 @@ def test_inference_runner_honors_stop_requested_during_start(inference_root, mon
     finished = inference_runner.job_status(queued["id"])
     assert finished["status"] == "stopped"
     assert called == []
+
+def test_inference_stop_remains_stopped_when_execution_raises(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
+
+    def stop_then_fail(job_id):
+        execution_queue.mark_running(
+            job_id,
+            details={"providerJobId": "provider-stop", "providerStatus": "in_progress"},
+        )
+        execution_queue.request_stop(job_id)
+        raise RuntimeError("provider poll failed while stopping")
+
+    monkeypatch.setattr(inference_runner, "_execute_claimed", stop_then_fail)
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait_status",
+        lambda _provider_id: "cancelled",
+    )
+
+    result = inference_runner._advance_queue()
+
+    assert result["status"] == "stopped"
+    assert inference_runner.job_status(queued["id"])["status"] == "stopped"
+    assert inference_runner.snapshot()["paused"] is False
+
 
 def test_inference_runner_executes_claimed_storyboard_job(inference_root, monkeypatch):
     queued = inference_runner.enqueue_storyboard(

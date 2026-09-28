@@ -269,6 +269,7 @@ def test_chat_uses_selected_model_disables_thinking_retains_model_and_releases_g
         },
     )
 
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda: False)
     captured = {}
 
     def fake_http(path, method="GET", payload=None, timeout=30):
@@ -954,6 +955,56 @@ def test_chat_uses_external_llm_gpu_reservation_without_double_claim(monkeypatch
     assert calls == ["free-comfy", "load:qwen"]
 
 
+def test_remote_native_url_strips_openai_v1_prefix_for_ollama_probe(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "mode": "remote",
+            "endpoint": "http://director-box:11434/v1",
+        },
+    )
+
+    assert storyboard_llm_runtime._remote_native_url("/api/version") == "http://director-box:11434/api/version"
+
+
+def test_remote_ollama_detection_uses_native_version_endpoint(monkeypatch):
+    storyboard_llm_runtime._remote_provider_cache.clear()
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "mode": "remote",
+            "endpoint": "http://director-box:11434/v1",
+        },
+    )
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"version":"0.12.0"}'
+
+    captured = {}
+
+    def fake_urlopen(request, timeout=0):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr(storyboard_llm_runtime.urllib.request, "urlopen", fake_urlopen)
+
+    assert storyboard_llm_runtime._remote_is_ollama() is True
+    assert captured == {
+        "url": "http://director-box:11434/api/version",
+        "timeout": 2,
+    }
+
+
 def test_remote_chat_uses_openai_compatible_endpoint_without_local_gpu_management(monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: calls.append("server"))
@@ -1026,6 +1077,65 @@ def test_remote_server_url_preserves_openai_api_prefix(monkeypatch):
     )
 
     assert storyboard_llm_runtime._server_url("/models") == "http://director-box:11434/v1/models"
+
+
+def test_stop_supported_accepts_detected_remote_ollama(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "remote"},
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda: True)
+
+    storyboard_llm_runtime.assert_stop_supported()
+
+
+def test_stop_supported_rejects_generic_remote_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "remote"},
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda: False)
+
+    with pytest.raises(ValueError, match="generic remote OpenAI-compatible"):
+        storyboard_llm_runtime.assert_stop_supported()
+
+
+def test_stop_active_remote_request_sets_signal_and_closes_socket(monkeypatch):
+    calls = []
+
+    class FakeSocket:
+        def shutdown(self, how):
+            calls.append(("shutdown", how))
+
+    class FakeConnection:
+        def __init__(self):
+            self.sock = FakeSocket()
+
+        def close(self):
+            calls.append(("close", None))
+
+    connection = FakeConnection()
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "remote"},
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_active_remote_connection", connection)
+    storyboard_llm_runtime.clear_stop_request()
+
+    try:
+        assert storyboard_llm_runtime.stop_active_request() is True
+        assert storyboard_llm_runtime._stop_requested.is_set()
+        assert calls == [
+            ("shutdown", storyboard_llm_runtime.socket.SHUT_RDWR),
+            ("close", None),
+        ]
+    finally:
+        storyboard_llm_runtime.clear_stop_request()
+        storyboard_llm_runtime._active_remote_connection = None
 
 
 def test_hard_stop_rejects_remote_runtime(monkeypatch):

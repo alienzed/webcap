@@ -997,3 +997,12 @@ def test_test_generations_selection_changes_only_at_explicit_navigation_seams():
     assert "initialStatus && initialStatus.session" in open_pane
     assert "? selectSessionStatus(initialStatus)" in open_pane
 
+
+
+def test_test_generations_director_queue_preserves_remote_runtime_identity():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    queued_block = script.split("if (String(job.status || '') === 'queued'", 1)[1].split("return Object.assign", 1)[0]
+    assert "runtimeMode: activity && activity.runtimeMode" in queued_block
+    assert "runtimeProvider: activity && activity.runtimeProvider" in queued_block
+    assert "showRemoteModelTelemetry = phaseName !== 'queued'" in script

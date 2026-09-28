@@ -1159,3 +1159,17 @@ def test_llm_stopping_after_model_return_skips_client_ingest(llm_root, monkeypat
     llm_runner._execute_claimed(job["id"], gpu_reserved=False)
 
     assert llm_runner.job_status(job["id"])["status"] == "stopped"
+
+
+def test_llm_snapshot_retries_startup_reconciliation_when_needed(llm_root):
+    execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"messages": []}},
+        metadata={"client": "storyboard", "operation": "expand_concept"},
+    )
+    llm_runner._startup_reconciled = False
+
+    snapshot = llm_runner.snapshot(include_terminal=False)
+
+    assert llm_runner._startup_reconciled is True
+    assert snapshot["jobs"] == []

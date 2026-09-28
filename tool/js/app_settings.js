@@ -330,14 +330,22 @@ function renderEnvironmentCheck(payload) {
     (!checksById.package_imageio || checksById.package_imageio.ok);
   var poseReady = (!checksById.package_mediapipe || checksById.package_mediapipe.ok) &&
     (!checksById.analysis_mediapipe_models || checksById.analysis_mediapipe_models.ok);
+  var analysisSelectionChanged = false;
   if (ui.appSettingsEnableFaceAnalysisEl) {
     ui.appSettingsEnableFaceAnalysisEl.disabled = !faceReady;
-    if (!faceReady) ui.appSettingsEnableFaceAnalysisEl.checked = false;
+    if (!faceReady && ui.appSettingsEnableFaceAnalysisEl.checked) {
+      ui.appSettingsEnableFaceAnalysisEl.checked = false;
+      analysisSelectionChanged = true;
+    }
   }
   if (ui.appSettingsEnableMediaPipeAnalysisEl) {
     ui.appSettingsEnableMediaPipeAnalysisEl.disabled = !poseReady;
-    if (!poseReady) ui.appSettingsEnableMediaPipeAnalysisEl.checked = false;
+    if (!poseReady && ui.appSettingsEnableMediaPipeAnalysisEl.checked) {
+      ui.appSettingsEnableMediaPipeAnalysisEl.checked = false;
+      analysisSelectionChanged = true;
+    }
   }
+  if (analysisSelectionChanged) syncAppSettingsJsonFromForm();
   resultsEl.classList.remove('hidden');
 }
 
@@ -392,7 +400,7 @@ function runEnvironmentCheck() {
   var button = ui.appSettingsEnvironmentRunBtnEl;
   if (button) button.disabled = true;
   if (ui.appSettingsEnvironmentSummaryEl) ui.appSettingsEnvironmentSummaryEl.textContent = 'Checking...';
-  fetch('/app/environment')
+  return fetch('/app/environment')
     .then(function (response) {
       return response.json().then(function (payload) {
         if (!response.ok) throw new Error(payload && payload.error ? payload.error : 'Environment check failed.');

@@ -740,8 +740,8 @@ def apply_concept_expansion(story_id, expanded_concept):
     expanded = str(expanded_concept or "").strip()
     if not expanded:
         raise ValueError("Expanded Story concept is empty.")
-    previous = str(story.get("concept") or "")
-    story["previousConcept"] = previous
+    if not isinstance(story.get("previousConcept"), str):
+        story["previousConcept"] = expanded
     story["concept"] = expanded
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
@@ -790,9 +790,7 @@ def restore_previous_concept(story_id):
     previous = story.get("previousConcept")
     if not isinstance(previous, str):
         raise FileNotFoundError("No previous Story concept is available.")
-    current = str(story.get("concept") or "")
     story["concept"] = previous
-    story["previousConcept"] = current
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)
     return story

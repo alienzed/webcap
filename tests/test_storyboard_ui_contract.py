@@ -202,6 +202,18 @@ def test_storyboard_routine_autosave_state_does_not_pollute_global_console():
     assert "text !== 'Unsaved changes'" in save_state
     assert "reportConsoleInfo('Storyboard', text);" in save_state
 
+
+def test_storyboard_local_director_status_messages_are_mirrored_to_console():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    develop = storyboard.split("function setDevelopStatus(text)", 1)[1].split("\n  function ", 1)[0]
+    repair = storyboard.split("function setRepairStatus(text)", 1)[1].split("\n  function ", 1)[0]
+    scene = storyboard.split("function updateSceneDirectorStatus(sceneId, text)", 1)[1].split("\n  function ", 1)[0]
+
+    assert "reportConsoleInfo('Storyboard', message);" in develop
+    assert "reportConsoleInfo('Storyboard', message);" in repair
+    assert "reportConsoleInfo(generationConsoleLabel(sceneId), message);" in scene
+
 def test_storyboard_story_switching_and_save_results_are_story_scoped():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 

@@ -156,6 +156,12 @@ def _append_optional_analysis_checks(checks):
 
 
 def _append_inference_checks(checks):
+    checks.append(_python_package_check(
+        "websocket",
+        "websocket-client (live ComfyUI progress)",
+        group="inference",
+        required=False,
+    ))
     try:
         stats = inference_runtime.system_stats()
         details = ""

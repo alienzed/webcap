@@ -1078,8 +1078,8 @@ def test_llm_snapshot_explains_training_queue_priority(llm_root, monkeypatch):
 def test_llm_stop_or_cancel_cancels_queued_job_without_touching_runtime(llm_root, monkeypatch):
     monkeypatch.setattr(
         storyboard_llm_runtime,
-        "stop_owned_server",
-        lambda: pytest.fail("Queued LLM work must cancel without killing llama.cpp."),
+        "stop_active_request",
+        lambda: pytest.fail("Queued LLM work must cancel without touching the runtime."),
     )
     job = llm_runner.enqueue(
         "generate",
@@ -1101,8 +1101,8 @@ def test_llm_stop_or_cancel_hard_stops_active_local_job(llm_root, monkeypatch):
     )
     execution_queue.claim_next(llm_runner.EXECUTION_LANE)
     execution_queue.mark_running(job["id"])
-    monkeypatch.setattr(storyboard_llm_runtime, "assert_hard_stop_supported", lambda: calls.append("assert"))
-    monkeypatch.setattr(storyboard_llm_runtime, "stop_owned_server", lambda: calls.append("stop") or True)
+    monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: calls.append("assert"))
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: calls.append("stop") or True)
 
     result = llm_runner.action("stop_or_cancel", job_id=job["id"])
 
@@ -1118,7 +1118,7 @@ def test_llm_hard_stop_response_survives_worker_finishing_during_server_shutdown
     )
     execution_queue.claim_next(llm_runner.EXECUTION_LANE)
     execution_queue.mark_running(job["id"])
-    monkeypatch.setattr(storyboard_llm_runtime, "assert_hard_stop_supported", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: None)
 
     def finish_during_stop():
         execution_queue.finish_job_transient(
@@ -1128,12 +1128,30 @@ def test_llm_hard_stop_response_survives_worker_finishing_during_server_shutdown
         )
         return True
 
-    monkeypatch.setattr(storyboard_llm_runtime, "stop_owned_server", finish_during_stop)
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", finish_during_stop)
 
     result = llm_runner.action("stop_or_cancel", job_id=job["id"])
 
     assert result["job"]["status"] == "stopping"
     assert llm_runner.job_status(job["id"])["status"] == "stopped"
+
+
+def test_llm_stop_active_remote_uses_runtime_specific_cancel(llm_root, monkeypatch):
+    calls = []
+    job = execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"operation": "write_prompt", "prompt": "Expand."}, "clientContext": {}},
+        metadata={"client": "generate", "modelId": "remote-model"},
+    )
+    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
+    execution_queue.mark_running(job["id"])
+    monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: calls.append("assert"))
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: calls.append("cancel") or True)
+
+    result = llm_runner.action("stop_or_cancel", job_id=job["id"])
+
+    assert result["job"]["status"] == "stopping"
+    assert calls == ["assert", "cancel"]
 
 
 def test_llm_stopping_after_model_return_skips_client_ingest(llm_root, monkeypatch):

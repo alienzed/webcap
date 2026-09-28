@@ -495,6 +495,18 @@ def _advance_queue():
             _set_backlog_wait_reason("Waiting for Prompt Assistant / Director.")
             return None
 
+        # Provider availability is an execution concern, not an admission
+        # concern. Keep both fresh queued work and restored backlog intact while
+        # ComfyUI is unavailable. Check before touching the shared GPU so an
+        # offline provider does not evict a retained Director model or contend
+        # with Training.
+        try:
+            from . import inference_runtime
+            inference_runtime.system_stats()
+        except (ConnectionError, TimeoutError):
+            _set_backlog_wait_reason("ComfyUI unavailable.")
+            return None
+
         owner = execution_resource_owner()
         if owner and owner != GPU_RESERVATION_OWNER:
             _set_backlog_wait_reason("Waiting for " + owner + " to release the shared GPU.")
@@ -523,19 +535,6 @@ def _advance_queue():
                 "Inference is waiting for the retained Prompt Assistant / Director model to yield the GPU.",
                 exc_info=True,
             )
-            return None
-
-        # Provider availability is an execution concern, not an admission
-        # concern. Keep both fresh queued work and restored backlog intact while
-        # ComfyUI is unavailable instead of claiming a job only to pause the
-        # whole lane on a routine connection failure.
-        try:
-            from . import inference_runtime
-            inference_runtime.system_stats()
-        except Exception:
-            _set_backlog_wait_reason("ComfyUI unavailable.")
-            if execution_resource_owner() == GPU_RESERVATION_OWNER:
-                _release_gpu()
             return None
 
         _set_backlog_wait_reason("")

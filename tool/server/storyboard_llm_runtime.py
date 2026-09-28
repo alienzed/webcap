@@ -266,13 +266,13 @@ def _remote_native_url(path):
     return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, native_path, "", ""))
 
 
-def _remote_is_ollama():
+def _remote_is_ollama(refresh=False):
     settings = _director_config()
     if settings.get("mode", "local") != "remote":
         return False
     endpoint = str(settings.get("endpoint") or "").rstrip("/")
     cached = _remote_provider_cache.get(endpoint)
-    if cached is not None:
+    if cached is not None and not refresh:
         return cached == "ollama"
 
     request = urllib.request.Request(_remote_native_url("/api/version"), method="GET")
@@ -348,7 +348,7 @@ def assert_stop_supported():
     if settings.get("mode", "local") == "local":
         assert_hard_stop_supported()
         return
-    if not _remote_is_ollama():
+    if not _remote_is_ollama(refresh=True):
         raise ValueError(
             "Stop is not supported by this generic remote OpenAI-compatible endpoint. "
             "Remote cancellation is currently supported for Ollama."

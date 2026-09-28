@@ -591,6 +591,7 @@ def test_inference_snapshot_projects_test_rendition_context(inference_root):
             "candidateFile": "",
             "candidateLabel": "Base",
             "candidateIndex": 1,
+            "wildcardValues": ["red dress", "rooftop", "side"],
         },
         label="Comparison · Base",
     )
@@ -603,6 +604,7 @@ def test_inference_snapshot_projects_test_rendition_context(inference_root):
     assert job["sessionId"] == "session-1"
     assert job["folder"] == "sets/subject"
     assert job["candidateKind"] == "base"
+    assert job["wildcardValues"] == ["red dress", "rooftop", "side"]
     assert job["label"] == "Comparison · Base"
 
 def test_inference_runner_pauses_without_consuming_queue_when_comfyui_is_unavailable(inference_root, monkeypatch):

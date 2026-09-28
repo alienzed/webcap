@@ -240,10 +240,10 @@ WebCap should eventually assemble provider requests from these stable instructio
 
 Storyboard Director supports two execution modes while keeping one provider-neutral authoring layer:
 
-- **Local llama.cpp** — WebCap starts and manages `llama-server` on loopback, discovers GGUFs from the shared Model Root `text_encoders` folder, explicitly loads the selected model for a request, and unloads it afterward.
+- **Local llama.cpp** — WebCap starts and manages `llama-server` on loopback, discovers GGUFs from the shared Model Root `text_encoders` folder, and loads the selected model on demand. A successfully loaded model may remain resident for follow-up LLM work until Training or shared Inference needs the local GPU.
 - **Remote OpenAI-compatible** — WebCap connects directly to a configured API base such as `http://host:11434/v1`, discovers models from `/models`, and sends the same Director contracts to `/chat/completions`. This path is suitable for Ollama or another compatible server on a different machine.
 
-The selected Director model is a runtime preference stored by the browser, not Story data. Remote inference never reserves WebCap's local GPU or asks local ComfyUI to free models. Local llama.cpp keeps the conservative GPU handoff: WebCap reserves the GPU, asks idle ComfyUI to unload cached models/free memory, loads one Director model, then unloads it and releases the reservation after the request.
+The selected Director model is a runtime preference stored by the browser, not Story data. Remote inference never reserves WebCap's local GPU or asks local ComfyUI to free models. Local llama.cpp keeps the conservative GPU handoff: WebCap reserves the GPU, asks idle ComfyUI to unload cached models/free memory, and loads the selected Director model. The shared reservation is released after the request, while a successfully loaded model may remain resident; Training or shared Inference explicitly evicts that retained model after winning the GPU reservation and before launching competing GPU work.
 
 LLM context stays deliberately small:
 
@@ -417,7 +417,7 @@ Current runtime slice:
 - WebCap-managed llama.cpp router process on loopback;
 - local GGUF discovery through the existing configured WebCap Model Root (`text_encoders`);
 - Storyboard-level Director model selector;
-- `expand_concept` turns a terse Story seed into a richer persistent overview without creating Scenes; the previous concept is kept as one-step recoverable text;
+- `expand_concept` turns a terse Story seed into a richer persistent overview without creating Scenes; the first successful expanded concept becomes the fixed **Restore Previous** baseline, and later expansions (including First Cut) do not replace that baseline;
 - `develop_story` turns the saved concept/style into a complete structured Scene sequence and writes the initial H3-ready prompt for every Scene in the same whole-Story pass;
 - whole-Story development must reliably return usable Scenes; shared continuity metadata is optional and must never be required for Scene creation to succeed;
 - when a Story already contains valid shared continuity definitions/references, WebCap can still inject those descriptions mechanically into later H3 prompt rewrites and final generation compilation;

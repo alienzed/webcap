@@ -284,10 +284,14 @@ def _read_state():
     global _state_file_seen, _persisted_managed_job_ids
     _ensure_runtime_dirs()
     path = _state_path()
-    if not path.exists():
+    try:
+        path.stat()
+    except FileNotFoundError:
         _state_file_seen = None
         _persisted_managed_job_ids = set()
         return _default_state()
+    except OSError as exc:
+        raise TrainingStateError("Could not inspect the existing training queue state; it was left unchanged: " + str(path)) from exc
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -312,8 +316,12 @@ def _read_state():
 def _read_state_readonly():
     """Read queue state without creating the runtime directory or changing globals."""
     path = _state_path()
-    if not path.exists():
+    try:
+        path.stat()
+    except FileNotFoundError:
         return _default_state()
+    except OSError as exc:
+        raise TrainingStateError("Could not inspect the existing training queue state: " + str(path)) from exc
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:

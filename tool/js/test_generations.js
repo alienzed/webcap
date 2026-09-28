@@ -404,13 +404,35 @@
 
   function wildcardDirectorActivityForCurrentJob(activity, queue) {
     var jobId = String(wildcardDirector.jobId || '');
-    if (!jobId || !queue || !Array.isArray(queue.jobs)) return activity;
-    var job = queue.jobs.find(function (candidate) {
+    if (!jobId) {
+      return {
+        active: wildcardDirector.busy,
+        phase: wildcardDirector.busy ? 'preparing' : 'complete',
+        startedAt: wildcardDirector.activityStartedAt,
+        jobId: '',
+        jobStatus: ''
+      };
+    }
+
+    var activityJobId = String(activity && activity.jobId || '');
+    var matchingActivity = !activityJobId || activityJobId === jobId ? activity : null;
+    var jobs = queue && Array.isArray(queue.jobs) ? queue.jobs : [];
+    var job = jobs.find(function (candidate) {
       return String(candidate.jobId || '') === jobId;
     });
-    if (!job) return Object.assign({}, activity || {}, { jobId: jobId });
+
+    if (!job) {
+      return Object.assign({}, matchingActivity || {}, {
+        active: wildcardDirector.busy,
+        phase: matchingActivity && matchingActivity.phase ? matchingActivity.phase : 'preparing',
+        startedAt: matchingActivity && matchingActivity.startedAt ? matchingActivity.startedAt : wildcardDirector.activityStartedAt,
+        jobId: jobId,
+        jobStatus: ''
+      });
+    }
+
     if (String(job.status || '') === 'queued' && String(queue.activeJobId || '') !== jobId) {
-      return Object.assign({}, activity || {}, {
+      return {
         active: true,
         phase: 'queued',
         model: job.modelId || '',
@@ -418,9 +440,13 @@
         startedAt: job.createdAt,
         jobId: jobId,
         jobStatus: 'queued'
-      });
+      };
     }
-    return Object.assign({}, activity || {}, {
+
+    return Object.assign({}, matchingActivity || {}, {
+      active: true,
+      phase: matchingActivity && matchingActivity.phase ? matchingActivity.phase : 'preparing',
+      startedAt: matchingActivity && matchingActivity.startedAt ? matchingActivity.startedAt : (job.startedAt || job.createdAt),
       jobId: jobId,
       jobStatus: String(job.status || '')
     });
@@ -508,18 +534,10 @@
   function finishWildcardDirectorActivity() {
     if (wildcardDirector.activityTimer) clearTimeout(wildcardDirector.activityTimer);
     wildcardDirector.activityTimer = 0;
-    wildcardRequestJson('/fs/director/activity').then(function (activity) {
-      renderWildcardDirectorActivity(
-        wildcardDirectorActivityForCurrentJob(activity, activity && activity.queue),
-        null
-      );
-    }).catch(function () {
-      renderWildcardDirectorActivity({ phase: 'complete', active: false }, null);
-    }).then(function () {
-      setTimeout(function () {
-        if (!wildcardDirector.busy) el('test-generations-director-activity').classList.add('hidden');
-      }, 800);
-    });
+    renderWildcardDirectorActivity({ phase: 'complete', active: false, jobId: '', jobStatus: 'completed' }, null);
+    setTimeout(function () {
+      if (!wildcardDirector.busy) el('test-generations-director-activity').classList.add('hidden');
+    }, 800);
   }
 
   function stopWildcardDirectorJob() {

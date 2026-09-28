@@ -26,7 +26,7 @@ def _get_rembg_session():
             from rembg import new_session
         except ImportError as exc:
             raise RuntimeError(
-                "Background removal is unavailable because rembg is not installed. "
+                "Background removal is unavailable because rembg or one of its runtime dependencies is not installed. "
                 "Use Settings > Advanced > Install / Repair Python Requirements."
             ) from exc
 

@@ -99,7 +99,7 @@
   function activityTitle(item) {
     var kind = kindLabel(item);
     if (item.kind === 'director') {
-      var client = item.client === 'generate' ? 'Generate' : item.client === 'storyboard' ? 'Storyboard' : item.client === 'test' ? 'Test' : '';
+      var client = item.client === 'generate' ? 'Generate' : item.client === 'storyboard' ? 'Storyboard' : item.client === 'test' ? 'Test' : item.client === 'chat' ? 'Chat' : '';
       return client ? kind + ' · ' + client : kind;
     }
     return item.label ? kind + ' · ' + String(item.label) : kind;
@@ -184,6 +184,8 @@
         window.openGenerateActivity(target);
       } else if (item.client === 'test' && typeof window.openTestBenchActivity === 'function') {
         window.openTestBenchActivity(target);
+      } else if (item.client === 'chat' && typeof window.openDirectorChatActivity === 'function') {
+        window.openDirectorChatActivity(target);
       } else if (typeof window.openStoryboardActivity === 'function') {
         window.openStoryboardActivity(target);
       }
@@ -433,7 +435,8 @@
         training: 'activity-training-btn',
         test: 'activity-test-btn',
         storyboard: 'activity-storyboard-btn',
-        storage: 'activity-storage-btn'
+        storage: 'activity-storage-btn',
+        chat: 'director-chat-rail-btn'
       }[kind];
       if (id) activeIds[id] = true;
     });
@@ -443,7 +446,8 @@
       'activity-training-btn',
       'activity-test-btn',
       'activity-storyboard-btn',
-      'activity-storage-btn'
+      'activity-storage-btn',
+      'director-chat-rail-btn'
     ].forEach(function (id) {
       var button = el(id);
       if (button) button.classList.toggle('has-active-work', !!activeIds[id]);

@@ -50,8 +50,12 @@ def _default_lane():
 
 def _read_state():
     path = _state_path()
-    if not path.is_file():
+    try:
+        path.stat()
+    except FileNotFoundError:
         return _default_state()
+    except OSError as exc:
+        raise ExecutionQueueStateError("Execution queue state cannot be inspected: " + str(exc)) from exc
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:

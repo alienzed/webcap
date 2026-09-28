@@ -889,3 +889,31 @@ def test_director_chat_uses_shared_transient_llm_job_lifecycle():
     assert 'client not in {"storyboard", "generate", "test", "chat"}' in runner
     assert 'if client == "chat":' in runner
 
+def test_settings_uses_six_task_owned_tabs_and_progressive_disclosure():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
+
+    for tab in ["general", "models", "training", "testing", "director", "system"]:
+        assert f'data-app-settings-tab="{tab}"' in html
+        assert f'data-app-settings-panel="{tab}"' in html
+
+    assert 'data-app-settings-tab="workspace"' not in html
+    assert 'data-app-settings-tab="advanced"' not in html
+    assert 'data-app-settings-tab="storyboard"' not in html
+    assert "['general', 'models', 'training', 'testing', 'director', 'system']" in settings
+
+    assert "<summary>Captioning</summary>" in html
+    assert "<summary>Python / Environment</summary>" in html
+    assert "<summary>Hardware Calibration</summary>" in html
+    assert "<summary>Troubleshooting</summary>" in html
+    assert "<summary>Candidate Copy Destinations</summary>" in html
+    assert "<summary>Optional Features</summary>" in html
+    assert "<summary>Diagnostics</summary>" in html
+    assert "<summary>Raw Configuration</summary>" in html
+    assert "<summary>Danger Zone</summary>" in html
+
+    assert 'id="app-settings-director-local"' in html
+    assert 'id="app-settings-director-remote"' in html
+    assert "function syncAppSettingsDirectorModeVisibility()" in settings
+    assert "details.open = !core.ready;" in settings
+

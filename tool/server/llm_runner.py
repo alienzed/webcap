@@ -688,10 +688,10 @@ def action(operation, job_id="", direction="", position=None):
             return {"job": _job_view(execution_cancel_pending_transient(job_id))}
         if status not in {"starting", "running", "stopping"}:
             raise ValueError("Only queued or active LLM jobs can be stopped.")
-        from .storyboard_llm_runtime import assert_hard_stop_supported, stop_owned_server
-        assert_hard_stop_supported()
+        from .storyboard_llm_runtime import assert_stop_supported, stop_active_request
+        assert_stop_supported()
         stopping = current if status == "stopping" else execution_request_stop(job_id)
-        stop_owned_server()
+        stop_active_request()
         # The worker may finish and remove the durable job while hard-stop is
         # synchronously shutting llama.cpp down. Return the stopping snapshot
         # captured before that race instead of re-reading a job that may already

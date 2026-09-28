@@ -34,7 +34,13 @@
     busy: false,
     jobId: '',
     requestFolder: '',
-    analysis: null
+    analysis: null,
+    activityStartedAt: 0,
+    activityTimer: 0,
+    activityHistory: [],
+    activityLastMemory: null,
+    activityLoadBaseline: null,
+    activityLoadModelId: ''
   };
 
   function el(id) { return document.getElementById(id); }
@@ -244,6 +250,296 @@
     });
   }
 
+  function wildcardDirectorPhaseLabel(phase) {
+    var labels = {
+      queued: 'Queued…',
+      preparing: 'Preparing…',
+      freeing_comfy: 'Preparing GPU…',
+      loading_model: 'Loading model…',
+      generating: 'Generating response…',
+      complete: 'Complete',
+      stopped: 'Stopped',
+      error: 'Failed'
+    };
+    return labels[String(phase || '')] || 'Working…';
+  }
+
+  function wildcardDirectorMemoryGiB(mib) {
+    var value = Number(mib);
+    return isFinite(value) && value >= 0 ? (value / 1024).toFixed(1) + ' GiB' : '';
+  }
+
+  function wildcardDirectorBytesGiB(bytes) {
+    var value = Number(bytes);
+    return isFinite(value) && value >= 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
+  }
+
+  function wildcardDirectorMemorySample(system) {
+    var gpu = system && system.gpu;
+    var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
+    var ram = system && system.ram;
+    var ramBytes = ram && ram.available ? Number(ram.used) : NaN;
+    var vramMiB = primary ? Number(primary.memoryUsed) : NaN;
+    if (!isFinite(ramBytes) || !isFinite(vramMiB)) return null;
+    return {
+      ramBytes: ramBytes,
+      vramBytes: vramMiB * 1024 * 1024
+    };
+  }
+
+  function updateWildcardDirectorModelLoad(activity, system) {
+    var meter = el('test-generations-director-model-load');
+    var label = el('test-generations-director-model-load-label');
+    var fill = el('test-generations-director-model-load-fill');
+    if (!meter || !label || !fill) throw new Error('Test Generations Director model-load markup is missing.');
+
+    var phase = String(activity && activity.phase || '');
+    var sample = wildcardDirectorMemorySample(system);
+    if (phase !== 'loading_model') {
+      meter.classList.add('hidden');
+      if (sample) wildcardDirector.activityLastMemory = sample;
+      if (phase === 'preparing' || phase === 'queued' || phase === 'freeing_comfy') {
+        wildcardDirector.activityLoadBaseline = null;
+        wildcardDirector.activityLoadModelId = '';
+      }
+      return;
+    }
+
+    var modelId = String(activity && activity.model || '');
+    if (wildcardDirector.activityLoadModelId !== modelId) {
+      wildcardDirector.activityLoadModelId = modelId;
+      wildcardDirector.activityLoadBaseline = wildcardDirector.activityLastMemory || sample;
+    } else if (!wildcardDirector.activityLoadBaseline && sample) {
+      wildcardDirector.activityLoadBaseline = wildcardDirector.activityLastMemory || sample;
+    }
+
+    var track = meter.querySelector('.director-model-load-track');
+    var modelSizeBytes = Number(activity && activity.modelSizeBytes);
+    var baseline = wildcardDirector.activityLoadBaseline;
+    meter.classList.remove('hidden');
+
+    if (!sample || !baseline) {
+      label.textContent = 'Waiting for memory sample…';
+      fill.style.width = '0%';
+      if (track) track.removeAttribute('aria-valuenow');
+      meter.title = 'Waiting for a RAM / VRAM sample before estimating Director model residency.';
+      return;
+    }
+    if (!isFinite(modelSizeBytes) || modelSizeBytes <= 0) {
+      label.textContent = 'Model size unavailable';
+      fill.style.width = '0%';
+      if (track) track.removeAttribute('aria-valuenow');
+      meter.title = 'llama.cpp did not expose a usable size for the selected model.';
+      return;
+    }
+
+    var residentBytes = Math.max(
+      0,
+      Math.max(0, sample.ramBytes - baseline.ramBytes) + Math.max(0, sample.vramBytes - baseline.vramBytes)
+    );
+    var displayBytes = Math.min(modelSizeBytes, residentBytes);
+    var percent = Math.max(0, Math.min(100, residentBytes / modelSizeBytes * 100));
+    label.textContent = '≈ ' + wildcardDirectorBytesGiB(displayBytes) + ' / ' + wildcardDirectorBytesGiB(modelSizeBytes) + ' · ~' + Math.round(percent) + '%';
+    fill.style.width = percent.toFixed(1) + '%';
+    if (track) track.setAttribute('aria-valuenow', String(Math.round(percent)));
+    meter.title = 'Approximate model residency from RAM + VRAM growth since loading began.';
+  }
+
+  function wildcardDirectorTrendPath(history, key) {
+    var path = '';
+    var cutoff = Date.now() - 60000;
+    history.forEach(function (sample) {
+      var value = sample[key];
+      if (!isFinite(value)) return;
+      var x = Math.max(0, Math.min(120, (sample.time - cutoff) / 60000 * 120));
+      var y = 28 - Math.max(0, Math.min(100, value)) * 0.26;
+      path += (path ? ' L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+    });
+    return path;
+  }
+
+  function updateWildcardDirectorTrend(system) {
+    var graph = el('test-generations-director-activity-trend');
+    if (!graph) throw new Error('Test Generations Director system history markup is missing.');
+    var gpu = system && system.gpu;
+    var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
+    var ram = system && system.ram;
+    var vramPercent = primary ? Number(primary.memoryUsed) / Number(primary.memoryTotal) * 100 : NaN;
+    var ramPercent = ram && ram.available ? Number(ram.used) / Number(ram.total) * 100 : NaN;
+    var gpuPercent = primary ? Number(primary.utilization) : NaN;
+    var gpuTemperature = primary ? Number(primary.temperature) : NaN;
+
+    if (isFinite(vramPercent) || isFinite(ramPercent) || isFinite(gpuPercent) || isFinite(gpuTemperature)) {
+      wildcardDirector.activityHistory.push({
+        time: Date.now(),
+        ram: ramPercent,
+        vram: vramPercent,
+        gpu: gpuPercent,
+        thermal: gpuTemperature
+      });
+      if (wildcardDirector.activityHistory.length > 40) wildcardDirector.activityHistory.shift();
+    }
+    var cutoff = Date.now() - 60000;
+    while (wildcardDirector.activityHistory.length && wildcardDirector.activityHistory[0].time < cutoff) {
+      wildcardDirector.activityHistory.shift();
+    }
+    var history = wildcardDirector.activityHistory;
+    graph.querySelector('.director-activity-trend-ram-line').setAttribute('d', wildcardDirectorTrendPath(history, 'ram'));
+    graph.querySelector('.director-activity-trend-vram-line').setAttribute('d', wildcardDirectorTrendPath(history, 'vram'));
+    graph.querySelector('.director-activity-trend-gpu-line').setAttribute('d', wildcardDirectorTrendPath(history, 'gpu'));
+    graph.querySelector('.director-activity-trend-thermal-line').setAttribute('d', wildcardDirectorTrendPath(history, 'thermal'));
+
+    var latest = history[history.length - 1];
+    var parts = [];
+    if (latest) {
+      if (isFinite(latest.ram)) parts.push('RAM ' + Math.round(latest.ram) + '%');
+      if (isFinite(latest.vram)) parts.push('VRAM ' + Math.round(latest.vram) + '%');
+      if (isFinite(latest.gpu)) parts.push('GPU ' + Math.round(latest.gpu) + '%');
+      if (isFinite(latest.thermal)) parts.push('GPU temperature ' + Math.round(latest.thermal) + '°C');
+    }
+    graph.setAttribute('aria-label', parts.length
+      ? 'System history for the last minute. Latest: ' + parts.join(', ') + '.'
+      : 'System history, waiting for samples');
+  }
+
+  function wildcardDirectorActivityForCurrentJob(activity, queue) {
+    var jobId = String(wildcardDirector.jobId || '');
+    if (!jobId || !queue || !Array.isArray(queue.jobs)) return activity;
+    var job = queue.jobs.find(function (candidate) {
+      return String(candidate.jobId || '') === jobId;
+    });
+    if (!job) return Object.assign({}, activity || {}, { jobId: jobId });
+    if (String(job.status || '') === 'queued' && String(queue.activeJobId || '') !== jobId) {
+      return Object.assign({}, activity || {}, {
+        active: true,
+        phase: 'queued',
+        model: job.modelId || '',
+        operation: job.operation || '',
+        startedAt: job.createdAt,
+        jobId: jobId,
+        jobStatus: 'queued'
+      });
+    }
+    return Object.assign({}, activity || {}, {
+      jobId: jobId,
+      jobStatus: String(job.status || '')
+    });
+  }
+
+  function renderWildcardDirectorActivity(activity, system) {
+    var card = el('test-generations-director-activity');
+    var phase = el('test-generations-director-activity-phase');
+    var detail = el('test-generations-director-activity-detail');
+    var stop = el('test-generations-director-stop');
+    if (!card || !phase || !detail || !stop) throw new Error('Test Generations Director activity markup is missing.');
+
+    var phaseName = String(activity && activity.phase || '');
+    var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
+    var visible = wildcardDirector.busy || (activity && activity.active) || terminal;
+    card.classList.toggle('hidden', !visible);
+
+    var jobId = String(activity && activity.jobId || wildcardDirector.jobId || '');
+    var jobStatus = String(activity && activity.jobStatus || '');
+    var canStop = !!jobId && ['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(jobStatus) === -1;
+    stop.classList.toggle('hidden', !canStop);
+    stop.disabled = jobStatus === 'stopping';
+    stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
+    if (!visible) return;
+
+    updateWildcardDirectorTrend(system);
+    updateWildcardDirectorModelLoad(activity, system);
+    phase.textContent = wildcardDirectorPhaseLabel(activity && activity.phase);
+
+    var parts = [];
+    var startedAt = Number(activity && activity.startedAt) || wildcardDirector.activityStartedAt;
+    if (startedAt) parts.push(String(Math.max(0, Math.round(Date.now() / 1000 - startedAt))) + 's elapsed');
+
+    var gpu = system && system.gpu;
+    var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
+    if (primary) {
+      var utilization = Number(primary.utilization);
+      if (isFinite(utilization)) parts.push('GPU ' + Math.round(utilization) + '%');
+      var memoryUsed = Number(primary.memoryUsed);
+      var memoryTotal = Number(primary.memoryTotal);
+      if (isFinite(memoryTotal) && memoryTotal > 0) {
+        parts.push('VRAM ' + Math.round(memoryUsed / memoryTotal * 100) + '%');
+      }
+    }
+    var ram = system && system.ram;
+    if (ram && ram.available) {
+      var ramUsed = Number(ram.used);
+      var ramTotal = Number(ram.total);
+      if (isFinite(ramTotal) && ramTotal > 0) parts.push('RAM ' + Math.round(ramUsed / ramTotal * 100) + '%');
+    }
+    detail.textContent = parts.join(' · ');
+  }
+
+  function refreshWildcardDirectorActivity() {
+    if (!wildcardDirector.busy) return Promise.resolve();
+    return Promise.all([
+      wildcardRequestJson('/fs/director/activity'),
+      wildcardRequestJson('/fs/system_status').catch(function () { return null; })
+    ]).then(function (values) {
+      observeTransientLlmActivity(values[0]);
+      renderWildcardDirectorActivity(
+        wildcardDirectorActivityForCurrentJob(values[0], values[0] && values[0].queue),
+        values[1]
+      );
+    }).catch(function () {
+      renderWildcardDirectorActivity({ phase: 'preparing', active: true }, null);
+    }).then(function () {
+      if (!wildcardDirector.busy) return;
+      if (wildcardDirector.activityTimer) clearTimeout(wildcardDirector.activityTimer);
+      wildcardDirector.activityTimer = setTimeout(refreshWildcardDirectorActivity, 1500);
+    });
+  }
+
+  function startWildcardDirectorActivity() {
+    wildcardDirector.activityStartedAt = Date.now() / 1000;
+    wildcardDirector.activityHistory = [];
+    renderWildcardDirectorActivity({
+      phase: 'preparing',
+      active: true,
+      startedAt: wildcardDirector.activityStartedAt
+    }, null);
+    refreshWildcardDirectorActivity();
+  }
+
+  function finishWildcardDirectorActivity() {
+    if (wildcardDirector.activityTimer) clearTimeout(wildcardDirector.activityTimer);
+    wildcardDirector.activityTimer = 0;
+    wildcardRequestJson('/fs/director/activity').then(function (activity) {
+      renderWildcardDirectorActivity(
+        wildcardDirectorActivityForCurrentJob(activity, activity && activity.queue),
+        null
+      );
+    }).catch(function () {
+      renderWildcardDirectorActivity({ phase: 'complete', active: false }, null);
+    }).then(function () {
+      setTimeout(function () {
+        if (!wildcardDirector.busy) el('test-generations-director-activity').classList.add('hidden');
+      }, 800);
+    });
+  }
+
+  function stopWildcardDirectorJob() {
+    var button = el('test-generations-director-stop');
+    var jobId = String(wildcardDirector.jobId || '');
+    if (!button || !jobId || button.disabled) return;
+    button.disabled = true;
+    button.textContent = 'Stopping…';
+    wildcardPostJson('/fs/director/job', {
+      operation: 'stop_or_cancel',
+      jobId: jobId
+    }).then(function () {
+      return refreshWildcardDirectorActivity();
+    }).catch(function (err) {
+      button.disabled = false;
+      button.textContent = 'Stop';
+      showError(err);
+    });
+  }
+
   function waitForWildcardJob(job) {
     if (!job || !job.jobId) throw new Error('Wildcard analysis did not return a queued job.');
     trackTransientLlmJob(job);
@@ -280,6 +576,7 @@
     el('test-generations-wildcard-status').textContent = 'Analyzing Set captions…';
     renderWildcardAnalysis(null);
     renderWildcardDirector();
+    startWildcardDirectorActivity();
 
     return wildcardPostJson('/fs/test_generations/wildcard', {
       folder: requestFolder,
@@ -313,6 +610,7 @@
       wildcardDirector.jobId = '';
       wildcardDirector.requestFolder = '';
       renderWildcardDirector();
+      finishWildcardDirectorActivity();
     });
   }
 
@@ -2743,6 +3041,7 @@
       setDirectorModelPreference('webcap.testGenerations.directorModel', this.value);
       renderWildcardDirector();
     });
+    el('test-generations-director-stop').onclick = stopWildcardDirectorJob;
     el('test-generations-wildcard-use-btn').onclick = function () {
       try { useGeneratedWildcard(); } catch (err) { showError(err); }
     };

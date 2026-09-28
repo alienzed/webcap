@@ -81,6 +81,8 @@
       else if (job.candidateFile) parts.push(String(job.candidateFile));
     }
     if (job.modelId) parts.push(String(job.modelId).replace(/_/g, ' '));
+    var progress = formatInferenceProgress(job.progress);
+    if (progress) parts.push(progress);
     if (job.providerStatus) parts.push('Provider ' + String(job.providerStatus).replace(/_/g, ' '));
     return parts.join(' · ');
   }

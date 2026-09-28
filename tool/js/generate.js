@@ -729,14 +729,7 @@
   }
 
   function generationPreviewStatus(job) {
-    var status = String(job && job.status || '');
-    var queuePosition = Number(job && job.queuePosition || 0);
-    if (status === 'backlog') return 'Backlog';
-    if (status === 'queued') return 'Queued' + (queuePosition ? ' · #' + queuePosition : '');
-    var elapsed = generationElapsed(job);
-    if (status === 'starting') return 'Starting…' + (elapsed ? ' · ' + elapsed : '');
-    if (status === 'stopping') return 'Stopping…' + (elapsed ? ' · ' + elapsed : '');
-    return 'Generating…' + (elapsed ? ' · ' + elapsed : '');
+    return formatInferenceJobStatus(job);
   }
 
   function generationPreviewCard(jobId) {

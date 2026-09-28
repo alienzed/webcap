@@ -1183,10 +1183,12 @@
   function liveStatusDetails(status) {
     if (!status || (status.status !== 'running' && status.status !== 'stopping')) return '';
     var parts = [];
+    var progress = formatInferenceProgress(status.progress);
     var comfyStatus = String(status.comfyStatus || '').trim();
     var jobId = String(status.comfyJobId || '').trim();
     var startedAt = Number(status.candidateStartedAt || status.startedAt || 0);
     var lastContactAt = Number(status.comfyLastContactAt || 0);
+    if (progress) parts.push(progress);
     if (comfyStatus) parts.push('Comfy ' + comfyStatus);
     if (jobId) parts.push('Job ' + jobId.slice(0, 8));
     if (startedAt) parts.push('elapsed ' + formatElapsedMs(Date.now() - startedAt));

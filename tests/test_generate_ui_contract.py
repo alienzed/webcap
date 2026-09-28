@@ -326,11 +326,12 @@ def test_generate_redesign_does_not_keep_dead_pre_redesign_layout_css():
 
 def test_generate_displays_live_and_persisted_generation_elapsed_time():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
     store = (ROOT / "tool" / "server" / "generate_store.py").read_text(encoding="utf-8")
 
-    assert "function formatGenerationElapsedMs(value)" in script
-    assert "var startedAt = Number(job && job.startedAt || 0);" in script
-    assert "formatGenerationElapsedMs(Date.now() - (startedAt * 1000))" in script
+    assert "return formatInferenceJobStatus(job);" in script
+    assert "function formatInferenceJobStatus(job)" in common
+    assert "formatInferenceElapsedMs(Date.now() - (startedAt * 1000))" in common
     assert "formatGenerationElapsedMs(result && result.elapsedMs)" in script
     assert '"elapsedMs": int(elapsed_ms or 0)' in store
 

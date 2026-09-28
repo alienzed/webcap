@@ -2973,17 +2973,12 @@
   }
 
   function generationJobStatusText(job) {
-    var status = String(job && job.status || '');
-    var queuePosition = Number(job && job.queuePosition || 0);
-    if (status === 'backlog') return 'Backlog';
-    if (status === 'queued') return 'Queued' + (queuePosition ? ' · #' + queuePosition : '');
-    var startedAt = Number(job && job.startedAt || 0);
-    var elapsed = startedAt ? formatGenerationElapsedMs(Date.now() - (startedAt * 1000)) : '';
-    if (status === 'starting') return 'Starting…' + (elapsed ? ' · ' + elapsed : '');
-    if (status === 'stopping') return 'Stopping…' + (elapsed ? ' · ' + elapsed : '');
-    return 'Generating…' +
-      (job && job.comfyStatus ? ' · ' + String(job.comfyStatus).replace(/_/g, ' ') : '') +
-      (elapsed ? ' · ' + elapsed : '');
+    return formatInferenceJobStatus({
+      status: job && job.status,
+      queuePosition: job && job.queuePosition,
+      startedAt: job && job.startedAt,
+      progress: job && job.progress
+    });
   }
 
   function takeMetaLabel(take) {
@@ -4177,6 +4172,7 @@
       queuePosition: Number(job.queuePosition || 0),
       comfyJobId: String(job.providerJobId || ''),
       comfyStatus: String(job.providerStatus || ''),
+      progress: job.progress && typeof job.progress === 'object' ? job.progress : {},
       takeId: job.result && job.result.takeId,
       requestedAction: String(job.requestedAction || ''),
       error: String(job.error || '')
@@ -4194,6 +4190,7 @@
       var changed = !previousJob ||
         String(previousJob.status || '') !== String(job.status || '') ||
         String(previousJob.comfyStatus || '') !== String(job.comfyStatus || '') ||
+        JSON.stringify(previousJob.progress || {}) !== JSON.stringify(job.progress || {}) ||
         Number(previousJob.queuePosition || 0) !== Number(job.queuePosition || 0);
       storyState.generationJobs[job.jobId] = job;
       reportGenerationStatus(job.sceneId, job, previousJob);

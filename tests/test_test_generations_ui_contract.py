@@ -374,6 +374,7 @@ def test_live_test_status_surfaces_comfy_job_progress_and_errors_to_console():
 
     assert "function formatElapsedMs(milliseconds)" in script
     assert "function liveStatusDetails(status)" in script
+    assert "formatInferenceProgress(status.progress)" in script
     assert "Comfy ' + comfyStatus" in script
     assert "Job ' + jobId.slice(0, 8)" in script
     assert "candidateStartedAt || status.startedAt" in script

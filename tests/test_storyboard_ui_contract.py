@@ -1166,7 +1166,8 @@ def test_storyboard_takes_display_live_and_persisted_generation_elapsed_time():
 
     assert "function formatGenerationElapsedMs(value)" in storyboard
     assert "function generationJobStatusText(job)" in storyboard
-    assert "var startedAt = Number(job && job.startedAt || 0);" in storyboard
+    assert "return formatInferenceJobStatus({" in storyboard
+    assert "progress: job && job.progress" in storyboard
     assert "formatGenerationElapsedMs(take && take.elapsedMs)" in storyboard
     assert "elapsed_ms = int((time.monotonic() - started) * 1000)" in generation
     assert '"elapsedMs": elapsed_ms' in generation

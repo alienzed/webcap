@@ -75,6 +75,61 @@ function setDirectorModelPreference(storageKey, modelId) {
 window.getDirectorModelPreference = getDirectorModelPreference;
 window.setDirectorModelPreference = setDirectorModelPreference;
 
+function formatInferenceElapsedMs(milliseconds) {
+  var ms = Number(milliseconds);
+  if (!isFinite(ms) || ms < 0) return '';
+  var seconds = Math.floor(ms / 1000);
+  var hours = Math.floor(seconds / 3600);
+  var minutes = Math.floor((seconds % 3600) / 60);
+  seconds %= 60;
+  if (hours) return hours + 'h ' + minutes + 'm';
+  if (minutes) return minutes + 'm ' + String(seconds).padStart(2, '0') + 's';
+  return seconds + 's';
+}
+
+function formatInferenceProgress(progress) {
+  progress = progress && typeof progress === 'object' ? progress : {};
+  var parts = [];
+  var step = Number(progress.step);
+  var steps = Number(progress.steps);
+  var percent = Number(progress.percent);
+  if (isFinite(step) && isFinite(steps) && step >= 0 && steps > 0) {
+    parts.push(String(Math.round(step)) + ' / ' + String(Math.round(steps)) + ' steps');
+  }
+  if (isFinite(percent) && percent >= 0 && percent <= 100) {
+    parts.push(String(Math.round(percent)) + '%');
+  }
+  return parts.join(' · ');
+}
+
+function formatInferenceJobStatus(job) {
+  job = job || {};
+  var status = String(job.status || '');
+  var queuePosition = Number(job.queuePosition || 0);
+  if (status === 'backlog') return 'Backlog';
+  if (status === 'queued') return 'Queued' + (queuePosition ? ' · #' + queuePosition : '');
+
+  var parts = [];
+  if (status === 'starting') parts.push('Starting…');
+  else if (status === 'stopping') parts.push('Stopping…');
+  else if (status === 'running') parts.push('Generating…');
+  else parts.push(status ? status.replace(/_/g, ' ') : 'Generating…');
+
+  var progress = formatInferenceProgress(job.progress);
+  if (progress) parts.push(progress);
+
+  var startedAt = Number(job.startedAt || 0);
+  if (startedAt > 0) {
+    var elapsed = formatInferenceElapsedMs(Date.now() - (startedAt * 1000));
+    if (elapsed) parts.push(elapsed);
+  }
+  return parts.join(' · ');
+}
+
+window.formatInferenceElapsedMs = formatInferenceElapsedMs;
+window.formatInferenceProgress = formatInferenceProgress;
+window.formatInferenceJobStatus = formatInferenceJobStatus;
+
 // Ephemeral LLM timing instrumentation. Browser-memory only by design:
 // no localStorage, Story state, queue metadata, or history persistence.
 var transientLlmTimingJobs = {};

@@ -1,6 +1,6 @@
 # Prompt Assistant / Director Activity Plan
 
-**Status:** implemented and audited on `ux/prompt-assistant-activity` / PR #67.
+**Status:** historical implementation plan for retained-model and screen-local activity work. Those parts remain implemented, but the synchronous request transport described below was later superseded by the durable shared `llm` execution lane; see `docs/execution_queue.md` for current scheduling behavior.
 
 ## Goal
 
@@ -16,7 +16,7 @@ Make local LLM assistance feel responsive and predictable without adding a secon
 6. If retained-model eviction fails, the competing GPU workload must not launch.
 7. Remote OpenAI-compatible Director mode never attempts local model eviction.
 8. Progress is factual phase information, elapsed time, and existing GPU/RAM telemetry. No fake percentage and no claim to expose model thoughts.
-9. The existing synchronous request/response contract remains in place for this pass; no new queue, websocket layer, or token streaming.
+9. At the time of this pass, the existing synchronous request/response contract remained in place. This was later superseded by the durable shared `llm` lane; no websocket or token-streaming layer was introduced.
 10. Operational failures continue to reach the global Console; local activity UI is additive context.
 11. Generate and Storyboard share one selected Director / Prompt Assistant model preference; feature labels differ, ownership does not.
 12. Model selection never causes speculative loading. The first real LLM task loads on demand, and successful follow-up work reuses the retained model.
@@ -90,7 +90,7 @@ Prefer removing complexity over expanding this design.
 - The activity lifecycle is serialized with the same re-entrant request lock as the LLM request itself, so a waiting second request cannot overwrite the visible phase of the request currently running.
 - Generate uses Prompt Assistant terminology while Storyboard retains Director terminology.
 - Both screens use a feature-owned, non-modal activity card with truthful lifecycle phase and elapsed time. GPU/VRAM/RAM telemetry is supplemental and best-effort; telemetry failure does not replace the authoritative LLM phase.
-- The existing synchronous request/response architecture remains intact. No additional queue, service layer, event bus, websocket protocol, or token-streaming path was introduced.
+- This pass originally left synchronous request/response intact. Subsequent work replaced that transport with the app-owned durable `llm` execution lane so browser clients enqueue and poll Director / Prompt Assistant jobs. No event bus, websocket protocol, or token-streaming path was introduced.
 - Existing global Console error reporting remains unchanged.
 
 ### Hostile findings corrected during audit

@@ -792,6 +792,33 @@ def shelve_queued(lane_name):
         return changed
 
 
+def promote_all_backlog(lane_name):
+    """Move every backlogged job to the end of the runnable queue, preserving FIFO order."""
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name)
+        jobs = lane["jobs"]
+        backlog = [job for job in jobs if job.get("status") == "backlog"]
+        if not backlog:
+            return []
+
+        remaining = [job for job in jobs if job.get("status") != "backlog"]
+        insert_at = 0
+        for index, item in enumerate(remaining):
+            if item.get("status") in ACTIVE_STATUSES or item.get("status") == "queued":
+                insert_at = index + 1
+
+        for job in backlog:
+            job["status"] = "queued"
+            job["updatedAt"] = now
+
+        lane["jobs"] = remaining[:insert_at] + backlog + remaining[insert_at:]
+        _refresh_positions(lane)
+        _write_state(state)
+        return [_public_job(job) for job in backlog]
+
+
 def promote_backlog(job_id):
     """Move one backlogged job to the end of the runnable queue."""
     now = time.time()

@@ -1442,6 +1442,39 @@ def test_deferred_storyboard_and_test_jobs_enter_backlog_without_starting_worker
 
 
 
+def test_inference_add_all_to_queue_promotes_backlog_and_starts_worker_once(inference_root, monkeypatch):
+    first = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    second = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "test", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    started = []
+    monkeypatch.setattr(
+        inference_runner,
+        "_start_worker_for_requested_inference",
+        lambda: started.append(True),
+    )
+
+    result = inference_runner.action("add_all_to_queue")
+
+    assert result["promoted"] == 2
+    assert started == [True]
+    jobs = execution_queue.lane_snapshot(
+        inference_runner.EXECUTION_LANE,
+        include_terminal=False,
+    )["jobs"]
+    assert [job["id"] for job in jobs] == [first["id"], second["id"]]
+    assert [job["status"] for job in jobs] == ["queued", "queued"]
+    assert [job["queuePosition"] for job in jobs] == [1, 2]
+
+
 def test_inference_move_all_to_backlog_preserves_pending_work(inference_root, monkeypatch):
     first = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,

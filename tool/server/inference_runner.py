@@ -16,6 +16,7 @@ from .execution_queue import (
     lane_snapshot as execution_lane_snapshot,
     mark_running as execution_mark_running,
     pause_lane as execution_pause_lane,
+    promote_all_backlog as execution_promote_all_backlog,
     promote_backlog as execution_promote_backlog,
     shelve_queued as execution_shelve_queued,
     shelve_unfinished as execution_shelve_unfinished,
@@ -877,6 +878,11 @@ def action(operation, job_id="", direction="", position=None):
         promoted = execution_promote_backlog(job_id)
         _start_worker_for_requested_inference()
         return {"job": _job_view(promoted), "queue": snapshot()}
+    if operation == "add_all_to_queue":
+        promoted = execution_promote_all_backlog(EXECUTION_LANE)
+        if promoted:
+            _start_worker_for_requested_inference()
+        return {"queue": snapshot(), "promoted": len(promoted)}
     if operation == "move_all_to_backlog":
         moved = execution_shelve_queued(EXECUTION_LANE)
         return {"queue": snapshot(), "moved": len(moved)}

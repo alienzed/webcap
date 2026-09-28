@@ -210,7 +210,6 @@ def persist_result(job_id, request, output_ref, media_bytes, provider_job_id, el
             "seed": (request.get("settings") or {}).get("seed"),
             "loras": request.get("loras") if isinstance(request.get("loras"), list) else [],
             "references": persisted_references,
-            "wildcardsEnabled": bool(request.get("wildcardsEnabled")),
             "workflowFile": str(request.get("workflowFile") or ""),
             "providerJobId": str(provider_job_id or ""),
             "elapsedMs": int(elapsed_ms or 0),

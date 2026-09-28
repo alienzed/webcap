@@ -11,6 +11,12 @@ from . import config as app_config
 
 
 STATE_VERSION = 1
+
+
+class ExecutionQueueStateError(RuntimeError):
+    pass
+
+
 QUEUE_STATUSES = {"queued"}
 BACKLOG_STATUSES = {"backlog"}
 PENDING_STATUSES = QUEUE_STATUSES | BACKLOG_STATUSES
@@ -49,11 +55,11 @@ def _read_state():
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Execution queue state is unreadable: " + str(exc)) from exc
+        raise ExecutionQueueStateError("Execution queue state is unreadable: " + str(exc)) from exc
     if not isinstance(raw, dict) or raw.get("version") != STATE_VERSION:
-        raise RuntimeError("Execution queue state has an unsupported format.")
+        raise ExecutionQueueStateError("Execution queue state has an unsupported format.")
     if not isinstance(raw.get("lanes"), dict):
-        raise RuntimeError("Execution queue lanes are invalid.")
+        raise ExecutionQueueStateError("Execution queue lanes are invalid.")
     return raw
 
 
@@ -83,17 +89,17 @@ def _lane(state, lane_name, create=True):
         lane = _default_lane()
         lanes[lane_name] = lane
     if not isinstance(lane, dict) or not isinstance(lane.get("jobs"), list):
-        raise RuntimeError("Execution queue lane is invalid: " + lane_name)
+        raise ExecutionQueueStateError("Execution queue lane is invalid: " + lane_name)
     recent = lane.get("recent")
     if recent is None:
         lane["recent"] = []
     elif not isinstance(recent, list):
-        raise RuntimeError("Execution queue lane recent receipts are invalid: " + lane_name)
+        raise ExecutionQueueStateError("Execution queue lane recent receipts are invalid: " + lane_name)
     guards = lane.get("guards")
     if guards is None:
         lane["guards"] = {}
     elif not isinstance(guards, dict):
-        raise RuntimeError("Execution queue lane guards are invalid: " + lane_name)
+        raise ExecutionQueueStateError("Execution queue lane guards are invalid: " + lane_name)
     lane.setdefault("paused", False)
     lane.setdefault("pauseReason", "")
     lane.setdefault("activeJobId", "")

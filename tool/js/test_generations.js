@@ -2944,7 +2944,7 @@
       pendingActivitySession = '';
       var previewReady = requestedSession
         ? request('test_open_session', { session: requestedSession }).then(function (selectedStatus) {
-            renderStatus(selectedStatus);
+            selectSessionStatus(selectedStatus);
           }).catch(function (err) {
             reportConsoleWarning(
               'Test Generations',

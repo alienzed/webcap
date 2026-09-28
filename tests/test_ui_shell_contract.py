@@ -829,3 +829,28 @@ def test_activity_drawer_uses_readable_application_scale_typography():
     assert ".activity-monitor-queue-row strong" in activity
     assert "font-size: 12.5px;" in activity
     assert "font-size: 9px;" not in activity
+
+
+def test_settings_exposes_requirements_repair_without_startup_dependency_manager():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
+    constants = (ROOT / "tool" / "js" / "constants.js").read_text(encoding="utf-8")
+    media = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
+    selection_pose = (ROOT / "tool" / "server" / "selection_pose.py").read_text(encoding="utf-8")
+    inference = (ROOT / "tool" / "server" / "inference_runtime.py").read_text(encoding="utf-8")
+    training_config = (ROOT / "tool" / "server" / "training_config_files.py").read_text(encoding="utf-8")
+
+    assert 'id="app-settings-environment-install-btn"' in html
+    assert "Install / Repair Python Requirements" in html
+    assert "appSettingsEnvironmentInstallBtnEl" in constants
+    assert "function installPythonRequirements()" in settings
+    assert "'/app/environment/install-requirements'" in settings
+    assert "appendRequirementsOutputToConsole" in settings
+    assert "appSettingsEnableMediaPipeAnalysisEl.disabled = !poseReady" in settings
+    assert "appSettingsEnableFaceAnalysisEl.disabled = !faceReady" in settings
+    assert "X-WebCap-Optional-Analysis-Warnings" in media
+    assert "reportedOptionalAnalysisWarnings" in media
+    assert "\nimport mediapipe as mp\n" not in selection_pose
+    assert "\nimport websocket\n" not in inference
+    assert "except ModuleNotFoundError:" in training_config
+    assert "import tomli as tomllib" in training_config

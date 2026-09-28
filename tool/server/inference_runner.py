@@ -525,15 +525,18 @@ def _advance_queue():
             )
             return None
 
-        if str(next_runnable.get("status") or "") == "backlog":
-            try:
-                from . import inference_runtime
-                inference_runtime.system_stats()
-            except Exception:
-                _set_backlog_wait_reason("ComfyUI unavailable.")
-                if execution_resource_owner() == GPU_RESERVATION_OWNER:
-                    _release_gpu()
-                return None
+        # Provider availability is an execution concern, not an admission
+        # concern. Keep both fresh queued work and restored backlog intact while
+        # ComfyUI is unavailable instead of claiming a job only to pause the
+        # whole lane on a routine connection failure.
+        try:
+            from . import inference_runtime
+            inference_runtime.system_stats()
+        except Exception:
+            _set_backlog_wait_reason("ComfyUI unavailable.")
+            if execution_resource_owner() == GPU_RESERVATION_OWNER:
+                _release_gpu()
+            return None
 
         _set_backlog_wait_reason("")
         backlog_ids = {

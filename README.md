@@ -19,7 +19,7 @@ WebCap is built with Flask plus plain browser JavaScript. There is no database o
 | **Training runs and checkpoints** | Use the managed Training Queue or generate a manual WSL command; inspect progress, next-checkpoint ETA, logs, output, and **Training History**. Resume compatible checkpoints or start a fresh run from a saved LoRA/initializer. Training History is a lightweight metadata index rather than a filesystem-derived catalog. | In Training, use **Run setup** and **Training Queue**; select **Resume checkpoint** or **Fine-tune from saved LoRA** under **Starting point** when applicable. |
 | **LoRA candidate analysis** | Review a recorded run's TensorBoard loss curves and suggested completed checkpoint epochs without changing run files. **Multiscale Loss Basins** is the primary detector; **Score Scalars · legacy baseline** remains available. Saved candidates can be copied to the configured Test root and removed again later. | In a run row with recorded output, choose **Analyze LoRA candidates**, then use the candidate actions to stage or remove Test copies. |
 | **H3 calibration** | Test MiniMax H3 video bucket shapes on the configured training hardware and retain conclusive results. Verified safe ceilings affect only newly generated or reset H3 datasets; existing TOMLs and captured runs are left unchanged. | Open **App Settings** → **Training** → **H3 calibration**, choose an eligible source from the current folder, and select **Run calibration**. See [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md). |
-| **Test Bench** | Compare staged MiniMax H3 LoRAs against a shared prompt/settings baseline. Queue multiple Test sessions, include or exclude the base model, use wildcard prompts, revisit named/saved sessions and Recent Test Sets, switch between Grid and two-item Compare, open result folders, and rate generated items. | Choose MiniMax H3 as the Base Model, stage checkpoints from Training, then open **Test** from the permanent activity rail. |
+| **Test Bench** | Compare staged MiniMax H3 or Krea2 LoRAs against a shared prompt/settings baseline. Queue multiple Test sessions, include or exclude the base model, use wildcard prompts (including the optional caption-driven LLM helper), revisit named/saved sessions and Recent Test Sets, switch between Grid and two-item Compare, open result folders, and rate generated items. | Choose a supported Test Base Model, stage checkpoints from Training, then open **Test** from the permanent activity rail. |
 | **App settings** | Configure the filesystem root, default caption template, optional local analysis, appearance, training runtime, Storyboard Director runtime, repeat-reference epochs, Copy-to-Test roots, enabled training models, diagnostics, and advanced JSON. | Open **App Settings** from the permanent activity rail. Use the **General**, **Training**, **Storyboard**, and **Advanced** tabs. |
 
 ## Supported training profiles
@@ -45,12 +45,12 @@ See [`docs/training_profiles.md`](docs/training_profiles.md) and [`docs/train.md
 
 WebCap uses a permanent application shell:
 
-- the left activity rail switches major activities such as Prep, Training, and Test and also owns Console, Settings, Help, and immersive-mode access;
+- the left activity rail switches major activities including Prep, Generate, Training, Test, Storyboard, and Storage; it also owns global Activity, Inference Queue, Console, Settings, Help, and immersive-mode access;
 - the top header shows current folder/set context, the single editable **Base Model** selector where relevant, workspace identity, and persistent workload/system status: **Idle / Training / Testing / Generating**, GPU utilization/VRAM, and free disk space;
 - transient application status appears as a floating bottom-left shell message;
 - the multiline application console is a separate shell surface and is not the same thing as a Training run log.
 
-Durable navigation location is reflected in the URL hash. Refreshing a route such as `#/training?folder=my/set&scope=set`, `#/test?folder=my/set`, or `#/grid?folder=my/set` restores the folder and major workspace after the folder finishes loading. Transient state such as open modals, local tabs, Focus cursor/group, console visibility, and immersive mode is intentionally not encoded in the URL.
+Durable navigation location is reflected in the URL hash. Refreshing routes for Prep, Generate, Training, Test, Storyboard, Storage, Review, or Grid restores the major workspace (and folder where applicable); for example `#/training?folder=my/set&scope=set`, `#/test?folder=my/set`, or `#/storyboard`. Transient state such as open modals, local tabs, Focus cursor/group, console visibility, and immersive mode is intentionally not encoded in the URL.
 
 ## Requirements
 
@@ -75,9 +75,9 @@ GPU training requirements are otherwise owned by Diffusion Pipe/the selected mod
 
 H3 calibration additionally requires working NVIDIA telemetry (`nvidia-smi`) in the training environment.
 
-### MiniMax H3 Test Bench
+### Test Generations
 
-The current Test Bench expects a reachable local ComfyUI API using the shipped MiniMax H3 workflow template. On the current Windows/WSL topology WebCap can bridge to Windows ComfyUI through `curl.exe`; the Test Bench otherwise uses the local ComfyUI HTTP API directly.
+The current Test Bench supports the app-owned MiniMax H3 and Krea2 Test workflows and expects a reachable ComfyUI API. On the current Windows/WSL topology WebCap can bridge to Windows ComfyUI through `curl.exe`; Test Generations otherwise uses the configured/local ComfyUI HTTP API directly.
 
 ## Install
 

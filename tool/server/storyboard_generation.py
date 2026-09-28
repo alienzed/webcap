@@ -47,8 +47,17 @@ _logger = logging.getLogger(__name__)
 
 
 def generation_capabilities():
+    try:
+        inference_runtime.system_stats()
+    except (ConnectionError, TimeoutError):
+        return {
+            "available": False,
+            "error": "ComfyUI unavailable.",
+            "loras": [],
+            "baseLoras": [],
+        }
+
     model = get_inference_model("minimax_h3")
-    inference_runtime.system_stats()
     template = model.load_template()
     available = model.available_lora_names(inference_runtime.available_names)
     resolved = model.resolve_assets(
@@ -64,7 +73,7 @@ def generation_capabilities():
         if str(name).replace("\\", "/").casefold() not in base_keys
     ]
     selectable.sort(key=lambda value: value.casefold())
-    return {"loras": selectable, "baseLoras": base_loras}
+    return {"available": True, "error": "", "loras": selectable, "baseLoras": base_loras}
 
 
 def _scene_settings(scene, story=None):

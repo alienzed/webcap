@@ -42,6 +42,7 @@ def _execution_item(lane, job):
         "sceneId": str(job.get("sceneId") or metadata.get("sceneId") or ""),
         "folder": str(job.get("folder") or metadata.get("folder") or ""),
         "sessionId": str(job.get("sessionId") or metadata.get("sessionId") or ""),
+        "source": str(job.get("source") or metadata.get("source") or ""),
         "operation": str(job.get("operation") or metadata.get("operation") or ""),
         "queuePosition": int(job.get("queuePosition") or 0),
         "createdAt": job.get("createdAt"),

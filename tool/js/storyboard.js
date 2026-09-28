@@ -48,6 +48,7 @@
       activityLoadBaseline: null,
       activityLoadModelId: '',
       activityTarget: null,
+      dismissedActivityTargetKey: '',
       activityErrorReported: false,
       activitySlotSample: null
     }
@@ -1065,7 +1066,12 @@
 
     var phaseName = String(activity && activity.phase || '');
     var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
-    var visible = directorActivityActive() || (activity && activity.active) || terminal;
+    var activityTargetKey = directorTargetKey(storyState.director.activityTarget);
+    var dismissed = !!(
+      activityTargetKey &&
+      storyState.director.dismissedActivityTargetKey === activityTargetKey
+    );
+    var visible = !dismissed && (directorActivityActive() || (activity && activity.active) || terminal);
     card.classList.toggle('hidden', !visible);
     var jobId = String(activity && activity.jobId || '');
     var jobStatus = String(activity && activity.jobStatus || '');
@@ -1205,7 +1211,10 @@
         return body;
       });
     }).then(function () {
-      return refreshDirectorActivity();
+      storyState.director.dismissedActivityTargetKey = directorTargetKey(storyState.director.activityTarget);
+      var card = el('storyboard-director-activity');
+      if (card) card.classList.add('hidden');
+      positionDirectorActivity();
     }).catch(function (err) {
       button.disabled = false;
       button.textContent = 'Stop';
@@ -1215,6 +1224,7 @@
 
   function startDirectorActivity() {
     if (storyState.director.pendingOrder.length === 1) {
+      storyState.director.dismissedActivityTargetKey = '';
       storyState.director.activityStartedAt = Date.now() / 1000;
       storyState.director.activityHistory = [];
       storyState.director.activitySlotSample = null;
@@ -1655,6 +1665,9 @@
     } else {
       var existing = storyState.director.pendingTargets[key];
       if (existing) setDirectorTargetProtected(existing, false);
+      if (storyState.director.dismissedActivityTargetKey === key) {
+        storyState.director.dismissedActivityTargetKey = '';
+      }
       delete storyState.director.pendingTargets[key];
       storyState.director.pendingOrder = storyState.director.pendingOrder.filter(function (pendingKey) {
         return pendingKey !== key;

@@ -1203,3 +1203,18 @@ def test_storyboard_director_activity_exposes_hard_stop_control():
     assert "position: absolute;" in styles
     assert "right: 4px;" in styles
     assert "bottom: 3px;" in styles
+
+
+def test_storyboard_director_stop_dismisses_only_the_stopped_activity_target():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    stop_block = storyboard.split("function stopDirectorJob()", 1)[1].split("function startDirectorActivity()", 1)[0]
+    render_block = storyboard.split("function renderDirectorActivity(activity, system)", 1)[1].split("function directorActivityActive()", 1)[0]
+    pending_block = storyboard.split("function setDirectorPending(target, pending)", 1)[1].split("function defineInvariants()", 1)[0]
+
+    assert "dismissedActivityTargetKey = directorTargetKey(storyState.director.activityTarget)" in stop_block
+    assert "card.classList.add('hidden')" in stop_block
+    assert "storyState.director.dismissedActivityTargetKey === activityTargetKey" in render_block
+    assert "visible = !dismissed &&" in render_block
+    assert "storyState.director.dismissedActivityTargetKey === key" in pending_block
+

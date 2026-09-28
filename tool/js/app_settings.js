@@ -322,7 +322,69 @@ function renderEnvironmentCheck(payload) {
       rows +
       '</section>';
   }).join('');
+  var checksById = {};
+  (payload.checks || []).forEach(function (check) {
+    checksById[String(check.id || '')] = check;
+  });
+  var faceReady = (!checksById.package_deface || checksById.package_deface.ok) &&
+    (!checksById.package_imageio || checksById.package_imageio.ok);
+  var poseReady = !checksById.package_mediapipe || checksById.package_mediapipe.ok;
+  if (ui.appSettingsEnableFaceAnalysisEl) {
+    ui.appSettingsEnableFaceAnalysisEl.disabled = !faceReady;
+    if (!faceReady) ui.appSettingsEnableFaceAnalysisEl.checked = false;
+  }
+  if (ui.appSettingsEnableMediaPipeAnalysisEl) {
+    ui.appSettingsEnableMediaPipeAnalysisEl.disabled = !poseReady;
+    if (!poseReady) ui.appSettingsEnableMediaPipeAnalysisEl.checked = false;
+  }
   resultsEl.classList.remove('hidden');
+}
+
+function appendRequirementsOutputToConsole(payload) {
+  payload = payload && typeof payload === 'object' ? payload : {};
+  var command = Array.isArray(payload.command) ? payload.command.join(' ') : '';
+  if (command) reportConsoleInfo('Python Requirements', '$ ' + command);
+  String(payload.stdout || '').split(/\r?\n/).forEach(function (line) {
+    if (line) reportConsoleInfo('Python Requirements', line);
+  });
+  String(payload.stderr || '').split(/\r?\n/).forEach(function (line) {
+    if (line) reportConsoleWarning('Python Requirements', line);
+  });
+}
+
+function installPythonRequirements() {
+  var button = ui.appSettingsEnvironmentInstallBtnEl;
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Installing...';
+  }
+  reportConsoleInfo('Python Requirements', 'Installing / repairing requirements.txt in the current WebCap Python environment...');
+  fetch('/app/environment/install-requirements', { method: 'POST' })
+    .then(function (response) {
+      return response.json().then(function (payload) {
+        appendRequirementsOutputToConsole(payload);
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload && payload.error ? payload.error : 'Python requirements install failed.');
+        }
+        return payload;
+      });
+    })
+    .then(function () {
+      reportConsoleInfo('Python Requirements', 'Install / repair completed successfully.');
+      return runEnvironmentCheck();
+    })
+    .catch(function (error) {
+      reportConsoleError('Python Requirements', error);
+      if (ui.appSettingsEnvironmentSummaryEl) {
+        ui.appSettingsEnvironmentSummaryEl.textContent = 'Requirements install failed. See Console.';
+      }
+    })
+    .finally(function () {
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Install / Repair Python Requirements';
+      }
+    });
 }
 
 function runEnvironmentCheck() {
@@ -553,6 +615,7 @@ function wireAppSettingsUi() {
   if (h3Reset) h3Reset.onclick = resetH3CalibrationSettings;
   if (h3Console) h3Console.onclick = showConsolePanel;
   if (ui.appSettingsEnvironmentRunBtnEl) ui.appSettingsEnvironmentRunBtnEl.onclick = runEnvironmentCheck;
+  if (ui.appSettingsEnvironmentInstallBtnEl) ui.appSettingsEnvironmentInstallBtnEl.onclick = installPythonRequirements;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
     button.onclick = function () {
       setAppSettingsTab(button.getAttribute('data-app-settings-tab'), false);

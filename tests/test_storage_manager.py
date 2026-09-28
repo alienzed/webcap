@@ -1069,3 +1069,28 @@ def test_storage_manager_prefers_output_test_session_on_legacy_name_collision(mo
     assert items[0]["meta"]["source"] == "current"
     assert storage_manager._resolve_test("", "same-id") == current.resolve()
 
+
+
+def test_storage_overview_keeps_unrelated_inventory_when_execution_queue_is_unavailable(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    story_dir = _story(tmp_path)
+    monkeypatch.setattr(
+        storage_manager,
+        "execution_lane_snapshot",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            storage_manager.ExecutionQueueStateError("execution queue unavailable")
+        ),
+    )
+
+    payload = storage_manager.overview("")
+
+    assert payload["ok"] is True
+    assert len(payload["items"]["storyboard"]) == 1
+    assert payload["items"]["storyboard"][0]["id"] == "story-demo/scene-1/take-1"
+    assert payload["items"]["generate"] == []
+    assert payload["items"]["runtime"] == []
+    assert payload["items"]["comfy"] == []
+    assert "generate" in payload["unavailable"]
+    assert "runtime" in payload["unavailable"]
+    assert "comfy" in payload["unavailable"]
+    assert story_dir.is_dir()

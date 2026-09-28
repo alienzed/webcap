@@ -541,6 +541,7 @@
     state.open = !!open;
     if (state.open) {
       if (!wasOpen) state.openedAt = Date.now() / 1000;
+      if (typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
       if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
     } else if (wasOpen) {
       storeLastSeen(Date.now() / 1000);

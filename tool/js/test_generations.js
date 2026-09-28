@@ -423,6 +423,8 @@
         active: wildcardDirector.busy,
         phase: wildcardDirector.busy ? 'preparing' : 'complete',
         startedAt: wildcardDirector.activityStartedAt,
+        runtimeMode: activity && activity.runtimeMode,
+        runtimeProvider: activity && activity.runtimeProvider,
         jobId: '',
         jobStatus: ''
       };
@@ -452,6 +454,8 @@
         model: job.modelId || '',
         operation: job.operation || '',
         startedAt: job.createdAt,
+        runtimeMode: activity && activity.runtimeMode,
+        runtimeProvider: activity && activity.runtimeProvider,
         jobId: jobId,
         jobStatus: 'queued'
       };

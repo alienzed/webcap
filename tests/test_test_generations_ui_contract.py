@@ -905,5 +905,10 @@ def test_test_generations_can_generate_wildcard_prompt_from_set_captions():
     assert 'id="test-generations-wildcard-analysis"' in html
     assert "function generateWildcardFromSet()" in script
     assert "folder: owningSetFolder(launchFolder" in script
-    assert "prompt.value = String(analysis.wildcard || '').trim();" in script
-    assert "saveTestPromptDraft(prompt.value);" in script
+    assert 'id="test-generations-wildcard-output"' in html
+    assert 'id="test-generations-wildcard-use-btn"' in html
+    assert "function useGeneratedWildcard()" in script
+    assert "Wildcard generated. Review it before using it." in script
+    assert "prompt.value = value;" in script
+    assert "saveTestPromptDraft(value);" in script
+    assert "requestFolder" in script

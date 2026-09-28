@@ -2532,6 +2532,25 @@ iframe {
   gap: 8px;
   align-items: start;
 }
+.test-generations-wildcard-output {
+  display: grid;
+  gap: 4px;
+}
+.test-generations-wildcard-output > span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.test-generations-wildcard-output textarea {
+  width: 100%;
+  min-height: 70px;
+  box-sizing: border-box;
+  resize: vertical;
+}
+.test-generations-wildcard-analysis .test-generations-wildcard-apply {
+  display: flex;
+  justify-content: flex-end;
+}
 .test-generations-wildcard-analysis strong {
   font-size: 12px;
 }

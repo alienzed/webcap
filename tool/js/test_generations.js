@@ -33,6 +33,7 @@
     available: false,
     busy: false,
     jobId: '',
+    requestFolder: '',
     analysis: null
   };
 
@@ -196,24 +197,41 @@
 
   function renderWildcardAnalysis(analysis) {
     var panel = el('test-generations-wildcard-analysis');
+    var output = el('test-generations-wildcard-output');
     var stable = el('test-generations-wildcard-stable');
     var variations = el('test-generations-wildcard-variations');
-    if (!panel || !stable || !variations) throw new Error('Test wildcard analysis markup is missing.');
+    var use = el('test-generations-wildcard-use-btn');
+    if (!panel || !output || !stable || !variations || !use) throw new Error('Test wildcard analysis markup is missing.');
     if (!analysis) {
       panel.classList.add('hidden');
+      output.value = '';
       stable.textContent = '';
       variations.textContent = '';
+      use.disabled = true;
       return;
     }
     var stableTerms = Array.isArray(analysis.stableTerms) ? analysis.stableTerms : [];
     var groups = Array.isArray(analysis.variationGroups) ? analysis.variationGroups : [];
+    output.value = String(analysis.wildcard || '');
     stable.textContent = stableTerms.length ? stableTerms.join(' · ') : 'No strong stable terms identified.';
     variations.textContent = groups.length
       ? groups.map(function (group) {
           return String(group.label || 'Variation') + ': ' + (Array.isArray(group.options) ? group.options.join(' / ') : '');
         }).join(' · ')
       : 'No meaningful variation groups identified.';
+    use.disabled = !output.value.trim();
     panel.classList.remove('hidden');
+  }
+
+  function useGeneratedWildcard() {
+    var output = el('test-generations-wildcard-output');
+    var prompt = el('test-generations-prompt');
+    var value = String(output && output.value || '').trim();
+    if (!value) throw new Error('No generated wildcard is available.');
+    prompt.value = value;
+    saveTestPromptDraft(value);
+    saveTestBenchState(value);
+    el('test-generations-wildcard-status').textContent = 'Wildcard copied to Prompt.';
   }
 
   function refreshWildcardDirector() {
@@ -255,14 +273,16 @@
   function generateWildcardFromSet() {
     if (wildcardDirector.busy) return;
     if (!wildcardDirector.modelId) throw new Error('Choose a Director model.');
+    var requestFolder = owningSetFolder(launchFolder || (state && state.folder) || '');
     wildcardDirector.busy = true;
+    wildcardDirector.requestFolder = requestFolder;
     wildcardDirector.analysis = null;
     el('test-generations-wildcard-status').textContent = 'Analyzing Set captions…';
     renderWildcardAnalysis(null);
     renderWildcardDirector();
 
     return wildcardPostJson('/fs/test_generations/wildcard', {
-      folder: owningSetFolder(launchFolder || (state && state.folder) || ''),
+      folder: requestFolder,
       directorModel: wildcardDirector.modelId
     }).then(function (payload) {
       wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
@@ -273,13 +293,14 @@
       if (!analysis || !String(analysis.wildcard || '').trim()) {
         throw new Error('Wildcard analysis returned no wildcard caption.');
       }
+      if (owningSetFolder(launchFolder || (state && state.folder) || '') !== requestFolder) {
+        wildcardDirector.analysis = null;
+        el('test-generations-wildcard-status').textContent = 'Wildcard finished for a different Set. Generate again here.';
+        return;
+      }
       wildcardDirector.analysis = analysis;
-      var prompt = el('test-generations-prompt');
-      prompt.value = String(analysis.wildcard || '').trim();
-      saveTestPromptDraft(prompt.value);
-      saveTestBenchState(prompt.value);
       renderWildcardAnalysis(analysis);
-      el('test-generations-wildcard-status').textContent = 'Wildcard generated from Set captions.';
+      el('test-generations-wildcard-status').textContent = 'Wildcard generated. Review it before using it.';
     }).catch(function (err) {
       if (err && ['stopped', 'cancelled'].indexOf(String(err.jobStatus || '')) !== -1) {
         el('test-generations-wildcard-status').textContent = 'Wildcard analysis stopped.';
@@ -290,6 +311,7 @@
     }).then(function () {
       wildcardDirector.busy = false;
       wildcardDirector.jobId = '';
+      wildcardDirector.requestFolder = '';
       renderWildcardDirector();
     });
   }
@@ -2712,6 +2734,12 @@
       wildcardDirector.modelId = this.value;
       setDirectorModelPreference('webcap.testGenerations.directorModel', this.value);
       renderWildcardDirector();
+    });
+    el('test-generations-wildcard-use-btn').onclick = function () {
+      try { useGeneratedWildcard(); } catch (err) { showError(err); }
+    };
+    el('test-generations-wildcard-output').addEventListener('input', function () {
+      el('test-generations-wildcard-use-btn').disabled = !this.value.trim();
     });
     el('test-generations-source-up-btn').onclick = function () {
       if (!this.disabled) chooseTestSource(String(this.dataset.sourceParent || ''));

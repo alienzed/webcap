@@ -468,13 +468,18 @@
     state.pending = true;
     return requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
       state.payload = payload;
+      var activeErrorKeys = Object.create(null);
       (Array.isArray(payload.errors) ? payload.errors : []).forEach(function (item) {
         var key = String(item.area || 'activity') + ':' + String(item.error || '');
+        activeErrorKeys[key] = true;
         if (state.reportedErrors[key]) return;
         state.reportedErrors[key] = true;
         if (typeof window.reportConsoleError === 'function') {
           window.reportConsoleError('Activity', String(item.area || 'Activity') + ' unavailable: ' + String(item.error || 'Unknown error'));
         }
+      });
+      Object.keys(state.reportedErrors).forEach(function (key) {
+        if (!activeErrorKeys[key]) delete state.reportedErrors[key];
       });
       notifyRecent(sessionRecent());
       render();

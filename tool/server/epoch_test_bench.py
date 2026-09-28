@@ -18,6 +18,7 @@ from .training_test_paths import browse_test_source, test_copy_path, test_source
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
+    promote_backlog as execution_promote_backlog,
     discard_terminal_and_recent as execution_discard_terminal_and_recent,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
@@ -1467,20 +1468,20 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                     request.get("prompt"),
                 ),
             }
-            if legacy_job_id:
-                job = enqueue_test(request, context, label=label, deferred=True)
-            else:
-                job = enqueue_test(request, context, label=label)
+            job = enqueue_test(request, context, label=label, deferred=True)
             queued_ids.append(job["jobId"])
-            with _status_lock:
-                current_status = _read_status(session_directory) or {}
-                current_status["inferenceJobs"] = list(queued_ids)
-                _atomic_write_json(_status_path(session_directory), current_status)
+
         with _status_lock:
             current_status = _read_status(session_directory) or {}
             current_status["inferenceJobs"] = list(queued_ids)
             current_status["migrationComplete"] = True
             _atomic_write_json(_status_path(session_directory), current_status)
+
+        if not legacy_job_id:
+            for job_id in queued_ids:
+                execution_promote_backlog(job_id)
+            from .inference_runner import _start_worker_for_requested_inference
+            _start_worker_for_requested_inference()
     except Exception as exc:
         rollback_errors = []
         rollback_pending = False

@@ -15,8 +15,7 @@ def build_request(captions):
     counts = Counter(cleaned)
     corpus = []
     for caption, count in counts.most_common():
-        prefix = ("x" + str(count) + " ") if count > 1 else ""
-        corpus.append(prefix + caption)
+        corpus.append("[count=" + str(count) + "] " + caption)
 
     schema = {
         "type": "object",
@@ -59,6 +58,7 @@ def build_request(captions):
         "[GOAL]\n"
         "Find what is genuinely common across the Set, identify the semantic dimensions that vary, and express those observed variations as one compact wildcard caption.\n\n"
         "[RULES]\n"
+        "- Each caption is prefixed with [count=N] frequency metadata. Use the count as evidence of prevalence; it is not caption text.\n"
         "- Use only information present in the supplied captions. Do not invent new attributes or options.\n"
         "- Keep stable subject tokens, identity terms, and consistently recurring descriptors outside wildcard braces.\n"
         "- Put genuinely varying alternatives in {a|b|c} groups. Do not create a wildcard for something that is effectively constant.\n"

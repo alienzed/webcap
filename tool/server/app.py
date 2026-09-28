@@ -1209,9 +1209,10 @@ def test_generations_wildcard_route():
         data = request.get_json(silent=True) or {}
         folder = str(data.get("folder") or "").strip()
         captions = [
-            load_caption_text(folder, media_name).get("caption") or ""
+            str(load_caption_text(folder, media_name).get("caption") or "").strip()
             for media_name in list_media_files(folder)
         ]
+        captions = [caption for caption in captions if caption]
         contract = test_wildcard_build_request(captions)
         job = enqueue_llm(
             "test",

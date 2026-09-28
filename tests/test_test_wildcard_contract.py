@@ -11,7 +11,8 @@ def test_caption_wildcard_contract_reports_stable_and_variable_content():
     assert request["operation"] == "analyze_caption_wildcard"
     assert request["output"] == "json"
     assert request["response_schema"]["required"] == ["wildcard", "stableTerms", "variationGroups"]
-    assert "x2 mikeperson standing in a kitchen" in request["prompt"]
+    assert "[count=2] mikeperson standing in a kitchen" in request["prompt"]
+    assert "frequency metadata" in request["prompt"]
     assert "Use only information present in the supplied captions" in request["prompt"]
     assert "Do not create a wildcard for something that is effectively constant" in request["prompt"]
 

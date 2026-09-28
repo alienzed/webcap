@@ -1,8 +1,10 @@
 import atexit
+import http.client
 import json
 import logging
 import os
 import shutil
+import socket
 import subprocess
 import threading
 import time
@@ -35,6 +37,9 @@ _log_handle = None
 _server_settings_signature = None
 _process_lock = threading.RLock()
 _request_lock = threading.RLock()
+_remote_request_lock = threading.Lock()
+_active_remote_connection = None
+_remote_provider_cache = {}
 _activity_lock = threading.Lock()
 _log_relay_lock = threading.Lock()
 _log_relay_offset = 0
@@ -247,6 +252,127 @@ def _http_json(path, method="GET", payload=None, timeout=30):
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RuntimeError("Storyboard Director endpoint returned invalid JSON.") from exc
+
+
+def _remote_native_url(path):
+    settings = _director_config()
+    if settings.get("mode", "local") != "remote":
+        raise ValueError("Remote Director endpoint is not active.")
+    parsed = urllib.parse.urlsplit(settings.get("endpoint", ""))
+    prefix = parsed.path.rstrip("/")
+    if prefix.endswith("/v1"):
+        prefix = prefix[:-3]
+    native_path = prefix.rstrip("/") + "/" + str(path or "").lstrip("/")
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, native_path, "", ""))
+
+
+def _remote_is_ollama():
+    settings = _director_config()
+    if settings.get("mode", "local") != "remote":
+        return False
+    endpoint = str(settings.get("endpoint") or "").rstrip("/")
+    cached = _remote_provider_cache.get(endpoint)
+    if cached is not None:
+        return cached == "ollama"
+
+    request = urllib.request.Request(_remote_native_url("/api/version"), method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=2) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        detected = isinstance(payload, dict) and bool(str(payload.get("version") or "").strip())
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
+        detected = False
+    _remote_provider_cache[endpoint] = "ollama" if detected else "generic"
+    return detected
+
+
+def _remote_http_json_cancellable(path, method="GET", payload=None, timeout=30):
+    global _active_remote_connection
+    url = _server_url(path)
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Storyboard Director remote endpoint is invalid.")
+
+    connection_class = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+    connection = connection_class(parsed.hostname, parsed.port, timeout=timeout)
+    target = parsed.path or "/"
+    if parsed.query:
+        target += "?" + parsed.query
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"} if body is not None else {}
+
+    try:
+        connection.connect()
+        with _remote_request_lock:
+            _active_remote_connection = connection
+        if _stop_requested.is_set():
+            raise RuntimeError("LLM request stopped.")
+        connection.request(method, target, body=body, headers=headers)
+        response = connection.getresponse()
+        raw = response.read()
+        if response.status >= 400:
+            detail = raw.decode("utf-8", errors="replace").strip()
+            if detail:
+                try:
+                    decoded = json.loads(detail)
+                    error = decoded.get("error") if isinstance(decoded, dict) else None
+                    if isinstance(error, dict) and error.get("message"):
+                        detail = str(error["message"])
+                except (ValueError, TypeError):
+                    pass
+            raise RuntimeError(
+                "Storyboard Director endpoint request failed: "
+                + (detail or (str(response.status) + " " + str(response.reason or "").strip()))
+            )
+        if not raw:
+            return {}
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("Storyboard Director endpoint returned invalid JSON.") from exc
+    except RuntimeError:
+        raise
+    except (http.client.HTTPException, TimeoutError, OSError) as exc:
+        if _stop_requested.is_set():
+            raise RuntimeError("LLM request stopped.") from exc
+        raise ConnectionError("Could not connect to the configured Storyboard Director endpoint.") from exc
+    finally:
+        with _remote_request_lock:
+            if _active_remote_connection is connection:
+                _active_remote_connection = None
+        connection.close()
+
+
+def assert_stop_supported():
+    settings = _director_config()
+    if settings.get("mode", "local") == "local":
+        assert_hard_stop_supported()
+        return
+    if not _remote_is_ollama():
+        raise ValueError(
+            "Stop is not supported by this generic remote OpenAI-compatible endpoint. "
+            "Remote cancellation is currently supported for Ollama."
+        )
+
+
+def stop_active_request():
+    settings = _director_config()
+    if settings.get("mode", "local") == "local":
+        return stop_owned_server()
+    assert_stop_supported()
+    _stop_requested.set()
+    with _remote_request_lock:
+        connection = _active_remote_connection
+    if connection is None:
+        return False
+    sock = getattr(connection, "sock", None)
+    if sock is not None:
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+    connection.close()
+    return True
 
 
 def _health_ok():
@@ -849,8 +975,11 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
             }
 
         if settings.get("mode", "local") == "remote":
+            if _stop_requested.is_set():
+                raise RuntimeError("LLM request stopped.")
             _set_activity("generating", model_id=model_id)
-            response = _http_json(
+            request_json = _remote_http_json_cancellable if _remote_is_ollama() else _http_json
+            response = request_json(
                 "/chat/completions",
                 method="POST",
                 payload=payload,

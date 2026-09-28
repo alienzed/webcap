@@ -311,8 +311,6 @@
       renderLoras();
     }
 
-    var wildcards = el('generate-wildcards');
-    if (wildcards) wildcards.checked = !!result.wildcardsEnabled;
     generateState.promptLibrary.activeId = '';
     generateState.director.previousPrompt = null;
     setDirectorStatus('');
@@ -493,7 +491,6 @@
         modelId: model.id,
         prompt: prompt,
         settings: collectSettings(),
-        wildcardsEnabled: !!el('generate-wildcards').checked,
         loras: savedLoras(model.id),
         references: references
       });

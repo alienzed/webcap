@@ -1126,7 +1126,7 @@
       }
       var remoteVramBytes = showRemoteModelTelemetry ? Number(activity && activity.remoteModelVramBytes) : NaN;
       if (isFinite(remoteVramBytes) && remoteVramBytes > 0) {
-        parts.push('<span title="VRAM allocated to the loaded remote model">Model VRAM ' + escapeHtml(directorBytesGiB(remoteVramBytes)) + '</span>');
+        parts.push('<span title="Model bytes reported resident on the remote GPU">GPU-resident ' + escapeHtml(directorBytesGiB(remoteVramBytes)) + '</span>');
       }
       var remoteContextSize = showRemoteModelTelemetry ? Number(activity && activity.contextSize) : NaN;
       if (isFinite(remoteContextSize) && remoteContextSize > 0 && phaseName !== 'complete') {

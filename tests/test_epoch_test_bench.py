@@ -1124,7 +1124,7 @@ def test_enqueue_registers_all_children_before_any_test_work_can_start(tmp_path,
             for job_id in observed["jobIds"]
         ]
 
-    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", inspect_before_worker_start)
+    monkeypatch.setattr(inference_runner, "start_observer", inspect_before_worker_start)
 
     payload = bench.enqueue(
         tmp_path,

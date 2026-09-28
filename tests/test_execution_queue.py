@@ -440,3 +440,14 @@ def test_execution_queue_unreadable_state_is_not_treated_as_empty(queue_root):
         execution_queue.lane_snapshot("inference")
 
     assert state_path.read_text(encoding="utf-8") == "{not-json"
+
+
+def test_execution_queue_inaccessible_state_is_not_treated_as_missing(queue_root, monkeypatch):
+    class InaccessibleStatePath:
+        def stat(self):
+            raise PermissionError("access denied")
+
+    monkeypatch.setattr(execution_queue, "_state_path", lambda: InaccessibleStatePath())
+
+    with pytest.raises(execution_queue.ExecutionQueueStateError, match="cannot be inspected"):
+        execution_queue.lane_snapshot("inference")

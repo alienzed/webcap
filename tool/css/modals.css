@@ -226,7 +226,7 @@
 .app-settings-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: 0;
 }
 
 .app-settings-header {
@@ -256,10 +256,30 @@
 }
 
 .app-settings-section {
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  background: #f8fafc;
-  padding: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: transparent;
+  padding: 14px 4px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-settings-section:first-child {
+  padding-top: 4px;
+}
+
+.app-settings-section:last-child {
+  border-bottom: 0;
+}
+
+.app-settings-section-disclosure {
+  margin: 12px 0 2px;
+}
+
+.app-settings-disclosure-body {
+  padding-top: 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -390,7 +410,7 @@
 
 .app-settings-caption-template {
   width: 100%;
-  min-height: 132px;
+  min-height: 112px;
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 12px;
 }
@@ -500,7 +520,10 @@
 }
 
 .app-settings-danger-zone {
-  border-color: #fecaca;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
   background: #fff7f7;
 }
 
@@ -517,6 +540,10 @@
   flex-wrap: wrap;
 }
 
+.app-settings-actions-inline {
+  justify-content: flex-start;
+}
+
 @media (max-width: 760px) {
   .app-settings-dialog {
     width: min(100vw - 18px, 980px);
@@ -529,7 +556,11 @@
   }
 }
 
-html[data-theme="dark"] .app-settings-section,
+html[data-theme="dark"] .app-settings-section {
+  background: transparent;
+  border-color: var(--border);
+}
+
 html[data-theme="dark"] .app-settings-advanced {
   background: #111827;
   border-color: var(--border);

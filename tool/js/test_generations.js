@@ -21,6 +21,7 @@
   var selectedCandidates = null;
   var testSource = null;
   var pendingTestSource = null;
+  var pendingActivitySession = '';
   var pendingSourceOwnerFolder = '';
   var sourceBrowser = null;
   var queuedTestJobs = [];
@@ -889,8 +890,25 @@
     openTestBenchFolder(folder, true);
   }
 
-  function openTestBenchActivity() {
-    if (isOpen()) return;
+  function openTestBenchActivity(target) {
+    target = target && typeof target === 'object' ? target : {};
+    if (target.sessionId) pendingActivitySession = String(target.sessionId || '');
+    if (target.folder || target.source || target.modelId) {
+      openTestBenchSource(
+        String(target.folder || ''),
+        String(target.source || ''),
+        String(target.modelId || '')
+      );
+      return;
+    }
+    if (isOpen()) {
+      if (pendingActivitySession) {
+        var session = pendingActivitySession;
+        pendingActivitySession = '';
+        openSession(session);
+      }
+      return;
+    }
     var active = Array.isArray(testActivity.active) && testActivity.active.length ? testActivity.active[0] : null;
     if (active) {
       openTestBenchSource(
@@ -2921,13 +2939,15 @@
       var initialStatus = payload.latest || { status: 'idle' };
       if (initialStatus.status === 'running' || initialStatus.status === 'stopping') showSessionError = true;
       syncActiveRunControls(initialStatus);
-      var previewReady = rememberedSession
-        ? request('test_open_session', { session: rememberedSession }).then(function (selectedStatus) {
+      var requestedSession = String(pendingActivitySession || rememberedSession || '');
+      pendingActivitySession = '';
+      var previewReady = requestedSession
+        ? request('test_open_session', { session: requestedSession }).then(function (selectedStatus) {
             renderStatus(selectedStatus);
           }).catch(function (err) {
             reportConsoleWarning(
               'Test Generations',
-              'Could not restore selected Test session ' + rememberedSession + ': ' +
+              'Could not open selected Test session ' + requestedSession + ': ' +
               String(err && err.message ? err.message : err)
             );
             currentSession = '';

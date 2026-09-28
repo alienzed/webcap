@@ -875,7 +875,22 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
 
     template = model.load_template()
     normalized_settings = model.normalize_settings(template, _new_session_seed, requested_settings)
-    resolved_prompt = inference_runtime.resolve_wildcard_prompt(prompt, normalized_settings["seed"])
+
+    # Queue admission must not depend on ComfyUI being online. Preserve the
+    # existing eager wildcard resolution when the provider is reachable so
+    # queue labels keep their resolved differentiators; otherwise freeze the
+    # source prompt + seed and resolve it when the job is actually runnable.
+    prompt_needs_resolve = False
+    try:
+        inference_runtime.system_stats()
+    except Exception:
+        resolved_prompt = prompt
+        prompt_needs_resolve = True
+    else:
+        resolved_prompt = inference_runtime.resolve_wildcard_prompt(
+            prompt,
+            normalized_settings["seed"],
+        )
     request = {
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,
@@ -883,6 +898,7 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
         "name": session_name,
         "sourcePrompt": prompt,
         "prompt": resolved_prompt,
+        "promptNeedsResolve": prompt_needs_resolve,
         "settings": dict(normalized_settings),
         "workflow": copy.deepcopy(template),
     }
@@ -1261,6 +1277,20 @@ def execute_inference(job_id, request, context):
             dict(request.get("settings") or {}),
         )
         prompt = str(request.get("prompt") or "").strip()
+        if request.get("promptNeedsResolve"):
+            with _status_lock:
+                status_payload = _read_status(session_directory) or {}
+                session_prompt = str(status_payload.get("resolvedPrompt") or "").strip()
+                if session_prompt and session_prompt != str(request.get("sourcePrompt") or "").strip():
+                    prompt = session_prompt
+                else:
+                    prompt = inference_runtime.resolve_wildcard_prompt(
+                        str(request.get("sourcePrompt") or prompt),
+                        settings["seed"],
+                    )
+                    status_payload["resolvedPrompt"] = prompt
+                    status_payload["prompt"] = prompt
+                    _atomic_write_json(_status_path(session_directory), status_payload)
         if not prompt:
             raise ValueError("Test inference job has no resolved prompt.")
 

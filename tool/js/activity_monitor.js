@@ -413,6 +413,33 @@
     return section;
   }
 
+  function syncActivityRailWork(active) {
+    var activeIds = Object.create(null);
+    (active || []).forEach(function (item) {
+      var kind = String(item && item.kind || '');
+      if (kind === 'director') kind = String(item && item.client || 'storyboard');
+      var id = {
+        generate: 'activity-generate-btn',
+        training: 'activity-training-btn',
+        test: 'activity-test-btn',
+        storyboard: 'activity-storyboard-btn',
+        storage: 'activity-storage-btn'
+      }[kind];
+      if (id) activeIds[id] = true;
+    });
+
+    [
+      'activity-generate-btn',
+      'activity-training-btn',
+      'activity-test-btn',
+      'activity-storyboard-btn',
+      'activity-storage-btn'
+    ].forEach(function (id) {
+      var button = el(id);
+      if (button) button.classList.toggle('has-active-work', !!activeIds[id]);
+    });
+  }
+
   function render() {
     var active = Array.isArray(state.payload.active) ? state.payload.active : [];
     var recent = sessionRecent();
@@ -428,6 +455,7 @@
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
     toggle.classList.toggle('activity-running', active.length > 0);
+    syncActivityRailWork(active);
 
     var unseen = unseenCount();
     badge.textContent = unseen > 99 ? '99+' : String(unseen);

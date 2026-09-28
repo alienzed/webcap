@@ -55,7 +55,13 @@ def _execution_item(lane, job):
 def _training_active_and_queue():
     payload, status_code = training_status_response()
     if status_code != 200 or not payload.get("ok"):
-        return [], {"queued": 0, "paused": False, "pauseReason": ""}
+        return [], {
+            "queued": 0,
+            "paused": False,
+            "pauseReason": "",
+            "unavailable": True,
+            "error": str(payload.get("error") or "Training state is unavailable."),
+        }
     jobs = payload.get("jobs") if isinstance(payload.get("jobs"), list) else []
     active = []
     for job in jobs:
@@ -142,6 +148,8 @@ def activity_snapshot(limit=20, since=0):
         llm = {"jobs": [], "paused": False, "pauseReason": "", "unavailable": True}
 
     training_active, training_queue = _training_active_and_queue()
+    if training_queue.get("unavailable"):
+        errors.append({"area": "training", "error": str(training_queue.get("error") or "Training state is unavailable.")})
 
     active = []
     for job in inference.get("jobs", []):
@@ -189,7 +197,15 @@ def activity_snapshot(limit=20, since=0):
             _logger.exception("Director recent activity is unavailable.")
             errors.append({"area": "director", "error": str(exc)})
 
-    recent = inference_recent + llm_recent + _training_recent(limit, since)
+    training_recent = []
+    try:
+        training_recent = _training_recent(limit, since)
+    except ValueError as exc:
+        _logger.exception("Training recent activity is unavailable.")
+        if not any(item.get("area") == "training" for item in errors):
+            errors.append({"area": "training", "error": str(exc)})
+
+    recent = inference_recent + llm_recent + training_recent
 
     if (
         str(scan.get("status") or "") in {"completed", "failed", "cancelled"}

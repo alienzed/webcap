@@ -866,13 +866,18 @@ def director_activity_route():
     activity = storyboard_director_activity_status()
     queue = llm_snapshot(include_terminal=False)
     if not activity.get("active"):
+        runtime_identity = {
+            key: activity.get(key)
+            for key in ("runtimeMode", "runtimeProvider")
+            if activity.get(key) is not None
+        }
         active_id = str(queue.get("activeJobId") or "")
         queued = [job for job in queue.get("jobs", []) if str(job.get("status") or "") == "queued"]
         if active_id:
             active = next((job for job in queue.get("jobs", []) if job.get("jobId") == active_id), None)
             if active:
                 activity = {
-                    **activity,
+                    **runtime_identity,
                     "active": True,
                     "phase": "preparing",
                     "model": active.get("modelId") or "",
@@ -881,7 +886,7 @@ def director_activity_route():
                 }
         elif queued:
             activity = {
-                **activity,
+                **runtime_identity,
                 "active": True,
                 "phase": "queued",
                 "model": queued[0].get("modelId") or "",

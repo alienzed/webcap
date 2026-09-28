@@ -139,6 +139,8 @@ def test_inference_queue_polish_exposes_real_queue_actions_and_status():
     assert "payload.direction" in inference
     assert "document.addEventListener('pointerdown'" in inference
     assert "function formatJobAge(job)" in inference
+    assert "function testWildcardSummary(job)" in inference
+    assert "job.wildcardValues" in inference
     assert "queue.get(\"waitReason\")" in backend
     assert ".inference-queue-position {" in css
     assert ".inference-queue-header-actions {" in css

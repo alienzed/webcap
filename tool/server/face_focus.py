@@ -54,10 +54,11 @@ def _detection_from_box(det, image_width, image_height):
 
 def get_face_focus_detector():
     try:
+        import imageio.v2
         from deface.centerface import CenterFace
     except ImportError as exc:
         raise RuntimeError(
-            "Face Focus is unavailable because deface is not installed. "
+            "Face Focus is unavailable because deface or imageio is not installed. "
             "Use Settings > Advanced > Install / Repair Python Requirements."
         ) from exc
 

@@ -60,7 +60,7 @@ Durable navigation location is reflected in the URL hash. Refreshing routes for 
 - `pip`
 - `ffmpeg` and `ffprobe` available in `PATH`
 
-Python dependencies are listed in [`requirements.txt`](requirements.txt), including Flask, Pillow, deface, MediaPipe, rembg, and ONNX Runtime. Python 3.10 uses the lightweight `tomli` compatibility package for TOML parsing.
+Python dependencies are listed in [`requirements.txt`](requirements.txt). Some packages support optional features such as MediaPipe analysis, Face Focus, background removal, TensorBoard candidate analysis, and live ComfyUI progress; missing optional packages should not prevent unrelated WebCap features from starting. Python 3.10 uses the lightweight `tomli` compatibility package for TOML parsing.
 
 ### Managed training
 
@@ -86,7 +86,7 @@ For a complete setup guide, including the MiniMax H3 reference training environm
 ```bash
 git clone https://github.com/alienzed/webcap.git
 cd webcap
-python start.py
+python -m pip install -r requirements.txt
 ```
 
 Copy the example configuration and edit it for the local machine:
@@ -128,21 +128,15 @@ Start from [`tool/config.example.json`](tool/config.example.json). The important
 - `set_destinations.presets` — Create Set destination shortcuts.
 - `requirements` / `vocabulary` — global annotation baseline/catalog data.
 
-App Settings exposes the normal settings UI plus advanced raw JSON editing. **App Settings → Training → Environment Check** can inspect the WebCap Python environment, common media tools, WSL/Diffusion Pipe configuration, DeepSpeed, PyTorch/CUDA visibility, and NVIDIA telemetry without requiring a dataset. It reports remediation guidance but does not automatically rewrite CUDA/PyTorch packages.
+App Settings exposes the normal settings UI plus advanced raw JSON editing. **Settings → Advanced → Check Environment** can inspect the WebCap Python environment, common media tools, WSL/Diffusion Pipe configuration, DeepSpeed, PyTorch/CUDA visibility, and NVIDIA telemetry without requiring a dataset. **Install / Repair Python Requirements** runs the current WebCap Python interpreter against this repository's `requirements.txt` and reports stdout/stderr in the WebCap Console. It does not modify Diffusion Pipe, PyTorch/CUDA, ComfyUI, or other external runtimes.
 
 ## Run
 
 ```bash
-python start.py
-```
-
-The launcher ensures WebCap's own `requirements.txt` is installed into the same Python environment, then starts the existing server. It does not install or modify Diffusion Pipe, PyTorch/CUDA, ComfyUI, or other external runtimes.
-
-The direct developer entry point remains available when dependency installation is intentionally being managed separately:
-
-```bash
 python -m tool.server.app
 ```
+
+This is the normal WebCap launch path. If the WebCap Python environment needs repair, use **Settings → Advanced → Install / Repair Python Requirements** or run `python -m pip install -r requirements.txt` manually. The optional `start.py` wrapper remains available as a convenience bootstrap, but application correctness does not depend on using it.
 
 Then open:
 

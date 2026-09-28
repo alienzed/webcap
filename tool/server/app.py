@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 import shutil
+import subprocess
+import sys
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
@@ -384,6 +386,58 @@ def app_environment():
     except Exception as exc:
         app.logger.exception("ENVIRONMENT CHECK FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.route("/app/environment/install-requirements", methods=["POST"])
+def app_environment_install_requirements():
+    requirements_path = ROOT / "requirements.txt"
+    if not requirements_path.is_file():
+        message = "WebCap requirements file is missing: " + str(requirements_path)
+        app.logger.error(message)
+        return jsonify({"ok": False, "error": message}), 500
+    command = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "-r",
+        str(requirements_path),
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception as exc:
+        app.logger.exception("PYTHON REQUIREMENTS INSTALL FAILED: %s", exc)
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+            "command": command,
+            "stdout": "",
+            "stderr": str(exc),
+        }), 500
+    payload = {
+        "ok": completed.returncode == 0,
+        "command": command,
+        "exitCode": completed.returncode,
+        "stdout": completed.stdout or "",
+        "stderr": completed.stderr or "",
+    }
+    if completed.returncode != 0:
+        payload["error"] = "pip install -r requirements.txt failed with exit code " + str(completed.returncode) + "."
+        app.logger.error(
+            "PYTHON REQUIREMENTS INSTALL FAILED (%s): %s",
+            completed.returncode,
+            (completed.stderr or completed.stdout or "").strip(),
+        )
+        return jsonify(payload), 500
+    app.logger.info("PYTHON REQUIREMENTS INSTALL COMPLETED")
+    return jsonify(payload)
 
 
 @app.route("/app/config", methods=["GET"])

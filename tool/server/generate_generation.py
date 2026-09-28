@@ -161,25 +161,14 @@ def prepare_request(data):
         resolve_reference_path(relative_path)
         references[role] = str(relative_path)
 
-    prompt = source_prompt
-    wildcards_enabled = bool(data.get("wildcardsEnabled"))
-    prompt_needs_resolve = False
-    if wildcards_enabled:
-        try:
-            prompt = inference_runtime.resolve_wildcard_prompt(source_prompt, settings["seed"])
-        except (ConnectionError, TimeoutError):
-            prompt_needs_resolve = True
-
     return {
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,
         "sourcePrompt": source_prompt,
-        "prompt": prompt,
+        "prompt": source_prompt,
         "settings": settings,
         "loras": loras,
         "references": references,
-        "wildcardsEnabled": wildcards_enabled,
-        "promptNeedsResolve": prompt_needs_resolve,
         "workflowFile": model.TEMPLATE_PATH.name,
     }
 
@@ -188,12 +177,6 @@ def execute(job_id, request):
     model = get_inference_model(request.get("modelId"))
     template = model.load_template()
     request = copy.deepcopy(request)
-    if request.get("promptNeedsResolve"):
-        request["prompt"] = inference_runtime.resolve_wildcard_prompt(
-            str(request.get("sourcePrompt") or request.get("prompt") or ""),
-            request["settings"]["seed"],
-        )
-        request["promptNeedsResolve"] = False
     started = time.monotonic()
     uploaded = {}
     output_ref = None

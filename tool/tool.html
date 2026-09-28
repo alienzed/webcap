@@ -1487,6 +1487,14 @@
                         <option value="">Loading models...</option>
                     </select>
                 </div>
+                <div id="director-chat-progress" class="director-chat-progress hidden" aria-live="polite">
+                    <div class="director-chat-progress-copy">
+                        <strong id="director-chat-progress-phase">Preparing</strong>
+                        <span id="director-chat-progress-detail"></span>
+                        <time id="director-chat-progress-elapsed">0.0s</time>
+                    </div>
+                    <div class="director-chat-progress-track" aria-hidden="true"><span></span></div>
+                </div>
                 <div id="director-chat-messages" class="director-chat-messages" aria-live="polite"></div>
                 <div id="director-chat-empty" class="director-chat-empty">
                     Start a freeform conversation with the selected model. Nothing here is shared with Storyboard or saved.
@@ -1494,7 +1502,7 @@
                 <div class="director-chat-composer">
                     <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
                     <div class="director-chat-composer-footer">
-                        <span id="director-chat-status" class="director-chat-status" aria-live="polite"></span>
+                        <span class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
                         <button id="director-chat-send" type="button" class="review-captions-btn">Send</button>
                     </div>
                 </div>

@@ -931,6 +931,69 @@ def _completion_result(response, model_id):
     }
 
 
+def run_freeform_chat(model_id, messages):
+    if not isinstance(messages, list) or not messages:
+        raise ValueError("Director Chat messages are required.")
+
+    normalized = []
+    for message in messages:
+        if not isinstance(message, dict):
+            raise ValueError("Director Chat messages must be objects.")
+        role = str(message.get("role") or "").strip().lower()
+        if role not in {"user", "assistant"}:
+            raise ValueError("Director Chat supports only user and assistant messages.")
+        content = str(message.get("content") or "").strip()
+        if not content:
+            raise ValueError("Director Chat messages cannot be empty.")
+        normalized.append({"role": role, "content": content})
+
+    operation = "freeform_chat"
+    with _request_lock:
+        if _stop_requested.is_set():
+            raise RuntimeError("LLM request stopped.")
+        _set_activity(
+            "preparing",
+            model_id=model_id,
+            operation=operation,
+            active=True,
+            error="",
+            model_size_bytes=0,
+        )
+        try:
+            settings = _director_config()
+            _set_activity(
+                "preparing",
+                model_id=model_id,
+                operation=operation,
+                context_size=(settings.get("context_size") or 0) if settings.get("mode", "local") == "local" else 0,
+            )
+            result = chat(model_id, normalized)
+            _set_activity(
+                "complete",
+                model_id=model_id,
+                operation=operation,
+                active=False,
+                usage=result.get("usage"),
+                timings=result.get("timings"),
+            )
+            print(
+                "[Director Chat] request completed: model="
+                + model_id
+                + " messages=" + str(len(normalized))
+                + " usage=" + json.dumps(result.get("usage") or {}, ensure_ascii=False)
+                + " timings=" + json.dumps(result.get("timings") or {}, ensure_ascii=False),
+                flush=True,
+            )
+            _relay_log_updates()
+            return result
+        except Exception as exc:
+            if _stop_requested.is_set():
+                _set_activity("stopped", model_id=model_id, operation=operation, active=False, error="")
+            else:
+                _set_activity("error", model_id=model_id, operation=operation, active=False, error=str(exc))
+            raise
+
+
 def run_contract(model_id, contract, gpu_reserved=False):
     if not isinstance(contract, dict):
         raise ValueError("Storyboard Director contract must be an object.")

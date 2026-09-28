@@ -282,7 +282,6 @@ def _managed_job_ids(state):
 
 def _read_state():
     global _state_file_seen, _persisted_managed_job_ids
-    _ensure_runtime_dirs()
     path = _state_path()
     try:
         path.stat()

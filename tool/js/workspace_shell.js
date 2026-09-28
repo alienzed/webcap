@@ -479,6 +479,12 @@ function syncApplicationShellContext() {
   var workspaceActions = document.getElementById('app-header-workspace-actions');
   var modelControl = document.getElementById('app-header-model-control');
   var modelSelect = document.getElementById('app-header-model-profile-select');
+  var workingModelProfileId = getWorkingModelProfileId();
+  if (modelSelect && workingModelProfileId && Array.prototype.some.call(modelSelect.options, function (option) {
+    return String(option.value || '') === workingModelProfileId;
+  })) {
+    modelSelect.value = workingModelProfileId;
+  }
   var previewHeader = document.getElementById('preview-header');
   var annotationActions = document.getElementById('workbench-annotation-actions');
   var sidebarToggle = document.getElementById('sidebar-collapse-toggle-btn');
@@ -922,6 +928,10 @@ function wireWorkspaceHeaderUi() {
   if (immersiveExitBtn && !immersiveExitBtn.__workspaceWired) {
     immersiveExitBtn.__workspaceWired = true;
     immersiveExitBtn.onclick = function () { setShellImmersive(false); };
+  }
+  if (!window.__webcapWorkingModelShellBound) {
+    window.__webcapWorkingModelShellBound = true;
+    window.addEventListener('webcap:working-model-changed', syncApplicationShellContext);
   }
   if (!window.__webcapShellEscapeBound) {
     window.__webcapShellEscapeBound = true;

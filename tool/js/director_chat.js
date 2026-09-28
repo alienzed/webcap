@@ -188,7 +188,7 @@
       models.forEach(function (model) {
         var option = document.createElement('option');
         option.value = String(model.id || '');
-        option.textContent = String(model.label || model.id || '');
+        option.textContent = formatDirectorModelLabel(model);
         select.appendChild(option);
       });
 

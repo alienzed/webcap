@@ -2086,9 +2086,18 @@ def open_in_vscode():
     return open_in_vscode_response(rel_path)
     
 if __name__ == "__main__":
-    prepare_inference_startup_backlog()
-    start_training_runner_observer()
-    reconcile_llm_startup()
+    try:
+        prepare_inference_startup_backlog()
+    except Exception:
+        app.logger.exception("INFERENCE STARTUP RECONCILIATION FAILED; inference state was left unchanged.")
+    try:
+        start_training_runner_observer()
+    except Exception:
+        app.logger.exception("TRAINING OBSERVER STARTUP FAILED.")
+    try:
+        reconcile_llm_startup()
+    except Exception:
+        app.logger.exception("DIRECTOR STARTUP RECONCILIATION FAILED; Director queue state was left unchanged.")
     # Only bind to localhost for desktop/offline use.
     # Disable Flask debug mode for a production-like local runtime.
     app.run(host="127.0.0.1", port=4200, debug=False)

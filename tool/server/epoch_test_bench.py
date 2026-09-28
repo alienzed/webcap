@@ -152,11 +152,16 @@ def recent_test_sets(limit=8):
         return [dict(item) for item in cached_items[:max(1, int(limit or 8))]]
 
     recent_by_key = {}
-    central_root = _central_session_root()
-    if central_root.is_dir() and not central_root.is_symlink():
+    seen_sessions = set()
+    for central_root in (_central_session_root(), _legacy_central_session_root()):
+        if not central_root.is_dir() or central_root.is_symlink():
+            continue
         for session in central_root.iterdir():
+            if session.name in seen_sessions:
+                continue
             if session.is_symlink() or not session.is_dir() or not (session / "test.json").is_file():
                 continue
+            seen_sessions.add(session.name)
             payload = _read_status(session) or {}
             source = str(payload.get("source") or "").strip()
             model_id = str(payload.get("modelId") or payload.get("model") or "").strip()
@@ -317,20 +322,31 @@ def _relative_to_fs_root(path):
     return Path(path).resolve().relative_to(Path(app_config.FS_ROOT).resolve()).as_posix()
 
 
+def _session_result_folder(session_directory):
+    try:
+        return _session_result_folder(session_directory)
+    except ValueError:
+        return ""
+
+
 def _session_root(folder_path):
     """Legacy per-set Test Session root."""
     return _owning_set_directory(folder_path) / TEST_RESULTS_DIR
 
 
+def _legacy_central_session_root():
+    return Path(app_config.FS_ROOT) / ".webcap" / TEST_RESULTS_DIR
+
+
 def _central_session_root():
-    root = Path(app_config.FS_ROOT) / ".webcap" / TEST_RESULTS_DIR
+    root = app_config.output_root() / TEST_RESULTS_DIR
     if root.is_symlink():
         raise RuntimeError("Central Test Session storage cannot be symlinked.")
     return root
 
 
 def _session_roots(folder_path):
-    roots = [_central_session_root(), _session_root(folder_path)]
+    roots = [_central_session_root(), _legacy_central_session_root(), _session_root(folder_path)]
     unique = []
     seen = set()
     for root in roots:
@@ -348,8 +364,11 @@ def _session_belongs_to_folder(folder_path, session_directory, payload=None):
     if session.parent == legacy_root:
         return True
 
-    central_root = _central_session_root().resolve()
-    if session.parent != central_root:
+    central_roots = {
+        _central_session_root().resolve(),
+        _legacy_central_session_root().resolve(),
+    }
+    if session.parent not in central_roots:
         return False
 
     status = payload if isinstance(payload, dict) else (_read_status(session) or {})
@@ -434,7 +453,7 @@ def _session_status(session_directory):
     if not visible.get("modelId"):
         visible["modelId"] = str(visible.get("model") or get_test_model().PROFILE_ID)
     if not visible.get("resultFolder"):
-        visible["resultFolder"] = _relative_to_fs_root(session_directory)
+        visible["resultFolder"] = _session_result_folder(session_directory)
     return visible
 
 
@@ -1074,7 +1093,7 @@ def _sync_inference_session(session_directory):
         visible["queued"] = len(pending)
         visible["running"] = 1 if active is not None else 0
         visible["session"] = Path(session_directory).name
-        visible["resultFolder"] = visible.get("resultFolder") or _relative_to_fs_root(session_directory)
+        visible["resultFolder"] = visible.get("resultFolder") or _session_result_folder(session_directory)
 
         if active is not None:
             metadata = active.get("metadata") if isinstance(active.get("metadata"), dict) else {}
@@ -1241,7 +1260,7 @@ def execute_inference(job_id, request, context):
                 "providerJobId": provider_job_id,
                 "providerStatus": "pending",
                 "session": session_id,
-                "resultFolder": _relative_to_fs_root(session_directory),
+                "resultFolder": _session_result_folder(session_directory),
             },
         )
         with _status_lock:
@@ -1360,7 +1379,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "workflowSha256": str(request.get("workflowSha256") or ""),
         "includeBase": bool(include_base),
         "results": [],
-        "resultFolder": _relative_to_fs_root(session_directory),
+        "resultFolder": _session_result_folder(session_directory),
         "inferenceJobs": [],
         "legacyJobId": str(legacy_job_id or ""),
         "migrationComplete": False,

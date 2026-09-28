@@ -12,6 +12,7 @@ from tool.server import inference_runtime
 
 def configure_execution_queue(monkeypatch, tmp_path):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench.app_config, "output_root", lambda: tmp_path / "output")
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
     bench._startup_reconciled = False
@@ -1241,7 +1242,7 @@ def test_explicit_test_root_does_not_get_replaced_by_set_default(monkeypatch):
 
 
 
-def test_new_test_sessions_use_central_webcap_storage_and_record_source(tmp_path, monkeypatch):
+def test_new_test_sessions_use_output_storage_and_record_source(tmp_path, monkeypatch):
     configure_execution_queue(monkeypatch, tmp_path)
     model = patch_default_test_model(
         monkeypatch,
@@ -1283,11 +1284,62 @@ def test_new_test_sessions_use_central_webcap_storage_and_record_source(tmp_path
         include_base=False,
     )
 
-    path = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR / session["session"] / "test.json"
+    path = tmp_path / "output" / bench.TEST_RESULTS_DIR / session["session"] / "test.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["source"] == "random-loras"
     assert payload["ownerFolder"] == "sets/demo"
     assert not (set_folder / bench.TEST_RESULTS_DIR).exists()
+
+
+def test_new_output_test_root_wins_same_name_collision_with_legacy_central(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench.app_config, "output_root", lambda: tmp_path / "creative")
+    set_folder = tmp_path / "sets" / "demo"
+    set_folder.mkdir(parents=True)
+
+    current = tmp_path / "creative" / bench.TEST_RESULTS_DIR / "same-session"
+    legacy = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR / "same-session"
+    current.mkdir(parents=True)
+    legacy.mkdir(parents=True)
+    bench._atomic_write_json(current / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "shared",
+        "ownerFolder": "sets/demo",
+        "results": [],
+        "name": "Current",
+    })
+    bench._atomic_write_json(legacy / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "shared",
+        "ownerFolder": "sets/demo",
+        "results": [],
+        "name": "Legacy",
+    })
+
+    opened = bench.open_session(set_folder, "same-session")
+
+    assert opened["name"] == "Current"
+    assert [item["session"] for item in bench.list_sessions(set_folder, source="shared")] == ["same-session"]
+
+
+def test_legacy_central_test_sessions_remain_readable_after_output_alignment(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench.app_config, "output_root", lambda: tmp_path / "creative")
+    set_folder = tmp_path / "sets" / "demo"
+    set_folder.mkdir(parents=True)
+    legacy = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR / "legacy-session"
+    legacy.mkdir(parents=True)
+    bench._atomic_write_json(legacy / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "shared",
+        "ownerFolder": "sets/demo",
+        "results": [],
+    })
+
+    assert bench.open_session(set_folder, "legacy-session")["session"] == "legacy-session"
 
 
 def test_central_test_sessions_are_scoped_to_their_owning_set(tmp_path, monkeypatch):

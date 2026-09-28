@@ -141,6 +141,7 @@ def test_activity_navigation_passes_stable_target_identity_to_workspaces():
     assert "function openGenerateActivity(target)" in generate
     assert "trackGenerateJob(targetJobId);" in generate
     assert "generateState.activePendingJobId = targetJobId;" in generate
+    assert "setGenerateViewMode(targetJobId ? 'create' : generateState.viewMode);" in generate
     assert "function openTrainingSurface(mode, target)" in shell
     assert "openTrainingWorkspaceFolder(String(target.folder || ''));" in shell
     assert '"source": str(job.get("source") or metadata.get("source") or "")' in monitor

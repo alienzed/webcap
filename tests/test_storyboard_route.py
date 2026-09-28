@@ -10,6 +10,50 @@ def isolate_storyboard_output_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module.app_config, "output_root", lambda: tmp_path / "output")
 
 
+def test_director_activity_queue_handoff_drops_stale_model_telemetry(monkeypatch):
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_director_activity_status",
+        lambda: {
+            "active": False,
+            "phase": "complete",
+            "model": "previous-model",
+            "modelSizeBytes": 123,
+            "contextSize": 456,
+            "remoteModelVramBytes": 789,
+            "usage": {"prompt_tokens": 12},
+            "runtimeMode": "remote",
+            "runtimeProvider": "ollama",
+        },
+    )
+    monkeypatch.setattr(
+        app_module,
+        "llm_snapshot",
+        lambda include_terminal=False: {
+            "activeJobId": "",
+            "jobs": [{
+                "jobId": "queued-1",
+                "status": "queued",
+                "modelId": "next-model",
+                "operation": "develop_story",
+                "createdAt": 10,
+                "queuePosition": 1,
+            }],
+        },
+    )
+
+    payload = app_module.app.test_client().get("/fs/director/activity").get_json()
+
+    assert payload["runtimeMode"] == "remote"
+    assert payload["runtimeProvider"] == "ollama"
+    assert payload["phase"] == "queued"
+    assert payload["model"] == "next-model"
+    assert "modelSizeBytes" not in payload
+    assert "contextSize" not in payload
+    assert "remoteModelVramBytes" not in payload
+    assert "usage" not in payload
+
+
 def test_storyboard_route_is_independent_of_current_set(tmp_path, monkeypatch):
     root = tmp_path / "root"
     root.mkdir()

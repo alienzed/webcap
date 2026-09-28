@@ -147,8 +147,12 @@ def _write_json_atomic(path, payload):
 
 def _read_recent_runs():
     path = _recent_runs_path()
-    if not path.exists():
+    try:
+        path.stat()
+    except FileNotFoundError:
         return {"version": RECENT_RUNS_VERSION, "jobs": []}
+    except OSError as exc:
+        raise ValueError("Could not inspect Recent Runs; it was left unchanged: " + str(path)) from exc
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:

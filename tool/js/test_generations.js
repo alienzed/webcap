@@ -510,7 +510,7 @@
       }
       var remoteVramBytes = showRemoteModelTelemetry ? Number(activity && activity.remoteModelVramBytes) : NaN;
       if (isFinite(remoteVramBytes) && remoteVramBytes > 0) {
-        parts.push('Model VRAM ' + wildcardDirectorBytesGiB(remoteVramBytes));
+        parts.push('GPU-resident ' + wildcardDirectorBytesGiB(remoteVramBytes));
       }
       var remoteContextSize = showRemoteModelTelemetry ? Number(activity && activity.contextSize) : NaN;
       if (isFinite(remoteContextSize) && remoteContextSize > 0) {

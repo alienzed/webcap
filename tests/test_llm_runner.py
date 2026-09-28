@@ -53,6 +53,33 @@ def test_llm_test_job_returns_structured_analysis_without_side_effects(llm_root,
     assert finished["result"]["analysis"]["wildcard"] == "subject {standing|sitting}"
 
 
+def test_llm_test_client_rejects_unowned_operations(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "text": '{"wildcard":"subject {a|b}","stableTerms":[],"variationGroups":[]}',
+            "data": {"wildcard": "subject {a|b}", "stableTerms": [], "variationGroups": []},
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "test",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Analyze.", "output": "json"},
+        label="Test wildcard",
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "failed"
+    assert "Unsupported Test Generations LLM operation" in finished["error"]
+
+
 def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)

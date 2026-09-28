@@ -912,3 +912,14 @@ def test_test_generations_can_generate_wildcard_prompt_from_set_captions():
     assert "prompt.value = value;" in script
     assert "saveTestPromptDraft(value);" in script
     assert "requestFolder" in script
+
+
+def test_test_wildcard_helper_is_optional_and_does_not_leave_cross_set_output():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    open_block = script.split("function openPane()", 1)[1].split("function startRun", 1)[0]
+    assert "wildcardDirector.analysis = null;" in open_block
+    assert "renderWildcardAnalysis(null);" in open_block
+    assert "Director unavailable." in open_block
+    assert "reportConsoleError('Test Generations', err);" in open_block
+    assert "showError(err);" not in open_block.split("refreshWildcardDirector()", 1)[1].split("refreshTestSourceBrowser()", 1)[0]

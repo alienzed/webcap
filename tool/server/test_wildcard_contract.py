@@ -1,10 +1,9 @@
 from collections import Counter
 
-from .originals import MEDIA_ALL_EXTS, is_transient_media_name
-
 
 def _clean_caption(value):
-    return " ".join(str(value or "").strip().split())
+    lines = [line.strip() for line in str(value or "").replace("\r\n", "\n").split("\n")]
+    return "\n".join(line for line in lines if line)
 
 
 def build_request(captions):
@@ -83,23 +82,40 @@ def build_request(captions):
     }
 
 
+def normalize_result(data):
+    if not isinstance(data, dict):
+        raise ValueError("Wildcard analysis response must be an object.")
 
-def captions_from_folder(folder_path):
-    captions = []
-    for media_path in sorted(folder_path.iterdir(), key=lambda path: path.name.lower()):
-        if (
-            not media_path.is_file()
-            or media_path.suffix.lower() not in MEDIA_ALL_EXTS
-            or is_transient_media_name(media_path.name)
-        ):
-            continue
-        caption_path = media_path.with_suffix(".txt")
-        if not caption_path.is_file():
-            continue
-        try:
-            text = caption_path.read_text(encoding="utf-8").strip()
-        except OSError as exc:
-            raise RuntimeError("Could not read Set caption: " + caption_path.name) from exc
-        if text:
-            captions.append(text)
-    return captions
+    wildcard = str(data.get("wildcard") or "").strip()
+    if not wildcard:
+        raise ValueError("Wildcard analysis response is missing its wildcard caption.")
+
+    stable_terms = data.get("stableTerms")
+    if not isinstance(stable_terms, list):
+        raise ValueError("Wildcard analysis response stableTerms must be an array.")
+    stable_terms = [str(value or "").strip() for value in stable_terms]
+    if any(not value for value in stable_terms):
+        raise ValueError("Wildcard analysis response contains an empty stable term.")
+
+    groups = data.get("variationGroups")
+    if not isinstance(groups, list):
+        raise ValueError("Wildcard analysis response variationGroups must be an array.")
+
+    normalized_groups = []
+    for group in groups:
+        if not isinstance(group, dict):
+            raise ValueError("Wildcard analysis response contains an invalid variation group.")
+        label = str(group.get("label") or "").strip()
+        options = group.get("options")
+        if not label or not isinstance(options, list):
+            raise ValueError("Wildcard analysis response contains an invalid variation group.")
+        options = [str(value or "").strip() for value in options]
+        if len(options) < 2 or any(not value for value in options):
+            raise ValueError("Wildcard analysis variation groups require at least two non-empty options.")
+        normalized_groups.append({"label": label, "options": options})
+
+    return {
+        "wildcard": wildcard,
+        "stableTerms": stable_terms,
+        "variationGroups": normalized_groups,
+    }

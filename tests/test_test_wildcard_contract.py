@@ -1,4 +1,4 @@
-from tool.server.test_wildcard_contract import build_request
+from tool.server.test_wildcard_contract import build_request, normalize_result
 
 
 def test_caption_wildcard_contract_reports_stable_and_variable_content():
@@ -21,3 +21,23 @@ def test_caption_wildcard_contract_requires_real_captions():
 
     with pytest.raises(ValueError, match="no captions"):
         build_request(["", "   "])
+
+
+def test_caption_wildcard_contract_preserves_meaningful_line_structure():
+    request = build_request(["subject standing\nblack shirt\nsoft lighting, front view"])
+
+    assert "subject standing\nblack shirt\nsoft lighting, front view" in request["prompt"]
+
+
+def test_caption_wildcard_result_is_normalized_before_ui():
+    result = normalize_result({
+        "wildcard": " subject {standing|sitting} ",
+        "stableTerms": [" subject "],
+        "variationGroups": [{"label": " pose ", "options": [" standing ", " sitting "]}],
+    })
+
+    assert result == {
+        "wildcard": "subject {standing|sitting}",
+        "stableTerms": ["subject"],
+        "variationGroups": [{"label": "pose", "options": ["standing", "sitting"]}],
+    }

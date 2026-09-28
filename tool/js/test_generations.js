@@ -2527,6 +2527,9 @@
     currentStatus = {};
     showSessionError = false;
     compareIndex = 0;
+    wildcardDirector.analysis = null;
+    renderWildcardAnalysis(null);
+    el('test-generations-wildcard-status').textContent = '';
     setResultsView('grid');
     renderStatus({ status: 'idle' });
     refreshActivityButton();
@@ -2543,7 +2546,8 @@
       wildcardDirector.available = false;
       wildcardDirector.models = [];
       renderWildcardDirector();
-      showError(err);
+      el('test-generations-wildcard-status').textContent = 'Director unavailable.';
+      reportConsoleError('Test Generations', err);
     });
     refreshTestSourceBrowser().then(function (sourcePayload) {
       if (sourcePayload && sourcePayload.navigated) return null;

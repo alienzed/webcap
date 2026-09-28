@@ -50,22 +50,6 @@ def _default_lane():
     }
 
 
-def _discard_invalid_state(path, reason):
-    backup = path.with_name("execution_queue.invalid-" + str(int(time.time())) + ".json")
-    try:
-        os.replace(path, backup)
-    except OSError as exc:
-        raise ExecutionQueueStateError(
-            "Execution queue state is invalid and could not be moved aside: " + str(exc)
-        ) from exc
-    _logger.error(
-        "Execution queue runtime state was invalid and has been moved aside to %s: %s",
-        backup,
-        reason,
-    )
-    return _default_state()
-
-
 def _read_state():
     path = _state_path()
     try:
@@ -76,15 +60,47 @@ def _read_state():
         raise ExecutionQueueStateError("Execution queue state cannot be inspected: " + str(exc)) from exc
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        return _discard_invalid_state(path, "unreadable JSON: " + str(exc))
-    except OSError as exc:
-        raise ExecutionQueueStateError("Execution queue state cannot be read: " + str(exc)) from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ExecutionQueueStateError("Execution queue state is unreadable: " + str(exc)) from exc
     if not isinstance(raw, dict) or raw.get("version") != STATE_VERSION:
-        return _discard_invalid_state(path, "unsupported format")
+        raise ExecutionQueueStateError("Execution queue state has an unsupported format.")
     if not isinstance(raw.get("lanes"), dict):
-        return _discard_invalid_state(path, "invalid lanes")
+        raise ExecutionQueueStateError("Execution queue lanes are invalid.")
     return raw
+
+
+def recover_invalid_startup_state():
+    """Move aside invalid runtime queue bookkeeping before workers start."""
+    path = _state_path()
+    try:
+        state = _read_state()
+        for lane_name in state.get("lanes", {}):
+            _lane(state, lane_name, create=False)
+        return False
+    except FileNotFoundError:
+        return False
+    except ExecutionQueueStateError as exc:
+        try:
+            path.stat()
+        except FileNotFoundError:
+            return False
+        except OSError:
+            raise
+        backup = path.with_name(
+            "execution_queue.invalid-" + str(int(time.time() * 1000)) + ".json"
+        )
+        try:
+            os.replace(path, backup)
+        except OSError as move_exc:
+            raise ExecutionQueueStateError(
+                "Execution queue state is invalid and could not be moved aside: " + str(move_exc)
+            ) from move_exc
+        _logger.error(
+            "Execution queue runtime state was invalid at startup and has been moved aside to %s: %s",
+            backup,
+            exc,
+        )
+        return True
 
 
 def _write_state(state):

@@ -63,6 +63,21 @@ def test_new_session_seed_uses_portable_32_bit_range():
     assert 0 <= seed <= 4294967295
 
 
+def test_resolved_wildcard_values_extracts_only_selected_variants():
+    assert bench._resolved_wildcard_values(
+        "person wearing {black dress|red dress} in a {studio|rooftop}, {front|side} view",
+        "person wearing red dress in a rooftop, side view",
+    ) == ["red dress", "rooftop", "side"]
+
+
+def test_resolved_wildcard_values_ignores_plain_or_unmatched_prompts():
+    assert bench._resolved_wildcard_values("plain prompt", "plain prompt") == []
+    assert bench._resolved_wildcard_values(
+        "person wearing {black|red}",
+        "a completely different resolved prompt",
+    ) == []
+
+
 def test_test_source_owner_requires_unanimous_webcap_provenance(tmp_path, monkeypatch):
     model = bench.get_test_model()
     staged = tmp_path / "staged"

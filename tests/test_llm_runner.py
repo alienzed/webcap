@@ -80,6 +80,54 @@ def test_llm_test_client_rejects_unowned_operations(llm_root, monkeypatch):
     assert "Unsupported Test Generations LLM operation" in finished["error"]
 
 
+def test_llm_chat_job_runs_through_shared_lane_without_persisting_conversation(llm_root, monkeypatch):
+    calls = []
+    captured = {}
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(
+        llm_runner,
+        "_reserve_gpu",
+        lambda: calls.append("reserve") or execution_queue.reserve_resource("llm"),
+    )
+    monkeypatch.setattr(
+        llm_runner,
+        "_release_gpu",
+        lambda: calls.append("release") or execution_queue.release_resource("llm"),
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_freeform_chat",
+        lambda model_id, messages, gpu_reserved=False: captured.update({
+            "model": model_id,
+            "messages": messages,
+            "gpu_reserved": gpu_reserved,
+        }) or {
+            "text": "Hello there.",
+            "model": model_id,
+            "usage": {"total_tokens": 7},
+            "timings": {"predicted_ms": 5},
+        },
+    )
+
+    messages = [{"role": "user", "content": "Hello"}]
+    job = llm_runner.enqueue(
+        "chat",
+        "qwen",
+        {"operation": "freeform_chat", "messages": messages},
+        label="Director Chat",
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["client"] == "chat"
+    assert finished["operation"] == "freeform_chat"
+    assert finished["result"]["text"] == "Hello there."
+    assert captured == {"model": "qwen", "messages": messages, "gpu_reserved": True}
+    assert calls == ["reserve", "release"]
+    assert execution_queue.resource_owner() == ""
+
+
 def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)

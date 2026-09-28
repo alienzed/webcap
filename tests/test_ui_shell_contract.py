@@ -691,6 +691,29 @@ def test_caption_report_owns_a_large_inspectable_balance_wheel():
 
 
 
+
+def test_test_generations_director_uses_visible_activity_card_and_stop():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-director-activity"' in html
+    assert 'id="test-generations-director-model-load"' in html
+    assert 'id="test-generations-director-activity-trend"' in html
+    assert 'id="test-generations-director-stop"' in html
+    assert "startWildcardDirectorActivity();" in script
+    assert "finishWildcardDirectorActivity();" in script
+    assert "stopWildcardDirectorJob" in script
+    assert "wildcardRequestJson('/fs/director/activity')" in script
+    assert "wildcardRequestJson('/fs/system_status')" in script
+    assert "operation: 'stop_or_cancel'" in script
+    assert "observeTransientLlmActivity(values[0]);" in script
+    assert ".test-generations-director-activity {" in css
+    assert "item.client === 'test' ? 'Test'" in activity
+    assert "item.client === 'test' && typeof window.openTestBenchActivity === 'function'" in activity
+
+
 def test_test_generations_sessions_use_standard_work_item_anatomy():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

@@ -470,6 +470,22 @@ Training's special execution status must not leak into speculative queue-admissi
 
 A queue should preserve user intent even when execution dependencies are unavailable.
 
+### Eventual terminalization
+
+Every accepted job must have a path to a terminal state. A job may be queued, starting, running,
+stopping, or otherwise in-flight temporarily, but it must not remain non-terminal forever because
+an external provider, worker, or cancellation handshake disappeared.
+
+Stop/Cancel requests do not release semantic UI ownership merely because the request was issued.
+Ownership ends only when the job is actually terminal. Therefore the execution/reconciliation layer
+must guarantee eventual terminalization through normal completion, cancellation, stop, visible
+failure, interruption/recovery handling, or equivalent authoritative reconciliation.
+
+The UI must never reopen mutable state on the assumption that a worker stopped when that has not
+been established.
+
+A queue should preserve user intent even when execution dependencies are unavailable.
+
 Examples:
 
 - ComfyUI unavailable: valid inference work may remain queued and later execute or fail visibly.

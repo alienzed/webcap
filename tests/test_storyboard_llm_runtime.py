@@ -1027,6 +1027,7 @@ def test_remote_chat_uses_openai_compatible_endpoint_without_local_gpu_managemen
             "max_tokens": 4096,
         },
     )
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda: False)
 
     captured = {}
 
@@ -1063,6 +1064,45 @@ def test_remote_chat_uses_openai_compatible_endpoint_without_local_gpu_managemen
     assert "repeat_penalty" not in captured["payload"]
     assert "seed" not in captured["payload"]
     assert calls == ["server"]
+
+
+def test_remote_ollama_chat_uses_cancellable_transport(monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "mode": "remote",
+            "endpoint": "http://director-box:11434/v1",
+            "max_tokens": None,
+        },
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda: True)
+    captured = {}
+
+    def fake_cancellable(path, method="GET", payload=None, timeout=30):
+        captured["path"] = path
+        captured["method"] = method
+        captured["payload"] = payload
+        return {"choices": [{"message": {"content": "ollama response"}}]}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_http_json_cancellable", fake_cancellable)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda *_args, **_kwargs: pytest.fail("Detected Ollama chat must use the cancellable transport."),
+    )
+
+    result = storyboard_llm_runtime.chat(
+        "ollama-model",
+        [{"role": "user", "content": "Write."}],
+    )
+
+    assert result["text"] == "ollama response"
+    assert captured["path"] == "/chat/completions"
+    assert captured["method"] == "POST"
+    assert captured["payload"]["model"] == "ollama-model"
 
 
 def test_remote_server_url_preserves_openai_api_prefix(monkeypatch):

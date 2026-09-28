@@ -232,7 +232,7 @@ Storyboard keeps its LLM instructions in versioned repo documents rather than re
 - `docs/storyboard-scene-plan.schema.json` — strict JSON contract for whole-Story -> ordered Scene planning; WebCap validates before creating canonical Scenes.
 - `docs/storyboard-plan-audit.schema.json` — advisory semantic-audit contract used after deterministic plan validation and before an optional single repair pass.
 
-WebCap should eventually assemble provider requests from these stable instructions plus current Story/Scene context. The provider is not the authoritative session store.
+WebCap assembles provider requests from these stable instructions plus current Story/Scene context. The provider is not the authoritative session store.
 
 ## Provider direction
 

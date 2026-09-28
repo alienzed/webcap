@@ -166,10 +166,13 @@ function transientLlmOperationLabel(client, operation, status) {
     repair_scenes: 'Checked / repaired scenes',
     write_prompt: String(client || '') === 'storyboard' ? 'Wrote scene prompt' : 'Expanded prompt',
     refine_prompt: 'Refined prompt',
-    analyze_caption_wildcard: 'Generated wildcard caption'
+    analyze_caption_wildcard: 'Generated wildcard caption',
+    freeform_chat: 'Director Chat'
   };
   var label = labels[key] || (key ? key.replace(/_/g, ' ') : 'LLM call');
-  if (String(status || '') !== 'completed') label += ' failed';
+  var jobStatus = String(status || '');
+  if (jobStatus === 'failed') label += ' failed';
+  else if (['cancelled', 'stopped', 'interrupted'].indexOf(jobStatus) !== -1) label += ' stopped';
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 

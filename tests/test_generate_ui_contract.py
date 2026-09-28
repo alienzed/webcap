@@ -234,8 +234,15 @@ def test_generate_library_open_restores_saved_generation_configuration():
     assert "function restoreResultConfiguration(result)" in script
     assert "prompt.value = String(result.sourcePrompt || result.resolvedPrompt || '');" in script
     assert "generateState.lorasByModel[resultModelId]" in script
-    assert "wildcards.checked = !!result.wildcardsEnabled;" in script
     assert "restoreResultConfiguration(result);" in script
+
+
+def test_generate_does_not_expose_webcap_wildcard_resolution():
+    markup = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert 'id="generate-wildcards"' not in markup
+    assert "wildcardsEnabled" not in script
 
 
 def test_generate_results_have_permanent_delete_action():

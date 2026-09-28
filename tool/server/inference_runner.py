@@ -60,6 +60,21 @@ def _release_gpu():
     release_gpu_for_external_work(GPU_RESERVATION_OWNER)
 
 
+def _local_llm_work_pending():
+    from .storyboard_llm_runtime import uses_local_gpu
+    if not uses_local_gpu():
+        return False
+    snapshot = execution_lane_snapshot("llm", include_terminal=False)
+    if snapshot.get("activeJobId"):
+        return True
+    if snapshot.get("paused"):
+        return False
+    return any(
+        str(job.get("status") or "") == "queued"
+        for job in snapshot.get("jobs", [])
+    )
+
+
 def _set_backlog_wait_reason(reason):
     global _backlog_wait_reason
     with _backlog_lock:
@@ -474,6 +489,10 @@ def _advance_queue():
             _set_backlog_wait_reason("")
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
+            return None
+
+        if _local_llm_work_pending():
+            _set_backlog_wait_reason("Waiting for Prompt Assistant / Director.")
             return None
 
         owner = execution_resource_owner()

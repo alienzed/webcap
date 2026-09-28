@@ -43,6 +43,7 @@ from .storyboard_llm_runtime import activity_status as storyboard_director_activ
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
+from .test_wildcard_contract import build_request as test_wildcard_build_request, captions_from_folder as test_wildcard_captions_from_folder
 from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, prepare_startup_backlog as prepare_inference_startup_backlog, snapshot as inference_snapshot, stop_storyboard_jobs
 from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot, storyboard_story_busy as llm_storyboard_story_busy, storyboard_target_busy as llm_storyboard_target_busy
 from .activity_monitor import activity_snapshot
@@ -1197,6 +1198,33 @@ def generate_director_route():
 def training_profiles_route():
     enabled = set((app_config.config.get("training") or {}).get("enabled_profiles") or [])
     return jsonify({"profiles": [item for item in training_profiles() if item["id"] in enabled]})
+
+
+@app.route("/fs/test_generations/wildcard", methods=["GET", "POST"])
+def test_generations_wildcard_route():
+    try:
+        if request.method == "GET":
+            return jsonify({"ok": True, **storyboard_director_status()})
+
+        data = request.get_json(silent=True) or {}
+        folder_path = safe_join_fs_root(str(data.get("folder") or "").strip())
+        captions = test_wildcard_captions_from_folder(folder_path)
+        contract = test_wildcard_build_request(captions)
+        job = enqueue_llm(
+            "test",
+            str(data.get("directorModel") or "").strip(),
+            contract,
+            context={},
+            label="Test wildcard from Set captions",
+        )
+        return jsonify({
+            "ok": True,
+            "captionCount": len(captions),
+            "job": job,
+        }), 202
+    except Exception as exc:
+        app.logger.exception("TEST WILDCARD GENERATION FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.route("/fs/test_generations/models", methods=["GET"])

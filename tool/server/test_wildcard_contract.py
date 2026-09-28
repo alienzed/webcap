@@ -79,3 +79,21 @@ def build_request(captions):
         "prompt": prompt,
         "response_schema": schema,
     }
+
+
+
+def captions_from_folder(folder_path):
+    captions = []
+    for media_path in sorted(folder_path.iterdir(), key=lambda path: path.name.lower()):
+        if not media_path.is_file():
+            continue
+        caption_path = media_path.with_suffix(".txt")
+        if not caption_path.is_file():
+            continue
+        try:
+            text = caption_path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise RuntimeError("Could not read Set caption: " + caption_path.name) from exc
+        if text:
+            captions.append(text)
+    return captions

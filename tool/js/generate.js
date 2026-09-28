@@ -1584,7 +1584,14 @@
     }, generateState.open ? 5000 : 12000);
   }
 
-  function openGenerateActivity() {
+  function openGenerateActivity(target) {
+    target = target && typeof target === 'object' ? target : {};
+    var targetJobId = String(target.jobId || '');
+    if (targetJobId) {
+      trackGenerateJob(targetJobId);
+      generateState.activePendingJobId = targetJobId;
+      generateState.activeResultKey = '';
+    }
     var frame = el('app-frame');
     var workspace = el('generate-workspace');
     if (!frame || !workspace) throw new Error('Generate workspace markup is missing.');
@@ -1594,7 +1601,7 @@
     generateState.director.modelId = getDirectorModelPreference('webcap.generate.directorModel');
     frame.classList.add('workspace-generate-open');
     workspace.classList.remove('hidden');
-    setGenerateViewMode(generateState.viewMode);
+    setGenerateViewMode('create');
     setTakesCollapsed(generateState.takesCollapsed);
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();

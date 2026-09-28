@@ -4336,6 +4336,7 @@
     if (!storyState.story) return;
     var storyId = String(storyState.story.id || '');
     var generationBlocked = storyHasPendingGeneration(storyId);
+    var queuedFirstCut = !!queuedFirstCutForStory(storyId);
     var developBlocked = generationBlocked || directorTargetBlocked({ kind: 'scenes', storyId: storyId });
     var firstCutBlocked = generationBlocked || directorTargetBlocked({ kind: 'story-action', storyId: storyId });
     var developButton = el('storyboard-develop-btn');
@@ -4356,6 +4357,24 @@
         ? 'Wait for or cancel this Story\'s pending Take generation before starting First Cut.'
         : firstCutButton.dataset.defaultTitle;
     }
+
+    document.querySelectorAll('#storyboard-generate-scenes-btn, #storyboard-scenes-list [data-scene-generate]').forEach(function (control) {
+      if (queuedFirstCut) {
+        if (!control.disabled) {
+          control.disabled = true;
+          control.dataset.firstCutQueuedDisabled = '1';
+        }
+        control.title = 'Remove this Story from the First Cut queue before adding new Take generation.';
+      } else if (control.dataset.firstCutQueuedDisabled === '1') {
+        control.disabled = false;
+        delete control.dataset.firstCutQueuedDisabled;
+        if (control.matches('[data-scene-generate]')) {
+          control.title = 'Queue a new Take from the current saved Scene.';
+        } else {
+          control.removeAttribute('title');
+        }
+      }
+    });
   }
 
   function storyboardInferenceJob(job) {

@@ -314,10 +314,10 @@
         if (!response.ok || !body || !body.ok) {
           throw new Error((body && body.error) || 'Storyboard generation capabilities failed.');
         }
-        storyState.generationCapabilities.available = true;
+        storyState.generationCapabilities.available = body.available !== false;
         storyState.generationCapabilities.loras = body.loras || [];
         storyState.generationCapabilities.baseLoras = body.baseLoras || [];
-        storyState.generationCapabilities.error = '';
+        storyState.generationCapabilities.error = String(body.error || '');
         if (storyState.story) {
           renderStoryLoras();
           renderScenes();

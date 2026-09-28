@@ -1,3 +1,4 @@
+import logging
 import time
 
 from .execution_queue import recent_snapshot as execution_recent_snapshot
@@ -10,6 +11,7 @@ from .training_runner import status_response as training_status_response
 
 _ACTIVE_STATUSES = {"starting", "running", "stopping"}
 _TERMINAL_STATUSES = {"completed", "finished_early", "failed", "stopped", "interrupted", "cancelled"}
+_logger = logging.getLogger(__name__)
 
 
 def _finished_at(item):
@@ -124,8 +126,21 @@ def activity_snapshot(limit=20, since=0):
     except (TypeError, ValueError):
         since = 0.0
 
-    inference = inference_snapshot(include_terminal=False)
-    llm = llm_snapshot(include_terminal=False)
+    errors = []
+    try:
+        inference = inference_snapshot(include_terminal=False)
+    except Exception as exc:
+        _logger.exception("Inference activity state is unavailable.")
+        errors.append({"area": "inference", "error": str(exc)})
+        inference = {"jobs": [], "paused": False, "pauseReason": "", "backlogCount": 0, "unavailable": True}
+
+    try:
+        llm = llm_snapshot(include_terminal=False)
+    except Exception as exc:
+        _logger.exception("Director activity state is unavailable.")
+        errors.append({"area": "director", "error": str(exc)})
+        llm = {"jobs": [], "paused": False, "pauseReason": "", "unavailable": True}
+
     training_active, training_queue = _training_active_and_queue()
 
     active = []
@@ -158,11 +173,23 @@ def activity_snapshot(limit=20, since=0):
 
     # Recent is a client-session view. Persisted receipts are filtered to the
     # caller's session start rather than becoming durable Activity history.
-    recent = (
-        _execution_recent("inference", limit, since)
-        + _execution_recent("llm", limit, since)
-        + _training_recent(limit, since)
-    )
+    inference_recent = []
+    if not inference.get("unavailable"):
+        try:
+            inference_recent = _execution_recent("inference", limit, since)
+        except Exception as exc:
+            _logger.exception("Inference recent activity is unavailable.")
+            errors.append({"area": "inference", "error": str(exc)})
+
+    llm_recent = []
+    if not llm.get("unavailable"):
+        try:
+            llm_recent = _execution_recent("llm", limit, since)
+        except Exception as exc:
+            _logger.exception("Director recent activity is unavailable.")
+            errors.append({"area": "director", "error": str(exc)})
+
+    recent = inference_recent + llm_recent + _training_recent(limit, since)
 
     if (
         str(scan.get("status") or "") in {"completed", "failed", "cancelled"}
@@ -191,6 +218,7 @@ def activity_snapshot(limit=20, since=0):
         "ok": True,
         "active": active,
         "recent": recent,
+        "errors": errors,
         "queues": {
             "inference": {
                 "running": sum(1 for job in inference_jobs if str(job.get("status") or "") in _ACTIVE_STATUSES),
@@ -198,6 +226,7 @@ def activity_snapshot(limit=20, since=0):
                 "backlog": int(inference.get("backlogCount") or 0),
                 "paused": bool(inference.get("paused")),
                 "pauseReason": str(inference.get("pauseReason") or ""),
+                "unavailable": bool(inference.get("unavailable")),
             },
             "training": training_queue,
             "director": {
@@ -205,6 +234,7 @@ def activity_snapshot(limit=20, since=0):
                 "queued": sum(1 for job in llm_jobs if str(job.get("status") or "") == "queued"),
                 "paused": bool(llm.get("paused")),
                 "pauseReason": str(llm.get("pauseReason") or ""),
+                "unavailable": bool(llm.get("unavailable")),
             },
         },
     }

@@ -354,12 +354,14 @@
   flex: 1 1 auto;
 }
 
-.activity-rail-btn.training-running {
+.activity-rail-btn.training-running,
+.activity-rail-btn.has-active-work {
   position: relative;
 }
 
 .activity-rail-btn.training-running::after,
-.activity-rail-btn.test-running::after {
+.activity-rail-btn.test-running::after,
+.activity-rail-btn.has-active-work::after {
   content: "";
   position: absolute;
   top: 4px;

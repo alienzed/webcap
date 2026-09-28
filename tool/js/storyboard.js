@@ -1560,35 +1560,21 @@
     target = target || {};
     if (!storyState.story || String(target.storyId || '') !== String(storyState.story.id || '')) return;
     if (target.kind === 'story-action') {
-      document.querySelectorAll('[data-story-action-disabled="1"]').forEach(function (control) {
-        control.disabled = false;
-        delete control.dataset.storyActionDisabled;
-      });
-      if (!protectedState) return;
-
       document.querySelectorAll(
-        '#storyboard-story-concept, #storyboard-story-style, #storyboard-story-style-preset, ' +
-        '#storyboard-expand-concept-btn, #storyboard-restore-concept-btn, #storyboard-develop-btn, ' +
-        '#storyboard-invariant-define, #storyboard-invariant-add, ' +
-        '#storyboard-invariants-list input, #storyboard-invariants-list select, #storyboard-invariants-list textarea, #storyboard-invariants-list button, ' +
-        '#storyboard-story-target-scenes, #storyboard-story-aspect-ratio, #storyboard-story-megapixels, ' +
-        '#storyboard-story-lora-list input, #storyboard-story-lora-list select, #storyboard-story-lora-list button, #storyboard-story-lora-picker, ' +
-        '#storyboard-director-pass-mode, #storyboard-repair-instruction, #storyboard-repair-scenes-btn, #storyboard-restore-repair-btn, ' +
-        '#storyboard-scenes-list [data-scene-field], ' +
-        '#storyboard-scenes-list [data-reference-clear], #storyboard-scenes-list [data-reference-role], ' +
-        '#storyboard-scenes-list [data-reference-source], #storyboard-scenes-list [data-reference-frame], ' +
-        '#storyboard-scenes-list [data-reference-apply], #storyboard-scenes-list [data-reference-upload], #storyboard-scenes-list [data-reference-previous], ' +
-        '#storyboard-scenes-list [data-director-write], #storyboard-scenes-list [data-director-refine], #storyboard-scenes-list [data-director-restore], ' +
-        '#storyboard-scenes-list [data-director-correction], #storyboard-scenes-list [data-scene-generate], ' +
-        '#storyboard-scenes-list [data-scene-lora-add], #storyboard-scenes-list [data-scene-lora-picker], ' +
-        '#storyboard-scenes-list [data-scene-lora-name], #storyboard-scenes-list [data-scene-lora-strength], #storyboard-scenes-list [data-scene-lora-remove], ' +
-        '#storyboard-scenes-list [data-story-lora-enabled], #storyboard-scenes-list [data-story-lora-scene-strength], ' +
-        '#storyboard-scenes-list [data-scene-action], #storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add], ' +
+        '#storyboard-story-authoring button, #storyboard-story-authoring input, #storyboard-story-authoring select, #storyboard-story-authoring textarea, ' +
+        '#storyboard-scenes-list button, #storyboard-scenes-list input, #storyboard-scenes-list select, #storyboard-scenes-list textarea, ' +
+        '#storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add], ' +
         '#storyboard-generate-scenes-btn, #storyboard-director-model'
       ).forEach(function (control) {
-        if (!control.disabled) {
-          control.disabled = true;
-          control.dataset.storyActionDisabled = '1';
+        if (control.matches('[data-story-action-cancel]')) return;
+        if (protectedState) {
+          if (!control.disabled) {
+            control.disabled = true;
+            control.dataset.storyActionDisabled = '1';
+          }
+        } else if (control.dataset.storyActionDisabled === '1') {
+          control.disabled = false;
+          delete control.dataset.storyActionDisabled;
         }
       });
       return;
@@ -1643,6 +1629,11 @@
     var conceptTarget = { kind: 'concept', storyId: currentStoryId };
     var repairTarget = { kind: 'repair', storyId: currentStoryId };
     var selector = el('storyboard-director-model');
+
+    document.querySelectorAll('[data-story-action-disabled="1"]').forEach(function (control) {
+      control.disabled = false;
+      delete control.dataset.storyActionDisabled;
+    });
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;
 
     setDirectorTargetProtected(conceptTarget, directorTargetPending(conceptTarget));
@@ -3656,21 +3647,6 @@
     };
     if (directorTargetPending({ kind: 'concept', storyId: storyState.story.id })) {
       delete payload.concept;
-    }
-    var storyAction = storyState.storyAction;
-    if (
-      storyAction &&
-      storyAction.active &&
-      String(storyAction.storyId || '') === String(storyState.story.id || '')
-    ) {
-      delete payload.concept;
-      delete payload.style;
-      delete payload.repairInstruction;
-      delete payload.repairComplete;
-      delete payload.invariants;
-      delete payload.loras;
-      delete payload.targetSceneCount;
-      delete payload.generationDefaults;
     }
     return payload;
   }

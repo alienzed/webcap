@@ -1272,6 +1272,8 @@ def test_new_test_sessions_use_output_storage_and_record_source(tmp_path, monkey
     monkeypatch.setattr(bench.inference_runtime if hasattr(bench, "inference_runtime") else inference_runtime, "resolve_wildcard_prompt", lambda prompt, _seed: prompt)
     monkeypatch.setattr(bench, "_workflow_evidence", lambda _model, _template: {"workflowFile": "test.json", "workflowSha256": "abc"})
     monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="", deferred=False: {"jobId": "job-" + context["candidateKind"]})
+    monkeypatch.setattr(bench, "execution_promote_backlog", lambda job_id: {"id": job_id, "status": "queued"})
+    monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
 
     set_folder = tmp_path / "sets" / "demo"

@@ -1601,7 +1601,7 @@
     generateState.director.modelId = getDirectorModelPreference('webcap.generate.directorModel');
     frame.classList.add('workspace-generate-open');
     workspace.classList.remove('hidden');
-    setGenerateViewMode('create');
+    setGenerateViewMode(targetJobId ? 'create' : generateState.viewMode);
     setTakesCollapsed(generateState.takesCollapsed);
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();

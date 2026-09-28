@@ -373,3 +373,16 @@ def test_generate_prompt_assistant_activity_exposes_hard_stop_control():
     assert "generateState.director.jobId" in script
     assert "Prompt Assistant stopped." in script
     assert ".director-stop-btn {" in styles
+
+def test_generate_secondary_controls_are_collapsible_by_default():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert '<details id="generate-prompt-assistant"' in html
+    assert '<details id="generate-references"' in html
+    assert 'id="generate-prompt-assistant"' in html and ' open' not in html.split('id="generate-prompt-assistant"', 1)[0][-80:]
+    assert 'id="generate-references"' in html
+    assert "assistant.open = true" in script
+    assert ".generate-collapsible > summary" in css
+

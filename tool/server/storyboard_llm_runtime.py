@@ -1060,7 +1060,7 @@ def _completion_result(response, model_id):
     }
 
 
-def run_freeform_chat(model_id, messages):
+def run_freeform_chat(model_id, messages, gpu_reserved=False):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director Chat messages are required.")
 
@@ -1096,7 +1096,7 @@ def run_freeform_chat(model_id, messages):
                 operation=operation,
                 context_size=(settings.get("context_size") or 0) if settings.get("mode", "local") == "local" else 0,
             )
-            result = chat(model_id, normalized)
+            result = chat(model_id, normalized, gpu_reserved=bool(gpu_reserved))
             _set_activity(
                 "complete",
                 model_id=model_id,

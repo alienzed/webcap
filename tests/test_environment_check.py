@@ -99,6 +99,8 @@ def test_environment_report_groups_optional_capabilities(monkeypatch):
     assert report["summary"]["optional_analysis"]["ready"] is True
     checks = {item["id"]: item for item in report["checks"]}
     assert checks["inference_comfyui"]["group"] == "inference"
+    assert checks["package_websocket"]["group"] == "inference"
+    assert checks["package_websocket"]["required"] is False
     assert checks["director_llama_server"]["ok"] is True
     assert checks["package_mediapipe"]["group"] == "optional_analysis"
     assert checks["package_imageio"]["group"] == "optional_analysis"

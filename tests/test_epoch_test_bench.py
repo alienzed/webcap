@@ -721,8 +721,8 @@ def test_test_enqueue_survives_comfyui_unavailable_and_defers_wildcard_resolutio
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
     monkeypatch.setattr(
         inference_runtime,
-        "system_stats",
-        lambda: (_ for _ in ()).throw(ConnectionError("offline")),
+        "resolve_wildcard_prompt",
+        lambda *_args: (_ for _ in ()).throw(ConnectionError("offline")),
     )
 
     payload = bench.enqueue(

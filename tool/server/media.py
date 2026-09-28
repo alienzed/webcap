@@ -552,10 +552,21 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
         if cached and cached.get("mtime") == mtime and cached.get("size") == size and not needs_face_focus and not needs_selection_pose and not needs_scene_complexity:
             continue
         pending_entries.append(entry)
+    optional_analysis_warnings = []
     if include_face_focus and any(is_face_focus_image(entry) for entry in pending_entries):
-        face_detector = get_face_focus_detector()
+        try:
+            face_detector = get_face_focus_detector()
+        except Exception as exc:
+            message = "Face Focus analysis unavailable: " + str(exc)
+            logger.warning(message)
+            optional_analysis_warnings.append(message)
     if include_selection_pose and any(is_selection_pose_image(entry) for entry in pending_entries):
-        selection_pose_analyzers = get_selection_pose_analyzers()
+        try:
+            selection_pose_analyzers = get_selection_pose_analyzers()
+        except Exception as exc:
+            message = "MediaPipe selection analysis unavailable: " + str(exc)
+            logger.warning(message)
+            optional_analysis_warnings.append(message)
     for entry in pending_entries:
         metadata[entry.name] = probe_media_metadata(entry, face_detector, selection_pose_analyzers)
         if (include_face_focus and is_face_focus_image(entry)) or (include_selection_pose and is_selection_pose_image(entry)):
@@ -570,6 +581,7 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
             "checked": checked_count,
             "generated": len(pending_entries),
             "removed": len(to_remove),
+            "optionalAnalysisWarnings": optional_analysis_warnings,
         })
     return metadata
 
@@ -861,6 +873,9 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
         response.headers["X-WebCap-Metadata-Checked"] = str(metadata_summary.get("checked", 0))
         response.headers["X-WebCap-Metadata-Generated"] = str(metadata_summary.get("generated", 0))
         response.headers["X-WebCap-Metadata-Removed"] = str(metadata_summary.get("removed", 0))
+        warnings = metadata_summary.get("optionalAnalysisWarnings") or []
+        if warnings:
+            response.headers["X-WebCap-Optional-Analysis-Warnings"] = json.dumps(warnings)
         return response
     except Exception as e:
         logger.exception("MEDIA METADATA FAILED for %r: %s", rel_path, e)

@@ -1,6 +1,6 @@
 # WebCap Docs Map
 
-Last reviewed against code: 2026-09-21
+Last reviewed against code: 2026-09-28
 
 This folder mixes three different kinds of documents:
 
@@ -29,6 +29,9 @@ Start here when you need to know what the app does today:
 - `docs/src_videos_semantics.md` - current `src_videos` rules
 - `docs/phrase_copy.md` - helper panel, annotate strip, and tag copy/paste
 - `docs/primer_mappings_v2.md` - structured mappings/rules storage and UI contract
+- `docs/execution_queue.md` - current shared inference/LLM scheduling, backlog, GPU arbitration, and Activity/Inference Queue boundaries
+- `docs/storyboard.md` - current Storyboard storage, Director, generation, First Cut, and Sequence behavior
+- `INSTALLATION.md` - current installation/bootstrap and environment-diagnostics guide
 
 ## Shipped Feature Notes
 
@@ -66,7 +69,13 @@ These are useful product notes, not authoritative implementation references:
 
 ## Historical / Superseded
 
-These are intentionally retained for context:
+These are intentionally retained for context. Some have a current-status preface because later implementation superseded part of their original design:
+
+- `docs/epoch_test_bench_plan.md` - original Test Bench architecture; its in-memory FIFO and original session-placement design predate the shared inference lane
+- `docs/prompt_assistant_activity_plan.md` - retained-model/activity-card implementation history; its original synchronous request transport predates the durable `llm` lane
+- `docs/generic_inference_generate_plan.md` - implementation sequence/history; its current-baseline preface is maintained while older phase text remains historical
+
+Additional superseded references:
 
 - `docs/archive/ui-revamp-2026-07/` - completed workspace-consolidation planning; use `README.md` and `docs/spec.md` for current behavior
 - `docs/archive/`

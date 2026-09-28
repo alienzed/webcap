@@ -81,6 +81,10 @@ def _windows_curl_request(curl_path, url, method="GET", payload=None, timeout=10
         detail = stdout_detail or stderr_detail
         if status_match:
             raise ComfyHttpError(int(status_match.group(1)), detail)
+        if result.returncode == 7:
+            raise ConnectionError("Could not connect to ComfyUI.")
+        if result.returncode == 28:
+            raise TimeoutError("Timed out contacting ComfyUI.")
         raise RuntimeError("ComfyUI request failed: " + detail)
     return result.stdout
 

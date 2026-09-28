@@ -401,12 +401,13 @@ The following features are optional at the product level. Their supported Python
 | --- | --- | --- | --- | --- |
 | Core media/video | FFmpeg / FFprobe | WebCap host | System package | Safe to detect and offer normal package-manager install |
 | Background remove / blur | `rembg` + ONNX Runtime | WebCap Python | `requirements.txt` | Safe to install/repair with WebCap Python requirements |
-| Face Focus / Deface | `deface` / CenterFace | WebCap Python | `requirements.txt` | Safe to install/repair with WebCap Python requirements |
+| Face Focus / Deface | `deface` + `imageio` / CenterFace | WebCap Python | `requirements.txt` | Safe to install/repair with WebCap Python requirements |
 | Selection pose / expression | MediaPipe | WebCap Python | `requirements.txt` | Safe to install/repair with WebCap Python requirements |
 | Training history metrics | TensorBoard | WebCap Python | `requirements.txt` | Safe to install/repair with WebCap Python requirements |
 | Storyboard Director, local | CUDA-enabled llama.cpp `llama-server` | Local machine / WSL topology | External runtime | Detect first; offer explicit build/install choices |
 | Storyboard Director, remote | OpenAI-compatible HTTP endpoint | External service | User-managed | Validate endpoint only; nothing to install |
 | Generate / Storyboard Takes / Test Generations | ComfyUI API | Local or reachable provider | External runtime | Detect/configure separately; do not install into WebCap's Python env |
+| Live ComfyUI progress | `websocket-client` | WebCap Python | `requirements.txt` | Optional enhancement; generation remains functional through HTTP polling when unavailable |
 | Managed MH3 training | Diffusion Pipe + DeepSpeed + CUDA PyTorch | WSL2/Linux | External training env | Guided/optional install; GPU stack requires explicit confirmation |
 | Model files | GGUF / safetensors / VAEs / text encoders / LoRAs | User model storage | User-managed | Detect paths and explain missing files; avoid surprise multi-GB downloads |
 
@@ -418,7 +419,7 @@ After activating WebCap's own virtual environment:
 python -c "import flask, PIL; print('WebCap core Python imports OK')"
 python -c "import rembg, onnxruntime; print('rembg / ONNX Runtime OK')"
 python -c "import mediapipe; print('MediaPipe', mediapipe.__version__)"
-python -c "from deface.centerface import CenterFace; print('deface / CenterFace OK')"
+python -c "import imageio; from deface.centerface import CenterFace; print('deface / imageio OK')"
 python -c "import tensorboard; print('TensorBoard', tensorboard.__version__)"
 ```
 

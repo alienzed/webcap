@@ -1480,8 +1480,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         if not legacy_job_id:
             for job_id in queued_ids:
                 execution_promote_backlog(job_id)
-            from .inference_runner import _start_worker_for_requested_inference
-            _start_worker_for_requested_inference()
+            from .inference_runner import start_observer
+            start_observer()
     except Exception as exc:
         rollback_errors = []
         rollback_pending = False

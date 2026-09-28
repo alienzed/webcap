@@ -76,12 +76,13 @@ Linux / WSL:
 source .venv/bin/activate
 ```
 
-Then install WebCap:
+WebCap can install its own Python requirements when it starts. You may still upgrade pip explicitly if desired:
 
 ```bash
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
 ```
+
+The launcher uses the same Python interpreter that starts WebCap and does not use `--upgrade`, so already-satisfied package versions are left alone.
 
 ## 3. Configure WebCap
 
@@ -108,6 +109,14 @@ You can edit configuration directly or use **App Settings** after WebCap starts.
 ## 4. Start WebCap
 
 From the repository root:
+
+```bash
+python start.py
+```
+
+Before importing the application, the launcher runs that interpreter's pip against WebCap's `requirements.txt`. If installation fails, startup stops with the real pip error. This bootstrap is limited to WebCap's own Python environment; it does not modify the configured training runtime, PyTorch/CUDA, ComfyUI, or Director runtime.
+
+For development environments where dependencies are managed separately, the original direct entry point remains available:
 
 ```bash
 python -m tool.server.app
@@ -366,7 +375,7 @@ Future setup assistance may safely automate low-risk, deterministic steps such a
 
 - checking prerequisites;
 - creating directories/configuration;
-- installing WebCap's own Python requirements;
+- installing WebCap's own Python requirements (handled by `python start.py`);
 - cloning/updating known repositories;
 - suggesting or running an explicitly shown command;
 - re-running Environment Check after each step.

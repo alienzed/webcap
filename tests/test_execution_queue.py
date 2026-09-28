@@ -218,9 +218,9 @@ def test_server_startup_shelves_inference_without_starting_it():
     assert "start_inference_observer()" not in startup
     assert "reconcile_llm_startup()" in startup
     assert "INFERENCE STARTUP RECONCILIATION FAILED" in startup
-    assert "TRAINING OBSERVER STARTUP FAILED" in startup
     assert "DIRECTOR STARTUP RECONCILIATION FAILED" in startup
-    assert startup.count("except Exception:") >= 3
+    assert "TRAINING OBSERVER STARTUP FAILED" not in startup
+    assert startup.count("except ExecutionQueueStateError:") == 2
 
 
 def test_execution_queue_resource_claim_is_exclusive(queue_root):

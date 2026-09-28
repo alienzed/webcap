@@ -392,6 +392,16 @@
       headingCopy.appendChild(headingCount);
       heading.appendChild(headingCopy);
 
+      var backlogActions = document.createElement('div');
+      backlogActions.className = 'inference-queue-section-actions';
+      var addAll = document.createElement('button');
+      addAll.type = 'button';
+      addAll.className = 'review-captions-btn';
+      addAll.dataset.inferenceQueueAction = 'add_all_to_queue';
+      addAll.textContent = 'Add all to Queue';
+      backlogActions.appendChild(addAll);
+      heading.appendChild(backlogActions);
+
       host.appendChild(heading);
 
       backlogJobs.forEach(function (job) {

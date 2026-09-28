@@ -588,7 +588,7 @@ def test_storyboard_scene_prompt_job_writes_only_its_target_on_backend(llm_root,
     assert stored["scenes"][second["id"]]["prompt"] == "Second prompt stays untouched."
 
 
-def test_storyboard_director_target_conflicts_are_backend_authoritative(llm_root):
+def test_storyboard_director_work_is_not_refused_at_enqueue(llm_root):
     story_a = storyboard_store.create_story({"title": "A"})
     story_a, scene_a1 = storyboard_store.add_scene(story_a["id"], {"prompt": "A1"})
     story_a, scene_a2 = storyboard_store.add_scene(story_a["id"], {"prompt": "A2"})
@@ -606,36 +606,32 @@ def test_storyboard_director_target_conflicts_are_backend_authoritative(llm_root
         {"operation": "write_prompt", "prompt": "Write.", "output": "text"},
         context={"storyId": story_a["id"], "sceneId": scene_a2["id"], "operation": "write_prompt"},
     )
-
-    assert first["status"] == "queued"
-    assert second["status"] == "queued"
-    assert llm_runner.storyboard_target_busy(story_a["id"], "scene-prompt", scene_a1["id"]) is True
-    assert llm_runner.storyboard_target_busy(story_a["id"], "concept") is False
-
-    with pytest.raises(ValueError, match="target already has pending work"):
-        llm_runner.enqueue(
-            "storyboard",
-            "qwen",
-            {"operation": "refine_prompt", "prompt": "Refine.", "output": "text"},
-            context={"storyId": story_a["id"], "sceneId": scene_a1["id"], "operation": "refine_prompt"},
-        )
-
-    with pytest.raises(ValueError, match="target already has pending work"):
-        llm_runner.enqueue(
-            "storyboard",
-            "qwen",
-            {"operation": "develop_story", "prompt": "Develop.", "output": "json"},
-            context={"storyId": story_a["id"], "operation": "develop_story"},
-        )
-
+    refine_same_scene = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "refine_prompt", "prompt": "Refine.", "output": "text"},
+        context={"storyId": story_a["id"], "sceneId": scene_a1["id"], "operation": "refine_prompt"},
+    )
+    develop_same_story = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "develop_story", "prompt": "Develop.", "output": "json"},
+        context={"storyId": story_a["id"], "operation": "develop_story"},
+    )
     other_story = llm_runner.enqueue(
         "storyboard",
         "qwen",
         {"operation": "expand_concept", "prompt": "Expand.", "output": "text"},
         context={"storyId": story_b["id"], "operation": "expand_concept"},
     )
-    assert other_story["status"] == "queued"
 
+    assert first["status"] == "queued"
+    assert second["status"] == "queued"
+    assert refine_same_scene["status"] == "queued"
+    assert develop_same_story["status"] == "queued"
+    assert other_story["status"] == "queued"
+    assert llm_runner.storyboard_target_busy(story_a["id"], "scene-prompt", scene_a1["id"]) is True
+    assert llm_runner.storyboard_target_busy(story_a["id"], "concept") is False
 
 
 def test_storyboard_ingest_failure_is_distinguished_from_model_failure(llm_root, monkeypatch):
@@ -986,7 +982,7 @@ def test_storyboard_scene_repair_renders_prompt_and_patches_only_returned_fields
     assert repaired["previousPrompt"] == "OLD PROMPT"
 
 
-def test_storyboard_scene_repair_conflicts_with_other_director_work(llm_root):
+def test_storyboard_scene_repair_does_not_refuse_other_director_enqueue(llm_root):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {"prompt": "Prompt."})
 
@@ -1013,16 +1009,16 @@ def test_storyboard_scene_repair_conflicts_with_other_director_work(llm_root):
             },
         },
     )
-    assert repair["status"] == "queued"
-    assert llm_runner.storyboard_target_busy(story["id"], "repair") is True
+    write_prompt = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Write.", "output": "text"},
+        context={"storyId": story["id"], "sceneId": scene["id"], "operation": "write_prompt"},
+    )
 
-    with pytest.raises(ValueError, match="target already has pending work"):
-        llm_runner.enqueue(
-            "storyboard",
-            "qwen",
-            {"operation": "write_prompt", "prompt": "Write.", "output": "text"},
-            context={"storyId": story["id"], "sceneId": scene["id"], "operation": "write_prompt"},
-        )
+    assert repair["status"] == "queued"
+    assert write_prompt["status"] == "queued"
+    assert llm_runner.storyboard_target_busy(story["id"], "repair") is True
 
 
 def test_storyboard_scene_repair_discards_malformed_optional_prompt_patch(llm_root, monkeypatch):

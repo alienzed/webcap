@@ -2661,6 +2661,27 @@ iframe {
   align-items: center;
   gap: 8px;
 }
+.test-generations-session-info-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+}
+.test-generations-session-info-btn:hover {
+  text-decoration: underline;
+}
+.test-generations-session-info-btn[aria-expanded="true"] {
+  width: 18px;
+  min-width: 18px;
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 400;
+  text-decoration: none;
+}
 .test-generations-session-meta {
   min-width: 0;
   overflow: hidden;

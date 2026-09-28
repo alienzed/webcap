@@ -911,9 +911,7 @@
       return document.querySelector('.storyboard-scene-workspace');
     }
     if (target.kind === 'repair') {
-      var repairInstruction = el('storyboard-repair-instruction');
-      if (repairInstruction && repairInstruction.offsetParent !== null) return repairInstruction;
-      return document.querySelector('[data-story-section="director"] > summary');
+      return document.querySelector('.storyboard-scene-workspace');
     }
     return document.querySelector('.storyboard-scene-workspace');
   }
@@ -928,7 +926,7 @@
 
     var detachedTarget = !!kind && !target;
     var hidden = card.classList.contains('hidden');
-    var fillsWorkspace = kind === 'scenes';
+    var fillsWorkspace = kind === 'scenes' || kind === 'repair';
     if (sceneWorkspace) {
       sceneWorkspace.classList.toggle('director-active', fillsWorkspace && !detachedTarget && !hidden);
     }

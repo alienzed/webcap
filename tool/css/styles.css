@@ -5005,6 +5005,11 @@ html[data-theme="dark"] iframe {
   margin-top: 3px;
 }
 
+.director-activity-trend.is-remote {
+  min-height: 32px !important;
+  grid-template-rows: 1fr !important;
+}
+
 .director-stop-btn {
   position: absolute;
   right: 4px;

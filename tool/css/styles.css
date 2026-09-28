@@ -2610,6 +2610,20 @@ iframe {
   display: flex;
   justify-content: flex-end;
 }
+.test-generations-wildcard-variations {
+  min-width: 0;
+}
+.test-generations-wildcard-variations > summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.test-generations-wildcard-variations > span {
+  display: block;
+  margin-top: 6px;
+  padding-left: 14px;
+}
 .test-generations-wildcard-analysis strong {
   font-size: 12px;
 }

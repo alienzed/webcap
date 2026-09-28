@@ -924,3 +924,13 @@ def test_test_wildcard_helper_is_optional_and_does_not_leave_cross_set_output():
     assert "Director unavailable." in open_block
     assert "reportConsoleError('Test Generations', err);" in open_block
     assert "showError(err);" not in open_block.split("refreshWildcardDirector()", 1)[1].split("refreshTestSourceBrowser()", 1)[0]
+
+
+def test_generated_wildcard_variations_are_collapsed_by_default():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert '<details class="test-generations-wildcard-variations">' in html
+    assert '<summary>Varies</summary>' in html
+    assert '<details class="test-generations-wildcard-variations" open>' not in html
+    assert ".test-generations-wildcard-variations > summary" in css

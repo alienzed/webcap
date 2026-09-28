@@ -1,5 +1,5 @@
 var appSettingsLoadedConfig = null;
-var appSettingsActiveTab = 'general';
+var appSettingsActiveTab = 'workspace';
 var appSettingsTrainingProfiles = [
   { id: 'wan22_t2v', uiKey: 'appSettingsTrainingProfileWan22El' },
   { id: 'krea2_raw', uiKey: 'appSettingsTrainingProfileKrea2El' },
@@ -15,7 +15,7 @@ var appSettingsTestCopyRoots = [
 ];
 
 function setAppSettingsTab(tabName, focusTab) {
-  var next = ['general', 'training', 'storyboard', 'advanced'].indexOf(tabName) !== -1 ? tabName : 'general';
+  var next = ['workspace', 'training', 'director', 'advanced'].indexOf(tabName) !== -1 ? tabName : 'workspace';
   appSettingsActiveTab = next;
   var selectedButton = null;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {

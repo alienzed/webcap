@@ -1109,29 +1109,22 @@ def test_nonterminal_test_session_fails_loudly_for_missing_execution_record(tmp_
     with pytest.raises(RuntimeError, match="missing active inference job"):
         bench.open_session(tmp_path, session.name)
 
-def test_enqueue_preserves_live_session_state_while_child_jobs_are_added(tmp_path, monkeypatch):
+def test_enqueue_registers_all_children_before_any_test_work_can_start(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)
-    original_enqueue = inference_runner.enqueue_test
-    calls = {"count": 0}
+    observed = {}
 
-    def enqueue_and_start_first(request, context, label=""):
-        job = original_enqueue(request, context, label=label)
-        calls["count"] += 1
-        if calls["count"] == 1:
-            session_root = bench._central_session_root()
-            session = next(path for path in session_root.iterdir() if path.is_dir())
-            claimed = execution_queue.claim_next(inference_runner.EXECUTION_LANE)
-            assert claimed["id"] == job["jobId"]
-            execution_queue.mark_running(job["jobId"])
-            with bench._status_lock:
-                status = bench._read_status(session) or {}
-                status["status"] = "running"
-                status["current"] = "Base"
-                status["comfyStatus"] = "pending"
-                bench._atomic_write_json(session / "test.json", status)
-        return job
+    def inspect_before_worker_start():
+        session_root = bench._central_session_root()
+        session = next(path for path in session_root.iterdir() if path.is_dir())
+        manifest = bench._read_status(session)
+        observed["jobIds"] = list(manifest["inferenceJobs"])
+        observed["migrationComplete"] = manifest["migrationComplete"]
+        observed["statuses"] = [
+            execution_queue.get_job(job_id)["status"]
+            for job_id in observed["jobIds"]
+        ]
 
-    monkeypatch.setattr(inference_runner, "enqueue_test", enqueue_and_start_first)
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", inspect_before_worker_start)
 
     payload = bench.enqueue(
         tmp_path,
@@ -1142,11 +1135,12 @@ def test_enqueue_preserves_live_session_state_while_child_jobs_are_added(tmp_pat
 
     session = bench._session_directory(tmp_path, payload["latest"]["session"])
     manifest = bench._read_status(session)
-    assert manifest["status"] == "running"
-    assert manifest["current"] == "Base"
-    assert manifest["comfyStatus"] == "pending"
-    assert len(manifest["inferenceJobs"]) == 3
+    assert len(observed["jobIds"]) == 3
+    assert observed["migrationComplete"] is True
+    assert observed["statuses"] == ["queued", "queued", "queued"]
+    assert manifest["inferenceJobs"] == observed["jobIds"]
     assert manifest["migrationComplete"] is True
+
 
 
 def test_stop_session_state_cannot_be_reverted_by_provider_start_publication(tmp_path, monkeypatch):
@@ -1176,24 +1170,20 @@ def test_stop_session_state_cannot_be_reverted_by_provider_start_publication(tmp
     manifest = bench._read_status(session)
     assert manifest["status"] == "stopping"
 
-def test_test_enqueue_failure_stops_started_child_and_preserves_recovery_session(tmp_path, monkeypatch):
+def test_test_enqueue_failure_cleans_inert_children_and_incomplete_session(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
     original_enqueue = inference_runner.enqueue_test
     calls = {"count": 0}
 
-    def flaky_enqueue(request, context, label=""):
+    def flaky_enqueue(request, context, label="", deferred=False):
         calls["count"] += 1
         if calls["count"] == 1:
-            job = original_enqueue(request, context, label=label)
-            claimed = execution_queue.claim_next(inference_runner.EXECUTION_LANE)
-            assert claimed["id"] == job["jobId"]
-            execution_queue.mark_running(job["jobId"])
-            return job
+            return original_enqueue(request, context, label=label, deferred=deferred)
         raise RuntimeError("second rendition enqueue failed")
 
     monkeypatch.setattr(inference_runner, "enqueue_test", flaky_enqueue)
 
-    with pytest.raises(RuntimeError, match="preserved for recovery"):
+    with pytest.raises(RuntimeError, match="second rendition enqueue failed"):
         bench.enqueue(
             tmp_path,
             "prompt",
@@ -1202,16 +1192,10 @@ def test_test_enqueue_failure_stops_started_child_and_preserves_recovery_session
         )
 
     sessions = [path for path in bench._central_session_root().iterdir() if path.is_dir()]
-    assert len(sessions) == 1
-    manifest = bench._read_status(sessions[0])
-    assert manifest["migrationComplete"] is False
-    assert manifest["status"] == "stopping"
-    assert "preserved for recovery" in manifest["error"]
+    assert sessions == []
+    queue = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE, include_terminal=False)
+    assert queue["jobs"] == []
 
-    child_id = manifest["inferenceJobs"][0]
-    child = execution_queue.get_job(child_id)
-    assert child["status"] == "stopping"
-    assert child["requestedAction"] == "stop"
 
 
 
@@ -1287,7 +1271,7 @@ def test_new_test_sessions_use_output_storage_and_record_source(tmp_path, monkey
     )
     monkeypatch.setattr(bench.inference_runtime if hasattr(bench, "inference_runtime") else inference_runtime, "resolve_wildcard_prompt", lambda prompt, _seed: prompt)
     monkeypatch.setattr(bench, "_workflow_evidence", lambda _model, _template: {"workflowFile": "test.json", "workflowSha256": "abc"})
-    monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="": {"jobId": "job-" + context["candidateKind"]})
+    monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="", deferred=False: {"jobId": "job-" + context["candidateKind"]})
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
 
     set_folder = tmp_path / "sets" / "demo"

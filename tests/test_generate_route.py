@@ -214,7 +214,7 @@ def test_generate_capabilities_keeps_static_models_when_comfyui_is_offline(monke
     assert payload["models"][0]["baseLoras"] == ["base.safetensors"]
 
 
-def test_generate_prepare_defers_wildcard_resolution_when_comfyui_is_offline(monkeypatch):
+def test_generate_prepare_preserves_wildcard_syntax_for_comfyui(monkeypatch):
     class FakeModel:
         PROFILE_ID = "minimax_h3"
         MEDIA_KIND = "video"
@@ -231,18 +231,18 @@ def test_generate_prepare_defers_wildcard_resolution_when_comfyui_is_offline(mon
     monkeypatch.setattr(
         generate_generation.inference_runtime,
         "resolve_wildcard_prompt",
-        lambda *_args: (_ for _ in ()).throw(ConnectionError("offline")),
+        lambda *_args: (_ for _ in ()).throw(AssertionError("Generate must not pre-resolve wildcards")),
     )
 
     prepared = generate_generation.prepare_request({
         "modelId": "minimax_h3",
         "prompt": "person in {studio|rooftop}",
-        "wildcardsEnabled": True,
     })
 
     assert prepared["prompt"] == "person in {studio|rooftop}"
-    assert prepared["promptNeedsResolve"] is True
     assert prepared["settings"]["seed"] == 42
+    assert "wildcardsEnabled" not in prepared
+    assert "promptNeedsResolve" not in prepared
 
 
 def test_generate_capabilities_keeps_healthy_models_when_one_is_unavailable(monkeypatch):
@@ -384,7 +384,6 @@ def test_generate_result_uses_configured_output_root_outside_fs_root(tmp_path, m
             "settings": {"seed": 7},
             "loras": [],
             "references": {},
-            "wildcardsEnabled": False,
             "workflowFile": "workflow.json",
         },
         {"filename": "render.mp4", "type": "output"},
@@ -417,7 +416,6 @@ def test_generate_result_owns_reference_copy_before_transient_cleanup(tmp_path, 
             "settings": {"seed": 7},
             "loras": [],
             "references": {"first_frame": relative_source},
-            "wildcardsEnabled": False,
             "workflowFile": "workflow.json",
         },
         {"filename": "render.mp4", "type": "output"},

@@ -2623,11 +2623,18 @@
       refreshActivityButtonIfDue(5000);
       if (status && (status.status === 'running' || status.status === 'stopping')) showSessionError = true;
       var activeSession = String(status && status.session || '');
+      var selectedPreviewLive = !!(
+        currentSession &&
+        currentSession !== activeSession &&
+        currentStatus &&
+        String(currentStatus.session || '') === currentSession &&
+        (currentStatus.status === 'running' || currentStatus.status === 'stopping')
+      );
       var previewRefresh = Promise.resolve();
 
       if (currentSession === activeSession) {
         renderStatus(status);
-      } else if (currentSession) {
+      } else if (selectedPreviewLive) {
         previewRefresh = request('test_open_session', { session: currentSession }).then(function (selectedStatus) {
           renderStatus(selectedStatus);
         });

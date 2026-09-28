@@ -431,13 +431,14 @@ def test_execution_queue_lane_guard_is_durable_and_explicitly_clearable(queue_ro
     assert execution_queue.lane_guard("inference", "providerCleanup") is None
 
 
-def test_execution_queue_unreadable_runtime_state_is_moved_aside(queue_root):
+def test_execution_queue_unreadable_runtime_state_is_moved_aside_on_startup(queue_root):
     state_path = queue_root / ".webcap" / "execution_queue.json"
     state_path.parent.mkdir(parents=True)
     state_path.write_text("{not-json", encoding="utf-8")
 
-    snapshot = execution_queue.lane_snapshot("inference")
+    assert execution_queue.recover_invalid_startup_state() is True
 
+    snapshot = execution_queue.lane_snapshot("inference")
     assert snapshot["jobs"] == []
     assert not state_path.exists()
     backups = list(state_path.parent.glob("execution_queue.invalid-*.json"))

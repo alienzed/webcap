@@ -132,6 +132,34 @@ def test_optional_analysis_initialization_failure_does_not_break_metadata(tmp_pa
     assert "MediaPipe missing" in summary["optionalAnalysisWarnings"][0]
 
 
+def test_unavailable_optional_analyzer_does_not_rewrite_unchanged_metadata(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    image_path = folder / "one.png"
+    write_image(image_path)
+
+    first_summary = {}
+    media_module.update_media_metadata(folder, summary=first_summary)
+    metadata_path = folder / "media_metadata.json"
+    before = metadata_path.read_text(encoding="utf-8")
+
+    monkeypatch.setattr(
+        media_module,
+        "get_selection_pose_analyzers",
+        lambda: (_ for _ in ()).throw(RuntimeError("MediaPipe missing")),
+    )
+    second_summary = {}
+    media_module.update_media_metadata(
+        folder,
+        include_selection_pose=True,
+        summary=second_summary,
+    )
+
+    assert second_summary["generated"] == 0
+    assert second_summary["optionalAnalysisWarnings"]
+    assert metadata_path.read_text(encoding="utf-8") == before
+
+
 def test_requirements_repair_route_uses_current_python_and_repo_requirements(tmp_path, monkeypatch):
     requirements = tmp_path / "requirements.txt"
     write_text(requirements, "Flask\n")
@@ -151,7 +179,7 @@ def test_requirements_repair_route_uses_current_python_and_repo_requirements(tmp
     payload = response.get_json()
     assert payload["ok"] is True
     assert captured["command"][0] == app_module.sys.executable
-    assert captured["command"][1:5] == ["-m", "pip", "install", "--disable-pip-version-check"]
+    assert captured["command"][1:6] == ["-m", "pip", "install", "--disable-pip-version-check", "--no-input"]
     assert captured["command"][-2:] == ["-r", str(requirements)]
     assert captured["kwargs"]["cwd"] == tmp_path
     assert payload["stdout"] == "installed\n"

@@ -498,15 +498,16 @@
     if (isRemote) {
       var provider = String(activity && activity.runtimeProvider || '').trim();
       parts.push(provider === 'ollama' ? 'Remote Ollama' : 'Remote');
-      var remoteModelSizeBytes = Number(activity && activity.modelSizeBytes);
+      var showRemoteModelTelemetry = phaseName !== 'queued';
+      var remoteModelSizeBytes = showRemoteModelTelemetry ? Number(activity && activity.modelSizeBytes) : NaN;
       if (isFinite(remoteModelSizeBytes) && remoteModelSizeBytes > 0) {
         parts.push('Model ' + wildcardDirectorBytesGiB(remoteModelSizeBytes));
       }
-      var remoteVramBytes = Number(activity && activity.remoteModelVramBytes);
+      var remoteVramBytes = showRemoteModelTelemetry ? Number(activity && activity.remoteModelVramBytes) : NaN;
       if (isFinite(remoteVramBytes) && remoteVramBytes > 0) {
         parts.push('Model VRAM ' + wildcardDirectorBytesGiB(remoteVramBytes));
       }
-      var remoteContextSize = Number(activity && activity.contextSize);
+      var remoteContextSize = showRemoteModelTelemetry ? Number(activity && activity.contextSize) : NaN;
       if (isFinite(remoteContextSize) && remoteContextSize > 0) {
         parts.push((remoteContextSize >= 1000 ? (remoteContextSize / 1000).toFixed(remoteContextSize < 10000 ? 1 : 0).replace(/\.0$/, '') + 'k' : Math.round(remoteContextSize)) + ' ctx');
       }

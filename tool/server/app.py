@@ -48,7 +48,7 @@ from .test_wildcard_contract import build_request as test_wildcard_build_request
 from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, prepare_startup_backlog as prepare_inference_startup_backlog, snapshot as inference_snapshot, stop_storyboard_jobs
 from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot, storyboard_story_busy as llm_storyboard_story_busy, storyboard_target_busy as llm_storyboard_target_busy
 from .activity_monitor import activity_snapshot
-from .execution_queue import ExecutionQueueStateError
+from .execution_queue import ExecutionQueueStateError, recover_invalid_startup_state
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
 
@@ -2087,6 +2087,10 @@ def open_in_vscode():
     return open_in_vscode_response(rel_path)
     
 if __name__ == "__main__":
+    try:
+        recover_invalid_startup_state()
+    except ExecutionQueueStateError:
+        app.logger.exception("EXECUTION QUEUE STARTUP RECOVERY FAILED; runtime state was left unchanged.")
     try:
         prepare_inference_startup_backlog()
     except ExecutionQueueStateError:

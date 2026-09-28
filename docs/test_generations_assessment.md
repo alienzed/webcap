@@ -74,9 +74,13 @@ The observation count matters. A `5.0 (1)` and a `4.4 (8)` represent different a
 
 No hidden weighting, model-generated quality score, or ranking algorithm is introduced.
 
+### Optional wildcard prompt assistance
+
+Test Generations now also has an explicit, user-triggered LLM helper for building a test prompt from the owning Set's existing captions. It identifies common wording and meaningful variable dimensions, proposes one editable `{a|b|c}` wildcard prompt, and only copies that proposal into the Test prompt when the user chooses **Use as Prompt**. It does not rewrite source captions or maintain a second persistent wildcard-template model.
+
 ## What is intentionally *not* implemented
 
-The first assessment layer does **not** add:
+The assessment layer does **not** add:
 
 - per-aspect questionnaires
 - mandatory criteria such as garment fidelity, leakage, colour, or body proportions
@@ -85,7 +89,7 @@ The first assessment layer does **not** add:
 - automatic winners
 - a separate Test Grid / Test Single / Test Focus implementation
 - semantic states such as shortlisted, excluded, rejected, or finalist
-- automatic prompt generation
+- unattended prompt replacement or automatic source-caption rewriting
 
 Those ideas may become useful, but the existing workflow should demonstrate the need first.
 

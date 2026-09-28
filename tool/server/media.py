@@ -553,10 +553,13 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
             continue
         pending_entries.append(entry)
     optional_analysis_warnings = []
+    face_focus_unavailable = False
+    selection_pose_unavailable = False
     if include_face_focus and any(is_face_focus_image(entry) for entry in pending_entries):
         try:
             face_detector = get_face_focus_detector()
         except Exception as exc:
+            face_focus_unavailable = True
             message = "Face Focus analysis unavailable: " + str(exc)
             logger.warning(message)
             optional_analysis_warnings.append(message)
@@ -564,22 +567,64 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
         try:
             selection_pose_analyzers = get_selection_pose_analyzers()
         except Exception as exc:
+            selection_pose_unavailable = True
             message = "MediaPipe selection analysis unavailable: " + str(exc)
             logger.warning(message)
             optional_analysis_warnings.append(message)
+
+    generated_count = 0
     for entry in pending_entries:
+        cached = metadata.get(entry.name)
+        stat = entry.stat()
+        unchanged = (
+            isinstance(cached, dict)
+            and cached.get("mtime") == int(stat.st_mtime)
+            and cached.get("size") == stat.st_size
+        )
+        cached_scene_complexity = cached.get("scene_complexity") if isinstance(cached, dict) else None
+        scene_complexity_current = (
+            isinstance(cached_scene_complexity, dict)
+            and cached_scene_complexity.get("version") == SCENE_COMPLEXITY_VERSION
+        )
+        needs_scene_complexity = is_scene_complexity_image(entry) and not scene_complexity_current
+        needs_face_focus = (
+            bool(include_face_focus)
+            and is_face_focus_image(entry)
+            and not (
+                isinstance(cached, dict)
+                and isinstance(cached.get("face_focus"), dict)
+                and cached["face_focus"].get("version") == FACE_FOCUS_VERSION
+            )
+        )
+        needs_selection_pose = (
+            bool(include_selection_pose)
+            and is_selection_pose_image(entry)
+            and not (
+                isinstance(cached, dict)
+                and isinstance(cached.get("selection_pose"), dict)
+                and cached["selection_pose"].get("version") == SELECTION_POSE_VERSION
+            )
+        )
+        if (
+            unchanged
+            and not needs_scene_complexity
+            and (not needs_face_focus or face_focus_unavailable)
+            and (not needs_selection_pose or selection_pose_unavailable)
+        ):
+            continue
         metadata[entry.name] = probe_media_metadata(entry, face_detector, selection_pose_analyzers)
+        generated_count += 1
         if (include_face_focus and is_face_focus_image(entry)) or (include_selection_pose and is_selection_pose_image(entry)):
             write_media_metadata_file(metadata_path, metadata)
     to_remove = [k for k in metadata if not (folder_path / k).exists() or is_transient_media_name(k)]
     for k in to_remove:
         del metadata[k]
-    if pending_entries or to_remove or not metadata_path.exists():
+    if generated_count or to_remove or not metadata_path.exists():
         write_media_metadata_file(metadata_path, metadata)
     if summary is not None:
         summary.update({
             "checked": checked_count,
-            "generated": len(pending_entries),
+            "generated": generated_count,
             "removed": len(to_remove),
             "optionalAnalysisWarnings": optional_analysis_warnings,
         })

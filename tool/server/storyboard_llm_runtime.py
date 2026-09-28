@@ -266,6 +266,23 @@ def _remote_native_url(path):
     return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, native_path, "", ""))
 
 
+def _remote_native_http_json(path, timeout=5):
+    request = urllib.request.Request(_remote_native_url(path), method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = response.read()
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError("Director endpoint request failed: " + _decode_error_body(exc)) from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise ConnectionError("Could not connect to the configured Director endpoint.") from exc
+    if not body:
+        return {}
+    try:
+        return json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Director endpoint returned invalid JSON.") from exc
+
+
 def _remote_is_ollama(refresh=False):
     settings = _director_config()
     if settings.get("mode", "local") != "remote":
@@ -275,15 +292,32 @@ def _remote_is_ollama(refresh=False):
     if cached is not None and not refresh:
         return cached == "ollama"
 
-    request = urllib.request.Request(_remote_native_url("/api/version"), method="GET")
     try:
-        with urllib.request.urlopen(request, timeout=2) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        payload = _remote_native_http_json("/api/version", timeout=2)
         detected = isinstance(payload, dict) and bool(str(payload.get("version") or "").strip())
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
+    except (ConnectionError, RuntimeError, ValueError):
         detected = False
     _remote_provider_cache[endpoint] = "ollama" if detected else "generic"
     return detected
+
+
+def _ollama_model_sizes():
+    payload = _remote_native_http_json("/api/tags", timeout=5)
+    raw_models = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(raw_models, list):
+        raise RuntimeError("Ollama did not return a model list from /api/tags.")
+    sizes = {}
+    for entry in raw_models:
+        if not isinstance(entry, dict):
+            continue
+        model_id = str(entry.get("name") or entry.get("model") or "").strip()
+        if not model_id:
+            continue
+        try:
+            sizes[model_id] = max(0, int(entry.get("size") or 0))
+        except (TypeError, ValueError):
+            sizes[model_id] = 0
+    return sizes
 
 
 def _remote_http_json_cancellable(path, method="GET", payload=None, timeout=30):
@@ -708,6 +742,15 @@ def list_models(reload=False):
     if settings.get("mode", "local") == "local":
         for model in models:
             model["sizeBytes"] = _model_file_size(model)
+    elif _remote_is_ollama(refresh=reload):
+        try:
+            sizes = _ollama_model_sizes()
+        except (ConnectionError, RuntimeError, ValueError) as exc:
+            _logger.warning("Could not read Ollama model sizes from /api/tags: %s", exc)
+        else:
+            for model in models:
+                if model["id"] in sizes:
+                    model["sizeBytes"] = sizes[model["id"]]
     return models
 
 

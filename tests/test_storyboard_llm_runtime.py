@@ -1005,6 +1005,70 @@ def test_remote_ollama_detection_uses_native_version_endpoint(monkeypatch):
     }
 
 
+def test_remote_ollama_model_sizes_use_native_tags_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "mode": "remote",
+            "endpoint": "http://director-box:11434/v1",
+        },
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_remote_native_http_json",
+        lambda path, timeout=5: {
+            "models": [
+                {"name": "qwen3:8b", "size": 5279023104},
+                {"model": "gemma3:12b", "size": "8143257600"},
+            ]
+        },
+    )
+
+    assert storyboard_llm_runtime._ollama_model_sizes() == {
+        "qwen3:8b": 5279023104,
+        "gemma3:12b": 8143257600,
+    }
+
+
+def test_remote_ollama_list_models_enriches_openai_models_with_sizes(monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "mode": "remote",
+            "endpoint": "http://director-box:11434/v1",
+        },
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda path, timeout=10: {
+            "data": [
+                {"id": "qwen3:8b"},
+                {"id": "gemma3:12b"},
+            ]
+        },
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda refresh=False: True)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_ollama_model_sizes",
+        lambda: {
+            "qwen3:8b": 5279023104,
+            "gemma3:12b": 8143257600,
+        },
+    )
+
+    models = storyboard_llm_runtime.list_models(reload=True)
+
+    assert models[0]["id"] == "gemma3:12b"
+    assert models[0]["sizeBytes"] == 8143257600
+    assert models[1]["id"] == "qwen3:8b"
+    assert models[1]["sizeBytes"] == 5279023104
+
+
 def test_remote_chat_uses_openai_compatible_endpoint_without_local_gpu_management(monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: calls.append("server"))

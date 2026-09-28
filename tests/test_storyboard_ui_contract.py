@@ -648,9 +648,12 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
     assert "storyState.director.activityTarget = storyState.director.pendingTargets[storyState.director.pendingOrder[0]]" in storyboard
     assert ".storyboard-director-activity {" in css
     assert "position: absolute;" in css
-    assert "fillsField = kind === 'concept' || kind === 'scene-prompt' || kind === 'scenes'" in storyboard
+    assert "fillsField = kind === 'concept' || kind === 'scene-prompt'" in storyboard
+    assert "fillsWorkspace = kind === 'scenes' || kind === 'repair'" in storyboard
     assert "card.style.height = Math.round(height) + 'px';" in storyboard
-    assert "kind === 'scenes'" in storyboard
+    target_block = storyboard.split("function directorActivityTargetElement()", 1)[1].split("function positionDirectorActivity()", 1)[0]
+    assert "if (target.kind === 'repair')" in target_block
+    assert "return document.querySelector('.storyboard-scene-workspace');" in target_block
     assert "storyboard-story-concept" in storyboard
     assert "bottomAlignedTop" not in storyboard
     assert "is-story-plan-overlay" not in storyboard

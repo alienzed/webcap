@@ -49,19 +49,67 @@ def _public_model(model):
     }
 
 
+def _offline_public_model(model):
+    template = model.load_template()
+    defaults = model.normalize_settings(
+        template,
+        _new_seed,
+        model.template_settings(template),
+    )
+
+    def unavailable_names(*_args, **_kwargs):
+        raise ConnectionError("ComfyUI unavailable.")
+
+    try:
+        options = model.setting_options(template, unavailable_names)
+    except (ConnectionError, TimeoutError):
+        options = {
+            key: [value]
+            for key, value in defaults.items()
+            if key in model.settings and isinstance(value, str) and value
+        }
+
+    return {
+        "id": model.PROFILE_ID,
+        "label": str(model.profile["label"]),
+        "mediaKind": model.MEDIA_KIND,
+        "settings": list(model.settings),
+        "references": list(model.references),
+        "default": bool(model.spec.get("default")),
+        "defaultPrompt": "",
+        "defaultSettings": defaults,
+        "settingOptions": options,
+        "loras": [],
+        "baseLoras": [_portable_name(value) for value in model.base_loras(template)],
+    }
+
+
 def capabilities():
     models = []
     unavailable_models = []
-    for item in public_models():
+    items = public_models()
+    for item in items:
         model = get_inference_model(item["id"])
         try:
             models.append(_public_model(model))
         except (ConnectionError, TimeoutError):
+            offline_models = []
+            offline_unavailable = []
+            for offline_item in items:
+                offline_model = get_inference_model(offline_item["id"])
+                try:
+                    offline_models.append(_offline_public_model(offline_model))
+                except Exception as exc:
+                    offline_unavailable.append({
+                        "id": offline_model.PROFILE_ID,
+                        "label": str(offline_model.profile["label"]),
+                        "error": str(exc),
+                    })
             return {
                 "available": False,
                 "error": "ComfyUI unavailable.",
-                "models": [],
-                "unavailableModels": [],
+                "models": offline_models,
+                "unavailableModels": offline_unavailable,
             }
         except Exception as exc:
             unavailable_models.append({
@@ -115,8 +163,12 @@ def prepare_request(data):
 
     prompt = source_prompt
     wildcards_enabled = bool(data.get("wildcardsEnabled"))
+    prompt_needs_resolve = False
     if wildcards_enabled:
-        prompt = inference_runtime.resolve_wildcard_prompt(source_prompt, settings["seed"])
+        try:
+            prompt = inference_runtime.resolve_wildcard_prompt(source_prompt, settings["seed"])
+        except (ConnectionError, TimeoutError):
+            prompt_needs_resolve = True
 
     return {
         "modelId": model.PROFILE_ID,
@@ -127,6 +179,7 @@ def prepare_request(data):
         "loras": loras,
         "references": references,
         "wildcardsEnabled": wildcards_enabled,
+        "promptNeedsResolve": prompt_needs_resolve,
         "workflowFile": model.TEMPLATE_PATH.name,
     }
 
@@ -134,6 +187,13 @@ def prepare_request(data):
 def execute(job_id, request):
     model = get_inference_model(request.get("modelId"))
     template = model.load_template()
+    request = copy.deepcopy(request)
+    if request.get("promptNeedsResolve"):
+        request["prompt"] = inference_runtime.resolve_wildcard_prompt(
+            str(request.get("sourcePrompt") or request.get("prompt") or ""),
+            request["settings"]["seed"],
+        )
+        request["promptNeedsResolve"] = False
     started = time.monotonic()
     uploaded = {}
     output_ref = None

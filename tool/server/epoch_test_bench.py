@@ -764,6 +764,38 @@ def handle_request(folder_path, mode, selection_criteria=None):
 SHARED_EXECUTION_LANE = "inference"
 
 
+def _resolved_wildcard_values(source_prompt, resolved_prompt):
+    source = str(source_prompt or "").strip()
+    resolved = str(resolved_prompt or "").strip()
+    matches = list(re.finditer(r"\\{([^{}]*\\|[^{}]*)\\}", source))
+    if not matches:
+        return []
+
+    pattern = []
+    option_groups = []
+    cursor = 0
+    for match in matches:
+        options = [option.strip() for option in match.group(1).split("|") if option.strip()]
+        if len(options) < 2:
+            return []
+        pattern.append(re.escape(source[cursor:match.start()]))
+        pattern.append("(" + "|".join(re.escape(option) for option in options) + ")")
+        option_groups.append(options)
+        cursor = match.end()
+    pattern.append(re.escape(source[cursor:]))
+
+    resolved_match = re.fullmatch("".join(pattern), resolved, flags=re.DOTALL)
+    if not resolved_match:
+        return []
+
+    values = []
+    for value in resolved_match.groups():
+        value = str(value or "").strip()
+        if value and value.casefold() not in {existing.casefold() for existing in values}:
+            values.append(value)
+    return values
+
+
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
                            selected_files=None, include_base=True, model_id=None, source=None,
                            aspect_ratio=None, megapixels=None, duration=None):
@@ -1350,6 +1382,10 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 "candidateLabel": candidate["label"],
                 "candidateIndex": index,
                 "source": str(request.get("source") or ""),
+                "wildcardValues": _resolved_wildcard_values(
+                    request.get("sourcePrompt"),
+                    request.get("prompt"),
+                ),
             }
             if legacy_job_id:
                 job = enqueue_test(request, context, label=label, deferred=True)

@@ -1304,9 +1304,11 @@
   }
 
   function updateSceneDirectorStatus(sceneId, text) {
+    var message = String(text || '');
     var root = sceneElement(sceneId);
     var node = root && root.querySelector('[data-director-status]');
-    if (node) node.textContent = text || '';
+    if (node) node.textContent = message;
+    if (message) reportConsoleInfo(generationConsoleLabel(sceneId), message);
   }
 
   function syncSceneDirectorRestore(sceneId) {
@@ -1510,13 +1512,17 @@
   }
 
   function setDevelopStatus(text) {
+    var message = String(text || '');
     var node = el('storyboard-develop-status');
-    if (node) node.textContent = text || '';
+    if (node) node.textContent = message;
+    if (message) reportConsoleInfo('Storyboard', message);
   }
 
   function setRepairStatus(text) {
+    var message = String(text || '');
     var node = el('storyboard-repair-status');
-    if (node) node.textContent = text || '';
+    if (node) node.textContent = message;
+    if (message) reportConsoleInfo('Storyboard', message);
   }
 
   function syncRepairRestore() {

@@ -28,6 +28,7 @@ from .epoch_test_bench import (
     activity_snapshot as test_generations_activity_snapshot,
     browse_source as test_generations_browse_source,
     handle_request as handle_epoch_test_bench_request,
+    resolve_result_media as test_generations_resolve_result_media,
     supported_models as test_generations_supported_models,
 )
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
@@ -1249,6 +1250,22 @@ def test_generations_source_route():
             str(request.args.get("setName") or "").strip(),
         )
         return jsonify({"ok": True, **payload})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/test_generations/media", methods=["GET"])
+def test_generations_media_route():
+    try:
+        folder_path = safe_join_fs_root(str(request.args.get("folder") or "").strip())
+        media_path = test_generations_resolve_result_media(
+            folder_path,
+            str(request.args.get("session") or "").strip(),
+            str(request.args.get("media") or "").strip(),
+        )
+        return send_from_directory(str(media_path.parent), media_path.name, conditional=True)
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:

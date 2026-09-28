@@ -1525,17 +1525,19 @@
     return String(status.status || '');
   }
 
-  function mediaUrl(folder, fileName) {
-    return '/caption/media?folder=' + encodeURIComponent(String(folder || '')) + '&media=' + encodeURIComponent(String(fileName || ''));
+  function mediaUrl(sessionName, fileName) {
+    return '/fs/test_generations/media?folder=' + encodeURIComponent(String(launchFolder || '')) +
+      '&session=' + encodeURIComponent(String(sessionName || '')) +
+      '&media=' + encodeURIComponent(String(fileName || ''));
   }
 
-  function appendTestPreview(container, resultFolder, result, options) {
+  function appendTestPreview(container, sessionName, result, options) {
     var fileName = resultMediaFile(result);
     var kind = resultMediaKind(result);
-    if (!container || !resultFolder || !fileName) return null;
+    if (!container || !sessionName || !fileName) return null;
     if (kind === 'image') {
       var image = document.createElement('img');
-      image.src = mediaUrl(resultFolder, fileName);
+      image.src = mediaUrl(sessionName, fileName);
       image.alt = 'Test preview image';
       image.loading = 'lazy';
       container.appendChild(image);
@@ -1544,7 +1546,7 @@
     var video = document.createElement('video');
     video.preload = 'metadata';
     video.muted = !!(options && options.muted);
-    video.src = mediaUrl(resultFolder, fileName);
+    video.src = mediaUrl(sessionName, fileName);
     appendTestPreviewVideo(container, video);
     return video;
   }
@@ -1607,10 +1609,10 @@
     return /\.(?:png|jpe?g|webp|gif|bmp|avif)$/.test(fileName) ? 'image' : (fileName ? 'video' : '');
   }
 
-  function buildResultRating(result, resultFolder) {
+  function buildResultRating(result, sessionName) {
     var mediaFile = resultMediaFile(result);
-    var ratingFolder = String(resultFolder || '').trim();
-    if (!mediaFile) return null;
+    var session = String(sessionName || '').trim();
+    if (!mediaFile || !session) return null;
 
     var currentRating = Math.max(0, Math.min(5, Number(result && result.rating || 0)));
     var stars = document.createElement('div');
@@ -1623,7 +1625,7 @@
       star.className = 'test-generations-result-star' + (value <= currentRating ? ' active' : '');
       star.dataset.testRating = String(value);
       star.dataset.mediaFile = mediaFile;
-      star.dataset.ratingFolder = ratingFolder;
+      star.dataset.testSession = session;
       star.title = 'Rate ' + value + ' star' + (value === 1 ? '' : 's');
       star.setAttribute('aria-label', star.title);
       star.textContent = value <= currentRating ? '★' : '☆';
@@ -1632,15 +1634,15 @@
     return stars;
   }
 
-  function syncResultRatingButtons(resultFolder, mediaFile, rating) {
-    var folder = String(resultFolder || '').trim();
+  function syncResultRatingButtons(sessionName, mediaFile, rating) {
+    var session = String(sessionName || '').trim();
     var name = String(mediaFile || '').trim();
     var value = Math.max(0, Math.min(5, Number(rating || 0)));
-    if (!folder || !name) return;
+    if (!session || !name) return;
     Array.prototype.forEach.call(
-      document.querySelectorAll('[data-test-rating][data-media-file][data-rating-folder]'),
+      document.querySelectorAll('[data-test-rating][data-media-file][data-test-session]'),
       function (star) {
-        if (String(star.dataset.ratingFolder || '') !== folder || String(star.dataset.mediaFile || '') !== name) return;
+        if (String(star.dataset.testSession || '') !== session || String(star.dataset.mediaFile || '') !== name) return;
         var starValue = Number(star.dataset.testRating || 0);
         var active = starValue <= value;
         star.classList.toggle('active', active);
@@ -1653,12 +1655,8 @@
   function rateTestResult(button) {
     var rating = Number(button && button.dataset.testRating || 0);
     var mediaFile = String(button && button.dataset.mediaFile || '').trim();
-    var resultFolder = String(button && button.dataset.ratingFolder || '').trim();
-    if (!mediaFile || rating < 1 || rating > 5) return;
-    if (!resultFolder) {
-      showError(new Error('Test result has no result folder.'));
-      return;
-    }
+    var sessionName = String(button && button.dataset.testSession || '').trim();
+    if (!mediaFile || !sessionName || rating < 1 || rating > 5) return;
 
     var row = button.closest('.test-generations-result-rating');
     if (row) {
@@ -1667,9 +1665,13 @@
       });
     }
 
-    setMediaRating(resultFolder, mediaFile, rating).then(function (payload) {
-      syncResultRatingButtons(resultFolder, mediaFile, payload && payload.rating);
-      if (currentStatus && String(currentStatus.resultFolder || '') === resultFolder && Array.isArray(currentStatus.results)) {
+    request('test_rate_result', {
+      session: sessionName,
+      mediaFile: mediaFile,
+      rating: rating
+    }).then(function (payload) {
+      syncResultRatingButtons(sessionName, mediaFile, payload && payload.rating);
+      if (currentStatus && String(currentStatus.session || '') === sessionName && Array.isArray(currentStatus.results)) {
         currentStatus.results.forEach(function (result) {
           if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
         });
@@ -1743,7 +1745,7 @@
     }
 
     if (!opts.failed) {
-      var rating = buildResultRating(result, opts.resultFolder);
+      var rating = buildResultRating(result, opts.sessionName);
       if (rating) secondaryRow.appendChild(rating);
     }
 
@@ -1910,6 +1912,7 @@
     if (!host) return;
     var results = status && Array.isArray(status.results) ? status.results : [];
     var resultFolder = String(status && status.resultFolder || '');
+    var sessionName = String(status && status.session || '');
 
     if (results.length < 2) {
       host.dataset.compareKey = '';
@@ -1919,7 +1922,7 @@
 
     compareIndex = Math.max(0, Math.min(compareIndex, results.length - 2));
     var pair = [results[compareIndex], results[compareIndex + 1]];
-    var compareKey = resultFolder + '|' + pair.map(function (result, index) {
+    var compareKey = sessionName + '|' + pair.map(function (result, index) {
       return String(resultMediaFile(result) || result.sourceLoRA || ('result-' + (compareIndex + index)));
     }).join('|');
     if (String(host.dataset.compareKey || '') === compareKey && host.querySelector('.test-generations-compare-stage')) {
@@ -1942,12 +1945,12 @@
       var item = document.createElement('article');
       item.className = 'test-generations-compare-item';
 
-      var preview = appendTestPreview(item, resultFolder, result, { muted: true });
+      var preview = appendTestPreview(item, sessionName, result, { muted: true });
       if (preview && preview.tagName === 'VIDEO') videos.push(preview);
 
       var remove = buildResultRemoveButton(result);
       if (remove) item.appendChild(remove);
-      item.appendChild(buildResultFooter(result, { resultFolder: resultFolder }));
+      item.appendChild(buildResultFooter(result, { sessionName: sessionName }));
       stage.appendChild(item);
     });
 
@@ -1987,6 +1990,7 @@
     var failures = status && Array.isArray(status.failures) ? status.failures : [];
     var total = Number(status && status.total || (prepared && prepared.count) || 0);
     var resultFolder = String(status && status.resultFolder || '');
+    var sessionName = String(status && status.session || '');
     var priorFolder = String(host.dataset.resultFolder || '');
 
     if (priorFolder !== resultFolder) {
@@ -2024,8 +2028,8 @@
       card.dataset.resultKey = resultKey;
       card.dataset.compareIndex = String(index);
 
-      if (resultFolder && mediaFile) {
-        appendTestPreview(card, resultFolder, result);
+      if (sessionName && mediaFile) {
+        appendTestPreview(card, sessionName, result);
       } else {
         var placeholder = document.createElement('div');
         placeholder.className = 'test-generations-preview-placeholder';
@@ -2035,7 +2039,7 @@
 
       var remove = buildResultRemoveButton(result);
       if (remove) card.appendChild(remove);
-      card.appendChild(buildResultFooter(result, { resultFolder: resultFolder }));
+      card.appendChild(buildResultFooter(result, { sessionName: sessionName }));
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);

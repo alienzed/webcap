@@ -445,12 +445,12 @@ def test_test_result_stars_are_shared_by_grid_and_compare():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
-    assert "function buildResultRating(result, resultFolder)" in script
+    assert "function buildResultRating(result, sessionName)" in script
     assert "function rateTestResult(button)" in script
-    assert "function syncResultRatingButtons(resultFolder, mediaFile, rating)" in script
-    assert "setMediaRating(resultFolder, mediaFile, rating)" in script
-    assert "star.dataset.ratingFolder = ratingFolder;" in script
-    assert "var rating = buildResultRating(result, opts.resultFolder);" in script
+    assert "function syncResultRatingButtons(sessionName, mediaFile, rating)" in script
+    assert "request('test_rate_result'" in script
+    assert "star.dataset.testSession = session;" in script
+    assert "var rating = buildResultRating(result, opts.sessionName);" in script
     assert "star.textContent = value <= currentRating ? '★' : '☆';" in script
     assert "if (!opts.failed)" in script
 
@@ -476,17 +476,16 @@ def test_history_mutations_do_not_replace_another_models_prepared_candidates():
 def test_test_rating_refresh_preserves_preview_dom():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    sync_block = script.split("function syncResultRatingButtons(resultFolder, mediaFile, rating)", 1)[1].split("function rateTestResult(button)", 1)[0]
+    sync_block = script.split("function syncResultRatingButtons(sessionName, mediaFile, rating)", 1)[1].split("function rateTestResult(button)", 1)[0]
     assert "document.querySelectorAll" in sync_block
     assert "star.classList.toggle('active', active);" in sync_block
     assert "star.textContent = active ? '★' : '☆';" in sync_block
 
     rate_block = script.split("function rateTestResult(button)", 1)[1].split("function buildResultFooter", 1)[0]
-    assert "var resultFolder = String(button && button.dataset.ratingFolder || '').trim();" in rate_block
-    assert "setMediaRating(resultFolder, mediaFile, rating)" in rate_block
-    assert "syncResultRatingButtons(resultFolder, mediaFile, payload && payload.rating);" in rate_block
+    assert "var sessionName = String(button && button.dataset.testSession || '').trim();" in rate_block
+    assert "request('test_rate_result'" in rate_block
+    assert "syncResultRatingButtons(sessionName, mediaFile, payload && payload.rating);" in rate_block
     assert "request('test_rating_summary'" in rate_block
-    assert "request('test_rate_result'" not in script
 
 
 def test_result_card_transport_remains_always_visible_without_toggle():
@@ -503,7 +502,7 @@ def test_compare_polling_preserves_video_elements_and_refreshes_navigation_only(
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
 
-    assert "var compareKey = resultFolder + '|'" in compare_block
+    assert "var compareKey = sessionName + '|'" in compare_block
     assert "host.dataset.compareKey = compareKey" in compare_block
     assert "host.querySelector('.test-generations-compare-stage')" in compare_block
     assert "existingPrevious.disabled = compareIndex <= 0;" in compare_block
@@ -519,8 +518,8 @@ def test_compare_videos_start_muted():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
-    preview_block = script.split("function appendTestPreview(container, resultFolder, result, options)", 1)[1].split("function candidateFileForResult", 1)[0]
-    assert "appendTestPreview(item, resultFolder, result, { muted: true })" in compare_block
+    preview_block = script.split("function appendTestPreview(container, sessionName, result, options)", 1)[1].split("function candidateFileForResult", 1)[0]
+    assert "appendTestPreview(item, sessionName, result, { muted: true })" in compare_block
     assert "video.muted = !!(options && options.muted);" in preview_block
 
 
@@ -934,3 +933,16 @@ def test_generated_wildcard_variations_are_collapsed_by_default():
     assert '<summary>Varies</summary>' in html
     assert '<details class="test-generations-wildcard-variations" open>' not in html
     assert ".test-generations-wildcard-variations > summary" in css
+
+
+def test_test_results_media_and_ratings_use_session_identity_not_fs_root_navigation():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+
+    assert "'/fs/test_generations/media?folder='" in script
+    assert "'&session=' + encodeURIComponent(String(sessionName || ''))" in script
+    assert "request('test_rate_result'" in script
+    assert '@app.route("/fs/test_generations/media", methods=["GET"])' in app
+    assert "def resolve_result_media(folder_path, session_name, media_name):" in backend
+    assert "def rate_result(folder_path, session_name, media_name, rating):" in backend

@@ -1342,6 +1342,55 @@ def test_legacy_central_test_sessions_remain_readable_after_output_alignment(tmp
     assert bench.open_session(set_folder, "legacy-session")["session"] == "legacy-session"
 
 
+def test_output_root_session_media_and_rating_work_outside_fs_root(tmp_path, monkeypatch):
+    fs_root = tmp_path / "sets-root"
+    output_root = tmp_path / "creative-output"
+    set_folder = fs_root / "sets" / "demo"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(bench.app_config, "output_root", lambda: output_root)
+
+    session = output_root / bench.TEST_RESULTS_DIR / "outside-session"
+    session.mkdir(parents=True)
+    media = session / "result.png"
+    media.write_bytes(b"image")
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "shared",
+        "ownerFolder": "sets/demo",
+        "results": [{"mediaFile": media.name}],
+    })
+
+    assert bench.resolve_result_media(set_folder, session.name, media.name) == media
+    rated = bench.rate_result(set_folder, session.name, media.name, 4)
+    assert rated["rating"] == 4
+    assert bench.open_session(set_folder, session.name)["results"][0]["rating"] == 4
+    assert bench.open_session(set_folder, session.name)["resultFolder"] == ""
+
+
+def test_output_root_result_media_rejects_path_escape(tmp_path, monkeypatch):
+    fs_root = tmp_path / "sets-root"
+    output_root = tmp_path / "creative-output"
+    set_folder = fs_root / "sets" / "demo"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(bench.app_config, "output_root", lambda: output_root)
+
+    session = output_root / bench.TEST_RESULTS_DIR / "session"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "shared",
+        "ownerFolder": "sets/demo",
+        "results": [],
+    })
+
+    with pytest.raises(ValueError, match="valid Test result media filename"):
+        bench.resolve_result_media(set_folder, session.name, "../outside.png")
+
+
 def test_central_test_sessions_are_scoped_to_their_owning_set(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     first_set = tmp_path / "sets" / "first"

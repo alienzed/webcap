@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .folder_state_store import read_folder_state
+from .folder_state_store import read_folder_state, set_media_rating
 from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path
 from .execution_queue import (
@@ -560,6 +560,29 @@ def open_session(folder_path, session_name):
     return _with_session_ratings(session, _visible_session_status(folder_path, session))
 
 
+def resolve_result_media(folder_path, session_name, media_name):
+    session = _session_directory(folder_path, session_name)
+    name = str(media_name or "").strip()
+    if not name or name in (".", "..") or Path(name).name != name:
+        raise ValueError("A valid Test result media filename is required.")
+    media = session / name
+    if media.is_symlink() or not media.is_file():
+        raise FileNotFoundError("Test result media does not exist: " + name)
+    return media
+
+
+def rate_result(folder_path, session_name, media_name, rating):
+    session = _session_directory(folder_path, session_name)
+    media = resolve_result_media(folder_path, session_name, media_name)
+    value = set_media_rating(session / ".webcap_state.json", media.name, rating)
+    return {
+        "operation": "test_rate_result",
+        "session": session.name,
+        "mediaFile": media.name,
+        "rating": value,
+    }
+
+
 def rating_summary(folder_path, model_id=None, source=None):
     return {
         "operation": "test_rating_summary",
@@ -747,6 +770,14 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_rating_summary":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return rating_summary(folder_path, model_id=criteria.get("modelId"), source=criteria.get("source"))
+    if operation == "test_rate_result":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return rate_result(
+            folder_path,
+            criteria.get("session"),
+            criteria.get("mediaFile"),
+            criteria.get("rating"),
+        )
     if operation == "test_stop":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return stop(folder_path, session_name=criteria.get("session"), source=criteria.get("source"))

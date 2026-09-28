@@ -454,47 +454,48 @@ def _test_items_for_folder(cache, folder, qualify_label=False):
 
 
 def _central_test_items(cache):
-    root = _central_test_root()
-    if not root.is_dir():
-        return []
     rows = []
-    for path in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower(), reverse=True):
-        if not path.is_dir() or path.is_symlink():
+    seen_names = set()
+    for root in _central_test_roots():
+        if not root.is_dir() or root.is_symlink():
             continue
-        try:
-            session = _read_test_session_manifest(path)
-        except (FileNotFoundError, RuntimeError):
-            continue
-        session_id = path.name
-        status = str(session.get("status") or "")
-        active = status in ACTIVE_TEST_STATUSES
-        source = str(session.get("source") or "")
-        owner_folder = str(session.get("ownerFolder") or "")
-        label = str(session.get("name") or "").strip() or session_id
-        if source:
-            label += " · " + source
-        rows.append(_item(
-            "tests",
-            session_id,
-            label,
-            path,
-            folder="",
-            kind=session.get("modelId") or session.get("model") or "Test Session",
-            status=status,
-            purgeable=not active,
-            protected_reason=("Active Test Session; stop it before deletion." if active else ""),
-            meta={
-                "source": source,
-                "ownerFolder": owner_folder,
-                "completed": int(session.get("completed") or 0),
-                "failed": int(session.get("failed") or 0),
-                "total": int(session.get("total") or 0),
-                "startedAt": session.get("startedAt"),
-            },
-            cache=cache,
-        ))
+        for path in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower(), reverse=True):
+            if path.name in seen_names or not path.is_dir() or path.is_symlink():
+                continue
+            try:
+                session = _read_test_session_manifest(path)
+            except (FileNotFoundError, RuntimeError):
+                continue
+            seen_names.add(path.name)
+            session_id = path.name
+            status = str(session.get("status") or "")
+            active = status in ACTIVE_TEST_STATUSES
+            source = str(session.get("source") or "")
+            owner_folder = str(session.get("ownerFolder") or "")
+            label = str(session.get("name") or "").strip() or session_id
+            if source:
+                label += " · " + source
+            rows.append(_item(
+                "tests",
+                session_id,
+                label,
+                path,
+                folder="",
+                kind=session.get("modelId") or session.get("model") or "Test Session",
+                status=status,
+                purgeable=not active,
+                protected_reason=("Active Test Session; stop it before deletion." if active else ""),
+                meta={
+                    "source": source,
+                    "ownerFolder": owner_folder,
+                    "completed": int(session.get("completed") or 0),
+                    "failed": int(session.get("failed") or 0),
+                    "total": int(session.get("total") or 0),
+                    "startedAt": session.get("startedAt"),
+                },
+                cache=cache,
+            ))
     return rows
-
 
 def _test_items(cache, folder):
     folders = _discovered_set_folders(cache, folder)
@@ -1052,11 +1053,28 @@ def _resolve_generate(item_id, *, require_manifest=False):
     return directory
 
 
+def _legacy_central_test_root():
+    return Path(app_config.FS_ROOT) / ".webcap" / "test-generations"
+
+
 def _central_test_root():
-    root = Path(app_config.FS_ROOT) / ".webcap" / "test-generations"
+    root = app_config.output_root() / "test-generations"
     if root.is_symlink():
         raise ValueError("Central Test Session storage path is symlinked.")
     return root
+
+
+def _central_test_roots():
+    roots = [_central_test_root(), _legacy_central_test_root()]
+    unique = []
+    seen = set()
+    for root in roots:
+        key = str(Path(root).absolute())
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(Path(root))
+    return unique
 
 
 def _resolve_test(folder, session_id):
@@ -1079,12 +1097,12 @@ def _resolve_test(folder, session_id):
             raise FileNotFoundError("Test Session is unavailable.")
         return session
 
-    central_root = _central_test_root()
-    central_session = central_root / name
-    if central_session.is_symlink():
-        raise ValueError("Test Session storage path is symlinked.")
-    if central_session.is_dir() and (central_session / "test.json").is_file():
-        return central_session.resolve()
+    for central_root in _central_test_roots():
+        central_session = central_root / name
+        if central_session.is_symlink():
+            raise ValueError("Test Session storage path is symlinked.")
+        if central_session.is_dir() and (central_session / "test.json").is_file():
+            return central_session.resolve()
 
     raise FileNotFoundError("Test Session is unavailable.")
 

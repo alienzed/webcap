@@ -999,9 +999,9 @@ def test_test_resolution_honors_explicit_set_folder_before_central_id_collision(
     assert resolved == legacy.resolve()
 
 
-def test_storage_manager_lists_and_purges_central_test_sessions(monkeypatch, tmp_path):
+def test_storage_manager_lists_and_purges_output_test_sessions(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
-    session = tmp_path / ".webcap" / "test-generations" / "session-central"
+    session = tmp_path / "output" / "test-generations" / "session-central"
     session.mkdir(parents=True)
     _write_json(session / "test.json", {
         "status": "complete",
@@ -1026,3 +1026,46 @@ def test_storage_manager_lists_and_purges_central_test_sessions(monkeypatch, tmp
     storage_manager.purge("tests", "session-central", "")
 
     assert not session.exists()
+
+
+def test_storage_manager_keeps_legacy_central_test_sessions_readable(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    session = tmp_path / ".webcap" / "test-generations" / "legacy-central"
+    session.mkdir(parents=True)
+    _write_json(session / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "archive/demo",
+        "ownerFolder": "sets/demo",
+        "completed": 1,
+        "failed": 0,
+        "total": 1,
+        "results": [],
+    })
+
+    items = storage_manager.overview("")["items"]["tests"]
+
+    assert any(item["id"] == "legacy-central" for item in items)
+    assert storage_manager._resolve_test("", "legacy-central") == session.resolve()
+
+
+def test_storage_manager_prefers_output_test_session_on_legacy_name_collision(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    current = tmp_path / "output" / "test-generations" / "same-id"
+    legacy = tmp_path / ".webcap" / "test-generations" / "same-id"
+    for path, source in ((current, "current"), (legacy, "legacy")):
+        path.mkdir(parents=True)
+        _write_json(path / "test.json", {
+            "status": "complete",
+            "modelId": "minimax_h3",
+            "source": source,
+            "ownerFolder": "sets/demo",
+            "results": [],
+        })
+
+    items = [item for item in storage_manager.overview("")["items"]["tests"] if item["id"] == "same-id"]
+
+    assert len(items) == 1
+    assert items[0]["meta"]["source"] == "current"
+    assert storage_manager._resolve_test("", "same-id") == current.resolve()
+

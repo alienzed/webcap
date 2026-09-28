@@ -302,6 +302,7 @@ def test_model_selector_is_single_real_control_in_permanent_header():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     training_state = (ROOT / "tool" / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
     training = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     test_bench = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
@@ -325,6 +326,8 @@ def test_model_selector_is_single_real_control_in_permanent_header():
     assert "window.syncApplicationShellContext()" in training
     assert "window.refreshWorkingModelSelector = refreshWorkingModelSelector" in training
     assert "window.refreshWorkingModelSelector()" in ui
+    assert "var workingModelProfileId = getWorkingModelProfileId();" in shell
+    assert "window.addEventListener('webcap:working-model-changed', syncApplicationShellContext);" in shell
     assert "if (isTrainingWorkspaceActive())" in training
     assert "setWorkingModelProfileId(modelProfileSelect.value, state.folder);" in training
     assert "app-header-model-profile-select" not in test_bench

@@ -366,6 +366,7 @@
     var graph = el('test-generations-director-activity-trend');
     if (!graph) throw new Error('Test Generations Director system history markup is missing.');
     var remote = String(activity && activity.runtimeMode || '') === 'remote';
+    graph.classList.toggle('is-remote', remote);
     var legend = graph.querySelector('.director-activity-trend-legend');
     var plot = graph.querySelector('svg');
     if (legend) legend.classList.toggle('hidden', remote);

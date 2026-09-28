@@ -1466,7 +1466,7 @@
     }
 
     select.innerHTML = generateState.director.models.map(function (model) {
-      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(model.label || model.id) + '</option>';
+      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(formatDirectorModelLabel(model)) + '</option>';
     }).join('');
     var chosen = generateState.director.models.some(function (model) { return model.id === generateState.director.modelId; })
       ? generateState.director.modelId

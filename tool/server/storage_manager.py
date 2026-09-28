@@ -11,7 +11,7 @@ from pathlib import Path, PurePosixPath
 from . import config as app_config
 from .epoch_test_bench import delete_session
 from .generate_store import MANIFEST_NAME
-from .execution_queue import get_job as execution_get_job, lane_snapshot as execution_lane_snapshot
+from .execution_queue import ExecutionQueueStateError, get_job as execution_get_job, lane_snapshot as execution_lane_snapshot
 from . import inference_runtime
 from .storyboard_store import delete_take, list_stories, load_story, storyboard_root
 from .training_action import managed_actions, read_action
@@ -32,6 +32,10 @@ _SCAN_CANCEL = None
 
 
 class _ScanCancelled(RuntimeError):
+    pass
+
+
+class _TrainingQueueStateError(RuntimeError):
     pass
 
 
@@ -927,18 +931,30 @@ def overview(folder=""):
     usage = shutil.disk_usage(app_config.FS_ROOT)
     cache = _read_cache()
     scan_complete = _scan_cache_complete(cache)
+    unavailable = {}
+
+    def collect(area, callback):
+        try:
+            return callback()
+        except (ExecutionQueueStateError, _TrainingQueueStateError) as exc:
+            unavailable[area] = str(exc)
+            return []
+
     groups = {
-        "training": _training_items(cache),
+        "training": collect("training", lambda: _training_items(cache)),
         "tests": _test_items(cache, folder),
-        "staged": _staged_items(cache, folder),
-        "generate": _generate_items(cache),
+        "staged": collect("staged", lambda: _staged_items(cache, folder)),
+        "generate": collect("generate", lambda: _generate_items(cache)),
         "storyboard": _storyboard_items(cache),
         "set": _set_items(cache, folder),
-        "runtime": _runtime_items(cache),
-        "comfy": _comfy_items(cache),
+        "runtime": collect("runtime", lambda: _runtime_items(cache)),
+        "comfy": collect("comfy", lambda: _comfy_items(cache)),
     }
     categories = [
-        _category("training", "Training", groups["training"]),
+        _category(
+            "training", "Training", groups["training"], complete="training" not in unavailable,
+            note=("Training queue state is unavailable; inventory is hidden until it can be read." if "training" in unavailable else "")
+        ),
         _category(
             "tests", "Tests", groups["tests"], complete=scan_complete,
             note=(
@@ -949,19 +965,33 @@ def overview(folder=""):
         ),
         _category(
             "staged", "Staged Test LoRAs", groups["staged"], complete=False,
-            note=("Showing WebCap-owned staged copies for the current Set in configured Test roots only.")
+            note=(
+                "Inference queue state is unavailable; staged inventory is hidden until it can be read."
+                if "staged" in unavailable else
+                "Showing WebCap-owned staged copies for the current Set in configured Test roots only."
+            )
         ),
-        _category("generate", "Generations", groups["generate"]),
+        _category(
+            "generate", "Generations", groups["generate"], complete="generate" not in unavailable,
+            note=("Inference queue state is unavailable; generation inventory is hidden until it can be read." if "generate" in unavailable else "")
+        ),
         _category("storyboard", "Storyboard Takes", groups["storyboard"]),
         _category(
             "set", ("Set Data (protected)" if scan_complete else "Current Set (protected)"),
             groups["set"], complete=scan_complete,
             note="Visible for accounting only; Set-owned data is not purgeable here."
         ),
-        _category("runtime", "Runtime / Temporary", groups["runtime"]),
         _category(
-            "comfy", "ComfyUI Scratch", groups["comfy"],
-            note=("Exact WebCap-prefixed job trees only; the provider root is learned from a real ComfyUI output path.")
+            "runtime", "Runtime / Temporary", groups["runtime"], complete="runtime" not in unavailable,
+            note=("Inference queue state is unavailable; runtime inventory is hidden until it can be read." if "runtime" in unavailable else "")
+        ),
+        _category(
+            "comfy", "ComfyUI Scratch", groups["comfy"], complete="comfy" not in unavailable,
+            note=(
+                "Inference queue state is unavailable; ComfyUI scratch inventory is hidden until it can be read."
+                if "comfy" in unavailable else
+                "Exact WebCap-prefixed job trees only; the provider root is learned from a real ComfyUI output path."
+            )
         ),
     ]
     categories.sort(key=lambda row: (row["bytes"], row["count"]), reverse=True)
@@ -977,6 +1007,7 @@ def overview(folder=""):
         "lastScan": cache.get("lastScan") if isinstance(cache.get("lastScan"), dict) else None,
         "categories": categories,
         "items": groups,
+        "unavailable": unavailable,
     }
 
 
@@ -1628,10 +1659,10 @@ def _training_queue_reference_map():
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Training queue state is unreadable; refusing Storage ownership decisions.") from exc
+        raise _TrainingQueueStateError("Training queue state is unreadable; refusing Storage ownership decisions.") from exc
     jobs = payload.get("jobs") if isinstance(payload, dict) else None
     if not isinstance(jobs, list):
-        raise RuntimeError("Training queue state is invalid; refusing Storage ownership decisions.")
+        raise _TrainingQueueStateError("Training queue state is invalid; refusing Storage ownership decisions.")
     references = {}
     for job in jobs:
         if not isinstance(job, dict):

@@ -101,6 +101,7 @@ def test_environment_report_groups_optional_capabilities(monkeypatch):
     assert checks["inference_comfyui"]["group"] == "inference"
     assert checks["director_llama_server"]["ok"] is True
     assert checks["package_mediapipe"]["group"] == "optional_analysis"
+    assert checks["package_imageio"]["group"] == "optional_analysis"
 
 
 def test_environment_report_remote_director_failure_is_group_local(monkeypatch):
@@ -122,3 +123,24 @@ def test_environment_report_remote_director_failure_is_group_local(monkeypatch):
     assert report["summary"]["inference"]["ready"] is False
     checks = {item["id"]: item for item in report["checks"]}
     assert "remote offline" in checks["director_remote_endpoint"]["details"]
+
+
+def test_optional_package_guidance_points_to_settings_repair(monkeypatch):
+    _stub_optional_probes(monkeypatch)
+    monkeypatch.setattr(environment_check, "uses_native_wsl_shell", lambda: False)
+    monkeypatch.setattr(environment_check, "wsl_executable", lambda: None)
+    monkeypatch.setattr(environment_check.shutil, "which", lambda name: "/usr/bin/" + name if name in {"ffmpeg", "ffprobe"} else None)
+    monkeypatch.setattr(environment_check, "_host_command", lambda *args, **kwargs: (0, "pip 25", ""))
+    monkeypatch.setattr(
+        environment_check.importlib.util,
+        "find_spec",
+        lambda name: None if name in {"mediapipe", "imageio"} else object(),
+    )
+
+    report = environment_check.build_environment_report({"training": {}})
+    checks = {item["id"]: item for item in report["checks"]}
+
+    assert checks["package_mediapipe"]["required"] is False
+    assert "Install / Repair Python Requirements" in checks["package_mediapipe"]["guidance"]
+    assert checks["package_imageio"]["required"] is False
+    assert report["summary"]["optional_analysis"]["ready"] is True

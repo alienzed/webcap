@@ -120,6 +120,32 @@ def test_activity_drawer_marks_owning_workspace_links_while_work_is_active():
     assert ".activity-rail-btn.has-active-work::after" in css
 
 
+def test_activity_navigation_passes_stable_target_identity_to_workspaces():
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    test_bench = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    generate = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    monitor = (ROOT / "tool" / "server" / "activity_monitor.py").read_text(encoding="utf-8")
+
+    assert "window.openStoryboardActivity(target);" in activity
+    assert "window.openTestBenchActivity(target);" in activity
+    assert "window.openGenerateActivity(target);" in activity
+    assert "window.openTrainingSurface(item.folder ? 'set' : 'global', target);" in activity
+    assert "function openStoryboardActivity(target)" in storyboard
+    assert "return openStory(targetStoryId);" in storyboard
+    assert "setSceneViewMode('focus', targetSceneId)" in storyboard
+    assert "function openTestBenchActivity(target)" in test_bench
+    assert "pendingActivitySession" in test_bench
+    assert "test_open_session', { session: requestedSession }" in test_bench
+    assert "function openGenerateActivity(target)" in generate
+    assert "trackGenerateJob(targetJobId);" in generate
+    assert "generateState.activePendingJobId = targetJobId;" in generate
+    assert "function openTrainingSurface(mode, target)" in shell
+    assert "openTrainingWorkspaceFolder(String(target.folder || ''));" in shell
+    assert '"source": str(job.get("source") or metadata.get("source") or "")' in monitor
+
+
 def test_global_activity_drawer_is_a_read_only_sibling_of_inference_queue():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")

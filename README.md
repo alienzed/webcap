@@ -86,7 +86,7 @@ For a complete setup guide, including the MiniMax H3 reference training environm
 ```bash
 git clone https://github.com/alienzed/webcap.git
 cd webcap
-pip install -r requirements.txt
+python start.py
 ```
 
 Copy the example configuration and edit it for the local machine:
@@ -131,6 +131,14 @@ Start from [`tool/config.example.json`](tool/config.example.json). The important
 App Settings exposes the normal settings UI plus advanced raw JSON editing. **App Settings → Training → Environment Check** can inspect the WebCap Python environment, common media tools, WSL/Diffusion Pipe configuration, DeepSpeed, PyTorch/CUDA visibility, and NVIDIA telemetry without requiring a dataset. It reports remediation guidance but does not automatically rewrite CUDA/PyTorch packages.
 
 ## Run
+
+```bash
+python start.py
+```
+
+The launcher ensures WebCap's own `requirements.txt` is installed into the same Python environment, then starts the existing server. It does not install or modify Diffusion Pipe, PyTorch/CUDA, ComfyUI, or other external runtimes.
+
+The direct developer entry point remains available when dependency installation is intentionally being managed separately:
 
 ```bash
 python -m tool.server.app

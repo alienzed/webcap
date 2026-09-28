@@ -911,7 +911,9 @@
       return document.querySelector('.storyboard-scene-workspace');
     }
     if (target.kind === 'repair') {
-      return document.querySelector('.storyboard-scene-workspace');
+      var repairInstruction = el('storyboard-repair-instruction');
+      if (repairInstruction && repairInstruction.offsetParent !== null) return repairInstruction;
+      return document.querySelector('[data-story-section="director"] > summary');
     }
     return document.querySelector('.storyboard-scene-workspace');
   }
@@ -926,7 +928,7 @@
 
     var detachedTarget = !!kind && !target;
     var hidden = card.classList.contains('hidden');
-    var fillsWorkspace = kind === 'scenes' || kind === 'repair';
+    var fillsWorkspace = kind === 'scenes';
     if (sceneWorkspace) {
       sceneWorkspace.classList.toggle('director-active', fillsWorkspace && !detachedTarget && !hidden);
     }
@@ -937,7 +939,7 @@
 
     var editorRect = editor.getBoundingClientRect();
     var targetRect = target.getBoundingClientRect();
-    var fillsField = kind === 'concept' || kind === 'scene-prompt';
+    var fillsField = kind === 'concept' || kind === 'scene-prompt' || kind === 'repair';
     card.classList.toggle('is-field-overlay', fillsField);
     card.classList.toggle('is-structure-overlay', !fillsField && !fillsWorkspace);
 

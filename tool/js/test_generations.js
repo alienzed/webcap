@@ -190,7 +190,7 @@
     }
 
     select.innerHTML = wildcardDirector.models.map(function (model) {
-      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(model.label || model.id) + '</option>';
+      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(formatDirectorModelLabel(model)) + '</option>';
     }).join('');
     if (!wildcardDirector.models.some(function (model) { return model.id === wildcardDirector.modelId; })) {
       wildcardDirector.modelId = String((wildcardDirector.models[0] || {}).id || '');

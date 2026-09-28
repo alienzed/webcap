@@ -1240,3 +1240,37 @@ def test_storyboard_first_cut_lock_is_story_scoped_and_sequence_readiness_is_der
     assert "scenesWithTake" in readiness
     assert "sequenceButton.classList.toggle('is-ready', sequenceReady);" in readiness
     assert "#storyboard-scenes-sequence-btn.is-ready:not(.active)" in css
+
+
+def test_storyboard_first_cut_queue_is_session_only_story_scoped_fifo():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "storyActionQueue: []" in storyboard
+    assert "function queuedFirstCutForStory(storyId)" in storyboard
+    assert "function firstCutQueueDisplayPosition(action)" in storyboard
+    assert "function removeQueuedFirstCut(storyId)" in storyboard
+    assert "function runFirstCut(action)" in storyboard
+    assert "function startNextFirstCut()" in storyboard
+    assert "storyState.storyActionQueue.push(action);" in storyboard
+    assert "var candidate = storyState.storyActionQueue.shift();" in storyboard
+    assert "button.textContent = anotherRunning ? 'Queue First Cut' : 'First Cut';" in storyboard
+    assert "'First Cut queued #' + String(firstCutQueueDisplayPosition(queuedFirstCut))" in storyboard
+    assert "removeQueuedFirstCut(storyId);" in storyboard
+    assert "window.localStorage.setItem('webcap.storyboard.firstCut" not in storyboard
+    assert "operation: 'queue_first_cut'" not in storyboard
+
+
+def test_storyboard_queued_first_cut_freezes_model_but_reads_story_at_start():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    start = storyboard.split("function startFirstCut()", 1)[1].split("\n  function ", 1)[0]
+    run = storyboard.split("function runFirstCut(action)", 1)[1].split("\n  function ", 1)[0]
+
+    assert "modelId: modelId" in start
+    assert "storyState.storyActionQueue.push(action);" in start
+    assert "var modelId = String(action.modelId || '');" in run
+    assert "request(null, 'story=' + encodeURIComponent(storyId))" in run
+    assert "replaceExisting = Array.isArray(actionStory && actionStory.sceneOrder)" in run
+    assert "setDirectorPending(directorTarget, true);" in run
+    assert "startNextFirstCut();" in run
+

@@ -107,3 +107,27 @@ def test_activity_recent_is_limited_to_client_session(monkeypatch):
     payload = activity_monitor.activity_snapshot(limit=10, since=100.0)
 
     assert [item["id"] for item in payload["recent"]] == ["training-new", "llm-new", "inference-new"]
+
+
+def test_activity_snapshot_keeps_other_domains_when_execution_state_is_unavailable(monkeypatch):
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("execution queue unavailable")
+
+    monkeypatch.setattr(activity_monitor, "inference_snapshot", unavailable)
+    monkeypatch.setattr(activity_monitor, "llm_snapshot", unavailable)
+    monkeypatch.setattr(activity_monitor, "training_status_response", lambda: ({
+        "ok": True,
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "train-active", "status": "running", "runName": "Training", "startedAt": 10.0}],
+    }, 200))
+    monkeypatch.setattr(activity_monitor, "training_recent_jobs", lambda: [])
+    monkeypatch.setattr(activity_monitor, "storage_scan_status", lambda: {"ok": True, "scan": {}})
+
+    payload = activity_monitor.activity_snapshot(limit=10)
+
+    assert payload["ok"] is True
+    assert [item["id"] for item in payload["active"]] == ["train-active"]
+    assert payload["queues"]["inference"]["unavailable"] is True
+    assert payload["queues"]["director"]["unavailable"] is True
+    assert {item["area"] for item in payload["errors"]} == {"inference", "director"}

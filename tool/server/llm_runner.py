@@ -664,6 +664,7 @@ def _queue_wait_state(current):
 
 
 def snapshot(include_terminal=False):
+    _ensure_execution_reconciled()
     current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=include_terminal)
     return {
         "paused": bool(current.get("paused")),

@@ -152,6 +152,7 @@ ui = {
   appSettingsTrainingActivateScriptEl: document.getElementById('app-settings-training-activate-script'),
   appSettingsTrainingH3SplitCachePhaseEl: document.getElementById('app-settings-training-h3-split-cache-phase'),
   appSettingsEnvironmentRunBtnEl: document.getElementById('app-settings-environment-run-btn'),
+  appSettingsEnvironmentInstallBtnEl: document.getElementById('app-settings-environment-install-btn'),
   appSettingsEnvironmentSummaryEl: document.getElementById('app-settings-environment-summary'),
   appSettingsEnvironmentResultsEl: document.getElementById('app-settings-environment-results'),
   appSettingsTrainingRepeatReferenceEpochsEl: document.getElementById('app-settings-training-repeat-reference-epochs'),

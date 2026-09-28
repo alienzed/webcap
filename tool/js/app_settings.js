@@ -1,5 +1,5 @@
 var appSettingsLoadedConfig = null;
-var appSettingsActiveTab = 'workspace';
+var appSettingsActiveTab = 'general';
 var appSettingsTrainingProfiles = [
   { id: 'wan22_t2v', uiKey: 'appSettingsTrainingProfileWan22El' },
   { id: 'krea2_raw', uiKey: 'appSettingsTrainingProfileKrea2El' },
@@ -15,7 +15,7 @@ var appSettingsTestCopyRoots = [
 ];
 
 function setAppSettingsTab(tabName, focusTab) {
-  var next = ['workspace', 'training', 'director', 'advanced'].indexOf(tabName) !== -1 ? tabName : 'workspace';
+  var next = ['general', 'models', 'training', 'testing', 'director', 'system'].indexOf(tabName) !== -1 ? tabName : 'general';
   appSettingsActiveTab = next;
   var selectedButton = null;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
@@ -130,6 +130,7 @@ function fillAppSettingsForm(cfg) {
     if (el) el.checked = c.training.enabled_profiles.indexOf(profile.id) !== -1;
   });
   if (ui.appSettingsStoryboardDirectorModeEl) ui.appSettingsStoryboardDirectorModeEl.value = c.storyboard.director.mode || 'local';
+  syncAppSettingsDirectorModeVisibility();
   if (ui.appSettingsStoryboardEndpointEl) ui.appSettingsStoryboardEndpointEl.value = c.storyboard.director.endpoint || '';
   if (ui.appSettingsStoryboardLlamaServerEl) ui.appSettingsStoryboardLlamaServerEl.value = c.storyboard.director.llama_server || '';
   if (ui.appSettingsStoryboardPortEl) ui.appSettingsStoryboardPortEl.value = c.storyboard.director.port;
@@ -347,6 +348,8 @@ function renderEnvironmentCheck(payload) {
   }
   if (analysisSelectionChanged) syncAppSettingsJsonFromForm();
   resultsEl.classList.remove('hidden');
+  var details = document.getElementById('app-settings-environment-details');
+  if (details) details.open = !core.ready;
 }
 
 function appendRequirementsOutputToConsole(payload) {
@@ -591,6 +594,14 @@ function openHelpReadmeInPreview() {
   });
 }
 
+function syncAppSettingsDirectorModeVisibility() {
+  var mode = ui.appSettingsStoryboardDirectorModeEl ? String(ui.appSettingsStoryboardDirectorModeEl.value || 'local') : 'local';
+  var local = document.getElementById('app-settings-director-local');
+  var remote = document.getElementById('app-settings-director-remote');
+  if (local) local.classList.toggle('hidden', mode === 'remote');
+  if (remote) remote.classList.toggle('hidden', mode !== 'remote');
+}
+
 function wireAppSettingsUi() {
   if (ui.shellSettingsBtn) ui.shellSettingsBtn.onclick = openAppSettingsModal;
   if (ui.shellHelpBtn) ui.shellHelpBtn.onclick = openHelpReadmeInPreview;
@@ -624,13 +635,17 @@ function wireAppSettingsUi() {
   if (h3Reset) h3Reset.onclick = resetH3CalibrationSettings;
   if (h3Console) h3Console.onclick = showConsolePanel;
   if (ui.appSettingsEnvironmentRunBtnEl) ui.appSettingsEnvironmentRunBtnEl.onclick = runEnvironmentCheck;
+  if (ui.appSettingsStoryboardDirectorModeEl) {
+    ui.appSettingsStoryboardDirectorModeEl.addEventListener('change', syncAppSettingsDirectorModeVisibility);
+    syncAppSettingsDirectorModeVisibility();
+  }
   if (ui.appSettingsEnvironmentInstallBtnEl) ui.appSettingsEnvironmentInstallBtnEl.onclick = installPythonRequirements;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
     button.onclick = function () {
       setAppSettingsTab(button.getAttribute('data-app-settings-tab'), false);
     };
     button.onkeydown = function (event) {
-      var tabs = ['general', 'training', 'storyboard', 'advanced'];
+      var tabs = ['general', 'models', 'training', 'testing', 'director', 'system'];
       var current = tabs.indexOf(button.getAttribute('data-app-settings-tab'));
       var next = current;
       if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;

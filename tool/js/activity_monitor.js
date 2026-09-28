@@ -9,7 +9,8 @@
     pending: false,
     lastSeen: sessionStartedAt,
     openedAt: 0,
-    notified: Object.create(null)
+    notified: Object.create(null),
+    reportedErrors: Object.create(null)
   };
 
   function el(id) { return document.getElementById(id); }
@@ -332,6 +333,7 @@
 
   function queueText(queue, includeRunning) {
     queue = queue || {};
+    if (queue.unavailable) return 'Unavailable';
     var parts = [];
     if (includeRunning && Number(queue.running || 0)) parts.push(String(queue.running) + ' running');
     if (Number(queue.queued || 0)) parts.push(String(queue.queued) + ' queued');
@@ -342,6 +344,7 @@
 
   function queueHasWork(queue, includeRunning) {
     queue = queue || {};
+    if (queue.unavailable) return false;
     return !!(
       (includeRunning && Number(queue.running || 0)) ||
       Number(queue.queued || 0) ||
@@ -363,7 +366,10 @@
     button.appendChild(statusEl);
 
     var hasWork = queueHasWork(queue, key !== 'training');
-    if (key === 'inference' && hasWork) {
+    if (queue && queue.unavailable) {
+      button.disabled = true;
+      button.title = label + ' state is unavailable; see Console for details.';
+    } else if (key === 'inference' && hasWork) {
       button.onclick = function () {
         setOpen(false);
         window.setInferenceQueueOpen(true);
@@ -462,6 +468,14 @@
     state.pending = true;
     return requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
       state.payload = payload;
+      (Array.isArray(payload.errors) ? payload.errors : []).forEach(function (item) {
+        var key = String(item.area || 'activity') + ':' + String(item.error || '');
+        if (state.reportedErrors[key]) return;
+        state.reportedErrors[key] = true;
+        if (typeof window.reportConsoleError === 'function') {
+          window.reportConsoleError('Activity', String(item.area || 'Activity') + ' unavailable: ' + String(item.error || 'Unknown error'));
+        }
+      });
       notifyRecent(sessionRecent());
       render();
       return payload;

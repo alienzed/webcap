@@ -51,6 +51,11 @@ Once queued:
 - the queued job runs from the inputs captured for it,
 - and stale-result validation may reject a result rather than applying it to incompatible current state.
 
+A later mutation does **not** retroactively invalidate valid frozen work that was already requested.
+If a Take, generation, or test was valid when queued, a subsequent authoring mutation does not cancel,
+rebase, or rewrite that job. The pending mutation may constrain **new** dependent requests until it
+completes, but earlier frozen work remains an intentional historical request.
+
 ## 2. The dependency rule
 
 Pending-work UI state is based on **data dependency**, not generic busy state.

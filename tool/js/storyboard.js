@@ -4610,7 +4610,10 @@
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
   }
 
-  function openStoryboardActivity() {
+  function openStoryboardActivity(target) {
+    target = target && typeof target === 'object' ? target : {};
+    var targetStoryId = String(target.storyId || '');
+    var targetSceneId = String(target.sceneId || '');
     if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
     var frame = el('app-frame');
     var workspace = el('storyboard-workspace');
@@ -4626,6 +4629,7 @@
     refreshLibrary().then(function () {
       return reconcileDirectorJobs();
     }).then(function () {
+      if (targetStoryId) return openStory(targetStoryId);
       if (storyState.story) {
         return refreshGenerationQueue(storyState.story.id).then(function () {
           renderStory();
@@ -4634,6 +4638,13 @@
       var first = storyState.stories && storyState.stories[0];
       if (first) return openStory(first.id);
       renderStory();
+      return null;
+    }).then(function () {
+      if (!targetSceneId || !storyState.story || String(storyState.story.id || '') !== targetStoryId) return;
+      if (!storyState.story.scenes || !storyState.story.scenes[targetSceneId]) {
+        throw new Error('Storyboard activity Scene no longer exists: ' + targetSceneId);
+      }
+      return setSceneViewMode('focus', targetSceneId);
     }).catch(reportError);
   }
 

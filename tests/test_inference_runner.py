@@ -246,6 +246,29 @@ def test_inference_yields_retained_director_after_reserving_gpu(inference_root, 
     assert inference_runner.job_status(queued["jobId"])["status"] == "completed"
 
 
+def test_inference_yields_when_local_llm_work_is_already_queued(inference_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
+    queued = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
+    )
+    execution_queue.enqueue(
+        "llm",
+        {"contract": {}},
+        metadata={"client": "storyboard"},
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(
+        inference_runner,
+        "_reserve_gpu",
+        lambda: (_ for _ in ()).throw(AssertionError("Inference must yield before reserving the shared GPU.")),
+    )
+
+    assert inference_runner._advance_queue() is None
+
+    assert execution_queue.get_job(queued["jobId"])["status"] == "queued"
+    assert execution_queue.resource_owner() == ""
+
+
 def test_inference_defers_without_pausing_if_director_runtime_is_busy(inference_root, monkeypatch):
     queued = inference_runner.enqueue_generate(
         {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}

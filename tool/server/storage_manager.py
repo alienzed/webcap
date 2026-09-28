@@ -1654,8 +1654,12 @@ def open_path(area, item_id, folder=""):
 
 def _training_queue_reference_map():
     path = Path(app_config.FS_ROOT) / ".webcap_training" / "queue.json"
-    if not path.is_file():
+    try:
+        path.stat()
+    except FileNotFoundError:
         return {}
+    except OSError as exc:
+        raise _TrainingQueueStateError("Training queue state cannot be inspected; refusing Storage ownership decisions.") from exc
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:

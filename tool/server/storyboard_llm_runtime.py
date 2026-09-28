@@ -243,15 +243,15 @@ def _http_json(path, method="GET", payload=None, timeout=30):
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read()
     except urllib.error.HTTPError as exc:
-        raise RuntimeError("Storyboard Director endpoint request failed: " + _decode_error_body(exc)) from exc
+        raise RuntimeError("Director endpoint request failed: " + _decode_error_body(exc)) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise ConnectionError("Could not connect to the configured Storyboard Director endpoint.") from exc
+        raise ConnectionError("Could not connect to the configured Director endpoint.") from exc
     if not body:
         return {}
     try:
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Storyboard Director endpoint returned invalid JSON.") from exc
+        raise RuntimeError("Director endpoint returned invalid JSON.") from exc
 
 
 def _remote_native_url(path):
@@ -321,7 +321,7 @@ def _remote_http_json_cancellable(path, method="GET", payload=None, timeout=30):
                 except (ValueError, TypeError):
                     pass
             raise RuntimeError(
-                "Storyboard Director endpoint request failed: "
+                "Director endpoint request failed: "
                 + (detail or (str(response.status) + " " + str(response.reason or "").strip()))
             )
         if not raw:
@@ -329,13 +329,13 @@ def _remote_http_json_cancellable(path, method="GET", payload=None, timeout=30):
         try:
             return json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise RuntimeError("Storyboard Director endpoint returned invalid JSON.") from exc
+            raise RuntimeError("Director endpoint returned invalid JSON.") from exc
     except RuntimeError:
         raise
     except (http.client.HTTPException, TimeoutError, OSError) as exc:
         if _stop_requested.is_set():
             raise RuntimeError("LLM request stopped.") from exc
-        raise ConnectionError("Could not connect to the configured Storyboard Director endpoint.") from exc
+        raise ConnectionError("Could not connect to the configured Director endpoint.") from exc
     finally:
         with _remote_request_lock:
             if _active_remote_connection is connection:
@@ -568,7 +568,7 @@ def _ensure_server():
             try:
                 _normalize_models(_http_json("/models", timeout=10))
             except Exception as exc:
-                raise ConnectionError("Could not connect to the configured remote Storyboard Director endpoint.") from exc
+                raise ConnectionError("Could not connect to the configured remote Director endpoint.") from exc
             return
 
         desired_signature = _server_signature(settings)
@@ -696,7 +696,7 @@ def _model_file_size(model):
         return int(path.stat().st_size)
     except OSError as exc:
         raise OSError(
-            "Could not stat Storyboard Director model file '" + str(path) + "': " + str(exc)
+            "Could not stat Director model file '" + str(path) + "': " + str(exc)
         ) from exc
 
 
@@ -753,7 +753,7 @@ def status():
 def _model_record(model_id):
     model_id = str(model_id or "").strip()
     if not model_id:
-        raise ValueError("Choose a Storyboard Director model.")
+        raise ValueError("Choose a Director model.")
     models = list_models(reload=True)
     for model in models:
         if model["id"] == model_id:
@@ -936,7 +936,7 @@ def _sampling_profile(operation):
 
 def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None):
     if not isinstance(messages, list) or not messages:
-        raise ValueError("Storyboard Director messages are required.")
+        raise ValueError("Director messages are required.")
 
     with _request_lock:
         _ensure_server()
@@ -956,7 +956,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
         if requested_max_tokens is not None:
             requested_max_tokens = int(requested_max_tokens)
             if requested_max_tokens <= 0:
-                raise ValueError("Storyboard Director max_tokens override must be greater than zero.")
+                raise ValueError("Director max_tokens override must be greater than zero.")
             payload["max_tokens"] = requested_max_tokens
         if settings.get("mode", "local") == "local":
             payload["reasoning_effort"] = "none"
@@ -1028,7 +1028,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                     else:
                         cleanup_safe = False
                         cleanup_error = DirectorGpuHoldRequired(
-                            "Storyboard Director could not confirm that the selected model was unloaded "
+                            "Director runtime could not confirm that the selected model was unloaded "
                             "from an external llama.cpp router after a failed request. The GPU reservation is being kept "
                             "to avoid colliding with Training or generation work. Stop/unload that router model, then "
                             "restart WebCap before using GPU work again."
@@ -1125,10 +1125,10 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
 
 def run_contract(model_id, contract, gpu_reserved=False):
     if not isinstance(contract, dict):
-        raise ValueError("Storyboard Director contract must be an object.")
+        raise ValueError("Director contract must be an object.")
     prompt = str(contract.get("prompt") or "").strip()
     if not prompt:
-        raise ValueError("Storyboard Director contract prompt is empty.")
+        raise ValueError("Director contract prompt is empty.")
 
     operation = str(contract.get("operation") or "").strip()
     with _request_lock:
@@ -1174,9 +1174,9 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 try:
                     data = json.loads(result["text"])
                 except (TypeError, json.JSONDecodeError) as exc:
-                    raise RuntimeError("Storyboard Director returned invalid structured JSON.") from exc
+                    raise RuntimeError("Director returned invalid structured JSON.") from exc
                 if not isinstance(data, dict):
-                    raise RuntimeError("Storyboard Director structured output must be a JSON object.")
+                    raise RuntimeError("Director structured output must be a JSON object.")
                 result["data"] = data
 
             renderer = contract.get("result_renderer")

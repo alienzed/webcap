@@ -1,6 +1,6 @@
 from collections import Counter
 
-from .originals import MEDIA_ALL_EXTS
+from .originals import MEDIA_ALL_EXTS, is_transient_media_name
 
 
 def _clean_caption(value):
@@ -87,7 +87,11 @@ def build_request(captions):
 def captions_from_folder(folder_path):
     captions = []
     for media_path in sorted(folder_path.iterdir(), key=lambda path: path.name.lower()):
-        if not media_path.is_file() or media_path.suffix.lower() not in MEDIA_ALL_EXTS:
+        if (
+            not media_path.is_file()
+            or media_path.suffix.lower() not in MEDIA_ALL_EXTS
+            or is_transient_media_name(media_path.name)
+        ):
             continue
         caption_path = media_path.with_suffix(".txt")
         if not caption_path.is_file():

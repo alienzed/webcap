@@ -2539,11 +2539,13 @@
       syncActiveRunControls({ status: 'idle' });
       return;
     }
-    Promise.all([
-      refreshWildcardDirector(),
-      refreshTestSourceBrowser()
-    ]).then(function (values) {
-      var sourcePayload = values[1];
+    refreshWildcardDirector().catch(function (err) {
+      wildcardDirector.available = false;
+      wildcardDirector.models = [];
+      renderWildcardDirector();
+      showError(err);
+    });
+    refreshTestSourceBrowser().then(function (sourcePayload) {
       if (sourcePayload && sourcePayload.navigated) return null;
       return request('test_prepare', { modelId: getWorkingModelProfileId() });
     }).then(function (payload) {

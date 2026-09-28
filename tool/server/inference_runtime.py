@@ -20,6 +20,12 @@ from .execution_queue import get_job as execution_get_job, update_job as executi
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 GENERATION_TIMEOUT_SECONDS = 45 * 60
 COMFY_JOB_MISSING_GRACE_SECONDS = 10
+
+
+class ComfyHttpError(RuntimeError):
+    def __init__(self, status, detail):
+        self.status = int(status)
+        super().__init__("ComfyUI request failed (HTTP " + str(self.status) + "): " + str(detail or ""))
 COMFY_PROVIDER_STATE_VERSION = 1
 COMFY_PROVIDER_STATE_FILE = "comfy_provider.json"
 _logger = logging.getLogger(__name__)
@@ -70,10 +76,12 @@ def _windows_curl_request(curl_path, url, method="GET", payload=None, timeout=10
     except subprocess.TimeoutExpired as exc:
         raise TimeoutError("Timed out contacting ComfyUI.") from exc
     if result.returncode != 0:
-        detail = (
-            result.stdout.decode("utf-8", errors="replace").strip()
-            or result.stderr.decode("utf-8", errors="replace").strip()
-        )
+        stdout_detail = result.stdout.decode("utf-8", errors="replace").strip()
+        stderr_detail = result.stderr.decode("utf-8", errors="replace").strip()
+        status_match = re.search(r"returned error:\s*(\d{3})", stderr_detail)
+        detail = stdout_detail or stderr_detail
+        if status_match:
+            raise ComfyHttpError(int(status_match.group(1)), detail)
         raise RuntimeError("ComfyUI request failed: " + detail)
     return result.stdout
 
@@ -91,7 +99,7 @@ def _read_json_response(url, method="GET", payload=None, timeout=10):
                 body = response.read()
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace").strip()
-            raise RuntimeError("ComfyUI request failed: " + (detail or str(exc))) from exc
+            raise ComfyHttpError(exc.code, detail or str(exc)) from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise ConnectionError("Could not connect to ComfyUI.") from exc
     if not body:
@@ -208,8 +216,8 @@ def read_job(prompt_id):
     url = COMFY_BASE_URL + "/api/jobs/" + urllib.parse.quote(str(prompt_id or ""), safe="")
     try:
         payload = _read_json_response(url)
-    except RuntimeError as exc:
-        if "404" in str(exc):
+    except ComfyHttpError as exc:
+        if exc.status == 404:
             return None
         raise
     if not isinstance(payload, dict):

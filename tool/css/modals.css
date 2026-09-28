@@ -185,7 +185,9 @@
   display: flex;
   gap: 4px;
   flex: 0 0 auto;
+  overflow-x: auto;
   border-bottom: 1px solid var(--border-soft);
+  scrollbar-width: thin;
 }
 
 .app-settings-tab {
@@ -277,6 +279,21 @@
 .app-settings-section-disclosure {
   margin: 12px 0 2px;
 }
+
+.app-settings-runtime-scope {
+  display: grid;
+  gap: 10px;
+}
+
+.app-settings-panel > .app-settings-section-disclosure:first-child {
+  margin-top: 4px;
+}
+
+.app-settings-danger-zone.app-settings-section-disclosure {
+  margin-top: 12px;
+  padding: 8px;
+}
+
 
 .app-settings-disclosure-body {
   padding-top: 12px;

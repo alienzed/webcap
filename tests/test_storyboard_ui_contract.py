@@ -338,7 +338,8 @@ def test_storyboard_director_pending_state_is_target_scoped():
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
     assert "target.kind === 'concept'" in protection
     assert "target.kind === 'scene-prompt'" in protection
-    assert "target.kind === 'scenes'" not in protection
+    assert "target.kind === 'scenes'" in protection
+    assert "#storyboard-story-overview button" in protection
     assert "querySelectorAll('input, textarea, select')" not in protection
     assert ".storyboard-director-activity.is-detached-target" in (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
@@ -805,30 +806,27 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    for section in ("story", "continuity", "director", "planning", "loras"):
+    for section in ("story", "continuity", "director", "defaults"):
         assert f'data-story-section="{section}"' in html
 
+    assert 'data-story-section="planning"' not in html
+    assert 'data-story-section="loras"' not in html
     assert 'data-story-section="story" open' in html
     assert 'data-story-section="continuity" open' in html
     assert "var STORY_SECTION_DEFAULTS = {" in storyboard
     assert "story: true" in storyboard
     assert "continuity: true" in storyboard
     assert "director: false" in storyboard
-    assert "planning: false" in storyboard
-    assert "loras: false" in storyboard
+    assert "defaults: false" in storyboard
     assert "function initStorySections()" in storyboard
     assert "'webcap.storyboard.storySection.' + sectionName" in storyboard
     assert ".storyboard-story-section:not([open]) > .storyboard-story-section-body" in css
-    lora_section_css = css.split(".storyboard-story-loras.storyboard-story-section {", 1)[1].split("}", 1)[0]
-    assert "overflow: visible;" in lora_section_css
-    assert "if (developRow && developRow.offsetParent !== null) return developRow;" in storyboard
-    assert "document.querySelector('[data-story-section=\"director\"] > summary')" in storyboard
 
     story_section = html.split('data-story-section="story"', 1)[1].split("</details>", 1)[0]
     continuity_section = html.split('data-story-section="continuity"', 1)[1].split("</details>", 1)[0]
     director_section = html.split('data-story-section="director"', 1)[1].split("</details>", 1)[0]
-    planning_section = html.split('data-story-section="planning"', 1)[1].split("</details>", 1)[0]
-    lora_section = html.split('data-story-section="loras"', 1)[1].split("</details>", 1)[0]
+    defaults_section = html.split('data-story-section="defaults"', 1)[1].split("</details>", 1)[0]
+    overview_surface = html.split('id="storyboard-story-overview"', 1)[1].split('<details class="storyboard-story-section storyboard-scene-defaults"', 1)[0]
 
     assert 'id="storyboard-story-title"' in story_section
     assert 'id="storyboard-story-status"' in story_section
@@ -846,12 +844,16 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'id="storyboard-repair-instruction"' in director_section
     assert 'id="storyboard-repair-scenes-btn"' in director_section
     assert 'id="storyboard-restore-repair-btn"' in director_section
-    assert 'id="storyboard-story-tags"' not in planning_section
-    assert 'id="storyboard-story-target-scenes"' in planning_section
-    assert 'id="storyboard-story-aspect-ratio"' in planning_section
-    assert 'id="storyboard-story-megapixels"' in planning_section
-    assert 'id="storyboard-story-lora-list"' in lora_section
-    assert 'id="storyboard-story-lora-picker"' in lora_section
+
+    assert 'id="storyboard-story-target-scenes"' in overview_surface
+    assert 'id="storyboard-story-aspect-ratio"' not in overview_surface
+    assert 'id="storyboard-story-megapixels"' not in overview_surface
+    assert 'id="storyboard-story-lora-list"' not in overview_surface
+    assert 'id="storyboard-story-aspect-ratio"' in defaults_section
+    assert 'id="storyboard-story-megapixels"' in defaults_section
+    assert 'id="storyboard-story-lora-list"' in defaults_section
+    assert 'id="storyboard-story-lora-picker"' in defaults_section
+    assert "These do not change the Story definition." in defaults_section
 
     payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
     assert "storySection" not in payload_block
@@ -859,6 +861,39 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'storyboard-list-section-title">Stories</div>' in storyboard
     assert 'storyboard-list-section-title">Recent</div>' not in storyboard
 
+
+def test_storyboard_develop_scenes_is_primary_story_to_scenes_handoff():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    handoff = html.split('<div class="storyboard-develop-row">', 1)[1].split("</div>\n\n                                <details", 1)[0]
+    assert 'id="storyboard-story-target-scenes"' in handoff
+    assert 'id="storyboard-develop-btn"' in handoff
+    assert handoff.index('id="storyboard-develop-btn"') < handoff.index('id="storyboard-develop-status"')
+    assert "Turn the Story Overview above into the Scene plan." in handoff
+
+    develop_css = css.split(".storyboard-develop-row .storyboard-primary-btn {", 1)[1].split("}", 1)[0]
+    assert "width: 100%;" in develop_css
+    assert "min-height: 48px;" in develop_css
+    assert "var(--accent)" in develop_css
+    assert ".storyboard-develop-row .storyboard-primary-btn::before" in css
+    assert ".storyboard-develop-row > .storyboard-save-state" in css
+
+
+def test_storyboard_director_scene_plan_lock_excludes_scene_defaults():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
+    scenes = protection.split("if (target.kind === 'scenes')", 1)[1].split("if (target.kind === 'scene-prompt')", 1)[0]
+    assert "#storyboard-story-overview button" in scenes
+    assert "storyboard-story-aspect-ratio" not in scenes
+    assert "storyboard-story-megapixels" not in scenes
+    assert "storyboard-story-lora" not in scenes
+    assert "control.dataset.directorScenesDisabled = '1';" in scenes
+
+    story_action = protection.split("if (target.kind === 'story-action')", 1)[1].split("if (target.kind === 'concept')", 1)[0]
+    assert "#storyboard-story-overview button" in story_action
+    assert "#storyboard-story-authoring button" not in story_action
 
 def test_storyboard_continuity_header_actions_do_not_toggle_disclosure():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
@@ -1229,7 +1264,8 @@ def test_storyboard_first_cut_lock_is_story_scoped_and_sequence_readiness_is_der
 
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("\n  function ", 1)[0]
     assert "String(target.storyId || '') !== String(storyState.story.id || '')" in protection
-    assert "#storyboard-story-authoring button, #storyboard-story-authoring input" in protection
+    assert "#storyboard-story-overview button, #storyboard-story-overview input" in protection
+    assert "#storyboard-story-authoring button, #storyboard-story-authoring input" not in protection
     assert "[data-story-action-cancel]" in protection
 
     pending_controls = storyboard.split("function syncDirectorPendingControls()", 1)[1].split("\n  function ", 1)[0]

@@ -729,6 +729,7 @@ def enqueue_test(request, context, label="", deferred=False):
 
 
 def snapshot(include_terminal=False):
+    _ensure_execution_reconciled()
     _clear_obsolete_persisted_provider_pause()
     current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=include_terminal)
     with _provider_hold_lock:

@@ -163,6 +163,7 @@ Only one execution owner may hold the shared local GPU resource at a time.
 - queued inference and queued LLM work remain durable while Training is busy;
 - running work is not preempted;
 - inference and local LLM cannot execute concurrently;
+- when local LLM work is already queued or active and the GPU becomes free, inference yields rather than racing that existing Director / Prompt Assistant demand for the next reservation;
 - remote LLM work does not reserve the local GPU;
 - retained or unsafe provider/model state keeps its resource reservation rather than guessing that the GPU is free;
 - if a retained idle Director model cannot yield on a launch attempt, Training or inference leaves the job queued and retries later instead of converting a transient handoff failure into a manual queue pause.

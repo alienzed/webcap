@@ -2587,14 +2587,21 @@
     ].join('');
   }
 
+  function selectSessionStatus(status) {
+    status = status || {};
+    currentSession = String(status.session || '');
+    currentSessionFolder = currentSession ? String(launchFolder || '') : '';
+    currentSessionModel = currentSession
+      ? String(status.modelId || status.model || currentTestModelId() || '')
+      : '';
+    currentSessionSource = currentSession
+      ? String(status.source == null ? testSource || '' : status.source)
+      : '';
+    renderStatus(status);
+  }
+
   function renderStatus(status) {
     currentStatus = status || {};
-    if (status && status.session) {
-      currentSession = String(status.session || '');
-      currentSessionFolder = String(launchFolder || '');
-      currentSessionModel = String(status.modelId || status.model || currentTestModelId() || '');
-      currentSessionSource = String(status.source == null ? testSource || '' : status.source);
-    }
     syncActiveRunControls(status || {});
     var rateItemsBtn = el('test-generations-rate-items-btn');
     var resultFolder = String(status && status.resultFolder || '');

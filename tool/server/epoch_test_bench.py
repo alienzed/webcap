@@ -767,12 +767,11 @@ SHARED_EXECUTION_LANE = "inference"
 def _resolved_wildcard_values(source_prompt, resolved_prompt):
     source = str(source_prompt or "").strip()
     resolved = str(resolved_prompt or "").strip()
-    matches = list(re.finditer(r"\\{([^{}]*\\|[^{}]*)\\}", source))
+    matches = list(re.finditer(r"\{([^{}]*\|[^{}]*)\}", source))
     if not matches:
         return []
 
     pattern = []
-    option_groups = []
     cursor = 0
     for match in matches:
         options = [option.strip() for option in match.group(1).split("|") if option.strip()]
@@ -780,7 +779,6 @@ def _resolved_wildcard_values(source_prompt, resolved_prompt):
             return []
         pattern.append(re.escape(source[cursor:match.start()]))
         pattern.append("(" + "|".join(re.escape(option) for option in options) + ")")
-        option_groups.append(options)
         cursor = match.end()
     pattern.append(re.escape(source[cursor:]))
 

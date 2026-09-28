@@ -56,6 +56,12 @@ If a Take, generation, or test was valid when queued, a subsequent authoring mut
 rebase, or rewrite that job. The pending mutation may constrain **new** dependent requests until it
 completes, but earlier frozen work remains an intentional historical request.
 
+The normal UI should make semantically invalid follow-up requests **unreachable**, not merely reject
+them later. If a pending mutation owns a Scene or authoring region, the corresponding overlay/disabled
+state prevents new dependent actions from being triggered against stale inputs. Queue ordering is
+therefore not a substitute for correct UI state and should not be used to make an otherwise-invalid
+request seem safe.
+
 ## 2. The dependency rule
 
 Pending-work UI state is based on **data dependency**, not generic busy state.

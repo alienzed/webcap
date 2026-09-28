@@ -894,3 +894,16 @@ def test_test_source_candidates_keep_explicit_delete_control():
     assert "remove.dataset.fileName = String(fileName || '');" in block
     assert "remove.title = 'Remove this Test candidate';" in block
     assert "row.appendChild(remove);" in block
+
+
+def test_test_generations_can_generate_wildcard_prompt_from_set_captions():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-wildcard-btn"' in html
+    assert 'id="test-generations-wildcard-model"' in html
+    assert 'id="test-generations-wildcard-analysis"' in html
+    assert "function generateWildcardFromSet()" in script
+    assert "folder: owningSetFolder(launchFolder" in script
+    assert "prompt.value = String(analysis.wildcard || '').trim();" in script
+    assert "saveTestPromptDraft(prompt.value);" in script

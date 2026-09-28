@@ -1,5 +1,7 @@
 from collections import Counter
 
+from .originals import MEDIA_ALL_EXTS
+
 
 def _clean_caption(value):
     return " ".join(str(value or "").strip().split())
@@ -85,7 +87,7 @@ def build_request(captions):
 def captions_from_folder(folder_path):
     captions = []
     for media_path in sorted(folder_path.iterdir(), key=lambda path: path.name.lower()):
-        if not media_path.is_file():
+        if not media_path.is_file() or media_path.suffix.lower() not in MEDIA_ALL_EXTS:
             continue
         caption_path = media_path.with_suffix(".txt")
         if not caption_path.is_file():

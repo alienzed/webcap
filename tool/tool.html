@@ -1011,6 +1011,15 @@
                                         <span>Prompt</span>
                                         <textarea id="test-generations-prompt" rows="5"></textarea>
                                     </label>
+                                    <div class="test-generations-wildcard-tools">
+                                        <select id="test-generations-wildcard-model" aria-label="Wildcard Director model"></select>
+                                        <button id="test-generations-wildcard-btn" type="button" class="review-captions-btn" title="Analyze this Set's captions and build a wildcard prompt from their common terms and observed variation.">Generate Wildcard</button>
+                                        <span id="test-generations-wildcard-status" class="test-generations-wildcard-status" aria-live="polite"></span>
+                                    </div>
+                                    <div id="test-generations-wildcard-analysis" class="test-generations-wildcard-analysis hidden">
+                                        <div><strong>Common</strong><span id="test-generations-wildcard-stable"></span></div>
+                                        <div><strong>Varies</strong><span id="test-generations-wildcard-variations"></span></div>
+                                    </div>
                                     <div class="test-generations-setup-options">
                                         <div class="test-generations-settings-grid">
                                             <label id="test-generations-aspect-field" class="training-run-option"><span>Aspect ratio</span><select id="test-generations-aspect"></select></label>

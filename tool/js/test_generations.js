@@ -27,6 +27,14 @@
   var showSessionError = false;
   var reportedFailureKeys = new Set();
   var debouncedPromptSave = debounceCreate(500);
+  var wildcardDirector = {
+    models: [],
+    modelId: '',
+    available: false,
+    busy: false,
+    jobId: '',
+    analysis: null
+  };
 
   function el(id) { return document.getElementById(id); }
 
@@ -138,6 +146,151 @@
         }
         return payload;
       });
+    });
+  }
+
+  function wildcardRequestJson(url, options) {
+    return fetch(url, options || {}).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Wildcard generation failed.');
+        }
+        return payload;
+      });
+    });
+  }
+
+  function wildcardPostJson(url, payload) {
+    return wildcardRequestJson(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+  }
+
+  function renderWildcardDirector() {
+    var select = el('test-generations-wildcard-model');
+    var button = el('test-generations-wildcard-btn');
+    var status = el('test-generations-wildcard-status');
+    if (!select || !button || !status) throw new Error('Test wildcard controls are missing.');
+
+    if (!wildcardDirector.available) {
+      select.innerHTML = '<option value="">Director unavailable</option>';
+      select.disabled = true;
+      button.disabled = true;
+      return;
+    }
+
+    select.innerHTML = wildcardDirector.models.map(function (model) {
+      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(model.label || model.id) + '</option>';
+    }).join('');
+    if (!wildcardDirector.models.some(function (model) { return model.id === wildcardDirector.modelId; })) {
+      wildcardDirector.modelId = String((wildcardDirector.models[0] || {}).id || '');
+    }
+    if (wildcardDirector.modelId) setDirectorModelPreference('webcap.testGenerations.directorModel', wildcardDirector.modelId);
+    select.value = wildcardDirector.modelId;
+    select.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
+    button.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
+    button.textContent = wildcardDirector.busy ? 'Analyzing…' : 'Generate Wildcard';
+  }
+
+  function renderWildcardAnalysis(analysis) {
+    var panel = el('test-generations-wildcard-analysis');
+    var stable = el('test-generations-wildcard-stable');
+    var variations = el('test-generations-wildcard-variations');
+    if (!panel || !stable || !variations) throw new Error('Test wildcard analysis markup is missing.');
+    if (!analysis) {
+      panel.classList.add('hidden');
+      stable.textContent = '';
+      variations.textContent = '';
+      return;
+    }
+    var stableTerms = Array.isArray(analysis.stableTerms) ? analysis.stableTerms : [];
+    var groups = Array.isArray(analysis.variationGroups) ? analysis.variationGroups : [];
+    stable.textContent = stableTerms.length ? stableTerms.join(' · ') : 'No strong stable terms identified.';
+    variations.textContent = groups.length
+      ? groups.map(function (group) {
+          return String(group.label || 'Variation') + ': ' + (Array.isArray(group.options) ? group.options.join(' / ') : '');
+        }).join(' · ')
+      : 'No meaningful variation groups identified.';
+    panel.classList.remove('hidden');
+  }
+
+  function refreshWildcardDirector() {
+    wildcardDirector.modelId = getDirectorModelPreference('webcap.testGenerations.directorModel');
+    return wildcardRequestJson('/fs/test_generations/wildcard').then(function (payload) {
+      wildcardDirector.available = !!payload.available;
+      wildcardDirector.models = Array.isArray(payload.models) ? payload.models : [];
+      renderWildcardDirector();
+      return payload;
+    });
+  }
+
+  function waitForWildcardJob(job) {
+    if (!job || !job.jobId) throw new Error('Wildcard analysis did not return a queued job.');
+    trackTransientLlmJob(job);
+    function poll(current) {
+      var status = String(current.status || '');
+      if (status === 'completed') {
+        reportTransientLlmTiming(current);
+        return Promise.resolve(current.result || {});
+      }
+      if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
+        reportTransientLlmTiming(current);
+        var err = new Error(current.error || ('Wildcard analysis ' + status + '.'));
+        err.jobStatus = status;
+        throw err;
+      }
+      return new Promise(function (resolve) { setTimeout(resolve, status === 'queued' ? 2000 : 1000); }).then(function () {
+        return wildcardRequestJson('/fs/director/job?job=' + encodeURIComponent(current.jobId) + '&consume=1');
+      }).then(function (payload) {
+        if (!payload.job) throw new Error('Wildcard analysis job response is missing its job.');
+        trackTransientLlmJob(payload.job);
+        return poll(payload.job);
+      });
+    }
+    return poll(job);
+  }
+
+  function generateWildcardFromSet() {
+    if (wildcardDirector.busy) return;
+    if (!wildcardDirector.modelId) throw new Error('Choose a Director model.');
+    wildcardDirector.busy = true;
+    wildcardDirector.analysis = null;
+    el('test-generations-wildcard-status').textContent = 'Analyzing Set captions…';
+    renderWildcardAnalysis(null);
+    renderWildcardDirector();
+
+    return wildcardPostJson('/fs/test_generations/wildcard', {
+      folder: owningSetFolder(launchFolder || (state && state.folder) || ''),
+      directorModel: wildcardDirector.modelId
+    }).then(function (payload) {
+      wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
+      trackTransientLlmJob(payload.job);
+      return waitForWildcardJob(payload.job);
+    }).then(function (result) {
+      var analysis = result && result.analysis;
+      if (!analysis || !String(analysis.wildcard || '').trim()) {
+        throw new Error('Wildcard analysis returned no wildcard caption.');
+      }
+      wildcardDirector.analysis = analysis;
+      var prompt = el('test-generations-prompt');
+      prompt.value = String(analysis.wildcard || '').trim();
+      saveTestPromptDraft(prompt.value);
+      saveTestBenchState(prompt.value);
+      renderWildcardAnalysis(analysis);
+      el('test-generations-wildcard-status').textContent = 'Wildcard generated from Set captions.';
+    }).catch(function (err) {
+      if (err && ['stopped', 'cancelled'].indexOf(String(err.jobStatus || '')) !== -1) {
+        el('test-generations-wildcard-status').textContent = 'Wildcard analysis stopped.';
+      } else {
+        el('test-generations-wildcard-status').textContent = 'Wildcard analysis failed.';
+        showError(err);
+      }
+    }).then(function () {
+      wildcardDirector.busy = false;
+      wildcardDirector.jobId = '';
+      renderWildcardDirector();
     });
   }
 
@@ -2364,7 +2517,11 @@
       syncActiveRunControls({ status: 'idle' });
       return;
     }
-    refreshTestSourceBrowser().then(function (sourcePayload) {
+    Promise.all([
+      refreshWildcardDirector(),
+      refreshTestSourceBrowser()
+    ]).then(function (values) {
+      var sourcePayload = values[1];
       if (sourcePayload && sourcePayload.navigated) return null;
       return request('test_prepare', { modelId: getWorkingModelProfileId() });
     }).then(function (payload) {
@@ -2548,6 +2705,14 @@
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
+    el('test-generations-wildcard-btn').onclick = function () {
+      generateWildcardFromSet().catch(showError);
+    };
+    el('test-generations-wildcard-model').addEventListener('change', function () {
+      wildcardDirector.modelId = this.value;
+      setDirectorModelPreference('webcap.testGenerations.directorModel', this.value);
+      renderWildcardDirector();
+    });
     el('test-generations-source-up-btn').onclick = function () {
       if (!this.disabled) chooseTestSource(String(this.dataset.sourceParent || ''));
     };

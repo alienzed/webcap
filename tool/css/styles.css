@@ -2502,6 +2502,44 @@ iframe {
   gap: 10px;
   min-width: 0;
 }
+.test-generations-wildcard-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+.test-generations-wildcard-tools select,
+.test-generations-wildcard-tools button {
+  min-height: 32px;
+}
+.test-generations-wildcard-tools .test-generations-wildcard-status {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+}
+.test-generations-wildcard-analysis {
+  display: grid;
+  gap: 6px;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+.test-generations-wildcard-analysis.hidden { display: none; }
+.test-generations-wildcard-analysis > div {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+.test-generations-wildcard-analysis strong {
+  font-size: 12px;
+}
+.test-generations-wildcard-analysis span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
 .test-generations-form-title {
   display: flex;
   align-items: center;

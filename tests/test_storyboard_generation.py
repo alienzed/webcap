@@ -264,11 +264,17 @@ def test_generation_capabilities_reuse_shared_h3_model(monkeypatch):
             return ["mh3/turbo.safetensors"]
 
     monkeypatch.setattr(storyboard_generation, "get_inference_model", lambda _model_id: FakeModel())
-    monkeypatch.setattr(storyboard_generation.inference_runtime, "system_stats", lambda: {})
+    monkeypatch.setattr(
+        storyboard_generation.inference_runtime,
+        "system_stats",
+        lambda: (_ for _ in ()).throw(AssertionError("LoRA capability discovery must not depend on a generic health probe.")),
+    )
 
     payload = storyboard_generation.generation_capabilities()
 
     assert payload == {
+        "available": True,
+        "error": "",
         "loras": ["characters/alice.safetensors"],
         "baseLoras": ["mh3/turbo.safetensors"],
     }

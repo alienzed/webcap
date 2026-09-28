@@ -912,15 +912,6 @@
       }
       return;
     }
-    var active = Array.isArray(testActivity.active) && testActivity.active.length ? testActivity.active[0] : null;
-    if (active) {
-      openTestBenchSource(
-        String(active.folder || ''),
-        String(active.source || ''),
-        String(active.modelId || '')
-      );
-      return;
-    }
     openPane();
   }
 
@@ -2632,18 +2623,11 @@
       refreshActivityButtonIfDue(5000);
       if (status && (status.status === 'running' || status.status === 'stopping')) showSessionError = true;
       var activeSession = String(status && status.session || '');
-      var selectedWasLive = !!(
-        currentSession &&
-        currentSession !== activeSession &&
-        currentStatus &&
-        String(currentStatus.session || '') === currentSession &&
-        (currentStatus.status === 'running' || currentStatus.status === 'stopping')
-      );
       var previewRefresh = Promise.resolve();
 
-      if (!currentSession || currentSession === activeSession) {
+      if (currentSession === activeSession) {
         renderStatus(status);
-      } else if (selectedWasLive) {
+      } else if (currentSession) {
         previewRefresh = request('test_open_session', { session: currentSession }).then(function (selectedStatus) {
           renderStatus(selectedStatus);
         });

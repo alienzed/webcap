@@ -846,6 +846,7 @@
     var graph = el('storyboard-director-activity-trend');
     if (!graph) throw new Error('Storyboard Director system history markup is missing.');
     var remote = String(activity && activity.runtimeMode || '') === 'remote';
+    graph.classList.toggle('is-remote', remote);
     var legend = graph.querySelector('.director-activity-trend-legend');
     var plot = graph.querySelector('svg');
     if (legend) legend.classList.toggle('hidden', remote);

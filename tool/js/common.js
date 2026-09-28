@@ -276,7 +276,11 @@ function reportTransientLlmTiming(job) {
   if (totalSeconds > 0) parts.push('Total: ' + transientLlmSeconds(totalSeconds));
 
   entry.reported = true;
-  var source = entry.client === 'storyboard' ? 'Storyboard' : (entry.client === 'generate' ? 'Generate' : 'LLM');
+  var source = entry.client === 'storyboard'
+    ? 'Storyboard'
+    : (entry.client === 'generate'
+      ? 'Generate'
+      : (entry.client === 'test' ? 'Test Generations' : (entry.client === 'chat' ? 'Director Chat' : 'LLM')));
   var label = transientLlmOperationLabel(entry.client, entry.operation, job && job.status);
   if (typeof reportConsoleInfo === 'function') {
     reportConsoleInfo(source, label + (parts.length ? ' · ' + parts.join(' · ') : ''));

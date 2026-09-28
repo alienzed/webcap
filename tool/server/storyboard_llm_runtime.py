@@ -114,7 +114,10 @@ def activity_status():
     except Exception:
         settings = {"mode": "local"}
 
-    if settings.get("mode", "local") == "local":
+    mode = settings.get("mode", "local")
+    activity["runtimeMode"] = mode
+    if mode == "local":
+        activity["runtimeProvider"] = "llama.cpp"
         _relay_log_updates()
         if activity.get("active") and activity.get("phase") == "generating":
             slot = _slot_snapshot(activity.get("model"))
@@ -126,6 +129,23 @@ def activity_status():
                     with _activity_lock:
                         if _activity.get("active") and _activity.get("phase") == "generating":
                             _activity["contextSize"] = context_size
+        return activity
+
+    is_ollama = _remote_is_ollama()
+    activity["runtimeProvider"] = "ollama" if is_ollama else "openai-compatible"
+    if is_ollama and activity.get("model"):
+        try:
+            remote_model = _ollama_running_model(activity.get("model"))
+        except (ConnectionError, RuntimeError, ValueError):
+            remote_model = {}
+        if remote_model:
+            activity["remoteModelVramBytes"] = remote_model.get("vramBytes", 0)
+            model_size = int(remote_model.get("sizeBytes") or 0)
+            context_size = int(remote_model.get("contextSize") or 0)
+            if model_size > 0:
+                activity["modelSizeBytes"] = model_size
+            if context_size > 0:
+                activity["contextSize"] = context_size
     return activity
 
 
@@ -318,6 +338,40 @@ def _ollama_model_sizes():
         except (TypeError, ValueError):
             sizes[model_id] = 0
     return sizes
+
+
+def _ollama_running_model(model_id):
+    model_id = str(model_id or "").strip()
+    if not model_id:
+        return {}
+
+    payload = _remote_native_http_json("/api/ps", timeout=2)
+    raw_models = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(raw_models, list):
+        raise RuntimeError("Ollama did not return running models from /api/ps.")
+
+    for entry in raw_models:
+        if not isinstance(entry, dict):
+            continue
+        entry_ids = {
+            str(entry.get("name") or "").strip(),
+            str(entry.get("model") or "").strip(),
+        }
+        if model_id not in entry_ids:
+            continue
+
+        def _nonnegative_int(value):
+            try:
+                return max(0, int(value or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        return {
+            "sizeBytes": _nonnegative_int(entry.get("size")),
+            "vramBytes": _nonnegative_int(entry.get("size_vram")),
+            "contextSize": _nonnegative_int(entry.get("context_length")),
+        }
+    return {}
 
 
 def _remote_http_json_cancellable(path, method="GET", payload=None, timeout=30):
@@ -762,7 +816,7 @@ def status():
             return {
                 "available": True,
                 "serverRunning": True,
-                "runtime": "Remote OpenAI-compatible",
+                "runtime": "Remote Ollama" if _remote_is_ollama() else "Remote OpenAI-compatible",
                 "endpoint": settings.get("endpoint", ""),
                 "models": models,
             }

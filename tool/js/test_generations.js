@@ -3018,7 +3018,7 @@
       refreshActivityButton();
       if (startedStatus && startedStatus.session) {
         showSessionError = true;
-        renderStatus(startedStatus);
+        if (currentSession === String(startedStatus.session || '')) renderStatus(startedStatus);
       }
       var nextSeed = el('test-generations-seed');
       if (nextSeed) nextSeed.value = String(randomSeed());
@@ -3038,7 +3038,7 @@
     request('test_stop', { session: String(stopBtn && stopBtn.dataset.sessionStop || '') }).then(function (status) {
       syncActiveRunControls(status);
       refreshActivityButton();
-      if (!currentSession || currentSession === String(status && status.session || '')) renderStatus(status);
+      if (currentSession === String(status && status.session || '')) renderStatus(status);
       pollStatus();
     }).catch(function (err) {
       if (stopBtn) stopBtn.disabled = false;
@@ -3049,7 +3049,7 @@
   function openSession(sessionName) {
     request('test_open_session', { session: String(sessionName || '') }).then(function (status) {
       showSessionError = true;
-      renderStatus(status);
+      selectSessionStatus(status);
     }).catch(showError);
   }
 
@@ -3079,10 +3079,11 @@
         renderStagedFiles(prepared);
       }
       if (payload.sessionStatus) {
-        renderStatus(payload.sessionStatus);
+        if (currentSession === String(payload.sessionStatus.session || '')) renderStatus(payload.sessionStatus);
         return null;
       }
-      return request('test_status', { modelId: currentTestModelId() }).then(renderStatus);
+      if (!currentSession) return null;
+      return request('test_open_session', { session: currentSession }).then(renderStatus);
     }).then(function () {
       return refreshSessions();
     });

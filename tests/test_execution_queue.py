@@ -356,6 +356,26 @@ def test_execution_queue_shelves_only_queued_work(queue_root):
     assert snapshot["jobs"][1]["id"] == backlog["id"]
 
 
+def test_execution_queue_promotes_all_backlog_to_end_of_queue_in_fifo_order(queue_root):
+    queued = execution_queue.enqueue("inference", {"n": 1})
+    first = execution_queue.enqueue("inference", {"n": 2}, initial_status="backlog")
+    second = execution_queue.enqueue("inference", {"n": 3}, initial_status="backlog")
+    another = execution_queue.enqueue("inference", {"n": 4})
+
+    promoted = execution_queue.promote_all_backlog("inference")
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+
+    assert [job["id"] for job in promoted] == [first["id"], second["id"]]
+    assert [job["id"] for job in snapshot["jobs"]] == [
+        queued["id"],
+        another["id"],
+        first["id"],
+        second["id"],
+    ]
+    assert [job["status"] for job in snapshot["jobs"]] == ["queued", "queued", "queued", "queued"]
+    assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2, 3, 4]
+
+
 def test_execution_queue_promotes_backlog_to_end_of_queue(queue_root):
     queued = execution_queue.enqueue("inference", {"n": 1})
     backlog = execution_queue.enqueue("inference", {"n": 2}, initial_status="backlog")

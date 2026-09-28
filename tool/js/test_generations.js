@@ -2513,7 +2513,20 @@
     if (!hasSession) {
       details.classList.add('hidden');
       details.innerHTML = '';
+      if (infoBtn) {
+        infoBtn.textContent = 'Details';
+        infoBtn.setAttribute('aria-expanded', 'false');
+        infoBtn.title = 'View frozen session settings and resolved prompt';
+        infoBtn.setAttribute('aria-label', infoBtn.title);
+      }
       return;
+    }
+    if (infoBtn) {
+      var expanded = !details.classList.contains('hidden');
+      infoBtn.textContent = expanded ? '×' : 'Details';
+      infoBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      infoBtn.title = expanded ? 'Close session details' : 'View frozen session settings and resolved prompt';
+      infoBtn.setAttribute('aria-label', infoBtn.title);
     }
     var resolvedPrompt = String(status.resolvedPrompt || status.prompt || '');
     var sourcePrompt = String(status.sourcePrompt || '');
@@ -3187,7 +3200,13 @@
       el('test-generations-help').classList.toggle('hidden');
     };
     el('test-generations-session-info-btn').onclick = function () {
-      el('test-generations-session-details').classList.toggle('hidden');
+      var details = el('test-generations-session-details');
+      var button = el('test-generations-session-info-btn');
+      var expanded = details.classList.toggle('hidden') === false;
+      button.textContent = expanded ? '×' : 'Details';
+      button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      button.title = expanded ? 'Close session details' : 'View frozen session settings and resolved prompt';
+      button.setAttribute('aria-label', button.title);
     };
     window.addEventListener('webcap:working-model-changed', function () {
       syncLaunchVisibility();

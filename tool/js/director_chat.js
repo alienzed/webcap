@@ -5,7 +5,9 @@
     modelsLoaded: false,
     modelId: '',
     messages: [],
-    elapsedByAssistantIndex: {}
+    elapsedByAssistantIndex: {},
+    progressTimer: 0,
+    requestStartedAt: 0
   };
 
   function el(id) {
@@ -26,6 +28,95 @@
   function formatElapsed(ms) {
     var seconds = Math.max(0, Number(ms || 0)) / 1000;
     return seconds < 10 ? seconds.toFixed(1) + 's' : Math.round(seconds) + 's';
+  }
+
+  function directorPhaseLabel(phase) {
+    return {
+      queued: 'Waiting',
+      preparing: 'Preparing',
+      freeing_comfy: 'Preparing runtime',
+      loading_model: 'Loading model',
+      generating: 'Generating',
+      complete: 'Complete',
+      stopped: 'Stopped',
+      error: 'Failed'
+    }[String(phase || '')] || 'Working';
+  }
+
+  function setProgressVisible(visible) {
+    var progress = el('director-chat-progress');
+    if (progress) progress.classList.toggle('hidden', !visible);
+  }
+
+  function renderProgress(activity) {
+    var phaseEl = el('director-chat-progress-phase');
+    var detailEl = el('director-chat-progress-detail');
+    var elapsedEl = el('director-chat-progress-elapsed');
+    var progress = el('director-chat-progress');
+    if (!phaseEl || !detailEl || !elapsedEl || !progress) return;
+
+    var activityOperation = String(activity && activity.operation || '');
+    var ownActivity = activityOperation === 'freeform_chat';
+    var active = !!(activity && activity.active);
+    var phase = ownActivity ? String(activity.phase || 'preparing') : (active ? 'queued' : 'preparing');
+    var detail = '';
+
+    if (ownActivity) {
+      if (phase === 'loading_model') detail = 'Loading ' + String(activity.model || state.modelId || 'model');
+      else if (phase === 'generating') detail = String(activity.model || state.modelId || 'Selected model');
+      else if (phase === 'freeing_comfy') detail = 'Releasing local GPU resources';
+      else detail = String(activity.model || state.modelId || '');
+    } else if (active) {
+      detail = 'Waiting for current Director work to finish';
+    } else {
+      detail = String(state.modelId || '');
+    }
+
+    phaseEl.textContent = directorPhaseLabel(phase);
+    detailEl.textContent = detail;
+    elapsedEl.textContent = formatElapsed(performance.now() - state.requestStartedAt);
+    progress.dataset.phase = phase;
+  }
+
+  function stopProgressPolling() {
+    if (state.progressTimer) clearTimeout(state.progressTimer);
+    state.progressTimer = 0;
+  }
+
+  function pollProgress() {
+    stopProgressPolling();
+    if (!state.pending) return;
+    requestJson('/fs/director/activity').then(function (activity) {
+      if (state.pending) renderProgress(activity);
+    }).catch(function () {
+      if (state.pending) renderProgress(null);
+    }).then(function () {
+      if (state.pending) state.progressTimer = setTimeout(pollProgress, 500);
+    });
+  }
+
+  function startProgress() {
+    state.requestStartedAt = performance.now();
+    setProgressVisible(true);
+    renderProgress(null);
+    pollProgress();
+  }
+
+  function finishProgress(error) {
+    stopProgressPolling();
+    if (error) {
+      var phaseEl = el('director-chat-progress-phase');
+      var detailEl = el('director-chat-progress-detail');
+      var elapsedEl = el('director-chat-progress-elapsed');
+      var progress = el('director-chat-progress');
+      if (phaseEl) phaseEl.textContent = 'Failed';
+      if (detailEl) detailEl.textContent = String(error && error.message ? error.message : error);
+      if (elapsedEl) elapsedEl.textContent = formatElapsed(performance.now() - state.requestStartedAt);
+      if (progress) progress.dataset.phase = 'error';
+      setProgressVisible(true);
+      return;
+    }
+    setProgressVisible(false);
   }
 
   function renderMessages() {
@@ -120,6 +211,7 @@
   function newChat() {
     state.messages = [];
     state.elapsedByAssistantIndex = {};
+    finishProgress(null);
     renderMessages();
     syncControls();
     var input = el('director-chat-input');
@@ -136,12 +228,12 @@
     state.messages.push({ role: 'user', content: content });
     input.value = '';
     state.pending = true;
-    var status = el('director-chat-status');
-    if (status) status.textContent = 'Generating…';
     renderMessages();
     syncControls();
+    startProgress();
 
     var startedAt = performance.now();
+    var requestError = null;
     requestJson('/fs/director/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -153,17 +245,13 @@
       state.messages.push({ role: 'assistant', content: String(payload.text || '') });
       state.elapsedByAssistantIndex[state.messages.length - 1] = performance.now() - startedAt;
     }).catch(function (err) {
+      requestError = err;
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Director Chat', err);
-      var statusEl = el('director-chat-status');
-      if (statusEl) statusEl.textContent = String(err && err.message ? err.message : err);
     }).then(function () {
       state.pending = false;
+      finishProgress(requestError);
       renderMessages();
       syncControls();
-      var status = el('director-chat-status');
-      if (status && state.messages.length && state.messages[state.messages.length - 1].role === 'assistant') {
-        status.textContent = '';
-      }
       if (input) input.focus();
     });
   }

@@ -504,6 +504,10 @@ def test_console_visibility_is_class_owned_after_shell_cleanup():
     assert "classList.toggle('hidden', !expanded)" in console
     assert "classList.toggle('console-open', expanded)" in console
     assert "isConsolePanelVisible()" in console
+    assert "function scrollConsolePanelToBottom()" in console
+    assert "requestAnimationFrame(scrollConsolePanelToBottom);" in console
+    assert "logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight <= 24" in console
+    assert "if (followTail) scrollConsolePanelToBottom();" in console
     assert "btn.innerHTML" not in console
     assert "btn.classList.toggle('active', expanded)" in console
     assert "syncWorkspaceConfigEditorUi()" not in console

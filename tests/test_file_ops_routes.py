@@ -7,6 +7,7 @@ import pytest
 import tool.server.app as app_module
 import tool.server.config as config_module
 import tool.server.file_ops as file_ops_module
+import tool.server.media as media_module
 import tool.server.run_ops as run_ops_module
 import tool.server.smart_set as smart_set_module
 import tool.server.training_bundle as training_bundle_module
@@ -106,6 +107,54 @@ def test_fs_path_exists_reports_directory_and_file(tmp_path, monkeypatch):
     assert file_payload["exists"] is True
     assert file_payload["is_dir"] is False
     assert file_payload["is_file"] is True
+
+
+def test_optional_analysis_initialization_failure_does_not_break_metadata(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    write_image(folder / "one.png")
+    monkeypatch.setattr(
+        media_module,
+        "get_selection_pose_analyzers",
+        lambda: (_ for _ in ()).throw(RuntimeError("MediaPipe missing")),
+    )
+
+    summary = {}
+    metadata = media_module.update_media_metadata(
+        folder,
+        include_selection_pose=True,
+        summary=summary,
+    )
+
+    assert "one.png" in metadata
+    assert metadata["one.png"]["resolution"] == "128x128"
+    assert summary["optionalAnalysisWarnings"]
+    assert "MediaPipe missing" in summary["optionalAnalysisWarnings"][0]
+
+
+def test_requirements_repair_route_uses_current_python_and_repo_requirements(tmp_path, monkeypatch):
+    requirements = tmp_path / "requirements.txt"
+    write_text(requirements, "Flask\n")
+    captured = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return app_module.subprocess.CompletedProcess(command, 0, stdout="installed\n", stderr="")
+
+    monkeypatch.setattr(app_module, "ROOT", tmp_path)
+    monkeypatch.setattr(app_module.subprocess, "run", fake_run)
+
+    response = app_module.app.test_client().post("/app/environment/install-requirements")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert captured["command"][0] == app_module.sys.executable
+    assert captured["command"][1:5] == ["-m", "pip", "install", "--disable-pip-version-check"]
+    assert captured["command"][-2:] == ["-r", str(requirements)]
+    assert captured["kwargs"]["cwd"] == tmp_path
+    assert payload["stdout"] == "installed\n"
 
 
 def test_app_config_get_prefers_disk_config(monkeypatch):

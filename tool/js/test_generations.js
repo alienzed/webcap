@@ -1991,11 +1991,12 @@
     var total = Number(status && status.total || (prepared && prepared.count) || 0);
     var resultFolder = String(status && status.resultFolder || '');
     var sessionName = String(status && status.session || '');
-    var priorFolder = String(host.dataset.resultFolder || '');
+    var resultScope = sessionName + '|' + resultFolder;
+    var priorScope = String(host.dataset.resultScope || '');
 
-    if (priorFolder !== resultFolder) {
+    if (priorScope !== resultScope) {
       host.innerHTML = '';
-      host.dataset.resultFolder = resultFolder;
+      host.dataset.resultScope = resultScope;
     }
 
     var validKeys = results.map(function (result, index) {

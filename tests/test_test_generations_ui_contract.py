@@ -946,3 +946,11 @@ def test_test_results_media_and_ratings_use_session_identity_not_fs_root_navigat
     assert '@app.route("/fs/test_generations/media", methods=["GET"])' in app
     assert "def resolve_result_media(folder_path, session_name, media_name):" in backend
     assert "def rate_result(folder_path, session_name, media_name, rating):" in backend
+
+
+def test_test_result_grid_identity_is_session_scoped_when_output_root_is_external():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    block = script.split("function renderResults(status)", 1)[1].split("function syncActiveRunControls(status)", 1)[0]
+
+    assert "var resultScope = sessionName + '|' + resultFolder;" in block
+    assert "host.dataset.resultScope = resultScope;" in block

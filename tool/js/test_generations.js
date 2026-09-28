@@ -366,9 +366,13 @@
     var graph = el('test-generations-director-activity-trend');
     if (!graph) throw new Error('Test Generations Director system history markup is missing.');
     var remote = String(activity && activity.runtimeMode || '') === 'remote';
-    graph.classList.toggle('hidden', remote);
+    var legend = graph.querySelector('.director-activity-trend-legend');
+    var plot = graph.querySelector('svg');
+    if (legend) legend.classList.toggle('hidden', remote);
+    if (plot) plot.classList.toggle('hidden', remote);
     if (remote) {
       wildcardDirector.activityHistory = [];
+      graph.setAttribute('aria-label', 'Remote runtime telemetry');
       return;
     }
     var gpu = system && system.gpu;
@@ -494,6 +498,10 @@
     if (isRemote) {
       var provider = String(activity && activity.runtimeProvider || '').trim();
       parts.push(provider === 'ollama' ? 'Remote Ollama' : 'Remote');
+      var remoteModelSizeBytes = Number(activity && activity.modelSizeBytes);
+      if (isFinite(remoteModelSizeBytes) && remoteModelSizeBytes > 0) {
+        parts.push('Model ' + wildcardDirectorBytesGiB(remoteModelSizeBytes));
+      }
       var remoteVramBytes = Number(activity && activity.remoteModelVramBytes);
       if (isFinite(remoteVramBytes) && remoteVramBytes > 0) {
         parts.push('Model VRAM ' + wildcardDirectorBytesGiB(remoteVramBytes));

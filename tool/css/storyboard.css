@@ -2367,6 +2367,10 @@
 }
 
 @media (max-width: 760px) {
+  .storyboard-develop-context {
+    grid-template-columns: 1fr;
+  }
+
   .storyboard-scenes-heading {
     align-items: stretch;
     flex-direction: column;
@@ -2527,12 +2531,18 @@
   gap: 8px;
 }
 
-.storyboard-story-loras.storyboard-story-section {
-  display: block;
-  padding: 0;
-  gap: 0;
-  overflow: visible;
-  background: var(--panel-soft);
+.storyboard-scene-defaults {
+  margin-top: 2px;
+  background: color-mix(in srgb, var(--panel-soft) 82%, var(--bg));
+}
+
+.storyboard-scene-defaults > summary {
+  min-height: 44px;
+}
+
+.storyboard-scene-defaults-body {
+  grid-template-columns: 1fr;
+  gap: 14px;
 }
 
 .storyboard-story-lora-section-body {
@@ -2541,8 +2551,30 @@
   gap: 8px;
 }
 
-.storyboard-story-loras.storyboard-story-section:not([open]) > .storyboard-story-lora-section-body {
-  display: none;
+.storyboard-scene-defaults .storyboard-story-loras {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 13px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.storyboard-scene-defaults-subheading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.storyboard-scene-defaults-subheading > strong {
+  font-size: 13px;
+}
+
+.storyboard-scene-defaults-subheading > span {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
 }
 
 .storyboard-concept-field,
@@ -2565,7 +2597,7 @@
 
 .storyboard-story-defaults-grid {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) 120px;
+  grid-template-columns: minmax(0, 1fr) 120px;
   gap: 10px;
 }
 
@@ -2617,17 +2649,74 @@
 }
 
 .storyboard-develop-row {
-  align-items: center;
-  flex-direction: row;
-  gap: 14px;
-  padding-top: 14px;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 16px 0 2px;
   border-top: 1px solid var(--border);
 }
 
-.storyboard-develop-row.has-scenes .storyboard-primary-btn {
-  border-color: var(--border);
-  background: transparent;
+.storyboard-develop-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  align-items: end;
+  gap: 12px;
+}
+
+.storyboard-develop-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.storyboard-develop-copy > strong {
+  font-size: 13px;
+}
+
+.storyboard-develop-copy > span,
+.storyboard-develop-row > .storyboard-save-state {
   color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.storyboard-target-scenes-field {
+  min-width: 0;
+}
+
+.storyboard-develop-row .storyboard-primary-btn {
+  width: 100%;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+  background: color-mix(in srgb, var(--accent) 24%, var(--panel-soft));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.storyboard-develop-row .storyboard-primary-btn::before {
+  content: "✦";
+  margin-right: 7px;
+  color: var(--accent);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.storyboard-develop-row .storyboard-primary-btn:hover:not(:disabled),
+.storyboard-develop-row .storyboard-primary-btn:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 34%, var(--panel-soft));
+  outline: none;
+}
+
+.storyboard-develop-row > .storyboard-save-state {
+  min-height: 16px;
+  text-align: center;
 }
 
 .storyboard-story-loras {

@@ -59,8 +59,7 @@
     story: true,
     continuity: true,
     director: false,
-    planning: false,
-    loras: false
+    defaults: false
   };
 
   var DIRECTOR_PASS_PRESETS = {
@@ -1590,7 +1589,7 @@
     if (!storyState.story || String(target.storyId || '') !== String(storyState.story.id || '')) return;
     if (target.kind === 'story-action') {
       document.querySelectorAll(
-        '#storyboard-story-authoring button, #storyboard-story-authoring input, #storyboard-story-authoring select, #storyboard-story-authoring textarea, ' +
+        '#storyboard-story-overview button, #storyboard-story-overview input, #storyboard-story-overview select, #storyboard-story-overview textarea, ' +
         '#storyboard-scenes-list button, #storyboard-scenes-list input, #storyboard-scenes-list select, #storyboard-scenes-list textarea, ' +
         '#storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add], ' +
         '#storyboard-generate-scenes-btn, #storyboard-director-model'
@@ -1613,6 +1612,22 @@
       if (concept) concept.disabled = !!protectedState;
       return;
     }
+    if (target.kind === 'scenes') {
+      document.querySelectorAll(
+        '#storyboard-story-overview button, #storyboard-story-overview input, #storyboard-story-overview select, #storyboard-story-overview textarea'
+      ).forEach(function (control) {
+        if (protectedState) {
+          if (!control.disabled) {
+            control.disabled = true;
+            control.dataset.directorScenesDisabled = '1';
+          }
+        } else if (control.dataset.directorScenesDisabled === '1') {
+          control.disabled = false;
+          delete control.dataset.directorScenesDisabled;
+        }
+      });
+      return;
+    }
     if (target.kind === 'scene-prompt') {
       var root = sceneElement(target.sceneId);
       if (!root) return;
@@ -1632,7 +1647,7 @@
       if (repairButton) repairButton.disabled = !!protectedState;
       if (restoreButton) restoreButton.disabled = !!protectedState;
       document.querySelectorAll(
-        '#storyboard-story-concept, #storyboard-story-style, #storyboard-story-style-preset, ' +
+        '#storyboard-story-title, #storyboard-story-status, #storyboard-story-concept, #storyboard-story-style, #storyboard-story-style-preset, #storyboard-story-target-scenes, ' +
         '#storyboard-expand-concept-btn, #storyboard-restore-concept-btn, #storyboard-develop-btn, ' +
         '#storyboard-invariant-define, #storyboard-invariant-add, ' +
         '#storyboard-invariants-list input, #storyboard-invariants-list select, #storyboard-invariants-list textarea, #storyboard-invariants-list button, ' +
@@ -1662,6 +1677,10 @@
     document.querySelectorAll('[data-story-action-disabled="1"]').forEach(function (control) {
       control.disabled = false;
       delete control.dataset.storyActionDisabled;
+    });
+    document.querySelectorAll('[data-director-scenes-disabled="1"]').forEach(function (control) {
+      control.disabled = false;
+      delete control.dataset.directorScenesDisabled;
     });
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;
 

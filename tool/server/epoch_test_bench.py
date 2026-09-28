@@ -324,7 +324,7 @@ def _relative_to_fs_root(path):
 
 def _session_result_folder(session_directory):
     try:
-        return _session_result_folder(session_directory)
+        return _relative_to_fs_root(session_directory)
     except ValueError:
         return ""
 

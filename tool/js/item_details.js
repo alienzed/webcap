@@ -2,6 +2,7 @@
 var captionItemTagsByMedia = {}; // Unscoped tags only.
 var itemTagsClipboard = null; // { unscoped: [], groups: { requirement: [] } }
 var mediaMetadataLoading = false;
+var reportedOptionalAnalysisWarnings = {};
 
 function isMediaMetadataLoading() {
   return !!mediaMetadataLoading;
@@ -1605,6 +1606,16 @@ function refreshMediaResolutionCache(options) {
         var rows = JSON.parse(xhr.responseText);
         var generatedCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Generated') || 0);
         var checkedCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Checked') || 0);
+        var optionalWarningsHeader = xhr.getResponseHeader('X-WebCap-Optional-Analysis-Warnings') || '';
+        if (optionalWarningsHeader) {
+          var optionalWarnings = JSON.parse(optionalWarningsHeader);
+          (optionalWarnings || []).forEach(function (warning) {
+            var message = String(warning || '').trim();
+            if (!message || reportedOptionalAnalysisWarnings[message]) return;
+            reportedOptionalAnalysisWarnings[message] = true;
+            reportConsoleWarning('Optional Analysis', message);
+          });
+        }
         var metadataByFile = {};
         (rows || []).forEach(function (row) {
           if (!row || !row.file) return;

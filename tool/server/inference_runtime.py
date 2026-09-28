@@ -11,8 +11,6 @@ import urllib.request
 import uuid
 from pathlib import Path, PureWindowsPath
 
-import websocket
-
 from . import config as app_config
 from .execution_queue import get_job as execution_get_job, update_job as execution_update_job
 
@@ -234,6 +232,7 @@ def _progress_socket_url(prompt_id):
 
 def _open_progress_socket(prompt_id):
     try:
+        import websocket
         sock = websocket.create_connection(_progress_socket_url(prompt_id), timeout=1)
         sock.settimeout(0.01)
         return sock
@@ -302,6 +301,7 @@ def _progress_from_message(message, prompt_id):
 def _drain_progress_socket(sock, prompt_id):
     if sock is None:
         return {}
+    import websocket
     latest = {}
     while True:
         try:

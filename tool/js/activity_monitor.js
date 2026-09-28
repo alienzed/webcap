@@ -179,7 +179,7 @@
       return;
     }
     if (item.kind === 'director') {
-      target.jobId = '';
+      if (item.client !== 'chat') target.jobId = '';
       if (item.client === 'generate' && typeof window.openGenerateActivity === 'function') {
         window.openGenerateActivity(target);
       } else if (item.client === 'test' && typeof window.openTestBenchActivity === 'function') {

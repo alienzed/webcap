@@ -27,6 +27,7 @@ def inference_root(tmp_path, monkeypatch):
     with inference_runner._backlog_lock:
         inference_runner._backlog_wait_reason = ""
     inference_runner._backlog_drain_enabled.clear()
+    monkeypatch.setattr(inference_runtime, "system_stats", lambda: {"ok": True})
     return tmp_path
 
 

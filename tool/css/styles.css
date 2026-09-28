@@ -2504,7 +2504,7 @@ iframe {
 }
 .test-generations-wildcard-tools {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 7px;
 }
@@ -4342,6 +4342,20 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
   color: var(--accent);
   border-color: var(--accent);
   cursor: pointer;
+}
+
+.director-model-refresh-btn {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  font-size: 1rem;
+  z-index: auto;
+}
+
+.director-model-refresh-btn:disabled {
+  cursor: default;
+  opacity: .55;
 }
 
 .media-list {

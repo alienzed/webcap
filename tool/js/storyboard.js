@@ -4925,6 +4925,13 @@
       storyState.director.modelId = this.value;
       setDirectorModelPreference('webcap.storyboard.directorModel', this.value);
     });
+    el('storyboard-director-refresh').onclick = function () {
+      var button = this;
+      button.disabled = true;
+      refreshDirector().then(function () {
+        button.disabled = false;
+      });
+    };
 
     el('storyboard-sequence-preview').addEventListener('click', function (event) {
       if (event.target.closest('[data-sequence-export]')) {

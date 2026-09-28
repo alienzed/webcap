@@ -190,10 +190,12 @@
     var send = el('director-chat-send');
     var input = el('director-chat-input');
     var model = el('director-chat-model');
+    var refresh = el('director-chat-model-refresh');
     var clear = el('director-chat-clear');
     if (send) send.disabled = state.pending || !state.modelId || !String(input && input.value || '').trim();
     if (input) input.disabled = state.pending;
     if (model) model.disabled = state.pending || !state.modelsLoaded;
+    if (refresh) refresh.disabled = state.pending;
     if (clear) clear.disabled = state.pending || !state.messages.length;
   }
 
@@ -384,13 +386,20 @@
     var stop = el('director-chat-stop');
     var input = el('director-chat-input');
     var model = el('director-chat-model');
-    if (!toggle || !drawer || !close || !clear || !send || !stop || !input || !model) return;
+    var refresh = el('director-chat-model-refresh');
+    if (!toggle || !drawer || !close || !clear || !send || !stop || !input || !model || !refresh) return;
 
     toggle.onclick = function () { setOpen(!state.open); };
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
     send.onclick = sendMessage;
     stop.onclick = stopJob;
+    refresh.onclick = function () {
+      refresh.disabled = true;
+      loadModels().then(function () {
+        refresh.disabled = state.pending;
+      });
+    };
     model.onchange = function () {
       state.modelId = String(model.value || '');
       setDirectorModelPreference('webcap.directorChat.model', state.modelId);

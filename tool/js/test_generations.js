@@ -179,8 +179,11 @@
   function renderWildcardDirector() {
     var select = el('test-generations-wildcard-model');
     var button = el('test-generations-wildcard-btn');
+    var refresh = el('test-generations-wildcard-refresh');
     var status = el('test-generations-wildcard-status');
-    if (!select || !button || !status) throw new Error('Test wildcard controls are missing.');
+    if (!select || !button || !refresh || !status) throw new Error('Test wildcard controls are missing.');
+
+    refresh.disabled = wildcardDirector.busy;
 
     if (!wildcardDirector.available) {
       select.innerHTML = '<option value="">Director unavailable</option>';
@@ -3110,6 +3113,19 @@
     el('test-generations-run-btn').onclick = startRun;
     el('test-generations-wildcard-btn').onclick = function () {
       generateWildcardFromSet().catch(showError);
+    };
+    el('test-generations-wildcard-refresh').onclick = function () {
+      var button = this;
+      button.disabled = true;
+      refreshWildcardDirector().catch(function (err) {
+        wildcardDirector.available = false;
+        wildcardDirector.models = [];
+        renderWildcardDirector();
+        el('test-generations-wildcard-status').textContent = 'Director unavailable.';
+        reportConsoleError('Test Generations', err);
+      }).then(function () {
+        button.disabled = wildcardDirector.busy;
+      });
     };
     el('test-generations-wildcard-model').addEventListener('change', function () {
       wildcardDirector.modelId = this.value;

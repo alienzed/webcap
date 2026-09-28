@@ -1455,7 +1455,10 @@
     var restore = el('generate-director-restore');
     var expand = el('generate-director-write');
     var refine = el('generate-director-refine');
-    if (!select || !status || !restore || !expand || !refine) return;
+    var refresh = el('generate-director-refresh');
+    if (!select || !status || !restore || !expand || !refine || !refresh) return;
+
+    refresh.disabled = generateState.director.busy;
 
     restore.classList.toggle('hidden', generateState.director.previousPrompt === null);
     if (!generateState.director.available) {
@@ -1691,6 +1694,13 @@
     };
     el('generate-director-restore').onclick = function () {
       restoreDirectorPrompt();
+    };
+    el('generate-director-refresh').onclick = function () {
+      var button = this;
+      button.disabled = true;
+      refreshDirector().then(function () {
+        button.disabled = generateState.director.busy;
+      });
     };
     el('generate-director-stop').onclick = function () {
       stopDirectorJob();

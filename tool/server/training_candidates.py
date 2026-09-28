@@ -48,7 +48,10 @@ def read_loss_events(run_dir):
     try:
         from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
     except ImportError as exc:
-        raise RuntimeError("TensorBoard support is unavailable. Install the WebCap requirements.") from exc
+        raise RuntimeError(
+            "TensorBoard Candidate Analysis is unavailable. "
+            "Use Settings > Advanced > Install / Repair Python Requirements."
+        ) from exc
     try:
         accumulator = EventAccumulator(str(directory), size_guidance={"scalars": 0})
         accumulator.Reload()

@@ -15,8 +15,8 @@ The app settings modal is the global configuration surface for values stored in 
 - **Training → Hardware Calibration**: MiniMax H3 bucket calibration.
 - **Training → Advanced Training**: uncommon H3 troubleshooting behavior.
 - **Director**: local llama.cpp or remote OpenAI-compatible runtime configuration. Model selection remains in Storyboard.
-- **Advanced → Environment & Diagnostics**: whole-app environment check and debug logging.
-- **Advanced → Optional Analysis**: Face Focus and MediaPipe analysis.
+- **Advanced → Environment & Diagnostics**: whole-app environment check, explicit **Install / Repair Python Requirements**, and debug logging. Requirements repair runs `python -m pip install -r requirements.txt` with the same Python executable that is running WebCap and reports command output/failures in the WebCap Console.
+- **Advanced → Optional Analysis**: Face Focus and MediaPipe analysis. Environment Check disables and unchecks an analyzer control when its required Python package or vendored MediaPipe task models are unavailable; saving Settings persists that disabled selection. After requirements are repaired and Environment Check is rerun, the control becomes available again but remains opt-in.
 - **Advanced → Raw Configuration**: direct JSON editing.
 - **Advanced → Reset App**: restore stock requirement terms.
 
@@ -25,6 +25,8 @@ The app settings modal is the global configuration surface for values stored in 
 The four top-level tabs are **Workspace**, **Training**, **Director**, and **Advanced**.
 
 Settings should stay under the feature or resource they actually affect. Whole-app resources such as Models Root do not belong to Training merely because Training consumes them. Likewise, the environment check belongs under Advanced because it reports Core, Training, Inference, Director, and Optional Analysis readiness.
+
+Missing optional analysis dependencies do not make ordinary media metadata loading fail. WebCap skips the unavailable analyzer, keeps normal metadata usable, and reports the feature-specific problem to the global Console with the Settings repair path.
 
 Specialist controls should prefer a local disclosure such as **Advanced Training** or **Runtime Overrides** over creating another top-level settings category.
 

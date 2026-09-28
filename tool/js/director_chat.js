@@ -417,8 +417,9 @@
 
   window.setDirectorChatOpen = setOpen;
   window.openDirectorChatActivity = function (target) {
-    setOpen(true);
     if (target && target.modelId) state.modelId = String(target.modelId);
+    if (target && target.jobId) state.jobId = String(target.jobId);
+    setOpen(true);
   };
   bind();
 })();

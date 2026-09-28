@@ -1,23 +1,36 @@
 # App Settings
 
-Last reviewed against code: 2026-09-21
+Last reviewed against code: 2026-09-28
 
-The app settings modal is the global configuration surface for values stored in `tool/config.json`.
+The app settings modal is the global configuration surface for values stored in `tool/config.json`. Its navigation is organized by user-facing ownership rather than implementation details.
 
 ## Current sections
 
-- **General → Library**: filesystem root.
-- **General → Caption Editor**: app-wide default caption template.
-- **General → Analysis & Appearance**: optional Face Focus / MediaPipe analysis plus browser-scoped theme.
-- **Training → Training Runtime**: models root, Diffusion Pipe/WSL runtime, Conda or activation script, and repeat-reference epochs.
-- **Training → Copy to Test**: per-stage LoRA destination roots plus an optional one-folder subfolder.
-- **Training → Training Models**: profiles available for new training runs.
-- **Training → H3 calibration**: hardware-bound MiniMax H3 bucket calibration.
-- **Advanced**: diagnostics, H3 troubleshooting options, and raw JSON editing.
+- **Workspace → Storage**: media/dataset root, generated output root, and shared models root.
+- **Workspace → Appearance**: browser-scoped theme.
+- **Workspace → Caption Defaults**: app-wide fallback caption template.
+- **Training → Runtime**: Diffusion Pipe/WSL runtime, Conda or activation script, and repeat-reference epochs.
+- **Training → Models**: profiles available for new training runs.
+- **Training → Testing**: per-stage LoRA destinations used by Copy to Test.
+- **Training → Hardware Calibration**: MiniMax H3 bucket calibration.
+- **Training → Advanced Training**: uncommon H3 troubleshooting behavior.
+- **Director**: local llama.cpp or remote OpenAI-compatible runtime configuration. Model selection remains in Storyboard.
+- **Advanced → Environment & Diagnostics**: whole-app environment check and debug logging.
+- **Advanced → Optional Analysis**: Face Focus and MediaPipe analysis.
+- **Advanced → Raw Configuration**: direct JSON editing.
+- **Advanced → Reset App**: restore stock requirement terms.
 
-## Storyboard Director output limit
+## Information architecture
 
-`storyboard.director.max_tokens` defaults to `16384` as a generous runaway-generation safety limit. The Storyboard settings field remains user-editable: clear it to use Auto/unbounded runtime behavior, or enter another limit. Existing configurations that explicitly store `null` remain Auto rather than being silently changed.
+The four top-level tabs are **Workspace**, **Training**, **Director**, and **Advanced**.
+
+Settings should stay under the feature or resource they actually affect. Whole-app resources such as Models Root do not belong to Training merely because Training consumes them. Likewise, the environment check belongs under Advanced because it reports Core, Training, Inference, Director, and Optional Analysis readiness.
+
+Specialist controls should prefer a local disclosure such as **Advanced Training** or **Runtime Overrides** over creating another top-level settings category.
+
+## Director output limit
+
+`storyboard.director.max_tokens` defaults to `16384` as a generous runaway-generation safety limit. The Director settings field remains user-editable: clear it to use Auto/unbounded runtime behavior, or enter another limit. Existing configurations that explicitly store `null` remain Auto rather than being silently changed.
 
 ## Repeat planning
 
@@ -31,9 +44,7 @@ The app settings modal is the global configuration surface for values stored in 
 
 All supported profiles are enabled by default. Clear a model checkbox to hide it from new training setup. At least one must remain enabled.
 
-Each model row links to its Hugging Face file repository. These are ordinary external links; WebCap does not download or manage model files.
-
-This is visibility only: disabling a model never deletes persistent TOMLs, captured run bundles, history, or resume metadata. If a set remembers a now-disabled model, Training selects the first enabled model instead. A single enabled model therefore appears as the only option.
+Each model row links to its Hugging Face file repository. Disabling a model never deletes persistent TOMLs, captured run bundles, history, or resume metadata.
 
 Use **Save + Reboot** to apply runtime settings immediately.
 
@@ -45,6 +56,8 @@ Use **Save + Reboot** to apply runtime settings immediately.
 
 ## Implementation notes
 
+- Frontend modal markup: `tool/tool.html`
 - Frontend modal logic: `tool/js/app_settings.js`
+- Frontend styling: `tool/css/modals.css`
 - Backend validation and persistence: `tool/server/config.py`
 - Available training profiles: `tool/server/training_profiles.py`

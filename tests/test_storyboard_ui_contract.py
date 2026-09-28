@@ -1262,6 +1262,8 @@ def test_storyboard_queued_first_cut_prevents_new_take_generation():
     assert "#storyboard-generate-scenes-btn, #storyboard-scenes-list [data-scene-generate]" in storyboard
     assert "control.dataset.firstCutQueuedDisabled = '1';" in storyboard
     assert "Remove this Story from the First Cut queue before adding new Take generation." in storyboard
+    assert "var activeFirstCut = storyState.storyAction" in storyboard
+    assert "control.dataset.storyActionDisabled = '1';" in storyboard
 
 def test_storyboard_first_cut_queue_is_session_only_story_scoped_fifo():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

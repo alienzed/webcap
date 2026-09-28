@@ -166,6 +166,85 @@ def test_generate_capabilities_does_not_require_system_stats_probe(monkeypatch):
     assert payload["unavailableModels"] == []
 
 
+def test_generate_capabilities_keeps_static_models_when_comfyui_is_offline(monkeypatch):
+    class FakeModel:
+        PROFILE_ID = "minimax_h3"
+        MEDIA_KIND = "video"
+        settings = ("aspectRatio", "seed")
+        references = ()
+        spec = {"default": True}
+        profile = {"label": "MiniMax H3"}
+
+        def load_template(self):
+            return {}
+
+        def template_settings(self, _template):
+            return {"aspectRatio": "16:9"}
+
+        def normalize_settings(self, _template, _new_seed, _values):
+            return {"aspectRatio": "16:9", "seed": 7}
+
+        def setting_options(self, _template, _available_names):
+            return {"aspectRatio": ["16:9", "1:1"]}
+
+        def base_loras(self, _template):
+            return ["base.safetensors"]
+
+    model = FakeModel()
+    monkeypatch.setattr(
+        generate_generation,
+        "public_models",
+        lambda: [{"id": "minimax_h3", "label": "MiniMax H3"}],
+    )
+    monkeypatch.setattr(generate_generation, "get_inference_model", lambda _model_id: model)
+    monkeypatch.setattr(
+        generate_generation,
+        "_public_model",
+        lambda _model: (_ for _ in ()).throw(ConnectionError("offline")),
+    )
+
+    payload = generate_generation.capabilities()
+
+    assert payload["available"] is False
+    assert payload["error"] == "ComfyUI unavailable."
+    assert payload["models"][0]["id"] == "minimax_h3"
+    assert payload["models"][0]["defaultSettings"]["aspectRatio"] == "16:9"
+    assert payload["models"][0]["settingOptions"]["aspectRatio"] == ["16:9", "1:1"]
+    assert payload["models"][0]["loras"] == []
+    assert payload["models"][0]["baseLoras"] == ["base.safetensors"]
+
+
+def test_generate_prepare_defers_wildcard_resolution_when_comfyui_is_offline(monkeypatch):
+    class FakeModel:
+        PROFILE_ID = "minimax_h3"
+        MEDIA_KIND = "video"
+        TEMPLATE_PATH = Path("workflow.json")
+        references = ()
+
+        def load_template(self):
+            return {}
+
+        def normalize_settings(self, _template, _new_seed, _values):
+            return {"seed": 42}
+
+    monkeypatch.setattr(generate_generation, "get_inference_model", lambda _model_id: FakeModel())
+    monkeypatch.setattr(
+        generate_generation.inference_runtime,
+        "resolve_wildcard_prompt",
+        lambda *_args: (_ for _ in ()).throw(ConnectionError("offline")),
+    )
+
+    prepared = generate_generation.prepare_request({
+        "modelId": "minimax_h3",
+        "prompt": "person in {studio|rooftop}",
+        "wildcardsEnabled": True,
+    })
+
+    assert prepared["prompt"] == "person in {studio|rooftop}"
+    assert prepared["promptNeedsResolve"] is True
+    assert prepared["settings"]["seed"] == 42
+
+
 def test_generate_capabilities_keeps_healthy_models_when_one_is_unavailable(monkeypatch):
     class FakeModel:
         def __init__(self, profile_id, label):

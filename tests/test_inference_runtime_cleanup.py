@@ -1,6 +1,46 @@
 from tool.server import inference_runtime
 
 
+def test_windows_curl_connection_failure_is_provider_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        inference_runtime.subprocess,
+        "run",
+        lambda *_args, **_kwargs: inference_runtime.subprocess.CompletedProcess(
+            args=[],
+            returncode=7,
+            stdout=b"",
+            stderr=b"curl: (7) Failed to connect",
+        ),
+    )
+
+    try:
+        inference_runtime._windows_curl_request("curl.exe", "http://127.0.0.1:8188/system_stats")
+    except ConnectionError:
+        pass
+    else:
+        raise AssertionError("curl exit 7 must be classified as a connection failure")
+
+
+def test_windows_curl_timeout_is_provider_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        inference_runtime.subprocess,
+        "run",
+        lambda *_args, **_kwargs: inference_runtime.subprocess.CompletedProcess(
+            args=[],
+            returncode=28,
+            stdout=b"",
+            stderr=b"curl: (28) Operation timed out",
+        ),
+    )
+
+    try:
+        inference_runtime._windows_curl_request("curl.exe", "http://127.0.0.1:8188/system_stats")
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("curl exit 28 must be classified as a timeout")
+
+
 def test_cleanup_saved_output_removes_generate_input_job_tree(monkeypatch, tmp_path):
     monkeypatch.setattr(inference_runtime.app_config, "FS_ROOT", tmp_path / "fs")
     comfy = tmp_path / "ComfyUI"

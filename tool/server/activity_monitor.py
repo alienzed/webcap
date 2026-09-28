@@ -1,7 +1,7 @@
 import logging
 import time
 
-from .execution_queue import recent_snapshot as execution_recent_snapshot
+from .execution_queue import ExecutionQueueStateError, recent_snapshot as execution_recent_snapshot
 from .inference_runner import snapshot as inference_snapshot
 from .llm_runner import snapshot as llm_snapshot
 from .storage_manager import scan_status as storage_scan_status
@@ -129,14 +129,14 @@ def activity_snapshot(limit=20, since=0):
     errors = []
     try:
         inference = inference_snapshot(include_terminal=False)
-    except Exception as exc:
+    except ExecutionQueueStateError as exc:
         _logger.exception("Inference activity state is unavailable.")
         errors.append({"area": "inference", "error": str(exc)})
         inference = {"jobs": [], "paused": False, "pauseReason": "", "backlogCount": 0, "unavailable": True}
 
     try:
         llm = llm_snapshot(include_terminal=False)
-    except Exception as exc:
+    except ExecutionQueueStateError as exc:
         _logger.exception("Director activity state is unavailable.")
         errors.append({"area": "director", "error": str(exc)})
         llm = {"jobs": [], "paused": False, "pauseReason": "", "unavailable": True}
@@ -177,7 +177,7 @@ def activity_snapshot(limit=20, since=0):
     if not inference.get("unavailable"):
         try:
             inference_recent = _execution_recent("inference", limit, since)
-        except Exception as exc:
+        except ExecutionQueueStateError as exc:
             _logger.exception("Inference recent activity is unavailable.")
             errors.append({"area": "inference", "error": str(exc)})
 
@@ -185,7 +185,7 @@ def activity_snapshot(limit=20, since=0):
     if not llm.get("unavailable"):
         try:
             llm_recent = _execution_recent("llm", limit, since)
-        except Exception as exc:
+        except ExecutionQueueStateError as exc:
             _logger.exception("Director recent activity is unavailable.")
             errors.append({"area": "director", "error": str(exc)})
 

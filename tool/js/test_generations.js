@@ -362,9 +362,15 @@
     return path;
   }
 
-  function updateWildcardDirectorTrend(system) {
+  function updateWildcardDirectorTrend(activity, system) {
     var graph = el('test-generations-director-activity-trend');
     if (!graph) throw new Error('Test Generations Director system history markup is missing.');
+    var remote = String(activity && activity.runtimeMode || '') === 'remote';
+    graph.classList.toggle('hidden', remote);
+    if (remote) {
+      wildcardDirector.activityHistory = [];
+      return;
+    }
     var gpu = system && system.gpu;
     var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
     var ram = system && system.ram;
@@ -476,15 +482,29 @@
     stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
     if (!visible) return;
 
-    updateWildcardDirectorTrend(system);
-    updateWildcardDirectorModelLoad(activity, system);
+    updateWildcardDirectorTrend(activity, system);
+    updateWildcardDirectorModelLoad(activity, String(activity && activity.runtimeMode || '') === 'remote' ? null : system);
     phase.textContent = wildcardDirectorPhaseLabel(activity && activity.phase);
 
     var parts = [];
     var startedAt = Number(activity && activity.startedAt) || wildcardDirector.activityStartedAt;
     if (startedAt) parts.push(String(Math.max(0, Math.round(Date.now() / 1000 - startedAt))) + 's elapsed');
 
-    var gpu = system && system.gpu;
+    var isRemote = String(activity && activity.runtimeMode || '') === 'remote';
+    if (isRemote) {
+      var provider = String(activity && activity.runtimeProvider || '').trim();
+      parts.push(provider === 'ollama' ? 'Remote Ollama' : 'Remote');
+      var remoteVramBytes = Number(activity && activity.remoteModelVramBytes);
+      if (isFinite(remoteVramBytes) && remoteVramBytes > 0) {
+        parts.push('Model VRAM ' + wildcardDirectorBytesGiB(remoteVramBytes));
+      }
+      var remoteContextSize = Number(activity && activity.contextSize);
+      if (isFinite(remoteContextSize) && remoteContextSize > 0) {
+        parts.push((remoteContextSize >= 1000 ? (remoteContextSize / 1000).toFixed(remoteContextSize < 10000 ? 1 : 0).replace(/\.0$/, '') + 'k' : Math.round(remoteContextSize)) + ' ctx');
+      }
+    }
+
+    var gpu = !isRemote && system && system.gpu;
     var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
     if (primary) {
       var utilization = Number(primary.utilization);
@@ -495,7 +515,7 @@
         parts.push('VRAM ' + Math.round(memoryUsed / memoryTotal * 100) + '%');
       }
     }
-    var ram = system && system.ram;
+    var ram = !isRemote && system && system.ram;
     if (ram && ram.available) {
       var ramUsed = Number(ram.used);
       var ramTotal = Number(ram.total);

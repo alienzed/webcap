@@ -870,3 +870,22 @@ def test_director_model_selectors_share_size_aware_labels():
     assert "formatDirectorModelLabel(model)" in generate
     assert "formatDirectorModelLabel(model)" in test_bench
 
+def test_director_chat_uses_shared_transient_llm_job_lifecycle():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    chat = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
+
+    assert 'id="director-chat-stop"' in html
+    assert "webcap.directorChat.model" in chat
+    assert "trackTransientLlmJob(payload.job)" in chat
+    assert "reportTransientLlmTiming(payload.job)" in chat
+    assert "operation: 'stop_or_cancel'" in chat
+    assert "window.openDirectorChatActivity" in chat
+    assert "item.client === 'chat'" in activity
+    assert "'director-chat-rail-btn'" in activity
+    assert '"chat",' in app
+    assert 'client not in {"storyboard", "generate", "test", "chat"}' in runner
+    assert 'if client == "chat":' in runner
+

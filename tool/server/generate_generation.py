@@ -50,6 +50,16 @@ def _public_model(model):
 
 
 def capabilities():
+    try:
+        inference_runtime.system_stats()
+    except (ConnectionError, TimeoutError):
+        return {
+            "available": False,
+            "error": "ComfyUI unavailable.",
+            "models": [],
+            "unavailableModels": [],
+        }
+
     models = []
     unavailable_models = []
     for item in public_models():
@@ -63,6 +73,8 @@ def capabilities():
                 "error": str(exc),
             })
     return {
+        "available": True,
+        "error": "",
         "models": models,
         "unavailableModels": unavailable_models,
     }

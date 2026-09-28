@@ -98,7 +98,7 @@
   function activityTitle(item) {
     var kind = kindLabel(item);
     if (item.kind === 'director') {
-      var client = item.client === 'generate' ? 'Generate' : item.client === 'storyboard' ? 'Storyboard' : '';
+      var client = item.client === 'generate' ? 'Generate' : item.client === 'storyboard' ? 'Storyboard' : item.client === 'test' ? 'Test' : '';
       return client ? kind + ' · ' + client : kind;
     }
     return item.label ? kind + ' · ' + String(item.label) : kind;
@@ -171,6 +171,8 @@
     if (item.kind === 'director') {
       if (item.client === 'generate' && typeof window.openGenerateActivity === 'function') {
         window.openGenerateActivity();
+      } else if (item.client === 'test' && typeof window.openTestBenchActivity === 'function') {
+        window.openTestBenchActivity();
       } else if (typeof window.openStoryboardActivity === 'function') {
         window.openStoryboardActivity();
       }

@@ -1118,15 +1118,16 @@
     if (isRemote) {
       var provider = String(activity && activity.runtimeProvider || '').trim();
       parts.push('<span>' + escapeHtml(provider === 'ollama' ? 'Remote Ollama' : 'Remote') + '</span>');
-      var remoteModelSizeBytes = Number(activity && activity.modelSizeBytes);
+      var showRemoteModelTelemetry = phaseName !== 'queued';
+      var remoteModelSizeBytes = showRemoteModelTelemetry ? Number(activity && activity.modelSizeBytes) : NaN;
       if (isFinite(remoteModelSizeBytes) && remoteModelSizeBytes > 0) {
         parts.push('<span>Model ' + escapeHtml(directorBytesGiB(remoteModelSizeBytes)) + '</span>');
       }
-      var remoteVramBytes = Number(activity && activity.remoteModelVramBytes);
+      var remoteVramBytes = showRemoteModelTelemetry ? Number(activity && activity.remoteModelVramBytes) : NaN;
       if (isFinite(remoteVramBytes) && remoteVramBytes > 0) {
         parts.push('<span title="VRAM allocated to the loaded remote model">Model VRAM ' + escapeHtml(directorBytesGiB(remoteVramBytes)) + '</span>');
       }
-      var remoteContextSize = Number(activity && activity.contextSize);
+      var remoteContextSize = showRemoteModelTelemetry ? Number(activity && activity.contextSize) : NaN;
       if (isFinite(remoteContextSize) && remoteContextSize > 0 && phaseName !== 'complete') {
         parts.push('<span>' + escapeHtml(directorTokenCount(remoteContextSize)) + ' ctx</span>');
       }

@@ -1419,6 +1419,8 @@
   }
 
   function startDirectorActivity() {
+    var assistant = el('generate-prompt-assistant');
+    if (assistant) assistant.open = true;
     generateState.director.activityStartedAt = Date.now() / 1000;
     generateState.director.activityHistory = [];
     generateState.director.activitySlotSample = null;

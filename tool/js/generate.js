@@ -1554,6 +1554,11 @@
       generateState.unavailableModels = payload.unavailableModels || [];
       populateModelSelector();
 
+      if (payload.available === false) {
+        setStatus(String(payload.error || 'ComfyUI unavailable.'));
+        return;
+      }
+
       if (!generateState.models.length) {
         var unavailable = generateState.unavailableModels.map(function (model) {
           return model.label + ': ' + model.error;

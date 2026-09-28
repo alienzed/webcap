@@ -328,7 +328,8 @@ function renderEnvironmentCheck(payload) {
   });
   var faceReady = (!checksById.package_deface || checksById.package_deface.ok) &&
     (!checksById.package_imageio || checksById.package_imageio.ok);
-  var poseReady = !checksById.package_mediapipe || checksById.package_mediapipe.ok;
+  var poseReady = (!checksById.package_mediapipe || checksById.package_mediapipe.ok) &&
+    (!checksById.analysis_mediapipe_models || checksById.analysis_mediapipe_models.ok);
   if (ui.appSettingsEnableFaceAnalysisEl) {
     ui.appSettingsEnableFaceAnalysisEl.disabled = !faceReady;
     if (!faceReady) ui.appSettingsEnableFaceAnalysisEl.checked = false;

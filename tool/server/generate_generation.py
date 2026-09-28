@@ -50,22 +50,19 @@ def _public_model(model):
 
 
 def capabilities():
-    try:
-        inference_runtime.system_stats()
-    except (ConnectionError, TimeoutError):
-        return {
-            "available": False,
-            "error": "ComfyUI unavailable.",
-            "models": [],
-            "unavailableModels": [],
-        }
-
     models = []
     unavailable_models = []
     for item in public_models():
         model = get_inference_model(item["id"])
         try:
             models.append(_public_model(model))
+        except (ConnectionError, TimeoutError):
+            return {
+                "available": False,
+                "error": "ComfyUI unavailable.",
+                "models": [],
+                "unavailableModels": [],
+            }
         except Exception as exc:
             unavailable_models.append({
                 "id": model.PROFILE_ID,

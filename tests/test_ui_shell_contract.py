@@ -854,3 +854,19 @@ def test_settings_exposes_requirements_repair_without_startup_dependency_manager
     assert "\nimport websocket\n" not in inference
     assert "except ModuleNotFoundError:" in training_config
     assert "import tomli as tomllib" in training_config
+
+def test_director_model_selectors_share_size_aware_labels():
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    chat = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
+    generate = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    test_bench = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "function formatDirectorModelLabel(model)" in common
+    assert "model.sizeBytes" in common
+    assert "window.formatDirectorModelLabel = formatDirectorModelLabel" in common
+    assert "formatDirectorModelLabel(model)" in storyboard
+    assert "formatDirectorModelLabel(model)" in chat
+    assert "formatDirectorModelLabel(model)" in generate
+    assert "formatDirectorModelLabel(model)" in test_bench
+

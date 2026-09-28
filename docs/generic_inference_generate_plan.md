@@ -29,9 +29,9 @@ This plan was intentionally incremental. It follows the repo contract in `AGENTS
   - restart reconciliation;
   - global execution-resource ownership.
 - Generate, Storyboard Takes, and individual Test renditions all use the common `inference` lane and `tool/server/inference_runner.py`.
-- Storyboard owns Story/Scene/Take semantics and its contextual pending-Take projection; Test owns Session aggregation/comparison/rating semantics; Generate owns the full Generation Queue surface and standalone result history.
+- Storyboard owns Story/Scene/Take semantics and its contextual pending-Take projection; Test owns Session aggregation/comparison/rating semantics; Generate owns its standalone generation UI and result history. The shell-owned **Inference Queue** is the authoritative shared scheduling surface.
 - Legacy persisted `storyboard-takes` and `test-generations` queue work is reconciled only as migration compatibility; neither legacy lane has an active scheduler/observer.
-- Startup reconciliation runs before the shared inference observer begins dispatching, and unresolved provider work holds the shared GPU resource rather than allowing overlapping inference.
+- Startup reconciliation is passive: unfinished inference is reconciled without contacting ComfyUI or starting provider work. Enqueueing new inference or explicitly resuming inference starts the demand-driven worker; unresolved provider work still holds the shared GPU resource when required for safety.
 - Training remains independently scheduled in `tool/server/training_runner.py` and shares only GPU resource arbitration with inference.
 - Shared H3/Krea2 inference adapters and runtime own model binding, ComfyUI transport, provider polling/cancellation, output retrieval, and generic lifecycle behavior.
 - The shared queue API uses explicit transitions: queued jobs are claimed into `starting`, marked `running`, stopped with `request_stop`, and only active jobs may be finished.
@@ -67,7 +67,7 @@ Training --> Training runner / Training queue
                 +---- shares only the GPU execution resource
 ```
 
-The user-facing queue should be called **Generation Queue**. Internally the shared lane and runner use the more precise term **inference**.
+The user-facing global scheduling surface is the **Inference Queue**. Internally the shared lane and runner also use the term **inference**; feature screens continue to use generation-specific language for their own contextual work.
 
 ## Scheduling rules
 

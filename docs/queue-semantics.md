@@ -67,6 +67,11 @@ If yes, the UI should wait.
 
 If no, the action should normally remain available.
 
+WebCap should block **semantic hazards**, not make editorial judgments for the user. An action may
+be wasteful, premature, or creatively odd and still be perfectly safe. If it does not create a
+misleading dependency, stale-input expectation, race, or destructive conflict, the app should
+normally leave the decision to the user.
+
 This rule is intentionally independent of queue identity, thread identity, GPU ownership, or broad
 Story/Scene "busy" concepts.
 
@@ -90,6 +95,17 @@ This is deliberate conservatism: it is easier to later relax a correct broad loc
 from subtle stale-input workflows caused by an incomplete dependency graph.
 
 Broad UI protection is acceptable. Broad **queue-admission refusal is not**.
+
+When an operation has frozen source inputs, the UI may also protect those source inputs while the
+operation is pending when editing them would reasonably imply that the pending work will see the
+new values. This is about truthful UI semantics, not technical inability to edit frozen requests.
+
+Prefer region-level overlays when a coherent authoring area is protected. Avoid maintaining large
+lists of individually disabled descendants when one clear overlay communicates the same state.
+
+Information architecture must not define queue semantics. If unrelated controls happen to share a
+visual container today, that is an IA concern; do not invent a semantic dependency merely to make
+the lock implementation convenient.
 
 ## 4. Independence boundaries
 
@@ -160,6 +176,10 @@ Downstream consumers include:
 
 It does not directly rewrite existing Scenes or existing Takes.
 
+While Expand Concept is pending, its direct source/target authoring state should be protected so the
+visible inputs do not drift away from the frozen request. Existing Scene/Takes work that does not
+consume the pending Concept result remains semantically independent.
+
 ### Define Invariants
 
 Reads:
@@ -179,6 +199,11 @@ Downstream consumers include:
 
 Existing Take generation uses already-materialized Scene generation input; it does not directly
 rerun invariant definition as part of generating the Take.
+
+While Define Invariants is pending, its direct source/target authoring state should be protected so
+the visible Story does not imply that the queued operation is using edits it cannot see. However,
+safe independent actions such as generating a Take from an already-materialized Scene remain valid.
+The fact that such work may later be creatively obsolete is not itself a reason to block it.
 
 ### Develop / Re-develop Scenes
 
@@ -200,8 +225,12 @@ Writes:
 - Scene continuity/shared-context planning state
 - Story development state
 
-This is a Story-scoped Scene-authoring mutation. The existing Scenes workspace overlay is an
-appropriate conservative UI scope while it is pending.
+This operation consumes the Story's defining authoring state and replaces/rebuilds the Scene
+structure. While Develop / Re-develop Scenes is pending, the **entire affected Story should be
+treated as read-only** until completion or cancellation. This is one of the cases where a true
+Story-wide lock is semantically justified.
+
+Other Stories remain fully available.
 
 ### Check & Repair / Refine All Scenes
 
@@ -459,6 +488,7 @@ This document intentionally separates semantic truth from current implementation
 When implementing or repairing UI state:
 
 - prefer existing disabled-state, Director-card, and overlay patterns,
+- prefer region-level overlays when a coherent authoring area shares one pending state,
 - prefer coarse, comprehensible locking over many fragile exceptions,
 - keep locks scoped to the affected Story/workspace whenever possible,
 - never let pending work in one Story unnecessarily freeze another,

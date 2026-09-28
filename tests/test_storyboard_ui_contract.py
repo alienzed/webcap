@@ -1242,6 +1242,27 @@ def test_storyboard_first_cut_lock_is_story_scoped_and_sequence_readiness_is_der
     assert "#storyboard-scenes-sequence-btn.is-ready:not(.active)" in css
 
 
+
+def test_storyboard_plan_replacement_controls_follow_story_generation_state():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "function storyHasPendingGeneration(storyId)" in storyboard
+    assert "function syncPlanReplacementControls()" in storyboard
+    assert "developButton.disabled = developBlocked;" in storyboard
+    assert "firstCutButton.disabled = firstCutBlocked;" in storyboard
+    assert "pending Take generation before replacing its Scene plan" in storyboard
+    assert "pending Take generation before starting First Cut" in storyboard
+    assert "syncPlanReplacementControls();" in storyboard
+
+
+def test_storyboard_queued_first_cut_prevents_new_take_generation():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "var queuedFirstCut = !!queuedFirstCutForStory(storyId);" in storyboard
+    assert "#storyboard-generate-scenes-btn, #storyboard-scenes-list [data-scene-generate]" in storyboard
+    assert "control.dataset.firstCutQueuedDisabled = '1';" in storyboard
+    assert "Remove this Story from the First Cut queue before adding new Take generation." in storyboard
+
 def test_storyboard_first_cut_queue_is_session_only_story_scoped_fifo():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 

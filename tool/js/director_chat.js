@@ -3,11 +3,12 @@
     open: false,
     pending: false,
     modelsLoaded: false,
-    modelId: '',
+    modelId: getDirectorModelPreference('webcap.directorChat.model'),
     messages: [],
     elapsedByAssistantIndex: {},
     progressTimer: 0,
-    requestStartedAt: 0
+    requestStartedAt: 0,
+    jobId: ''
   };
 
   function el(id) {
@@ -48,29 +49,57 @@
     if (progress) progress.classList.toggle('hidden', !visible);
   }
 
+  function activityForCurrentJob(activity) {
+    var jobId = String(state.jobId || '');
+    var queue = activity && activity.queue;
+    if (!jobId || !queue || !Array.isArray(queue.jobs)) return activity;
+    var job = queue.jobs.find(function (candidate) {
+      return String(candidate && candidate.jobId || '') === jobId;
+    });
+    if (!job) return activity;
+    var status = String(job.status || '');
+    if (status === 'queued' && String(queue.activeJobId || '') !== jobId) {
+      return Object.assign({}, activity || {}, {
+        active: true,
+        phase: 'queued',
+        model: job.modelId || state.modelId,
+        operation: job.operation || 'freeform_chat',
+        startedAt: job.createdAt,
+        jobStatus: status,
+        queuePosition: job.queuePosition || 0
+      });
+    }
+    return Object.assign({}, activity || {}, {
+      jobStatus: status,
+      model: job.modelId || (activity && activity.model) || state.modelId,
+      operation: job.operation || (activity && activity.operation) || 'freeform_chat'
+    });
+  }
+
   function renderProgress(activity) {
     var phaseEl = el('director-chat-progress-phase');
     var detailEl = el('director-chat-progress-detail');
     var elapsedEl = el('director-chat-progress-elapsed');
     var progress = el('director-chat-progress');
-    if (!phaseEl || !detailEl || !elapsedEl || !progress) return;
+    var stop = el('director-chat-stop');
+    if (!phaseEl || !detailEl || !elapsedEl || !progress || !stop) return;
 
-    var activityOperation = String(activity && activity.operation || '');
-    var ownActivity = activityOperation === 'freeform_chat';
-    var active = !!(activity && activity.active);
-    var phase = ownActivity ? String(activity.phase || 'preparing') : (active ? 'queued' : 'preparing');
+    activity = activityForCurrentJob(activity);
+    var phase = String(activity && activity.phase || 'preparing');
     var detail = '';
+    if (phase === 'queued') {
+      var position = Number(activity && activity.queuePosition || 0);
+      detail = position > 1 ? ('Queue #' + position) : 'Waiting for Director runtime';
+    } else if (phase === 'loading_model') detail = 'Loading ' + String(activity && activity.model || state.modelId || 'model');
+    else if (phase === 'generating') detail = String(activity && activity.model || state.modelId || 'Selected model');
+    else if (phase === 'freeing_comfy') detail = 'Releasing local GPU resources';
+    else detail = String(activity && activity.model || state.modelId || '');
 
-    if (ownActivity) {
-      if (phase === 'loading_model') detail = 'Loading ' + String(activity.model || state.modelId || 'model');
-      else if (phase === 'generating') detail = String(activity.model || state.modelId || 'Selected model');
-      else if (phase === 'freeing_comfy') detail = 'Releasing local GPU resources';
-      else detail = String(activity.model || state.modelId || '');
-    } else if (active) {
-      detail = 'Waiting for current Director work to finish';
-    } else {
-      detail = String(state.modelId || '');
-    }
+    var jobStatus = String(activity && activity.jobStatus || '');
+    var terminal = ['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(jobStatus) !== -1;
+    stop.classList.toggle('hidden', !state.pending || terminal || !state.jobId);
+    stop.disabled = jobStatus === 'stopping';
+    stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
 
     phaseEl.textContent = directorPhaseLabel(phase);
     detailEl.textContent = detail;
@@ -87,6 +116,7 @@
     stopProgressPolling();
     if (!state.pending) return;
     requestJson('/fs/director/activity').then(function (activity) {
+      observeTransientLlmActivity(activity);
       if (state.pending) renderProgress(activity);
     }).catch(function () {
       if (state.pending) renderProgress(null);
@@ -116,6 +146,8 @@
       setProgressVisible(true);
       return;
     }
+    var stop = el('director-chat-stop');
+    if (stop) stop.classList.add('hidden');
     setProgressVisible(false);
   }
 
@@ -197,6 +229,7 @@
       });
       if (!stillAvailable) state.modelId = String(models[0].id || '');
       select.value = state.modelId;
+      setDirectorModelPreference('webcap.directorChat.model', state.modelId);
       state.modelsLoaded = true;
       syncControls();
     }).catch(function (err) {
@@ -218,6 +251,57 @@
     if (input) input.focus();
   }
 
+  function jobRequest(jobId) {
+    return requestJson('/fs/director/job?job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
+      if (!payload.job) throw new Error('Director Chat job response is missing its job.');
+      trackTransientLlmJob(payload.job);
+      if (['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(String(payload.job.status || '')) !== -1) {
+        reportTransientLlmTiming(payload.job);
+      }
+      return payload.job;
+    });
+  }
+
+  function waitForJob(job) {
+    if (!job || !job.jobId) throw new Error('Director Chat did not return a queued job.');
+    function poll(current) {
+      var status = String(current.status || '');
+      if (status === 'completed') return Promise.resolve(current);
+      if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
+        var terminalError = new Error(current.error || ('Director Chat job ' + status + '.'));
+        terminalError.jobStatus = status;
+        throw terminalError;
+      }
+      var delay = status === 'queued' ? 2000 : 1000;
+      return new Promise(function (resolve) { setTimeout(resolve, delay); })
+        .then(function () { return jobRequest(current.jobId); })
+        .then(poll);
+    }
+    return poll(job);
+  }
+
+  function stopJob() {
+    var stop = el('director-chat-stop');
+    if (!stop || !state.jobId || stop.disabled) return;
+    stop.disabled = true;
+    stop.textContent = 'Stopping…';
+    requestJson('/fs/director/job', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation: 'stop_or_cancel', jobId: state.jobId })
+    }).then(function (payload) {
+      if (payload.job) renderProgress({
+        phase: String(payload.job.status || '') === 'cancelled' ? 'stopped' : 'preparing',
+        jobStatus: payload.job.status,
+        model: payload.job.modelId || state.modelId
+      });
+    }).catch(function (err) {
+      stop.disabled = false;
+      stop.textContent = 'Stop';
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Director Chat', err);
+    });
+  }
+
   function sendMessage() {
     var input = el('director-chat-input');
     if (!input || state.pending) return;
@@ -228,6 +312,7 @@
     state.messages.push({ role: 'user', content: content });
     input.value = '';
     state.pending = true;
+    state.jobId = '';
     renderMessages();
     syncControls();
     startProgress();
@@ -242,14 +327,24 @@
         messages: state.messages
       })
     }).then(function (payload) {
-      state.messages.push({ role: 'assistant', content: String(payload.text || '') });
+      if (!payload.job || !payload.job.jobId) throw new Error('Director Chat did not return a queued job.');
+      state.jobId = String(payload.job.jobId);
+      trackTransientLlmJob(payload.job);
+      renderProgress({ phase: payload.job.status === 'queued' ? 'queued' : 'preparing', jobStatus: payload.job.status, model: payload.job.modelId });
+      return waitForJob(payload.job);
+    }).then(function (job) {
+      var result = job.result && typeof job.result === 'object' ? job.result : {};
+      state.messages.push({ role: 'assistant', content: String(result.text || '') });
       state.elapsedByAssistantIndex[state.messages.length - 1] = performance.now() - startedAt;
     }).catch(function (err) {
       requestError = err;
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Director Chat', err);
+      if (['stopped', 'cancelled'].indexOf(String(err && err.jobStatus || '')) === -1) {
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Director Chat', err);
+      }
     }).then(function () {
       state.pending = false;
-      finishProgress(requestError);
+      state.jobId = '';
+      finishProgress(requestError && ['stopped', 'cancelled'].indexOf(String(requestError.jobStatus || '')) === -1 ? requestError : null);
       renderMessages();
       syncControls();
       if (input) input.focus();
@@ -286,16 +381,19 @@
     var close = el('director-chat-close');
     var clear = el('director-chat-clear');
     var send = el('director-chat-send');
+    var stop = el('director-chat-stop');
     var input = el('director-chat-input');
     var model = el('director-chat-model');
-    if (!toggle || !drawer || !close || !clear || !send || !input || !model) return;
+    if (!toggle || !drawer || !close || !clear || !send || !stop || !input || !model) return;
 
     toggle.onclick = function () { setOpen(!state.open); };
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
     send.onclick = sendMessage;
+    stop.onclick = stopJob;
     model.onchange = function () {
       state.modelId = String(model.value || '');
+      setDirectorModelPreference('webcap.directorChat.model', state.modelId);
       syncControls();
     };
     input.addEventListener('input', syncControls);
@@ -318,5 +416,9 @@
   }
 
   window.setDirectorChatOpen = setOpen;
+  window.openDirectorChatActivity = function (target) {
+    setOpen(true);
+    if (target && target.modelId) state.modelId = String(target.modelId);
+  };
   bind();
 })();

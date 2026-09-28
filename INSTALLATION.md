@@ -76,13 +76,14 @@ Linux / WSL:
 source .venv/bin/activate
 ```
 
-WebCap can install its own Python requirements when it starts. You may still upgrade pip explicitly if desired:
+Install WebCap's Python requirements into the environment you will use to run WebCap:
 
 ```bash
 python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-The launcher uses the same Python interpreter that starts WebCap and does not use `--upgrade`, so already-satisfied package versions are left alone.
+The same install can later be attempted from **Settings → Advanced → Install / Repair Python Requirements**.
 
 ## 3. Configure WebCap
 
@@ -111,16 +112,12 @@ You can edit configuration directly or use **App Settings** after WebCap starts.
 From the repository root:
 
 ```bash
-python start.py
-```
-
-Before importing the application, the launcher runs that interpreter's pip against WebCap's `requirements.txt`. If installation fails, startup stops with the real pip error. This bootstrap is limited to WebCap's own Python environment; it does not modify the configured training runtime, PyTorch/CUDA, ComfyUI, or Director runtime.
-
-For development environments where dependencies are managed separately, the original direct entry point remains available:
-
-```bash
 python -m tool.server.app
 ```
+
+This is the normal launch path. Optional feature dependencies are loaded when their features need them, so a missing optional package should not prevent unrelated WebCap functionality from starting. When WebCap detects a missing Python package, use **Settings → Advanced → Install / Repair Python Requirements** to run the current WebCap interpreter against this repository's `requirements.txt`; the command output and failures are written to the WebCap Console.
+
+The optional `start.py` wrapper remains available as a convenience bootstrap, but normal WebCap operation does not depend on launching through it.
 
 Then open:
 
@@ -367,15 +364,16 @@ When an install command fails:
 
 Do not repeatedly install random CUDA, PyTorch, or DeepSpeed versions into the same environment until something appears to work. A fresh environment is often safer and easier to reason about.
 
-## 17. What WebCap may automate later
+## 17. Current setup assistance and future boundaries
 
-WebCap currently diagnoses the environment but does not automatically rewrite the GPU training stack.
+WebCap can currently diagnose the environment and explicitly install/repair its own Python requirements from **Settings → Advanced**. That action runs `python -m pip install -r requirements.txt` with the same Python executable that is running WebCap and reports the real command output in the Console.
 
-Future setup assistance may safely automate low-risk, deterministic steps such as:
+WebCap does not automatically rewrite the GPU training stack.
+
+Future setup assistance may safely automate other low-risk, deterministic steps such as:
 
 - checking prerequisites;
 - creating directories/configuration;
-- installing WebCap's own Python requirements (handled by `python start.py`);
 - cloning/updating known repositories;
 - suggesting or running an explicitly shown command;
 - re-running Environment Check after each step.
@@ -395,7 +393,7 @@ An installation helper failing must not make an otherwise working WebCap install
 
 # Optional components
 
-The following features are optional at the product level. Some of their Python packages are nevertheless included in WebCap's normal `requirements.txt` today. This section documents the **current repository**, not a future packaging scheme.
+The following features are optional at the product level. Their supported Python packages remain in WebCap's single `requirements.txt`, while runtime imports are scoped so a missing optional package does not take down unrelated functionality.
 
 ## 18. Dependency map
 
@@ -433,7 +431,7 @@ command -v deface
 tensorboard --version
 ```
 
-If these fail in a clean WebCap environment, the normal repair is:
+If these fail in a WebCap environment, use **Settings → Advanced → Install / Repair Python Requirements** or run:
 
 ```bash
 python -m pip install -r requirements.txt

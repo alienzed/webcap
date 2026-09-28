@@ -102,6 +102,24 @@ def test_test_activity_visibility_and_active_state_are_owned_by_new_rail():
     assert "activityButton.classList.toggle('active', isOpen())" in script
 
 
+def test_activity_drawer_marks_owning_workspace_links_while_work_is_active():
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert "function syncActivityRailWork(active)" in activity
+    assert "director') kind = String(item && item.client || 'storyboard')" in activity
+    for button_id in (
+        "activity-generate-btn",
+        "activity-training-btn",
+        "activity-test-btn",
+        "activity-storyboard-btn",
+        "activity-storage-btn",
+    ):
+        assert button_id in activity
+    assert "button.classList.toggle('has-active-work', !!activeIds[id]);" in activity
+    assert ".activity-rail-btn.has-active-work::after" in css
+
+
 def test_global_activity_drawer_is_a_read_only_sibling_of_inference_queue():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")

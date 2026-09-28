@@ -149,20 +149,29 @@
   function openItem(item) {
     setOpen(false);
     if (!item) return;
+    var target = {
+      jobId: String(item.id || ''),
+      storyId: String(item.storyId || ''),
+      sceneId: String(item.sceneId || ''),
+      folder: String(item.folder || ''),
+      sessionId: String(item.sessionId || ''),
+      source: String(item.source || ''),
+      modelId: String(item.modelId || '')
+    };
     if (item.kind === 'storyboard' && typeof window.openStoryboardActivity === 'function') {
-      window.openStoryboardActivity();
+      window.openStoryboardActivity(target);
       return;
     }
     if (item.kind === 'test' && typeof window.openTestBenchActivity === 'function') {
-      window.openTestBenchActivity();
+      window.openTestBenchActivity(target);
       return;
     }
     if (item.kind === 'generate' && typeof window.openGenerateActivity === 'function') {
-      window.openGenerateActivity();
+      window.openGenerateActivity(target);
       return;
     }
     if (item.kind === 'training' && typeof window.openTrainingSurface === 'function') {
-      window.openTrainingSurface('global');
+      window.openTrainingSurface(item.folder ? 'set' : 'global', target);
       return;
     }
     if (item.kind === 'storage' && typeof window.openStorageActivity === 'function') {
@@ -170,12 +179,13 @@
       return;
     }
     if (item.kind === 'director') {
+      target.jobId = '';
       if (item.client === 'generate' && typeof window.openGenerateActivity === 'function') {
-        window.openGenerateActivity();
+        window.openGenerateActivity(target);
       } else if (item.client === 'test' && typeof window.openTestBenchActivity === 'function') {
-        window.openTestBenchActivity();
+        window.openTestBenchActivity(target);
       } else if (typeof window.openStoryboardActivity === 'function') {
-        window.openStoryboardActivity();
+        window.openStoryboardActivity(target);
       }
     }
   }

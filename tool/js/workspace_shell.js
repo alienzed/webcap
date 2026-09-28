@@ -739,7 +739,8 @@ function exitWorkspaceSurface(surfaceOverride) {
   setWorkspaceSurface(targetSurface || 'default', { skipRemember: true });
 }
 
-function openTrainingSurface(mode) {
+function openTrainingSurface(mode, target) {
+  target = target && typeof target === 'object' ? target : {};
   if (typeof window !== 'undefined' && typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
   if (typeof window !== 'undefined' && typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
@@ -761,6 +762,7 @@ function openTrainingSurface(mode) {
     setWorkspaceSurface('training', { sidebarHidden: entryMode === 'global' });
     setTrainingDetailTab(entryMode === 'global' ? 'run-log' : 'items');
     syncTrainingEntryChrome();
+    if (target.folder) openTrainingWorkspaceFolder(String(target.folder || ''));
   }
 
   if (!shouldSaveConfig) {

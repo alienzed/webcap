@@ -223,6 +223,7 @@ def _job_view(job):
         "source": str(metadata.get("source") or ""),
         "candidateKind": str(metadata.get("candidateKind") or ""),
         "candidateFile": str(metadata.get("candidateFile") or ""),
+        "wildcardValues": copy.deepcopy(metadata.get("wildcardValues") or []),
         "status": str(job.get("status") or ""),
         "queuePosition": int(job.get("queuePosition") or 0),
         "createdAt": job.get("createdAt"),
@@ -717,6 +718,7 @@ def enqueue_test(request, context, label="", deferred=False):
             "sessionId": session_id,
             "candidateKind": candidate_kind,
             "candidateFile": str(context.get("candidateFile") or ""),
+            "wildcardValues": copy.deepcopy(context.get("wildcardValues") or []),
         },
         initial_status=status,
     )

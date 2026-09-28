@@ -401,6 +401,7 @@ def app_environment_install_requirements():
         "pip",
         "install",
         "--disable-pip-version-check",
+        "--no-input",
         "-r",
         str(requirements_path),
     ]

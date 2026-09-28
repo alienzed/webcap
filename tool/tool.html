@@ -103,6 +103,19 @@
                 </button>
                 <div class="activity-rail-spacer"></div>
                 <button
+                    id="director-chat-rail-btn"
+                    type="button"
+                    class="activity-rail-btn"
+                    title="Director Chat"
+                    aria-label="Director Chat"
+                    aria-expanded="false"
+                    aria-controls="director-chat-drawer"
+                >
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 5h14v10H9l-4 4V5z"></path>
+                    </svg>
+                </button>
+                <button
                     id="activity-monitor-rail-btn"
                     type="button"
                     class="activity-rail-btn activity-monitor-rail-btn"
@@ -1457,6 +1470,35 @@
                     </div>
                 </section>
             </section>
+            <aside id="director-chat-drawer" class="director-chat-drawer hidden" aria-label="Director Chat" aria-hidden="true">
+                <header class="director-chat-drawer-header">
+                    <div class="director-chat-header-copy">
+                        <strong>Director Chat</strong>
+                        <span>Session-only freeform model conversation</span>
+                    </div>
+                    <div class="director-chat-header-actions">
+                        <button id="director-chat-clear" type="button" class="review-captions-btn">New chat</button>
+                        <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Director Chat">×</button>
+                    </div>
+                </header>
+                <div class="director-chat-model-row">
+                    <label for="director-chat-model">Model</label>
+                    <select id="director-chat-model" aria-label="Director Chat model">
+                        <option value="">Loading models...</option>
+                    </select>
+                </div>
+                <div id="director-chat-messages" class="director-chat-messages" aria-live="polite"></div>
+                <div id="director-chat-empty" class="director-chat-empty">
+                    Start a freeform conversation with the selected model. Nothing here is shared with Storyboard or saved.
+                </div>
+                <div class="director-chat-composer">
+                    <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>
+                    <div class="director-chat-composer-footer">
+                        <span id="director-chat-status" class="director-chat-status" aria-live="polite"></span>
+                        <button id="director-chat-send" type="button" class="review-captions-btn">Send</button>
+                    </div>
+                </div>
+            </aside>
             <aside id="activity-monitor-drawer" class="activity-monitor-drawer hidden" aria-label="Activity" aria-hidden="true">
                 <header class="activity-monitor-drawer-header">
                     <div>
@@ -2030,6 +2072,7 @@
         <script src="/static/js/training_candidates.js"></script>
         <script src="/static/js/training_workspace.js"></script>
         <script src="/static/js/workspace_shell.js"></script>
+        <script src="/static/js/director_chat.js"></script>
         <script src="/static/js/inference_queue.js"></script>
         <script src="/static/js/activity_monitor.js"></script>
         <script src="/static/js/storage_manager.js"></script>

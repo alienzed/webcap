@@ -4182,10 +4182,12 @@
   function syncStoryboardInferenceSnapshot(queue) {
     if (!storyState.story || !queue || !Array.isArray(queue.jobs)) return;
     var storyId = String(storyState.story.id || '');
+    var seenJobIds = Object.create(null);
     queue.jobs.forEach(function (rawJob) {
       if (String(rawJob.client || '') !== 'storyboard' || String(rawJob.storyId || '') !== storyId) return;
       var job = storyboardInferenceJob(rawJob);
       if (!job || !job.jobId) return;
+      seenJobIds[job.jobId] = true;
       var previousJob = storyState.generationJobs[job.jobId] || null;
       var changed = !previousJob ||
         String(previousJob.status || '') !== String(job.status || '') ||
@@ -4200,6 +4202,15 @@
         pollGeneration(storyId, job.jobId);
       }
     });
+
+    Object.keys(storyState.generationJobs).forEach(function (jobId) {
+      var cachedJob = storyState.generationJobs[jobId];
+      if (!cachedJob || String(cachedJob.storyId || '') !== storyId || !generationJobIsActive(cachedJob) || seenJobIds[jobId]) return;
+      clearGenerationPoll(jobId);
+      delete storyState.generationJobs[jobId];
+      if (cachedJob.sceneId) syncSceneTakeDom(cachedJob.sceneId);
+    });
+
     syncStoryboardGenerationActivity();
   }
 

@@ -75,6 +75,16 @@ function setDirectorModelPreference(storageKey, modelId) {
 window.getDirectorModelPreference = getDirectorModelPreference;
 window.setDirectorModelPreference = setDirectorModelPreference;
 
+function formatDirectorModelLabel(model) {
+  model = model && typeof model === 'object' ? model : {};
+  var label = String(model.label || model.id || '').trim();
+  var sizeBytes = Number(model.sizeBytes);
+  if (!isFinite(sizeBytes) || sizeBytes <= 0) return label;
+  return label + ' · ' + (sizeBytes / (1024 * 1024 * 1024)).toFixed(1) + ' GiB';
+}
+
+window.formatDirectorModelLabel = formatDirectorModelLabel;
+
 function formatInferenceElapsedMs(milliseconds) {
   var ms = Number(milliseconds);
   if (!isFinite(ms) || ms < 0) return '';

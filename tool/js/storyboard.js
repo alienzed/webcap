@@ -1560,7 +1560,7 @@
     if (!storyState.story || String(target.storyId || '') !== String(storyState.story.id || '')) return;
     if (target.kind === 'story-action') {
       document.querySelectorAll(
-        '#storyboard-story-overview button, #storyboard-story-overview input, #storyboard-story-overview select, #storyboard-story-overview textarea, ' +
+        '#storyboard-story-authoring button, #storyboard-story-authoring input, #storyboard-story-authoring select, #storyboard-story-authoring textarea, ' +
         '#storyboard-scenes-list button, #storyboard-scenes-list input, #storyboard-scenes-list select, #storyboard-scenes-list textarea, ' +
         '#storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add], ' +
         '#storyboard-generate-scenes-btn, #storyboard-director-model'

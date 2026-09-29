@@ -980,7 +980,7 @@ def test_storyboard_director_scene_plan_lock_covers_story_authoring_and_scene_de
     assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState)" in scenes
 
     story_action = protection.split("if (target.kind === 'story-action')", 1)[1].split("if (target.kind === 'concept')", 1)[0]
-    assert "#storyboard-story-overview button" in story_action
+    assert "#storyboard-story-authoring button" in story_action
     assert "storyboard-director-tools-drawer" not in story_action
 
 
@@ -1405,8 +1405,8 @@ def test_storyboard_first_cut_lock_is_story_scoped_and_sequence_readiness_is_der
 
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("\n  function ", 1)[0]
     assert "String(target.storyId || '') !== String(storyState.story.id || '')" in protection
-    assert "#storyboard-story-overview button, #storyboard-story-overview input" in protection
-    assert "#storyboard-story-authoring button, #storyboard-story-authoring input" not in protection
+    assert "#storyboard-story-authoring button, #storyboard-story-authoring input" in protection
+    assert "#storyboard-story-overview button, #storyboard-story-overview input" not in protection
     assert "[data-story-action-cancel]" in protection
 
     pending_controls = storyboard.split("function syncDirectorPendingControls()", 1)[1].split("\n  function ", 1)[0]

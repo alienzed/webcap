@@ -1432,7 +1432,8 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
             model_size_bytes=0,
         )
         try:
-            settings = _director_config()
+            runtime_id, _raw_model_id = _split_model_ref(model_id)
+            settings = _runtime_settings(runtime_id)
             _set_activity(
                 "preparing",
                 model_id=model_id,
@@ -1486,7 +1487,8 @@ def run_contract(model_id, contract, gpu_reserved=False):
             model_size_bytes=0,
         )
         try:
-            settings = _director_config()
+            runtime_id, _raw_model_id = _split_model_ref(model_id)
+            settings = _runtime_settings(runtime_id)
             print(
                 "[Director] request starting: operation="
                 + (operation or "unknown")

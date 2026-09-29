@@ -1,3 +1,5 @@
+import copy
+import json
 import os
 import shutil
 import subprocess
@@ -50,6 +52,62 @@ def _rename_media_key_in_folder_state(folder_state, old_name, new_name):
         if field in updated:
             updated[field] = _rename_key_in_map(updated[field], old_name, new_name)
     return updated
+
+
+def _copy_key_in_list(values, source_name, target_name):
+    if not isinstance(values, list) or source_name not in values:
+        return values
+    if target_name in values:
+        raise ValueError(f"Folder state already contains target media key: {target_name}")
+    copied = list(values)
+    source_index = copied.index(source_name)
+    copied.insert(source_index + 1, target_name)
+    return copied
+
+
+def _copy_key_in_map(values, source_name, target_name):
+    if not isinstance(values, dict) or source_name not in values:
+        return values
+    if target_name in values:
+        raise ValueError(f"Folder state already contains target media key: {target_name}")
+    copied = dict(values)
+    copied[target_name] = copy.deepcopy(values[source_name])
+    return copied
+
+
+def _duplicate_media_key_in_folder_state(folder_state, source_name, target_name):
+    updated = dict(folder_state)
+    if "reviewedKeys" in updated:
+        updated["reviewedKeys"] = _copy_key_in_list(updated["reviewedKeys"], source_name, target_name)
+    for field in (
+        "flags",
+        "caption_requirements_checked",
+        "caption_term_descriptors_by_media",
+        "caption_group_tags_by_media",
+        "caption_group_term_descriptors_by_media",
+        "caption_tags_by_media",
+        "ratings_by_media",
+    ):
+        if field in updated:
+            updated[field] = _copy_key_in_map(updated[field], source_name, target_name)
+    return updated
+
+
+def _duplicate_media_metadata_entry(metadata_path, source_name, target_name):
+    metadata_path = Path(metadata_path)
+    if not metadata_path.exists():
+        return None
+    with metadata_path.open("r", encoding="utf-8") as handle:
+        metadata = json.load(handle)
+    if not isinstance(metadata, dict):
+        raise ValueError(f"Media metadata is not a JSON object: {metadata_path}")
+    if source_name not in metadata:
+        return None
+    if target_name in metadata:
+        raise ValueError(f"Media metadata already contains target media key: {target_name}")
+    copied = dict(metadata)
+    copied[target_name] = copy.deepcopy(metadata[source_name])
+    return copied
 
 
 def duplicate_folder_response(src_rel):
@@ -110,14 +168,59 @@ def duplicate_media_response(src_rel):
             break
         i += 1
 
-    shutil.copy2(str(src_path), str(dst_path))
-    normalize_path_permissions(dst_path)
+    state_path = parent / ".webcap_state.json"
+    duplicated_folder_state = None
+    try:
+        if folder_state_exists(state_path):
+            folder_state = read_folder_state(state_path, missing_ok=False)
+            duplicated_folder_state = _duplicate_media_key_in_folder_state(folder_state, src_path.name, dst_name)
+    except Exception as state_error:
+        print(
+            f"[duplicate_media] FOLDER STATE READ/VALIDATION FAILED; duplicate blocked: {state_error}",
+            file=sys.stderr,
+            flush=True,
+        )
+        traceback.print_exc()
+        return jsonify({"error": str(state_error)}), 400
+
+    metadata_path = parent / "media_metadata.json"
+    duplicated_metadata = None
+    try:
+        duplicated_metadata = _duplicate_media_metadata_entry(metadata_path, src_path.name, dst_name)
+    except Exception as metadata_error:
+        # Derived analysis metadata can be regenerated. Do not block a valid duplicate
+        # when the cache itself is stale or unreadable.
+        print(
+            f"[duplicate_media] MEDIA METADATA COPY SKIPPED: {metadata_error}",
+            file=sys.stderr,
+            flush=True,
+        )
 
     src_caption = src_path.with_suffix(".txt")
     dst_caption = dst_path.with_suffix(".txt")
-    if src_caption.exists() and src_caption.is_file() and not dst_caption.exists():
-        shutil.copy2(str(src_caption), str(dst_caption))
-        normalize_path_permissions(dst_caption)
+    try:
+        shutil.copy2(str(src_path), str(dst_path))
+        normalize_path_permissions(dst_path)
+
+        if src_caption.exists() and src_caption.is_file() and not dst_caption.exists():
+            shutil.copy2(str(src_caption), str(dst_caption))
+            normalize_path_permissions(dst_caption)
+
+        if duplicated_folder_state is not None:
+            write_folder_state_atomic(state_path, duplicated_folder_state)
+
+        if duplicated_metadata is not None:
+            write_folder_state_atomic(metadata_path, duplicated_metadata)
+    except Exception as duplicate_error:
+        for copied_path in (dst_caption, dst_path):
+            try:
+                if copied_path.exists():
+                    copied_path.unlink()
+            except OSError:
+                pass
+        print(f"[duplicate_media] DUPLICATE FAILED: {duplicate_error}", file=sys.stderr, flush=True)
+        traceback.print_exc()
+        return jsonify({"error": f"Duplicate failed: {duplicate_error}"}), 500
 
     return jsonify({"success": True, "dst": str(dst_path), "dstName": dst_name})
 

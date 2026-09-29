@@ -252,6 +252,32 @@ def test_local_llm_job_arriving_during_grace_reuses_retained_gpu(llm_root, monke
     assert execution_queue.resource_owner() == "llm"
 
 
+
+def test_pausing_idle_llm_grace_releases_retained_gpu(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda model_id, contract, gpu_reserved=False: {"text": "Done", "model": model_id},
+    )
+
+    job = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Prompt.", "output": "text"},
+    )
+    llm_runner._advance_queue()
+
+    assert llm_runner.job_status(job["jobId"])["status"] == "completed"
+    assert execution_queue.resource_owner() == "llm"
+
+    llm_runner.action("pause_queue")
+    llm_runner._advance_queue()
+
+    assert execution_queue.resource_owner() == ""
+    assert llm_runner._monitor_has_work() is False
+
+
 def test_local_llm_queue_reuses_gpu_ownership_until_queued_work_is_drained(llm_root, monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)

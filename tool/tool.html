@@ -1836,34 +1836,28 @@
                     <div id="app-settings-panel-director" class="app-settings-panel hidden" data-app-settings-panel="director" role="tabpanel" aria-labelledby="app-settings-tab-director">
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Director Runtime</div>
-                                <div class="app-settings-section-copy">Choose between WebCap-managed llama.cpp and a remote OpenAI-compatible endpoint.</div>
+                                <div class="app-settings-section-title">Director Runtimes</div>
+                                <div class="app-settings-section-copy">Local llama.cpp and any enabled remote OpenAI-compatible endpoints are discovered together.</div>
                             </div>
-                            <label class="app-settings-field">
-                                <span class="app-settings-field-label">Runtime</span>
-                                <select id="app-settings-storyboard-director-mode">
-                                    <option value="local">Local llama.cpp</option>
-                                    <option value="remote">Remote OpenAI-compatible</option>
-                                </select>
-                            </label>
                             <div id="app-settings-director-local" class="app-settings-runtime-scope">
                                 <div class="app-settings-form-grid">
                                     <label class="app-settings-field app-settings-field-wide">
-                                        <span class="app-settings-field-label">llama-server Executable</span>
+                                        <span class="app-settings-field-label">Local llama-server Executable</span>
                                         <input id="app-settings-storyboard-llama-server" type="text" placeholder="~/llama.cpp/build/bin/llama-server">
                                     </label>
                                     <label class="app-settings-field">
-                                        <span class="app-settings-field-label">Port</span>
+                                        <span class="app-settings-field-label">Local Port</span>
                                         <input id="app-settings-storyboard-port" type="number" min="1" max="65535" step="1" value="8189">
                                     </label>
                                 </div>
                             </div>
-                            <div id="app-settings-director-remote" class="app-settings-runtime-scope hidden">
-                                <label class="app-settings-field app-settings-field-wide">
-                                    <span class="app-settings-field-label">Remote Endpoint</span>
-                                    <input id="app-settings-storyboard-endpoint" type="text" placeholder="http://192.168.1.20:11434/v1">
-                                    <span class="app-settings-note">Include the API prefix, usually <code>/v1</code>.</span>
-                                </label>
+                            <div class="app-settings-runtime-scope">
+                                <div class="app-settings-section-header">
+                                    <div class="app-settings-section-title">Remote Endpoints</div>
+                                    <div class="app-settings-section-copy">Unavailable endpoints are skipped during model discovery.</div>
+                                </div>
+                                <div id="app-settings-director-endpoints"></div>
+                                <button id="app-settings-director-endpoint-add" type="button" class="review-captions-btn">Add Endpoint</button>
                             </div>
                             <details class="app-settings-advanced">
                                 <summary>Runtime Overrides</summary>
@@ -1880,7 +1874,7 @@
                                     </label>
                                 </div>
                             </details>
-                            <p class="app-settings-help">Local mode discovers GGUFs from <code>&lt;Models Root&gt;/text_encoders</code>. Remote mode discovers models from the endpoint's <code>/models</code> API. Model selection is handled by each Director-enabled workspace.</p>
+                            <p class="app-settings-help">Local models come from <code>&lt;Models Root&gt;/text_encoders</code>; each enabled remote contributes models from its <code>/models</code> API. Director model selection is shared globally across Director-enabled workspaces.</p>
                             <p class="app-settings-help">Use <strong>Save + Reboot</strong> after changing Director runtime settings.</p>
                         </section>
                     </div>

@@ -1652,6 +1652,8 @@
       control.disabled = false;
       delete control.dataset.storyActionDisabled;
     });
+    setDirectorRegionProtected(el('storyboard-story-authoring'), false);
+    setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), false);
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;
 
     setDirectorTargetProtected(conceptTarget, directorTargetPending(conceptTarget));

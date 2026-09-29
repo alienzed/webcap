@@ -436,7 +436,19 @@ North Star semantics:
 - Stop/Cancel apply to the exact requested job,
 - stale-result protection belongs at application/commit time.
 
-The queue should preserve work, not reinterpret user intent.
+LLM work is **server-session-bound**:
+
+- browser refresh, navigation, or returning to the feature does not end the server session; queued
+  or running LLM work remains authoritative and the UI should reconnect to it,
+- a WebCap server restart ends the LLM session,
+- all unfinished LLM work is discarded across server restart regardless of whether it was queued,
+  starting, running, or stopping,
+- successfully applied Story/prompt state remains because the authoritative result already lives in
+  its feature store,
+- orphaned external/remote model responses from the old server session must not later mutate WebCap.
+
+The queue should preserve work within the live server session, not reinterpret user intent or grow
+restart-recovery machinery for short-lived LLM commands.
 
 ## 11. Director Chat semantics
 

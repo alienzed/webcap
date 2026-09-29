@@ -423,6 +423,10 @@ Its responsibilities are:
 - stop active work,
 - expose failures and wait reasons.
 
+**Pause affects execution, not admission.** While the Inference Queue is paused, valid Generate,
+Storyboard Take, and Test requests may still be queued normally. They simply do not begin execution
+until the queue is resumed.
+
 It is not the authority for feature-specific semantic validity.
 
 A feature decides whether an action should be enabled. The Inference Queue schedules the resulting

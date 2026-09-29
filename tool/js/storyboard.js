@@ -1602,6 +1602,7 @@
     if (target.kind === 'story-action') {
       document.querySelectorAll(
         '#storyboard-story-overview button, #storyboard-story-overview input, #storyboard-story-overview select, #storyboard-story-overview textarea, ' +
+        '.storyboard-director-tools-drawer button, .storyboard-director-tools-drawer input, .storyboard-director-tools-drawer select, .storyboard-director-tools-drawer textarea, ' +
         '#storyboard-scenes-list button, #storyboard-scenes-list input, #storyboard-scenes-list select, #storyboard-scenes-list textarea, ' +
         '#storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add], ' +
         '#storyboard-generate-scenes-btn, #storyboard-director-model'
@@ -1626,7 +1627,8 @@
     }
     if (target.kind === 'scenes') {
       document.querySelectorAll(
-        '#storyboard-story-overview button, #storyboard-story-overview input, #storyboard-story-overview select, #storyboard-story-overview textarea'
+        '#storyboard-story-overview button, #storyboard-story-overview input, #storyboard-story-overview select, #storyboard-story-overview textarea, ' +
+        '.storyboard-director-tools-drawer button, .storyboard-director-tools-drawer input, .storyboard-director-tools-drawer select, .storyboard-director-tools-drawer textarea'
       ).forEach(function (control) {
         if (protectedState) {
           if (!control.disabled) {

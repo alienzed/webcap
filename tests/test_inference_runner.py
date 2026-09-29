@@ -455,6 +455,59 @@ def test_inference_releases_gpu_at_queue_to_backlog_boundary(inference_root, mon
     assert execution_queue.resource_owner() == ""
 
 
+
+def test_inference_drains_foreground_then_yields_backlog_to_training(
+    inference_root, monkeypatch
+):
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: False,
+    )
+
+    first = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "First"}
+    )
+    second = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Second"}
+    )
+    backlog = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    inference_runner._backlog_drain_enabled.set()
+    monkeypatch.setattr(
+        inference_runner,
+        "_execute_claimed",
+        lambda job_id: execution_queue.finish_job_transient(job_id, status="completed"),
+    )
+
+    inference_runner._advance_queue()
+
+    assert inference_runner.job_status(first["jobId"])["status"] == "completed"
+    assert inference_runner.job_status(second["jobId"])["status"] == "queued"
+    assert execution_queue.resource_owner() == "inference"
+
+    training_state = training_runner._default_state()
+    training_state["jobs"] = [{"id": "train-next", "status": "queued"}]
+    training_state["queuePaused"] = False
+    training_runner._ensure_runtime_dirs()
+    training_runner._write_state(training_state)
+
+    inference_runner._advance_queue()
+
+    assert inference_runner.job_status(second["jobId"])["status"] == "completed"
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+    assert execution_queue.resource_owner() == ""
+
+    assert inference_runner._advance_queue() is None
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+    assert execution_queue.resource_owner() == ""
+
+
 def test_inference_defers_without_pausing_if_director_runtime_is_busy(inference_root, monkeypatch):
     queued = inference_runner.enqueue_generate(
         {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}

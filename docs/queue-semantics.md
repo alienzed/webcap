@@ -471,6 +471,10 @@ Cancellation is **job-local**. Cancelling one queued LLM job removes only that j
 work remains queued and preserves its relative FIFO order. Cancellation does not cascade merely
 because another request was submitted afterward.
 
+Stopping the currently running LLM job is also job-local. Once that job reaches a terminal state,
+the LLM queue continues automatically with the next queued job in FIFO order. Stopping one job does
+not implicitly pause the whole LLM lane.
+
 LLM work is **server-session-bound**:
 
 - browser refresh, navigation, or returning to the feature does not end the server session; queued

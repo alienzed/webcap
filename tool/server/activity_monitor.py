@@ -6,7 +6,7 @@ from .inference_runner import snapshot as inference_snapshot
 from .llm_runner import snapshot as llm_snapshot
 from .storage_manager import scan_status as storage_scan_status
 from .training_history import recent_jobs as training_recent_jobs
-from .training_runner import status_response as training_status_response
+from .training_runner import passive_status_snapshot as training_status_snapshot
 
 
 _ACTIVE_STATUSES = {"starting", "running", "stopping"}
@@ -54,7 +54,7 @@ def _execution_item(lane, job):
 
 
 def _training_active_and_queue():
-    payload, status_code = training_status_response()
+    payload, status_code = training_status_snapshot()
     if status_code != 200 or not payload.get("ok"):
         return [], {
             "queued": 0,

@@ -70,10 +70,13 @@ def _local_llm_work_pending():
         return True
     if snapshot.get("paused"):
         return False
-    return any(
+    if any(
         str(job.get("status") or "") == "queued"
         for job in snapshot.get("jobs", [])
-    )
+    ):
+        return True
+    from .llm_runner import local_gpu_drain_pending
+    return local_gpu_drain_pending()
 
 
 def _set_backlog_wait_reason(reason):

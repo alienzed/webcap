@@ -1877,6 +1877,31 @@
                             <p class="app-settings-help">Local models come from <code>&lt;Models Root&gt;/text_encoders</code>; each enabled remote contributes models from its <code>/models</code> API. Director model selection is shared globally across Director-enabled workspaces.</p>
                             <p class="app-settings-help">Use <strong>Save + Reboot</strong> after changing Director runtime settings.</p>
                         </section>
+                        <details class="app-settings-advanced app-settings-section-disclosure" id="director-model-test-settings">
+                            <summary>Model Test</summary>
+                            <div class="app-settings-disclosure-body">
+                                <p class="app-settings-help">Run one fixed expansion protocol sequentially across selected Director models. Results are saved after every model; no quality score is inferred.</p>
+                                <div id="director-model-test-protocol" class="app-settings-help">Open to load the protocol and available models.</div>
+                                <div class="app-settings-actions app-settings-actions-inline">
+                                    <button id="director-model-test-refresh" type="button" class="review-captions-btn">Refresh Models</button>
+                                    <button id="director-model-test-select-all" type="button" class="review-captions-btn">All</button>
+                                    <button id="director-model-test-select-none" type="button" class="review-captions-btn">None</button>
+                                    <button id="director-model-test-run" type="button">Run Selected</button>
+                                    <button id="director-model-test-stop" type="button" class="hidden">Stop</button>
+                                    <button id="director-model-test-export" type="button" class="review-captions-btn" disabled>Export JSON</button>
+                                </div>
+                                <div id="director-model-test-status" class="app-settings-help">Ready.</div>
+                                <div id="director-model-test-models"></div>
+                                <details class="app-settings-advanced">
+                                    <summary>Results</summary>
+                                    <div id="director-model-test-results" class="app-settings-disclosure-body"><p class="app-settings-help">No results yet.</p></div>
+                                </details>
+                                <details class="app-settings-advanced">
+                                    <summary>Saved Sessions</summary>
+                                    <div id="director-model-test-sessions" class="app-settings-disclosure-body"><p class="app-settings-help">No saved model tests yet.</p></div>
+                                </details>
+                            </div>
+                        </details>
                     </div>
 
                     <div id="app-settings-panel-system" class="app-settings-panel hidden" data-app-settings-panel="system" role="tabpanel" aria-labelledby="app-settings-tab-system">
@@ -2113,6 +2138,7 @@
         <script src="/static/js/balance_distribution_wheel.js"></script>
         <script src="/static/js/h3_calibration_results.js"></script>
         <script src="/static/js/app_settings.js"></script>
+        <script src="/static/js/director_model_test.js"></script>
         <script src="/static/js/smart_set.js"></script>
         <script src="/static/js/media_context_actions.js"></script>
         <script src="/static/js/ui_event_wiring.js"></script>

@@ -423,15 +423,16 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, mode=None, 
         dest = folder / resolved["file"]
         if dest.exists() and not reset:
             existing = dest.read_text(encoding="utf-8")
-            tomllib.loads(existing)
+            parsed = tomllib.loads(existing)
             rendered = existing
-            if resolved["dataset"] in ("dataset.h3.toml", "dataset.wan21.toml"):
-                match = _DATASET_LINE_PATTERN.search(existing)
-                if match:
-                    quoted = re.search(r'["\\']([^"\\']+)["\\']', match.group(0))
-                    if quoted and Path(quoted.group(1)).name == "dataset.train.toml":
-                        dataset_value = str(Path(quoted.group(1)).with_name(resolved["dataset"])).replace("\\", "/")
-                        rendered = with_dataset_path(existing, dataset_value)
+            current_dataset = parsed.get("dataset")
+            if (
+                resolved["dataset"] in ("dataset.h3.toml", "dataset.wan21.toml")
+                and isinstance(current_dataset, str)
+                and Path(current_dataset).name == "dataset.train.toml"
+            ):
+                dataset_value = str(Path(current_dataset).with_name(resolved["dataset"])).replace("\\", "/")
+                rendered = with_dataset_path(existing, dataset_value)
             if rendered != existing:
                 _write_set_toml_atomic(dest, rendered)
                 written.append(dest)

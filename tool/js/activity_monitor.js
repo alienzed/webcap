@@ -552,6 +552,13 @@
     }, state.open ? 2500 : ((activeCount() || hasQueuedOrPausedWork()) ? 4000 : 30000));
   }
 
+  function wake() {
+    return refresh().then(function (payload) {
+      schedule();
+      return payload;
+    });
+  }
+
   function setOpen(open) {
     var wasOpen = state.open;
     state.open = !!open;
@@ -564,7 +571,7 @@
       state.openedAt = 0;
     }
     render();
-    refresh().then(schedule);
+    wake();
   }
 
   function bind() {
@@ -581,11 +588,11 @@
     window.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && state.open) setOpen(false);
     });
-    window.addEventListener('webcap:inference-queue-changed', refresh);
+    window.addEventListener('webcap:inference-queue-changed', wake);
   }
 
   window.setActivityDrawerOpen = setOpen;
-  window.refreshActivityMonitor = refresh;
+  window.refreshActivityMonitor = wake;
   bind();
-  refresh().then(schedule);
+  wake();
 })();

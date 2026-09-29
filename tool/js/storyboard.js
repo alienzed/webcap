@@ -1600,7 +1600,7 @@
       return;
     }
     if (target.kind === 'scenes') {
-      setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState);
+      setDirectorRegionProtected(el('storyboard-story-overview'), protectedState);
       setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState);
       return;
     }
@@ -1619,7 +1619,7 @@
       control.disabled = false;
       delete control.dataset.storyActionDisabled;
     });
-    setDirectorRegionProtected(el('storyboard-story-authoring'), false);
+    setDirectorRegionProtected(el('storyboard-story-overview'), false);
     setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), false);
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;
 

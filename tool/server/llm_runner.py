@@ -408,7 +408,11 @@ def _advance_queue():
     _ensure_execution_reconciled()
     with _dispatch_lock:
         snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-        if snapshot.get("paused") or snapshot.get("activeJobId"):
+        if snapshot.get("activeJobId"):
+            return None
+        if snapshot.get("paused"):
+            if execution_resource_owner() == GPU_RESERVATION_OWNER:
+                _release_gpu()
             return None
 
         queued = [job for job in snapshot.get("jobs", []) if job.get("status") == "queued"]

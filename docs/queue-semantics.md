@@ -504,7 +504,28 @@ North Star semantics:
 
 Training's special execution status must not leak into speculative queue-admission rules.
 
-## 13. Runtime and failure semantics
+## 13. Cross-lane ordering and resource arbitration
+
+WebCap does **not** promise one global FIFO order across Training, LLM, and Inference.
+
+Ordering is lane-local:
+
+- each queue preserves its own ordering semantics,
+- explicit user reordering changes order only within that queue,
+- Inference Queue remains Queue-before-Backlog,
+- running work is not preempted merely because another lane receives newer work.
+
+Cross-lane GPU contention should preserve the existing simple resource-ownership behavior rather than
+grow a fairness scheduler, timestamp arbitration layer, weighted priority system, or other global
+ordering mechanism.
+
+Training retains its deliberately special execution lifecycle. Existing LLM/Inference handoff
+behavior is status quo unless a concrete workflow problem justifies changing it.
+
+The North Star here is **KISS over theoretical fairness**: do not redesign cross-lane arbitration
+without an observed user-facing problem.
+
+## 14. Runtime and failure semantics
 
 A queue should preserve user intent even when execution dependencies are unavailable.
 
@@ -537,7 +558,7 @@ Examples:
 
 WebCap should prefer truthful execution failure over speculative pre-emptive refusal.
 
-## 14. Destructive ownership semantics
+## 15. Destructive ownership semantics
 
 Destructive deletion is different from ordinary queue admission.
 
@@ -558,7 +579,7 @@ wins over convenience here. Automatic cleanup is preferable only when it is simp
 If deletion is unavailable because owned work is still active, the UI should make the blocking work
 understandable enough that the user can resolve it without hunting for an unidentified job.
 
-## 15. Stale results
+## 16. Stale results
 
 Frozen queued work can become stale if its source state changes before its result is applied.
 
@@ -570,7 +591,7 @@ The correct protection is at the mutation boundary:
 
 Stale-result protection must not be generalized into "do not allow another job to exist."
 
-## 16. Implementation posture
+## 17. Implementation posture
 
 This document intentionally separates semantic truth from current implementation detail.
 
@@ -588,7 +609,7 @@ When implementing or repairing UI state:
 A correct conservative UI can be refined. A queue that refuses valid work based on guessed conflicts
 has violated the model.
 
-## 17. Review heuristic
+## 18. Review heuristic
 
 For any new queued action, answer these questions in order:
 
@@ -602,7 +623,7 @@ For any new queued action, answer these questions in order:
 
 If the answer to #6 is "queue admission" or #7 is "yes", the design should be reconsidered.
 
-## 18. Status of this document
+## 19. Status of this document
 
 This is a North Star contract.
 

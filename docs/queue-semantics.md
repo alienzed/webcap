@@ -439,6 +439,14 @@ valid request.
 ComfyUI/provider state may prevent execution or cause visible execution failure. It should not turn
 a previously valid feature action into a speculative admission refusal.
 
+Provider **unavailability before an execution attempt** is a wait state, not a failed job. The queued
+request remains intact and unclaimed until the provider is available. From the user's perspective,
+nothing has failed because nothing was attempted.
+
+If execution genuinely starts and then fails, preserving the frozen request and pausing further
+Inference is valid recovery behavior. The failed attempt is the signal; WebCap does not need a
+separate "Retry" semantic that rebuilds or duplicates the request.
+
 ## 10. LLM / Director Queue semantics
 
 The LLM queue serializes Director, Prompt Assistant, Test Director, and Chat work according to its
@@ -517,7 +525,10 @@ A queue should preserve user intent even when execution dependencies are unavail
 
 Examples:
 
-- ComfyUI unavailable: valid inference work may remain queued and later execute or fail visibly.
+- ComfyUI unavailable before claim/start: valid inference work remains queued unchanged and waits;
+  this is not a failure state.
+- an inference attempt starts and then errors: the frozen job may be returned to the queue and
+  Inference paused so the user can resolve the execution problem before resuming.
 - local GPU occupied: valid local work waits.
 - Director runtime busy: valid Director work waits.
 - Training owns GPU: other valid local-GPU work waits.

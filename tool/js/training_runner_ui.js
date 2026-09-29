@@ -498,6 +498,7 @@ function startManagedTraining() {
       renderTrainingRunnerPreflight(null);
       renderTrainingLaunchStatus();
       setStatus(payload.queued ? 'Training job queued.' : 'Managed training started.');
+      if (typeof window.refreshActivityMonitor === 'function') window.refreshActivityMonitor();
       refreshTrainingRunnerStatus();
     })
     .catch(function (err) {

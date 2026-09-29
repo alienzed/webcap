@@ -81,7 +81,7 @@ def test_review_update_limits_targets_and_reset_replaces_custom_dataset(tmp_path
             "runId": "train", "selected_media": names, "total_media_count": len(names), "plan": plan,
         })
 
-    dataset = folder / "dataset.train.toml"
+    dataset = folder / "dataset.h3.toml"
     dataset.write_text('[[directory]]\npath = "custom"\nnum_repeats = 1\ngroup = "images"\nsize_buckets = [[512, 512, 1]]\nextra = true\n', encoding="utf-8")
     custom = _review(folder, names)
     assert custom["customDataset"]
@@ -114,7 +114,7 @@ def test_off_ladder_image_bucket_stays_connected_to_review(tmp_path, monkeypatch
     _configure_root(monkeypatch, tmp_path)
     folder, names = _set(tmp_path)
     _review(folder, names)
-    (folder / "dataset.train.toml").write_text(
+    (folder / "dataset.h3.toml").write_text(
         'enable_ar_bucket = true\n\n[[directory]]\npath = "square"\nnum_repeats = 1\ngroup = "images"\nsize_buckets = [[510, 510, 1]]\n',
         encoding="utf-8",
     )
@@ -133,7 +133,7 @@ def test_off_ladder_video_bucket_becomes_raw_custom_toml(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder, names = _set(tmp_path)
     _review(folder, names)
-    (folder / "dataset.train.toml").write_text(
+    (folder / "dataset.h3.toml").write_text(
         'enable_ar_bucket = true\n\n[[directory]]\npath = "square"\nnum_repeats = 1\ngroup = "videos"\nsize_buckets = [[370, 370, 68]]\n',
         encoding="utf-8",
     )
@@ -142,7 +142,7 @@ def test_off_ladder_video_bucket_becomes_raw_custom_toml(tmp_path, monkeypatch):
 
     assert payload["customDataset"]
     assert "current managed bucket policy" in payload["customDataset"]["message"]
-    assert "370, 370, 68" in (folder / "dataset.train.toml").read_text(encoding="utf-8")
+    assert "370, 370, 68" in (folder / "dataset.h3.toml").read_text(encoding="utf-8")
 
 
 def test_calibration_change_moves_stale_managed_video_bucket_to_raw_without_rewrite(tmp_path, monkeypatch):
@@ -158,14 +158,14 @@ def test_calibration_change_moves_stale_managed_video_bucket_to_raw_without_rewr
         '# webcap_video_role = {"id":"temporal","enabled":true,"frames":68,"weight":0.5,"buckets":{"square":[[512,512]]}}\n'
         'enable_ar_bucket = true\n\n[[directory]]\npath = "square"\nnum_repeats = 1\ngroup = "videos"\nsize_buckets = [[512, 512, 68]]\n'
     )
-    (folder / "dataset.train.toml").write_text(stale, encoding="utf-8")
+    (folder / "dataset.h3.toml").write_text(stale, encoding="utf-8")
     assert _review(folder, names)["customDataset"] is False
 
     app_config.config["training"]["h3_calibration"]["safe_shapes"] = {"68": {"square": [448, 448]}}
     reopened = _review(folder, names)
 
     assert reopened["customDataset"]
-    assert (folder / "dataset.train.toml").read_text(encoding="utf-8") == stale
+    assert (folder / "dataset.h3.toml").read_text(encoding="utf-8") == stale
     reset = training_review.update_training_review(folder, MINIMAX_H3_PROFILE_ID, {
         "runId": "train", "selected_media": names, "total_media_count": len(names), "reset": "buckets",
     })
@@ -430,7 +430,7 @@ def test_review_route_returns_recomputed_payload_and_invalid_toml_is_loud(tmp_pa
     update = client.post("/fs/training_review/update", json=request)
     assert update.status_code == 200 and "distribution" in update.get_json()
 
-    (folder / "dataset.train.toml").write_text("not = [valid", encoding="utf-8")
+    (folder / "dataset.h3.toml").write_text("not = [valid", encoding="utf-8")
     invalid = client.post("/fs/training_review", json=request)
     assert invalid.status_code == 400
 

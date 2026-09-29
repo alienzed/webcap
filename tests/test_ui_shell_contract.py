@@ -666,6 +666,7 @@ def test_background_training_activity_is_discovered_on_app_startup():
     assert "if (observedId !== localId) refreshTrainingRunnerStatus();" in runner
     assert "window.reconcileTrainingRunnerActivity = reconcileTrainingRunnerActivity;" in runner
     assert "window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);" in activity
+    assert "if (typeof window.refreshActivityMonitor === 'function') window.refreshActivityMonitor();" in runner
 
 
 def test_activity_polling_backs_off_only_when_managed_work_is_idle():
@@ -677,6 +678,10 @@ def test_activity_polling_backs_off_only_when_managed_work_is_idle():
     assert "!!queue.paused" in activity
     assert "30000" in activity
     assert "(activeCount() || hasQueuedOrPausedWork()) ? 4000 : 30000" in activity
+    assert "function wake()" in activity
+    assert "refresh().then(function (payload)" in activity
+    assert "window.refreshActivityMonitor = wake;" in activity
+    assert "window.addEventListener('webcap:inference-queue-changed', wake);" in activity
 
 
 def test_retired_workflow_mode_does_not_survive_as_parallel_shell_state():

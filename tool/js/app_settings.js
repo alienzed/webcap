@@ -74,6 +74,19 @@ function normalizeAppConfigShape(cfg) {
   }
   if (out.storyboard.director.mode !== 'remote') out.storyboard.director.mode = 'local';
   if (typeof out.storyboard.director.endpoint !== 'string') out.storyboard.director.endpoint = '';
+  if (!Array.isArray(out.storyboard.director.remote_endpoints)) out.storyboard.director.remote_endpoints = [];
+  out.storyboard.director.remote_endpoints = out.storyboard.director.remote_endpoints.map(function (item, index) {
+    item = item && typeof item === 'object' ? item : {};
+    return {
+      id: String(item.id || ('remote-' + String(index + 1))).trim(),
+      name: String(item.name || ('Remote ' + String(index + 1))).trim(),
+      endpoint: String(item.endpoint || '').trim(),
+      enabled: item.enabled !== false
+    };
+  });
+  if (out.storyboard.director.endpoint && !out.storyboard.director.remote_endpoints.some(function (item) { return item.endpoint === out.storyboard.director.endpoint; })) {
+    out.storyboard.director.remote_endpoints.unshift({ id: 'remote', name: 'Remote', endpoint: out.storyboard.director.endpoint, enabled: true });
+  }
   if (typeof out.storyboard.director.llama_server !== 'string') out.storyboard.director.llama_server = '';
   if (!Number.isInteger(out.storyboard.director.port)) out.storyboard.director.port = 8189;
   if (out.storyboard.director.context_size !== null && !Number.isInteger(out.storyboard.director.context_size)) out.storyboard.director.context_size = null;
@@ -108,6 +121,70 @@ function renderAppSettingsJson(cfg) {
   ui.appSettingsJsonEl.value = JSON.stringify(cfg, null, 2);
 }
 
+function appSettingsEndpointId(value, index) {
+  var normalized = String(value || '').trim().replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!normalized || normalized === 'local') normalized = 'remote-' + String(index + 1);
+  return normalized;
+}
+
+function renderAppSettingsDirectorEndpoints(endpoints) {
+  if (!ui.appSettingsDirectorEndpointsEl) return;
+  endpoints = Array.isArray(endpoints) ? endpoints : [];
+  ui.appSettingsDirectorEndpointsEl.innerHTML = '';
+  endpoints.forEach(function (endpoint, index) {
+    var row = document.createElement('div');
+    row.className = 'app-settings-form-grid';
+    row.dataset.directorEndpointRow = String(index);
+    row.innerHTML =
+      '<label class="app-settings-field"><span class="app-settings-field-label">Name</span>' +
+      '<input type="text" data-director-endpoint-name value="' + escapeHtml(String(endpoint.name || '')) + '" placeholder="MacBook Pro"></label>' +
+      '<label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Endpoint</span>' +
+      '<input type="text" data-director-endpoint-url value="' + escapeHtml(String(endpoint.endpoint || '')) + '" placeholder="http://192.168.1.20:11434/v1"></label>' +
+      '<label class="app-settings-check-row"><input type="checkbox" data-director-endpoint-enabled' + (endpoint.enabled !== false ? ' checked' : '') + '><span>Enabled</span></label>' +
+      '<button type="button" class="review-captions-btn" data-director-endpoint-remove>Remove</button>';
+    row.dataset.endpointId = appSettingsEndpointId(endpoint.id, index);
+    ui.appSettingsDirectorEndpointsEl.appendChild(row);
+  });
+}
+
+function collectAppSettingsDirectorEndpoints() {
+  if (!ui.appSettingsDirectorEndpointsEl) return [];
+  return Array.prototype.map.call(
+    ui.appSettingsDirectorEndpointsEl.querySelectorAll('[data-director-endpoint-row]'),
+    function (row, index) {
+      var name = row.querySelector('[data-director-endpoint-name]');
+      var endpoint = row.querySelector('[data-director-endpoint-url]');
+      var enabled = row.querySelector('[data-director-endpoint-enabled]');
+      return {
+        id: appSettingsEndpointId(row.dataset.endpointId || (name && name.value), index),
+        name: String(name && name.value || '').trim() || ('Remote ' + String(index + 1)),
+        endpoint: String(endpoint && endpoint.value || '').trim(),
+        enabled: !!(enabled && enabled.checked)
+      };
+    }
+  ).filter(function (item) { return !!item.endpoint; });
+}
+
+function addAppSettingsDirectorEndpoint() {
+  var current = collectAppSettingsDirectorEndpoints();
+  var used = {};
+  current.forEach(function (item) { used[String(item.id || '')] = true; });
+  var number = current.length + 1;
+  while (used['remote-' + String(number)]) number += 1;
+  current.push({
+    id: 'remote-' + String(number),
+    name: 'Remote ' + String(number),
+    endpoint: '',
+    enabled: true
+  });
+  renderAppSettingsDirectorEndpoints(current);
+  syncAppSettingsJsonFromForm();
+  var rows = ui.appSettingsDirectorEndpointsEl.querySelectorAll('[data-director-endpoint-row]');
+  var last = rows.length ? rows[rows.length - 1] : null;
+  var input = last && last.querySelector('[data-director-endpoint-name]');
+  if (input) input.focus();
+}
+
 function fillAppSettingsForm(cfg) {
   var c = normalizeAppConfigShape(cfg);
   if (ui.appSettingsRootEl) ui.appSettingsRootEl.value = c.filesystem.root || '';
@@ -129,9 +206,7 @@ function fillAppSettingsForm(cfg) {
     var el = ui[profile.uiKey];
     if (el) el.checked = c.training.enabled_profiles.indexOf(profile.id) !== -1;
   });
-  if (ui.appSettingsStoryboardDirectorModeEl) ui.appSettingsStoryboardDirectorModeEl.value = c.storyboard.director.mode || 'local';
-  syncAppSettingsDirectorModeVisibility();
-  if (ui.appSettingsStoryboardEndpointEl) ui.appSettingsStoryboardEndpointEl.value = c.storyboard.director.endpoint || '';
+  renderAppSettingsDirectorEndpoints(c.storyboard.director.remote_endpoints || []);
   if (ui.appSettingsStoryboardLlamaServerEl) ui.appSettingsStoryboardLlamaServerEl.value = c.storyboard.director.llama_server || '';
   if (ui.appSettingsStoryboardPortEl) ui.appSettingsStoryboardPortEl.value = c.storyboard.director.port;
   if (ui.appSettingsStoryboardContextSizeEl) ui.appSettingsStoryboardContextSizeEl.value = c.storyboard.director.context_size == null ? '' : c.storyboard.director.context_size;
@@ -167,8 +242,9 @@ function collectAppSettingsFormConfig() {
     var el = ui[profile.uiKey];
     return !!(el && el.checked);
   }).map(function (profile) { return profile.id; });
-  base.storyboard.director.mode = ui.appSettingsStoryboardDirectorModeEl ? ui.appSettingsStoryboardDirectorModeEl.value : 'local';
-  base.storyboard.director.endpoint = ui.appSettingsStoryboardEndpointEl ? ui.appSettingsStoryboardEndpointEl.value : '';
+  base.storyboard.director.mode = 'local';
+  base.storyboard.director.endpoint = '';
+  base.storyboard.director.remote_endpoints = collectAppSettingsDirectorEndpoints();
   base.storyboard.director.llama_server = ui.appSettingsStoryboardLlamaServerEl ? ui.appSettingsStoryboardLlamaServerEl.value : '';
   base.storyboard.director.port = Number(ui.appSettingsStoryboardPortEl ? ui.appSettingsStoryboardPortEl.value : 8189);
   var contextSizeValue = ui.appSettingsStoryboardContextSizeEl ? ui.appSettingsStoryboardContextSizeEl.value.trim() : '';
@@ -594,14 +670,6 @@ function openHelpReadmeInPreview() {
   });
 }
 
-function syncAppSettingsDirectorModeVisibility() {
-  var mode = ui.appSettingsStoryboardDirectorModeEl ? String(ui.appSettingsStoryboardDirectorModeEl.value || 'local') : 'local';
-  var local = document.getElementById('app-settings-director-local');
-  var remote = document.getElementById('app-settings-director-remote');
-  if (local) local.classList.toggle('hidden', mode === 'remote');
-  if (remote) remote.classList.toggle('hidden', mode !== 'remote');
-}
-
 function wireAppSettingsUi() {
   if (ui.shellSettingsBtn) ui.shellSettingsBtn.onclick = openAppSettingsModal;
   if (ui.shellHelpBtn) ui.shellHelpBtn.onclick = openHelpReadmeInPreview;
@@ -635,9 +703,16 @@ function wireAppSettingsUi() {
   if (h3Reset) h3Reset.onclick = resetH3CalibrationSettings;
   if (h3Console) h3Console.onclick = showConsolePanel;
   if (ui.appSettingsEnvironmentRunBtnEl) ui.appSettingsEnvironmentRunBtnEl.onclick = runEnvironmentCheck;
-  if (ui.appSettingsStoryboardDirectorModeEl) {
-    ui.appSettingsStoryboardDirectorModeEl.addEventListener('change', syncAppSettingsDirectorModeVisibility);
-    syncAppSettingsDirectorModeVisibility();
+  if (ui.appSettingsDirectorEndpointAddBtnEl) ui.appSettingsDirectorEndpointAddBtnEl.onclick = addAppSettingsDirectorEndpoint;
+  if (ui.appSettingsDirectorEndpointsEl) {
+    ui.appSettingsDirectorEndpointsEl.addEventListener('click', function (event) {
+      var remove = event.target.closest('[data-director-endpoint-remove]');
+      if (!remove) return;
+      remove.closest('[data-director-endpoint-row]').remove();
+      syncAppSettingsJsonFromForm();
+    });
+    ui.appSettingsDirectorEndpointsEl.addEventListener('input', syncAppSettingsJsonFromForm);
+    ui.appSettingsDirectorEndpointsEl.addEventListener('change', syncAppSettingsJsonFromForm);
   }
   if (ui.appSettingsEnvironmentInstallBtnEl) ui.appSettingsEnvironmentInstallBtnEl.onclick = installPythonRequirements;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
@@ -691,8 +766,6 @@ function wireAppSettingsUi() {
     ui.appSettingsTrainingProfileKrea2El,
     ui.appSettingsTrainingProfileWan21El,
     ui.appSettingsTrainingProfileH3El,
-    ui.appSettingsStoryboardDirectorModeEl,
-    ui.appSettingsStoryboardEndpointEl,
     ui.appSettingsStoryboardLlamaServerEl,
     ui.appSettingsStoryboardPortEl,
     ui.appSettingsStoryboardContextSizeEl,

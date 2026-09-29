@@ -476,6 +476,12 @@ Inference scheduling continues with the next queued job unless the Inference lan
 Cancelling pending Inference work is also job-local. Cancelling one queued or backlogged job removes
 only that job; remaining work keeps its relative order and no implicit queue pause occurs.
 
+Queued Inference work is not automatically demoted to Backlog merely because execution is waiting.
+Training ownership, local LLM priority, provider unavailability, or other temporary execution blockers
+leave the job in Queue with a visible wait reason. Automatic shelving to Backlog is reserved for
+explicit lifecycle transitions such as server-restart recovery, or an intentional user action such
+as Move all to Backlog.
+
 ## 10. LLM / Director Queue semantics
 
 The LLM queue serializes Director, Prompt Assistant, Test Director, and Chat work according to its

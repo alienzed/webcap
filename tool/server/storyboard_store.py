@@ -293,12 +293,14 @@ def _normalize_story_lora_overrides(value):
 
 
 def _normalize_target_scene_count(value):
+    if value is None:
+        return None
     if isinstance(value, bool):
-        raise ValueError("Story target Scene count must be an integer.")
+        raise ValueError("Story target Scene count must be an integer or Auto.")
     try:
         count = int(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError("Story target Scene count must be an integer.") from exc
+        raise ValueError("Story target Scene count must be an integer or Auto.") from exc
     if count < 2 or count > 50:
         raise ValueError("Story target Scene count must be between 2 and 50.")
     return count

@@ -1451,6 +1451,7 @@ def test_model_discovery_skips_failed_remote_and_keeps_healthy_models(monkeypatc
     assert storyboard_llm_runtime.list_models.last_warnings == [{
         "runtimeId": "offline",
         "runtimeName": "Offline PC",
+        "endpoint": "http://offline:11434/v1",
         "error": "offline",
     }]
 

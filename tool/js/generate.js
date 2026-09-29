@@ -1497,12 +1497,7 @@
       return;
     }
 
-    select.innerHTML = generateState.director.models.map(function (model) {
-      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(formatDirectorModelLabel(model)) + '</option>';
-    }).join('');
-    var chosen = generateState.director.models.some(function (model) { return model.id === generateState.director.modelId; })
-      ? generateState.director.modelId
-      : String((generateState.director.models[0] || {}).id || '');
+    var chosen = renderDirectorModelOptions(select, generateState.director.models, generateState.director.modelId);
     generateState.director.modelId = chosen;
     if (chosen) setDirectorModelPreference('webcap.generate.directorModel', chosen);
     select.value = chosen;
@@ -1741,6 +1736,13 @@
       setDirectorStatus('');
       setDirectorModelPreference('webcap.generate.directorModel', this.value);
       renderDirector();
+    });
+    window.addEventListener('webcap:director-model-changed', function (event) {
+      var selected = String(event && event.detail && event.detail.modelId || '');
+      if (!selected || selected === generateState.director.modelId) return;
+      generateState.director.modelId = selected;
+      var modelSelect = el('generate-director-model');
+      if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) modelSelect.value = selected;
     });
     el('generate-lora-list').addEventListener('input', function (event) {
       var input = event.target.closest('[data-generate-lora-strength]');

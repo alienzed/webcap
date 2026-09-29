@@ -478,7 +478,7 @@
         renderStoryReadiness();
         syncRepairRestore();
         syncRepairState();
-        setRepairStatus('Check & Repair completed.');
+        setRepairStatus('Revise Scenes completed.');
       } else if (operation === 'develop_story') {
         storyState.story.sceneOrder = canonical.sceneOrder || [];
         storyState.story.scenes = canonical.scenes || {};
@@ -1543,7 +1543,7 @@
     if (!mode || !button || !instruction) return;
     mode.value = storyState.directorPassMode;
     var refine = storyState.directorPassMode === 'continuity';
-    button.textContent = refine ? 'Refine All Scenes' : 'Check & Repair Scenes';
+    button.textContent = refine ? 'Refine All Scenes' : 'Revise Scenes';
     button.title = refine
       ? 'Review every Scene in sequence for continuity and prompt completeness.'
       : 'Apply this instruction Scene by Scene across the current plan.';
@@ -1859,45 +1859,43 @@
     });
   }
 
-  function repairScenes() {
-    if (!storyState.story) return;
+  function reviseScenes(instruction, modelId) {
+    if (!storyState.story) return Promise.reject(new Error('Choose a Story first.'));
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'repair', storyId: storyId };
     if (directorTargetBlocked(directorTarget)) {
-      reportError(new Error('This Story already has Director work that conflicts with Check & Repair.'));
-      return;
+      return Promise.reject(new Error('This Story already has Director work that conflicts with Revise Scenes.'));
     }
-    if (!storyState.director.modelId) {
-      reportError(new Error('Choose a Storyboard Director model first.'));
-      return;
-    }
+    modelId = String(modelId || storyState.director.modelId || '');
+    if (!modelId) return Promise.reject(new Error('Choose a Director model first.'));
+
     var sceneIds = Array.isArray(storyState.story.sceneOrder)
       ? storyState.story.sceneOrder.slice()
       : [];
-    if (!sceneIds.length) {
-      setRepairStatus('Develop Scenes first.');
-      return;
-    }
-    var instruction = el('storyboard-repair-instruction').value.trim();
-    if (!instruction) {
-      setRepairStatus('Enter what the Director should check and repair.');
-      return;
-    }
+    if (!sceneIds.length) return Promise.reject(new Error('Develop Scenes first.'));
+
+    instruction = String(instruction || '').trim();
+    if (!instruction) return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
+
+    var instructionField = el('storyboard-repair-instruction');
+    if (instructionField) instructionField.value = instruction;
+    storyState.story.repairInstruction = instruction;
+    storyState.story.repairComplete = false;
 
     setDirectorPending(directorTarget, true);
     startDirectorActivity();
-    flushPendingSaves().then(function () {
+    return flushPendingSaves().then(function () {
       return runSceneDirectorPass(
         storyId,
         sceneIds,
         instruction,
-        storyState.director.modelId,
+        modelId,
         function (sceneId, index) {
           var scene = storyState.story && storyState.story.scenes
             ? storyState.story.scenes[sceneId]
             : null;
           setRepairStatus(
-            'Checking Scene ' + String(index + 1) + ' / ' + String(sceneIds.length)
+            'Revising Scene ' + String(index + 1) + ' / ' + String(sceneIds.length)
             + (scene && scene.title ? ' · ' + scene.title : '')
           );
         }
@@ -1907,21 +1905,22 @@
         storyState.story.repairComplete = true;
         scheduleStorySave();
       }
-      setRepairStatus(
-        storyState.directorPassMode === 'continuity'
-          ? ('Refined ' + String(sceneIds.length) + ' Scenes.')
-          : ('Checked & repaired ' + String(sceneIds.length) + ' Scenes.')
-      );
+      setRepairStatus('Revised ' + String(sceneIds.length) + ' Scenes.');
+      return { text: 'Revised ' + String(sceneIds.length) + ' Scenes.' };
     }).catch(function (err) {
-      if (directorWasStopped(err)) setRepairStatus('Check & Repair stopped.');
-      else {
-        setRepairStatus('Check & Repair failed.');
-        reportError(err);
-      }
+      if (directorWasStopped(err)) setRepairStatus('Revise Scenes stopped.');
+      else setRepairStatus('Revise Scenes failed.');
+      throw err;
     }).finally(function () {
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
+      if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();
     });
+  }
+
+  function repairScenes() {
+    var instruction = el('storyboard-repair-instruction').value.trim();
+    return reviseScenes(instruction, storyState.director.modelId).catch(reportError);
   }
 
   function restoreLastRepair() {
@@ -3946,6 +3945,7 @@
     }).then(function () {
       if (requestId !== storyState.openStoryRequestId) return null;
       renderStory();
+      if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();
       setSaveState('Saved');
       return refreshSequenceExport(storyId);
     }).catch(function (err) {
@@ -5150,6 +5150,7 @@
     if (frame) frame.classList.remove('workspace-storyboard-open');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+    if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();
   }
 
   function openStoryboardActivity(target) {
@@ -5164,6 +5165,7 @@
     storyState.director.modelId = getDirectorModelPreference('webcap.storyboard.directorModel');
     frame.classList.add('workspace-storyboard-open');
     workspace.classList.remove('hidden');
+    if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     refreshDirector();
@@ -5207,6 +5209,12 @@
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
+    el('storyboard-assistant-btn').onclick = function () {
+      var hasScenes = !!(storyState.story && Array.isArray(storyState.story.sceneOrder) && storyState.story.sceneOrder.length);
+      if (typeof window.openAssistant === 'function') {
+        window.openAssistant({ mode: hasScenes ? 'revise-scenes' : 'chat' });
+      }
+    };
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
@@ -5653,5 +5661,32 @@
 
   window.openStoryboardActivity = openStoryboardActivity;
   window.closeStoryboardActivity = closeStoryboardActivity;
+
+  if (typeof window.registerAssistantMode === 'function') {
+    window.registerAssistantMode({
+      id: 'revise-scenes',
+      label: 'Revise Scenes',
+      description: 'Apply a targeted revision across the current Story\'s Scene plan.',
+      placeholder: 'What should be revised across these Scenes?',
+      successMessage: 'Scene revisions completed.',
+      available: function () {
+        var workspace = el('storyboard-workspace');
+        return !!(
+          workspace &&
+          !workspace.classList.contains('hidden') &&
+          storyState.story &&
+          Array.isArray(storyState.story.sceneOrder) &&
+          storyState.story.sceneOrder.length > 0
+        );
+      },
+      execute: function (request) {
+        return reviseScenes(request && request.instruction, request && request.modelId);
+      },
+      cancel: function () {
+        stopDirectorJob();
+      }
+    });
+  }
+
   bindUi();
 })();

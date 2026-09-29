@@ -1999,6 +1999,48 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   outline: none;
 }
 
+.director-chat-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  background: color-mix(in srgb, var(--panel-soft) 78%, transparent);
+}
+
+.director-chat-mode-row.hidden {
+  display: none;
+}
+
+.director-chat-mode-row > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.director-chat-mode-switch {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.director-chat-mode-switch .review-captions-btn {
+  width: auto;
+  min-height: 30px;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.director-chat-mode-switch .review-captions-btn.active {
+  border-color: color-mix(in srgb, var(--accent) 68%, var(--border));
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel-soft));
+  color: var(--text);
+}
+
 .director-chat-model-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

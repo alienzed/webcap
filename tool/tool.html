@@ -106,8 +106,8 @@
                     id="director-chat-rail-btn"
                     type="button"
                     class="activity-rail-btn"
-                    title="Director Chat"
-                    aria-label="Director Chat"
+                    title="Assistant"
+                    aria-label="Assistant"
                     aria-expanded="false"
                     aria-controls="director-chat-drawer"
                 >
@@ -1425,7 +1425,7 @@
                                                 <textarea id="storyboard-repair-instruction" rows="3" placeholder="Tell the Director what tendency or problem to check across the current Scene plan…"></textarea>
                                             </label>
                                             <div class="storyboard-director-repair-actions">
-                                                <button id="storyboard-repair-scenes-btn" type="button" class="review-captions-btn storyboard-director-action">Check &amp; Repair Scenes</button>
+                                                <button id="storyboard-repair-scenes-btn" type="button" class="review-captions-btn storyboard-director-action">Revise Scenes</button>
                                                 <button id="storyboard-restore-repair-btn" type="button" class="review-captions-btn hidden">Restore Last Repair</button>
                                                 <span id="storyboard-repair-status" class="storyboard-save-state" aria-live="polite"></span>
                                             </div>
@@ -1472,6 +1472,7 @@
                                         <div class="storyboard-scenes-title-row">
                                             <strong id="storyboard-workspace-mode-title">Scenes</strong>
                                             <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn" title="Queue one new Take for every Scene in this Story.">Generate</button>
+                                            <button id="storyboard-assistant-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Assistant">Assistant</button>
                                         </div>
                                         <span id="storyboard-progress-summary" class="storyboard-progress-summary"></span>
                                     </div>
@@ -1498,20 +1499,24 @@
                     </div>
                 </section>
             </section>
-            <aside id="director-chat-drawer" class="director-chat-drawer hidden" aria-label="Director Chat" aria-hidden="true">
+            <aside id="director-chat-drawer" class="director-chat-drawer hidden" aria-label="Assistant" aria-hidden="true">
                 <header class="director-chat-drawer-header">
                     <div class="director-chat-header-copy">
-                        <strong>Director Chat</strong>
-                        <span>Session-only freeform model conversation</span>
+                        <strong>Assistant</strong>
+                        <span id="director-chat-mode-description">Session-only freeform model conversation</span>
                     </div>
                     <div class="director-chat-header-actions">
                         <button id="director-chat-clear" type="button" class="review-captions-btn">New chat</button>
-                        <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Director Chat">×</button>
+                        <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Assistant">×</button>
                     </div>
                 </header>
+                <div id="director-chat-mode-row" class="director-chat-mode-row hidden" aria-label="Assistant mode">
+                    <span>Mode</span>
+                    <div id="director-chat-mode-switch" class="director-chat-mode-switch" role="group" aria-label="Assistant mode"></div>
+                </div>
                 <div class="director-chat-model-row">
                     <label for="director-chat-model">Model</label>
-                    <select id="director-chat-model" aria-label="Director Chat model">
+                    <select id="director-chat-model" aria-label="Assistant model">
                         <option value="">Loading models...</option>
                     </select>
                     <button id="director-chat-model-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
@@ -1526,7 +1531,7 @@
                 </div>
                 <div id="director-chat-messages" class="director-chat-messages" aria-live="polite"></div>
                 <div id="director-chat-empty" class="director-chat-empty">
-                    Start a freeform conversation with the selected model. Nothing here is shared with Storyboard or saved.
+                    Start a freeform conversation with the selected model.
                 </div>
                 <div class="director-chat-composer">
                     <textarea id="director-chat-input" rows="4" placeholder="Ask the model anything…"></textarea>

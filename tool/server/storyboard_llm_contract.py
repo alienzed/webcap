@@ -377,10 +377,10 @@ def build_request(story, scene_id, operation, instruction=""):
     if operation == "repair_scenes":
         correction = _clean(instruction)
         if not correction:
-            raise ValueError("A Check & Repair instruction is required.")
+            raise ValueError("A Revise Scenes instruction is required.")
         scene_plan = _repair_scene_plan(story)
         if not scene_plan:
-            raise ValueError("Story must have Scenes before Check & Repair can run.")
+            raise ValueError("Story must have Scenes before Revise Scenes can run.")
 
         blocks = ["[DIRECTOR CONTEXT]\n" + director_context]
         title = _clean(story.get("title"))

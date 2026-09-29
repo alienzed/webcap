@@ -204,7 +204,7 @@ function renderTrainingRunParameters(payload) {
     trainingWorkspaceState.runConfigStage = stage;
     trainingWorkspaceState.runConfigTemplateSignature = signature;
     trainingWorkspaceState.runConfigDirty = false;
-    presetSelect.value = 'default';
+    presetSelect.value = 'custom';
   }
 
   var draft = trainingWorkspaceState.runConfigDraft;
@@ -217,6 +217,7 @@ function renderTrainingRunParameters(payload) {
     input.oninput = function () {
       trainingWorkspaceState.runConfigDraft[key] = input.value;
       trainingWorkspaceState.runConfigDirty = true;
+      presetSelect.value = 'custom';
       updateTrainingRunParameterState();
     };
     input.onchange = input.oninput;
@@ -227,6 +228,10 @@ function renderTrainingRunParameters(payload) {
   bindDraft(dropoutInput, 'adapterDropout');
 
   presetSelect.onchange = function () {
+    if (presetSelect.value === 'custom') {
+      updateTrainingRunParameterState();
+      return;
+    }
     if (presetSelect.value === 'character') {
       trainingWorkspaceState.runConfigDraft = {
         optimizerLr: '1e-4',
@@ -234,11 +239,17 @@ function renderTrainingRunParameters(payload) {
         epochs: '80',
         adapterDropout: '0'
       };
-      trainingWorkspaceState.runConfigDirty = true;
+    } else if (presetSelect.value === 'clothing') {
+      trainingWorkspaceState.runConfigDraft = {
+        optimizerLr: '8e-5',
+        adapterRank: '32',
+        epochs: '90',
+        adapterDropout: '0.05'
+      };
     } else {
-      trainingWorkspaceState.runConfigDraft = Object.assign({}, defaults);
-      trainingWorkspaceState.runConfigDirty = false;
+      throw new Error('Unknown training run setup mode: ' + presetSelect.value);
     }
+    trainingWorkspaceState.runConfigDirty = true;
     trainingWorkspaceState.runConfigStage = stage;
     trainingWorkspaceState.runConfigTemplateSignature = signature;
     renderTrainingRunParameters(payload);

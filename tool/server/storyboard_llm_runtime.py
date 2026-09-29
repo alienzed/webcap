@@ -983,7 +983,7 @@ def _model_record(model_ref):
 def _wait_for_model(model_id, wanted, timeout=180):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        for model in list_models(reload=False):
+        for model in _list_models_for_current_runtime(reload=False):
             if model["id"] != model_id:
                 continue
             if model["status"] == wanted:
@@ -1082,14 +1082,14 @@ def _free_comfy_models():
 
 
 def _model_status(model_id):
-    for model in list_models(reload=False):
+    for model in _list_models_for_current_runtime(reload=False):
         if model["id"] == model_id:
             return model["status"]
     return ""
 
 
 def _ensure_local_model_loaded(model_id):
-    models = list_models(reload=False)
+    models = _list_models_for_current_runtime(reload=False)
     selected = next((model for model in models if model["id"] == model_id), None)
     if selected is None:
         raise FileNotFoundError("Director model is not available from the active runtime: " + model_id)
@@ -1250,13 +1250,14 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
     )
 
 
-def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None):
+def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director messages are required.")
 
-    with _request_lock:
+    runtime_id, model_id = _split_model_ref(model_ref)
+    with _request_lock, _use_runtime(runtime_id):
         _ensure_server()
-        _model_record(model_id)
+        _model_record(model_ref)
         settings = _director_config()
         sampling = dict(sampling or _sampling_profile(""))
         payload = {
@@ -1290,12 +1291,12 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                 },
             }
 
-        _debug_llm_request(settings, model_id, messages, payload, response_schema)
+        _debug_llm_request(settings, model_ref, messages, payload, response_schema)
 
         if settings.get("mode", "local") == "remote":
             if _stop_requested.is_set():
                 raise RuntimeError("LLM request stopped.")
-            _set_activity("generating", model_id=model_id)
+            _set_activity("generating", model_id=model_ref)
             request_json = _remote_http_json_cancellable if _remote_is_ollama() else _http_json
             request_started = time.perf_counter()
             try:
@@ -1306,21 +1307,21 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                     timeout=10 * 60,
                 )
             except Exception as exc:
-                _debug_llm_failure(model_id, time.perf_counter() - request_started, exc)
+                _debug_llm_failure(model_ref, time.perf_counter() - request_started, exc)
                 raise
-            _debug_llm_response(response, model_id, time.perf_counter() - request_started)
-            return _completion_result(response, model_id)
+            _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
+            return _completion_result(response, model_ref)
 
         if not gpu_reserved:
             _reserve_gpu()
         completed = False
         cleanup_safe = True
         try:
-            _set_activity("freeing_comfy", model_id=model_id)
+            _set_activity("freeing_comfy", model_id=model_ref)
             _free_comfy_models()
             _ensure_local_model_loaded(model_id)
             _relay_log_updates()
-            _set_activity("generating", model_id=model_id)
+            _set_activity("generating", model_id=model_ref)
             request_started = time.perf_counter()
             try:
                 response = _http_json(
@@ -1330,7 +1331,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                     timeout=10 * 60,
                 )
             except Exception as exc:
-                _debug_llm_failure(model_id, time.perf_counter() - request_started, exc)
+                _debug_llm_failure(model_ref, time.perf_counter() - request_started, exc)
                 tail = _log_tail()
                 if tail:
                     _logger.error(
@@ -1338,9 +1339,9 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                         tail,
                     )
                 raise
-            _debug_llm_response(response, model_id, time.perf_counter() - request_started)
+            _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
             _relay_log_updates()
-            result = _completion_result(response, model_id)
+            result = _completion_result(response, model_ref)
             completed = True
             return result
         finally:

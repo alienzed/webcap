@@ -762,10 +762,9 @@ def _ensure_server():
     with _process_lock:
         settings = _director_config()
         if settings.get("mode", "local") == "remote":
-            try:
-                _normalize_models(_http_json("/models", timeout=10))
-            except Exception as exc:
-                raise ConnectionError("Could not connect to the configured remote Director endpoint.") from exc
+            # Remote discovery is performed by the caller. Do not double-probe
+            # here; a dead endpoint should be skipped quickly rather than
+            # serially consuming two network timeouts.
             return
 
         desired_signature = _server_signature(settings)
@@ -901,7 +900,8 @@ def _list_models_for_current_runtime(reload=False):
     _ensure_server()
     settings = _director_config()
     suffix = "?reload=1" if reload and settings.get("mode", "local") == "local" else ""
-    models = _normalize_models(_http_json("/models" + suffix, timeout=10))
+    discovery_timeout = 10 if settings.get("mode", "local") == "local" else 3
+    models = _normalize_models(_http_json("/models" + suffix, timeout=discovery_timeout))
     if settings.get("mode", "local") == "local":
         for model in models:
             model["sizeBytes"] = _model_file_size(model)
@@ -1456,7 +1456,9 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
                 + " timings=" + json.dumps(result.get("timings") or {}, ensure_ascii=False),
                 flush=True,
             )
-            _relay_log_updates()
+            if settings.get("mode", "local") == "local":
+                if settings.get("mode", "local") == "local":
+                _relay_log_updates()
             return result
         except Exception as exc:
             if _stop_requested.is_set():

@@ -2829,24 +2829,32 @@
   grid-row: 2;
   margin: 0 22px 14px;
   overflow: visible;
-  background: color-mix(in srgb, var(--panel) 96%, var(--bg));
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
+  border-radius: 0;
+  background: transparent;
 }
 
 .storyboard-scene-defaults-drawer > summary {
-  min-height: 46px;
-  padding: 8px 11px;
+  min-height: 44px;
+  padding: 9px 0;
+}
+
+.storyboard-scene-defaults-drawer .storyboard-story-section-summary-copy {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .storyboard-scene-defaults-drawer[open] > summary {
-  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   border-bottom: 0;
 }
 
 .storyboard-scene-defaults-drawer > .storyboard-scene-defaults-body {
   position: absolute;
   z-index: 26;
-  left: -1px;
-  right: -1px;
+  left: 0;
+  right: 0;
   bottom: 100%;
   max-height: min(62vh, 620px);
   overflow-y: auto;
@@ -2867,17 +2875,22 @@
 
 .storyboard-scene-defaults-drawer .storyboard-story-defaults {
   width: min(100%, 430px);
-  padding: 10px 12px;
+  padding: 0;
 }
 
 .storyboard-scene-defaults-drawer .storyboard-story-defaults-grid {
   grid-template-columns: minmax(220px, 1fr) 120px;
-  gap: 10px;
+  gap: 8px;
 }
 
 .storyboard-scene-defaults-drawer .storyboard-story-loras {
   width: 100%;
   grid-column: 1 / -1;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
+  border-radius: 0;
+  background: transparent;
 }
 
 .storyboard-scene-defaults-body {
@@ -2888,7 +2901,7 @@
 .storyboard-story-lora-section-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .storyboard-scene-defaults .storyboard-story-loras {
@@ -2900,15 +2913,11 @@
   border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
-.storyboard-scene-defaults-drawer .storyboard-story-loras {
-  padding: 13px 0 0;
-}
-
 .storyboard-scene-defaults-subheading {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 8px;
 }
 
 .storyboard-scene-defaults-subheading > strong {
@@ -2918,7 +2927,13 @@
 .storyboard-scene-defaults-subheading > span {
   color: var(--muted);
   font-size: 11px;
-  text-align: right;
+  text-align: left;
+}
+
+.storyboard-scene-defaults-drawer #storyboard-story-lora-status {
+  align-self: flex-start;
+  font-size: 11px;
+  opacity: .72;
 }
 
 .storyboard-concept-field,

@@ -45,30 +45,35 @@ try {
 
 window.setRuntimeAppConfig = setRuntimeAppConfig;
 
-var LEGACY_DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model';
+var DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model';
 
-function getDirectorModelPreference(storageKey) {
-  var key = String(storageKey || '').trim();
-  if (!key) throw new Error('Director model preference key is required.');
+function getDirectorModelPreference(_storageKey) {
   var selected = '';
   try {
-    selected = String(window.localStorage.getItem(key) || '').trim();
+    selected = String(window.localStorage.getItem(DIRECTOR_MODEL_STORAGE_KEY) || '').trim();
     if (!selected) {
-      selected = String(window.localStorage.getItem(LEGACY_DIRECTOR_MODEL_STORAGE_KEY) || '').trim();
-      if (selected) window.localStorage.setItem(key, selected);
+      var legacyKeys = [
+        'webcap.storyboard.directorModel',
+        'webcap.generate.directorModel',
+        'webcap.testGenerations.directorModel',
+        'webcap.directorChat.model'
+      ];
+      for (var i = 0; i < legacyKeys.length && !selected; i += 1) {
+        selected = String(window.localStorage.getItem(legacyKeys[i]) || '').trim();
+      }
+      if (selected) window.localStorage.setItem(DIRECTOR_MODEL_STORAGE_KEY, selected);
     }
   } catch (_err) {}
   return selected;
 }
 
-function setDirectorModelPreference(storageKey, modelId) {
-  var key = String(storageKey || '').trim();
-  if (!key) throw new Error('Director model preference key is required.');
+function setDirectorModelPreference(_storageKey, modelId) {
   var selected = String(modelId || '').trim();
   try {
-    if (selected) window.localStorage.setItem(key, selected);
-    else window.localStorage.removeItem(key);
+    if (selected) window.localStorage.setItem(DIRECTOR_MODEL_STORAGE_KEY, selected);
+    else window.localStorage.removeItem(DIRECTOR_MODEL_STORAGE_KEY);
   } catch (_err) {}
+  window.dispatchEvent(new CustomEvent('webcap:director-model-changed', { detail: { modelId: selected } }));
   return selected;
 }
 
@@ -77,13 +82,46 @@ window.setDirectorModelPreference = setDirectorModelPreference;
 
 function formatDirectorModelLabel(model) {
   model = model && typeof model === 'object' ? model : {};
-  var label = String(model.label || model.id || '').trim();
+  var label = String(model.label || model.modelId || model.id || '').trim();
   var sizeBytes = Number(model.sizeBytes);
   if (!isFinite(sizeBytes) || sizeBytes <= 0) return label;
   return label + ' · ' + (sizeBytes / (1024 * 1024 * 1024)).toFixed(1) + ' GiB';
 }
 
+function renderDirectorModelOptions(select, models, selectedId) {
+  if (!select) throw new Error('Director model select is required.');
+  models = Array.isArray(models) ? models : [];
+  select.innerHTML = '';
+  var groups = [];
+  models.forEach(function (model) {
+    var runtimeId = String(model.runtimeId || 'local');
+    var runtimeName = String(model.runtimeName || (runtimeId === 'local' ? 'Local' : runtimeId));
+    var group = groups.find(function (item) { return item.id === runtimeId; });
+    if (!group) {
+      group = { id: runtimeId, name: runtimeName, models: [] };
+      groups.push(group);
+    }
+    group.models.push(model);
+  });
+  groups.forEach(function (group) {
+    var host = document.createElement('optgroup');
+    host.label = group.name;
+    group.models.forEach(function (model) {
+      var option = document.createElement('option');
+      option.value = String(model.id || '');
+      option.textContent = formatDirectorModelLabel(model);
+      host.appendChild(option);
+    });
+    select.appendChild(host);
+  });
+  var wanted = String(selectedId || '');
+  var available = models.some(function (model) { return String(model.id || '') === wanted; });
+  select.value = available ? wanted : String((models[0] || {}).id || '');
+  return select.value;
+}
+
 window.formatDirectorModelLabel = formatDirectorModelLabel;
+window.renderDirectorModelOptions = renderDirectorModelOptions;
 
 function formatInferenceElapsedMs(milliseconds) {
   var ms = Number(milliseconds);

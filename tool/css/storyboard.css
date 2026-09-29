@@ -3462,3 +3462,159 @@
     padding-left: 16px;
   }
 }
+
+
+/* Storyboard IA experiment: Plex-style Stories navigator. */
+@media (min-width: 1181px) {
+  .app-frame.workspace-storyboard-open > .storyboard-workspace {
+    grid-template-columns: 62px minmax(0, 1fr);
+  }
+
+  .app-frame.workspace-storyboard-open > .storyboard-workspace.story-library-pinned {
+    grid-template-columns: 255px minmax(0, 1fr);
+  }
+
+  .storyboard-library {
+    position: relative;
+    z-index: 30;
+    width: 62px;
+    overflow: visible;
+    transition: width .16s ease;
+  }
+
+  .storyboard-workspace.story-library-pinned > .storyboard-library,
+  .storyboard-library:hover,
+  .storyboard-library:focus-within {
+    width: 255px;
+    box-shadow: 10px 0 28px rgba(0, 0, 0, .28);
+  }
+
+  .storyboard-workspace.story-library-pinned > .storyboard-library {
+    box-shadow: none;
+  }
+
+  .storyboard-library-header,
+  .storyboard-library-list {
+    width: 255px;
+  }
+
+  .storyboard-library-header {
+    min-height: 54px;
+    padding: 9px 8px;
+  }
+
+  .storyboard-library-heading {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .storyboard-library-pin {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .storyboard-library-pin:hover,
+  .storyboard-library-pin:focus-visible,
+  .storyboard-library-pin[aria-pressed="true"] {
+    border-color: var(--border);
+    background: var(--panel-soft);
+    color: var(--text);
+    outline: none;
+  }
+
+  .storyboard-story-open {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: center;
+    gap: 7px;
+    padding: 7px 7px;
+  }
+
+  .storyboard-story-rail-glyph {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent) 18%);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--panel-soft) 86%, var(--accent) 14%);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 850;
+  }
+
+  .storyboard-story-row-copy {
+    min-width: 0;
+  }
+
+  .storyboard-story-row-copy strong,
+  .storyboard-story-row-copy > span {
+    display: block;
+  }
+
+  .storyboard-story-row-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .storyboard-story-row-copy > span {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .storyboard-library:not(:hover):not(:focus-within) .storyboard-library-heading > strong,
+  .storyboard-library:not(:hover):not(:focus-within) #storyboard-new-btn,
+  .storyboard-library:not(:hover):not(:focus-within) .storyboard-list-section-title,
+  .storyboard-library:not(:hover):not(:focus-within) .storyboard-story-row-copy,
+  .storyboard-library:not(:hover):not(:focus-within) .storyboard-story-menu {
+    display: none;
+  }
+
+  .storyboard-workspace.story-library-pinned .storyboard-library-heading > strong,
+  .storyboard-workspace.story-library-pinned #storyboard-new-btn,
+  .storyboard-workspace.story-library-pinned .storyboard-list-section-title,
+  .storyboard-workspace.story-library-pinned .storyboard-story-row-copy,
+  .storyboard-workspace.story-library-pinned .storyboard-story-menu {
+    display: initial;
+  }
+
+  .storyboard-workspace.story-library-pinned .storyboard-story-row-copy {
+    display: block;
+  }
+
+  .storyboard-library:not(:hover):not(:focus-within) .storyboard-library-header {
+    justify-content: center;
+  }
+
+  .storyboard-library:not(:hover):not(:focus-within) .storyboard-library-pin {
+    margin: 0 auto;
+  }
+
+  .storyboard-library:not(:hover):not(:focus-within) .storyboard-library-list {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .storyboard-library:not(:hover):not(:focus-within) .storyboard-story-row {
+    width: 44px;
+  }
+
+  .storyboard-library:not(:hover):not(:focus-within) .storyboard-story-open {
+    grid-template-columns: 34px;
+    width: 42px;
+    padding: 4px;
+  }
+}

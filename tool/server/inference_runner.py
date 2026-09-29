@@ -495,7 +495,16 @@ def _advance_queue():
                 _release_gpu()
             return None
 
-        if _local_llm_work_pending():
+        owner = execution_resource_owner()
+        if owner and owner != GPU_RESERVATION_OWNER:
+            _set_backlog_wait_reason("Waiting for " + owner + " to release the shared GPU.")
+            return None
+
+        # Once Inference owns the GPU, let its normal Queue drain before
+        # considering another local-GPU lane. This prevents lane thrash between
+        # adjacent foreground inference jobs. A lane trying to acquire the GPU
+        # still yields to pending local LLM work.
+        if not owner and _local_llm_work_pending():
             _set_backlog_wait_reason("Waiting for Prompt Assistant / Director.")
             return None
 
@@ -509,11 +518,6 @@ def _advance_queue():
             inference_runtime.system_stats()
         except (ConnectionError, TimeoutError):
             _set_backlog_wait_reason("ComfyUI unavailable.")
-            return None
-
-        owner = execution_resource_owner()
-        if owner and owner != GPU_RESERVATION_OWNER:
-            _set_backlog_wait_reason("Waiting for " + owner + " to release the shared GPU.")
             return None
 
         reserved_here = False
@@ -553,10 +557,11 @@ def _advance_queue():
             expected_job_id=str(next_runnable.get("id") or ""),
         )
         if claimed is None:
-            if reserved_here:
+            if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
             return None
 
+        claimed_was_queued = str(next_runnable.get("status") or "") == "queued"
         job_id = str(claimed.get("id") or "")
         release_gpu = True
         try:
@@ -598,7 +603,17 @@ def _advance_queue():
                     _logger.exception("Queued inference attempt failed; inference was paused and the job was preserved.")
         finally:
             if release_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
-                _release_gpu()
+                current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+                keep_gpu = (
+                    claimed_was_queued
+                    and not current.get("paused")
+                    and any(
+                        str(job.get("status") or "") == "queued"
+                        for job in current.get("jobs", [])
+                    )
+                )
+                if not keep_gpu:
+                    _release_gpu()
         try:
             return _job_view(execution_get_job(job_id))
         except FileNotFoundError:

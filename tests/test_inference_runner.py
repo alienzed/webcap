@@ -318,6 +318,106 @@ def test_inference_yields_during_local_llm_drain_grace(inference_root, monkeypat
     assert execution_queue.resource_owner() == ""
 
 
+def test_inference_queue_reuses_gpu_ownership_until_foreground_queue_is_drained(
+    inference_root, monkeypatch
+):
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
+    calls = []
+    monkeypatch.setattr(
+        inference_runner,
+        "_reserve_gpu",
+        lambda: calls.append("reserve") or execution_queue.reserve_resource("inference"),
+    )
+    monkeypatch.setattr(
+        inference_runner,
+        "_release_gpu",
+        lambda: calls.append("release") or execution_queue.release_resource("inference"),
+    )
+    monkeypatch.setattr(inference_runtime, "system_stats", lambda: {"ok": True})
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: False,
+    )
+
+    first = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "First"}
+    )
+    second = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Second"}
+    )
+
+    monkeypatch.setattr(
+        inference_runner,
+        "_execute_claimed",
+        lambda job_id: execution_queue.finish_job_transient(job_id, status="completed"),
+    )
+
+    inference_runner._advance_queue()
+
+    assert inference_runner.job_status(first["jobId"])["status"] == "completed"
+    assert inference_runner.job_status(second["jobId"])["status"] == "queued"
+    assert calls == ["reserve"]
+    assert execution_queue.resource_owner() == "inference"
+
+    execution_queue.enqueue(
+        "llm",
+        {"contract": {}},
+        metadata={"client": "storyboard"},
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+
+    inference_runner._advance_queue()
+
+    assert inference_runner.job_status(second["jobId"])["status"] == "completed"
+    assert calls == ["reserve", "release"]
+    assert execution_queue.resource_owner() == ""
+
+
+def test_inference_releases_gpu_at_queue_to_backlog_boundary(inference_root, monkeypatch):
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
+    calls = []
+    monkeypatch.setattr(
+        inference_runner,
+        "_reserve_gpu",
+        lambda: calls.append("reserve") or execution_queue.reserve_resource("inference"),
+    )
+    monkeypatch.setattr(
+        inference_runner,
+        "_release_gpu",
+        lambda: calls.append("release") or execution_queue.release_resource("inference"),
+    )
+    monkeypatch.setattr(inference_runtime, "system_stats", lambda: {"ok": True})
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: False,
+    )
+
+    queued = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Foreground"}
+    )
+    backlog = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+        initial_status="backlog",
+    )
+    inference_runner._backlog_drain_enabled.set()
+    monkeypatch.setattr(
+        inference_runner,
+        "_execute_claimed",
+        lambda job_id: execution_queue.finish_job_transient(job_id, status="completed"),
+    )
+
+    inference_runner._advance_queue()
+
+    assert inference_runner.job_status(queued["jobId"])["status"] == "completed"
+    assert execution_queue.get_job(backlog["id"])["status"] == "backlog"
+    assert calls == ["reserve", "release"]
+    assert execution_queue.resource_owner() == ""
+
+
 def test_inference_defers_without_pausing_if_director_runtime_is_busy(inference_root, monkeypatch):
     queued = inference_runner.enqueue_generate(
         {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}

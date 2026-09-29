@@ -66,6 +66,15 @@ request seem safe.
 
 Pending-work UI state is based on **data dependency**, not generic busy state.
 
+There is an important asymmetry:
+
+> **Pending consumers do not lock their source authoring state merely because they exist. Pending writers may constrain future consumers.**
+
+If a Take, generation, test, or other consumer has already snapshotted valid inputs, the user may keep
+editing those inputs for future work. The queued consumer keeps its frozen version. By contrast, when
+pending work will mutate an input that a new consumer would snapshot, the new consumer should wait
+when the user would reasonably expect it to use the completed mutation.
+
 > If pending operation A will modify data X, and action B would read or snapshot X if clicked now,
 > the user would normally expect B to use A's completed result. Therefore B should not be offered
 > against the old value while A is pending.

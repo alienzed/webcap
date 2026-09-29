@@ -482,6 +482,10 @@ leave the job in Queue with a visible wait reason. Automatic shelving to Backlog
 explicit lifecycle transitions such as server-restart recovery, or an intentional user action such
 as Move all to Backlog.
 
+Generate, Storyboard Takes, and Tests share one Inference Queue with no hidden feature priority.
+Within Queue, work is FIFO unless the user explicitly reorders it. Feature type alone does not let a
+newer request jump ahead of older queued work.
+
 ## 10. LLM / Director Queue semantics
 
 The LLM queue serializes Director, Prompt Assistant, Test Director, and Chat work according to its

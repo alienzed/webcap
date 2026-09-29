@@ -517,7 +517,28 @@ Examples:
 
 WebCap should prefer truthful execution failure over speculative pre-emptive refusal.
 
-## 14. Stale results
+## 14. Destructive ownership semantics
+
+Destructive deletion is different from ordinary queue admission.
+
+An object must not be purged while non-terminal work still owns, targets, or is expected to write
+back into that object. The required semantic is **quiescence before deletion**.
+
+How WebCap reaches quiescence is an implementation choice:
+
+- if ownership is explicit and cancellation/stop is already reliable, deletion may cancel/stop the
+  object's owned work, wait for authoritative terminalization, and then delete,
+- if coordinated cancellation would add meaningful complexity or uncertainty, deletion may remain
+  unavailable/refuse until the owned work is terminal,
+- unrelated work must never be cancelled merely because it shares a queue or execution resource.
+
+The North Star does **not** require every destructive action to orchestrate cancellation. Reliability
+wins over convenience here. Automatic cleanup is preferable only when it is simple and trustworthy.
+
+If deletion is unavailable because owned work is still active, the UI should make the blocking work
+understandable enough that the user can resolve it without hunting for an unidentified job.
+
+## 15. Stale results
 
 Frozen queued work can become stale if its source state changes before its result is applied.
 
@@ -529,7 +550,7 @@ The correct protection is at the mutation boundary:
 
 Stale-result protection must not be generalized into "do not allow another job to exist."
 
-## 15. Implementation posture
+## 16. Implementation posture
 
 This document intentionally separates semantic truth from current implementation detail.
 
@@ -547,7 +568,7 @@ When implementing or repairing UI state:
 A correct conservative UI can be refined. A queue that refuses valid work based on guessed conflicts
 has violated the model.
 
-## 16. Review heuristic
+## 17. Review heuristic
 
 For any new queued action, answer these questions in order:
 
@@ -561,7 +582,7 @@ For any new queued action, answer these questions in order:
 
 If the answer to #6 is "queue admission" or #7 is "yes", the design should be reconsidered.
 
-## 17. Status of this document
+## 18. Status of this document
 
 This is a North Star contract.
 

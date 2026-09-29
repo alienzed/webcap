@@ -141,14 +141,23 @@ def activity_status():
                             _activity["contextSize"] = context_size
         return activity
 
-    is_ollama = _remote_is_ollama()
-    activity["runtimeProvider"] = "ollama" if is_ollama else "openai-compatible"
-    if is_ollama and activity.get("model"):
-        try:
-            _runtime_id, remote_model_id = _split_model_ref(activity.get("model"))
-            remote_model = _ollama_running_model(remote_model_id)
-        except (ConnectionError, RuntimeError, ValueError):
-            remote_model = {}
+    try:
+        with _use_runtime(settings.get("runtime_id", "")):
+            is_ollama = _remote_is_ollama()
+            activity["runtimeProvider"] = "ollama" if is_ollama else "openai-compatible"
+            if is_ollama and activity.get("model"):
+                try:
+                    _runtime_id, remote_model_id = _split_model_ref(activity.get("model"))
+                    remote_model = _ollama_running_model(remote_model_id)
+                except (ConnectionError, RuntimeError, ValueError):
+                    remote_model = {}
+            else:
+                remote_model = {}
+    except Exception:
+        is_ollama = False
+        activity["runtimeProvider"] = "openai-compatible"
+        remote_model = {}
+    if remote_model:
         if remote_model:
             activity["remoteModelVramBytes"] = remote_model.get("vramBytes", 0)
             model_size = int(remote_model.get("sizeBytes") or 0)
@@ -525,23 +534,34 @@ def _remote_http_json_cancellable(path, method="GET", payload=None, timeout=30):
         connection.close()
 
 
+def _active_runtime_settings():
+    with _activity_lock:
+        active_model = str(_activity.get("model") or "").strip()
+    if not active_model:
+        return _director_config()
+    runtime_id, _model_id = _split_model_ref(active_model)
+    return _runtime_settings(runtime_id)
+
+
 def assert_stop_supported():
-    settings = _director_config()
+    settings = _active_runtime_settings()
     if settings.get("mode", "local") == "local":
         assert_hard_stop_supported()
         return
-    if not _remote_is_ollama(refresh=True):
-        raise ValueError(
-            "Stop is not supported by this generic remote OpenAI-compatible endpoint. "
-            "Remote cancellation is currently supported for Ollama."
-        )
+    with _use_runtime(settings.get("runtime_id", "")):
+        if not _remote_is_ollama(refresh=True):
+            raise ValueError(
+                "Stop is not supported by this generic remote OpenAI-compatible endpoint. "
+                "Remote cancellation is currently supported for Ollama."
+            )
 
 
 def stop_active_request():
-    settings = _director_config()
+    settings = _active_runtime_settings()
     if settings.get("mode", "local") == "local":
         return stop_owned_server()
-    assert_stop_supported()
+    with _use_runtime(settings.get("runtime_id", "")):
+        assert_stop_supported()
     _stop_requested.set()
     with _remote_request_lock:
         connection = _active_remote_connection

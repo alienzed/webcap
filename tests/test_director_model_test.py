@@ -14,12 +14,12 @@ def model_test_root(tmp_path, monkeypatch):
 
 def test_protocol_is_fixed_versioned_expansion_task():
     assert model_test.PROTOCOL["id"] == "expansion-v1"
-    assert model_test.PROTOCOL["sourceText"] == "A woman waits alone at a rainy bus stop at night."
     assert len(model_test.PROTOCOL["messages"]) == 1
-    prompt = model_test.PROTOCOL["messages"][0]["content"]
-    assert "Preserve the subject, action, setting, and tone." in prompt
-    assert "do not introduce new characters" in prompt
-    assert "under 250 words" in prompt
+    prompt = model_test.PROTOCOL["defaultPrompt"]
+    assert model_test.PROTOCOL["messages"][0]["content"] == prompt
+    assert "production-ready cinematic generation prompt" in prompt
+    assert "Use your judgment" in prompt
+    assert "350–500 words" in prompt
 
 
 def test_session_freezes_models_and_persists_each_run(model_test_root):
@@ -40,9 +40,11 @@ def test_session_freezes_models_and_persists_each_run(model_test_root):
             "label": "gemma.gguf",
             "sizeBytes": 5678,
         },
-    ])
+    ], prompt="Custom benchmark prompt.")
 
     assert session["status"] == "running"
+    assert session["protocol"]["prompt"] == "Custom benchmark prompt."
+    assert session["protocol"]["messages"] == [{"role": "user", "content": "Custom benchmark prompt."}]
     assert [item["modelRef"] for item in session["models"]] == [
         "macbook::qwen3:8b",
         "local::gemma.gguf",
@@ -116,7 +118,7 @@ def test_run_must_belong_to_frozen_session(model_test_root):
         })
 
 
-def test_protocol_run_uses_existing_chat_lane(monkeypatch):
+def test_protocol_run_uses_session_frozen_prompt(monkeypatch, model_test_root):
     captured = {}
 
     def fake_enqueue(client, model_ref, contract, context=None, label=""):
@@ -129,16 +131,24 @@ def test_protocol_run_uses_existing_chat_lane(monkeypatch):
         })
         return {"jobId": "job-1"}
 
+    session = model_test.start_session([{
+        "modelRef": "macbook::qwen3:8b",
+        "runtimeId": "macbook",
+        "runtimeName": "MacBook Pro",
+        "modelId": "qwen3:8b",
+        "label": "qwen3:8b",
+    }], prompt="Frozen custom benchmark.")
+
     from tool.server import llm_runner
     monkeypatch.setattr(llm_runner, "enqueue", fake_enqueue)
 
-    job = model_test.enqueue_protocol_run("macbook::qwen3:8b")
+    job = model_test.enqueue_protocol_run(session["id"], "macbook::qwen3:8b")
 
     assert job == {"jobId": "job-1"}
     assert captured["client"] == "chat"
     assert captured["modelRef"] == "macbook::qwen3:8b"
     assert captured["contract"]["operation"] == "freeform_chat"
-    assert captured["contract"]["messages"] == model_test.PROTOCOL["messages"]
+    assert captured["contract"]["messages"] == [{"role": "user", "content": "Frozen custom benchmark."}]
     assert captured["label"] == "Director Model Test"
 
 
@@ -174,3 +184,14 @@ def test_model_test_is_isolated_to_settings_and_feature_modules():
     assert "/fs/storyboard/director" in frontend
     assert "director_model_test" not in llm_runner
     assert "director_model_test" not in runtime
+
+
+def test_empty_custom_prompt_is_rejected(model_test_root):
+    with pytest.raises(ValueError, match="prompt is required"):
+        model_test.start_session([{
+            "modelRef": "local::qwen.gguf",
+            "runtimeId": "local",
+            "runtimeName": "Local",
+            "modelId": "qwen.gguf",
+            "label": "qwen.gguf",
+        }], prompt="   ")

@@ -262,24 +262,35 @@ def test_storyboard_director_configuration_is_first_class_app_setting():
 
 
 
-def test_storyboard_director_tools_has_sparse_scene_healing_pass():
+def test_storyboard_revise_scenes_lives_in_assistant_and_keeps_sparse_scene_healing():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
-    assert 'id="storyboard-repair-instruction"' in html
-    assert 'id="storyboard-repair-scenes-btn"' in html
-    assert "function repairScenes()" in storyboard
-    assert "operation: 'repair_scenes'" in storyboard
+    assert "Director Tools" not in html
+    assert 'data-story-section="director"' not in html
+    assert 'id="storyboard-repair-instruction"' not in html
+    assert 'id="storyboard-repair-scenes-btn"' not in html
+    assert 'id="storyboard-restore-repair-btn"' not in html
+    assert "storyboard-director-tools-drawer" not in storyboard
+
+    assert "function reviseScenes(instruction, modelId)" in storyboard
+    assert "id: 'revise-scenes'" in storyboard
+    assert "return reviseScenes(request && request.instruction, request && request.modelId)" in storyboard
+    assert "DIRECTOR_PASS_PRESETS.continuity.instruction" in storyboard
+    assert "label: 'Continuity pass'" in storyboard
+
+    assert 'id="director-chat-mode-tools"' in html
+    assert 'id="director-chat-mode-presets"' in html
+    assert "active.presets" in assistant
+    assert "data-assistant-preset" in assistant
+
     assert "kind: 'repair'" in storyboard
-    assert "function restoreLastRepair()" in storyboard
-    assert "restore_last_scene_repair" in storyboard
-    assert 'if operation == "restore_last_scene_repair":' in app
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
-    assert '[data-scene-field="summary"]' in protection
-    assert '[data-scene-field="entryState"]' in protection
-    assert '[data-scene-field="exitState"]' in protection
-    assert '[data-scene-field="prompt"]' in protection
+    assert "target.kind === 'scene-prompt' || target.kind === 'repair'" in protection
+    assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState)" in protection
+
     scene_payload = storyboard.split("function scenePayloadFromUi(sceneId)", 1)[1].split("\n  function ", 1)[0]
     assert "directorTargetPending({ kind: 'repair'" in scene_payload
     assert "delete payload.summary;" in scene_payload
@@ -287,15 +298,16 @@ def test_storyboard_director_tools_has_sparse_scene_healing_pass():
     assert 'llm_storyboard_target_busy(story_id, "repair")' in app
 
 
-def test_storyboard_restore_repair_does_not_use_story_wide_director_lock():
+
+def test_storyboard_restore_repair_is_not_exposed_as_legacy_director_ui():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
-    restore = storyboard.split("function restoreLastRepair()", 1)[1].split("\n  function ", 1)[0]
-    assert "directorTargetBlocked" not in restore
-    route = app.split('if operation == "restore_last_scene_repair":', 1)[1].split('if operation == "restore_previous_prompt":', 1)[0]
-    assert 'llm_storyboard_target_busy(story_id, "scenes")' in route
-    assert "llm_storyboard_story_busy(story_id)" not in route
+    assert 'id="storyboard-restore-repair-btn"' not in html
+    assert "function restoreLastRepair()" not in storyboard
+    assert 'if operation == "restore_last_scene_repair":' in app
+
 
 
 def test_storyboard_can_develop_concept_directly_into_scenes():
@@ -818,28 +830,27 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    for section in ("story", "continuity", "director", "defaults"):
+    for section in ("story", "continuity", "defaults"):
         assert f'data-story-section="{section}"' in html
-
+    assert 'data-story-section="director"' not in html
     assert 'data-story-section="planning"' not in html
     assert 'data-story-section="loras"' not in html
+
     assert 'data-story-section="story" open' in html
     assert 'data-story-section="continuity" open' not in html
     assert "var STORY_SECTION_DEFAULTS = {" in storyboard
     assert "story: true" in storyboard
     assert "continuity: false" in storyboard
-    assert "director: false" in storyboard
     assert "defaults: false" in storyboard
+    assert "director: false" not in storyboard
     assert "function initStorySections()" in storyboard
     assert "'webcap.storyboard.storySection.' + sectionName" in storyboard
     assert ".storyboard-story-section:not([open]) > .storyboard-story-section-body" in css
 
-    overview_surface = html.split('id="storyboard-story-overview"', 1)[1].split('<div class="storyboard-story-utility-shelf"', 1)[0]
-    utility_shelf = html.split('<div class="storyboard-story-utility-shelf"', 1)[1].split('<div class="storyboard-scene-workspace">', 1)[0]
+    overview_surface = html.split('id="storyboard-story-overview"', 1)[1].split('<div class="storyboard-scene-workspace">', 1)[0]
     story_section = overview_surface.split('data-story-section="story"', 1)[1].split("</details>", 1)[0]
     continuity_section = overview_surface.split('data-story-section="continuity"', 1)[1].split("</details>", 1)[0]
-    director_section = utility_shelf.split('data-story-section="director"', 1)[1].split("</details>", 1)[0]
-    defaults_section = utility_shelf.split('data-story-section="defaults"', 1)[1].split("</details>", 1)[0]
+    defaults_section = overview_surface.split('data-story-section="defaults"', 1)[1].split("</details>", 1)[0]
 
     assert 'id="storyboard-story-title"' in story_section
     assert 'id="storyboard-story-icon"' in story_section
@@ -852,31 +863,21 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'id="storyboard-invariant-define"' in continuity_summary
     assert 'id="storyboard-invariant-add"' in continuity_summary
     assert 'id="storyboard-invariants-list"' in continuity_section
+
     add_invariant = storyboard.split("el('storyboard-invariant-add').addEventListener('click'", 1)[1].split("});", 1)[0]
     assert "continuitySection.open = true" in add_invariant
     assert "invariantRowHtml({ kind: 'character', title: '', text: '' }, true)" in add_invariant
 
-    assert 'class="storyboard-director-tools-drawer"' in utility_shelf
-    assert 'class="storyboard-scene-defaults"' in utility_shelf
-    assert 'data-story-section="continuity"' not in utility_shelf
-    assert html.index('id="storyboard-develop-btn"') < html.index('data-story-section="director"')
-    assert 'id="storyboard-repair-instruction"' in director_section
-    assert 'id="storyboard-repair-scenes-btn"' in director_section
-    assert 'id="storyboard-restore-repair-btn"' in director_section
-
-    assert 'id="storyboard-story-target-scenes"' in overview_surface
-    assert 'id="storyboard-story-aspect-ratio"' not in overview_surface
-    assert 'id="storyboard-story-megapixels"' not in overview_surface
-    assert 'id="storyboard-story-lora-list"' not in overview_surface
+    assert 'class="storyboard-scene-defaults"' in overview_surface
     assert 'id="storyboard-story-aspect-ratio"' in defaults_section
     assert 'id="storyboard-story-megapixels"' in defaults_section
     assert 'id="storyboard-story-lora-list"' in defaults_section
     assert 'id="storyboard-story-lora-picker"' in defaults_section
 
-    assert ".storyboard-story-utility-shelf" in css
-    assert "grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);" in css
-    assert ".storyboard-story-utility-shelf > .storyboard-director-tools-drawer > .storyboard-story-section-body" in css
-    assert ".storyboard-story-utility-shelf > .storyboard-scene-defaults > .storyboard-story-section-body" in css
+    assert "storyboard-story-utility-shelf" not in html
+    assert ".storyboard-story-utility-shelf" not in css
+    assert "storyboard-director-tools-drawer" not in html
+    assert "storyboard-director-tools-drawer" not in css
 
     payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
     assert "storySection" not in payload_block
@@ -885,12 +886,13 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'storyboard-list-section-title">Recent</div>' not in storyboard
 
 
+
 def test_storyboard_develop_scenes_is_primary_story_to_scenes_handoff():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    handoff = html.split('<div class="storyboard-develop-row">', 1)[1].split('<div class="storyboard-story-utility-shelf"', 1)[0]
+    handoff = html.split('<div class="storyboard-develop-row">', 1)[1].split('</div>\n                            </div>', 1)[0]
     assert handoff.count('id="storyboard-story-target-scenes"') == 1
     assert handoff.count('id="storyboard-scene-count-auto"') == 1
     assert handoff.count('id="storyboard-develop-btn"') == 1
@@ -911,23 +913,20 @@ def test_storyboard_develop_scenes_is_primary_story_to_scenes_handoff():
     assert "el('storyboard-scene-count-auto').onclick" in storyboard
 
 
+
 def test_storyboard_director_scene_plan_lock_excludes_scene_defaults():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
-    scenes = protection.split("if (target.kind === 'scenes')", 1)[1].split("if (target.kind === 'scene-prompt')", 1)[0]
-    assert "#storyboard-story-overview button" in scenes
-    assert ".storyboard-director-tools-drawer button" in scenes
-    assert "storyboard-story-aspect-ratio" not in scenes
-    assert "storyboard-story-megapixels" not in scenes
-    assert "storyboard-story-lora" not in scenes
-    assert "control.dataset.directorScenesDisabled = '1';" in scenes
+    scenes = protection.split("if (target.kind === 'scenes')", 1)[1].split("if (target.kind === 'scene-prompt'", 1)[0]
+    assert "setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState)" in scenes
+    assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState)" in scenes
 
     story_action = protection.split("if (target.kind === 'story-action')", 1)[1].split("if (target.kind === 'concept')", 1)[0]
     assert "#storyboard-story-overview button" in story_action
-    assert ".storyboard-director-tools-drawer button" in story_action
-    assert "#storyboard-story-authoring button" not in story_action
-    assert "storyboard-story-aspect-ratio" not in story_action
+    assert "storyboard-director-tools-drawer" not in story_action
+
+
 
 def test_storyboard_continuity_header_actions_do_not_toggle_disclosure():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
@@ -1496,6 +1495,8 @@ def test_assistant_exposes_storyboard_revise_scenes_only_when_context_is_availab
     assert 'aria-label="Assistant"' in html
     assert 'id="director-chat-mode-row"' in html
     assert 'id="director-chat-mode-switch"' in html
+    assert 'id="director-chat-mode-tools"' in html
+    assert 'id="director-chat-mode-presets"' in html
     assert 'id="storyboard-assistant-btn"' in html
     assert 'storyboard-director-action' in html.split('id="storyboard-assistant-btn"', 1)[1].split(">", 1)[0]
 
@@ -1504,11 +1505,16 @@ def test_assistant_exposes_storyboard_revise_scenes_only_when_context_is_availab
     assert "window.openAssistant" in assistant
     assert "data-assistant-mode=\"chat\"" in assistant
     assert "mode.execute" in assistant
+    assert "active.presets" in assistant
+    assert "data-assistant-preset" in assistant
     assert ".director-chat-mode-switch" in shell_css
+    assert ".director-chat-mode-presets" in shell_css
 
     mode = storyboard.split("window.registerAssistantMode({", 1)[1].split("});", 1)[0]
     assert "id: 'revise-scenes'" in mode
     assert "label: 'Revise Scenes'" in mode
+    assert "label: 'Continuity pass'" in mode
+    assert "DIRECTOR_PASS_PRESETS.continuity.instruction" in mode
     assert "!workspace.classList.contains('hidden')" in mode
     assert "storyState.story" in mode
     assert "Array.isArray(storyState.story.sceneOrder)" in mode
@@ -1516,9 +1522,10 @@ def test_assistant_exposes_storyboard_revise_scenes_only_when_context_is_availab
     assert "return reviseScenes(request && request.instruction, request && request.modelId)" in mode
 
     assert "function reviseScenes(instruction, modelId)" in storyboard
-    assert "function repairScenes()" in storyboard
-    assert "return reviseScenes(instruction, storyState.director.modelId)" in storyboard
+    assert "function repairScenes()" not in storyboard
+    assert "function restoreLastRepair()" not in storyboard
     assert "window.openAssistant({ mode: hasScenes ? 'revise-scenes' : 'chat' })" in storyboard
+
 
 
 def test_assistant_chat_remains_freeform_and_separate_from_contextual_modes():

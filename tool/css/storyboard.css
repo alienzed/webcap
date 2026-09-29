@@ -3202,99 +3202,99 @@
 }
 
 
-/* Storyboard IA experiment: wide two-dimensional Story authoring canvas.
-   Branch-only checkpoint: geometry only; no Story/Scene behavior changes. */
+/* Storyboard IA experiment: wide two-column Story canvas.
+   Matches the visual prototype: one Story split only, never nested into a third lane. */
+.storyboard-story-overview-surface {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+
+.storyboard-story-panel-heading,
+.storyboard-story-meta,
+.storyboard-story-canvas,
+.storyboard-develop-row {
+  min-width: 0;
+}
+
+.storyboard-story-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 12px;
+}
+
+.storyboard-story-canvas {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.storyboard-story-canvas-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.storyboard-story-side-stack {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+
+.storyboard-story-canvas .storyboard-concept-field,
+.storyboard-story-canvas .storyboard-style-field {
+  grid-column: auto;
+}
+
+.storyboard-story-concept-card textarea {
+  min-height: 340px;
+  max-width: none;
+}
+
+.storyboard-story-visual-card textarea {
+  min-height: 130px;
+  max-width: none;
+}
+
+.storyboard-story-continuity-card {
+  min-width: 0;
+  margin: 0;
+}
+
 @media (min-width: 1500px) {
   .storyboard-editor-scroll {
-    grid-template-columns: minmax(720px, 780px) minmax(0, 1fr);
+    grid-template-columns: minmax(760px, 820px) minmax(0, 1fr);
   }
 
-  .storyboard-story-overview-surface {
-    grid-template-columns: minmax(0, 1.35fr) minmax(300px, .85fr);
-    gap: 12px 14px;
-    align-content: start;
-  }
-
-  .storyboard-story-overview-surface > .storyboard-story-panel-heading {
-    grid-column: 1 / -1;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="story"] {
-    grid-column: 1;
-    grid-row: 2 / span 2;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="continuity"] {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="director"] {
-    grid-column: 2;
-    grid-row: 3;
-  }
-
-  .storyboard-story-overview-surface > .storyboard-develop-row {
-    grid-column: 1;
-    grid-row: 4;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="story"] > .storyboard-story-section-body {
-    grid-template-columns: minmax(0, 1.3fr) minmax(220px, .7fr);
-    align-items: start;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="story"] .storyboard-concept-field {
-    grid-column: 1;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="story"] .storyboard-style-field {
-    grid-column: 2;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="story"] .storyboard-concept-field textarea {
-    min-height: 280px;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="story"] .storyboard-style-field textarea {
-    min-height: 180px;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="continuity"] .storyboard-story-section-body,
-  .storyboard-story-overview-surface > [data-story-section="director"] .storyboard-story-section-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="continuity"] .storyboard-invariant-row {
-    grid-template-columns: 92px minmax(0, 1fr) auto;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="continuity"] .storyboard-invariant-row textarea {
-    grid-column: 1 / -1;
+  .storyboard-story-canvas {
+    grid-template-columns: minmax(0, 1.3fr) minmax(300px, .8fr);
+    align-items: stretch;
   }
 }
 
 @media (min-width: 1900px) {
   .storyboard-editor-scroll {
-    grid-template-columns: minmax(820px, 920px) minmax(0, 1fr);
+    grid-template-columns: minmax(840px, 940px) minmax(0, 1fr);
   }
 
-  .storyboard-story-overview-surface {
-    grid-template-columns: minmax(0, 1.45fr) minmax(340px, .8fr);
-    gap: 14px 16px;
-  }
-
-  .storyboard-story-overview-surface > [data-story-section="story"] > .storyboard-story-section-body {
-    grid-template-columns: minmax(0, 1.4fr) minmax(280px, .75fr);
+  .storyboard-story-canvas {
+    grid-template-columns: minmax(0, 1.4fr) minmax(340px, .8fr);
+    gap: 14px;
   }
 }
 
 @media (min-width: 2400px) {
   .storyboard-editor-scroll {
-    grid-template-columns: minmax(900px, 1020px) minmax(0, 1fr);
+    grid-template-columns: minmax(920px, 1040px) minmax(0, 1fr);
   }
 }
-
 
 /* Storyboard IA experiment: compact Continuity rows. */
 .storyboard-invariant-row {
@@ -3402,50 +3402,58 @@
 }
 
 
-/* Storyboard IA experiment: Story utility shelf / slide-up drawer. */
+/* Storyboard IA experiment: two-button Story utility shelf / slide-up drawers. */
 @media (min-width: 1181px) {
   .storyboard-story-authoring {
     position: relative;
-    padding-bottom: 76px;
+    padding-bottom: 74px;
   }
 
-  .storyboard-scene-defaults {
+  .storyboard-story-utility-shelf {
     position: sticky;
     z-index: 18;
     bottom: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
     margin-top: auto;
+    padding: 8px 0 0;
+    background: linear-gradient(to top, color-mix(in srgb, var(--bg) 98%, transparent) 72%, transparent);
+  }
+
+  .storyboard-story-utility-shelf > .storyboard-story-section {
+    position: static;
+    margin: 0;
     overflow: visible;
-    border-color: color-mix(in srgb, var(--border) 86%, var(--accent) 14%);
     background: color-mix(in srgb, var(--panel) 94%, var(--bg));
-    box-shadow: 0 -10px 24px rgba(0, 0, 0, .18);
+    box-shadow: 0 -8px 18px rgba(0, 0, 0, .12);
   }
 
-  .storyboard-scene-defaults > summary {
+  .storyboard-story-utility-shelf > .storyboard-story-section > summary {
     min-height: 46px;
-    background: color-mix(in srgb, var(--panel-soft) 90%, var(--bg));
+    padding: 8px 11px;
   }
 
-  .storyboard-scene-defaults[open] > summary {
-    border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  .storyboard-story-utility-shelf > .storyboard-story-section[open] > summary {
     border-bottom: 0;
   }
 
-  .storyboard-scene-defaults > .storyboard-scene-defaults-body {
+  .storyboard-story-utility-shelf > .storyboard-story-section > .storyboard-story-section-body {
     position: absolute;
-    left: -1px;
-    right: -1px;
+    left: 0;
+    right: 0;
     bottom: calc(100% - 1px);
-    max-height: min(58vh, 560px);
+    max-height: min(62vh, 620px);
     overflow: auto;
     padding: 14px;
     border: 1px solid var(--border);
     border-bottom: 0;
     border-radius: 9px 9px 0 0;
-    background: color-mix(in srgb, var(--panel) 96%, var(--bg));
-    box-shadow: 0 -18px 34px rgba(0, 0, 0, .28);
+    background: color-mix(in srgb, var(--panel) 97%, var(--bg));
+    box-shadow: 0 -18px 36px rgba(0, 0, 0, .3);
   }
 
-  .storyboard-scene-defaults:not([open]) > .storyboard-scene-defaults-body {
+  .storyboard-story-utility-shelf > .storyboard-story-section:not([open]) > .storyboard-story-section-body {
     display: none;
   }
 
@@ -3457,12 +3465,15 @@
 
   .storyboard-scene-defaults .storyboard-story-loras {
     padding-top: 0;
+    padding-left: 16px;
     border-top: 0;
     border-left: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-    padding-left: 16px;
+  }
+
+  .storyboard-director-tools-drawer > .storyboard-story-section-body {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
-
 
 /* Storyboard IA experiment: Plex-style Stories navigator. */
 @media (min-width: 1181px) {

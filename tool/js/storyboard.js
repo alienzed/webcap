@@ -907,17 +907,12 @@
       if (conceptField && conceptField.offsetParent !== null) return conceptField;
       return document.querySelector('[data-story-section="story"] > summary');
     }
-    if (target.kind === 'scene-prompt') {
-      var sceneRoot = sceneElement(target.sceneId);
-      return sceneRoot && sceneRoot.querySelector('[data-scene-field="prompt"]');
-    }
-    if (target.kind === 'scenes') {
+    if (
+      target.kind === 'scene-prompt' ||
+      target.kind === 'scenes' ||
+      target.kind === 'repair'
+    ) {
       return document.querySelector('.storyboard-scene-workspace');
-    }
-    if (target.kind === 'repair') {
-      var repairInstruction = el('storyboard-repair-instruction');
-      if (repairInstruction && repairInstruction.offsetParent !== null) return repairInstruction;
-      return document.querySelector('[data-story-section="director"] > summary');
     }
     return document.querySelector('.storyboard-scene-workspace');
   }
@@ -932,7 +927,11 @@
 
     var detachedTarget = !!kind && !target;
     var hidden = card.classList.contains('hidden');
-    var fillsWorkspace = kind === 'scenes';
+    var fillsWorkspace = (
+      kind === 'scene-prompt' ||
+      kind === 'scenes' ||
+      kind === 'repair'
+    );
     if (sceneWorkspace) {
       sceneWorkspace.classList.toggle('director-active', fillsWorkspace && !detachedTarget && !hidden);
     }
@@ -943,7 +942,7 @@
 
     var editorRect = editor.getBoundingClientRect();
     var targetRect = target.getBoundingClientRect();
-    var fillsField = kind === 'concept' || kind === 'scene-prompt';
+    var fillsField = kind === 'concept';
     card.classList.toggle('is-field-overlay', fillsField);
     card.classList.toggle('is-structure-overlay', !fillsField && !fillsWorkspace);
 

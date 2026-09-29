@@ -2915,6 +2915,29 @@
     popover.style.top = Math.round(Math.max(margin, top)) + 'px';
   }
 
+  function storyRailIconHtml(story) {
+    var key = String(story && (story.id || story.title) || 'story');
+    var hash = 0;
+    for (var index = 0; index < key.length; index += 1) {
+      hash = ((hash << 5) - hash + key.charCodeAt(index)) | 0;
+    }
+    var iconIndex = Math.abs(hash) % 8;
+    var toneIndex = Math.abs(hash >> 3) % 6;
+    var paths = [
+      '<path d="M5 4.5h14v15H5z M8 8h8 M8 12h8 M8 16h5"/>',
+      '<path d="M4.5 18.5 9 11l3 4 2-3 5.5 6.5z M8 8.2a1.7 1.7 0 1 0 0-3.4 1.7 1.7 0 0 0 0 3.4z"/>',
+      '<path d="M12 3.8 14.4 9l5.6.7-4.1 3.8 1.1 5.5-5-2.8-5 2.8 1.1-5.5L4 9.7 9.6 9z"/>',
+      '<path d="M6 5.5h12v13H6z M9 5.5v13 M13 9h3 M13 12h3 M13 15h3"/>',
+      '<path d="M4.5 15.5c2.2-4.7 5.2-7.1 9-7.1 2.4 0 4.5.8 6 2.4-1.6 4.7-4.6 7-9 7-2.4 0-4.4-.8-6-2.3z M12 11.2a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0-4.6z"/>',
+      '<path d="M12 4v16 M4 12h16 M6.3 6.3l11.4 11.4 M17.7 6.3 6.3 17.7"/>',
+      '<path d="M5 17c2.5-4.6 5.2-7 8.2-7 2.3 0 4.2 1.2 5.8 3.5 M5 19h14 M8 8.5 10.5 5l2.3 3.5"/>',
+      '<path d="M5 6.5h14v11H5z M8 4.5v4 M16 4.5v4 M8 12h8"/>'
+    ];
+    return '<span class="storyboard-story-rail-icon storyboard-story-rail-icon-tone-' + toneIndex + '" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24" focusable="false">' + paths[iconIndex] + '</svg>' +
+    '</span>';
+  }
+
   function renderLibrary() {
     var host = el('storyboard-library-list');
     if (!host) return;
@@ -2942,7 +2965,7 @@
         meta.push(String(Number(story.sceneCount || 0)) + ' scene' + (Number(story.sceneCount || 0) === 1 ? '' : 's'));
         return '<div class="storyboard-story-row' + (active ? ' active' : '') + '" data-story-id="' + escapeHtml(story.id) + '">' +
           '<button type="button" class="storyboard-story-open" data-story-open title="' + escapeHtml(story.title || 'Untitled Story') + '">' +
-            '<span class="storyboard-story-rail-glyph" aria-hidden="true">' + escapeHtml(String(story.title || 'Untitled Story').trim().charAt(0).toUpperCase() || '•') + '</span>' +
+            storyRailIconHtml(story) +
             '<span class="storyboard-story-row-copy">' +
               '<strong>' + escapeHtml(story.title || 'Untitled Story') + '</strong>' +
               '<span>' + escapeHtml(meta.join(' · ')) + '</span>' +

@@ -1882,6 +1882,11 @@
                             <div class="app-settings-disclosure-body">
                                 <p class="app-settings-help">Run one fixed expansion protocol sequentially across selected Director models. Results are saved after every model; no quality score is inferred.</p>
                                 <div id="director-model-test-protocol" class="app-settings-help">Open to load the protocol and available models.</div>
+                                <label class="app-settings-field app-settings-field-wide">
+                                    <span class="app-settings-field-label">Benchmark Prompt</span>
+                                    <textarea id="director-model-test-prompt" rows="14" spellcheck="true"></textarea>
+                                    <span class="app-settings-note">The exact text is frozen into the saved session when the test starts.</span>
+                                </label>
                                 <div class="app-settings-actions app-settings-actions-inline">
                                     <button id="director-model-test-refresh" type="button" class="review-captions-btn">Refresh Models</button>
                                     <button id="director-model-test-select-all" type="button" class="review-captions-btn">All</button>

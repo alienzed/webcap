@@ -3796,3 +3796,67 @@
     margin-top: 5px;
   }
 }
+
+
+/* Storyboard IA correction: compact Develop Scenes handoff. */
+.storyboard-develop-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.storyboard-develop-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.storyboard-target-scenes-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.storyboard-target-scenes-inline input {
+  width: 62px;
+  min-height: 38px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg, var(--panel));
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+}
+
+.storyboard-target-scenes-inline input:disabled {
+  opacity: .48;
+}
+
+.storyboard-scene-count-auto {
+  width: auto;
+  min-height: 38px;
+  padding: 7px 10px;
+}
+
+.storyboard-scene-count-auto.active,
+.storyboard-scene-count-auto[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel-soft));
+  color: var(--text);
+}
+
+.storyboard-develop-controls .storyboard-primary-btn {
+  flex: 1 1 auto;
+  min-height: 42px;
+}
+
+.storyboard-develop-row > .storyboard-save-state:empty {
+  display: none;
+}

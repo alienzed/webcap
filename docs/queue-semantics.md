@@ -467,6 +467,10 @@ LLM commands are short-lived, contextual, and often causally related. WebCap sho
 reordering surface for Director/Prompt Assistant/Chat work unless a concrete workflow later proves
 that FIFO is insufficient.
 
+Cancellation is **job-local**. Cancelling one queued LLM job removes only that job; later queued
+work remains queued and preserves its relative FIFO order. Cancellation does not cascade merely
+because another request was submitted afterward.
+
 LLM work is **server-session-bound**:
 
 - browser refresh, navigation, or returning to the feature does not end the server session; queued

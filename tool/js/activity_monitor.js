@@ -7,6 +7,7 @@
     payload: { active: [], recent: [], queues: {} },
     timer: 0,
     pending: false,
+    pendingPromise: null,
     lastSeen: sessionStartedAt,
     openedAt: 0,
     notified: Object.create(null),
@@ -452,6 +453,9 @@
       var button = el(id);
       if (button) button.classList.toggle('has-active-work', !!activeIds[id]);
     });
+    if (typeof window.setShellTrainingActive === 'function') {
+      window.setShellTrainingActive(!!activeIds['activity-training-btn']);
+    }
   }
 
   function render() {
@@ -506,9 +510,9 @@
   }
 
   function refresh() {
-    if (state.pending) return Promise.resolve(state.payload);
+    if (state.pending) return state.pendingPromise || Promise.resolve(state.payload);
     state.pending = true;
-    return requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
+    state.pendingPromise = requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
       state.payload = payload;
       window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);
       var activeErrorKeys = Object.create(null);
@@ -530,7 +534,20 @@
       return state.payload;
     }).then(function (payload) {
       state.pending = false;
+      state.pendingPromise = null;
       return payload;
+    });
+    return state.pendingPromise;
+  }
+
+  function hasQueuedOrPausedWork() {
+    var queues = state.payload.queues || {};
+    return ['inference', 'training', 'director'].some(function (key) {
+      var queue = queues[key] || {};
+      return Number(queue.running || 0) > 0 ||
+        Number(queue.queued || 0) > 0 ||
+        Number(queue.backlog || 0) > 0 ||
+        !!queue.paused;
     });
   }
 
@@ -538,7 +555,22 @@
     if (state.timer) clearTimeout(state.timer);
     state.timer = setTimeout(function () {
       refresh().then(schedule);
-    }, state.open ? 2500 : (activeCount() ? 4000 : 9000));
+    }, state.open ? 2500 : ((activeCount() || hasQueuedOrPausedWork()) ? 4000 : 30000));
+  }
+
+  function wake() {
+    if (state.pending) {
+      return state.pendingPromise.then(function () {
+        return refresh();
+      }).then(function (payload) {
+        schedule();
+        return payload;
+      });
+    }
+    return refresh().then(function (payload) {
+      schedule();
+      return payload;
+    });
   }
 
   function setOpen(open) {
@@ -553,7 +585,7 @@
       state.openedAt = 0;
     }
     render();
-    refresh().then(schedule);
+    wake();
   }
 
   function bind() {
@@ -570,11 +602,11 @@
     window.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && state.open) setOpen(false);
     });
-    window.addEventListener('webcap:inference-queue-changed', refresh);
+    window.addEventListener('webcap:inference-queue-changed', wake);
   }
 
   window.setActivityDrawerOpen = setOpen;
-  window.refreshActivityMonitor = refresh;
+  window.refreshActivityMonitor = wake;
   bind();
-  refresh().then(schedule);
+  wake();
 })();

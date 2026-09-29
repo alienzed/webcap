@@ -927,7 +927,10 @@ function syncTrainingWorkspaceDetailUi() {
 }
 
 function syncTrainingWorkspaceUi() {
-  if (!isTrainingWorkspaceActive()) return;
+  if (!isTrainingWorkspaceActive()) {
+    stopTrainingRunnerPoll();
+    return;
+  }
   syncTrainingWorkspaceDetailUi();
   syncTrainingConsoleUi();
   refreshTrainingWorkspace();

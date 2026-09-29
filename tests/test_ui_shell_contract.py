@@ -108,6 +108,7 @@ def test_activity_drawer_marks_owning_workspace_links_while_work_is_active():
 
     assert "function syncActivityRailWork(active)" in activity
     assert "director') kind = String(item && item.client || 'storyboard')" in activity
+    assert "window.setShellTrainingActive(!!activeIds['activity-training-btn']);" in activity
     for button_id in (
         "activity-generate-btn",
         "activity-training-btn",
@@ -658,12 +659,33 @@ def test_background_training_activity_is_discovered_on_app_startup():
 
     assert "if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();" in main
     assert "function scheduleTrainingRunnerPoll()" in runner
+    assert "function stopTrainingRunnerPoll()" in runner
+    assert "if (!isTrainingWorkspaceActive()) return;" in runner
     assert "if (!hasActiveJob) return;" in runner
     assert "function reconcileTrainingRunnerActivity(activeItems)" in runner
     assert "if (!isTrainingWorkspaceActive()) return;" in runner
     assert "if (observedId !== localId) refreshTrainingRunnerStatus();" in runner
     assert "window.reconcileTrainingRunnerActivity = reconcileTrainingRunnerActivity;" in runner
     assert "window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);" in activity
+    assert "if (typeof window.refreshActivityMonitor === 'function') window.refreshActivityMonitor();" in runner
+
+
+def test_activity_polling_backs_off_only_when_managed_work_is_idle():
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+
+    assert "function hasQueuedOrPausedWork()" in activity
+    assert "Number(queue.queued || 0) > 0" in activity
+    assert "Number(queue.backlog || 0) > 0" in activity
+    assert "!!queue.paused" in activity
+    assert "30000" in activity
+    assert "(activeCount() || hasQueuedOrPausedWork()) ? 4000 : 30000" in activity
+    assert "function wake()" in activity
+    assert "pendingPromise: null" in activity
+    assert "if (state.pending) {" in activity
+    assert "return state.pendingPromise.then(function ()" in activity
+    assert "refresh().then(function (payload)" in activity
+    assert "window.refreshActivityMonitor = wake;" in activity
+    assert "window.addEventListener('webcap:inference-queue-changed', wake);" in activity
 
 
 def test_retired_workflow_mode_does_not_survive_as_parallel_shell_state():

@@ -108,6 +108,7 @@ def test_activity_drawer_marks_owning_workspace_links_while_work_is_active():
 
     assert "function syncActivityRailWork(active)" in activity
     assert "director') kind = String(item && item.client || 'storyboard')" in activity
+    assert "window.setShellTrainingActive(!!activeIds['activity-training-btn']);" in activity
     for button_id in (
         "activity-generate-btn",
         "activity-training-btn",
@@ -679,6 +680,9 @@ def test_activity_polling_backs_off_only_when_managed_work_is_idle():
     assert "30000" in activity
     assert "(activeCount() || hasQueuedOrPausedWork()) ? 4000 : 30000" in activity
     assert "function wake()" in activity
+    assert "pendingPromise: null" in activity
+    assert "if (state.pending) {" in activity
+    assert "return state.pendingPromise.then(function ()" in activity
     assert "refresh().then(function (payload)" in activity
     assert "window.refreshActivityMonitor = wake;" in activity
     assert "window.addEventListener('webcap:inference-queue-changed', wake);" in activity

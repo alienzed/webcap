@@ -422,7 +422,19 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, mode=None, 
         resolved = config_for_stage(selected_profile["id"], base["id"], mode)
         dest = folder / resolved["file"]
         if dest.exists() and not reset:
-            tomllib.loads(dest.read_text(encoding="utf-8"))
+            existing = dest.read_text(encoding="utf-8")
+            tomllib.loads(existing)
+            rendered = existing
+            if resolved["dataset"] in ("dataset.h3.toml", "dataset.wan21.toml"):
+                match = _DATASET_LINE_PATTERN.search(existing)
+                if match:
+                    quoted = re.search(r'["\\']([^"\\']+)["\\']', match.group(0))
+                    if quoted and Path(quoted.group(1)).name == "dataset.train.toml":
+                        dataset_value = str(Path(quoted.group(1)).with_name(resolved["dataset"])).replace("\\\\", "/")
+                        rendered = with_dataset_path(existing, dataset_value)
+            if rendered != existing:
+                _write_set_toml_atomic(dest, rendered)
+                written.append(dest)
             continue
         rendered = _render_mode_config(folder, selected_profile["id"], base["id"], mode, reset=reset)
         _write_set_toml_atomic(dest, rendered)

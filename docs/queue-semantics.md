@@ -460,7 +460,12 @@ North Star semantics:
 - feature UIs own semantic pending-state protection,
 - local/remote runtime choice affects execution resources, not semantic validity,
 - Stop/Cancel apply to the exact requested job,
-- stale-result protection belongs at application/commit time.
+- stale-result protection belongs at application/commit time,
+- LLM work is simple FIFO; manual queue reordering is not a product requirement.
+
+LLM commands are short-lived, contextual, and often causally related. WebCap should not add a manual
+reordering surface for Director/Prompt Assistant/Chat work unless a concrete workflow later proves
+that FIFO is insufficient.
 
 LLM work is **server-session-bound**:
 

@@ -410,6 +410,66 @@
     return row;
   }
 
+  function directorQueueOperationLabel(job) {
+    var operation = String(job && job.operation || '');
+    var labels = {
+      expand_concept: 'Expand Concept',
+      define_invariants: 'Define Invariants',
+      develop_story: 'Develop Scenes',
+      repair_scenes: 'Revise Scenes',
+      write_prompt: 'Write Scene Prompt',
+      refine_prompt: 'Refine Scene Prompt',
+      freeform_chat: 'Chat'
+    };
+    return labels[operation] || String(job && job.label || operation || 'Director request').replace(/_/g, ' ');
+  }
+
+  function directorQueueClientLabel(job) {
+    var client = String(job && job.client || '');
+    return client === 'storyboard' ? 'Storyboard'
+      : client === 'generate' ? 'Generate'
+      : client === 'test' ? 'Test'
+      : client === 'chat' ? 'Chat'
+      : 'Director';
+  }
+
+  function createDirectorQueueList(queue) {
+    queue = queue || {};
+    var jobs = Array.isArray(queue.jobs) ? queue.jobs : [];
+    if (!jobs.length) return null;
+
+    var list = document.createElement('div');
+    list.className = 'activity-monitor-director-queue';
+
+    jobs.forEach(function (job, index) {
+      var row = document.createElement('div');
+      row.className = 'activity-monitor-director-queue-row';
+
+      var position = document.createElement('span');
+      position.className = 'activity-monitor-director-queue-position';
+      position.textContent = '#' + String(Number(job.queuePosition || index + 1));
+
+      var copy = document.createElement('div');
+      copy.className = 'activity-monitor-director-queue-copy';
+
+      var title = document.createElement('strong');
+      title.textContent = directorQueueClientLabel(job) + ' · ' + directorQueueOperationLabel(job);
+
+      var detail = document.createElement('small');
+      var parts = [];
+      if (job.sceneId) parts.push('Scene ' + String(job.sceneId));
+      if (job.modelId) parts.push(String(job.modelId));
+      detail.textContent = parts.join(' · ') || 'Waiting';
+
+      copy.appendChild(title);
+      copy.appendChild(detail);
+      row.appendChild(position);
+      row.appendChild(copy);
+      list.appendChild(row);
+    });
+    return list;
+  }
+
   function appendSection(host, titleText, noteText) {
     var section = document.createElement('section');
     section.className = 'activity-monitor-section';
@@ -507,6 +567,8 @@
     var queueSection = appendSection(host, 'Queue Status', '');
     queueSection.classList.add('activity-monitor-queue-section');
     queueSection.appendChild(createQueueStatusBar(queues));
+    var directorQueueList = createDirectorQueueList(queues.director);
+    if (directorQueueList) queueSection.appendChild(directorQueueList);
   }
 
   function refresh() {

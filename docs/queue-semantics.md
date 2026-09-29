@@ -473,6 +473,9 @@ Stopping the active Inference job is **job-local**. Once that job reaches a term
 Inference scheduling continues with the next queued job unless the Inference lane itself is paused.
 **Stop does not imply Pause.**
 
+Cancelling pending Inference work is also job-local. Cancelling one queued or backlogged job removes
+only that job; remaining work keeps its relative order and no implicit queue pause occurs.
+
 ## 10. LLM / Director Queue semantics
 
 The LLM queue serializes Director, Prompt Assistant, Test Director, and Chat work according to its

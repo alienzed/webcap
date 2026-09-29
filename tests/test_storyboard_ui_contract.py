@@ -1590,3 +1590,8 @@ def test_assistant_chat_remains_freeform_and_separate_from_contextual_modes():
     assert "requestJson('/fs/director/chat'" in assistant
     assert "if (mode)" in assistant
     assert "mode.execute({" in assistant
+    assert "slot.generatedTokens" in assistant
+    assert "' tokens'" in assistant
+    assert "' tok/s'" in assistant
+    assert "completedResponseMetrics(result)" in assistant
+    assert "usage.completion_tokens" in assistant

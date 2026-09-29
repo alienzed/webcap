@@ -750,7 +750,7 @@ def apply_concept_expansion(story_id, expanded_concept):
     if not expanded:
         raise ValueError("Expanded Story concept is empty.")
     if not isinstance(story.get("previousConcept"), str):
-        story["previousConcept"] = expanded
+        story["previousConcept"] = str(story.get("concept") or "")
     story["concept"] = expanded
     story["updatedAt"] = _utc_now()
     _write_json_atomic(_story_path(story_id), story)

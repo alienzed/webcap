@@ -194,6 +194,53 @@ def test_local_llm_completion_opens_short_gpu_drain_window(llm_root, monkeypatch
     assert llm_runner.local_gpu_drain_pending() is True
 
 
+def test_local_llm_queue_reuses_gpu_ownership_until_queued_work_is_drained(llm_root, monkeypatch):
+    calls = []
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(
+        llm_runner,
+        "_reserve_gpu",
+        lambda: calls.append("reserve") or execution_queue.reserve_resource("llm"),
+    )
+    monkeypatch.setattr(
+        llm_runner,
+        "_release_gpu",
+        lambda: calls.append("release") or execution_queue.release_resource("llm"),
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda model_id, contract, gpu_reserved=False: {
+            "text": "Done",
+            "model": model_id,
+        },
+    )
+
+    first = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "First.", "output": "text"},
+    )
+    second = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Second.", "output": "text"},
+    )
+
+    llm_runner._advance_queue()
+
+    assert llm_runner.job_status(first["jobId"])["status"] == "completed"
+    assert llm_runner.job_status(second["jobId"])["status"] == "queued"
+    assert calls == ["reserve"]
+    assert execution_queue.resource_owner() == "llm"
+
+    llm_runner._advance_queue()
+
+    assert llm_runner.job_status(second["jobId"])["status"] == "completed"
+    assert calls == ["reserve", "release"]
+    assert execution_queue.resource_owner() == ""
+
+
 def test_llm_terminal_receipt_is_removed_when_consumed(llm_root):
     job = execution_queue.enqueue(
         llm_runner.EXECUTION_LANE,

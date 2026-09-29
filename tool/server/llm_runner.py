@@ -418,19 +418,24 @@ def _advance_queue():
         from .storyboard_llm_runtime import uses_local_gpu
         local_gpu = uses_local_gpu()
         reserved_here = False
+        owner = execution_resource_owner()
         if local_gpu:
-            from .execution_queue import resource_owner
-            if resource_owner():
+            if owner and owner != GPU_RESERVATION_OWNER:
                 return None
-            if not _reserve_gpu():
-                return None
-            reserved_here = True
+            if not owner:
+                if not _reserve_gpu():
+                    return None
+                reserved_here = True
+        elif owner == GPU_RESERVATION_OWNER:
+            # Runtime mode may have changed while this lane retained ownership
+            # for another queued local job. Remote work does not need the GPU.
+            _release_gpu()
 
         from .storyboard_llm_runtime import clear_stop_request
         clear_stop_request()
         claimed = execution_claim_next(EXECUTION_LANE)
         if claimed is None:
-            if reserved_here:
+            if local_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
             return None
 
@@ -456,6 +461,17 @@ def _advance_queue():
         finally:
             if local_gpu:
                 _arm_local_gpu_drain_grace()
+                if release_gpu:
+                    current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+                    keep_gpu = (
+                        not current.get("paused")
+                        and any(
+                            str(job.get("status") or "") == "queued"
+                            for job in current.get("jobs", [])
+                        )
+                    )
+                    if keep_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
+                        release_gpu = False
             if release_gpu:
                 _release_gpu()
 

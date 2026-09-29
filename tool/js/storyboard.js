@@ -594,17 +594,11 @@
     }
 
     select.disabled = false;
-    select.innerHTML = models.map(function (model) {
-      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(formatDirectorModelLabel(model)) + '</option>';
-    }).join('');
-
-    var selected = storyState.director.modelId;
-    if (!models.some(function (model) { return model.id === selected; })) {
-      selected = models[0].id;
+    var selected = renderDirectorModelOptions(select, models, storyState.director.modelId);
+    if (storyState.director.modelId !== selected) {
       storyState.director.modelId = selected;
       setDirectorModelPreference('webcap.storyboard.directorModel', selected);
     }
-    select.value = selected;
     select.title = '';
   }
 
@@ -5152,6 +5146,15 @@
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;
       setDirectorModelPreference('webcap.storyboard.directorModel', this.value);
+    });
+    window.addEventListener('webcap:director-model-changed', function (event) {
+      var selected = String(event && event.detail && event.detail.modelId || '');
+      if (!selected || selected === storyState.director.modelId) return;
+      storyState.director.modelId = selected;
+      var modelSelect = el('storyboard-director-model');
+      if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) {
+        modelSelect.value = selected;
+      }
     });
     el('storyboard-director-refresh').onclick = function () {
       var button = this;

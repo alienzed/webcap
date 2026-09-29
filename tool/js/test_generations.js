@@ -192,12 +192,7 @@
       return;
     }
 
-    select.innerHTML = wildcardDirector.models.map(function (model) {
-      return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(formatDirectorModelLabel(model)) + '</option>';
-    }).join('');
-    if (!wildcardDirector.models.some(function (model) { return model.id === wildcardDirector.modelId; })) {
-      wildcardDirector.modelId = String((wildcardDirector.models[0] || {}).id || '');
-    }
+    wildcardDirector.modelId = renderDirectorModelOptions(select, wildcardDirector.models, wildcardDirector.modelId);
     if (wildcardDirector.modelId) setDirectorModelPreference('webcap.testGenerations.directorModel', wildcardDirector.modelId);
     select.value = wildcardDirector.modelId;
     select.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
@@ -3170,6 +3165,13 @@
       wildcardDirector.modelId = this.value;
       setDirectorModelPreference('webcap.testGenerations.directorModel', this.value);
       renderWildcardDirector();
+    });
+    window.addEventListener('webcap:director-model-changed', function (event) {
+      var selected = String(event && event.detail && event.detail.modelId || '');
+      if (!selected || selected === wildcardDirector.modelId) return;
+      wildcardDirector.modelId = selected;
+      var modelSelect = el('test-generations-wildcard-model');
+      if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) modelSelect.value = selected;
     });
     el('test-generations-director-stop').onclick = stopWildcardDirectorJob;
     el('test-generations-wildcard-use-btn').onclick = function () {

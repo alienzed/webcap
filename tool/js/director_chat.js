@@ -416,18 +416,7 @@
         return;
       }
 
-      models.forEach(function (model) {
-        var option = document.createElement('option');
-        option.value = String(model.id || '');
-        option.textContent = formatDirectorModelLabel(model);
-        select.appendChild(option);
-      });
-
-      var stillAvailable = models.some(function (model) {
-        return String(model.id || '') === state.modelId;
-      });
-      if (!stillAvailable) state.modelId = String(models[0].id || '');
-      select.value = state.modelId;
+      state.modelId = renderDirectorModelOptions(select, models, state.modelId);
       setDirectorModelPreference('webcap.directorChat.model', state.modelId);
       state.modelsLoaded = true;
       syncControls();
@@ -663,6 +652,13 @@
       setDirectorModelPreference('webcap.directorChat.model', state.modelId);
       syncControls();
     };
+    window.addEventListener('webcap:director-model-changed', function (event) {
+      var selected = String(event && event.detail && event.detail.modelId || '');
+      if (!selected || selected === state.modelId) return;
+      state.modelId = selected;
+      if (Array.prototype.some.call(model.options, function (option) { return option.value === selected; })) model.value = selected;
+      syncControls();
+    });
     input.addEventListener('input', syncControls);
     input.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && !event.shiftKey) {

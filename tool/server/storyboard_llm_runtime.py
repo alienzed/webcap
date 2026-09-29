@@ -1,4 +1,5 @@
 import atexit
+import contextlib
 import http.client
 import json
 import logging
@@ -40,6 +41,7 @@ _request_lock = threading.RLock()
 _remote_request_lock = threading.Lock()
 _active_remote_connection = None
 _remote_provider_cache = {}
+_runtime_context = threading.local()
 _activity_lock = threading.Lock()
 _log_relay_lock = threading.Lock()
 _log_relay_offset = 0
@@ -110,17 +112,25 @@ def activity_status():
         activity = dict(_activity)
 
     try:
-        settings = _director_config()
+        active_model = str(activity.get("model") or "")
+        if active_model:
+            runtime_id, _active_model_id = _split_model_ref(active_model)
+            settings = _runtime_settings(runtime_id)
+        else:
+            settings = _director_config()
     except Exception:
-        settings = {"mode": "local"}
+        settings = {"mode": "local", "runtime_id": "local", "runtime_name": "Local"}
 
     mode = settings.get("mode", "local")
+    activity["runtimeId"] = settings.get("runtime_id", "local")
+    activity["runtimeName"] = settings.get("runtime_name", "Local")
     activity["runtimeMode"] = mode
     if mode == "local":
         activity["runtimeProvider"] = "llama.cpp"
         _relay_log_updates()
         if activity.get("active") and activity.get("phase") == "generating":
-            slot = _slot_snapshot(activity.get("model"))
+            _runtime_id, slot_model_id = _split_model_ref(activity.get("model"))
+            slot = _slot_snapshot(slot_model_id)
             if slot:
                 activity["slot"] = slot
                 context_size = int(slot.get("contextSize") or 0)
@@ -131,55 +141,52 @@ def activity_status():
                             _activity["contextSize"] = context_size
         return activity
 
-    is_ollama = _remote_is_ollama()
-    activity["runtimeProvider"] = "ollama" if is_ollama else "openai-compatible"
-    if is_ollama and activity.get("model"):
-        try:
-            remote_model = _ollama_running_model(activity.get("model"))
-        except (ConnectionError, RuntimeError, ValueError):
-            remote_model = {}
-        if remote_model:
-            activity["remoteModelVramBytes"] = remote_model.get("vramBytes", 0)
-            model_size = int(remote_model.get("sizeBytes") or 0)
-            context_size = int(remote_model.get("contextSize") or 0)
-            if model_size > 0:
-                activity["modelSizeBytes"] = model_size
-            if context_size > 0:
-                activity["contextSize"] = context_size
+    try:
+        with _use_runtime(settings.get("runtime_id", "")):
+            is_ollama = _remote_is_ollama()
+            activity["runtimeProvider"] = "ollama" if is_ollama else "openai-compatible"
+            if is_ollama and activity.get("model"):
+                try:
+                    _runtime_id, remote_model_id = _split_model_ref(activity.get("model"))
+                    remote_model = _ollama_running_model(remote_model_id)
+                except (ConnectionError, RuntimeError, ValueError):
+                    remote_model = {}
+            else:
+                remote_model = {}
+    except Exception:
+        is_ollama = False
+        activity["runtimeProvider"] = "openai-compatible"
+        remote_model = {}
+    if remote_model:
+        activity["remoteModelVramBytes"] = remote_model.get("vramBytes", 0)
+        model_size = int(remote_model.get("sizeBytes") or 0)
+        context_size = int(remote_model.get("contextSize") or 0)
+        if model_size > 0:
+            activity["modelSizeBytes"] = model_size
+        if context_size > 0:
+            activity["contextSize"] = context_size
     return activity
 
 
 
-def _director_config():
+def _director_base_config():
     storyboard = app_config.config.get("storyboard")
     storyboard = storyboard if isinstance(storyboard, dict) else {}
     director = storyboard.get("director")
     director = director if isinstance(director, dict) else {}
 
-    mode = str(director.get("mode") or "local").strip().lower()
-    endpoint = str(director.get("endpoint") or "").strip().rstrip("/")
     executable = str(director.get("llama_server") or "").strip()
     port = int(director.get("port") or DEFAULT_PORT)
     raw_context_size = director.get("context_size", DEFAULT_CONTEXT_SIZE)
     context_size = None if raw_context_size in (None, "") else int(raw_context_size)
     raw_max_tokens = director.get("max_tokens", DEFAULT_MAX_TOKENS)
     max_tokens = None if raw_max_tokens in (None, "") else int(raw_max_tokens)
-
-    if mode not in {"local", "remote"}:
-        raise ValueError("Storyboard Director mode must be local or remote.")
     if max_tokens is not None and max_tokens <= 0:
         raise ValueError("Storyboard Director max_tokens must be greater than zero when overridden.")
 
     models_dir = None
-    if mode == "remote":
-        if not endpoint:
-            raise ValueError("Storyboard Director remote endpoint is required.")
-        if not endpoint.startswith(("http://", "https://")):
-            raise ValueError("Storyboard Director remote endpoint must start with http:// or https://.")
-    else:
-        models_root = str(app_config.config.get("filesystem", {}).get("models") or "").strip()
-        if not models_root:
-            raise ValueError("WebCap Model Root is required for local Storyboard Director model discovery.")
+    models_root = str(app_config.config.get("filesystem", {}).get("models") or "").strip()
+    if models_root:
         if models_root.startswith("/"):
             models_dir = Path(models_root) / "text_encoders"
         else:
@@ -187,23 +194,116 @@ def _director_config():
             distribution = str(app_config.config.get("training", {}).get("wsl_distribution") or "").strip()
             windows_models_dir = str(PureWindowsPath(models_root) / "text_encoders")
             models_dir = Path(to_wsl_path(windows_models_dir, distribution=distribution))
-        if port <= 0 or port > 65535:
-            raise ValueError("Storyboard Director llama.cpp port must be between 1 and 65535.")
-        if context_size is not None and context_size < 1024:
-            raise ValueError("Storyboard Director context_size must be at least 1024 when overridden.")
+        models_dir = models_dir.expanduser()
+
+    remote_endpoints = []
+    raw_endpoints = director.get("remote_endpoints")
+    if isinstance(raw_endpoints, list):
+        for item in raw_endpoints:
+            if not isinstance(item, dict) or item.get("enabled", True) is False:
+                continue
+            endpoint_id = str(item.get("id") or "").strip()
+            endpoint = str(item.get("endpoint") or "").strip().rstrip("/")
+            if endpoint_id and endpoint:
+                remote_endpoints.append({
+                    "id": endpoint_id,
+                    "name": str(item.get("name") or endpoint_id).strip(),
+                    "endpoint": endpoint,
+                })
+
+    legacy_endpoint = str(director.get("endpoint") or "").strip().rstrip("/")
+    if legacy_endpoint and not any(item["endpoint"] == legacy_endpoint for item in remote_endpoints):
+        remote_endpoints.insert(0, {"id": "remote", "name": "Remote", "endpoint": legacy_endpoint})
 
     return {
-        "mode": mode,
-        "endpoint": endpoint,
+        "legacy_mode": str(director.get("mode") or "local").strip().lower(),
         "llama_server": executable,
-        "models_dir": models_dir.expanduser() if models_dir is not None else None,
+        "models_dir": models_dir,
         "port": port,
         "context_size": context_size,
         "max_tokens": max_tokens,
+        "remote_endpoints": remote_endpoints,
     }
 
 
-def uses_local_gpu():
+def _runtime_settings(runtime_id=""):
+    base = _director_base_config()
+    runtime_id = str(runtime_id or getattr(_runtime_context, "runtime_id", "") or "").strip()
+    if not runtime_id:
+        if base["legacy_mode"] == "remote" and base["remote_endpoints"]:
+            runtime_id = base["remote_endpoints"][0]["id"]
+        else:
+            runtime_id = "local"
+
+    if runtime_id == "local":
+        if base["models_dir"] is None:
+            raise ValueError("WebCap Model Root is required for local Storyboard Director model discovery.")
+        if base["port"] <= 0 or base["port"] > 65535:
+            raise ValueError("Storyboard Director llama.cpp port must be between 1 and 65535.")
+        if base["context_size"] is not None and base["context_size"] < 1024:
+            raise ValueError("Storyboard Director context_size must be at least 1024 when overridden.")
+        return {
+            **base,
+            "runtime_id": "local",
+            "runtime_name": "Local",
+            "mode": "local",
+            "endpoint": "",
+        }
+
+    endpoint = next((item for item in base["remote_endpoints"] if item["id"] == runtime_id), None)
+    if endpoint is None:
+        raise ValueError("Unknown Director runtime: " + runtime_id)
+    if not endpoint["endpoint"].startswith(("http://", "https://")):
+        raise ValueError("Storyboard Director remote endpoint must start with http:// or https://.")
+    return {
+        **base,
+        "runtime_id": endpoint["id"],
+        "runtime_name": endpoint["name"],
+        "mode": "remote",
+        "endpoint": endpoint["endpoint"],
+        "models_dir": None,
+    }
+
+
+def _director_config():
+    return _runtime_settings()
+
+
+@contextlib.contextmanager
+def _use_runtime(runtime_id):
+    previous = getattr(_runtime_context, "runtime_id", "")
+    _runtime_context.runtime_id = str(runtime_id or "")
+    try:
+        yield _director_config()
+    finally:
+        _runtime_context.runtime_id = previous
+
+
+def _split_model_ref(model_ref):
+    value = str(model_ref or "").strip()
+    if not value:
+        raise ValueError("Choose a Director model.")
+    if "::" in value:
+        runtime_id, model_id = value.split("::", 1)
+        runtime_id = runtime_id.strip()
+        model_id = model_id.strip()
+        if not runtime_id or not model_id:
+            raise ValueError("Director model reference is invalid.")
+        return runtime_id, model_id
+
+    # Unqualified refs are legacy local model IDs. Browser preferences are
+    # reconciled against discovered qualified refs before requests are queued.
+    return "local", value
+
+
+def _model_ref(runtime_id, model_id):
+    return str(runtime_id or "").strip() + "::" + str(model_id or "").strip()
+
+
+def uses_local_gpu(model_ref=None):
+    if model_ref:
+        runtime_id, _model_id = _split_model_ref(model_ref)
+        return runtime_id == "local"
     return _director_config().get("mode", "local") == "local"
 
 
@@ -431,23 +531,34 @@ def _remote_http_json_cancellable(path, method="GET", payload=None, timeout=30):
         connection.close()
 
 
+def _active_runtime_settings():
+    with _activity_lock:
+        active_model = str(_activity.get("model") or "").strip()
+    if not active_model:
+        return _director_config()
+    runtime_id, _model_id = _split_model_ref(active_model)
+    return _runtime_settings(runtime_id)
+
+
 def assert_stop_supported():
-    settings = _director_config()
+    settings = _active_runtime_settings()
     if settings.get("mode", "local") == "local":
         assert_hard_stop_supported()
         return
-    if not _remote_is_ollama(refresh=True):
-        raise ValueError(
-            "Stop is not supported by this generic remote OpenAI-compatible endpoint. "
-            "Remote cancellation is currently supported for Ollama."
-        )
+    with _use_runtime(settings.get("runtime_id", "")):
+        if not _remote_is_ollama(refresh=True):
+            raise ValueError(
+                "Stop is not supported by this generic remote OpenAI-compatible endpoint. "
+                "Remote cancellation is currently supported for Ollama."
+            )
 
 
 def stop_active_request():
-    settings = _director_config()
+    settings = _active_runtime_settings()
     if settings.get("mode", "local") == "local":
         return stop_owned_server()
-    assert_stop_supported()
+    with _use_runtime(settings.get("runtime_id", "")):
+        assert_stop_supported()
     _stop_requested.set()
     with _remote_request_lock:
         connection = _active_remote_connection
@@ -651,12 +762,9 @@ def _ensure_server():
     with _process_lock:
         settings = _director_config()
         if settings.get("mode", "local") == "remote":
-            if _process is not None:
-                _stop_server_locked()
-            try:
-                _normalize_models(_http_json("/models", timeout=10))
-            except Exception as exc:
-                raise ConnectionError("Could not connect to the configured remote Director endpoint.") from exc
+            # Remote discovery is performed by the caller. Do not double-probe
+            # here; a dead endpoint should be skipped quickly rather than
+            # serially consuming two network timeouts.
             return
 
         desired_signature = _server_signature(settings)
@@ -788,11 +896,12 @@ def _model_file_size(model):
         ) from exc
 
 
-def list_models(reload=False):
+def _list_models_for_current_runtime(reload=False):
     _ensure_server()
     settings = _director_config()
     suffix = "?reload=1" if reload and settings.get("mode", "local") == "local" else ""
-    models = _normalize_models(_http_json("/models" + suffix, timeout=10))
+    discovery_timeout = 10 if settings.get("mode", "local") == "local" else 3
+    models = _normalize_models(_http_json("/models" + suffix, timeout=discovery_timeout))
     if settings.get("mode", "local") == "local":
         for model in models:
             model["sizeBytes"] = _model_file_size(model)
@@ -808,60 +917,94 @@ def list_models(reload=False):
     return models
 
 
-def status():
-    settings = _director_config()
+def list_models(reload=False):
+    models = []
+    warnings = []
+    base = _director_base_config()
+
     try:
-        models = list_models(reload=True)
-        if settings.get("mode", "local") == "remote":
-            return {
-                "available": True,
-                "serverRunning": True,
-                "runtime": "Remote Ollama" if _remote_is_ollama() else "Remote OpenAI-compatible",
-                "endpoint": settings.get("endpoint", ""),
-                "models": models,
-            }
-
-        executable = ""
-        try:
-            executable = _resolve_executable()
-        except FileNotFoundError:
-            if _process is not None:
-                raise
-        return {
-            "available": True,
-            "serverRunning": True,
-            "runtime": "llama.cpp",
-            "executable": executable,
-            "modelsDir": str(settings["models_dir"]),
-            "models": models,
-        }
+        with _use_runtime("local"):
+            local_models = _list_models_for_current_runtime(reload=reload)
+        for model in local_models:
+            model["runtimeId"] = "local"
+            model["runtimeName"] = "Local"
+            model["modelId"] = model["id"]
+            model["id"] = _model_ref("local", model["id"])
+        models.extend(local_models)
     except Exception as exc:
-        return {
-            "available": False,
-            "serverRunning": False,
-            "runtime": "Remote OpenAI-compatible" if settings.get("mode", "local") == "remote" else "llama.cpp",
-            "endpoint": settings.get("endpoint", "") if settings.get("mode", "local") == "remote" else "",
-            "modelsDir": str(settings["models_dir"]) if settings["models_dir"] is not None else "",
-            "models": [],
-            "error": str(exc),
-        }
+        warnings.append({"runtimeId": "local", "runtimeName": "Local", "error": str(exc)})
+        _logger.info("Director local model discovery unavailable; skipped: %s", exc)
+
+    for endpoint in base["remote_endpoints"]:
+        try:
+            with _use_runtime(endpoint["id"]):
+                remote_models = _list_models_for_current_runtime(reload=reload)
+            for model in remote_models:
+                model["runtimeId"] = endpoint["id"]
+                model["runtimeName"] = endpoint["name"]
+                model["modelId"] = model["id"]
+                model["id"] = _model_ref(endpoint["id"], model["id"])
+            models.extend(remote_models)
+        except Exception as exc:
+            warnings.append({
+                "runtimeId": endpoint["id"],
+                "runtimeName": endpoint["name"],
+                "endpoint": endpoint["endpoint"],
+                "error": str(exc),
+            })
+            _logger.info(
+                "Director endpoint %s (%s) unavailable; skipped: %s",
+                endpoint["name"],
+                endpoint["endpoint"],
+                exc,
+            )
+
+    models.sort(key=lambda model: (
+        0 if model.get("runtimeId") == "local" else 1,
+        str(model.get("runtimeName") or "").casefold(),
+        str(model.get("label") or "").casefold(),
+    ))
+    list_models.last_warnings = warnings
+    return models
 
 
-def _model_record(model_id):
-    model_id = str(model_id or "").strip()
-    if not model_id:
-        raise ValueError("Choose a Director model.")
+list_models.last_warnings = []
+
+
+def status():
     models = list_models(reload=True)
+    warnings = list(getattr(list_models, "last_warnings", []) or [])
+    return {
+        "available": bool(models),
+        "serverRunning": bool(models),
+        "runtime": "Director runtimes",
+        "models": models,
+        "warnings": warnings,
+        "error": "" if models else (
+            "No Director models are currently available."
+            + ((" " + "; ".join(item.get("runtimeName", "Runtime") + ": " + item.get("error", "") for item in warnings)) if warnings else "")
+        ),
+    }
+
+
+def _model_record(model_ref):
+    runtime_id, model_id = _split_model_ref(model_ref)
+    with _use_runtime(runtime_id):
+        models = _list_models_for_current_runtime(reload=True)
     for model in models:
         if model["id"] == model_id:
+            model["runtimeId"] = runtime_id
+            model["runtimeName"] = _runtime_settings(runtime_id)["runtime_name"]
+            model["modelId"] = model_id
+            model["id"] = _model_ref(runtime_id, model_id)
             return model
-    raise FileNotFoundError("Director model is not available from the active runtime: " + model_id)
+    raise FileNotFoundError("Director model is not available from runtime '" + runtime_id + "': " + model_id)
 
 
 def _wait_for_model(model_id, wanted, timeout=180):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        for model in list_models(reload=False):
+        for model in _list_models_for_current_runtime(reload=False):
             if model["id"] != model_id:
                 continue
             if model["status"] == wanted:
@@ -960,14 +1103,14 @@ def _free_comfy_models():
 
 
 def _model_status(model_id):
-    for model in list_models(reload=False):
+    for model in _list_models_for_current_runtime(reload=False):
         if model["id"] == model_id:
             return model["status"]
     return ""
 
 
 def _ensure_local_model_loaded(model_id):
-    models = list_models(reload=False)
+    models = _list_models_for_current_runtime(reload=False)
     selected = next((model for model in models if model["id"] == model_id), None)
     if selected is None:
         raise FileNotFoundError("Director model is not available from the active runtime: " + model_id)
@@ -976,7 +1119,6 @@ def _ensure_local_model_loaded(model_id):
 
     _set_activity(
         "loading_model",
-        model_id=model_id,
         model_size_bytes=_model_file_size(selected),
     )
     for model in models:
@@ -1128,13 +1270,14 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
     )
 
 
-def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None):
+def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director messages are required.")
 
-    with _request_lock:
+    runtime_id, model_id = _split_model_ref(model_ref)
+    with _request_lock, _use_runtime(runtime_id):
         _ensure_server()
-        _model_record(model_id)
+        _model_record(model_ref)
         settings = _director_config()
         sampling = dict(sampling or _sampling_profile(""))
         payload = {
@@ -1168,12 +1311,12 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                 },
             }
 
-        _debug_llm_request(settings, model_id, messages, payload, response_schema)
+        _debug_llm_request(settings, model_ref, messages, payload, response_schema)
 
         if settings.get("mode", "local") == "remote":
             if _stop_requested.is_set():
                 raise RuntimeError("LLM request stopped.")
-            _set_activity("generating", model_id=model_id)
+            _set_activity("generating", model_id=model_ref)
             request_json = _remote_http_json_cancellable if _remote_is_ollama() else _http_json
             request_started = time.perf_counter()
             try:
@@ -1184,21 +1327,21 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                     timeout=10 * 60,
                 )
             except Exception as exc:
-                _debug_llm_failure(model_id, time.perf_counter() - request_started, exc)
+                _debug_llm_failure(model_ref, time.perf_counter() - request_started, exc)
                 raise
-            _debug_llm_response(response, model_id, time.perf_counter() - request_started)
-            return _completion_result(response, model_id)
+            _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
+            return _completion_result(response, model_ref)
 
         if not gpu_reserved:
             _reserve_gpu()
         completed = False
         cleanup_safe = True
         try:
-            _set_activity("freeing_comfy", model_id=model_id)
+            _set_activity("freeing_comfy", model_id=model_ref)
             _free_comfy_models()
             _ensure_local_model_loaded(model_id)
             _relay_log_updates()
-            _set_activity("generating", model_id=model_id)
+            _set_activity("generating", model_id=model_ref)
             request_started = time.perf_counter()
             try:
                 response = _http_json(
@@ -1208,7 +1351,7 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                     timeout=10 * 60,
                 )
             except Exception as exc:
-                _debug_llm_failure(model_id, time.perf_counter() - request_started, exc)
+                _debug_llm_failure(model_ref, time.perf_counter() - request_started, exc)
                 tail = _log_tail()
                 if tail:
                     _logger.error(
@@ -1216,9 +1359,9 @@ def chat(model_id, messages, response_schema=None, max_tokens=None, gpu_reserved
                         tail,
                     )
                 raise
-            _debug_llm_response(response, model_id, time.perf_counter() - request_started)
+            _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
             _relay_log_updates()
-            result = _completion_result(response, model_id)
+            result = _completion_result(response, model_ref)
             completed = True
             return result
         finally:
@@ -1294,7 +1437,9 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
             model_size_bytes=0,
         )
         try:
-            settings = _director_config()
+            runtime_id, _raw_model_id = _split_model_ref(model_id)
+            with _use_runtime(runtime_id):
+                settings = _director_config()
             _set_activity(
                 "preparing",
                 model_id=model_id,
@@ -1318,7 +1463,8 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
                 + " timings=" + json.dumps(result.get("timings") or {}, ensure_ascii=False),
                 flush=True,
             )
-            _relay_log_updates()
+            if settings.get("mode", "local") == "local":
+                _relay_log_updates()
             return result
         except Exception as exc:
             if _stop_requested.is_set():
@@ -1348,7 +1494,9 @@ def run_contract(model_id, contract, gpu_reserved=False):
             model_size_bytes=0,
         )
         try:
-            settings = _director_config()
+            runtime_id, _raw_model_id = _split_model_ref(model_id)
+            with _use_runtime(runtime_id):
+                settings = _director_config()
             print(
                 "[Director] request starting: operation="
                 + (operation or "unknown")
@@ -1424,7 +1572,8 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 + " timings=" + json.dumps(result.get("timings") or {}, ensure_ascii=False),
                 flush=True,
             )
-            _relay_log_updates()
+            if settings.get("mode", "local") == "local":
+                _relay_log_updates()
             return result
         except Exception as exc:
             if _stop_requested.is_set():

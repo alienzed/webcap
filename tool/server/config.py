@@ -274,13 +274,63 @@ def validate_config_payload(payload):
     mode = str(director.get("mode") or "local").strip().lower()
     if mode not in {"local", "remote"}:
         raise ValueError("Config.storyboard.director.mode must be local or remote.")
+
+    legacy_endpoint = str(director.get("endpoint") or "").strip()
+    raw_remote_endpoints = director.get("remote_endpoints")
+    if raw_remote_endpoints is None:
+        raw_remote_endpoints = []
+    if not isinstance(raw_remote_endpoints, list):
+        raise ValueError("Config.storyboard.director.remote_endpoints must be an array when provided.")
+
+    remote_endpoints = []
+    seen_endpoint_ids = set()
+    for index, raw_endpoint in enumerate(raw_remote_endpoints):
+        if not isinstance(raw_endpoint, dict):
+            raise ValueError("Each Director remote endpoint must be an object.")
+        endpoint_id = str(raw_endpoint.get("id") or "").strip()
+        name = str(raw_endpoint.get("name") or "").strip()
+        endpoint = str(raw_endpoint.get("endpoint") or "").strip().rstrip("/")
+        enabled = raw_endpoint.get("enabled", True)
+        if not endpoint_id:
+            raise ValueError("Director remote endpoint id is required.")
+        if endpoint_id == "local" or "::" in endpoint_id:
+            raise ValueError("Director remote endpoint id cannot be 'local' or contain '::'.")
+        if endpoint_id in seen_endpoint_ids:
+            raise ValueError("Director remote endpoint ids must be unique.")
+        if not endpoint.startswith(("http://", "https://")):
+            raise ValueError("Director remote endpoint must start with http:// or https://.")
+        if not isinstance(enabled, bool):
+            raise ValueError("Director remote endpoint enabled must be true or false.")
+        seen_endpoint_ids.add(endpoint_id)
+        remote_endpoints.append({
+            "id": endpoint_id,
+            "name": name or ("Remote " + str(index + 1)),
+            "endpoint": endpoint,
+            "enabled": enabled,
+        })
+
+    # Preserve existing single-remote configurations on upgrade. The legacy
+    # fields remain readable for one release so old config files and browser
+    # preferences continue to resolve, but new UI writes remote_endpoints.
+    if legacy_endpoint and not any(item["endpoint"] == legacy_endpoint.rstrip("/") for item in remote_endpoints):
+        legacy_id = "remote"
+        suffix = 2
+        while legacy_id in seen_endpoint_ids:
+            legacy_id = "remote-" + str(suffix)
+            suffix += 1
+        remote_endpoints.insert(0, {
+            "id": legacy_id,
+            "name": "Remote",
+            "endpoint": legacy_endpoint.rstrip("/"),
+            "enabled": True,
+        })
+
     normalized_director = {
         "mode": mode,
-        "endpoint": str(director.get("endpoint") or "").strip(),
+        "endpoint": legacy_endpoint,
+        "remote_endpoints": remote_endpoints,
         "llama_server": str(director.get("llama_server") or "").strip(),
     }
-    if mode == "remote" and not normalized_director["endpoint"]:
-        raise ValueError("Config.storyboard.director.endpoint is required in remote mode.")
     port = director.get("port", 8189)
     if isinstance(port, bool) or not isinstance(port, int) or port < 1 or port > 65535:
         raise ValueError("Config.storyboard.director.port must be an integer between 1 and 65535.")

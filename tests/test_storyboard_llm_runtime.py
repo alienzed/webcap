@@ -1400,3 +1400,84 @@ def test_chat_hard_stop_does_not_restart_or_unload_runtime(monkeypatch):
         assert calls == ["interrupted"]
     finally:
         storyboard_llm_runtime.clear_stop_request()
+
+
+def test_model_refs_keep_runtime_identity_distinct():
+    assert storyboard_llm_runtime._split_model_ref("local::qwen3:8b") == ("local", "qwen3:8b")
+    assert storyboard_llm_runtime._split_model_ref("macbook::qwen3:8b") == ("macbook", "qwen3:8b")
+    assert storyboard_llm_runtime.uses_local_gpu("local::qwen3:8b") is True
+    assert storyboard_llm_runtime.uses_local_gpu("macbook::qwen3:8b") is False
+
+
+def test_model_discovery_skips_failed_remote_and_keeps_healthy_models(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_base_config",
+        lambda: {
+            "legacy_mode": "local",
+            "llama_server": "",
+            "models_dir": tmp_path,
+            "port": 8189,
+            "context_size": None,
+            "max_tokens": None,
+            "remote_endpoints": [
+                {"id": "macbook", "name": "MacBook Pro", "endpoint": "http://macbook:11434/v1"},
+                {"id": "offline", "name": "Offline PC", "endpoint": "http://offline:11434/v1"},
+            ],
+        },
+    )
+
+    def fake_list_models(reload=False):
+        runtime_id = str(getattr(storyboard_llm_runtime._runtime_context, "runtime_id", "") or "local")
+        if runtime_id == "offline":
+            raise ConnectionError("offline")
+        return [{
+            "id": "qwen3:8b",
+            "label": "qwen3:8b",
+            "path": "",
+            "status": "remote" if runtime_id != "local" else "unloaded",
+            "sizeBytes": 123,
+        }]
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_list_models_for_current_runtime", fake_list_models)
+
+    models = storyboard_llm_runtime.list_models(reload=True)
+
+    assert [model["id"] for model in models] == [
+        "local::qwen3:8b",
+        "macbook::qwen3:8b",
+    ]
+    assert [model["runtimeName"] for model in models] == ["Local", "MacBook Pro"]
+    assert storyboard_llm_runtime.list_models.last_warnings == [{
+        "runtimeId": "offline",
+        "runtimeName": "Offline PC",
+        "endpoint": "http://offline:11434/v1",
+        "error": "offline",
+    }]
+
+
+def test_status_remains_available_when_one_runtime_is_down(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "list_models",
+        lambda reload=False: [{
+            "id": "remote::qwen",
+            "modelId": "qwen",
+            "label": "qwen",
+            "runtimeId": "remote",
+            "runtimeName": "Remote",
+            "status": "remote",
+            "sizeBytes": 0,
+        }],
+    )
+    storyboard_llm_runtime.list_models.last_warnings = [{
+        "runtimeId": "offline",
+        "runtimeName": "Offline PC",
+        "error": "connection failed",
+    }]
+
+    payload = storyboard_llm_runtime.status()
+
+    assert payload["available"] is True
+    assert payload["models"][0]["id"] == "remote::qwen"
+    assert payload["warnings"][0]["runtimeName"] == "Offline PC"

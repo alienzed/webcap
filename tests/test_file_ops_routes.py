@@ -505,6 +505,76 @@ def test_duplicate_media_route_copies_caption(tmp_path, monkeypatch):
     assert (set_dir / "photo copy.txt").read_text(encoding="utf-8") == "caption text"
 
 
+def test_duplicate_media_route_clones_per_item_state_and_cached_metadata(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs_root"
+    set_dir = fs_root / "set_state"
+    set_dir.mkdir(parents=True)
+    write_image(set_dir / "photo.png")
+    write_text(set_dir / "photo.txt", "caption text")
+    write_text(
+        set_dir / ".webcap_state.json",
+        json.dumps(
+            {
+                "reviewedKeys": ["photo.png"],
+                "mutated_media_keys": ["photo.png"],
+                "flags": {"photo.png": "keep"},
+                "caption_requirements_checked": {"photo.png": {"Caption": True, "Tags": True}},
+                "caption_term_descriptors_by_media": {"photo.png": {"dragon": {"suffix": "portrait"}}},
+                "caption_group_tags_by_media": {"photo.png": {"Hair": ["brown"], "Background": ["blue"]}},
+                "caption_group_term_descriptors_by_media": {
+                    "photo.png": {"Hair": {"brown": {"suffix": "hair"}}}
+                },
+                "caption_tags_by_media": {"photo.png": ["outdoors", "portrait"]},
+                "ratings_by_media": {"photo.png": 4},
+            }
+        ),
+    )
+    write_text(
+        set_dir / "media_metadata.json",
+        json.dumps(
+            {
+                "photo.png": {
+                    "size": (set_dir / "photo.png").stat().st_size,
+                    "mtime": int((set_dir / "photo.png").stat().st_mtime),
+                    "resolution": "128x128",
+                    "aspect_ratio": "1:1",
+                    "scene_complexity": {"version": 1, "bucket": "simple"},
+                }
+            }
+        ),
+    )
+
+    def safe_join(rel_path):
+        rel = str(rel_path or "").strip().replace("..", "").replace("\\", "/").replace("//", "/")
+        if rel.startswith("/"):
+            rel = rel[1:]
+        return (fs_root / rel).resolve()
+
+    monkeypatch.setattr(file_ops_module, "safe_join_fs_root", safe_join)
+
+    client = app_module.app.test_client()
+    response = client.post("/fs/duplicate_media", json={"src": "set_state/photo.png"})
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+
+    state = json.loads((set_dir / ".webcap_state.json").read_text(encoding="utf-8"))
+    assert state["reviewedKeys"] == ["photo.png", "photo copy.png"]
+    assert state["mutated_media_keys"] == ["photo.png"]
+    assert state["flags"]["photo copy.png"] == "keep"
+    assert state["caption_requirements_checked"]["photo copy.png"] == {"Caption": True, "Tags": True}
+    assert state["caption_term_descriptors_by_media"]["photo copy.png"] == {"dragon": {"suffix": "portrait"}}
+    assert state["caption_group_tags_by_media"]["photo copy.png"] == {"Hair": ["brown"], "Background": ["blue"]}
+    assert state["caption_group_term_descriptors_by_media"]["photo copy.png"] == {
+        "Hair": {"brown": {"suffix": "hair"}}
+    }
+    assert state["caption_tags_by_media"]["photo copy.png"] == ["outdoors", "portrait"]
+    assert state["ratings_by_media"]["photo copy.png"] == 4
+
+    metadata = json.loads((set_dir / "media_metadata.json").read_text(encoding="utf-8"))
+    assert metadata["photo copy.png"] == metadata["photo.png"]
+
+
 def test_duplicate_media_route_copies_video_caption(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs_root"
     set_dir = fs_root / "set_video"

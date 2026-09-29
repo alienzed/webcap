@@ -1286,7 +1286,10 @@
                 <aside class="storyboard-library" aria-label="Stories">
                     <header class="storyboard-library-header">
                         <strong>Stories</strong>
-                        <button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Story</button>
+                        <div class="storyboard-library-header-actions">
+                            <button id="storyboard-library-compact-toggle" type="button" class="review-captions-btn storyboard-library-compact-toggle" aria-pressed="false" title="Collapse Stories to icons" aria-label="Collapse Stories to icons">‹</button>
+                            <button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Story</button>
+                        </div>
                     </header>
                     <div id="storyboard-library-list" class="storyboard-library-list"></div>
                 </aside>
@@ -1312,7 +1315,7 @@
                                 <div class="storyboard-story-panel-heading">
                                     <strong>Story Overview</strong>
                                     <div class="storyboard-story-action-wrap">
-                                        <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn" title="Take this Story from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
+                                        <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn storyboard-director-action" title="Take this Story from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
                                         <div id="storyboard-story-action-card" class="storyboard-story-action-card hidden" aria-live="polite">
                                             <div class="storyboard-story-action-copy">
                                                 <strong id="storyboard-story-action-phase">Preparing</strong>
@@ -1333,12 +1336,13 @@
                                     </summary>
                                     <div class="storyboard-story-section-body">
                                         <label class="storyboard-field"><span>Title</span><input id="storyboard-story-title" type="text" maxlength="200"></label>
+                                        <label class="storyboard-field storyboard-story-icon-field"><span>Icon</span><select id="storyboard-story-icon" aria-label="Story icon"><option value="">Auto</option><option value="book">Book</option><option value="image">Image</option><option value="star">Star</option><option value="film">Film</option><option value="eye">Eye</option><option value="spark">Spark</option><option value="mountain">Mountain</option><option value="calendar">Calendar</option></select></label>
                                         <label class="storyboard-field"><span>Status</span><select id="storyboard-story-status"><option value="active">Active</option><option value="complete">Complete</option><option value="archived">Archived</option></select></label>
                                         <div class="storyboard-field storyboard-concept-field">
                                             <div class="storyboard-field-header">
                                                 <span>Concept / overview</span>
                                                 <div class="storyboard-field-actions">
-                                                    <button id="storyboard-expand-concept-btn" type="button" class="storyboard-field-action-btn">Expand with Director</button>
+                                                    <button id="storyboard-expand-concept-btn" type="button" class="storyboard-field-action-btn storyboard-director-action">Expand with Director</button>
                                                     <button id="storyboard-restore-concept-btn" type="button" class="storyboard-field-action-btn hidden">Restore Previous</button>
                                                 </div>
                                             </div>
@@ -1363,7 +1367,7 @@
                                             <span>Facts that should remain stable.</span>
                                         </span>
                                         <span class="storyboard-invariants-actions">
-                                            <button id="storyboard-invariant-define" type="button" class="review-captions-btn">Define from Concept</button>
+                                            <button id="storyboard-invariant-define" type="button" class="review-captions-btn storyboard-director-action">Define from Concept</button>
                                             <button id="storyboard-invariant-add" type="button" class="review-captions-btn">Add Invariant</button>
                                         </span>
                                     </summary>
@@ -1374,7 +1378,23 @@
                                     </div>
                                 </details>
 
-                                <details class="storyboard-story-section" data-story-section="director">
+
+
+                                <div class="storyboard-develop-row">
+                                    <div class="storyboard-develop-controls">
+                                        <label class="storyboard-target-scenes-inline">
+                                            <input id="storyboard-story-target-scenes" type="number" min="2" max="50" step="1" value="12" aria-label="Target Scene count">
+                                            <span>scenes</span>
+                                        </label>
+                                        <button id="storyboard-scene-count-auto" type="button" class="review-captions-btn storyboard-scene-count-auto" aria-pressed="false" title="Let Director choose the Scene count from the Story">Auto</button>
+                                        <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn storyboard-director-action">Develop Scenes</button>
+                                    </div>
+                                    <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite"></span>
+                                </div>
+                            </div>
+
+                            <div class="storyboard-story-utility-shelf" aria-label="Story utilities">
+                                <details class="storyboard-story-section storyboard-director-tools-drawer" data-story-section="director">
                                     <summary>
                                         <span class="storyboard-story-section-summary-copy">
                                             <strong>Director Tools</strong>
@@ -1395,7 +1415,7 @@
                                                 <textarea id="storyboard-repair-instruction" rows="3" placeholder="Tell the Director what tendency or problem to check across the current Scene plan…"></textarea>
                                             </label>
                                             <div class="storyboard-director-repair-actions">
-                                                <button id="storyboard-repair-scenes-btn" type="button" class="review-captions-btn">Check &amp; Repair Scenes</button>
+                                                <button id="storyboard-repair-scenes-btn" type="button" class="review-captions-btn storyboard-director-action">Check &amp; Repair Scenes</button>
                                                 <button id="storyboard-restore-repair-btn" type="button" class="review-captions-btn hidden">Restore Last Repair</button>
                                                 <span id="storyboard-repair-status" class="storyboard-save-state" aria-live="polite"></span>
                                             </div>
@@ -1403,50 +1423,37 @@
                                         </div>
                                     </div>
                                 </details>
-
-                                <div class="storyboard-develop-row">
-                                    <div class="storyboard-develop-context">
-                                        <span class="storyboard-develop-copy">
-                                            <strong>Scene plan</strong>
-                                            <span>Turn the Story Overview above into the Scene plan.</span>
+                                <details class="storyboard-story-section storyboard-scene-defaults" data-story-section="defaults" aria-label="Scene Defaults">
+                                    <summary>
+                                        <span class="storyboard-story-section-summary-copy">
+                                            <strong>Scene Defaults</strong>
+                                            <span>Inherited generation settings for Scenes. These do not change the Story definition.</span>
                                         </span>
-                                        <label class="storyboard-field storyboard-target-scenes-field"><span>Target scenes</span><input id="storyboard-story-target-scenes" type="number" min="2" max="50" step="1" value="12"></label>
-                                    </div>
-                                    <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn">Develop Scenes</button>
-                                    <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite">Create a Scene plan from this Story Overview.</span>
-                                </div>
-                            </div>
-
-                            <details class="storyboard-story-section storyboard-scene-defaults" data-story-section="defaults" aria-label="Scene Defaults">
-                                <summary>
-                                    <span class="storyboard-story-section-summary-copy">
-                                        <strong>Scene Defaults</strong>
-                                        <span>Inherited generation settings for Scenes. These do not change the Story definition.</span>
-                                    </span>
-                                </summary>
-                                <div class="storyboard-story-section-body storyboard-scene-defaults-body">
-                                    <section class="storyboard-story-defaults" aria-label="Inherited Scene generation defaults">
-                                        <div class="storyboard-story-defaults-grid">
-                                            <label class="storyboard-field"><span>Aspect ratio</span><select id="storyboard-story-aspect-ratio"><option value="1:1 (Square)">1:1 (Square)</option><option value="2:3 (Portrait Photo)">2:3 (Portrait Photo)</option><option value="3:2 (Photo)">3:2 (Photo)</option><option value="3:4 (Portrait Standard)">3:4 (Portrait Standard)</option><option value="4:3 (Standard)">4:3 (Standard)</option><option value="9:16 (Portrait Widescreen)">9:16 (Portrait Widescreen)</option><option value="16:9 (Widescreen)">16:9 (Widescreen)</option><option value="21:9 (Ultrawide)">21:9 (Ultrawide)</option></select></label>
-                                            <label class="storyboard-field"><span>Megapixels</span><input id="storyboard-story-megapixels" type="number" min="0.05" step="0.05" value="0.2"></label>
-                                        </div>
-                                    </section>
-                                    <section class="storyboard-story-loras" aria-label="Story LoRAs">
-                                        <div class="storyboard-scene-defaults-subheading">
-                                            <strong>Story LoRAs</strong>
-                                            <span>Inherited by every Scene unless overridden there.</span>
-                                        </div>
-                                        <div class="storyboard-story-lora-section-body">
-                                            <div id="storyboard-story-lora-list" class="storyboard-lora-list"></div>
-                                            <div class="storyboard-lora-picker-wrap">
-                                                <input id="storyboard-story-lora-picker" type="search" class="storyboard-lora-picker" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Filter / choose LoRA…" aria-label="Filter and choose Story LoRA">
-                                                <div class="storyboard-lora-picker-menu hidden" data-lora-picker-menu role="listbox"></div>
+                                    </summary>
+                                    <div class="storyboard-story-section-body storyboard-scene-defaults-body">
+                                        <section class="storyboard-story-defaults" aria-label="Inherited Scene generation defaults">
+                                            <div class="storyboard-story-defaults-grid">
+                                                <label class="storyboard-field"><span>Aspect ratio</span><select id="storyboard-story-aspect-ratio"><option value="1:1 (Square)">1:1 (Square)</option><option value="2:3 (Portrait Photo)">2:3 (Portrait Photo)</option><option value="3:2 (Photo)">3:2 (Photo)</option><option value="3:4 (Portrait Standard)">3:4 (Portrait Standard)</option><option value="4:3 (Standard)">4:3 (Standard)</option><option value="9:16 (Portrait Widescreen)">9:16 (Portrait Widescreen)</option><option value="16:9 (Widescreen)">16:9 (Widescreen)</option><option value="21:9 (Ultrawide)">21:9 (Ultrawide)</option></select></label>
+                                                <label class="storyboard-field"><span>Megapixels</span><input id="storyboard-story-megapixels" type="number" min="0.05" step="0.05" value="0.2"></label>
                                             </div>
-                                            <span id="storyboard-story-lora-status" class="storyboard-reference-empty"></span>
-                                        </div>
-                                    </section>
-                                </div>
-                            </details>
+                                        </section>
+                                        <section class="storyboard-story-loras" aria-label="Story LoRAs">
+                                            <div class="storyboard-scene-defaults-subheading">
+                                                <strong>Story LoRAs</strong>
+                                                <span>Inherited by every Scene unless overridden there.</span>
+                                            </div>
+                                            <div class="storyboard-story-lora-section-body">
+                                                <div id="storyboard-story-lora-list" class="storyboard-lora-list"></div>
+                                                <div class="storyboard-lora-picker-wrap">
+                                                    <input id="storyboard-story-lora-picker" type="search" class="storyboard-lora-picker" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Filter / choose LoRA…" aria-label="Filter and choose Story LoRA">
+                                                    <div class="storyboard-lora-picker-menu hidden" data-lora-picker-menu role="listbox"></div>
+                                                </div>
+                                                <span id="storyboard-story-lora-status" class="storyboard-reference-empty"></span>
+                                            </div>
+                                        </section>
+                                    </div>
+                                </details>
+                            </div>
                         </div>
                         <div class="storyboard-scene-workspace">
                             <div class="storyboard-scenes-heading">

@@ -243,6 +243,17 @@ def test_develop_story_uses_full_concept_and_structured_scene_plan():
     assert "EXISTING SECOND PROMPT" not in prompt
 
 
+def test_develop_story_auto_scene_count_does_not_fall_back_to_twelve():
+    story = _story()
+    story["targetSceneCount"] = None
+
+    prompt = storyboard_llm_contract.build_request(story, "", "develop_story")["prompt"]
+
+    assert "Choose the Scene count that best fits the Story's natural progression" in prompt
+    assert "do not target a predetermined count" in prompt
+    assert "Aim for 12 Scenes" not in prompt
+
+
 def test_repair_scenes_is_sparse_whole_story_patch_not_redevelopment():
     story = _story()
     request = storyboard_llm_contract.build_request(

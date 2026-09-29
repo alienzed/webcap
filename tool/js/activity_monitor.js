@@ -7,6 +7,7 @@
     payload: { active: [], recent: [], queues: {} },
     timer: 0,
     pending: false,
+    pendingPromise: null,
     lastSeen: sessionStartedAt,
     openedAt: 0,
     notified: Object.create(null),
@@ -452,6 +453,9 @@
       var button = el(id);
       if (button) button.classList.toggle('has-active-work', !!activeIds[id]);
     });
+    if (typeof window.setShellTrainingActive === 'function') {
+      window.setShellTrainingActive(!!activeIds['activity-training-btn']);
+    }
   }
 
   function render() {
@@ -506,9 +510,9 @@
   }
 
   function refresh() {
-    if (state.pending) return Promise.resolve(state.payload);
+    if (state.pending) return state.pendingPromise || Promise.resolve(state.payload);
     state.pending = true;
-    return requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
+    state.pendingPromise = requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
       state.payload = payload;
       window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);
       var activeErrorKeys = Object.create(null);
@@ -530,8 +534,10 @@
       return state.payload;
     }).then(function (payload) {
       state.pending = false;
+      state.pendingPromise = null;
       return payload;
     });
+    return state.pendingPromise;
   }
 
   function hasQueuedOrPausedWork() {
@@ -553,6 +559,14 @@
   }
 
   function wake() {
+    if (state.pending) {
+      return state.pendingPromise.then(function () {
+        return refresh();
+      }).then(function (payload) {
+        schedule();
+        return payload;
+      });
+    }
     return refresh().then(function (payload) {
       schedule();
       return payload;

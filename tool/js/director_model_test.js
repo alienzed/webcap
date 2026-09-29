@@ -155,6 +155,7 @@ function directorModelTestRenderSession() {
       '<td>' + escapeHtml(statusText) + '</td>' +
       '<td>' + escapeHtml(directorModelTestSeconds(run.totalSeconds)) + '</td>' +
       '<td>' + escapeHtml(directorModelTestSeconds(run.queueSeconds)) + '</td>' +
+      '<td>' + escapeHtml(directorModelTestSeconds(run.preparingSeconds)) + '</td>' +
       '<td>' + escapeHtml(directorModelTestSeconds(run.loadingSeconds)) + '</td>' +
       '<td>' + escapeHtml(directorModelTestSeconds(run.generatingSeconds)) + '</td>' +
       '<td>' + escapeHtml(directorModelTestTokenCount(run.promptTokens)) + ' / ' + escapeHtml(directorModelTestTokenCount(run.completionTokens)) + '</td>' +
@@ -173,7 +174,7 @@ function directorModelTestRenderSession() {
 
   results.innerHTML =
     '<div class="table-responsive"><table class="table table-sm">' +
-      '<thead><tr><th>Model</th><th>Runtime</th><th>Status</th><th>Total</th><th>Queue</th><th>Load</th><th>Generate</th><th>In / Out</th><th>tok/s</th><th>Size</th></tr></thead>' +
+      '<thead><tr><th>Model</th><th>Runtime</th><th>Status</th><th>Total</th><th>Queue</th><th>Prep</th><th>Load</th><th>Generate</th><th>In / Out</th><th>tok/s</th><th>Size</th></tr></thead>' +
       '<tbody>' + rows + '</tbody>' +
     '</table></div>' +
     outputs;

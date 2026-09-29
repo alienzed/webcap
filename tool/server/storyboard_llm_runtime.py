@@ -1,4 +1,5 @@
 import atexit
+import contextlib
 import http.client
 import json
 import logging
@@ -40,6 +41,7 @@ _request_lock = threading.RLock()
 _remote_request_lock = threading.Lock()
 _active_remote_connection = None
 _remote_provider_cache = {}
+_runtime_context = threading.local()
 _activity_lock = threading.Lock()
 _log_relay_lock = threading.Lock()
 _log_relay_offset = 0
@@ -150,36 +152,24 @@ def activity_status():
 
 
 
-def _director_config():
+def _director_base_config():
     storyboard = app_config.config.get("storyboard")
     storyboard = storyboard if isinstance(storyboard, dict) else {}
     director = storyboard.get("director")
     director = director if isinstance(director, dict) else {}
 
-    mode = str(director.get("mode") or "local").strip().lower()
-    endpoint = str(director.get("endpoint") or "").strip().rstrip("/")
     executable = str(director.get("llama_server") or "").strip()
     port = int(director.get("port") or DEFAULT_PORT)
     raw_context_size = director.get("context_size", DEFAULT_CONTEXT_SIZE)
     context_size = None if raw_context_size in (None, "") else int(raw_context_size)
     raw_max_tokens = director.get("max_tokens", DEFAULT_MAX_TOKENS)
     max_tokens = None if raw_max_tokens in (None, "") else int(raw_max_tokens)
-
-    if mode not in {"local", "remote"}:
-        raise ValueError("Storyboard Director mode must be local or remote.")
     if max_tokens is not None and max_tokens <= 0:
         raise ValueError("Storyboard Director max_tokens must be greater than zero when overridden.")
 
     models_dir = None
-    if mode == "remote":
-        if not endpoint:
-            raise ValueError("Storyboard Director remote endpoint is required.")
-        if not endpoint.startswith(("http://", "https://")):
-            raise ValueError("Storyboard Director remote endpoint must start with http:// or https://.")
-    else:
-        models_root = str(app_config.config.get("filesystem", {}).get("models") or "").strip()
-        if not models_root:
-            raise ValueError("WebCap Model Root is required for local Storyboard Director model discovery.")
+    models_root = str(app_config.config.get("filesystem", {}).get("models") or "").strip()
+    if models_root:
         if models_root.startswith("/"):
             models_dir = Path(models_root) / "text_encoders"
         else:
@@ -187,23 +177,118 @@ def _director_config():
             distribution = str(app_config.config.get("training", {}).get("wsl_distribution") or "").strip()
             windows_models_dir = str(PureWindowsPath(models_root) / "text_encoders")
             models_dir = Path(to_wsl_path(windows_models_dir, distribution=distribution))
-        if port <= 0 or port > 65535:
-            raise ValueError("Storyboard Director llama.cpp port must be between 1 and 65535.")
-        if context_size is not None and context_size < 1024:
-            raise ValueError("Storyboard Director context_size must be at least 1024 when overridden.")
+        models_dir = models_dir.expanduser()
+
+    remote_endpoints = []
+    raw_endpoints = director.get("remote_endpoints")
+    if isinstance(raw_endpoints, list):
+        for item in raw_endpoints:
+            if not isinstance(item, dict) or item.get("enabled", True) is False:
+                continue
+            endpoint_id = str(item.get("id") or "").strip()
+            endpoint = str(item.get("endpoint") or "").strip().rstrip("/")
+            if endpoint_id and endpoint:
+                remote_endpoints.append({
+                    "id": endpoint_id,
+                    "name": str(item.get("name") or endpoint_id).strip(),
+                    "endpoint": endpoint,
+                })
+
+    legacy_endpoint = str(director.get("endpoint") or "").strip().rstrip("/")
+    if legacy_endpoint and not any(item["endpoint"] == legacy_endpoint for item in remote_endpoints):
+        remote_endpoints.insert(0, {"id": "remote", "name": "Remote", "endpoint": legacy_endpoint})
 
     return {
-        "mode": mode,
-        "endpoint": endpoint,
+        "legacy_mode": str(director.get("mode") or "local").strip().lower(),
         "llama_server": executable,
-        "models_dir": models_dir.expanduser() if models_dir is not None else None,
+        "models_dir": models_dir,
         "port": port,
         "context_size": context_size,
         "max_tokens": max_tokens,
+        "remote_endpoints": remote_endpoints,
     }
 
 
-def uses_local_gpu():
+def _runtime_settings(runtime_id=""):
+    base = _director_base_config()
+    runtime_id = str(runtime_id or getattr(_runtime_context, "runtime_id", "") or "").strip()
+    if not runtime_id:
+        if base["legacy_mode"] == "remote" and base["remote_endpoints"]:
+            runtime_id = base["remote_endpoints"][0]["id"]
+        else:
+            runtime_id = "local"
+
+    if runtime_id == "local":
+        if base["models_dir"] is None:
+            raise ValueError("WebCap Model Root is required for local Storyboard Director model discovery.")
+        if base["port"] <= 0 or base["port"] > 65535:
+            raise ValueError("Storyboard Director llama.cpp port must be between 1 and 65535.")
+        if base["context_size"] is not None and base["context_size"] < 1024:
+            raise ValueError("Storyboard Director context_size must be at least 1024 when overridden.")
+        return {
+            **base,
+            "runtime_id": "local",
+            "runtime_name": "Local",
+            "mode": "local",
+            "endpoint": "",
+        }
+
+    endpoint = next((item for item in base["remote_endpoints"] if item["id"] == runtime_id), None)
+    if endpoint is None:
+        raise ValueError("Unknown Director runtime: " + runtime_id)
+    if not endpoint["endpoint"].startswith(("http://", "https://")):
+        raise ValueError("Storyboard Director remote endpoint must start with http:// or https://.")
+    return {
+        **base,
+        "runtime_id": endpoint["id"],
+        "runtime_name": endpoint["name"],
+        "mode": "remote",
+        "endpoint": endpoint["endpoint"],
+        "models_dir": None,
+    }
+
+
+def _director_config():
+    return _runtime_settings()
+
+
+@contextlib.contextmanager
+def _use_runtime(runtime_id):
+    previous = getattr(_runtime_context, "runtime_id", "")
+    _runtime_context.runtime_id = str(runtime_id or "")
+    try:
+        yield _runtime_settings(runtime_id)
+    finally:
+        _runtime_context.runtime_id = previous
+
+
+def _split_model_ref(model_ref):
+    value = str(model_ref or "").strip()
+    if not value:
+        raise ValueError("Choose a Director model.")
+    if "::" in value:
+        runtime_id, model_id = value.split("::", 1)
+        runtime_id = runtime_id.strip()
+        model_id = model_id.strip()
+        if not runtime_id or not model_id:
+            raise ValueError("Director model reference is invalid.")
+        return runtime_id, model_id
+
+    # Backward compatibility for saved pre-migration model preferences.
+    base = _director_base_config()
+    if base["legacy_mode"] == "remote" and base["remote_endpoints"]:
+        return base["remote_endpoints"][0]["id"], value
+    return "local", value
+
+
+def _model_ref(runtime_id, model_id):
+    return str(runtime_id or "").strip() + "::" + str(model_id or "").strip()
+
+
+def uses_local_gpu(model_ref=None):
+    if model_ref:
+        runtime_id, _model_id = _split_model_ref(model_ref)
+        return runtime_id == "local"
     return _director_config().get("mode", "local") == "local"
 
 

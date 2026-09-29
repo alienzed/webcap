@@ -5557,7 +5557,8 @@
           !workspace.classList.contains('hidden') &&
           storyState.story &&
           Array.isArray(storyState.story.sceneOrder) &&
-          storyState.story.sceneOrder.length > 0
+          storyState.story.sceneOrder.length > 0 &&
+          !directorTargetBlocked({ kind: 'repair', storyId: storyState.story.id })
         );
       },
       execute: function (request) {

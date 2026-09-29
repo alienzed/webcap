@@ -898,9 +898,7 @@
     if (targetStoryId && targetStoryId !== currentStoryId) return null;
 
     if (target.kind === 'concept') {
-      var conceptField = el('storyboard-story-concept');
-      if (conceptField && conceptField.offsetParent !== null) return conceptField;
-      return document.querySelector('[data-story-section="story"] > summary');
+      return el('storyboard-story-overview');
     }
     if (
       target.kind === 'scene-prompt' ||
@@ -927,34 +925,24 @@
       kind === 'scenes' ||
       kind === 'repair'
     );
+    var fillsOverview = kind === 'concept';
+    var fillsRegion = fillsWorkspace || fillsOverview;
     if (sceneWorkspace) {
       sceneWorkspace.classList.toggle('director-active', fillsWorkspace && !detachedTarget && !hidden);
     }
 
     card.classList.toggle('is-detached-target', detachedTarget);
-    card.classList.toggle('is-workspace-overlay', fillsWorkspace);
+    card.classList.toggle('is-workspace-overlay', fillsRegion);
     if (detachedTarget || !target || hidden) return;
 
     var editorRect = editor.getBoundingClientRect();
     var targetRect = target.getBoundingClientRect();
-    var fillsField = kind === 'concept';
-    card.classList.toggle('is-field-overlay', fillsField);
-    card.classList.toggle('is-structure-overlay', !fillsField && !fillsWorkspace);
-
-    if (fillsField) {
-      var inset = 7;
-      var width = Math.max(260, targetRect.width - inset * 2);
-      var height = Math.max(96, targetRect.height - inset * 2);
-      card.style.width = Math.round(width) + 'px';
-      card.style.height = Math.round(height) + 'px';
-      card.style.left = Math.round(targetRect.left - editorRect.left + inset) + 'px';
-      card.style.top = Math.round(targetRect.top - editorRect.top + inset) + 'px';
-      return;
-    }
+    card.classList.remove('is-field-overlay');
+    card.classList.toggle('is-structure-overlay', !fillsRegion);
 
     card.style.height = '';
 
-    if (fillsWorkspace) {
+    if (fillsRegion) {
       var workspaceWidth = Math.max(0, targetRect.width - 48);
       var availableWidth = Math.max(0, editorRect.width - 24);
       var cardWidth = Math.min(560, workspaceWidth || 560, availableWidth || 560);
@@ -1595,8 +1583,7 @@
       return;
     }
     if (target.kind === 'concept') {
-      var concept = el('storyboard-story-concept');
-      if (concept) concept.disabled = !!protectedState;
+      setDirectorRegionProtected(el('storyboard-story-overview'), protectedState);
       return;
     }
     if (target.kind === 'scenes') {

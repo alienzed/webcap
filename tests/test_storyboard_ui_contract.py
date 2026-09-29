@@ -1460,14 +1460,23 @@ def test_storyboard_story_rail_is_full_by_default_and_manually_compactable():
 def test_storyboard_story_icon_is_optional_persisted_and_visible_in_library():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
     store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
 
     story_section = html.split('data-story-section="story"', 1)[1].split("</details>", 1)[0]
     assert story_section.index('id="storyboard-story-title"') < story_section.index('id="storyboard-story-icon"') < story_section.index('id="storyboard-story-status"')
+    assert 'id="storyboard-story-icon-trigger"' in story_section
+    assert 'id="storyboard-story-icon-menu"' in story_section
+    assert 'type="hidden"' in story_section.split('id="storyboard-story-icon"', 1)[1].split(">", 1)[0]
     assert "var STORY_RAIL_ICONS = {" in storyboard
+    assert "var STORY_ICON_LABELS = {" in storyboard
     assert "function storyRailIconHtml(story)" in storyboard
+    assert "function renderStoryIconPicker()" in storyboard
+    assert "function setStoryIconSelection(iconName)" in storyboard
     assert "storyboard-story-rail-icon" in storyboard
     assert "icon: el('storyboard-story-icon').value" in storyboard
-    assert "VALID_STORY_ICONS" in store
+    assert ".storyboard-icon-picker-menu" in css
+    assert "grid-template-columns: repeat(6" in css
+    assert len(store.split("VALID_STORY_ICONS = {", 1)[1].split("}", 1)[0].split(",")) >= 30
     assert '"icon": icon' in store
     assert '"icon": source.get("icon") or ""' in store

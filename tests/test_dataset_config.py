@@ -133,7 +133,7 @@ def test_generate_dataset_configs_copies_video_and_replaces_images(tmp_path):
     assert training_plan["stages"]["hi"]["estimatedSteps"] > 0
     assert training_plan["stages"]["lo"]["estimatedSteps"] > 0
 
-    shared_dataset = set_folder / "dataset.train.toml"
+    shared_dataset = set_folder / "dataset.h3.toml"
     shared_dataset.write_text("h3 dataset\n", encoding="utf-8")
     krea_report = generate_dataset_configs(set_folder, profile_id=KREA2_PROFILE_ID)
     krea_text = (set_folder / "dataset.krea2.toml").read_text(encoding="utf-8")
@@ -160,7 +160,7 @@ def test_generate_dataset_configs_fails_without_prep_manifest(tmp_path):
 def test_failed_atomic_dataset_replace_keeps_existing_set_toml(tmp_path, monkeypatch):
     set_folder = tmp_path / "set"
     _write_h3_video_manifest(set_folder, 136)
-    dataset_path = set_folder / "dataset.train.toml"
+    dataset_path = set_folder / "dataset.h3.toml"
     dataset_path.write_text("existing = true\n", encoding="utf-8")
     monkeypatch.setattr(training_config_files_module.os, "replace", lambda _temporary, _target: (_ for _ in ()).throw(OSError("replace failed")))
 
@@ -168,7 +168,7 @@ def test_failed_atomic_dataset_replace_keeps_existing_set_toml(tmp_path, monkeyp
         generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
 
     assert dataset_path.read_text(encoding="utf-8") == "existing = true\n"
-    assert not list(set_folder.glob(".dataset.train.toml.*.tmp"))
+    assert not list(set_folder.glob(".dataset.h3.toml.*.tmp"))
 
 
 def _write_h3_video_manifest(set_folder, frames, include_image=False, fps=24, duration=None, ar="square", size=(768, 768)):
@@ -211,7 +211,7 @@ def test_h3_uses_balanced_temporal_and_detail_roles(tmp_path):
     (set_folder / "config.h3.toml").write_text("epochs = 100\n", encoding="utf-8")
 
     report = generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
-    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    text = (set_folder / "dataset.h3.toml").read_text(encoding="utf-8")
 
     assert "[320, 320, 68]" in text
     assert "[544, 544, 34]" in text
@@ -237,7 +237,7 @@ def test_h3_dataset_warns_when_a_short_clip_is_excluded_from_a_usable_set(tmp_pa
     _write_h3_video_manifest(set_folder, 33, include_image=True)
 
     report = generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
-    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    text = (set_folder / "dataset.h3.toml").read_text(encoding="utf-8")
 
     assert "square: detail 704x704 @ 17" in report
     assert 'group = "videos"' in text
@@ -264,7 +264,7 @@ def test_h3_dataset_accepts_an_image_only_set(tmp_path):
     }), encoding="utf-8")
 
     generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
-    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    text = (set_folder / "dataset.h3.toml").read_text(encoding="utf-8")
 
     assert ", 1]" in text
     assert 'group = "videos"' not in text
@@ -306,7 +306,7 @@ def test_h3_bucket_timing_uses_24fps_for_legacy_and_high_fps_sources(tmp_path):
     legacy_folder = tmp_path / "legacy"
     _write_h3_video_manifest(legacy_folder, 48, fps=16, duration=3.0)
     generate_dataset_configs(legacy_folder, profile_id=MINIMAX_H3_PROFILE_ID)
-    legacy_text = (legacy_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    legacy_text = (legacy_folder / "dataset.h3.toml").read_text(encoding="utf-8")
     assert ", 68]" in legacy_text
     assert ", 34]" in legacy_text
     assert ", 17]" in legacy_text
@@ -315,7 +315,7 @@ def test_h3_bucket_timing_uses_24fps_for_legacy_and_high_fps_sources(tmp_path):
     high_fps_folder = tmp_path / "high_fps"
     _write_h3_video_manifest(high_fps_folder, 120, fps=60, duration=2.0)
     generate_dataset_configs(high_fps_folder, profile_id=MINIMAX_H3_PROFILE_ID)
-    high_fps_text = (high_fps_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    high_fps_text = (high_fps_folder / "dataset.h3.toml").read_text(encoding="utf-8")
     assert ", 17]" in high_fps_text
     assert ", 34]" in high_fps_text
     assert all(f", {frames}]" not in high_fps_text for frames in (68, 102, 136))
@@ -334,7 +334,7 @@ def test_h3_safe_video_bucket_table_covers_every_aspect_ratio(tmp_path):
         _write_h3_video_manifest(set_folder, 136, ar=ar, size=(1024, 1024))
 
         generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
-        text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+        text = (set_folder / "dataset.h3.toml").read_text(encoding="utf-8")
 
         width, height, frames = buckets
         assert f"[{width}, {height}, {frames}]" in text
@@ -378,7 +378,7 @@ def test_h3_dataset_generation_applies_calibrated_ceiling(tmp_path, monkeypatch)
     _write_h3_video_manifest(set_folder, 136, size=(1024, 1024))
 
     generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
-    text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    text = (set_folder / "dataset.h3.toml").read_text(encoding="utf-8")
 
     assert "[256, 256, 68]" in text
     assert "[320, 320, 68]" not in text
@@ -449,14 +449,14 @@ def test_h3_bucket_selection_tolerates_small_upscale_and_falls_back_for_smaller_
     tolerated = tmp_path / "tolerated"
     _write_h3_video_manifest(tolerated, 34, ar="169", size=(585, 334))
     generate_dataset_configs(tolerated, profile_id=MINIMAX_H3_PROFILE_ID)
-    tolerated_text = (tolerated / "dataset.train.toml").read_text(encoding="utf-8")
+    tolerated_text = (tolerated / "dataset.h3.toml").read_text(encoding="utf-8")
     assert "[576, 320, 17]" in tolerated_text
     assert "[576, 320, 34]" in tolerated_text
 
     fallback = tmp_path / "fallback"
     _write_h3_video_manifest(fallback, 34, ar="169", size=(500, 280))
     generate_dataset_configs(fallback, profile_id=MINIMAX_H3_PROFILE_ID)
-    fallback_text = (fallback / "dataset.train.toml").read_text(encoding="utf-8")
+    fallback_text = (fallback / "dataset.h3.toml").read_text(encoding="utf-8")
     assert "[448, 256, 17]" in fallback_text
     assert "[448, 256, 34]" in fallback_text
     assert "\n  [576, 320, 17]" not in fallback_text
@@ -747,13 +747,13 @@ def test_h3_repeat_planning_uses_fixed_reference_epochs(tmp_path, monkeypatch):
     config_path = set_folder / "config.h3.toml"
     config_path.write_text("epochs = 30\n", encoding="utf-8")
     generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
-    first_text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    first_text = (set_folder / "dataset.h3.toml").read_text(encoding="utf-8")
     first_repeats = [line.strip() for line in first_text.splitlines() if line.strip().startswith("num_repeats =")]
     first_plan = json.loads((set_folder / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))["stages"]["h3"]
 
     config_path.write_text("epochs = 150\n", encoding="utf-8")
     generate_dataset_configs(set_folder, profile_id=MINIMAX_H3_PROFILE_ID)
-    second_text = (set_folder / "dataset.train.toml").read_text(encoding="utf-8")
+    second_text = (set_folder / "dataset.h3.toml").read_text(encoding="utf-8")
     second_repeats = [line.strip() for line in second_text.splitlines() if line.strip().startswith("num_repeats =")]
     second_plan = json.loads((set_folder / "auto_dataset" / "training_plan.json").read_text(encoding="utf-8"))["stages"]["h3"]
 

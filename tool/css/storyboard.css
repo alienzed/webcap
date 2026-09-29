@@ -2823,6 +2823,63 @@
   min-height: 44px;
 }
 
+.storyboard-scene-defaults-drawer {
+  position: relative;
+  z-index: 24;
+  grid-row: 2;
+  margin: 0 22px 14px;
+  overflow: visible;
+  background: color-mix(in srgb, var(--panel) 96%, var(--bg));
+}
+
+.storyboard-scene-defaults-drawer > summary {
+  min-height: 46px;
+  padding: 8px 11px;
+}
+
+.storyboard-scene-defaults-drawer[open] > summary {
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-bottom: 0;
+}
+
+.storyboard-scene-defaults-drawer > .storyboard-scene-defaults-body {
+  position: absolute;
+  z-index: 26;
+  left: -1px;
+  right: -1px;
+  bottom: 100%;
+  max-height: min(62vh, 620px);
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 9px 9px 0 0;
+  background: color-mix(in srgb, var(--panel) 98%, var(--bg));
+  box-shadow: 0 -18px 36px rgba(0, 0, 0, .28);
+}
+
+.storyboard-scene-defaults-drawer:not([open]) > .storyboard-scene-defaults-body {
+  display: none;
+}
+
+.storyboard-scene-defaults-drawer .storyboard-story-defaults {
+  width: min(100%, 430px);
+  padding: 10px 12px;
+}
+
+.storyboard-scene-defaults-drawer .storyboard-story-defaults-grid {
+  grid-template-columns: minmax(220px, 1fr) 120px;
+  gap: 10px;
+}
+
+.storyboard-scene-defaults-drawer .storyboard-story-loras {
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
 .storyboard-scene-defaults-body {
   grid-template-columns: 1fr;
   gap: 14px;
@@ -2841,6 +2898,10 @@
   gap: 9px;
   padding-top: 13px;
   border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.storyboard-scene-defaults-drawer .storyboard-story-loras {
+  padding: 13px 0 0;
 }
 
 .storyboard-scene-defaults-subheading {
@@ -3072,6 +3133,19 @@
     overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--border);
+  }
+
+  .storyboard-scene-defaults-drawer {
+    margin: 0 20px 20px;
+  }
+
+  .storyboard-scene-defaults-drawer > .storyboard-scene-defaults-body {
+    position: static;
+    max-height: none;
+    border: 0;
+    border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .storyboard-scene-workspace {

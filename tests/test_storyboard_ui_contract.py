@@ -889,10 +889,11 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert "'webcap.storyboard.storySection.' + sectionName" in storyboard
     assert ".storyboard-story-section:not([open]) > .storyboard-story-section-body" in css
 
-    overview_surface = html.split('id="storyboard-story-overview"', 1)[1].split('<div class="storyboard-scene-workspace">', 1)[0]
+    overview_surface = html.split('id="storyboard-story-overview"', 1)[1].split('</div>\n\n                            <details class="storyboard-story-section storyboard-scene-defaults', 1)[0]
+    authoring = html.split('id="storyboard-story-authoring"', 1)[1].split('<div class="storyboard-scene-workspace">', 1)[0]
     story_section = overview_surface.split('data-story-section="story"', 1)[1].split("</details>", 1)[0]
     continuity_section = overview_surface.split('data-story-section="continuity"', 1)[1].split("</details>", 1)[0]
-    defaults_section = overview_surface.split('data-story-section="defaults"', 1)[1].split("</details>", 1)[0]
+    defaults_section = authoring.split('data-story-section="defaults"', 1)[1].split("</details>", 1)[0]
 
     assert 'id="storyboard-story-title"' in story_section
     assert 'id="storyboard-story-icon"' in story_section
@@ -910,7 +911,8 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert "continuitySection.open = true" in add_invariant
     assert "invariantRowHtml({ kind: 'character', title: '', text: '' }, true)" in add_invariant
 
-    assert 'class="storyboard-scene-defaults"' in overview_surface
+    assert 'storyboard-scene-defaults-drawer' not in overview_surface
+    assert 'storyboard-scene-defaults-drawer' in authoring
     assert 'id="storyboard-story-aspect-ratio"' in defaults_section
     assert 'id="storyboard-story-megapixels"' in defaults_section
     assert 'id="storyboard-story-lora-list"' in defaults_section
@@ -918,6 +920,11 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
 
     assert "storyboard-story-utility-shelf" not in html
     assert ".storyboard-story-utility-shelf" not in css
+    assert ".storyboard-scene-defaults-drawer > .storyboard-scene-defaults-body" in css
+    assert ".storyboard-scene-defaults-drawer .storyboard-story-defaults" in css
+    assert "width: min(100%, 430px);" in css
+    assert ".storyboard-scene-defaults-drawer .storyboard-story-loras" in css
+    assert "width: 100%;" in css
     assert "storyboard-director-tools-drawer" not in html
     assert "storyboard-director-tools-drawer" not in css
 
@@ -961,7 +968,8 @@ def test_storyboard_director_scene_plan_lock_excludes_scene_defaults():
 
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
     scenes = protection.split("if (target.kind === 'scenes')", 1)[1].split("if (target.kind === 'scene-prompt'", 1)[0]
-    assert "setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState)" in scenes
+    assert "setDirectorRegionProtected(el('storyboard-story-overview'), protectedState)" in scenes
+    assert "setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState)" not in scenes
     assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState)" in scenes
 
     story_action = protection.split("if (target.kind === 'story-action')", 1)[1].split("if (target.kind === 'concept')", 1)[0]
@@ -984,7 +992,8 @@ def test_storyboard_switching_stories_clears_stale_director_locks():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     block = storyboard.split("function syncDirectorPendingControls()", 1)[1].split("\n  function ", 1)[0]
-    assert "setDirectorRegionProtected(el('storyboard-story-authoring'), false);" in block
+    assert "setDirectorRegionProtected(el('storyboard-story-overview'), false);" in block
+    assert "setDirectorRegionProtected(el('storyboard-story-authoring'), false);" not in block
     assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), false);" in block
     assert "setDirectorTargetProtected(conceptTarget, directorTargetPending(conceptTarget));" in block
     assert "setDirectorTargetProtected(repairTarget, directorTargetPending(repairTarget));" in block

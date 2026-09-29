@@ -1457,7 +1457,6 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
                 flush=True,
             )
             if settings.get("mode", "local") == "local":
-                if settings.get("mode", "local") == "local":
                 _relay_log_updates()
             return result
         except Exception as exc:
@@ -1565,7 +1564,8 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 + " timings=" + json.dumps(result.get("timings") or {}, ensure_ascii=False),
                 flush=True,
             )
-            _relay_log_updates()
+            if settings.get("mode", "local") == "local":
+                _relay_log_updates()
             return result
         except Exception as exc:
             if _stop_requested.is_set():

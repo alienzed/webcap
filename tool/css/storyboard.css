@@ -3618,3 +3618,65 @@
     padding: 4px;
   }
 }
+
+
+/* Storyboard IA experiment: responsive Takes rail.
+   Use a compact Generate-like side strip when the Scene container has room;
+   otherwise the existing horizontal Takes shelf remains below the Scene. */
+@container (min-width: 1280px) {
+  .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    grid-template-areas:
+      "body takes";
+    align-items: start;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) > .storyboard-takes {
+    max-height: calc(100cqh - 12px);
+    margin: 8px 10px 8px 0;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    box-shadow: none;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-summary {
+    min-height: 42px;
+    padding: 0 10px;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-summary strong {
+    font-size: 13px;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-content {
+    padding: 0 8px 10px;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-takes-grid {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    overflow: visible;
+    padding: 6px 0 2px;
+    scroll-snap-type: none;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-take {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    padding: 6px;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-take-media {
+    min-height: 0;
+    max-height: 260px;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-take-footer {
+    gap: 6px;
+    margin-top: 5px;
+  }
+}

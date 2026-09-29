@@ -1312,7 +1312,7 @@
                                 <div class="storyboard-story-panel-heading">
                                     <strong>Story Overview</strong>
                                     <div class="storyboard-story-action-wrap">
-                                        <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn" title="Take this Story from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
+                                        <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn storyboard-director-action" title="Take this Story from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
                                         <div id="storyboard-story-action-card" class="storyboard-story-action-card hidden" aria-live="polite">
                                             <div class="storyboard-story-action-copy">
                                                 <strong id="storyboard-story-action-phase">Preparing</strong>
@@ -1338,7 +1338,7 @@
                                             <div class="storyboard-field-header">
                                                 <span>Concept / overview</span>
                                                 <div class="storyboard-field-actions">
-                                                    <button id="storyboard-expand-concept-btn" type="button" class="storyboard-field-action-btn">Expand with Director</button>
+                                                    <button id="storyboard-expand-concept-btn" type="button" class="storyboard-field-action-btn storyboard-director-action">Expand with Director</button>
                                                     <button id="storyboard-restore-concept-btn" type="button" class="storyboard-field-action-btn hidden">Restore Previous</button>
                                                 </div>
                                             </div>
@@ -1363,7 +1363,7 @@
                                             <span>Facts that should remain stable.</span>
                                         </span>
                                         <span class="storyboard-invariants-actions">
-                                            <button id="storyboard-invariant-define" type="button" class="review-captions-btn">Define from Concept</button>
+                                            <button id="storyboard-invariant-define" type="button" class="review-captions-btn storyboard-director-action">Define from Concept</button>
                                             <button id="storyboard-invariant-add" type="button" class="review-captions-btn">Add Invariant</button>
                                         </span>
                                     </summary>
@@ -1395,7 +1395,7 @@
                                                 <textarea id="storyboard-repair-instruction" rows="3" placeholder="Tell the Director what tendency or problem to check across the current Scene plan…"></textarea>
                                             </label>
                                             <div class="storyboard-director-repair-actions">
-                                                <button id="storyboard-repair-scenes-btn" type="button" class="review-captions-btn">Check &amp; Repair Scenes</button>
+                                                <button id="storyboard-repair-scenes-btn" type="button" class="review-captions-btn storyboard-director-action">Check &amp; Repair Scenes</button>
                                                 <button id="storyboard-restore-repair-btn" type="button" class="review-captions-btn hidden">Restore Last Repair</button>
                                                 <span id="storyboard-repair-status" class="storyboard-save-state" aria-live="polite"></span>
                                             </div>
@@ -1412,7 +1412,7 @@
                                         </span>
                                         <label class="storyboard-field storyboard-target-scenes-field"><span>Target scenes</span><input id="storyboard-story-target-scenes" type="number" min="2" max="50" step="1" value="12"></label>
                                     </div>
-                                    <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn">Develop Scenes</button>
+                                    <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn storyboard-director-action">Develop Scenes</button>
                                     <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite">Create a Scene plan from this Story Overview.</span>
                                 </div>
                             </div>

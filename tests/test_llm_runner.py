@@ -17,6 +17,7 @@ def llm_root(tmp_path, monkeypatch):
     execution_queue.clear_transient_receipts()
     llm_runner._startup_reconciled = True
     llm_runner._monitor_thread = None
+    llm_runner._local_gpu_drain_until = 0.0
     storyboard_llm_runtime.clear_stop_request()
     monkeypatch.setattr(llm_runner, "_ensure_monitor_started", lambda: None)
     return tmp_path
@@ -168,6 +169,29 @@ def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
     assert finished["result"]["model"] == "qwen"
     assert calls == ["reserve", "release"]
     assert execution_queue.resource_owner() == ""
+
+
+
+def test_local_llm_completion_opens_short_gpu_drain_window(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda model_id, contract, gpu_reserved=False: {
+            "text": "Done",
+            "model": model_id,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+    )
+    llm_runner._advance_queue()
+
+    assert llm_runner.job_status(job["jobId"])["status"] == "completed"
+    assert llm_runner.local_gpu_drain_pending() is True
 
 
 def test_llm_terminal_receipt_is_removed_when_consumed(llm_root):

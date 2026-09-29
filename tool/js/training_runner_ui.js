@@ -199,8 +199,15 @@ function revealTrainingRunnerLog() {
   });
 }
 
+function stopTrainingRunnerPoll() {
+  if (!trainingWorkspaceState.runnerPollTimer) return;
+  clearTimeout(trainingWorkspaceState.runnerPollTimer);
+  trainingWorkspaceState.runnerPollTimer = null;
+}
+
 function scheduleTrainingRunnerPoll() {
-  if (trainingWorkspaceState.runnerPollTimer) clearTimeout(trainingWorkspaceState.runnerPollTimer);
+  stopTrainingRunnerPoll();
+  if (!isTrainingWorkspaceActive()) return;
   var activeStatus = (trainingWorkspaceState.runnerJobs || []).map(function (job) { return job.status; });
   var hasActiveJob = activeStatus.some(function (status) {
     return status === 'starting' || status === 'running' || status === 'stopping';
@@ -209,6 +216,8 @@ function scheduleTrainingRunnerPoll() {
   var transitioning = activeStatus.some(function (status) { return status === 'starting' || status === 'stopping'; });
   var delay = transitioning ? 5000 : (isTrainingRunnerConsoleVisible() ? 3000 : 30000);
   trainingWorkspaceState.runnerPollTimer = setTimeout(function () {
+    trainingWorkspaceState.runnerPollTimer = null;
+    if (!isTrainingWorkspaceActive()) return;
     refreshTrainingRunnerStatus();
   }, delay);
 }

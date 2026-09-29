@@ -1393,3 +1393,28 @@ def test_storyboard_queued_first_cut_freezes_model_but_reads_story_at_start():
     assert "setDirectorPending(directorTarget, true);" in run
     assert "startNextFirstCut();" in run
 
+
+
+def test_storyboard_director_actions_and_invariants_keep_compact_affordances():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    for control_id in (
+        "storyboard-first-cut-btn",
+        "storyboard-expand-concept-btn",
+        "storyboard-invariant-define",
+        "storyboard-repair-scenes-btn",
+        "storyboard-develop-btn",
+    ):
+        control = html.split(f'id="{control_id}"', 1)[1].split(">", 1)[0]
+        assert "storyboard-director-action" in control
+
+    assert 'class="review-captions-btn storyboard-director-action" data-director-write' in storyboard
+    assert 'class="review-captions-btn storyboard-director-action" data-director-refine' in storyboard
+    assert "function invariantRowHtml(item, expanded)" in storyboard
+    assert '<details class="storyboard-invariant-row"' in storyboard
+    assert "syncInvariantRowSummary" in storyboard
+    assert ".storyboard-director-action::before" in css
+    assert ".storyboard-invariant-summary" in css
+    assert ".storyboard-invariant-editor" in css

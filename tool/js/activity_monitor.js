@@ -396,7 +396,7 @@
       button.title = 'Open Training';
     } else {
       button.disabled = true;
-      if (key === 'director' && hasWork) button.title = 'Director requests are shown under Now.';
+      if (key === 'director' && hasWork) button.title = 'Queued Director requests are listed below.';
     }
     return button;
   }

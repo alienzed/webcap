@@ -10,25 +10,19 @@ from . import config as app_config
 
 
 SESSION_VERSION = 1
+DEFAULT_PROMPT = "Expand the source concept below into a polished, production-ready cinematic generation prompt suitable for a high-quality text-to-video model.\n\nDevelop the scene with useful visual specificity. Enrich the environment, composition, camera perspective and movement, lighting, weather, physical motion, textures, body language, spatial relationships, atmosphere, and small observable details that would help the generation model create a coherent and convincing scene.\n\nUse your judgment about which details are worth developing. Preserve the identity, setting, mood, and essential situation of the source concept while making it substantially richer and more visually complete.\n\nKeep the scene internally consistent from beginning to end. Details such as the subject's appearance and clothing, location, weather, lighting, time of day, and overall atmosphere should remain coherent throughout the prompt.\n\nWrite the result as one directly usable generation prompt rather than commentary, analysis, an outline, or an explanation of your choices.\n\nAim for approximately 350–500 words.\n\nSource concept:\n\nA woman in her early thirties stands alone at a nearly empty roadside bus stop late at night. She wears a dark green wool coat over office clothes and carries a small black shoulder bag. It has been raining for some time. The pavement is wet and reflective, but the rain is now light. She looks tired and slightly cold, occasionally checking the empty road for the bus. A glass shelter beside her is lit by a single cool fluorescent tube. Across the road are closed storefronts with their signs turned off. The mood is quiet, lonely, and realistic rather than frightening. Nothing dramatic happens; she simply waits."
 PROTOCOL = {
     "id": "expansion-v1",
     "title": "Prompt expansion",
-    "description": "Expand one short cinematic idea without changing its core intent.",
-    "sourceText": "A woman waits alone at a rainy bus stop at night.",
+    "description": "Expand one cinematic concept into a production-ready generation prompt.",
+    "defaultPrompt": DEFAULT_PROMPT,
     "messages": [
         {
             "role": "user",
-            "content": (
-                "Expand this into a detailed cinematic generation prompt. Preserve the subject, "
-                "action, setting, and tone. Add useful visual, camera, lighting, environmental, "
-                "and motion detail, but do not introduce new characters, plot events, dialogue, "
-                "or major story elements. Keep the result under 250 words.\n\n"
-                "Input: A woman waits alone at a rainy bus stop at night."
-            ),
+            "content": DEFAULT_PROMPT,
         }
     ],
 }
-
 
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
@@ -98,9 +92,12 @@ def _model_snapshot(model):
     }
 
 
-def start_session(models):
+def start_session(models, prompt=None):
     if not isinstance(models, list) or not models:
         raise ValueError("Choose at least one Director model to test.")
+    prompt = str(prompt if prompt is not None else DEFAULT_PROMPT).strip()
+    if not prompt:
+        raise ValueError("Director model test prompt is required.")
     frozen_models = [_model_snapshot(model) for model in models]
     model_refs = [model["modelRef"] for model in frozen_models]
     if len(set(model_refs)) != len(model_refs):
@@ -110,7 +107,11 @@ def start_session(models):
     session = {
         "version": SESSION_VERSION,
         "id": stamp + "-" + secrets.token_hex(3),
-        "protocol": json.loads(json.dumps(PROTOCOL)),
+        "protocol": {
+            **json.loads(json.dumps(PROTOCOL)),
+            "prompt": prompt,
+            "messages": [{"role": "user", "content": prompt}],
+        },
         "status": "running",
         "startedAt": _now_iso(),
         "finishedAt": "",
@@ -220,18 +221,27 @@ def delete_session(session_id):
     return str(session_id)
 
 
-def enqueue_protocol_run(model_ref):
+def enqueue_protocol_run(session_id, model_ref):
     from .llm_runner import enqueue
 
+    session = _read_session(session_id)
     model_ref = str(model_ref or "").strip()
     if not model_ref:
         raise ValueError("Choose a Director model to test.")
+    if not any(model.get("modelRef") == model_ref for model in session.get("models", [])):
+        raise ValueError("Director model test model does not belong to this session.")
+
+    protocol = session.get("protocol") if isinstance(session.get("protocol"), dict) else {}
+    messages = protocol.get("messages") if isinstance(protocol.get("messages"), list) else None
+    if not messages:
+        raise RuntimeError("Director model test session is missing its frozen prompt.")
+
     return enqueue(
         "chat",
         model_ref,
         {
             "operation": "freeform_chat",
-            "messages": json.loads(json.dumps(PROTOCOL["messages"])),
+            "messages": json.loads(json.dumps(messages)),
         },
         context={},
         label="Director Model Test",
@@ -259,11 +269,11 @@ def register_routes(app):
             data = request.get_json(silent=True) or {}
             action = str(data.get("action") or "").strip()
             if action == "start":
-                return jsonify({"ok": True, "session": start_session(data.get("models"))}), 201
+                return jsonify({"ok": True, "session": start_session(data.get("models"), data.get("prompt"))}), 201
             if action == "enqueue":
                 return jsonify({
                     "ok": True,
-                    "job": enqueue_protocol_run(data.get("modelRef")),
+                    "job": enqueue_protocol_run(data.get("sessionId"), data.get("modelRef")),
                 }), 202
             if action == "save_run":
                 return jsonify({

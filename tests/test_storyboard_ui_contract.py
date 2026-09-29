@@ -311,7 +311,7 @@ def test_storyboard_director_region_overlays_match_coarse_semantic_scopes():
     assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState);" in protection
     assert "target.kind === 'scene-prompt' || target.kind === 'repair'" in protection
     assert "target.kind === 'concept'" in protection
-    assert "concept.disabled = !!protectedState;" in protection
+    assert "setDirectorRegionProtected(el('storyboard-story-overview'), protectedState);" in protection
     assert "target.kind === 'story-action'" in protection
     assert "data-story-action-disabled" in protection
 
@@ -322,9 +322,11 @@ def test_storyboard_director_region_overlays_match_coarse_semantic_scopes():
     assert "kind === 'scene-prompt'" in positioning
     assert "kind === 'scenes'" in positioning
     assert "kind === 'repair'" in positioning
-    assert "var fillsField = kind === 'concept';" in positioning
+    assert "var fillsOverview = kind === 'concept';" in positioning
+    assert "var fillsRegion = fillsWorkspace || fillsOverview;" in positioning
 
     assert ".storyboard-scene-workspace.director-protected" in css
+    assert ".storyboard-story-overview.director-protected" in css
     assert ".storyboard-story-authoring.director-protected" in css
 
 

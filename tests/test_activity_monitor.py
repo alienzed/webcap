@@ -88,6 +88,8 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
     assert payload["queues"]["inference"]["queued"] == 1
     assert payload["queues"]["training"]["queued"] == 1
     assert payload["queues"]["director"]["queued"] == 1
+    assert [job["id"] for job in payload["queues"]["director"]["jobs"]] == ["llm-queued"]
+    assert payload["queues"]["director"]["jobs"][0]["operation"] == "develop_story"
 
 
 def test_activity_recent_is_limited_to_client_session(monkeypatch):

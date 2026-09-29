@@ -59,7 +59,7 @@
 
   var STORY_SECTION_DEFAULTS = {
     story: true,
-    continuity: true,
+    continuity: false,
     director: false,
     defaults: false
   };
@@ -5299,6 +5299,8 @@
     });
     el('storyboard-invariant-define').addEventListener('click', defineInvariants);
     el('storyboard-invariant-add').addEventListener('click', function () {
+      var continuitySection = document.querySelector('[data-story-section="continuity"]');
+      if (continuitySection) continuitySection.open = true;
       el('storyboard-invariants-list').insertAdjacentHTML('beforeend', invariantRowHtml({ kind: 'character', title: '', text: '' }, true));
     });
     el('storyboard-invariants-list').addEventListener('click', function (event) {

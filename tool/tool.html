@@ -1286,7 +1286,10 @@
                 <aside class="storyboard-library" aria-label="Stories">
                     <header class="storyboard-library-header">
                         <strong>Stories</strong>
-                        <button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Story</button>
+                        <div class="storyboard-library-header-actions">
+                            <button id="storyboard-library-compact-toggle" type="button" class="review-captions-btn storyboard-library-compact-toggle" aria-pressed="false" title="Collapse Stories to icons" aria-label="Collapse Stories to icons">‹</button>
+                            <button id="storyboard-new-btn" type="button" class="storyboard-primary-btn">New Story</button>
+                        </div>
                     </header>
                     <div id="storyboard-library-list" class="storyboard-library-list"></div>
                 </aside>
@@ -1333,6 +1336,7 @@
                                     </summary>
                                     <div class="storyboard-story-section-body">
                                         <label class="storyboard-field"><span>Title</span><input id="storyboard-story-title" type="text" maxlength="200"></label>
+                                        <label class="storyboard-field storyboard-story-icon-field"><span>Icon</span><select id="storyboard-story-icon" aria-label="Story icon"><option value="">Auto</option><option value="book">Book</option><option value="image">Image</option><option value="star">Star</option><option value="film">Film</option><option value="eye">Eye</option><option value="spark">Spark</option><option value="mountain">Mountain</option><option value="calendar">Calendar</option></select></label>
                                         <label class="storyboard-field"><span>Status</span><select id="storyboard-story-status"><option value="active">Active</option><option value="complete">Complete</option><option value="archived">Archived</option></select></label>
                                         <div class="storyboard-field storyboard-concept-field">
                                             <div class="storyboard-field-header">

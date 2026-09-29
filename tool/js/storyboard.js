@@ -1659,7 +1659,7 @@
       if (repairButton) repairButton.disabled = !!protectedState;
       if (restoreButton) restoreButton.disabled = !!protectedState;
       document.querySelectorAll(
-        '#storyboard-story-title, #storyboard-story-icon, #storyboard-story-status, #storyboard-story-concept, #storyboard-story-style, #storyboard-story-style-preset, #storyboard-story-target-scenes, ' +
+        '#storyboard-story-title, #storyboard-story-icon, #storyboard-story-status, #storyboard-story-concept, #storyboard-story-style, #storyboard-story-style-preset, #storyboard-story-target-scenes, #storyboard-scene-count-auto, ' +
         '#storyboard-expand-concept-btn, #storyboard-restore-concept-btn, #storyboard-develop-btn, ' +
         '#storyboard-invariant-define, #storyboard-invariant-add, ' +
         '#storyboard-invariants-list input, #storyboard-invariants-list select, #storyboard-invariants-list textarea, #storyboard-invariants-list button, ' +
@@ -3784,7 +3784,14 @@
     renderStoryStylePresetSelector();
     renderStoryInvariants();
     el('storyboard-story-status').value = storyState.story.status || 'active';
-    el('storyboard-story-target-scenes').value = storyState.story.targetSceneCount || 12;
+    var targetSceneCount = storyState.story.targetSceneCount;
+    var targetScenesInput = el('storyboard-story-target-scenes');
+    var autoSceneCountButton = el('storyboard-scene-count-auto');
+    var autoSceneCount = targetSceneCount == null;
+    targetScenesInput.value = autoSceneCount ? '' : targetSceneCount;
+    targetScenesInput.disabled = autoSceneCount;
+    autoSceneCountButton.classList.toggle('active', autoSceneCount);
+    autoSceneCountButton.setAttribute('aria-pressed', autoSceneCount ? 'true' : 'false');
     var storyDefaults = storyState.story.generationDefaults || {};
     el('storyboard-story-aspect-ratio').value = storyDefaults.aspectRatio || '4:3 (Standard)';
     el('storyboard-story-megapixels').value = storyDefaults.megapixels == null ? 0.2 : storyDefaults.megapixels;
@@ -4012,7 +4019,9 @@
       repairComplete: !!storyState.story.repairComplete,
       invariants: storyInvariantsFromUi(),
       loras: storyLorasFromUi(),
-      targetSceneCount: el('storyboard-story-target-scenes').value || 12,
+      targetSceneCount: el('storyboard-scene-count-auto').getAttribute('aria-pressed') === 'true'
+        ? null
+        : (el('storyboard-story-target-scenes').value || 12),
       generationDefaults: {
         aspectRatio: el('storyboard-story-aspect-ratio').value || '4:3 (Standard)',
         megapixels: el('storyboard-story-megapixels').value || 0.2
@@ -5109,6 +5118,15 @@
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
+    el('storyboard-scene-count-auto').onclick = function () {
+      var input = el('storyboard-story-target-scenes');
+      var nextAuto = this.getAttribute('aria-pressed') !== 'true';
+      this.setAttribute('aria-pressed', nextAuto ? 'true' : 'false');
+      this.classList.toggle('active', nextAuto);
+      input.disabled = nextAuto;
+      if (!nextAuto && !input.value) input.value = '12';
+      scheduleStorySave();
+    };
     el('storyboard-repair-scenes-btn').onclick = repairScenes;
     el('storyboard-restore-repair-btn').onclick = restoreLastRepair;
     var sceneWorkspace = document.querySelector('.storyboard-scene-workspace');

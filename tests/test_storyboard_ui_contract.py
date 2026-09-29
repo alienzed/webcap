@@ -1117,7 +1117,8 @@ def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
     assert "webcap:inference-queue-snapshot" in storyboard
     assert "function syncStoryboardInferenceSnapshot(queue)" in storyboard
     assert "var seenJobIds = Object.create(null);" in storyboard
-    assert "var delay = generationJobIsExecuting(current) ? 2000 : 8000;" in storyboard
+    assert "function pollGeneration(storyId, jobId, delayOverride)" in storyboard
+    assert "? (generationJobIsExecuting(current) ? 2000 : 8000)" in storyboard
     assert "}, delay);" in storyboard
     assert "if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);" in storyboard
     assert "card.querySelector('.storyboard-take-pending-media strong')" in storyboard
@@ -1128,9 +1129,17 @@ def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
     missing_job_block = snapshot_block.split(
         "Object.keys(storyState.generationJobs).forEach(function (jobId) {", 1
     )[1].split("\n    });", 1)[0]
-    assert "pollGeneration(storyId, jobId);" in missing_job_block
-    assert "clearGenerationPoll(jobId);" not in missing_job_block
+    assert "clearGenerationPoll(jobId);" in missing_job_block
+    assert "pollGeneration(storyId, jobId, 0);" in missing_job_block
     assert "delete storyState.generationJobs[jobId];" not in missing_job_block
+
+    refresh_block = storyboard.split("function refreshGenerationQueue(storyId)", 1)[1].split(
+        "\n  function generationAction", 1
+    )[0]
+    assert "storyState.generationJobs = {};" not in refresh_block
+    assert "Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);" not in refresh_block
+    assert "var seenJobIds = Object.create(null);" in refresh_block
+    assert "pollGeneration(storyId, jobId, 0);" in refresh_block
 
     take_sync = storyboard.split("function syncSceneTakeDom(sceneId)", 1)[1].split(
         "\n  function mergeFetchedSceneTakeState", 1

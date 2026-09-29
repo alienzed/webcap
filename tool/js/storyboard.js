@@ -4570,10 +4570,11 @@
     Object.keys(storyState.generationJobs).forEach(function (jobId) {
       var cachedJob = storyState.generationJobs[jobId];
       if (!cachedJob || String(cachedJob.storyId || '') !== storyId || !generationJobIsActive(cachedJob) || seenJobIds[jobId]) return;
-      // The shared snapshot contains active queue work only. A missing cached job may
-      // have just become terminal, so keep its receipt poll alive until that status
-      // is consumed and merged into the current Scene.
-      pollGeneration(storyId, jobId);
+      // The shared snapshot contains active queue work only. Missing means the job
+      // may have just become terminal, so replace any stale timer with one immediate
+      // receipt check instead of waiting for the cached status cadence.
+      clearGenerationPoll(jobId);
+      pollGeneration(storyId, jobId, 0);
     });
 
     syncStoryboardGenerationActivity();
@@ -4754,10 +4755,12 @@
     delete storyState.generationPolls[jobId];
   }
 
-  function pollGeneration(storyId, jobId) {
+  function pollGeneration(storyId, jobId, delayOverride) {
     if (storyState.generationPolls[jobId]) return;
     var current = storyState.generationJobs[jobId];
-    var delay = generationJobIsExecuting(current) ? 2000 : 8000;
+    var delay = delayOverride == null
+      ? (generationJobIsExecuting(current) ? 2000 : 8000)
+      : Math.max(0, Number(delayOverride) || 0);
     storyState.generationPolls[jobId] = window.setTimeout(function () {
       delete storyState.generationPolls[jobId];
       generationRequest(null, 'job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
@@ -4807,19 +4810,32 @@
   }
 
   function refreshGenerationQueue(storyId) {
-    Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
-    storyState.generationJobs = {};
+    storyId = String(storyId || '');
+    Object.keys(storyState.generationJobs).forEach(function (jobId) {
+      var cachedJob = storyState.generationJobs[jobId];
+      if (cachedJob && String(cachedJob.storyId || '') === storyId) return;
+      clearGenerationPoll(jobId);
+      delete storyState.generationJobs[jobId];
+    });
     if (!storyId) {
       syncStoryboardGenerationActivity();
       return Promise.resolve();
     }
     return generationRequest(null, 'story=' + encodeURIComponent(storyId)).then(function (payload) {
-      if (!storyState.story || String(storyState.story.id || '') !== String(storyId)) {
+      if (!storyState.story || String(storyState.story.id || '') !== storyId) {
         return payload.queue;
       }
       var jobs = payload.queue && Array.isArray(payload.queue.jobs) ? payload.queue.jobs : [];
+      var seenJobIds = Object.create(null);
       jobs.forEach(function (job) {
+        seenJobIds[job.jobId] = true;
         storyState.generationJobs[job.jobId] = job;
+      });
+      Object.keys(storyState.generationJobs).forEach(function (jobId) {
+        var cachedJob = storyState.generationJobs[jobId];
+        if (!cachedJob || String(cachedJob.storyId || '') !== storyId || !generationJobIsActive(cachedJob) || seenJobIds[jobId]) return;
+        clearGenerationPoll(jobId);
+        pollGeneration(storyId, jobId, 0);
       });
       syncStoryboardGenerationActivity();
       syncPlanReplacementControls();

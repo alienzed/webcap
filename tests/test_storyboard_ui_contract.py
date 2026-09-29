@@ -876,6 +876,11 @@ def test_storyboard_story_context_uses_flat_canvas_and_persisted_utility_drawers
 
     assert "wide two-column Story canvas" in css
     assert "two-button Story utility shelf / slide-up drawers" in css
+    assert "grid-template-rows: minmax(0, 1fr) auto;" in css
+    assert "bottom: 100%;" in css
+    assert "Storyboard IA correction: Continuity is intentionally narrow" in css
+    assert "function storyRailIconHtml(story)" in storyboard
+    assert "storyboard-story-rail-icon" in storyboard
 
     payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
     assert "storySection" not in payload_block

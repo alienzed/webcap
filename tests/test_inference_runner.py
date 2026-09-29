@@ -242,6 +242,46 @@ def test_inference_keeps_fresh_queued_job_pending_when_comfyui_is_unavailable(in
     assert execution_queue.resource_owner() == ""
 
 
+
+def test_inference_releases_retained_gpu_if_comfyui_disappears_between_jobs(
+    inference_root, monkeypatch
+):
+    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
+    first = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "First"}
+    )
+    second = inference_runner.enqueue_generate(
+        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Second"}
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        inference_runner,
+        "_execute_claimed",
+        lambda job_id: execution_queue.finish_job_transient(job_id, status="completed"),
+    )
+
+    inference_runner._advance_queue()
+
+    assert inference_runner.job_status(first["jobId"])["status"] == "completed"
+    assert inference_runner.job_status(second["jobId"])["status"] == "queued"
+    assert execution_queue.resource_owner() == "inference"
+
+    monkeypatch.setattr(
+        inference_runtime,
+        "system_stats",
+        lambda: (_ for _ in ()).throw(ConnectionError("offline")),
+    )
+
+    assert inference_runner._advance_queue() is None
+    assert inference_runner.job_status(second["jobId"])["status"] == "queued"
+    assert execution_queue.resource_owner() == ""
+
+
+
 def test_inference_yields_retained_director_after_reserving_gpu(inference_root, monkeypatch):
     calls = []
     queued = inference_runner.enqueue_generate(

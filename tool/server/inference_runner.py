@@ -518,6 +518,8 @@ def _advance_queue():
             inference_runtime.system_stats()
         except (ConnectionError, TimeoutError):
             _set_backlog_wait_reason("ComfyUI unavailable.")
+            if execution_resource_owner() == GPU_RESERVATION_OWNER:
+                _release_gpu()
             return None
 
         reserved_here = False

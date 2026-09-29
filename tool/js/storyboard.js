@@ -22,6 +22,7 @@
     activeSceneId: '',
     openStoryRequestId: 0,
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
+    storyLibraryCompact: window.localStorage.getItem('webcap.storyboard.storyLibraryCompact') === '1',
     directorPassMode: 'custom',
     storyAction: null,
     storyActionQueue: [],
@@ -1658,7 +1659,7 @@
       if (repairButton) repairButton.disabled = !!protectedState;
       if (restoreButton) restoreButton.disabled = !!protectedState;
       document.querySelectorAll(
-        '#storyboard-story-title, #storyboard-story-status, #storyboard-story-concept, #storyboard-story-style, #storyboard-story-style-preset, #storyboard-story-target-scenes, ' +
+        '#storyboard-story-title, #storyboard-story-icon, #storyboard-story-status, #storyboard-story-concept, #storyboard-story-style, #storyboard-story-style-preset, #storyboard-story-target-scenes, ' +
         '#storyboard-expand-concept-btn, #storyboard-restore-concept-btn, #storyboard-develop-btn, ' +
         '#storyboard-invariant-define, #storyboard-invariant-add, ' +
         '#storyboard-invariants-list input, #storyboard-invariants-list select, #storyboard-invariants-list textarea, #storyboard-invariants-list button, ' +
@@ -2897,6 +2898,56 @@
     popover.style.top = Math.round(Math.max(margin, top)) + 'px';
   }
 
+  var STORY_RAIL_ICONS = {
+    book: '<path d="M5 4.5h14v15H5z M8 8h8 M8 12h8 M8 16h5"/>',
+    image: '<path d="M4.5 18.5 9 11l3 4 2-3 5.5 6.5z M8 8.2a1.7 1.7 0 1 0 0-3.4 1.7 1.7 0 0 0 0 3.4z"/>',
+    star: '<path d="M12 3.8 14.4 9l5.6.7-4.1 3.8 1.1 5.5-5-2.8-5 2.8 1.1-5.5L4 9.7 9.6 9z"/>',
+    film: '<path d="M6 5.5h12v13H6z M9 5.5v13 M13 9h3 M13 12h3 M13 15h3"/>',
+    eye: '<path d="M4.5 15.5c2.2-4.7 5.2-7.1 9-7.1 2.4 0 4.5.8 6 2.4-1.6 4.7-4.6 7-9 7-2.4 0-4.4-.8-6-2.3z M12 11.2a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0-4.6z"/>',
+    spark: '<path d="M12 4v16 M4 12h16 M6.3 6.3l11.4 11.4 M17.7 6.3 6.3 17.7"/>',
+    mountain: '<path d="M5 17c2.5-4.6 5.2-7 8.2-7 2.3 0 4.2 1.2 5.8 3.5 M5 19h14 M8 8.5 10.5 5l2.3 3.5"/>',
+    calendar: '<path d="M5 6.5h14v11H5z M8 4.5v4 M16 4.5v4 M8 12h8"/>'
+  };
+
+  function storyRailIconName(story) {
+    var selected = String(story && story.icon || '');
+    if (STORY_RAIL_ICONS[selected]) return selected;
+    var names = Object.keys(STORY_RAIL_ICONS);
+    var key = String(story && (story.id || story.title) || 'story');
+    var hash = 0;
+    for (var index = 0; index < key.length; index += 1) {
+      hash = ((hash << 5) - hash + key.charCodeAt(index)) | 0;
+    }
+    return names[Math.abs(hash) % names.length];
+  }
+
+  function storyRailIconHtml(story) {
+    var key = String(story && (story.id || story.title) || 'story');
+    var hash = 0;
+    for (var index = 0; index < key.length; index += 1) {
+      hash = ((hash << 5) - hash + key.charCodeAt(index)) | 0;
+    }
+    var toneIndex = Math.abs(hash >> 3) % 6;
+    var iconName = storyRailIconName(story);
+    return '<span class="storyboard-story-rail-icon storyboard-story-rail-icon-tone-' + toneIndex + '" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24" focusable="false">' + STORY_RAIL_ICONS[iconName] + '</svg>' +
+    '</span>';
+  }
+
+  function setStoryLibraryCompact(compact) {
+    storyState.storyLibraryCompact = !!compact;
+    window.localStorage.setItem('webcap.storyboard.storyLibraryCompact', storyState.storyLibraryCompact ? '1' : '0');
+    var workspace = el('storyboard-workspace');
+    var button = el('storyboard-library-compact-toggle');
+    if (workspace) workspace.classList.toggle('story-library-compact', storyState.storyLibraryCompact);
+    if (button) {
+      button.setAttribute('aria-pressed', storyState.storyLibraryCompact ? 'true' : 'false');
+      button.setAttribute('title', storyState.storyLibraryCompact ? 'Expand Stories' : 'Collapse Stories to icons');
+      button.setAttribute('aria-label', storyState.storyLibraryCompact ? 'Expand Stories' : 'Collapse Stories to icons');
+      button.textContent = storyState.storyLibraryCompact ? '›' : '‹';
+    }
+  }
+
   function renderLibrary() {
     var host = el('storyboard-library-list');
     if (!host) return;
@@ -2923,9 +2974,12 @@
         if (story.status && story.status !== 'active') meta.push(story.status);
         meta.push(String(Number(story.sceneCount || 0)) + ' scene' + (Number(story.sceneCount || 0) === 1 ? '' : 's'));
         return '<div class="storyboard-story-row' + (active ? ' active' : '') + '" data-story-id="' + escapeHtml(story.id) + '">' +
-          '<button type="button" class="storyboard-story-open" data-story-open>' +
-            '<strong>' + escapeHtml(story.title || 'Untitled Story') + '</strong>' +
-            '<span>' + escapeHtml(meta.join(' · ')) + '</span>' +
+          '<button type="button" class="storyboard-story-open" data-story-open title="' + escapeHtml(story.title || 'Untitled Story') + '">' +
+            storyRailIconHtml(story) +
+            '<span class="storyboard-story-row-copy">' +
+              '<strong>' + escapeHtml(story.title || 'Untitled Story') + '</strong>' +
+              '<span>' + escapeHtml(meta.join(' · ')) + '</span>' +
+            '</span>' +
           '</button>' +
           '<details class="storyboard-story-menu">' +
             '<summary aria-label="Story actions">⋯</summary>' +
@@ -3722,6 +3776,7 @@
     overviewToggle.classList.remove('hidden');
 
     el('storyboard-story-title').value = storyState.story.title || '';
+    el('storyboard-story-icon').value = STORY_RAIL_ICONS[storyState.story.icon] ? storyState.story.icon : '';
     el('storyboard-story-concept').value = storyState.story.concept || '';
     el('storyboard-story-style').value = storyState.story.style || '';
     el('storyboard-repair-instruction').value = storyState.story.repairInstruction || '';
@@ -3950,6 +4005,7 @@
   function storyPayloadFromUi() {
     var payload = {
       title: el('storyboard-story-title').value,
+      icon: el('storyboard-story-icon').value,
       concept: el('storyboard-story-concept').value,
       style: el('storyboard-story-style').value,
       repairInstruction: el('storyboard-repair-instruction').value,
@@ -5038,7 +5094,12 @@
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
 
     initStorySections();
+    setStoryLibraryCompact(storyState.storyLibraryCompact);
 
+    el('storyboard-library-compact-toggle').onclick = function () {
+      setStoryLibraryCompact(!storyState.storyLibraryCompact);
+      this.blur();
+    };
     el('storyboard-new-btn').onclick = createStory;
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
@@ -5228,6 +5289,7 @@
       row.remove();
       scheduleStorySave();
     });
+    el('storyboard-story-icon').addEventListener('change', scheduleStorySave);
     el('storyboard-story-status').addEventListener('change', scheduleStorySave);
 
     el('storyboard-story-lora-list').addEventListener('input', function (event) {

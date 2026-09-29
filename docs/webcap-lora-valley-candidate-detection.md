@@ -2,7 +2,7 @@
 
 Candidates is a manual inspection of one recorded run. Multiscale Loss Basins is the default whenever the modal opens, and detector/display choices are not durable training decisions. Analysis version 13 identifies the selected algorithm explicitly.
 
-Candidate Analysis currently suggests regions/epochs, describes saved artifacts, and can stage a saved epoch into Test Generations. It does **not** currently persist a human decision that one epoch is the chosen release/final training result.
+Candidate Analysis suggests regions/epochs, describes saved artifacts, can stage a saved epoch into Test Generations, and persists one explicit human **Selected epoch** for the run. The selection is stored in the trainer timestamp folder's `webcap-run.json`, not inferred from detector output or Test staging.
 
 ## Available detectors
 
@@ -21,13 +21,15 @@ The server reads TensorBoard `train/loss` and `train/epoch_loss`, normalizes fin
 
 ## Current mutation boundary
 
-The analysis itself never rewrites detector data or run artifacts. Saved artifacts are descriptive. The surrounding Candidate Analysis workflow may explicitly copy/remove an already-saved epoch to/from the configured Test folder, but that is staging for evaluation, not a durable selection decision.
+The analysis itself never rewrites detector data. Saved artifacts remain descriptive. The surrounding Candidate Analysis workflow may explicitly copy/remove an already-saved epoch to/from the configured Test folder and may explicitly Select or Clear the run's one durable Selected epoch.
+
+Test staging is evaluation state; Selected epoch is the human training conclusion. Neither is inferred from the detector.
 
 Synthetic fixtures establish algorithm behavior, not which algorithm is best for a real training run.
 
-## Planned durable Selected epoch
+## Durable Selected epoch
 
-The next training-lifecycle slice should add one explicit, human-owned decision: **Selected epoch**. "Release" may be used as UI wording later, but the durable concept is selection rather than another analyzer score.
+Candidate Analysis owns one explicit, human-owned decision: **Selected epoch**. "Release" may be used as UI wording later, but the durable concept is selection rather than another analyzer score.
 
 Keep the states distinct:
 
@@ -64,7 +66,7 @@ Initial shape:
 }
 ```
 
-The manifest should stay deliberately small and portable. Selected-epoch knowledge must not depend on retaining the checkpoint file: the archive workflow intentionally allows epoch/checkpoint folders to be removed while preserving the TensorBoard logs and the selection fact.
+The manifest should stay deliberately small and portable. Selected-epoch knowledge is metadata rather than a filename convention, but the current archive contract also retains the selected `epochN/` folder and its `.safetensors` as the actual chosen result. Unselected `epoch*` folders and all `global_step*` folders are the intended bulk cleanup targets.
 
 Selection should be replaceable: choosing another saved epoch updates the one selected record rather than accumulating competing "winners". Clearing selection should also be explicit.
 
@@ -80,4 +82,4 @@ A selected epoch should be visually distinct from:
 
 Selection does not itself copy, move, delete, or archive any files. It records the human conclusion only.
 
-The archive/finalization lifecycle that consumes this selection is documented in [storage_manager_plan.md](storage_manager_plan.md).
+The archive/finalization lifecycle that consumes this selection is documented in [storage_manager_plan.md](storage_manager_plan.md). Finalize & Archive is a later, separate destructive action: it retains the selected epoch, prunes unselected epochs and resumable checkpoint bulk, moves the trainer timestamp folder under the archive root, and intentionally removes that experiment from WebCap's managed/discoverable run world.

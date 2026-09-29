@@ -338,94 +338,113 @@ The existing `recent_jobs()` helper in `training_history.py` was originally intr
 
 ### 5.1.1 Planned Training finalization / archive lifecycle
 
-Storage Manager is the natural operational surface for moving a completed training experiment from large working storage into compact long-term storage, but this depends on the durable **Selected epoch** described in [webcap-lora-valley-candidate-detection.md](webcap-lora-valley-candidate-detection.md).
+Durable **Selected epoch** is already implemented in the trainer timestamp folder's `webcap-run.json`. The remaining lifecycle work is explicit finalization/archive: turn a large working run into a compact filesystem-owned record and then remove it from WebCap's active world.
 
 The intended lifecycle is:
 
 ```text
-Active run -> Saved/Tested candidates -> Selected epoch -> Finalize training -> Archived experiment
+Active run -> Saved/Tested candidates -> Selected epoch -> Finalize & Archive -> unmanaged archived experiment
 ```
 
-This is deliberately separate from the Set lifecycle. Sets may move or be retired while experiment history remains useful, and large working output may need to be reclaimed without losing the evidence needed for future TensorBoard comparisons.
+Selection and archive are intentionally separate. Selecting means "this is the keeper"; archiving means "I am finished experimenting with this run and want to reclaim the working bulk."
 
-#### Archive layout and ownership
+#### Archive root and ownership
 
-The user's existing convention is an `archive/` directory next to the trainer `runs/` root. Only the trainer timestamp folder is retained; WebCap's outer action/capture wrapper is working-state and is not part of the long-term experiment archive. Prefer that filesystem-owned convention over another WebCap-global metadata store:
+Active managed training lives beneath:
 
 ```text
-trainer-output-root/
+<output_root>/
   runs/
-    <trainer timestamp run>/
-  archive/
-    <finalized trainer timestamp run>/
-      webcap-run.json
-      TensorBoard event files
-      webcap-run.json
 ```
 
-The archive should be self-describing. The run-owned `webcap-run.json` begins life with Selected-epoch knowledge and is enriched during finalization with the durable experiment snapshot.
+The default archive destination is its sibling:
 
-Useful durable fields include:
+```text
+<output_root>/
+  archive/
+```
 
-- schema version and stable run ID;
-- display/run name and finalization timestamp;
-- base model/profile;
-- learning rate, rank, dropout, configured epochs/repeats;
-- dataset identity snapshot: Set ID/name if available, item count, and an existing cheap fingerprint only if WebCap already has one;
-- selected epoch, optimizer step, and selection time;
-- cumulative active training time when known;
-- retained TensorBoard/config locations;
-- compact summary metrics that are cheap and stable enough to help compare maturation between runs.
+Add an optional `filesystem.archive_root` setting. Blank means `app_config.output_root() / "archive"`; a configured value may point elsewhere.
 
-Do not duplicate the dataset, keep an arbitrary file inventory, or introduce absolute-path authority into this manifest.
+Before implementing archive, make the active managed-run root consistently follow `app_config.output_root() / "runs"`. `config.output_root()` already honors `filesystem.output_root`, while `training_action.actions_root()` currently hard-codes `FS_ROOT/output/runs`.
 
-#### Finalize training
+The archive unit is the trainer timestamp run folder, not WebCap's outer action/capture wrapper. Once that folder has been finalized and moved under the archive root, **WebCap deliberately stops managing it**:
 
-"Finalize training" is an explicit lifecycle action, not automatic retention policy.
+- no archive registry;
+- no path migration into Recent Runs;
+- no Resume discovery;
+- no archived Candidate Analysis;
+- no requirement that ordinary Training or Storage views rediscover archived experiments.
+
+The filesystem archive is the long-term record. A future archive browser may be designed separately if a real need appears; finalization should not pre-build one.
+
+#### Retention contract
+
+Finalization is destructive cleanup with one deliberately retained result.
+
+Keep:
+
+- the **selected `epochN/` folder**, unchanged, including its selected `.safetensors`;
+- `webcap-run.json`, including selected epoch/step/time;
+- TensorBoard `events.out.tfevents*`;
+- the copied training config(s) already present in the trainer run;
+- `latest`;
+- other small non-resume evidence already present in the trainer timestamp folder when retaining it is cheap and unambiguous.
+
+Delete:
+
+- every unselected `epoch*` folder;
+- every `global_step*` folder.
+
+Do not flatten or rename the selected epoch. The archive should retain the actual chosen artifact in the same `epochN/` structure that existed during training.
+
+Keeping `latest` is harmless and useful evidence. Resume validation requires that its referenced `global_stepN` directory also exist; after all `global_step*` folders are pruned, `latest` alone must not make an archived run resumable.
+
+The selected epoch should therefore normally be mandatory for Finalize & Archive. If a future "archive without keeper" operation is desirable, treat it as a separate explicit destructive choice rather than silently finalizing with no retained model.
+
+#### Finalize & Archive
+
+"Finalize & Archive" is an explicit user action, never an automatic age/retention policy.
 
 Before finalizing:
 
-- the logical run must not be active/queued/resuming;
+- the training work must not be active, queued, paused for resume, or otherwise nonterminal;
 - run ownership must be re-resolved from Training domain evidence;
-- a Selected epoch should normally exist; if finalization without one is ever allowed, it must be an explicit exceptional path rather than inference;
+- `webcap-run.json` must contain a Selected epoch;
+- that selected epoch folder and its single unambiguous `.safetensors` artifact must still exist;
 - the archive destination must be validated and collision-safe.
 
-Finalization should then:
+The operation should:
 
-1. retain the TensorBoard event data needed for later curve comparison;
-2. retain/write the compact `webcap-run.json` experiment record, including Selected epoch/step;
-3. prune epoch/checkpoint folders and other resumable bulk according to the explicit archive retention contract;
-4. move the trainer timestamp folder from `runs/` to sibling `archive/`; the WebCap action/capture wrapper is not copied as part of this archive operation.
+1. verify and, where useful, enrich the compact `webcap-run.json` record before destructive cleanup;
+2. remove all unselected `epoch*` folders;
+3. remove all `global_step*` folders;
+4. retain the selected epoch and small experiment evidence listed above;
+5. move the finalized trainer timestamp folder from the managed runs tree to the archive root.
 
-A same-filesystem atomic rename is preferred. Cross-filesystem finalization must use copy -> verify -> commit/remove semantics rather than assuming `rename()` always works. Partial finalization must remain recoverable and must not leave two apparently authoritative experiment copies.
+A same-filesystem atomic rename is preferred. A configurable archive root may live on another filesystem, so cross-filesystem finalization must use copy -> verify -> remove-source semantics. Failure before the final source removal must remain recoverable and must not silently destroy the only selected artifact.
 
-#### Archived Candidate Analysis
-
-Archived experiments should remain readable by Candidate Analysis even though they are no longer active run workspaces.
-
-For archived runs Candidate Analysis may show:
-
-- TensorBoard loss curves;
-- the Selected epoch;
-- saved/retained epoch metadata;
-- training duration, steps, configuration, and dataset snapshot;
-- side-by-side historical curve comparison when implemented.
-
-Archived runs are read-only experiment records. Candidate Analysis must not offer active-workspace operations such as Copy to Test, Remove from Test, Resume, or Remove epoch unless a future archive-specific contract explicitly reintroduces one.
-
-Archive discovery should read shallow `webcap-run.json` manifests and known retained TensorBoard data. Do not turn every Training/Storage page load into a recursive archive scan. Storage's explicit **Start scan** remains the reconciliation path for disk accounting.
+After a successful move, existing lightweight Recent Runs metadata may naturally show that its old files are unavailable. Do not rewrite history merely to keep the archived artifact addressable: **losing active WebCap linkage is part of the archive contract.**
 
 #### Source-of-truth rule
 
-The durable hierarchy is:
+Before archive:
 
 ```text
-trainer timestamp folder owns the retained experiment artifacts
--> webcap-run.json inside that folder owns durable experiment knowledge
--> WebCap reads/presents that knowledge
+managed trainer timestamp folder
+-> webcap-run.json owns the user's Selected epoch decision
+-> WebCap may analyze/test/manage the run
 ```
 
-Training History remains a convenience/recent-work index. It must not become the permanent ledger for finalized experiments.
+After archive:
+
+```text
+filesystem archive folder
+-> selected epoch + webcap-run.json + small experiment evidence
+-> no active WebCap ownership
+```
+
+The retained manifest is portable evidence for the user or future tooling, not a reason for WebCap to maintain an archive database today.
 
 ### 5.2 Test Generations - Set-local durable output
 

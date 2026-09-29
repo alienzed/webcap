@@ -3294,3 +3294,109 @@
     grid-template-columns: minmax(900px, 1020px) minmax(0, 1fr);
   }
 }
+
+
+/* Storyboard IA experiment: compact Continuity rows. */
+.storyboard-invariant-row {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-soft);
+}
+
+.storyboard-invariant-summary {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 84px minmax(120px, .8fr) minmax(0, 1.7fr);
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.storyboard-invariant-summary::-webkit-details-marker {
+  display: none;
+}
+
+.storyboard-invariant-summary::before {
+  content: '▸';
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.storyboard-invariant-row[open] > .storyboard-invariant-summary::before {
+  content: '▾';
+}
+
+.storyboard-invariant-summary-kind {
+  grid-column: 1;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.storyboard-invariant-summary > strong {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storyboard-invariant-summary > span:last-child {
+  grid-column: 3;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storyboard-invariant-editor {
+  display: grid;
+  grid-template-columns: 100px minmax(130px, 190px) minmax(260px, 1fr) auto;
+  align-items: start;
+  gap: 6px;
+  padding: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.storyboard-invariant-editor textarea {
+  grid-column: 1 / -1;
+}
+
+.storyboard-invariant-row:not([open]) > .storyboard-invariant-editor {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .storyboard-invariant-summary {
+    grid-template-columns: 78px minmax(0, 1fr);
+  }
+
+  .storyboard-invariant-summary > span:last-child {
+    grid-column: 1 / -1;
+    padding-left: 16px;
+  }
+
+  .storyboard-invariant-editor {
+    grid-template-columns: 1fr auto;
+  }
+
+  .storyboard-invariant-editor select,
+  .storyboard-invariant-editor input,
+  .storyboard-invariant-editor textarea {
+    grid-column: 1 / -1;
+  }
+}

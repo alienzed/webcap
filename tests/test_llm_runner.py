@@ -24,7 +24,7 @@ def llm_root(tmp_path, monkeypatch):
 
 
 def test_llm_test_job_returns_structured_analysis_without_side_effects(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -55,7 +55,7 @@ def test_llm_test_job_returns_structured_analysis_without_side_effects(llm_root,
 
 
 def test_llm_test_client_rejects_unowned_operations(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -84,7 +84,7 @@ def test_llm_test_client_rejects_unowned_operations(llm_root, monkeypatch):
 def test_llm_chat_job_runs_through_shared_lane_without_persisting_conversation(llm_root, monkeypatch):
     calls = []
     captured = {}
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
         llm_runner,
         "_reserve_gpu",
@@ -135,7 +135,7 @@ def test_llm_chat_job_runs_through_shared_lane_without_persisting_conversation(l
 
 def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
     calls = []
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
         llm_runner,
         "_reserve_gpu",
@@ -181,7 +181,7 @@ def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
 
 
 def test_local_llm_completion_opens_short_gpu_drain_window(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -214,7 +214,7 @@ def test_local_llm_completion_opens_short_gpu_drain_window(llm_root, monkeypatch
 def test_training_cannot_claim_gpu_during_retained_llm_grace(llm_root, monkeypatch):
     from tool.server import training_runner
 
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -250,7 +250,7 @@ def test_training_cannot_claim_gpu_during_retained_llm_grace(llm_root, monkeypat
 
 def test_local_llm_job_arriving_during_grace_reuses_retained_gpu(llm_root, monkeypatch):
     calls = []
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
         llm_runner,
         "_reserve_gpu",
@@ -292,7 +292,7 @@ def test_local_llm_job_arriving_during_grace_reuses_retained_gpu(llm_root, monke
 
 
 def test_pausing_idle_llm_grace_releases_retained_gpu(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -318,7 +318,7 @@ def test_pausing_idle_llm_grace_releases_retained_gpu(llm_root, monkeypatch):
 
 def test_local_llm_queue_reuses_gpu_ownership_until_queued_work_is_drained(llm_root, monkeypatch):
     calls = []
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
         llm_runner,
         "_reserve_gpu",
@@ -385,7 +385,7 @@ def test_llm_terminal_receipt_is_removed_when_consumed(llm_root):
 
 
 def test_llm_local_job_waits_while_shared_gpu_is_owned(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     execution_queue._resource_owner = "training"
 
     job = llm_runner.enqueue(
@@ -400,7 +400,7 @@ def test_llm_local_job_waits_while_shared_gpu_is_owned(llm_root, monkeypatch):
 
 
 def test_llm_remote_job_does_not_claim_shared_gpu(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         llm_runner,
         "_reserve_gpu",
@@ -433,7 +433,7 @@ def test_llm_remote_job_does_not_claim_shared_gpu(llm_root, monkeypatch):
 
 
 def test_storyboard_llm_job_rejects_inconsistent_frozen_identity(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     job = execution_queue.enqueue(
         llm_runner.EXECUTION_LANE,
         {
@@ -469,7 +469,7 @@ def test_storyboard_llm_rejects_stale_contract_before_applying_result(llm_root, 
     from tool.server.storyboard_llm_contract import build_request
 
     contract = build_request(story, "", "expand_concept")
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
 
     def run_and_change_story(*_args, **_kwargs):
         storyboard_store.update_story(story["id"], {"style": "Changed while Director was running."})
@@ -517,7 +517,7 @@ def test_storyboard_develop_rejects_changed_story_inputs_before_replacing_scenes
     from tool.server.storyboard_llm_contract import build_request
 
     contract = build_request(story, "", "develop_story")
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
 
     def run_and_change_story(*_args, **_kwargs):
         storyboard_store.update_story(story["id"], {"style": "Changed while Director was running."})
@@ -564,7 +564,7 @@ def test_storyboard_scene_refine_rejects_changed_duration_instead_of_overwriting
     from tool.server.storyboard_llm_contract import build_request
 
     contract = build_request(story, scene["id"], "refine_prompt", instruction="Make the movement slower.")
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
 
     def run_and_change_duration(*_args, **_kwargs):
         storyboard_store.update_scene(story["id"], scene["id"], {"durationSeconds": 14})
@@ -628,7 +628,7 @@ def test_storyboard_scene_refine_no_change_does_not_mutate_scene(llm_root, monke
         instruction="Remove a barista if one appears in this Scene.",
     )
     before = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -663,7 +663,7 @@ def test_storyboard_scene_refine_no_change_does_not_mutate_scene(llm_root, monke
 
 def test_storyboard_llm_job_applies_expanded_concept_before_completion(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story", "concept": "Short concept."})
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -701,7 +701,7 @@ def test_storyboard_define_invariants_appends_only_missing_character_and_locatio
             {"kind": "character", "title": "Elena", "text": "Manual Elena definition stays authoritative."},
         ],
     })
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -752,7 +752,7 @@ def test_storyboard_scene_prompt_job_writes_only_its_target_on_backend(llm_root,
         "title": "Second",
         "prompt": "Second prompt stays untouched.",
     })
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -837,7 +837,7 @@ def test_storyboard_ingest_failure_is_distinguished_from_model_failure(llm_root,
         "concept": "A woman crosses a lobby.",
         "targetSceneCount": 1,
     })
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -886,7 +886,7 @@ def test_storyboard_optional_shared_context_cannot_block_scene_ingest(llm_root, 
         "concept": "Elena enters a lobby.",
         "targetSceneCount": 1,
     })
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -948,7 +948,7 @@ def test_storyboard_develop_result_refuses_to_replace_scene_with_active_take(llm
         "concept": "A woman crosses a lobby.",
         "targetSceneCount": 1,
     })
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -1011,7 +1011,7 @@ def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_r
             {"kind": "character", "title": "Elena", "text": "White woman in her early 30s with fair skin, hazel eyes, and shoulder-length dark brown wavy hair."},
         ],
     })
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -1130,7 +1130,7 @@ def test_storyboard_scene_repair_renders_prompt_and_patches_only_returned_fields
             }
         },
     }
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -1237,7 +1237,7 @@ def test_storyboard_scene_repair_discards_malformed_optional_prompt_patch(llm_ro
             }
         },
     }
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
@@ -1274,7 +1274,7 @@ def test_storyboard_scene_repair_discards_malformed_optional_prompt_patch(llm_ro
 
 
 def test_llm_snapshot_explains_inference_gpu_blocker(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     execution_queue.reserve_resource("inference")
     try:
         job = llm_runner.enqueue(
@@ -1296,7 +1296,7 @@ def test_llm_snapshot_explains_inference_gpu_blocker(llm_root, monkeypatch):
 def test_llm_snapshot_explains_training_queue_priority(llm_root, monkeypatch):
     from tool.server import training_runner
 
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
         training_runner,
         "gpu_reservation_block_reason",
@@ -1396,7 +1396,7 @@ def test_llm_stop_active_remote_uses_runtime_specific_cancel(llm_root, monkeypat
 
 
 def test_llm_stopping_after_model_return_skips_client_ingest(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     job = execution_queue.enqueue(
         llm_runner.EXECUTION_LANE,
         {"contract": {"operation": "write_prompt", "prompt": "Expand."}, "clientContext": {}},

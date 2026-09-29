@@ -167,7 +167,7 @@ def test_canonical_set_tomls_are_materialized_resettable_and_never_mode_duplicat
 
     assert result["mode"] == "normal"
     assert (folder / "config.h3.toml").is_file()
-    assert (folder / "dataset.train.toml").is_file()
+    assert (folder / "dataset.h3.toml").is_file()
     assert not list(folder.glob("config.h3.*.toml"))
     (folder / "config.h3.toml").write_text("not = [valid", encoding="utf-8")
     with pytest.raises(Exception):
@@ -196,7 +196,7 @@ def test_custom_valid_dataset_disables_wizard_but_does_not_block_training_review
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
     ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
-    (folder / "dataset.train.toml").write_text(
+    (folder / "dataset.h3.toml").write_text(
         '[[directory]]\npath = "custom"\nnum_repeats = 1\ngroup = "images"\nsize_buckets = [[512, 512, 1]]\nextra = true\n',
         encoding="utf-8",
     )

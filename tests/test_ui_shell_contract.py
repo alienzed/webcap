@@ -658,12 +658,25 @@ def test_background_training_activity_is_discovered_on_app_startup():
 
     assert "if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();" in main
     assert "function scheduleTrainingRunnerPoll()" in runner
+    assert "function stopTrainingRunnerPoll()" in runner
+    assert "if (!isTrainingWorkspaceActive()) return;" in runner
     assert "if (!hasActiveJob) return;" in runner
     assert "function reconcileTrainingRunnerActivity(activeItems)" in runner
     assert "if (!isTrainingWorkspaceActive()) return;" in runner
     assert "if (observedId !== localId) refreshTrainingRunnerStatus();" in runner
     assert "window.reconcileTrainingRunnerActivity = reconcileTrainingRunnerActivity;" in runner
     assert "window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);" in activity
+
+
+def test_activity_polling_backs_off_only_when_managed_work_is_idle():
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+
+    assert "function hasQueuedOrPausedWork()" in activity
+    assert "Number(queue.queued || 0) > 0" in activity
+    assert "Number(queue.backlog || 0) > 0" in activity
+    assert "!!queue.paused" in activity
+    assert "30000" in activity
+    assert "(activeCount() || hasQueuedOrPausedWork()) ? 4000 : 30000" in activity
 
 
 def test_retired_workflow_mode_does_not_survive_as_parallel_shell_state():

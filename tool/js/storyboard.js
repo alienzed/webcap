@@ -23,7 +23,6 @@
     openStoryRequestId: 0,
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
     storyLibraryCompact: window.localStorage.getItem('webcap.storyboard.storyLibraryCompact') === '1',
-    directorPassMode: 'custom',
     storyAction: null,
     storyActionQueue: [],
     storyActionTimer: 0,
@@ -60,7 +59,6 @@
   var STORY_SECTION_DEFAULTS = {
     story: true,
     continuity: false,
-    director: false,
     defaults: false
   };
 
@@ -473,11 +471,8 @@
         storyState.story.repairInstruction = canonical.repairInstruction || '';
         storyState.story.repairComplete = !!canonical.repairComplete;
         storyState.story.updatedAt = canonical.updatedAt;
-        el('storyboard-repair-instruction').value = storyState.story.repairInstruction;
         renderScenes();
         renderStoryReadiness();
-        syncRepairRestore();
-        syncRepairState();
         setRepairStatus('Revise Scenes completed.');
       } else if (operation === 'develop_story') {
         storyState.story.sceneOrder = canonical.sceneOrder || [];
@@ -1530,33 +1525,6 @@
     if (message) reportConsoleInfo('Storyboard', message);
   }
 
-  function syncRepairRestore() {
-    var button = el('storyboard-restore-repair-btn');
-    if (button) button.classList.add('hidden');
-  }
-
-  function syncRepairState() {
-    var mode = el('storyboard-director-pass-mode');
-    var button = el('storyboard-repair-scenes-btn');
-    var instruction = el('storyboard-repair-instruction');
-    if (!mode || !button || !instruction) return;
-    mode.value = storyState.directorPassMode;
-    var refine = storyState.directorPassMode === 'continuity';
-    button.textContent = refine ? 'Refine All Scenes' : 'Revise Scenes';
-    button.title = refine
-      ? 'Review every Scene in sequence for continuity and prompt completeness.'
-      : 'Apply this instruction Scene by Scene across the current plan.';
-  }
-
-  function setDirectorPassMode(mode) {
-    storyState.directorPassMode = mode === 'continuity' ? 'continuity' : 'custom';
-    if (storyState.directorPassMode === 'continuity') {
-      el('storyboard-repair-instruction').value = DIRECTOR_PASS_PRESETS.continuity.instruction;
-      if (storyState.story) storyState.story.repairComplete = false;
-      scheduleStorySave();
-    }
-    syncRepairState();
-  }
 
   function directorTargetKey(target) {
     target = target || {};
@@ -1609,7 +1577,6 @@
     if (target.kind === 'story-action') {
       document.querySelectorAll(
         '#storyboard-story-overview button, #storyboard-story-overview input, #storyboard-story-overview select, #storyboard-story-overview textarea, ' +
-        '.storyboard-director-tools-drawer button, .storyboard-director-tools-drawer input, .storyboard-director-tools-drawer select, .storyboard-director-tools-drawer textarea, ' +
         '#storyboard-scenes-list button, #storyboard-scenes-list input, #storyboard-scenes-list select, #storyboard-scenes-list textarea, ' +
         '#storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add], ' +
         '#storyboard-generate-scenes-btn, #storyboard-director-model'
@@ -1833,8 +1800,6 @@
     instruction = String(instruction || '').trim();
     if (!instruction) return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
 
-    var instructionField = el('storyboard-repair-instruction');
-    if (instructionField) instructionField.value = instruction;
     storyState.story.repairInstruction = instruction;
     storyState.story.repairComplete = false;
 
@@ -1874,33 +1839,6 @@
     });
   }
 
-  function repairScenes() {
-    var instruction = el('storyboard-repair-instruction').value.trim();
-    return reviseScenes(instruction, storyState.director.modelId).catch(reportError);
-  }
-
-  function restoreLastRepair() {
-    if (!storyState.story || !storyState.story.previousSceneRepair) return;
-    var storyId = storyState.story.id;
-    setRepairStatus('Restoring last repair…');
-    flushPendingSaves().then(function () {
-      return request({
-        operation: 'restore_last_scene_repair',
-        storyId: storyId
-      });
-    }).then(function (payload) {
-      if (!storyState.story || String(storyState.story.id || '') !== String(storyId)) return;
-      storyState.story = payload.story;
-      renderStory();
-      syncRepairState();
-      setRepairStatus('Last repair restored.');
-      setSaveState('Saved');
-      return refreshLibrary();
-    }).catch(function (err) {
-      setRepairStatus('Restore failed.');
-      reportError(err);
-    });
-  }
 
   function developStory() {
     if (!storyState.story) return;
@@ -3826,8 +3764,6 @@
     syncStoryIconPicker();
     el('storyboard-story-concept').value = storyState.story.concept || '';
     el('storyboard-story-style').value = storyState.story.style || '';
-    el('storyboard-repair-instruction').value = storyState.story.repairInstruction || '';
-    syncRepairState();
     renderStoryStylePresetSelector();
     renderStoryInvariants();
     el('storyboard-story-status').value = storyState.story.status || 'active';
@@ -3854,7 +3790,6 @@
     if (restoreConceptButton) {
       restoreConceptButton.classList.toggle('hidden', typeof storyState.story.previousConcept !== 'string');
     }
-    syncRepairRestore();
     setStoryCollapsed(storyState.storyCollapsed);
     renderStoryLoras();
     renderScenes();
@@ -4063,7 +3998,7 @@
       icon: el('storyboard-story-icon').value,
       concept: el('storyboard-story-concept').value,
       style: el('storyboard-story-style').value,
-      repairInstruction: el('storyboard-repair-instruction').value,
+      repairInstruction: String(storyState.story.repairInstruction || ''),
       repairComplete: !!storyState.story.repairComplete,
       invariants: storyInvariantsFromUi(),
       loras: storyLorasFromUi(),
@@ -5176,8 +5111,6 @@
       if (!nextAuto && !input.value) input.value = '12';
       scheduleStorySave();
     };
-    el('storyboard-repair-scenes-btn').onclick = repairScenes;
-    el('storyboard-restore-repair-btn').onclick = restoreLastRepair;
     var sceneWorkspace = document.querySelector('.storyboard-scene-workspace');
     if (sceneWorkspace) {
       sceneWorkspace.addEventListener('scroll', function () {
@@ -5308,14 +5241,6 @@
 
     ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-target-scenes'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);
-    });
-    el('storyboard-director-pass-mode').addEventListener('change', function () {
-      setDirectorPassMode(this.value);
-    });
-    el('storyboard-repair-instruction').addEventListener('input', function () {
-      if (storyState.story && storyState.story.repairComplete) storyState.story.repairComplete = false;
-      syncRepairState();
-      scheduleStorySave();
     });
     el('storyboard-story-style').addEventListener('input', function () {
       renderStoryStylePresetSelector();
@@ -5618,6 +5543,11 @@
       description: 'Apply a targeted revision across the current Story\'s Scene plan.',
       placeholder: 'What should be revised across these Scenes?',
       successMessage: 'Scene revisions completed.',
+      presets: [{
+        label: 'Continuity pass',
+        title: 'Review every Scene for continuity and prompt completeness',
+        instruction: DIRECTOR_PASS_PRESETS.continuity.instruction
+      }],
       available: function () {
         var workspace = el('storyboard-workspace');
         return !!(

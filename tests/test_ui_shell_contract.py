@@ -20,6 +20,15 @@ def test_outer_shell_wraps_existing_workspace_without_replacing_it():
     assert 'id="app-overlay-root"' in html
 
 
+def test_global_help_enters_prep_before_rendering_readme():
+    settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
+
+    start = settings.index("function openHelpReadmeInPreview()")
+    body = settings[start:settings.index("function wireAppSettingsUi()", start)]
+    assert "openPrepActivity();" in body
+    assert body.index("openPrepActivity();") < body.index("HttpModule.get('/app/help_readme'")
+
+
 def test_global_shell_controls_are_owned_by_permanent_shell():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 

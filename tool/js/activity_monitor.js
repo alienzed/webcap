@@ -534,11 +534,22 @@
     });
   }
 
+  function hasQueuedOrPausedWork() {
+    var queues = state.payload.queues || {};
+    return ['inference', 'training', 'director'].some(function (key) {
+      var queue = queues[key] || {};
+      return Number(queue.running || 0) > 0 ||
+        Number(queue.queued || 0) > 0 ||
+        Number(queue.backlog || 0) > 0 ||
+        !!queue.paused;
+    });
+  }
+
   function schedule() {
     if (state.timer) clearTimeout(state.timer);
     state.timer = setTimeout(function () {
       refresh().then(schedule);
-    }, state.open ? 2500 : (activeCount() ? 4000 : 9000));
+    }, state.open ? 2500 : ((activeCount() || hasQueuedOrPausedWork()) ? 4000 : 30000));
   }
 
   function setOpen(open) {

@@ -41,8 +41,17 @@ def ensure_training_setup(
         raise ValueError("File does not belong to the selected training setup: " + reset_name)
 
     ensure_training_config_files(folder, profile_id=selected["id"], mode=selected_mode)
+    legacy_shared_dataset = folder / "dataset.train.toml"
     for item in selected["configs"]:
         dataset_path = folder / item["dataset"]
+        if (
+            item["dataset"] in ("dataset.h3.toml", "dataset.wan21.toml")
+            and not dataset_path.exists()
+            and legacy_shared_dataset.is_file()
+        ):
+            legacy_text = legacy_shared_dataset.read_text(encoding="utf-8")
+            tomllib.loads(legacy_text)
+            _write_set_toml_atomic(dataset_path, legacy_text)
         if dataset_path.exists() and dataset_path.name != reset_name:
             tomllib.loads(dataset_path.read_text(encoding="utf-8"))
     if reset_name in known_configs:

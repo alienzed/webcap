@@ -3200,3 +3200,97 @@
       "trend";
   }
 }
+
+
+/* Storyboard IA experiment: wide two-dimensional Story authoring canvas.
+   Branch-only checkpoint: geometry only; no Story/Scene behavior changes. */
+@media (min-width: 1500px) {
+  .storyboard-editor-scroll {
+    grid-template-columns: minmax(720px, 780px) minmax(0, 1fr);
+  }
+
+  .storyboard-story-overview-surface {
+    grid-template-columns: minmax(0, 1.35fr) minmax(300px, .85fr);
+    gap: 12px 14px;
+    align-content: start;
+  }
+
+  .storyboard-story-overview-surface > .storyboard-story-panel-heading {
+    grid-column: 1 / -1;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="story"] {
+    grid-column: 1;
+    grid-row: 2 / span 2;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="continuity"] {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="director"] {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .storyboard-story-overview-surface > .storyboard-develop-row {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="story"] > .storyboard-story-section-body {
+    grid-template-columns: minmax(0, 1.3fr) minmax(220px, .7fr);
+    align-items: start;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="story"] .storyboard-concept-field {
+    grid-column: 1;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="story"] .storyboard-style-field {
+    grid-column: 2;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="story"] .storyboard-concept-field textarea {
+    min-height: 280px;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="story"] .storyboard-style-field textarea {
+    min-height: 180px;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="continuity"] .storyboard-story-section-body,
+  .storyboard-story-overview-surface > [data-story-section="director"] .storyboard-story-section-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="continuity"] .storyboard-invariant-row {
+    grid-template-columns: 92px minmax(0, 1fr) auto;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="continuity"] .storyboard-invariant-row textarea {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1900px) {
+  .storyboard-editor-scroll {
+    grid-template-columns: minmax(820px, 920px) minmax(0, 1fr);
+  }
+
+  .storyboard-story-overview-surface {
+    grid-template-columns: minmax(0, 1.45fr) minmax(340px, .8fr);
+    gap: 14px 16px;
+  }
+
+  .storyboard-story-overview-surface > [data-story-section="story"] > .storyboard-story-section-body {
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, .75fr);
+  }
+}
+
+@media (min-width: 2400px) {
+  .storyboard-editor-scroll {
+    grid-template-columns: minmax(900px, 1020px) minmax(0, 1fr);
+  }
+}

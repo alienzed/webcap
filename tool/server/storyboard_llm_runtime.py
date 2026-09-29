@@ -292,10 +292,8 @@ def _split_model_ref(model_ref):
             raise ValueError("Director model reference is invalid.")
         return runtime_id, model_id
 
-    # Backward compatibility for saved pre-migration model preferences.
-    base = _director_base_config()
-    if base["legacy_mode"] == "remote" and base["remote_endpoints"]:
-        return base["remote_endpoints"][0]["id"], value
+    # Unqualified refs are legacy local model IDs. Browser preferences are
+    # reconciled against discovered qualified refs before requests are queued.
     return "local", value
 
 
@@ -765,8 +763,6 @@ def _ensure_server():
     with _process_lock:
         settings = _director_config()
         if settings.get("mode", "local") == "remote":
-            if _process is not None:
-                _stop_server_locked()
             try:
                 _normalize_models(_http_json("/models", timeout=10))
             except Exception as exc:
@@ -1118,7 +1114,6 @@ def _ensure_local_model_loaded(model_id):
 
     _set_activity(
         "loading_model",
-        model_id=model_id,
         model_size_bytes=_model_file_size(selected),
     )
     for model in models:

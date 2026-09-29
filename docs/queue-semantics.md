@@ -443,7 +443,8 @@ Inference work is **durable across normal WebCap server restarts**:
 
 - **Queue** contains normal runnable work,
 - **Backlog** contains parked durable work behind the normal Queue,
-- while Inference is running, Queue work executes first and then Backlog work continues,
+- fresh/manual Inference requests enter Queue, so they run ahead of existing Backlog work,
+- Backlog is consumed one job at a time only when Queue has no runnable work; it is not bulk-promoted into Queue,
 - while Inference is paused, neither Queue nor Backlog advances,
 - moving work between Queue and Backlog changes execution order/intent only; the frozen request itself remains unchanged.
 

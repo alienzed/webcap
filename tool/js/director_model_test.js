@@ -208,8 +208,11 @@ function directorModelTestRefresh() {
     if (protocol && directorModelTestState.protocol) {
       protocol.textContent =
         directorModelTestState.protocol.id + ' · ' +
-        directorModelTestState.protocol.description + ' Input: "' +
-        directorModelTestState.protocol.sourceText + '"';
+        directorModelTestState.protocol.description;
+    }
+    var prompt = directorModelTestEl('director-model-test-prompt');
+    if (prompt && directorModelTestState.protocol && !prompt.value) {
+      prompt.value = String(directorModelTestState.protocol.defaultPrompt || '');
     }
     directorModelTestRenderModels();
     directorModelTestRenderSessions();
@@ -359,6 +362,7 @@ function directorModelTestRunOne(model) {
   var localStartedAt = Date.now() / 1000;
   return directorModelTestPost({
     action: 'enqueue',
+    sessionId: directorModelTestState.session.id,
     modelRef: model.modelRef
   }).then(function (payload) {
     directorModelTestState.currentJobId = String(payload.job && payload.job.jobId || '');
@@ -396,7 +400,16 @@ function directorModelTestStart() {
   directorModelTestSyncControls();
   reportConsoleInfo('Director Model Test', 'Starting ' + String(models.length) + '-model ' + String((directorModelTestState.protocol || {}).id || 'benchmark') + '.');
 
-  directorModelTestPost({ action: 'start', models: models }).then(function (payload) {
+  var prompt = String((directorModelTestEl('director-model-test-prompt') || {}).value || '').trim();
+  if (!prompt) {
+    var status = directorModelTestEl('director-model-test-status');
+    if (status) status.textContent = 'Enter a benchmark prompt.';
+    directorModelTestState.running = false;
+    directorModelTestSyncControls();
+    return;
+  }
+
+  directorModelTestPost({ action: 'start', models: models, prompt: prompt }).then(function (payload) {
     directorModelTestState.session = payload.session;
     directorModelTestRenderSession();
 

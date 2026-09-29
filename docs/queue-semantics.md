@@ -427,6 +427,10 @@ Its responsibilities are:
 Storyboard Take, and Test requests may still be queued normally. They simply do not begin execution
 until the queue is resumed.
 
+**Reordering changes priority, not meaning.** Moving frozen work earlier or later in a queue changes
+only when it executes. It must not re-resolve, rebase, or reinterpret that job against newer
+authoring state.
+
 It is not the authority for feature-specific semantic validity.
 
 A feature decides whether an action should be enabled. The Inference Queue schedules the resulting

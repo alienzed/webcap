@@ -1485,3 +1485,48 @@ def test_storyboard_story_icon_is_optional_persisted_and_visible_in_library():
     assert len(store.split("VALID_STORY_ICONS = {", 1)[1].split("}", 1)[0].split(",")) >= 30
     assert '"icon": icon' in store
     assert '"icon": source.get("icon") or ""' in store
+
+
+def test_assistant_exposes_storyboard_revise_scenes_only_when_context_is_available():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert 'aria-label="Assistant"' in html
+    assert 'id="director-chat-mode-row"' in html
+    assert 'id="director-chat-mode-switch"' in html
+    assert 'id="storyboard-assistant-btn"' in html
+    assert 'storyboard-director-action' in html.split('id="storyboard-assistant-btn"', 1)[1].split(">", 1)[0]
+
+    assert "window.registerAssistantMode = registerContextMode" in assistant
+    assert "window.refreshAssistantModes = syncModeUi" in assistant
+    assert "window.openAssistant" in assistant
+    assert "data-assistant-mode=\"chat\"" in assistant
+    assert "mode.execute" in assistant
+    assert ".director-chat-mode-switch" in shell_css
+
+    mode = storyboard.split("window.registerAssistantMode({", 1)[1].split("});", 1)[0]
+    assert "id: 'revise-scenes'" in mode
+    assert "label: 'Revise Scenes'" in mode
+    assert "!workspace.classList.contains('hidden')" in mode
+    assert "storyState.story" in mode
+    assert "Array.isArray(storyState.story.sceneOrder)" in mode
+    assert "storyState.story.sceneOrder.length > 0" in mode
+    assert "return reviseScenes(request && request.instruction, request && request.modelId)" in mode
+
+    assert "function reviseScenes(instruction, modelId)" in storyboard
+    assert "function repairScenes()" in storyboard
+    assert "return reviseScenes(instruction, storyState.director.modelId)" in storyboard
+    assert "window.openAssistant({ mode: hasScenes ? 'revise-scenes' : 'chat' })" in storyboard
+
+
+def test_assistant_chat_remains_freeform_and_separate_from_contextual_modes():
+    assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
+
+    assert "activeMode: 'chat'" in assistant
+    assert "if (state.activeMode === 'chat') return state.messages;" in assistant
+    assert "state.modeMessages" in assistant
+    assert "requestJson('/fs/director/chat'" in assistant
+    assert "if (mode)" in assistant
+    assert "mode.execute({" in assistant

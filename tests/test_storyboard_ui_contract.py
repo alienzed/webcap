@@ -276,15 +276,45 @@ def test_storyboard_director_tools_has_sparse_scene_healing_pass():
     assert "restore_last_scene_repair" in storyboard
     assert 'if operation == "restore_last_scene_repair":' in app
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
-    assert '[data-scene-field="summary"]' in protection
-    assert '[data-scene-field="entryState"]' in protection
-    assert '[data-scene-field="exitState"]' in protection
-    assert '[data-scene-field="prompt"]' in protection
+    region_protection = storyboard.split("function setDirectorRegionProtected(region, protectedState)", 1)[1].split("function setDirectorTargetProtected", 1)[0]
+    assert "target.kind === 'scene-prompt' || target.kind === 'repair'" in protection
+    assert "document.querySelector('.storyboard-scene-workspace')" in protection
+    assert "region.inert = !!protectedState;" in region_protection
+    assert "region.classList.toggle('director-protected', !!protectedState);" in region_protection
     scene_payload = storyboard.split("function scenePayloadFromUi(sceneId)", 1)[1].split("\n  function ", 1)[0]
     assert "directorTargetPending({ kind: 'repair'" in scene_payload
     assert "delete payload.summary;" in scene_payload
     assert "delete payload.prompt;" in scene_payload
     assert 'llm_storyboard_target_busy(story_id, "repair")' in app
+
+
+def test_storyboard_director_region_overlays_match_coarse_semantic_scopes():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
+    targeting = storyboard.split("function directorActivityTargetElement()", 1)[1].split("function positionDirectorActivity()", 1)[0]
+    positioning = storyboard.split("function positionDirectorActivity()", 1)[1].split("function directorActivityForTargetQueue", 1)[0]
+
+    assert "setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState);" in protection
+    assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState);" in protection
+    assert "target.kind === 'scene-prompt' || target.kind === 'repair'" in protection
+    assert "target.kind === 'concept'" in protection
+    assert "concept.disabled = !!protectedState;" in protection
+    assert "target.kind === 'story-action'" in protection
+    assert "data-story-action-disabled" in protection
+
+    assert "target.kind === 'scene-prompt'" in targeting
+    assert "target.kind === 'scenes'" in targeting
+    assert "target.kind === 'repair'" in targeting
+    assert "return document.querySelector('.storyboard-scene-workspace');" in targeting
+    assert "kind === 'scene-prompt'" in positioning
+    assert "kind === 'scenes'" in positioning
+    assert "kind === 'repair'" in positioning
+    assert "var fillsField = kind === 'concept';" in positioning
+
+    assert ".storyboard-scene-workspace.director-protected" in css
+    assert ".storyboard-story-authoring.director-protected" in css
 
 
 def test_storyboard_restore_repair_does_not_use_story_wide_director_lock():

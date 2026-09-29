@@ -2327,22 +2327,45 @@
     }
   }
 
-  function invariantRowHtml(item) {
+  function invariantRowHtml(item, expanded) {
     item = item || {};
     var kind = String(item.kind || 'custom');
     var title = String(item.title || '');
-    var text = String(item.text || '');
+    var invariantText = String(item.text || '');
     var labels = { visual: 'Visual', character: 'Character', location: 'Location', world: 'World', sound: 'Sound', custom: 'Custom' };
-    return '<div class="storyboard-invariant-row" data-story-invariant-row>' +
-      '<select data-story-invariant-kind aria-label="Invariant type">' +
-        Object.keys(labels).map(function (value) {
-          return '<option value="' + value + '"' + (value === kind ? ' selected' : '') + '>' + labels[value] + '</option>';
-        }).join('') +
-      '</select>' +
-      '<input type="text" data-story-invariant-title value="' + escapeHtml(title) + '" placeholder="Name / subject" aria-label="Invariant name">' +
-      '<button type="button" class="storyboard-invariant-remove" data-story-invariant-remove title="Remove invariant" aria-label="Remove invariant">×</button>' +
-      '<textarea data-story-invariant-text rows="2" placeholder="What must stay consistent across Scenes?" aria-label="Invariant description">' + escapeHtml(text) + '</textarea>' +
-    '</div>';
+    var summaryTitle = title || 'Untitled invariant';
+    var summaryText = invariantText || 'No continuity note yet.';
+    return '<details class="storyboard-invariant-row"' + (expanded ? ' open' : '') + ' data-story-invariant-row>' +
+      '<summary class="storyboard-invariant-summary">' +
+        '<span class="storyboard-invariant-summary-kind" data-invariant-summary-kind>' + escapeHtml(labels[kind] || labels.custom) + '</span>' +
+        '<strong data-invariant-summary-title>' + escapeHtml(summaryTitle) + '</strong>' +
+        '<span data-invariant-summary-text>' + escapeHtml(summaryText) + '</span>' +
+      '</summary>' +
+      '<div class="storyboard-invariant-editor">' +
+        '<select data-story-invariant-kind aria-label="Invariant type">' +
+          Object.keys(labels).map(function (value) {
+            return '<option value="' + value + '"' + (value === kind ? ' selected' : '') + '>' + labels[value] + '</option>';
+          }).join('') +
+        '</select>' +
+        '<input type="text" data-story-invariant-title value="' + escapeHtml(title) + '" placeholder="Name / subject" aria-label="Invariant name">' +
+        '<button type="button" class="storyboard-invariant-remove" data-story-invariant-remove title="Remove invariant" aria-label="Remove invariant">×</button>' +
+        '<textarea data-story-invariant-text rows="2" placeholder="What must stay consistent across Scenes?" aria-label="Invariant description">' + escapeHtml(invariantText) + '</textarea>' +
+      '</div>' +
+    '</details>';
+  }
+
+  function syncInvariantRowSummary(row) {
+    if (!row) return;
+    var labels = { visual: 'Visual', character: 'Character', location: 'Location', world: 'World', sound: 'Sound', custom: 'Custom' };
+    var kind = row.querySelector('[data-story-invariant-kind]');
+    var title = row.querySelector('[data-story-invariant-title]');
+    var invariantText = row.querySelector('[data-story-invariant-text]');
+    var kindSummary = row.querySelector('[data-invariant-summary-kind]');
+    var titleSummary = row.querySelector('[data-invariant-summary-title]');
+    var textSummary = row.querySelector('[data-invariant-summary-text]');
+    if (kindSummary) kindSummary.textContent = labels[String(kind && kind.value || 'custom')] || labels.custom;
+    if (titleSummary) titleSummary.textContent = String(title && title.value || '').trim() || 'Untitled invariant';
+    if (textSummary) textSummary.textContent = String(invariantText && invariantText.value || '').trim() || 'No continuity note yet.';
   }
 
   function storyInvariantsFromUi() {
@@ -2361,7 +2384,7 @@
     var list = el('storyboard-invariants-list');
     if (!list || !storyState.story) return;
     var invariants = Array.isArray(storyState.story.invariants) ? storyState.story.invariants : [];
-    list.innerHTML = invariants.map(invariantRowHtml).join('');
+    list.innerHTML = invariants.map(function (item) { return invariantRowHtml(item, false); }).join('');
   }
 
   function setStoryCollapsed(collapsed) {
@@ -3569,7 +3592,7 @@
                   (promptDirectorModel ? ' title="Last populated by Director model ' + escapeHtml(promptDirectorModel) + '"' : '') +
                 '>Generation prompt</span>' +
                 '<div class="storyboard-prompt-actions">' +
-                  '<button type="button" class="review-captions-btn" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
+                  '<button type="button" class="review-captions-btn storyboard-director-action" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
                   '<button type="button" class="review-captions-btn' +
                     (typeof scene.previousPrompt === 'string' ? '' : ' hidden') +
                     '" data-director-restore title="Restore the Scene state from before the last Director edit.">Restore Previous</button>' +
@@ -3578,7 +3601,7 @@
               '<textarea class="storyboard-prompt-textarea" data-scene-field="prompt" rows="7" placeholder="Full model-facing prompt. Write it directly or let the Director draft it from the Scene intent.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea>' +
               '<div class="storyboard-director-actions">' +
                 '<input type="text" data-director-correction placeholder="Tell the Director what to change in this prompt...">' +
-                '<button type="button" class="review-captions-btn" data-director-refine title="' +
+                '<button type="button" class="review-captions-btn storyboard-director-action" data-director-refine title="' +
                   (scene.refineComplete ? 'Last refinement completed. Start typing another instruction to refine again.' : 'Apply this correction to the existing generation prompt.') +
                   '">' + (scene.refineComplete ? '✓' : 'Refine') + '</button>' +
                 '<span class="storyboard-save-state" data-director-status></span>' +
@@ -5181,15 +5204,21 @@
       syncSceneGenerationDefaultHints();
       scheduleStorySave();
     });
-    el('storyboard-invariants-list').addEventListener('input', scheduleStorySave);
-    el('storyboard-invariants-list').addEventListener('change', scheduleStorySave);
+    el('storyboard-invariants-list').addEventListener('input', function (event) {
+      syncInvariantRowSummary(event.target.closest('[data-story-invariant-row]'));
+      scheduleStorySave();
+    });
+    el('storyboard-invariants-list').addEventListener('change', function (event) {
+      syncInvariantRowSummary(event.target.closest('[data-story-invariant-row]'));
+      scheduleStorySave();
+    });
     document.querySelector('.storyboard-continuity-summary .storyboard-invariants-actions').addEventListener('click', function (event) {
       event.preventDefault();
       event.stopPropagation();
     });
     el('storyboard-invariant-define').addEventListener('click', defineInvariants);
     el('storyboard-invariant-add').addEventListener('click', function () {
-      el('storyboard-invariants-list').insertAdjacentHTML('beforeend', invariantRowHtml({ kind: 'character', title: '', text: '' }));
+      el('storyboard-invariants-list').insertAdjacentHTML('beforeend', invariantRowHtml({ kind: 'character', title: '', text: '' }, true));
     });
     el('storyboard-invariants-list').addEventListener('click', function (event) {
       var remove = event.target.closest('[data-story-invariant-remove]');

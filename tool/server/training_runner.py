@@ -2301,6 +2301,26 @@ def start_response(
         return {"ok": True, "job": _public_job(job), "jobs": [_public_job(job)], "queued": job.get("status") == "queued"}, 200
 
 
+def passive_status_snapshot():
+    """Read the last persisted Training scheduler state without advancing or persisting it."""
+    with _lock:
+        try:
+            state = _read_state_readonly()
+        except TrainingStateError as exc:
+            return {"ok": False, "stateError": True, "error": str(exc)}, 409
+        jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
+        active_jobs = [job for job in jobs if job.get("status") in ACTIVE_STATUSES]
+        active_job_id = str(active_jobs[0].get("id") or "") if active_jobs else ""
+        return {
+            "ok": True,
+            "activeJobId": active_job_id,
+            "queuePaused": bool(state.get("queuePaused")),
+            "queuePauseReason": str(state.get("queuePauseReason") or ""),
+            "runnerNotice": str(state.get("runnerNotice") or ""),
+            "jobs": [_public_job(job) for job in jobs],
+        }, 200
+
+
 def status_response():
     with _lock:
         _ensure_monitor_started()

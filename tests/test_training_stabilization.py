@@ -11,7 +11,7 @@ from tool.server import app as app_module
 from tool.server import execution_queue, run_ops, storyboard_llm_runtime, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
 from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
-from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, config_for_stage, profile_for_mode
+from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_for_mode
 from tool.server.training_setup import ensure_training_setup
 
 
@@ -174,6 +174,26 @@ def test_canonical_set_tomls_are_materialized_resettable_and_never_mode_duplicat
         ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
     reset_training_config_file(folder, "config.h3.toml", profile_id=MINIMAX_H3_PROFILE_ID, mode="normal")
     assert "output_dir" in (folder / "config.h3.toml").read_text(encoding="utf-8")
+
+
+
+def test_legacy_shared_dataset_is_copied_to_each_model_specific_dataset_without_rewriting_it(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    h3_folder = _set(tmp_path / "h3")
+    legacy_h3 = h3_folder / "dataset.train.toml"
+    legacy_h3.write_text('enable_ar_bucket = true\n# preserve legacy edits\n', encoding="utf-8")
+
+    ensure_training_setup(h3_folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png", "two.png"])
+
+    assert (h3_folder / "dataset.h3.toml").read_text(encoding="utf-8") == legacy_h3.read_text(encoding="utf-8")
+
+    wan_folder = _set(tmp_path / "wan")
+    legacy_wan = wan_folder / "dataset.train.toml"
+    legacy_wan.write_text('enable_ar_bucket = true\n# preserve legacy edits\n', encoding="utf-8")
+
+    ensure_training_setup(wan_folder, WAN21_PROFILE_ID, "normal", selected_media=["one.png", "two.png"])
+
+    assert (wan_folder / "dataset.wan21.toml").read_text(encoding="utf-8") == legacy_wan.read_text(encoding="utf-8")
 
 
 def test_review_is_toml_backed_inclusive_and_returns_distribution(tmp_path, monkeypatch):

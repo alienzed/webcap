@@ -256,7 +256,7 @@ def test_story_scene_lifecycle(storyboard_fs):
     assert restored["sceneOrder"] == [second["id"], duplicate["id"], first["id"]]
 
 
-def test_concept_restore_keeps_first_expansion_as_fixed_baseline(storyboard_fs):
+def test_concept_restore_keeps_initial_prompt_as_fixed_baseline(storyboard_fs):
     story = storyboard_store.create_story({
         "title": "Story",
         "concept": "Original concept.",
@@ -264,19 +264,24 @@ def test_concept_restore_keeps_first_expansion_as_fixed_baseline(storyboard_fs):
     first_expansion = storyboard_store.apply_concept_expansion(story["id"], "First expanded concept.")
 
     assert first_expansion["concept"] == "First expanded concept."
-    assert first_expansion["previousConcept"] == "First expanded concept."
+    assert first_expansion["previousConcept"] == "Original concept."
 
+    storyboard_store.update_story(story["id"], {"concept": "Manual rewrite after expansion."})
     later_expansion = storyboard_store.apply_concept_expansion(story["id"], "Later expanded concept.")
     assert later_expansion["concept"] == "Later expanded concept."
-    assert later_expansion["previousConcept"] == "First expanded concept."
+    assert later_expansion["previousConcept"] == "Original concept."
 
     restored = storyboard_store.restore_previous_concept(story["id"])
-    assert restored["concept"] == "First expanded concept."
-    assert restored["previousConcept"] == "First expanded concept."
+    assert restored["concept"] == "Original concept."
+    assert restored["previousConcept"] == "Original concept."
+
+    reloaded = storyboard_store.load_story(story["id"])
+    assert reloaded["concept"] == "Original concept."
+    assert reloaded["previousConcept"] == "Original concept."
 
     restored_again = storyboard_store.restore_previous_concept(story["id"])
-    assert restored_again["concept"] == "First expanded concept."
-    assert restored_again["previousConcept"] == "First expanded concept."
+    assert restored_again["concept"] == "Original concept."
+    assert restored_again["previousConcept"] == "Original concept."
 
 
 def test_director_prompt_restore_is_durable_and_revertable(storyboard_fs):
@@ -759,7 +764,7 @@ def test_apply_developed_plan_treats_scene_count_as_target_but_keeps_semantic_va
         storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": [bad_scene]})
 
 
-def test_concept_expansion_preserves_one_previous_version(storyboard_fs):
+def test_concept_expansion_preserves_initial_prompt_after_restore(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "concept": "One sentence."})
 
     expanded = storyboard_store.apply_concept_expansion(
@@ -772,7 +777,7 @@ def test_concept_expansion_preserves_one_previous_version(storyboard_fs):
 
     restored = storyboard_store.restore_previous_concept(story["id"])
     assert restored["concept"] == "One sentence."
-    assert restored["previousConcept"] is None
+    assert restored["previousConcept"] == "One sentence."
 
 
 def test_restore_scene_clears_replanning_removal_metadata(storyboard_fs):

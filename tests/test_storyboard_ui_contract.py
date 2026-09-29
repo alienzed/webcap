@@ -824,10 +824,10 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'data-story-section="planning"' not in html
     assert 'data-story-section="loras"' not in html
     assert 'data-story-section="story" open' in html
-    assert 'data-story-section="continuity" open' in html
+    assert 'data-story-section="continuity" open' not in html
     assert "var STORY_SECTION_DEFAULTS = {" in storyboard
     assert "story: true" in storyboard
-    assert "continuity: true" in storyboard
+    assert "continuity: false" in storyboard
     assert "director: false" in storyboard
     assert "defaults: false" in storyboard
     assert "function initStorySections()" in storyboard
@@ -852,6 +852,9 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'id="storyboard-invariant-define"' in continuity_summary
     assert 'id="storyboard-invariant-add"' in continuity_summary
     assert 'id="storyboard-invariants-list"' in continuity_section
+    add_invariant = storyboard.split("el('storyboard-invariant-add').addEventListener('click'", 1)[1].split("});", 1)[0]
+    assert "continuitySection.open = true" in add_invariant
+    assert "invariantRowHtml({ kind: 'character', title: '', text: '' }, true)" in add_invariant
 
     assert 'class="storyboard-director-tools-drawer"' in utility_shelf
     assert 'class="storyboard-scene-defaults"' in utility_shelf

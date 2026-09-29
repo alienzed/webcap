@@ -38,6 +38,7 @@ def _shared_context():
 def test_story_create_list_and_reload(storyboard_fs):
     story = storyboard_store.create_story({
         "title": "Storm Hotel",
+        "icon": "star",
         "concept": "Arrival during a storm.",
         "style": "Rain-soaked neo-noir horror.",
         "invariants": [
@@ -49,6 +50,7 @@ def test_story_create_list_and_reload(storyboard_fs):
     })
 
     assert story["title"] == "Storm Hotel"
+    assert story["icon"] == "star"
     assert story["style"] == "Rain-soaked neo-noir horror."
     assert story["invariants"] == [
         {"kind": "character", "title": "Mara", "text": "Mara keeps the same dark bob and red coat."},
@@ -66,11 +68,13 @@ def test_story_create_list_and_reload(storyboard_fs):
     loaded = storyboard_store.load_story(story["id"])
     assert loaded["id"] == story["id"]
     assert storyboard_store.list_stories()[0]["title"] == "Storm Hotel"
+    assert storyboard_store.list_stories()[0]["icon"] == "star"
 
 
 def test_duplicate_story_copies_authoring_but_not_generated_artifacts(storyboard_fs):
     story = storyboard_store.create_story({
         "title": "Source Story",
+        "icon": "film",
         "concept": "A motel at night.",
         "style": "Neo-noir.",
         "invariants": [{"kind": "character", "title": "Elena", "text": "Elena wears a black coat."}],
@@ -92,6 +96,7 @@ def test_duplicate_story_copies_authoring_but_not_generated_artifacts(storyboard
 
     assert duplicate["id"] != story["id"]
     assert duplicate["title"] == "Source Story Copy"
+    assert duplicate["icon"] == "film"
     assert duplicate["concept"] == story["concept"]
     assert duplicate["style"] == story["style"]
     assert duplicate["invariants"] == story["invariants"]
@@ -120,6 +125,21 @@ def test_duplicate_story_copies_authoring_but_not_generated_artifacts(storyboard
     assert (duplicate_dir / "story.json").is_file()
     assert not (duplicate_dir / "exports").exists()
 
+
+
+def test_story_target_scene_count_can_be_auto(storyboard_fs):
+    story = storyboard_store.create_story({
+        "title": "Auto Story",
+        "targetSceneCount": None,
+    })
+
+    assert story["targetSceneCount"] is None
+
+    updated = storyboard_store.update_story(story["id"], {"targetSceneCount": 9})
+    assert updated["targetSceneCount"] == 9
+
+    updated = storyboard_store.update_story(story["id"], {"targetSceneCount": None})
+    assert updated["targetSceneCount"] is None
 
 
 def test_story_generation_defaults_and_scene_inheritance_are_persisted(storyboard_fs):

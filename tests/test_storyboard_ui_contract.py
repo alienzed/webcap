@@ -396,10 +396,15 @@ def test_storyboard_director_pending_state_is_target_scoped():
     assert "return 'story-concept:' + storyId;" in storyboard
     assert "return 'story-scenes:' + storyId;" in storyboard
     assert "return 'scene-prompt:' + storyId + ':' + String(target.sceneId);" in storyboard
-    assert "function directorTargetsConflict(a, b)" in storyboard
+    assert "function directorTargetsConflict(target, pending)" in storyboard
     assert "function directorTargetBlocked(target)" in storyboard
     assert "function setDirectorPending(target, pending)" in storyboard
     assert "function syncDirectorPendingControls()" in storyboard
+    conflicts = storyboard.split("function directorTargetsConflict(target, pending)", 1)[1].split("function directorTargetBlocked", 1)[0]
+    assert "if (target.kind === 'concept') return pending.kind === 'concept';" in conflicts
+    assert "if (target.kind === 'scenes' || target.kind === 'repair') return true;" in conflicts
+    assert "pending.kind === 'concept' || pending.kind === 'scenes' || pending.kind === 'repair'" in conflicts
+    assert "target.kind === 'repair' || pending.kind === 'repair'" not in conflicts
     assert "var directorTarget = { kind: 'concept', storyId: storyId };" in storyboard
     assert "var directorTarget = { kind: 'scenes', storyId: storyId };" in storyboard
     assert "var directorTarget = { kind: 'scene-prompt', storyId: storyId, sceneId: sceneId };" in storyboard
@@ -965,13 +970,13 @@ def test_storyboard_develop_scenes_is_primary_story_to_scenes_handoff():
 
 
 
-def test_storyboard_director_scene_plan_lock_excludes_scene_defaults():
+def test_storyboard_director_scene_plan_lock_covers_story_authoring_and_scene_defaults():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
     scenes = protection.split("if (target.kind === 'scenes')", 1)[1].split("if (target.kind === 'scene-prompt'", 1)[0]
-    assert "setDirectorRegionProtected(el('storyboard-story-overview'), protectedState)" in scenes
-    assert "setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState)" not in scenes
+    assert "setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState)" in scenes
+    assert "setDirectorRegionProtected(el('storyboard-story-overview'), protectedState)" not in scenes
     assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState)" in scenes
 
     story_action = protection.split("if (target.kind === 'story-action')", 1)[1].split("if (target.kind === 'concept')", 1)[0]
@@ -994,8 +999,8 @@ def test_storyboard_switching_stories_clears_stale_director_locks():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     block = storyboard.split("function syncDirectorPendingControls()", 1)[1].split("\n  function ", 1)[0]
+    assert "setDirectorRegionProtected(el('storyboard-story-authoring'), false);" in block
     assert "setDirectorRegionProtected(el('storyboard-story-overview'), false);" in block
-    assert "setDirectorRegionProtected(el('storyboard-story-authoring'), false);" not in block
     assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), false);" in block
     assert "setDirectorTargetProtected(conceptTarget, directorTargetPending(conceptTarget));" in block
     assert "setDirectorTargetProtected(repairTarget, directorTargetPending(repairTarget));" in block

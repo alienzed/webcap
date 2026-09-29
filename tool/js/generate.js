@@ -395,6 +395,7 @@
           '<button type="button" class="review-captions-btn generate-prompt-library-delete" data-generate-prompt-delete="' + escapeHtml(item.id) + '">Delete</button>' +
         '</div></article>';
     }).join('');
+    syncPromptAssistantDependencies();
   }
 
   function refreshPromptLibrary() {
@@ -478,12 +479,14 @@
   }
 
   function runGenerate() {
+    if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before generating.');
     var model = currentModel();
     var prompt = String(el('generate-prompt').value || '').trim();
     if (!model) throw new Error('Choose a Base Model.');
     if (!prompt) throw new Error('Enter a generation prompt.');
     var button = el('generate-run-btn');
-    button.disabled = true;
+    button.dataset.generateSubmitBusy = '1';
+    syncPromptAssistantDependencies();
     setStatus('Preparing generation…');
 
     return collectReferences().then(function (references) {
@@ -507,7 +510,8 @@
     }).catch(function (err) {
       reportError(err, conciseGenerateError(err, 'Generation failed'));
     }).then(function () {
-      button.disabled = false;
+      delete button.dataset.generateSubmitBusy;
+      syncPromptAssistantDependencies();
     });
   }
 
@@ -1476,6 +1480,15 @@
     if (status) status.textContent = generateState.director.status;
   }
 
+  function syncPromptAssistantDependencies() {
+    var runButton = el('generate-run-btn');
+    if (!runButton) throw new Error('Generate action markup is missing.');
+    runButton.disabled = generateState.director.busy || runButton.dataset.generateSubmitBusy === '1';
+    document.querySelectorAll('[data-generate-prompt-use]').forEach(function (button) {
+      button.disabled = generateState.director.busy;
+    });
+  }
+
   function renderDirector() {
     var select = el('generate-director-model');
     var status = el('generate-director-status');
@@ -1485,6 +1498,7 @@
     var refresh = el('generate-director-refresh');
     if (!select || !status || !restore || !expand || !refine || !refresh) return;
 
+    syncPromptAssistantDependencies();
     refresh.disabled = generateState.director.busy;
 
     restore.classList.toggle('hidden', generateState.director.previousPrompt === null);

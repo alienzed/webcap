@@ -104,6 +104,22 @@ def test_generate_prompt_assistant_uses_shared_llm_queue():
     assert "reference_roles=data.get(\"referenceRoles\")" in app
 
 
+def test_generate_prompt_assistant_protects_prompt_consumers_while_pending():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "function syncPromptAssistantDependencies()" in script
+    assert "runButton.disabled = generateState.director.busy || runButton.dataset.generateSubmitBusy === '1';" in script
+    assert "document.querySelectorAll('[data-generate-prompt-use]')" in script
+    assert "if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before generating.');" in script
+    assert "button.dataset.generateSubmitBusy = '1';" in script
+    assert "delete button.dataset.generateSubmitBusy;" in script
+
+    director = script.split("function renderDirector()", 1)[1].split("function refreshDirector", 1)[0]
+    prompt_library = script.split("function renderPromptLibrary()", 1)[1].split("function refreshPromptLibrary", 1)[0]
+    assert "syncPromptAssistantDependencies();" in director
+    assert "syncPromptAssistantDependencies();" in prompt_library
+
+
 def test_generate_prompt_assistant_memory_display_uses_percentages_with_amount_tooltips():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
 

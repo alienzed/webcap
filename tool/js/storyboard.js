@@ -1527,15 +1527,17 @@
     return !!(key && storyState.director.pendingTargets[key]);
   }
 
-  function directorTargetsConflict(a, b) {
-    if (!a || !b || String(a.storyId || '') !== String(b.storyId || '')) return false;
-    if (a.kind === 'story-action' || b.kind === 'story-action') return true;
-    if (a.kind === 'scene-prompt' && b.kind === 'scene-prompt') {
-      return String(a.sceneId || '') === String(b.sceneId || '');
+  function directorTargetsConflict(target, pending) {
+    if (!target || !pending || String(target.storyId || '') !== String(pending.storyId || '')) return false;
+    if (target.kind === 'story-action' || pending.kind === 'story-action') return true;
+    if (target.kind === 'concept') return pending.kind === 'concept';
+    if (target.kind === 'scenes' || target.kind === 'repair') return true;
+    if (target.kind === 'scene-prompt') {
+      if (pending.kind === 'concept' || pending.kind === 'scenes' || pending.kind === 'repair') return true;
+      return pending.kind === 'scene-prompt'
+        && String(target.sceneId || '') === String(pending.sceneId || '');
     }
-    if (a.kind === 'repair' || b.kind === 'repair') return true;
-    if (a.kind === 'scenes' || b.kind === 'scenes') return true;
-    return a.kind === 'concept' && b.kind === 'concept';
+    return false;
   }
 
   function directorTargetBlocked(target) {
@@ -1581,7 +1583,7 @@
       return;
     }
     if (target.kind === 'scenes') {
-      setDirectorRegionProtected(el('storyboard-story-overview'), protectedState);
+      setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState);
       setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState);
       return;
     }
@@ -1600,6 +1602,7 @@
       control.disabled = false;
       delete control.dataset.storyActionDisabled;
     });
+    setDirectorRegionProtected(el('storyboard-story-authoring'), false);
     setDirectorRegionProtected(el('storyboard-story-overview'), false);
     setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), false);
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;

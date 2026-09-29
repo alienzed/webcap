@@ -4398,9 +4398,6 @@
   }
 
   function deleteScene(sceneId) {
-    var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
-    var label = scene && scene.title ? scene.title : 'this Scene';
-    if (!window.confirm('Remove "' + label + '" from this Story? The Scene setup will remain recoverable, but its generated Takes will be permanently deleted.')) return;
     setSaveState('Saving...');
     flushPendingSaves().then(function () { return request({
       operation: 'delete_scene',
@@ -4497,10 +4494,6 @@
   }
 
   function removeTake(sceneId, takeId) {
-    var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
-    var take = scene && scene.takes ? scene.takes[takeId] : null;
-    var label = take && take.sourceFilename ? take.sourceFilename : 'this Take';
-    if (!window.confirm('Remove "' + label + '"? Its media and metadata will remain recoverable.')) return;
     setSaveState('Saving...');
     flushPendingSaves().then(function () { return request({
       operation: 'remove_take',

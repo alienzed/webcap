@@ -58,7 +58,6 @@
   };
 
   var STORY_SECTION_DEFAULTS = {
-    story: true,
     continuity: true,
     director: false,
     defaults: false
@@ -230,6 +229,11 @@
       var stored = window.localStorage.getItem(storySectionStorageKey(sectionName));
       section.open = stored === null ? STORY_SECTION_DEFAULTS[sectionName] : stored === '1';
       section.addEventListener('toggle', function () {
+        if (section.open && section.closest('.storyboard-story-utility-shelf')) {
+          section.closest('.storyboard-story-utility-shelf').querySelectorAll('details[data-story-section]').forEach(function (other) {
+            if (other !== section) other.open = false;
+          });
+        }
         window.localStorage.setItem(storySectionStorageKey(sectionName), section.open ? '1' : '0');
         if (directorActivityActive()) positionDirectorActivity();
       });
@@ -905,7 +909,7 @@
     if (target.kind === 'concept') {
       var conceptField = el('storyboard-story-concept');
       if (conceptField && conceptField.offsetParent !== null) return conceptField;
-      return document.querySelector('[data-story-section="story"] > summary');
+      return document.querySelector('.storyboard-story-panel-heading');
     }
     if (target.kind === 'scene-prompt') {
       var sceneRoot = sceneElement(target.sceneId);

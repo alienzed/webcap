@@ -1390,49 +1390,6 @@
 
 
 
-                                <div class="storyboard-develop-row">
-                                    <div class="storyboard-develop-controls">
-                                        <label class="storyboard-target-scenes-inline">
-                                            <input id="storyboard-story-target-scenes" type="number" min="2" max="50" step="1" value="12" aria-label="Target Scene count">
-                                            <span>scenes</span>
-                                        </label>
-                                        <button id="storyboard-scene-count-auto" type="button" class="review-captions-btn storyboard-scene-count-auto" aria-pressed="false" title="Let Director choose the Scene count from the Story">Auto</button>
-                                        <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn storyboard-director-action">Develop Scenes</button>
-                                    </div>
-                                    <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite"></span>
-                                </div>
-                            </div>
-
-                            <div class="storyboard-story-utility-shelf" aria-label="Story utilities">
-                                <details class="storyboard-story-section storyboard-director-tools-drawer" data-story-section="director">
-                                    <summary>
-                                        <span class="storyboard-story-section-summary-copy">
-                                            <strong>Director Tools</strong>
-                                            <span>Optional whole-Story review and repair tools.</span>
-                                        </span>
-                                    </summary>
-                                    <div class="storyboard-story-section-body">
-                                        <div class="storyboard-director-repair">
-                                            <label class="storyboard-field">
-                                                <span>Director pass</span>
-                                                <select id="storyboard-director-pass-mode">
-                                                    <option value="custom">Custom repair</option>
-                                                    <option value="continuity">Continuity &amp; prompt refinement</option>
-                                                </select>
-                                            </label>
-                                            <label class="storyboard-field">
-                                                <span>Instruction</span>
-                                                <textarea id="storyboard-repair-instruction" rows="3" placeholder="Tell the Director what tendency or problem to check across the current Scene plan…"></textarea>
-                                            </label>
-                                            <div class="storyboard-director-repair-actions">
-                                                <button id="storyboard-repair-scenes-btn" type="button" class="review-captions-btn storyboard-director-action">Revise Scenes</button>
-                                                <button id="storyboard-restore-repair-btn" type="button" class="review-captions-btn hidden">Restore Last Repair</button>
-                                                <span id="storyboard-repair-status" class="storyboard-save-state" aria-live="polite"></span>
-                                            </div>
-                                            <span class="storyboard-reference-empty">Runs Scene by Scene. Each Scene keeps its place in the plan and changes only when the instruction requires it.</span>
-                                        </div>
-                                    </div>
-                                </details>
                                 <details class="storyboard-story-section storyboard-scene-defaults" data-story-section="defaults" aria-label="Scene Defaults">
                                     <summary>
                                         <span class="storyboard-story-section-summary-copy">
@@ -1463,7 +1420,21 @@
                                         </section>
                                     </div>
                                 </details>
+
+                                <div class="storyboard-develop-row">
+                                    <div class="storyboard-develop-controls">
+                                        <label class="storyboard-target-scenes-inline">
+                                            <input id="storyboard-story-target-scenes" type="number" min="2" max="50" step="1" value="12" aria-label="Target Scene count">
+                                            <span>scenes</span>
+                                        </label>
+                                        <button id="storyboard-scene-count-auto" type="button" class="review-captions-btn storyboard-scene-count-auto" aria-pressed="false" title="Let Director choose the Scene count from the Story">Auto</button>
+                                        <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn storyboard-director-action">Develop Scenes</button>
+                                    </div>
+                                    <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite"></span>
+                                </div>
                             </div>
+
+
                         </div>
                         <div class="storyboard-scene-workspace">
                             <div class="storyboard-scenes-heading">
@@ -1513,6 +1484,10 @@
                 <div id="director-chat-mode-row" class="director-chat-mode-row hidden" aria-label="Assistant mode">
                     <span>Mode</span>
                     <div id="director-chat-mode-switch" class="director-chat-mode-switch" role="group" aria-label="Assistant mode"></div>
+                </div>
+                <div id="director-chat-mode-tools" class="director-chat-mode-tools hidden" aria-label="Assistant mode tools">
+                    <span>Quick</span>
+                    <div id="director-chat-mode-presets" class="director-chat-mode-presets"></div>
                 </div>
                 <div class="director-chat-model-row">
                     <label for="director-chat-model">Model</label>

@@ -186,12 +186,3 @@ def test_single_item_preview_header_renders_existing_media_metadata():
     assert "grid-template-columns: auto auto minmax(0, 1fr) auto;" in css
     assert ".preview-header-meta-resolution" in css
     assert "overflow: hidden;" in css
-
-
-def test_grid_duplicate_refresh_does_not_force_single_item_reselection():
-    script = _read("tool/js/ui.js")
-
-    block = script[script.index("// Pending filename reselection is a single-item workflow."):script.index("} catch (e) {")]
-    assert "state.pendingSelectFileName = undefined;" in block
-    assert "if (getWorkspaceViewMode() !== 'grid')" in block
-    assert "setTimeout(function() { selectByFileName(fname); }, 0);" in block

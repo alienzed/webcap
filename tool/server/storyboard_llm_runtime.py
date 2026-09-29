@@ -158,14 +158,13 @@ def activity_status():
         activity["runtimeProvider"] = "openai-compatible"
         remote_model = {}
     if remote_model:
-        if remote_model:
-            activity["remoteModelVramBytes"] = remote_model.get("vramBytes", 0)
-            model_size = int(remote_model.get("sizeBytes") or 0)
-            context_size = int(remote_model.get("contextSize") or 0)
-            if model_size > 0:
-                activity["modelSizeBytes"] = model_size
-            if context_size > 0:
-                activity["contextSize"] = context_size
+        activity["remoteModelVramBytes"] = remote_model.get("vramBytes", 0)
+        model_size = int(remote_model.get("sizeBytes") or 0)
+        context_size = int(remote_model.get("contextSize") or 0)
+        if model_size > 0:
+            activity["modelSizeBytes"] = model_size
+        if context_size > 0:
+            activity["contextSize"] = context_size
     return activity
 
 
@@ -275,7 +274,7 @@ def _use_runtime(runtime_id):
     previous = getattr(_runtime_context, "runtime_id", "")
     _runtime_context.runtime_id = str(runtime_id or "")
     try:
-        yield _runtime_settings(runtime_id)
+        yield _director_config()
     finally:
         _runtime_context.runtime_id = previous
 

@@ -880,6 +880,8 @@ def test_storyboard_story_context_uses_flat_canvas_and_persisted_utility_drawers
     assert "bottom: 100%;" in css
     assert "Storyboard IA correction: Continuity is intentionally narrow" in css
     assert "function storyRailIconHtml(story)" in storyboard
+    assert 'id="storyboard-scene-count-auto"' in html
+    assert "targetSceneCount: el('storyboard-scene-count-auto').getAttribute('aria-pressed') === 'true'" in storyboard
     assert "storyboard-story-rail-icon" in storyboard
 
     payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
@@ -892,18 +894,18 @@ def test_storyboard_develop_scenes_is_primary_story_to_scenes_handoff():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    handoff = html.split('<div class="storyboard-develop-row">', 1)[1].split("</div>\n\n                                <details", 1)[0]
+    handoff = html.split('<div class="storyboard-develop-row">', 1)[1].split('<div class="storyboard-story-utility-shelf"', 1)[0]
     assert 'id="storyboard-story-target-scenes"' in handoff
+    assert 'id="storyboard-scene-count-auto"' in handoff
     assert 'id="storyboard-develop-btn"' in handoff
-    assert handoff.index('id="storyboard-develop-btn"') < handoff.index('id="storyboard-develop-status"')
-    assert "Turn the Story Overview above into the Scene plan." in handoff
+    assert handoff.index('id="storyboard-story-target-scenes"') < handoff.index('id="storyboard-develop-btn"')
+    assert "Turn the Story Overview above into the Scene plan." not in handoff
+    assert "Scene plan" not in handoff
 
-    develop_css = css.split(".storyboard-develop-row .storyboard-primary-btn {", 1)[1].split("}", 1)[0]
-    assert "width: 100%;" in develop_css
-    assert "min-height: 48px;" in develop_css
-    assert "var(--accent)" in develop_css
-    assert ".storyboard-develop-row .storyboard-primary-btn::before" in css
-    assert ".storyboard-develop-row > .storyboard-save-state" in css
+    assert ".storyboard-develop-controls" in css
+    assert ".storyboard-target-scenes-inline" in css
+    assert ".storyboard-scene-count-auto" in css
+    assert ".storyboard-develop-controls .storyboard-primary-btn" in css
 
 
 def test_storyboard_director_scene_plan_lock_excludes_scene_defaults():

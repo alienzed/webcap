@@ -167,9 +167,13 @@ function collectAppSettingsDirectorEndpoints() {
 
 function addAppSettingsDirectorEndpoint() {
   var current = collectAppSettingsDirectorEndpoints();
+  var used = {};
+  current.forEach(function (item) { used[String(item.id || '')] = true; });
+  var number = current.length + 1;
+  while (used['remote-' + String(number)]) number += 1;
   current.push({
-    id: 'remote-' + String(current.length + 1),
-    name: 'Remote ' + String(current.length + 1),
+    id: 'remote-' + String(number),
+    name: 'Remote ' + String(number),
     endpoint: '',
     enabled: true
   });

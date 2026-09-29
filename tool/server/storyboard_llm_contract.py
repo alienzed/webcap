@@ -348,10 +348,16 @@ def build_request(story, scene_id, operation, instruction=""):
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 WRITING RULES]\n" + h3_runtime_context)
-        target_scene_count = int(story.get("targetSceneCount") or 12)
+        target_scene_count = story.get("targetSceneCount")
+        scene_count_guidance = (
+            "Aim for " + str(int(target_scene_count)) + " Scenes, but prioritize coherent, substantial Scenes over mechanically hitting the count. "
+            if target_scene_count is not None
+            else "Choose the Scene count that best fits the Story's natural progression, pacing, and generatability; do not target a predetermined count. "
+        )
         blocks.append(
             "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
-            "Aim for " + str(target_scene_count) + " Scenes, but prioritize coherent, substantial Scenes over mechanically hitting the count. Combine small related beats when they fit naturally; split material when a separate Scene improves clarity, pacing, or generatability. "
+            + scene_count_guidance
+            + "Combine small related beats when they fit naturally; split material when a separate Scene improves clarity, pacing, or generatability. "
             "Aim for about 10 seconds per Scene by default. Use up to 15 seconds when the Scene genuinely benefits from the extra time, and never propose less than 6 seconds. Use the available duration efficiently, normally with multiple meaningful shots, cuts, or distinct visual beats when the material supports them; use a single continuous shot when uninterrupted time is the stronger directorial choice. Preserve coherent progression appropriate to the concept, explicit entry/exit states, continuity where relevant, supplied Story facts, Story invariants, recurring character identity, wardrobe, location, and persistent visible state across the sequence. "
             "For every Scene, invariantRefs must contain the exact kind/title pairs of only the supplied character and location invariants actually present or materially relevant in that Scene; use an empty array when none apply. Do not introduce a character or location merely to justify a reference. WebCap will inject those invariant descriptions verbatim into the final H3 prompt, so do not rewrite their identity details merely for variety. "
             "Provide complete structured H3 content for every Scene now, not a placeholder; WebCap will render the exact model-facing field labels and spacing. Be creatively useful, but invent supporting performance, camera behavior, sound, dialogue, or music only when they serve the supplied concept; none is mandatory. "

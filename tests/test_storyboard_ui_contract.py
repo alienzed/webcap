@@ -1418,3 +1418,34 @@ def test_storyboard_director_actions_and_invariants_keep_compact_affordances():
     assert ".storyboard-director-action::before" in css
     assert ".storyboard-invariant-summary" in css
     assert ".storyboard-invariant-editor" in css
+
+
+def test_storyboard_story_rail_is_full_by_default_and_manually_compactable():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-library-compact-toggle"' in html
+    assert "storyLibraryCompact: window.localStorage.getItem('webcap.storyboard.storyLibraryCompact') === '1'" in storyboard
+    assert "function setStoryLibraryCompact(compact)" in storyboard
+    assert "story-library-compact" in storyboard
+    assert ".storyboard-workspace.story-library-compact" in css
+    assert ".storyboard-library:hover" not in css
+    assert "story-library-pinned" not in css
+    assert "story-library-pinned" not in storyboard
+
+
+def test_storyboard_story_icon_is_optional_persisted_and_visible_in_library():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
+
+    story_section = html.split('data-story-section="story"', 1)[1].split("</details>", 1)[0]
+    assert story_section.index('id="storyboard-story-title"') < story_section.index('id="storyboard-story-icon"') < story_section.index('id="storyboard-story-status"')
+    assert "var STORY_RAIL_ICONS = {" in storyboard
+    assert "function storyRailIconHtml(story)" in storyboard
+    assert "storyboard-story-rail-icon" in storyboard
+    assert "icon: el('storyboard-story-icon').value" in storyboard
+    assert "VALID_STORY_ICONS" in store
+    assert '"icon": icon' in store
+    assert '"icon": source.get("icon") or ""' in store

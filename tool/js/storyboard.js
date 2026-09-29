@@ -1475,11 +1475,12 @@
       }
     }
 
+    var saveBarrier = flushPendingSaves();
     clearSceneDirectorCompletion(storyId, sceneId);
     setDirectorPending(directorTarget, true);
     updateSceneDirectorStatus(sceneId, 'Director working…');
     startDirectorActivity();
-    flushPendingSaves().then(function () {
+    saveBarrier.then(function () {
       return requestSceneDirector(storyId, sceneId, operation, instruction, storyState.director.modelId, true);
     }).catch(function (err) {
       if (directorWasStopped(err)) updateSceneDirectorStatus(sceneId, 'Director stopped');
@@ -1563,7 +1564,7 @@
         '#storyboard-story-authoring button, #storyboard-story-authoring input, #storyboard-story-authoring select, #storyboard-story-authoring textarea, ' +
         '#storyboard-scenes-list button, #storyboard-scenes-list input, #storyboard-scenes-list select, #storyboard-scenes-list textarea, ' +
         '#storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add], ' +
-        '#storyboard-generate-scenes-btn, #storyboard-director-model'
+        '#storyboard-sequence-preview button, #storyboard-generate-scenes-btn, #storyboard-director-model'
       ).forEach(function (control) {
         if (control.matches('[data-story-action-cancel]')) return;
         if (protectedState) {
@@ -1789,9 +1790,10 @@
     storyState.story.repairInstruction = instruction;
     storyState.story.repairComplete = false;
 
+    var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     startDirectorActivity();
-    return flushPendingSaves().then(function () {
+    return saveBarrier.then(function () {
       return runSceneDirectorPass(
         storyId,
         sceneIds,

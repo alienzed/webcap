@@ -381,7 +381,7 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
 def test_storyboard_director_captures_unsaved_target_before_locking_it():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    for function_name in ("defineInvariants", "expandConcept", "developStory", "runDirector"):
+    for function_name in ("defineInvariants", "expandConcept", "developStory", "runDirector", "reviseScenes"):
         block = storyboard.split("function " + function_name, 1)[1].split("\n  function ", 1)[0]
         assert block.index("var saveBarrier = flushPendingSaves();") < block.index("setDirectorPending(directorTarget, true);")
         assert "saveBarrier.then(function () {" in block
@@ -981,6 +981,7 @@ def test_storyboard_director_scene_plan_lock_covers_story_authoring_and_scene_de
 
     story_action = protection.split("if (target.kind === 'story-action')", 1)[1].split("if (target.kind === 'concept')", 1)[0]
     assert "#storyboard-story-authoring button" in story_action
+    assert "#storyboard-sequence-preview button" in story_action
     assert "storyboard-director-tools-drawer" not in story_action
 
 

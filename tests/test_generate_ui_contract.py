@@ -109,8 +109,16 @@ def test_generate_prompt_assistant_protects_prompt_consumers_while_pending():
 
     assert "function syncPromptAssistantDependencies()" in script
     assert "runButton.disabled = generateState.director.busy || runButton.dataset.generateSubmitBusy === '1';" in script
-    assert "document.querySelectorAll('[data-generate-prompt-use]')" in script
+    assert "'generate-model'" in script
+    assert "'generate-prompt'" in script
+    assert "'generate-director-instruction'" in script
+    assert "'generate-reference-first_frame'" in script
+    assert "document.querySelectorAll('[data-generate-prompt-use], [data-generate-open-result-key]')" in script
     assert "if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before generating.');" in script
+    assert "Wait for Prompt Assistant to finish before restoring a generation configuration." in script
+    assert "var requestModelId = String(generateState.modelId || '');" in script
+    assert "modelId: requestModelId" in script
+    assert "window.localStorage.setItem('webcap.generate.prompt.' + requestModelId, promptNode.value);" in script
     assert "button.dataset.generateSubmitBusy = '1';" in script
     assert "delete button.dataset.generateSubmitBusy;" in script
 

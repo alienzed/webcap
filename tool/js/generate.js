@@ -262,6 +262,7 @@
   }
 
   function restoreResultConfiguration(result) {
+    if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before restoring a generation configuration.');
     if (!result) throw new Error('Generation result is required.');
 
     var resultModelId = String(result.modelId || '');
@@ -1018,6 +1019,7 @@
     } else {
       renderStageEmpty();
     }
+    syncPromptAssistantDependencies();
   }
 
   function refreshResults() {
@@ -1483,9 +1485,27 @@
   function syncPromptAssistantDependencies() {
     var runButton = el('generate-run-btn');
     if (!runButton) throw new Error('Generate action markup is missing.');
-    runButton.disabled = generateState.director.busy || runButton.dataset.generateSubmitBusy === '1';
-    document.querySelectorAll('[data-generate-prompt-use]').forEach(function (button) {
-      button.disabled = generateState.director.busy;
+    var assistantBusy = generateState.director.busy;
+    runButton.disabled = assistantBusy || runButton.dataset.generateSubmitBusy === '1';
+
+    [
+      'generate-model',
+      'generate-prompt',
+      'generate-director-instruction',
+      'generate-aspect',
+      'generate-megapixels',
+      'generate-duration',
+      'generate-dimensions',
+      'generate-seed',
+      'generate-reference-first_frame',
+      'generate-reference-last_frame'
+    ].forEach(function (id) {
+      var control = el(id);
+      if (control) control.disabled = assistantBusy;
+    });
+
+    document.querySelectorAll('[data-generate-prompt-use], [data-generate-open-result-key]').forEach(function (button) {
+      button.disabled = assistantBusy;
     });
   }
 
@@ -1552,6 +1572,7 @@
     var prompt = String(promptNode.value || '').trim();
     var instruction = String(el('generate-director-instruction').value || '').trim();
     var previousPrompt = promptNode.value;
+    var requestModelId = String(generateState.modelId || '');
     generateState.director.busy = true;
     setDirectorStatus('Prompt Assistant working…');
     renderDirector();
@@ -1559,7 +1580,7 @@
     return queueDirectorRequest({
       operation: operation,
       directorModel: generateState.director.modelId,
-      modelId: generateState.modelId,
+      modelId: requestModelId,
       prompt: prompt,
       instruction: instruction,
       settings: collectSettings(),
@@ -1570,7 +1591,7 @@
     }).then(function (payload) {
       promptNode.value = String(payload.result || '');
       generateState.director.previousPrompt = previousPrompt;
-      window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, promptNode.value);
+      window.localStorage.setItem('webcap.generate.prompt.' + requestModelId, promptNode.value);
       if (operation === 'refine_prompt') el('generate-director-instruction').value = '';
       setDirectorStatus(operation === 'write_prompt' ? 'Prompt expanded.' : 'Prompt refined.');
     }).catch(function (err) {
@@ -1833,9 +1854,13 @@
       var key = String(openButton.dataset.generateOpenResultKey || '');
       var result = generateState.results.find(function (item) { return resultKey(item) === key; });
       if (!result) return;
-      restoreResultConfiguration(result);
-      renderActiveResult(result);
-      setGenerateViewMode('create');
+      try {
+        restoreResultConfiguration(result);
+        renderActiveResult(result);
+        setGenerateViewMode('create');
+      } catch (err) {
+        reportError(err, 'Configuration restore blocked');
+      }
     });
     schedulePoll();
   }

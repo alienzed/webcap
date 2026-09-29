@@ -14,7 +14,7 @@ The app settings modal is the global configuration surface for values stored in 
 - **Training → Testing**: per-stage LoRA destinations used by Copy to Test.
 - **Training → Hardware Calibration**: MiniMax H3 bucket calibration.
 - **Training → Advanced Training**: uncommon H3 troubleshooting behavior.
-- **Director**: local llama.cpp or remote OpenAI-compatible runtime configuration. Model selection remains in Storyboard.
+- **Director**: local llama.cpp plus zero or more enabled remote OpenAI-compatible endpoints. Healthy runtimes are discovered together; unavailable remotes are skipped. Director model selection is shared across Director-enabled workspaces.
 - **Advanced → Environment & Diagnostics**: whole-app environment check, explicit **Install / Repair Python Requirements**, and debug logging. Requirements repair runs `python -m pip install -r requirements.txt` with the same Python executable that is running WebCap and reports command output/failures in the WebCap Console. With **Debug mode** enabled, Director LLM calls also log effective request metadata and response diagnostics such as model, message size, configured context/output settings, sampling/thinking flags, wall-clock response time, finish reason, usage, and backend timing fields when the runtime supplies them. This is observational only and does not change generation limits or request behavior.
 - **Advanced → Optional Analysis**: Face Focus and MediaPipe analysis. Environment Check disables and unchecks an analyzer control when its required Python package or vendored MediaPipe task models are unavailable; saving Settings persists that disabled selection. After requirements are repaired and Environment Check is rerun, the control becomes available again but remains opt-in.
 - **Advanced → Raw Configuration**: direct JSON editing.
@@ -63,3 +63,12 @@ Use **Save + Reboot** to apply runtime settings immediately.
 - Frontend styling: `tool/css/modals.css`
 - Backend validation and persistence: `tool/server/config.py`
 - Available training profiles: `tool/server/training_profiles.py`
+
+
+## Director runtimes and model identity
+
+Director can discover the WebCap-managed local llama.cpp runtime and multiple named remote OpenAI-compatible endpoints at the same time. Each discovered model carries its runtime identity, so the same model name may safely exist on more than one machine.
+
+The UI groups models by runtime and stores one global Director model preference. Selecting a model in Storyboard, Generate, Test Generations, or Assistant updates that shared preference.
+
+Remote discovery is best-effort. An unavailable endpoint is logged and omitted from the current model list; it does not make other healthy runtimes unavailable. Endpoint IDs are stable configuration identities, while display names may be edited freely.

@@ -834,13 +834,15 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert "'webcap.storyboard.storySection.' + sectionName" in storyboard
     assert ".storyboard-story-section:not([open]) > .storyboard-story-section-body" in css
 
-    story_section = html.split('data-story-section="story"', 1)[1].split("</details>", 1)[0]
-    continuity_section = html.split('data-story-section="continuity"', 1)[1].split("</details>", 1)[0]
-    director_section = html.split('data-story-section="director"', 1)[1].split("</details>", 1)[0]
-    defaults_section = html.split('data-story-section="defaults"', 1)[1].split("</details>", 1)[0]
-    overview_surface = html.split('id="storyboard-story-overview"', 1)[1].split('<details class="storyboard-story-section storyboard-scene-defaults"', 1)[0]
+    overview_surface = html.split('id="storyboard-story-overview"', 1)[1].split('<div class="storyboard-story-utility-shelf"', 1)[0]
+    utility_shelf = html.split('<div class="storyboard-story-utility-shelf"', 1)[1].split('<div class="storyboard-scene-workspace">', 1)[0]
+    story_section = overview_surface.split('data-story-section="story"', 1)[1].split("</details>", 1)[0]
+    continuity_section = overview_surface.split('data-story-section="continuity"', 1)[1].split("</details>", 1)[0]
+    director_section = utility_shelf.split('data-story-section="director"', 1)[1].split("</details>", 1)[0]
+    defaults_section = utility_shelf.split('data-story-section="defaults"', 1)[1].split("</details>", 1)[0]
 
     assert 'id="storyboard-story-title"' in story_section
+    assert 'id="storyboard-story-icon"' in story_section
     assert 'id="storyboard-story-status"' in story_section
     assert 'id="storyboard-story-concept"' in story_section
     assert 'id="storyboard-story-style"' in story_section
@@ -849,10 +851,12 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     continuity_summary = continuity_section.split('<summary class="storyboard-continuity-summary">', 1)[1].split("</summary>", 1)[0]
     assert 'id="storyboard-invariant-define"' in continuity_summary
     assert 'id="storyboard-invariant-add"' in continuity_summary
-    assert 'class="storyboard-invariants-header"' not in continuity_section
     assert 'id="storyboard-invariants-list"' in continuity_section
-    assert 'id="storyboard-develop-btn"' not in director_section
-    assert html.index('id="storyboard-develop-btn"') > html.index('data-story-section="director"')
+
+    assert 'class="storyboard-director-tools-drawer"' in utility_shelf
+    assert 'class="storyboard-scene-defaults"' in utility_shelf
+    assert 'data-story-section="continuity"' not in utility_shelf
+    assert html.index('id="storyboard-develop-btn"') < html.index('data-story-section="director"')
     assert 'id="storyboard-repair-instruction"' in director_section
     assert 'id="storyboard-repair-scenes-btn"' in director_section
     assert 'id="storyboard-restore-repair-btn"' in director_section
@@ -865,7 +869,11 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'id="storyboard-story-megapixels"' in defaults_section
     assert 'id="storyboard-story-lora-list"' in defaults_section
     assert 'id="storyboard-story-lora-picker"' in defaults_section
-    assert "These do not change the Story definition." in defaults_section
+
+    assert ".storyboard-story-utility-shelf" in css
+    assert "grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);" in css
+    assert ".storyboard-story-utility-shelf > .storyboard-director-tools-drawer > .storyboard-story-section-body" in css
+    assert ".storyboard-story-utility-shelf > .storyboard-scene-defaults > .storyboard-story-section-body" in css
 
     payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
     assert "storySection" not in payload_block
@@ -876,20 +884,28 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
 
 def test_storyboard_develop_scenes_is_primary_story_to_scenes_handoff():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    handoff = html.split('<div class="storyboard-develop-row">', 1)[1].split("</div>\n\n                                <details", 1)[0]
-    assert 'id="storyboard-story-target-scenes"' in handoff
-    assert 'id="storyboard-develop-btn"' in handoff
-    assert handoff.index('id="storyboard-develop-btn"') < handoff.index('id="storyboard-develop-status"')
-    assert "Turn the Story Overview above into the Scene plan." in handoff
+    handoff = html.split('<div class="storyboard-develop-row">', 1)[1].split('<div class="storyboard-story-utility-shelf"', 1)[0]
+    assert handoff.count('id="storyboard-story-target-scenes"') == 1
+    assert handoff.count('id="storyboard-scene-count-auto"') == 1
+    assert handoff.count('id="storyboard-develop-btn"') == 1
+    assert handoff.count('id="storyboard-develop-status"') == 1
+    assert handoff.index('id="storyboard-story-target-scenes"') < handoff.index('id="storyboard-develop-btn"')
+    assert "Turn the Story Overview above into the Scene plan." not in handoff
+    assert "Scene plan" not in handoff
 
-    develop_css = css.split(".storyboard-develop-row .storyboard-primary-btn {", 1)[1].split("}", 1)[0]
-    assert "width: 100%;" in develop_css
-    assert "min-height: 48px;" in develop_css
-    assert "var(--accent)" in develop_css
-    assert ".storyboard-develop-row .storyboard-primary-btn::before" in css
+    assert ".storyboard-develop-controls" in css
+    assert ".storyboard-target-scenes-inline" in css
+    assert ".storyboard-scene-count-auto" in css
+    assert ".storyboard-develop-controls .storyboard-primary-btn" in css
     assert ".storyboard-develop-row > .storyboard-save-state" in css
+
+    payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
+    assert "targetSceneCount: el('storyboard-scene-count-auto').getAttribute('aria-pressed') === 'true'" in payload_block
+    assert "? null" in payload_block
+    assert "el('storyboard-scene-count-auto').onclick" in storyboard
 
 
 def test_storyboard_director_scene_plan_lock_excludes_scene_defaults():

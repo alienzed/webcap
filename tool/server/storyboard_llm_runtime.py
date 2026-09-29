@@ -112,17 +112,25 @@ def activity_status():
         activity = dict(_activity)
 
     try:
-        settings = _director_config()
+        active_model = str(activity.get("model") or "")
+        if active_model:
+            runtime_id, _active_model_id = _split_model_ref(active_model)
+            settings = _runtime_settings(runtime_id)
+        else:
+            settings = _director_config()
     except Exception:
-        settings = {"mode": "local"}
+        settings = {"mode": "local", "runtime_id": "local", "runtime_name": "Local"}
 
     mode = settings.get("mode", "local")
+    activity["runtimeId"] = settings.get("runtime_id", "local")
+    activity["runtimeName"] = settings.get("runtime_name", "Local")
     activity["runtimeMode"] = mode
     if mode == "local":
         activity["runtimeProvider"] = "llama.cpp"
         _relay_log_updates()
         if activity.get("active") and activity.get("phase") == "generating":
-            slot = _slot_snapshot(activity.get("model"))
+            _runtime_id, slot_model_id = _split_model_ref(activity.get("model"))
+            slot = _slot_snapshot(slot_model_id)
             if slot:
                 activity["slot"] = slot
                 context_size = int(slot.get("contextSize") or 0)
@@ -137,7 +145,8 @@ def activity_status():
     activity["runtimeProvider"] = "ollama" if is_ollama else "openai-compatible"
     if is_ollama and activity.get("model"):
         try:
-            remote_model = _ollama_running_model(activity.get("model"))
+            _runtime_id, remote_model_id = _split_model_ref(activity.get("model"))
+            remote_model = _ollama_running_model(remote_model_id)
         except (ConnectionError, RuntimeError, ValueError):
             remote_model = {}
         if remote_model:
@@ -873,7 +882,7 @@ def _model_file_size(model):
         ) from exc
 
 
-def list_models(reload=False):
+def _list_models_for_current_runtime(reload=False):
     _ensure_server()
     settings = _director_config()
     suffix = "?reload=1" if reload and settings.get("mode", "local") == "local" else ""
@@ -893,54 +902,82 @@ def list_models(reload=False):
     return models
 
 
-def status():
-    settings = _director_config()
+def list_models(reload=False):
+    models = []
+    warnings = []
+    base = _director_base_config()
+
     try:
-        models = list_models(reload=True)
-        if settings.get("mode", "local") == "remote":
-            return {
-                "available": True,
-                "serverRunning": True,
-                "runtime": "Remote Ollama" if _remote_is_ollama() else "Remote OpenAI-compatible",
-                "endpoint": settings.get("endpoint", ""),
-                "models": models,
-            }
-
-        executable = ""
-        try:
-            executable = _resolve_executable()
-        except FileNotFoundError:
-            if _process is not None:
-                raise
-        return {
-            "available": True,
-            "serverRunning": True,
-            "runtime": "llama.cpp",
-            "executable": executable,
-            "modelsDir": str(settings["models_dir"]),
-            "models": models,
-        }
+        with _use_runtime("local"):
+            local_models = _list_models_for_current_runtime(reload=reload)
+        for model in local_models:
+            model["runtimeId"] = "local"
+            model["runtimeName"] = "Local"
+            model["modelId"] = model["id"]
+            model["id"] = _model_ref("local", model["id"])
+        models.extend(local_models)
     except Exception as exc:
-        return {
-            "available": False,
-            "serverRunning": False,
-            "runtime": "Remote OpenAI-compatible" if settings.get("mode", "local") == "remote" else "llama.cpp",
-            "endpoint": settings.get("endpoint", "") if settings.get("mode", "local") == "remote" else "",
-            "modelsDir": str(settings["models_dir"]) if settings["models_dir"] is not None else "",
-            "models": [],
-            "error": str(exc),
-        }
+        warnings.append({"runtimeId": "local", "runtimeName": "Local", "error": str(exc)})
+        _logger.warning("Director local model discovery skipped: %s", exc)
+
+    for endpoint in base["remote_endpoints"]:
+        try:
+            with _use_runtime(endpoint["id"]):
+                remote_models = _list_models_for_current_runtime(reload=reload)
+            for model in remote_models:
+                model["runtimeId"] = endpoint["id"]
+                model["runtimeName"] = endpoint["name"]
+                model["modelId"] = model["id"]
+                model["id"] = _model_ref(endpoint["id"], model["id"])
+            models.extend(remote_models)
+        except Exception as exc:
+            warnings.append({
+                "runtimeId": endpoint["id"],
+                "runtimeName": endpoint["name"],
+                "error": str(exc),
+            })
+            _logger.warning("Director remote model discovery skipped for %s: %s", endpoint["name"], exc)
+
+    models.sort(key=lambda model: (
+        0 if model.get("runtimeId") == "local" else 1,
+        str(model.get("runtimeName") or "").casefold(),
+        str(model.get("label") or "").casefold(),
+    ))
+    list_models.last_warnings = warnings
+    return models
 
 
-def _model_record(model_id):
-    model_id = str(model_id or "").strip()
-    if not model_id:
-        raise ValueError("Choose a Director model.")
+list_models.last_warnings = []
+
+
+def status():
     models = list_models(reload=True)
+    warnings = list(getattr(list_models, "last_warnings", []) or [])
+    return {
+        "available": bool(models),
+        "serverRunning": bool(models),
+        "runtime": "Director runtimes",
+        "models": models,
+        "warnings": warnings,
+        "error": "" if models else (
+            "No Director models are currently available."
+            + ((" " + "; ".join(item.get("runtimeName", "Runtime") + ": " + item.get("error", "") for item in warnings)) if warnings else "")
+        ),
+    }
+
+
+def _model_record(model_ref):
+    runtime_id, model_id = _split_model_ref(model_ref)
+    with _use_runtime(runtime_id):
+        models = _list_models_for_current_runtime(reload=True)
     for model in models:
         if model["id"] == model_id:
+            model["runtimeId"] = runtime_id
+            model["runtimeName"] = _runtime_settings(runtime_id)["runtime_name"]
+            model["modelId"] = model_id
+            model["id"] = _model_ref(runtime_id, model_id)
             return model
-    raise FileNotFoundError("Director model is not available from the active runtime: " + model_id)
+    raise FileNotFoundError("Director model is not available from runtime '" + runtime_id + "': " + model_id)
 
 
 def _wait_for_model(model_id, wanted, timeout=180):

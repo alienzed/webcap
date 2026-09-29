@@ -317,6 +317,19 @@ def test_storyboard_director_region_overlays_match_coarse_semantic_scopes():
     assert ".storyboard-story-authoring.director-protected" in css
 
 
+def test_storyboard_director_region_protection_resets_before_current_story_reapply():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    sync = storyboard.split("function syncDirectorPendingControls()", 1)[1].split("function setDirectorPending", 1)[0]
+    story_reset = "setDirectorRegionProtected(el('storyboard-story-authoring'), false);"
+    scenes_reset = "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), false);"
+
+    assert story_reset in sync
+    assert scenes_reset in sync
+    assert sync.index(story_reset) < sync.index("Object.keys(storyState.director.pendingTargets)")
+    assert sync.index(scenes_reset) < sync.index("Object.keys(storyState.director.pendingTargets)")
+
+
 def test_storyboard_restore_repair_does_not_use_story_wide_director_lock():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")

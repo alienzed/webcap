@@ -30,6 +30,19 @@ function getTrainingRunnerActiveJob() {
   return null;
 }
 
+function reconcileTrainingRunnerActivity(activeItems) {
+  if (!isTrainingWorkspaceActive()) return;
+  var observedTraining = (Array.isArray(activeItems) ? activeItems : []).find(function (item) {
+    return item && item.kind === 'training';
+  });
+  var localTraining = getTrainingRunnerActiveJob();
+  var observedId = String(observedTraining && observedTraining.id || '');
+  var localId = String(localTraining && localTraining.id || '');
+  if (observedId !== localId) refreshTrainingRunnerStatus();
+}
+
+window.reconcileTrainingRunnerActivity = reconcileTrainingRunnerActivity;
+
 function syncUtilityTrainingActivity() {
   var activityTrainingBtn = document.getElementById('activity-training-btn');
   if (!activityTrainingBtn) return;

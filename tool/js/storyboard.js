@@ -2336,15 +2336,9 @@
     var title = String(item.title || '');
     var invariantText = String(item.text || '');
     var labels = { visual: 'Visual', character: 'Character', location: 'Location', world: 'World', sound: 'Sound', custom: 'Custom' };
-    var summaryTitle = title || 'Untitled invariant';
-    var summaryText = invariantText || 'No continuity note yet.';
-    return '<details class="storyboard-invariant-row"' + (expanded ? ' open' : '') + ' data-story-invariant-row>' +
-      '<summary class="storyboard-invariant-summary">' +
-        '<span class="storyboard-invariant-summary-kind" data-invariant-summary-kind>' + escapeHtml(labels[kind] || labels.custom) + '</span>' +
-        '<strong data-invariant-summary-title>' + escapeHtml(summaryTitle) + '</strong>' +
-        '<span data-invariant-summary-text>' + escapeHtml(summaryText) + '</span>' +
-      '</summary>' +
-      '<div class="storyboard-invariant-editor">' +
+    return '<div class="storyboard-invariant-row' + (expanded ? ' is-open' : '') + '" data-story-invariant-row>' +
+      '<div class="storyboard-invariant-row-head">' +
+        '<button type="button" class="storyboard-invariant-toggle" data-story-invariant-toggle aria-expanded="' + (expanded ? 'true' : 'false') + '" title="' + (expanded ? 'Collapse invariant' : 'Expand invariant') + '" aria-label="' + (expanded ? 'Collapse invariant' : 'Expand invariant') + '">▸</button>' +
         '<select data-story-invariant-kind aria-label="Invariant type">' +
           Object.keys(labels).map(function (value) {
             return '<option value="' + value + '"' + (value === kind ? ' selected' : '') + '>' + labels[value] + '</option>';
@@ -2352,23 +2346,21 @@
         '</select>' +
         '<input type="text" data-story-invariant-title value="' + escapeHtml(title) + '" placeholder="Name / subject" aria-label="Invariant name">' +
         '<button type="button" class="storyboard-invariant-remove" data-story-invariant-remove title="Remove invariant" aria-label="Remove invariant">×</button>' +
+      '</div>' +
+      '<div class="storyboard-invariant-body">' +
         '<textarea data-story-invariant-text rows="2" placeholder="What must stay consistent across Scenes?" aria-label="Invariant description">' + escapeHtml(invariantText) + '</textarea>' +
       '</div>' +
-    '</details>';
+    '</div>';
   }
 
-  function syncInvariantRowSummary(row) {
+  function setInvariantRowOpen(row, open) {
     if (!row) return;
-    var labels = { visual: 'Visual', character: 'Character', location: 'Location', world: 'World', sound: 'Sound', custom: 'Custom' };
-    var kind = row.querySelector('[data-story-invariant-kind]');
-    var title = row.querySelector('[data-story-invariant-title]');
-    var invariantText = row.querySelector('[data-story-invariant-text]');
-    var kindSummary = row.querySelector('[data-invariant-summary-kind]');
-    var titleSummary = row.querySelector('[data-invariant-summary-title]');
-    var textSummary = row.querySelector('[data-invariant-summary-text]');
-    if (kindSummary) kindSummary.textContent = labels[String(kind && kind.value || 'custom')] || labels.custom;
-    if (titleSummary) titleSummary.textContent = String(title && title.value || '').trim() || 'Untitled invariant';
-    if (textSummary) textSummary.textContent = String(invariantText && invariantText.value || '').trim() || 'No continuity note yet.';
+    row.classList.toggle('is-open', !!open);
+    var toggle = row.querySelector('[data-story-invariant-toggle]');
+    if (!toggle) return;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    toggle.setAttribute('title', open ? 'Collapse invariant' : 'Expand invariant');
+    toggle.setAttribute('aria-label', open ? 'Collapse invariant' : 'Expand invariant');
   }
 
   function storyInvariantsFromUi() {
@@ -5383,14 +5375,8 @@
       syncSceneGenerationDefaultHints();
       scheduleStorySave();
     });
-    el('storyboard-invariants-list').addEventListener('input', function (event) {
-      syncInvariantRowSummary(event.target.closest('[data-story-invariant-row]'));
-      scheduleStorySave();
-    });
-    el('storyboard-invariants-list').addEventListener('change', function (event) {
-      syncInvariantRowSummary(event.target.closest('[data-story-invariant-row]'));
-      scheduleStorySave();
-    });
+    el('storyboard-invariants-list').addEventListener('input', scheduleStorySave);
+    el('storyboard-invariants-list').addEventListener('change', scheduleStorySave);
     document.querySelector('.storyboard-continuity-summary .storyboard-invariants-actions').addEventListener('click', function (event) {
       event.preventDefault();
       event.stopPropagation();
@@ -5402,6 +5388,13 @@
       el('storyboard-invariants-list').insertAdjacentHTML('beforeend', invariantRowHtml({ kind: 'character', title: '', text: '' }, true));
     });
     el('storyboard-invariants-list').addEventListener('click', function (event) {
+      var toggle = event.target.closest('[data-story-invariant-toggle]');
+      if (toggle) {
+        var toggleRow = toggle.closest('[data-story-invariant-row]');
+        if (!toggleRow) throw new Error('Story invariant row is missing.');
+        setInvariantRowOpen(toggleRow, !toggleRow.classList.contains('is-open'));
+        return;
+      }
       var remove = event.target.closest('[data-story-invariant-remove]');
       if (!remove) return;
       var row = remove.closest('[data-story-invariant-row]');

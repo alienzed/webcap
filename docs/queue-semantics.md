@@ -439,6 +439,13 @@ Inference work is **durable across normal WebCap server restarts**:
 - the frozen request remains unchanged,
 - the user decides when normal Inference execution resumes.
 
+**Queue and Backlog have distinct execution meaning:**
+
+- **Queue** contains work intended to run when execution is available,
+- **Backlog** contains deliberately parked durable work,
+- Backlog work does not execute until it is promoted or backlog draining is explicitly enabled,
+- moving work between Queue and Backlog changes execution intent only; the frozen request itself remains unchanged.
+
 This intentionally differs from LLM work, which is server-session-bound.
 
 It is not the authority for feature-specific semantic validity.

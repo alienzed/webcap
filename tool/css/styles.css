@@ -1546,6 +1546,20 @@ iframe {
   text-align: right;
 }
 
+.training-run-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.training-run-preset select {
+  min-width: 112px;
+  padding: 4px 24px 4px 6px;
+  font-size: 12px;
+}
+
 .training-run-setup-fields {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(220px, 2fr) minmax(100px, auto);

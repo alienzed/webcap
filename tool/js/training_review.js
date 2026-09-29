@@ -191,17 +191,20 @@ function renderTrainingRunParameters(payload) {
   var epochsInput = document.getElementById('training-run-epochs-input');
   var dropoutInput = document.getElementById('training-run-dropout-input');
   var resetButton = document.getElementById('training-run-parameters-reset');
-  if (!panel || !lrInput || !rankSelect || !epochsInput || !dropoutInput || !resetButton) return;
+  var presetSelect = document.getElementById('training-run-preset-select');
+  if (!panel || !lrInput || !rankSelect || !epochsInput || !dropoutInput || !resetButton || !presetSelect) return;
 
   var stage = String(trainingWorkspaceState.runStages || '');
   var defaults = trainingRunTemplateSettings(payload);
   var signature = stage + ':' + JSON.stringify(defaults);
-  if (!trainingWorkspaceState.runConfigDraft || trainingWorkspaceState.runConfigStage !== stage ||
-      (!trainingWorkspaceState.runConfigDirty && trainingWorkspaceState.runConfigTemplateSignature !== signature)) {
+  var resetDraft = !trainingWorkspaceState.runConfigDraft || trainingWorkspaceState.runConfigStage !== stage ||
+    (!trainingWorkspaceState.runConfigDirty && trainingWorkspaceState.runConfigTemplateSignature !== signature);
+  if (resetDraft) {
     trainingWorkspaceState.runConfigDraft = Object.assign({}, defaults);
     trainingWorkspaceState.runConfigStage = stage;
     trainingWorkspaceState.runConfigTemplateSignature = signature;
     trainingWorkspaceState.runConfigDirty = false;
+    presetSelect.value = 'default';
   }
 
   var draft = trainingWorkspaceState.runConfigDraft;
@@ -223,7 +226,26 @@ function renderTrainingRunParameters(payload) {
   bindDraft(epochsInput, 'epochs');
   bindDraft(dropoutInput, 'adapterDropout');
 
+  presetSelect.onchange = function () {
+    if (presetSelect.value === 'character') {
+      trainingWorkspaceState.runConfigDraft = {
+        optimizerLr: '1e-4',
+        adapterRank: '16',
+        epochs: '80',
+        adapterDropout: '0'
+      };
+      trainingWorkspaceState.runConfigDirty = true;
+    } else {
+      trainingWorkspaceState.runConfigDraft = Object.assign({}, defaults);
+      trainingWorkspaceState.runConfigDirty = false;
+    }
+    trainingWorkspaceState.runConfigStage = stage;
+    trainingWorkspaceState.runConfigTemplateSignature = signature;
+    renderTrainingRunParameters(payload);
+  };
+
   resetButton.onclick = function () {
+    presetSelect.value = 'default';
     trainingWorkspaceState.runConfigDraft = Object.assign({}, defaults);
     trainingWorkspaceState.runConfigStage = stage;
     trainingWorkspaceState.runConfigTemplateSignature = signature;

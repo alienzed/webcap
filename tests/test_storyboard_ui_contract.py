@@ -1113,16 +1113,40 @@ def test_storyboard_generate_scenes_reuses_existing_scene_generation_path():
 def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    assert "function syncGenerationJobCard(job)" in storyboard
+    assert "function syncGenerationJobCard(job, card)" in storyboard
     assert "webcap:inference-queue-snapshot" in storyboard
     assert "function syncStoryboardInferenceSnapshot(queue)" in storyboard
     assert "var seenJobIds = Object.create(null);" in storyboard
-    assert "delete storyState.generationJobs[jobId];" in storyboard
     assert "var delay = generationJobIsExecuting(current) ? 2000 : 8000;" in storyboard
     assert "}, delay);" in storyboard
     assert "if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);" in storyboard
-    assert "syncGenerationJobCard(job);" in storyboard
     assert "card.querySelector('.storyboard-take-pending-media strong')" in storyboard
+
+    snapshot_block = storyboard.split("function syncStoryboardInferenceSnapshot(queue)", 1)[1].split(
+        "\n  function generationJobsForScene", 1
+    )[0]
+    missing_job_block = snapshot_block.split(
+        "Object.keys(storyState.generationJobs).forEach(function (jobId) {", 1
+    )[1].split("\n    });", 1)[0]
+    assert "pollGeneration(storyId, jobId);" in missing_job_block
+    assert "clearGenerationPoll(jobId);" not in missing_job_block
+    assert "delete storyState.generationJobs[jobId];" not in missing_job_block
+
+    take_sync = storyboard.split("function syncSceneTakeDom(sceneId)", 1)[1].split(
+        "\n  function mergeFetchedSceneTakeState", 1
+    )[0]
+    assert "if (!take || sceneTakeCardById(grid, takeId)) return;" in take_sync
+    assert "insertAdjacentHTML" in take_sync
+    assert ".innerHTML =" not in take_sync
+    assert "renderScenes();" not in take_sync
+
+    poll_block = storyboard.split("function pollGeneration(storyId, jobId)", 1)[1].split(
+        "\n  function refreshGenerationQueue", 1
+    )[0]
+    completed_block = poll_block.split("if (job.status === 'completed') {", 1)[1]
+    assert "mergeFetchedSceneTakeState(storyId, job.sceneId, storyPayload.story);" in completed_block
+    assert "renderScenes();" not in completed_block
+
     active_block = storyboard.split("if (generationJobIsActive(job)) {", 1)[1].split("return;", 1)[0]
     assert "renderScenes();" not in active_block
 

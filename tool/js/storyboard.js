@@ -4570,9 +4570,10 @@
     Object.keys(storyState.generationJobs).forEach(function (jobId) {
       var cachedJob = storyState.generationJobs[jobId];
       if (!cachedJob || String(cachedJob.storyId || '') !== storyId || !generationJobIsActive(cachedJob) || seenJobIds[jobId]) return;
-      clearGenerationPoll(jobId);
-      delete storyState.generationJobs[jobId];
-      if (cachedJob.sceneId) syncSceneTakeDom(cachedJob.sceneId);
+      // The shared snapshot contains active queue work only. A missing cached job may
+      // have just become terminal, so keep its receipt poll alive until that status
+      // is consumed and merged into the current Scene.
+      pollGeneration(storyId, jobId);
     });
 
     syncStoryboardGenerationActivity();

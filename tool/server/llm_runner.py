@@ -413,6 +413,11 @@ def _advance_queue():
 
         queued = [job for job in snapshot.get("jobs", []) if job.get("status") == "queued"]
         if not queued:
+            if (
+                execution_resource_owner() == GPU_RESERVATION_OWNER
+                and not local_gpu_drain_pending()
+            ):
+                _release_gpu()
             return None
 
         from .storyboard_llm_runtime import uses_local_gpu
@@ -465,9 +470,12 @@ def _advance_queue():
                     current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
                     keep_gpu = (
                         not current.get("paused")
-                        and any(
-                            str(job.get("status") or "") == "queued"
-                            for job in current.get("jobs", [])
+                        and (
+                            any(
+                                str(job.get("status") or "") == "queued"
+                                for job in current.get("jobs", [])
+                            )
+                            or local_gpu_drain_pending()
                         )
                     )
                     if keep_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
@@ -484,7 +492,12 @@ def _monitor_has_work():
         return True
     if snapshot.get("paused"):
         return False
-    return any(str(job.get("status") or "") == "queued" for job in snapshot.get("jobs", []))
+    if any(str(job.get("status") or "") == "queued" for job in snapshot.get("jobs", [])):
+        return True
+    return (
+        execution_resource_owner() == GPU_RESERVATION_OWNER
+        and local_gpu_drain_pending()
+    )
 
 
 def _monitor_loop():

@@ -3354,7 +3354,8 @@
   gap: 10px;
 }
 
-.storyboard-scenes-title-row #storyboard-generate-scenes-btn {
+.storyboard-scenes-title-row #storyboard-generate-scenes-btn,
+.storyboard-scenes-title-row #storyboard-assistant-btn {
   width: auto;
   min-height: 30px;
   flex: 0 0 auto;

@@ -292,12 +292,14 @@ def _normalize_story_lora_overrides(value):
 
 
 def _normalize_target_scene_count(value):
+    if value is None:
+        return None
     if isinstance(value, bool):
-        raise ValueError("Story target Scene count must be an integer.")
+        raise ValueError("Story target Scene count must be an integer or Auto.")
     try:
         count = int(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError("Story target Scene count must be an integer.") from exc
+        raise ValueError("Story target Scene count must be an integer or Auto.") from exc
     if count < 2 or count > 50:
         raise ValueError("Story target Scene count must be between 2 and 50.")
     return count
@@ -570,7 +572,9 @@ def _normalize_story(payload, existing=None, story_id=None):
     scene_order = [scene_id for scene_id in scene_order if scene_id in scenes]
 
     target_scene_count = _normalize_target_scene_count(
-        payload.get("targetSceneCount", current.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT))
+        payload["targetSceneCount"]
+        if "targetSceneCount" in payload
+        else current.get("targetSceneCount", DEFAULT_TARGET_SCENE_COUNT)
     )
     generation_defaults = _normalize_story_generation_defaults(
         payload.get("generationDefaults") if "generationDefaults" in payload else None,

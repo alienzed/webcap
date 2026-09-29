@@ -4,15 +4,108 @@
     pending: false,
     modelsLoaded: false,
     modelId: getDirectorModelPreference('webcap.directorChat.model'),
+    activeMode: 'chat',
     messages: [],
+    modeMessages: {},
     elapsedByAssistantIndex: {},
+    modeElapsedByAssistantIndex: {},
     progressTimer: 0,
     requestStartedAt: 0,
     jobId: ''
   };
+  var contextualModes = {};
 
   function el(id) {
     return document.getElementById(id);
+  }
+
+  function activeContextMode() {
+    return state.activeMode === 'chat' ? null : (contextualModes[state.activeMode] || null);
+  }
+
+  function currentMessages() {
+    if (state.activeMode === 'chat') return state.messages;
+    if (!state.modeMessages[state.activeMode]) state.modeMessages[state.activeMode] = [];
+    return state.modeMessages[state.activeMode];
+  }
+
+  function currentElapsedMap() {
+    if (state.activeMode === 'chat') return state.elapsedByAssistantIndex;
+    if (!state.modeElapsedByAssistantIndex[state.activeMode]) state.modeElapsedByAssistantIndex[state.activeMode] = {};
+    return state.modeElapsedByAssistantIndex[state.activeMode];
+  }
+
+  function modeAvailable(mode) {
+    if (!mode || typeof mode.available !== 'function') return false;
+    try { return !!mode.available(); }
+    catch (err) {
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
+      return false;
+    }
+  }
+
+  function availableModes() {
+    return Object.keys(contextualModes).map(function (id) {
+      return contextualModes[id];
+    }).filter(modeAvailable);
+  }
+
+  function syncModeUi() {
+    var row = el('director-chat-mode-row');
+    var host = el('director-chat-mode-switch');
+    var description = el('director-chat-mode-description');
+    var input = el('director-chat-input');
+    var modes = availableModes();
+    var active = activeContextMode();
+
+    if (state.activeMode !== 'chat' && (!active || !modeAvailable(active))) {
+      state.activeMode = 'chat';
+      active = null;
+    }
+
+    if (row) row.classList.toggle('hidden', !modes.length);
+    if (host) {
+      host.innerHTML = '<button type="button" class="review-captions-btn' + (state.activeMode === 'chat' ? ' active' : '') + '" data-assistant-mode="chat">Chat</button>' +
+        modes.map(function (mode) {
+          return '<button type="button" class="review-captions-btn' + (state.activeMode === mode.id ? ' active' : '') +
+            '" data-assistant-mode="' + mode.id + '">' + mode.label + '</button>';
+        }).join('');
+    }
+
+    if (description) {
+      description.textContent = active
+        ? String(active.description || active.label || '')
+        : 'Session-only freeform model conversation';
+    }
+    if (input) {
+      input.placeholder = active
+        ? String(active.placeholder || 'What should the Assistant do?')
+        : 'Ask the model anything…';
+    }
+    renderMessages();
+    syncControls();
+  }
+
+  function setMode(modeId) {
+    modeId = String(modeId || 'chat');
+    if (modeId !== 'chat') {
+      var mode = contextualModes[modeId];
+      if (!mode || !modeAvailable(mode)) modeId = 'chat';
+    }
+    if (state.pending || state.activeMode === modeId) return;
+    state.activeMode = modeId;
+    finishProgress(null);
+    syncModeUi();
+    var input = el('director-chat-input');
+    if (input) input.focus();
+  }
+
+  function registerContextMode(mode) {
+    if (!mode || !mode.id || typeof mode.execute !== 'function' || typeof mode.available !== 'function') {
+      throw new Error('Assistant contextual mode requires id, available(), and execute().');
+    }
+    contextualModes[String(mode.id)] = mode;
+    if (state.open) syncModeUi();
   }
 
   function requestJson(url, options) {
@@ -97,7 +190,9 @@
 
     var jobStatus = String(activity && activity.jobStatus || '');
     var terminal = ['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(jobStatus) !== -1;
-    stop.classList.toggle('hidden', !state.pending || terminal || !state.jobId);
+    var mode = activeContextMode();
+    var canCancel = !!state.jobId || !!(mode && typeof mode.cancel === 'function');
+    stop.classList.toggle('hidden', !state.pending || terminal || !canCancel);
     stop.disabled = jobStatus === 'stopping';
     stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
 
@@ -157,9 +252,9 @@
     if (!host || !empty) return;
 
     host.innerHTML = '';
-    empty.classList.toggle('hidden', state.messages.length > 0);
+    empty.classList.toggle('hidden', currentMessages().length > 0);
 
-    state.messages.forEach(function (message, index) {
+    currentMessages().forEach(function (message, index) {
       var row = document.createElement('div');
       row.className = 'director-chat-message director-chat-message-' + message.role;
 
@@ -174,10 +269,11 @@
       row.appendChild(label);
       row.appendChild(body);
 
-      if (message.role === 'assistant' && Object.prototype.hasOwnProperty.call(state.elapsedByAssistantIndex, index)) {
+      var elapsedMap = currentElapsedMap();
+      if (message.role === 'assistant' && Object.prototype.hasOwnProperty.call(elapsedMap, index)) {
         var meta = document.createElement('div');
         meta.className = 'director-chat-message-meta';
-        meta.textContent = formatElapsed(state.elapsedByAssistantIndex[index]);
+        meta.textContent = formatElapsed(elapsedMap[index]);
         row.appendChild(meta);
       }
       host.appendChild(row);
@@ -196,7 +292,7 @@
     if (input) input.disabled = state.pending;
     if (model) model.disabled = state.pending || !state.modelsLoaded;
     if (refresh) refresh.disabled = state.pending;
-    if (clear) clear.disabled = state.pending || !state.messages.length;
+    if (clear) clear.disabled = state.pending || !currentMessages().length;
   }
 
   function loadModels() {
@@ -239,13 +335,18 @@
       state.modelId = '';
       select.innerHTML = '<option value="">Director unavailable</option>';
       syncControls();
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Director Chat', err);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
     });
   }
 
   function newChat() {
-    state.messages = [];
-    state.elapsedByAssistantIndex = {};
+    if (state.activeMode === 'chat') {
+      state.messages = [];
+      state.elapsedByAssistantIndex = {};
+    } else {
+      state.modeMessages[state.activeMode] = [];
+      state.modeElapsedByAssistantIndex[state.activeMode] = {};
+    }
     finishProgress(null);
     renderMessages();
     syncControls();
@@ -255,7 +356,7 @@
 
   function jobRequest(jobId) {
     return requestJson('/fs/director/job?job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
-      if (!payload.job) throw new Error('Director Chat job response is missing its job.');
+      if (!payload.job) throw new Error('Assistant job response is missing its job.');
       trackTransientLlmJob(payload.job);
       if (['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(String(payload.job.status || '')) !== -1) {
         reportTransientLlmTiming(payload.job);
@@ -265,12 +366,12 @@
   }
 
   function waitForJob(job) {
-    if (!job || !job.jobId) throw new Error('Director Chat did not return a queued job.');
+    if (!job || !job.jobId) throw new Error('Assistant did not return a queued job.');
     function poll(current) {
       var status = String(current.status || '');
       if (status === 'completed') return Promise.resolve(current);
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
-        var terminalError = new Error(current.error || ('Director Chat job ' + status + '.'));
+        var terminalError = new Error(current.error || ('Assistant job ' + status + '.'));
         terminalError.jobStatus = status;
         throw terminalError;
       }
@@ -284,7 +385,19 @@
 
   function stopJob() {
     var stop = el('director-chat-stop');
-    if (!stop || !state.jobId || stop.disabled) return;
+    var mode = activeContextMode();
+    if (!stop || stop.disabled) return;
+    if (mode && typeof mode.cancel === 'function' && state.pending) {
+      stop.disabled = true;
+      stop.textContent = 'Stopping…';
+      Promise.resolve(mode.cancel()).catch(function (err) {
+        stop.disabled = false;
+        stop.textContent = 'Stop';
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
+      });
+      return;
+    }
+    if (!state.jobId) return;
     stop.disabled = true;
     stop.textContent = 'Stopping…';
     requestJson('/fs/director/job', {
@@ -300,7 +413,7 @@
     }).catch(function (err) {
       stop.disabled = false;
       stop.textContent = 'Stop';
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Director Chat', err);
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
     });
   }
 
@@ -311,7 +424,10 @@
     var content = String(input.value || '').trim();
     if (!content || !state.modelId) return;
 
-    state.messages.push({ role: 'user', content: content });
+    var messages = currentMessages();
+    var elapsedMap = currentElapsedMap();
+    var mode = activeContextMode();
+    messages.push({ role: 'user', content: content });
     input.value = '';
     state.pending = true;
     state.jobId = '';
@@ -321,39 +437,58 @@
 
     var startedAt = performance.now();
     var requestError = null;
-    requestJson('/fs/director/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: state.modelId,
-        messages: state.messages
-      })
-    }).then(function (payload) {
-      if (!payload.job || !payload.job.jobId) throw new Error('Director Chat did not return a queued job.');
-      state.jobId = String(payload.job.jobId);
-      trackTransientLlmJob(payload.job);
-      renderProgress({ phase: payload.job.status === 'queued' ? 'queued' : 'preparing', jobStatus: payload.job.status, model: payload.job.modelId });
-      return waitForJob(payload.job);
-    }).then(function (job) {
-      var result = job.result && typeof job.result === 'object' ? job.result : {};
-      state.messages.push({ role: 'assistant', content: String(result.text || '') });
-      state.elapsedByAssistantIndex[state.messages.length - 1] = performance.now() - startedAt;
-    }).catch(function (err) {
+    var requestPromise;
+
+    if (mode) {
+      requestPromise = Promise.resolve(mode.execute({
+        instruction: content,
+        modelId: state.modelId
+      })).then(function (result) {
+        result = result && typeof result === 'object' ? result : {};
+        messages.push({
+          role: 'assistant',
+          content: String(result.text || mode.successMessage || (mode.label + ' completed.'))
+        });
+        elapsedMap[messages.length - 1] = performance.now() - startedAt;
+      });
+    } else {
+      requestPromise = requestJson('/fs/director/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: state.modelId,
+          messages: messages
+        })
+      }).then(function (payload) {
+        if (!payload.job || !payload.job.jobId) throw new Error('Assistant did not return a queued job.');
+        state.jobId = String(payload.job.jobId);
+        trackTransientLlmJob(payload.job);
+        renderProgress({ phase: payload.job.status === 'queued' ? 'queued' : 'preparing', jobStatus: payload.job.status, model: payload.job.modelId });
+        return waitForJob(payload.job);
+      }).then(function (job) {
+        var result = job.result && typeof job.result === 'object' ? job.result : {};
+        messages.push({ role: 'assistant', content: String(result.text || '') });
+        elapsedMap[messages.length - 1] = performance.now() - startedAt;
+      });
+    }
+
+    requestPromise.catch(function (err) {
       requestError = err;
       if (['stopped', 'cancelled'].indexOf(String(err && err.jobStatus || '')) === -1) {
-        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Director Chat', err);
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
       }
     }).then(function () {
       state.pending = false;
       state.jobId = '';
-      finishProgress(requestError && ['stopped', 'cancelled'].indexOf(String(requestError.jobStatus || '')) === -1 ? requestError : null);
+      finishProgress(requestError && ['stopped', 'cancelled'].indexOf(String(requestError && requestError.jobStatus || '')) === -1 ? requestError : null);
       renderMessages();
       syncControls();
       if (input) input.focus();
     });
   }
 
-  function setOpen(open) {
+  function setOpen(open, modeId) {
+    if (modeId) setMode(modeId);
     state.open = !!open;
     var drawer = el('director-chat-drawer');
     var toggle = el('director-chat-rail-btn');
@@ -370,6 +505,7 @@
     toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
 
     if (state.open) {
+      syncModeUi();
       loadModels().then(function () {
         var input = el('director-chat-input');
         if (input) input.focus();
@@ -387,13 +523,18 @@
     var input = el('director-chat-input');
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
-    if (!toggle || !drawer || !close || !clear || !send || !stop || !input || !model || !refresh) return;
+    var modeSwitch = el('director-chat-mode-switch');
+    if (!toggle || !drawer || !close || !clear || !send || !stop || !input || !model || !refresh || !modeSwitch) return;
 
     toggle.onclick = function () { setOpen(!state.open); };
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
     send.onclick = sendMessage;
     stop.onclick = stopJob;
+    modeSwitch.onclick = function (event) {
+      var button = event.target.closest('[data-assistant-mode]');
+      if (button) setMode(button.dataset.assistantMode);
+    };
     refresh.onclick = function () {
       refresh.disabled = true;
       loadModels().then(function () {
@@ -420,10 +561,15 @@
       if (event.key === 'Escape' && state.open) setOpen(false);
     });
 
-    renderMessages();
-    syncControls();
+    syncModeUi();
   }
 
+  window.registerAssistantMode = registerContextMode;
+  window.refreshAssistantModes = syncModeUi;
+  window.openAssistant = function (target) {
+    target = target && typeof target === 'object' ? target : {};
+    setOpen(true, target.mode || 'chat');
+  };
   window.setDirectorChatOpen = setOpen;
   window.openDirectorChatActivity = function (target) {
     if (target && target.modelId) state.modelId = String(target.modelId);

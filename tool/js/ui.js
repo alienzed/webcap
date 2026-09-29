@@ -459,11 +459,14 @@ function refreshCurrentDirectory() {
               if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
               refreshTrainingWorkspace();
             });
-          // If a file was just renamed, reselect it
+          // Pending filename reselection is a single-item workflow. Grid owns its
+          // multi-selection and refreshes from the new directory contents above.
           if (window.state && state.pendingSelectFileName) {
             var fname = state.pendingSelectFileName;
             state.pendingSelectFileName = undefined;
-            setTimeout(function() { selectByFileName(fname); }, 0);
+            if (getWorkspaceViewMode() !== 'grid') {
+              setTimeout(function() { selectByFileName(fname); }, 0);
+            }
           }
         } catch (e) {
           state.folderStateWritable = false;

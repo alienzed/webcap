@@ -9,8 +9,12 @@
     modeMessages: {},
     elapsedByAssistantIndex: {},
     modeElapsedByAssistantIndex: {},
+    metricsByAssistantIndex: {},
+    modeMetricsByAssistantIndex: {},
     progressTimer: 0,
     requestStartedAt: 0,
+    generationStartedAt: 0,
+    lastGeneratedTokens: 0,
     jobId: ''
   };
   var contextualModes = {};
@@ -33,6 +37,12 @@
     if (state.activeMode === 'chat') return state.elapsedByAssistantIndex;
     if (!state.modeElapsedByAssistantIndex[state.activeMode]) state.modeElapsedByAssistantIndex[state.activeMode] = {};
     return state.modeElapsedByAssistantIndex[state.activeMode];
+  }
+
+  function currentMetricsMap() {
+    if (state.activeMode === 'chat') return state.metricsByAssistantIndex;
+    if (!state.modeMetricsByAssistantIndex[state.activeMode]) state.modeMetricsByAssistantIndex[state.activeMode] = {};
+    return state.modeMetricsByAssistantIndex[state.activeMode];
   }
 
   function modeAvailable(mode) {
@@ -132,7 +142,71 @@
 
   function formatElapsed(ms) {
     var seconds = Math.max(0, Number(ms || 0)) / 1000;
-    return seconds < 10 ? seconds.toFixed(1) + 's' : Math.round(seconds) + 's';
+    if (seconds < 10) return seconds.toFixed(1) + 's';
+    if (seconds < 60) return Math.round(seconds) + 's';
+    var rounded = Math.round(seconds);
+    return Math.floor(rounded / 60) + 'm ' + String(rounded % 60) + 's';
+  }
+
+  function positiveNumber(value) {
+    value = Number(value);
+    return isFinite(value) && value > 0 ? value : 0;
+  }
+
+  function generatedTokenCount(result) {
+    result = result && typeof result === 'object' ? result : {};
+    var usage = result.usage && typeof result.usage === 'object' ? result.usage : {};
+    var timings = result.timings && typeof result.timings === 'object' ? result.timings : {};
+    var candidates = [
+      usage.completion_tokens,
+      usage.completionTokens,
+      usage.output_tokens,
+      usage.outputTokens,
+      usage.eval_count,
+      timings.predicted_n
+    ];
+    for (var i = 0; i < candidates.length; i += 1) {
+      var count = positiveNumber(candidates[i]);
+      if (count) return Math.round(count);
+    }
+    return Math.round(positiveNumber(state.lastGeneratedTokens));
+  }
+
+  function generationMilliseconds(result) {
+    result = result && typeof result === 'object' ? result : {};
+    var timings = result.timings && typeof result.timings === 'object' ? result.timings : {};
+    var measured = positiveNumber(timings.predicted_ms);
+    if (measured) return measured;
+    if (state.generationStartedAt) return Math.max(0, performance.now() - state.generationStartedAt);
+    return 0;
+  }
+
+  function generationRate(result, tokenCount, generationMs) {
+    result = result && typeof result === 'object' ? result : {};
+    var timings = result.timings && typeof result.timings === 'object' ? result.timings : {};
+    var measured = positiveNumber(timings.predicted_per_second);
+    if (measured) return measured;
+    return tokenCount > 0 && generationMs > 0 ? tokenCount / (generationMs / 1000) : 0;
+  }
+
+  function formatResponseMetrics(metrics, elapsedMs) {
+    metrics = metrics && typeof metrics === 'object' ? metrics : {};
+    var parts = [];
+    var tokenCount = positiveNumber(metrics.generatedTokens);
+    var rate = positiveNumber(metrics.tokensPerSecond);
+    if (tokenCount) parts.push(Math.round(tokenCount) + ' tokens');
+    if (rate) parts.push(rate.toFixed(1) + ' tok/s');
+    parts.push(formatElapsed(elapsedMs));
+    return parts.join(' · ');
+  }
+
+  function completedResponseMetrics(result) {
+    var tokenCount = generatedTokenCount(result);
+    var generationMs = generationMilliseconds(result);
+    return {
+      generatedTokens: tokenCount,
+      tokensPerSecond: generationRate(result, tokenCount, generationMs)
+    };
   }
 
   function directorPhaseLabel(phase) {
@@ -195,8 +269,21 @@
       var position = Number(activity && activity.queuePosition || 0);
       detail = position > 1 ? ('Queue #' + position) : 'Waiting for Director runtime';
     } else if (phase === 'loading_model') detail = 'Loading ' + String(activity && activity.model || state.modelId || 'model');
-    else if (phase === 'generating') detail = String(activity && activity.model || state.modelId || 'Selected model');
-    else if (phase === 'freeing_comfy') detail = 'Releasing local GPU resources';
+    else if (phase === 'generating') {
+      var now = performance.now();
+      if (!state.generationStartedAt) state.generationStartedAt = now;
+      var slot = activity && activity.slot && typeof activity.slot === 'object' ? activity.slot : {};
+      var generatedTokens = positiveNumber(slot.generatedTokens);
+      if (generatedTokens) state.lastGeneratedTokens = Math.max(state.lastGeneratedTokens, generatedTokens);
+      var liveParts = [];
+      if (state.lastGeneratedTokens > 0) {
+        liveParts.push(Math.round(state.lastGeneratedTokens) + ' tokens');
+        var liveRate = state.lastGeneratedTokens / Math.max(0.001, (now - state.generationStartedAt) / 1000);
+        if (liveRate > 0) liveParts.push(liveRate.toFixed(1) + ' tok/s');
+      }
+      liveParts.push(String(activity && activity.model || state.modelId || 'Selected model'));
+      detail = liveParts.join(' · ');
+    } else if (phase === 'freeing_comfy') detail = 'Releasing local GPU resources';
     else detail = String(activity && activity.model || state.modelId || '');
 
     var jobStatus = String(activity && activity.jobStatus || '');
@@ -233,6 +320,8 @@
 
   function startProgress() {
     state.requestStartedAt = performance.now();
+    state.generationStartedAt = 0;
+    state.lastGeneratedTokens = 0;
     setProgressVisible(true);
     renderProgress(null);
     pollProgress();
@@ -281,10 +370,11 @@
       row.appendChild(body);
 
       var elapsedMap = currentElapsedMap();
+      var metricsMap = currentMetricsMap();
       if (message.role === 'assistant' && Object.prototype.hasOwnProperty.call(elapsedMap, index)) {
         var meta = document.createElement('div');
         meta.className = 'director-chat-message-meta';
-        meta.textContent = formatElapsed(elapsedMap[index]);
+        meta.textContent = formatResponseMetrics(metricsMap[index], elapsedMap[index]);
         row.appendChild(meta);
       }
       host.appendChild(row);
@@ -354,9 +444,11 @@
     if (state.activeMode === 'chat') {
       state.messages = [];
       state.elapsedByAssistantIndex = {};
+      state.metricsByAssistantIndex = {};
     } else {
       state.modeMessages[state.activeMode] = [];
       state.modeElapsedByAssistantIndex[state.activeMode] = {};
+      state.modeMetricsByAssistantIndex[state.activeMode] = {};
     }
     finishProgress(null);
     renderMessages();
@@ -437,6 +529,7 @@
 
     var messages = currentMessages();
     var elapsedMap = currentElapsedMap();
+    var metricsMap = currentMetricsMap();
     var mode = activeContextMode();
     messages.push({ role: 'user', content: content });
     input.value = '';
@@ -479,7 +572,9 @@
       }).then(function (job) {
         var result = job.result && typeof job.result === 'object' ? job.result : {};
         messages.push({ role: 'assistant', content: String(result.text || '') });
-        elapsedMap[messages.length - 1] = performance.now() - startedAt;
+        var assistantIndex = messages.length - 1;
+        elapsedMap[assistantIndex] = performance.now() - startedAt;
+        metricsMap[assistantIndex] = completedResponseMetrics(result);
       });
     }
 

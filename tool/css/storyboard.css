@@ -2823,62 +2823,6 @@
   min-height: 44px;
 }
 
-.storyboard-story-utility-shelf {
-  position: relative;
-  z-index: 22;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-  gap: 8px;
-  padding: 8px 22px 14px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  background: color-mix(in srgb, var(--bg) 97%, var(--panel));
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, .14);
-}
-
-.storyboard-story-utility-shelf > .storyboard-story-section {
-  position: static;
-  margin: 0;
-  overflow: visible;
-  background: color-mix(in srgb, var(--panel) 94%, var(--bg));
-}
-
-.storyboard-story-utility-shelf > .storyboard-story-section > summary {
-  min-height: 46px;
-  padding: 8px 11px;
-}
-
-.storyboard-story-utility-shelf > .storyboard-story-section[open] > summary {
-  border-bottom: 0;
-}
-
-.storyboard-story-utility-shelf > .storyboard-story-section > .storyboard-story-section-body {
-  position: absolute;
-  bottom: 100%;
-  z-index: 24;
-  max-height: min(62vh, 620px);
-  overflow: auto;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-bottom: 0;
-  border-radius: 9px 9px 0 0;
-  background: color-mix(in srgb, var(--panel) 97%, var(--bg));
-  box-shadow: 0 -18px 36px rgba(0, 0, 0, .3);
-}
-
-.storyboard-story-utility-shelf > .storyboard-director-tools-drawer > .storyboard-story-section-body {
-  left: 22px;
-  right: 22px;
-}
-
-.storyboard-story-utility-shelf > .storyboard-scene-defaults > .storyboard-story-section-body {
-  right: 22px;
-  width: min(420px, calc(100% - 44px));
-}
-
-.storyboard-story-utility-shelf > .storyboard-story-section:not([open]) > .storyboard-story-section-body {
-  display: none;
-}
-
 .storyboard-scene-defaults-body {
   grid-template-columns: 1fr;
   gap: 14px;
@@ -3591,21 +3535,4 @@
     overflow: visible;
   }
 
-  .storyboard-story-utility-shelf {
-    grid-template-columns: 1fr;
-    padding: 0 22px 20px;
-    border-top: 0;
-    box-shadow: none;
-    background: transparent;
-  }
-
-  .storyboard-story-utility-shelf > .storyboard-story-section > .storyboard-story-section-body {
-    position: static;
-    width: auto;
-    max-height: none;
-    border: 0;
-    border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-    border-radius: 0;
-    box-shadow: none;
-  }
 }

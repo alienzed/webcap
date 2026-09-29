@@ -338,24 +338,21 @@ def test_inference_yields_when_local_llm_work_is_already_queued(inference_root, 
     assert execution_queue.resource_owner() == ""
 
 
-def test_inference_yields_during_local_llm_drain_grace(inference_root, monkeypatch):
-    from tool.server import llm_runner
-
+def test_inference_yields_while_llm_retains_gpu_during_grace(inference_root, monkeypatch):
     monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
     queued = inference_runner.enqueue_generate(
         {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
     )
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
-    monkeypatch.setattr(llm_runner, "local_gpu_drain_pending", lambda: True)
+    execution_queue._resource_owner = "llm"
     monkeypatch.setattr(
         inference_runner,
         "_reserve_gpu",
-        lambda: (_ for _ in ()).throw(AssertionError("Inference must not reserve GPU during LLM drain grace.")),
+        lambda: (_ for _ in ()).throw(AssertionError("Inference must not reserve an LLM-owned GPU.")),
     )
 
     assert inference_runner._advance_queue() is None
     assert execution_queue.get_job(queued["jobId"])["status"] == "queued"
-    assert execution_queue.resource_owner() == ""
+    assert execution_queue.resource_owner() == "llm"
 
 
 def test_inference_queue_reuses_gpu_ownership_until_foreground_queue_is_drained(

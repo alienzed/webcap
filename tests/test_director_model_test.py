@@ -156,3 +156,18 @@ def test_delete_session_removes_persisted_file(model_test_root):
     assert model_test.list_sessions() == []
     with pytest.raises(FileNotFoundError):
         model_test._read_session(session["id"])
+
+
+def test_model_test_is_isolated_to_settings_and_feature_modules():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
+    app = (root / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
+
+    assert 'id="director-model-test-settings"' in html
+    assert '/static/js/director_model_test.js' in html
+    assert "register_director_model_test_routes(app)" in app
+    assert "/fs/director/chat" not in app
+    assert "/fs/director/job" in frontend
+    assert "/fs/director/activity" in frontend
+    assert "/fs/storyboard/director" in frontend

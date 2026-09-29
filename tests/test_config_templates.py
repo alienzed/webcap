@@ -261,6 +261,80 @@ def test_storyboard_director_limits_default_output_and_accept_overrides():
     assert overridden["storyboard"]["director"]["max_tokens"] == 8192
 
 
+def test_storyboard_director_accepts_multiple_named_remote_endpoints():
+    normalized = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "storyboard": {
+            "director": {
+                "remote_endpoints": [
+                    {
+                        "id": "macbook",
+                        "name": "MacBook Pro",
+                        "endpoint": "http://192.168.1.20:11434/v1",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "gpu-box",
+                        "name": "4060 Ti",
+                        "endpoint": "http://192.168.1.30:11434/v1/",
+                        "enabled": False,
+                    },
+                ]
+            }
+        },
+    })
+
+    assert normalized["storyboard"]["director"]["remote_endpoints"] == [
+        {
+            "id": "macbook",
+            "name": "MacBook Pro",
+            "endpoint": "http://192.168.1.20:11434/v1",
+            "enabled": True,
+        },
+        {
+            "id": "gpu-box",
+            "name": "4060 Ti",
+            "endpoint": "http://192.168.1.30:11434/v1",
+            "enabled": False,
+        },
+    ]
+
+
+def test_storyboard_director_migrates_legacy_single_remote_endpoint():
+    normalized = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "storyboard": {
+            "director": {
+                "mode": "remote",
+                "endpoint": "http://director-box:11434/v1",
+            }
+        },
+    })
+
+    assert normalized["storyboard"]["director"]["mode"] == "remote"
+    assert normalized["storyboard"]["director"]["remote_endpoints"] == [{
+        "id": "remote",
+        "name": "Remote",
+        "endpoint": "http://director-box:11434/v1",
+        "enabled": True,
+    }]
+
+
+def test_storyboard_director_rejects_duplicate_remote_endpoint_ids():
+    with pytest.raises(ValueError, match="ids must be unique"):
+        config_module.validate_config_payload({
+            "filesystem": {"root": "C:/training", "models": ""},
+            "storyboard": {
+                "director": {
+                    "remote_endpoints": [
+                        {"id": "same", "endpoint": "http://one:11434/v1"},
+                        {"id": "same", "endpoint": "http://two:11434/v1"},
+                    ]
+                }
+            },
+        })
+
+
 def test_training_repeat_reference_epochs_must_be_positive_integer():
     with pytest.raises(ValueError, match="repeat_reference_epochs"):
         config_module.validate_config_payload({"filesystem": {"root": "C:/training", "models": ""}, "training": {"repeat_reference_epochs": 0}})

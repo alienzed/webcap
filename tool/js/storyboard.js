@@ -1596,6 +1596,14 @@
     });
   }
 
+  function setDirectorRegionProtected(region, protectedState) {
+    if (!region) throw new Error('Storyboard Director protection region is missing.');
+    region.inert = !!protectedState;
+    region.classList.toggle('director-protected', !!protectedState);
+    if (protectedState) region.setAttribute('aria-busy', 'true');
+    else region.removeAttribute('aria-busy');
+  }
+
   function setDirectorTargetProtected(target, protectedState) {
     target = target || {};
     if (!storyState.story || String(target.storyId || '') !== String(storyState.story.id || '')) return;
@@ -1626,59 +1634,12 @@
       return;
     }
     if (target.kind === 'scenes') {
-      document.querySelectorAll(
-        '#storyboard-story-overview button, #storyboard-story-overview input, #storyboard-story-overview select, #storyboard-story-overview textarea, ' +
-        '.storyboard-director-tools-drawer button, .storyboard-director-tools-drawer input, .storyboard-director-tools-drawer select, .storyboard-director-tools-drawer textarea'
-      ).forEach(function (control) {
-        if (protectedState) {
-          if (!control.disabled) {
-            control.disabled = true;
-            control.dataset.directorScenesDisabled = '1';
-          }
-        } else if (control.dataset.directorScenesDisabled === '1') {
-          control.disabled = false;
-          delete control.dataset.directorScenesDisabled;
-        }
-      });
+      setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState);
+      setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState);
       return;
     }
-    if (target.kind === 'scene-prompt') {
-      var root = sceneElement(target.sceneId);
-      if (!root) return;
-      var prompt = root.querySelector('[data-scene-field="prompt"]');
-      var duration = root.querySelector('[data-scene-field="durationSeconds"]');
-      if (prompt) prompt.disabled = !!protectedState;
-      if (duration && target.operation === 'refine_prompt') duration.disabled = !!protectedState;
-      return;
-    }
-    if (target.kind === 'repair') {
-      var mode = el('storyboard-director-pass-mode');
-      var instruction = el('storyboard-repair-instruction');
-      var repairButton = el('storyboard-repair-scenes-btn');
-      var restoreButton = el('storyboard-restore-repair-btn');
-      if (mode) mode.disabled = !!protectedState;
-      if (instruction) instruction.disabled = !!protectedState;
-      if (repairButton) repairButton.disabled = !!protectedState;
-      if (restoreButton) restoreButton.disabled = !!protectedState;
-      document.querySelectorAll(
-        '#storyboard-story-title, #storyboard-story-icon, #storyboard-story-status, #storyboard-story-concept, #storyboard-story-style, #storyboard-story-style-preset, #storyboard-story-target-scenes, #storyboard-scene-count-auto, ' +
-        '#storyboard-expand-concept-btn, #storyboard-restore-concept-btn, #storyboard-develop-btn, ' +
-        '#storyboard-invariant-define, #storyboard-invariant-add, ' +
-        '#storyboard-invariants-list input, #storyboard-invariants-list select, #storyboard-invariants-list textarea, #storyboard-invariants-list button, ' +
-        '#storyboard-scenes-list [data-scene-field="title"], ' +
-        '#storyboard-scenes-list [data-scene-field="summary"], ' +
-        '#storyboard-scenes-list [data-scene-field="entryState"], ' +
-        '#storyboard-scenes-list [data-scene-field="exitState"], ' +
-        '#storyboard-scenes-list [data-scene-field="prompt"], ' +
-        '#storyboard-scenes-list [data-scene-field="durationSeconds"], ' +
-        '#storyboard-scenes-list [data-reference-clear], #storyboard-scenes-list [data-reference-role], ' +
-        '#storyboard-scenes-list [data-reference-source], #storyboard-scenes-list [data-reference-frame], ' +
-        '#storyboard-scenes-list [data-reference-apply], #storyboard-scenes-list [data-reference-upload], ' +
-        '#storyboard-scenes-list [data-director-write], #storyboard-scenes-list [data-director-refine], #storyboard-scenes-list [data-director-restore], ' +
-        '#storyboard-scenes-list [data-scene-action], #storyboard-scene-progression [data-scene-action], #storyboard-scene-progression [data-scene-progress-add]'
-      ).forEach(function (field) {
-        field.disabled = !!protectedState;
-      });
+    if (target.kind === 'scene-prompt' || target.kind === 'repair') {
+      setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState);
     }
   }
 
@@ -1691,10 +1652,6 @@
     document.querySelectorAll('[data-story-action-disabled="1"]').forEach(function (control) {
       control.disabled = false;
       delete control.dataset.storyActionDisabled;
-    });
-    document.querySelectorAll('[data-director-scenes-disabled="1"]').forEach(function (control) {
-      control.disabled = false;
-      delete control.dataset.directorScenesDisabled;
     });
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;
 

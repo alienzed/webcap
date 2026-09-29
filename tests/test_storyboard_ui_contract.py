@@ -1435,11 +1435,16 @@ def test_storyboard_director_actions_and_invariants_keep_compact_affordances():
     assert 'class="review-captions-btn storyboard-director-action" data-director-write' in storyboard
     assert 'class="review-captions-btn storyboard-director-action" data-director-refine' in storyboard
     assert "function invariantRowHtml(item, expanded)" in storyboard
-    assert '<details class="storyboard-invariant-row"' in storyboard
-    assert "syncInvariantRowSummary" in storyboard
+    assert 'class="storyboard-invariant-row' in storyboard
+    assert "data-story-invariant-toggle" in storyboard
+    assert "function setInvariantRowOpen(row, open)" in storyboard
+    assert "storyboard-invariant-summary" not in storyboard
+    assert "Untitled invariant" not in storyboard
+    assert "No continuity note yet." not in storyboard
     assert ".storyboard-director-action::before" in css
-    assert ".storyboard-invariant-summary" in css
-    assert ".storyboard-invariant-editor" in css
+    assert ".storyboard-invariant-row-head" in css
+    assert ".storyboard-invariant-body" in css
+    assert ".storyboard-invariant-summary" not in css
 
 
 def test_storyboard_story_rail_is_full_by_default_and_manually_compactable():

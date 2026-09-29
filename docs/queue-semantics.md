@@ -431,6 +431,16 @@ until the queue is resumed.
 only when it executes. It must not re-resolve, rebase, or reinterpret that job against newer
 authoring state.
 
+Inference work is **durable across normal WebCap server restarts**:
+
+- browser reload does not change queued Inference work,
+- unfinished Inference work survives a WebCap server restart,
+- on restart, unfinished work returns to **Backlog** rather than automatically resuming execution,
+- the frozen request remains unchanged,
+- the user decides when normal Inference execution resumes.
+
+This intentionally differs from LLM work, which is server-session-bound.
+
 It is not the authority for feature-specific semantic validity.
 
 A feature decides whether an action should be enabled. The Inference Queue schedules the resulting

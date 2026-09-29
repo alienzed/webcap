@@ -70,9 +70,9 @@ _PROFILES = {
         "command": {"launcher": "standard_deepspeed"},
         "mediaKinds": ("image", "video"),
         "videoFps": 16,
-        "datasetFiles": ("dataset.train.toml",),
+        "datasetFiles": ("dataset.wan21.toml",),
         "configs": (
-            {"id": "wan21", "file": "config.wan21.toml", "dataset": "dataset.train.toml", "label": "Wan2.1 T2V 14B", "outputSlug": "wan21-t2v", "modelIdentityKeys": ("type", "ckpt_path")},
+            {"id": "wan21", "file": "config.wan21.toml", "dataset": "dataset.wan21.toml", "label": "Wan2.1 T2V 14B", "outputSlug": "wan21-t2v", "modelIdentityKeys": ("type", "ckpt_path")},
         ),
         "runs": (
             {"id": "train", "label": "Train", "stages": ("wan21",)},
@@ -84,9 +84,9 @@ _PROFILES = {
         "command": {"launcher": "standard_deepspeed"},
         "mediaKinds": ("image", "video"),
         "videoFps": 24,
-        "datasetFiles": ("dataset.train.toml",),
+        "datasetFiles": ("dataset.h3.toml",),
         "configs": (
-            {"id": "h3", "file": "config.h3.toml", "dataset": "dataset.train.toml", "label": "MiniMax H3", "outputSlug": "minimax-h3", "modelIdentityKeys": ("type", "diffusion_model")},
+            {"id": "h3", "file": "config.h3.toml", "dataset": "dataset.h3.toml", "label": "MiniMax H3", "outputSlug": "minimax-h3", "modelIdentityKeys": ("type", "diffusion_model")},
         ),
         "runs": (
             {"id": "train", "label": "Train", "stages": ("h3",)},

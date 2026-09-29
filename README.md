@@ -30,8 +30,8 @@ Current profiles are app-owned and intentionally finite:
 | --- | --- | --- | --- |
 | Wan2.2 T2V | Images + videos | `config.hi.toml`, `config.lo.toml`, `dataset.hi.toml`, `dataset.lo.toml` | High or Low |
 | Krea2 Raw | Images only | `config.krea2.toml`, `dataset.krea2.toml` | Train |
-| Wan2.1 T2V 14B | Images + videos | `config.wan21.toml`, `dataset.train.toml` | Train |
-| MiniMax H3 | Images + videos | `config.h3.toml`, `dataset.train.toml` | Train |
+| Wan2.1 T2V 14B | Images + videos | `config.wan21.toml`, `dataset.wan21.toml` | Train |
+| MiniMax H3 | Images + videos | `config.h3.toml`, `dataset.h3.toml` | Train |
 
 The current UI uses one canonical setup per profile; it has no training-mode variants.
 

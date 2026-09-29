@@ -22,6 +22,7 @@
     activeSceneId: '',
     openStoryRequestId: 0,
     storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
+    storyLibraryPinned: window.localStorage.getItem('webcap.storyboard.storyLibraryPinned') === '1',
     directorPassMode: 'custom',
     storyAction: null,
     storyActionQueue: [],
@@ -2399,6 +2400,19 @@
     toggleButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
   }
 
+  function setStoryLibraryPinned(pinned) {
+    storyState.storyLibraryPinned = !!pinned;
+    window.localStorage.setItem('webcap.storyboard.storyLibraryPinned', storyState.storyLibraryPinned ? '1' : '0');
+    var workspace = el('storyboard-workspace');
+    var button = el('storyboard-library-pin');
+    if (workspace) workspace.classList.toggle('story-library-pinned', storyState.storyLibraryPinned);
+    if (button) {
+      button.setAttribute('aria-pressed', storyState.storyLibraryPinned ? 'true' : 'false');
+      button.setAttribute('title', storyState.storyLibraryPinned ? 'Unpin Stories' : 'Pin Stories open');
+      button.setAttribute('aria-label', storyState.storyLibraryPinned ? 'Unpin Stories' : 'Pin Stories open');
+    }
+  }
+
   function ensureActiveScene(order) {
     order = Array.isArray(order) ? order : [];
     if (!order.length) {
@@ -2923,9 +2937,12 @@
         if (story.status && story.status !== 'active') meta.push(story.status);
         meta.push(String(Number(story.sceneCount || 0)) + ' scene' + (Number(story.sceneCount || 0) === 1 ? '' : 's'));
         return '<div class="storyboard-story-row' + (active ? ' active' : '') + '" data-story-id="' + escapeHtml(story.id) + '">' +
-          '<button type="button" class="storyboard-story-open" data-story-open>' +
-            '<strong>' + escapeHtml(story.title || 'Untitled Story') + '</strong>' +
-            '<span>' + escapeHtml(meta.join(' · ')) + '</span>' +
+          '<button type="button" class="storyboard-story-open" data-story-open title="' + escapeHtml(story.title || 'Untitled Story') + '">' +
+            '<span class="storyboard-story-rail-glyph" aria-hidden="true">' + escapeHtml(String(story.title || 'Untitled Story').trim().charAt(0).toUpperCase() || '•') + '</span>' +
+            '<span class="storyboard-story-row-copy">' +
+              '<strong>' + escapeHtml(story.title || 'Untitled Story') + '</strong>' +
+              '<span>' + escapeHtml(meta.join(' · ')) + '</span>' +
+            '</span>' +
           '</button>' +
           '<details class="storyboard-story-menu">' +
             '<summary aria-label="Story actions">⋯</summary>' +
@@ -5021,8 +5038,10 @@
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
 
     initStorySections();
+    setStoryLibraryPinned(storyState.storyLibraryPinned);
 
     el('storyboard-new-btn').onclick = createStory;
+    el('storyboard-library-pin').onclick = function () { setStoryLibraryPinned(!storyState.storyLibraryPinned); };
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };

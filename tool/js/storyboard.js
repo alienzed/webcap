@@ -1909,10 +1909,7 @@
       return { text: 'Revised ' + String(sceneIds.length) + ' Scenes.' };
     }).catch(function (err) {
       if (directorWasStopped(err)) setRepairStatus('Revise Scenes stopped.');
-      else {
-        setRepairStatus('Revise Scenes failed.');
-        reportError(err);
-      }
+      else setRepairStatus('Revise Scenes failed.');
       throw err;
     }).finally(function () {
       setDirectorPending(directorTarget, false);
@@ -1923,7 +1920,7 @@
 
   function repairScenes() {
     var instruction = el('storyboard-repair-instruction').value.trim();
-    return reviseScenes(instruction, storyState.director.modelId).catch(function () {});
+    return reviseScenes(instruction, storyState.director.modelId).catch(reportError);
   }
 
   function restoreLastRepair() {

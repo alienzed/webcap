@@ -55,6 +55,8 @@
     var host = el('director-chat-mode-switch');
     var description = el('director-chat-mode-description');
     var input = el('director-chat-input');
+    var toolsRow = el('director-chat-mode-tools');
+    var presetsHost = el('director-chat-mode-presets');
     var modes = availableModes();
     var active = activeContextMode();
 
@@ -81,6 +83,15 @@
       input.placeholder = active
         ? String(active.placeholder || 'What should the Assistant do?')
         : 'Ask the model anything…';
+    }
+
+    var presets = active && Array.isArray(active.presets) ? active.presets : [];
+    if (toolsRow) toolsRow.classList.toggle('hidden', !presets.length);
+    if (presetsHost) {
+      presetsHost.innerHTML = presets.map(function (preset, index) {
+        return '<button type="button" class="review-captions-btn" data-assistant-preset="' + String(index) +
+          '" title="' + String(preset.title || preset.label || '') + '">' + String(preset.label || 'Preset') + '</button>';
+      }).join('');
     }
     renderMessages();
     syncControls();
@@ -524,7 +535,8 @@
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
     var modeSwitch = el('director-chat-mode-switch');
-    if (!toggle || !drawer || !close || !clear || !send || !stop || !input || !model || !refresh || !modeSwitch) return;
+    var presetsHost = el('director-chat-mode-presets');
+    if (!toggle || !drawer || !close || !clear || !send || !stop || !input || !model || !refresh || !modeSwitch || !presetsHost) return;
 
     toggle.onclick = function () { setOpen(!state.open); };
     close.onclick = function () { setOpen(false); };
@@ -534,6 +546,16 @@
     modeSwitch.onclick = function (event) {
       var button = event.target.closest('[data-assistant-mode]');
       if (button) setMode(button.dataset.assistantMode);
+    };
+    presetsHost.onclick = function (event) {
+      var button = event.target.closest('[data-assistant-preset]');
+      var mode = activeContextMode();
+      if (!button || !mode || !Array.isArray(mode.presets)) return;
+      var preset = mode.presets[Number(button.dataset.assistantPreset)];
+      if (!preset) return;
+      input.value = String(preset.instruction || '');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
     };
     refresh.onclick = function () {
       refresh.disabled = true;

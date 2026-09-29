@@ -430,7 +430,7 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, mode=None, 
                 if match:
                     quoted = re.search(r'["\\']([^"\\']+)["\\']', match.group(0))
                     if quoted and Path(quoted.group(1)).name == "dataset.train.toml":
-                        dataset_value = str(Path(quoted.group(1)).with_name(resolved["dataset"])).replace("\\\\", "/")
+                        dataset_value = str(Path(quoted.group(1)).with_name(resolved["dataset"])).replace("\\", "/")
                         rendered = with_dataset_path(existing, dataset_value)
             if rendered != existing:
                 _write_set_toml_atomic(dest, rendered)

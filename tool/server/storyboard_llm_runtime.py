@@ -933,7 +933,7 @@ def list_models(reload=False):
         models.extend(local_models)
     except Exception as exc:
         warnings.append({"runtimeId": "local", "runtimeName": "Local", "error": str(exc)})
-        _logger.warning("Director local model discovery skipped: %s", exc)
+        _logger.info("Director local model discovery unavailable; skipped: %s", exc)
 
     for endpoint in base["remote_endpoints"]:
         try:
@@ -949,9 +949,15 @@ def list_models(reload=False):
             warnings.append({
                 "runtimeId": endpoint["id"],
                 "runtimeName": endpoint["name"],
+                "endpoint": endpoint["endpoint"],
                 "error": str(exc),
             })
-            _logger.warning("Director remote model discovery skipped for %s: %s", endpoint["name"], exc)
+            _logger.info(
+                "Director endpoint %s (%s) unavailable; skipped: %s",
+                endpoint["name"],
+                endpoint["endpoint"],
+                exc,
+            )
 
     models.sort(key=lambda model: (
         0 if model.get("runtimeId") == "local" else 1,

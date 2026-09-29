@@ -208,9 +208,6 @@ def duplicate_media_response(src_rel):
 
         if duplicated_folder_state is not None:
             write_folder_state_atomic(state_path, duplicated_folder_state)
-
-        if duplicated_metadata is not None:
-            write_folder_state_atomic(metadata_path, duplicated_metadata)
     except Exception as duplicate_error:
         for copied_path in (dst_caption, dst_path):
             try:
@@ -221,6 +218,17 @@ def duplicate_media_response(src_rel):
         print(f"[duplicate_media] DUPLICATE FAILED: {duplicate_error}", file=sys.stderr, flush=True)
         traceback.print_exc()
         return jsonify({"error": f"Duplicate failed: {duplicate_error}"}), 500
+
+    if duplicated_metadata is not None:
+        try:
+            write_folder_state_atomic(metadata_path, duplicated_metadata)
+        except Exception as metadata_error:
+            print(
+                f"[duplicate_media] MEDIA METADATA WRITE SKIPPED: {metadata_error}",
+                file=sys.stderr,
+                flush=True,
+            )
+            traceback.print_exc()
 
     return jsonify({"success": True, "dst": str(dst_path), "dstName": dst_name})
 

@@ -946,6 +946,32 @@ def test_result_evidence_still_applies_terminal_status(tmp_path, monkeypatch):
     assert state["activeJobId"] == ""
 
 
+def test_passive_training_status_does_not_advance_or_persist_queue(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "queued", "folder": "sets/subject", "status": "queued"}],
+    }
+    training_runner._write_state(state)
+    before = training_runner._state_path().read_bytes()
+
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda *_args: pytest.fail("Passive status must not reconcile Training."))
+    monkeypatch.setattr(training_runner, "_persist_reconciled_state", lambda *_args: pytest.fail("Passive status must not persist Training."))
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: pytest.fail("Passive status must not start the Training monitor."))
+
+    payload, status = training_runner.passive_status_snapshot()
+
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["activeJobId"] == ""
+    assert payload["jobs"][0]["id"] == "queued"
+    assert payload["jobs"][0]["status"] == "queued"
+    assert training_runner._state_path().read_bytes() == before
+
+
 def test_invalid_queue_state_is_loud_and_not_offered_recovery(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)

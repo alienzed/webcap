@@ -659,7 +659,8 @@ def _queue_wait_state(current):
         }
 
     from .storyboard_llm_runtime import uses_local_gpu
-    if not uses_local_gpu():
+    next_model_id = str((queued[0] or {}).get("modelId") or "").strip()
+    if not uses_local_gpu(next_model_id):
         return {"queueDepth": len(queued), "waitOwner": "", "waitReason": ""}
 
     owner = str(execution_resource_owner() or "")

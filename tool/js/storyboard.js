@@ -3636,7 +3636,7 @@
                   (promptDirectorModel ? ' title="Last populated by Director model ' + escapeHtml(promptDirectorModel) + '"' : '') +
                 '>Generation prompt</span>' +
                 '<div class="storyboard-prompt-actions">' +
-                  '<button type="button" class="review-captions-btn" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
+                  '<button type="button" class="review-captions-btn storyboard-director-action" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
                   '<button type="button" class="review-captions-btn' +
                     (typeof scene.previousPrompt === 'string' ? '' : ' hidden') +
                     '" data-director-restore title="Restore the Scene state from before the last Director edit.">Restore Previous</button>' +
@@ -3645,7 +3645,7 @@
               '<textarea class="storyboard-prompt-textarea" data-scene-field="prompt" rows="7" placeholder="Full model-facing prompt. Write it directly or let the Director draft it from the Scene intent.">' + escapeHtml(sceneValue(scene, 'prompt', '')) + '</textarea>' +
               '<div class="storyboard-director-actions">' +
                 '<input type="text" data-director-correction placeholder="Tell the Director what to change in this prompt...">' +
-                '<button type="button" class="review-captions-btn" data-director-refine title="' +
+                '<button type="button" class="review-captions-btn storyboard-director-action" data-director-refine title="' +
                   (scene.refineComplete ? 'Last refinement completed. Start typing another instruction to refine again.' : 'Apply this correction to the existing generation prompt.') +
                   '">' + (scene.refineComplete ? '✓' : 'Refine') + '</button>' +
                 '<span class="storyboard-save-state" data-director-status></span>' +
@@ -3789,6 +3789,7 @@
       var hasScenes = (storyState.story.sceneOrder || []).length > 0;
       developButton.textContent = hasScenes ? 'Re-develop Scenes…' : 'Develop Scenes';
       developButton.classList.toggle('storyboard-redevelop-btn', hasScenes);
+      developButton.classList.add('storyboard-director-action');
       var developRow = developButton.closest('.storyboard-develop-row');
       if (developRow) developRow.classList.toggle('has-scenes', hasScenes);
     }
@@ -5077,7 +5078,10 @@
     setStoryLibraryPinned(storyState.storyLibraryPinned);
 
     el('storyboard-new-btn').onclick = createStory;
-    el('storyboard-library-pin').onclick = function () { setStoryLibraryPinned(!storyState.storyLibraryPinned); };
+    el('storyboard-library-pin').onclick = function () {
+      setStoryLibraryPinned(!storyState.storyLibraryPinned);
+      this.blur();
+    };
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
     el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };

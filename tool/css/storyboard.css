@@ -3476,11 +3476,15 @@
   max-width: calc(100% - 24px);
 }
 
-.storyboard-scene-workspace.director-active {
+.storyboard-scene-workspace.director-active,
+.storyboard-scene-workspace.director-protected,
+.storyboard-story-authoring.director-protected {
   position: relative;
 }
 
-.storyboard-scene-workspace.director-active::after {
+.storyboard-scene-workspace.director-active::after,
+.storyboard-scene-workspace.director-protected::after,
+.storyboard-story-authoring.director-protected::after {
   content: "";
   position: absolute;
   inset: 0;

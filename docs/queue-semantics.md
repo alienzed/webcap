@@ -441,14 +441,17 @@ Inference work is **durable across normal WebCap server restarts**:
 
 **Queue and Backlog have distinct execution meaning:**
 
-- **Queue** contains normal runnable work,
-- **Backlog** contains parked durable work behind the normal Queue,
+- **Queue** contains normal foreground Inference work,
+- **Backlog** contains parked durable low-priority work behind the normal Queue,
 - fresh/manual Inference requests enter Queue, so they run ahead of existing Backlog work,
-- Backlog is consumed one job at a time only when Queue has no runnable work; it is not bulk-promoted into Queue,
+- Backlog is consumed only when Queue has no runnable work; it is not bulk-promoted into Queue,
+- Backlog should not extend Inference GPU ownership when another foreground local-GPU lane is waiting,
+- if that distinction would require fragile scheduler logic, prefer simpler yielding behavior over protecting Backlog throughput,
 - while Inference is paused, neither Queue nor Backlog advances,
 - moving work between Queue and Backlog changes execution order/intent only; the frozen request itself remains unchanged.
 
-"Backlog draining" is an implementation detail, not a separate product state or user-facing mode.
+"Backlog draining" is an implementation detail, not a separate product state or user-facing mode. Users
+can explicitly Add all to queue when backlogged work should become foreground work.
 
 This intentionally differs from LLM work, which is server-session-bound.
 
@@ -547,7 +550,9 @@ model.
 
 North Star semantics:
 
-- active/unpaused Training may own or retain priority over the local GPU execution domain,
+- a running Training job owns the local GPU until its normal/checkpoint-safe lifecycle releases it,
+- resuming or queueing Training does not preempt a local-GPU lane that is already draining ordinary foreground work,
+- once the current foreground lane reaches its natural idle boundary, Training may acquire the GPU,
 - local Inference and local LLM may wait,
 - valid Inference and LLM work may still be queued,
 - Training state does not create semantic locks in Storyboard, Generate, Test Generations, or Chat,
@@ -570,15 +575,27 @@ Cross-lane GPU contention should preserve simple resource-ownership behavior rat
 fairness scheduler, timestamp arbitration layer, weighted priority system, or other global ordering
 mechanism.
 
+The preferred anti-thrash rule is **lane stickiness**:
+
+- once a local-GPU lane owns the resource, it keeps it while that lane still has ordinary runnable work,
+- another lane does not cut in between jobs merely because it became ready,
+- ownership is released at the lane's natural idle boundary,
+- LLM may keep a short continuation grace window to bridge brief browser/orchestration gaps between causally related requests,
+- Inference Queue work may drain before yielding,
+- Inference Backlog is opportunistic low-priority work and should yield when another foreground local-GPU lane is waiting,
+- a running Training job remains non-preemptive because Training is a deliberately long-running lifecycle.
+
+This is intentionally simpler than cross-lane FIFO or priority arbitration. The goal is to avoid
+repeated model load/unload and GPU ownership thrash, not to build a general scheduler.
+
+If enforcing a fine-grained Backlog exception would make the resource handoff fragile, simplify the
+handoff rather than add a large decision tree. Backlog throughput is lower priority than predictable
+foreground execution; users can explicitly promote Backlog work into Queue when it matters.
+
 Training retains its deliberately special execution lifecycle.
 
-One concrete exception is local LLM burst continuity: when a local LLM job has just completed, a
-brief in-memory continuation window may let the next dependent LLM request arrive before Inference
-takes the GPU and unloads the retained model. This is an anti-thrash debounce, not persistent
-ownership, a global priority policy, or a semantic admission guard.
-
-The North Star here is **KISS over theoretical fairness**: make narrow fixes for observed
-user-facing contention problems rather than redesign cross-lane arbitration.
+The North Star here is **KISS over theoretical fairness**: prefer a small lane-drain rule and narrow
+fixes for observed contention over increasingly elaborate arbitration.
 
 ## 14. Runtime and failure semantics
 

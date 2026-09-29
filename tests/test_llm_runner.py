@@ -399,6 +399,32 @@ def test_llm_local_job_waits_while_shared_gpu_is_owned(llm_root, monkeypatch):
     assert execution_queue.resource_owner() == "training"
 
 
+def test_llm_wait_state_uses_queued_model_runtime(llm_root, monkeypatch):
+    execution_queue._resource_owner = "training"
+    seen = []
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "uses_local_gpu",
+        lambda model_ref=None: seen.append(model_ref) or str(model_ref or "").startswith("local::"),
+    )
+
+    remote_state = llm_runner._queue_wait_state({
+        "activeJobId": "",
+        "paused": False,
+        "jobs": [{"status": "queued", "modelId": "macbook::qwen3:8b"}],
+    })
+    assert remote_state["waitOwner"] == ""
+    assert seen[-1] == "macbook::qwen3:8b"
+
+    local_state = llm_runner._queue_wait_state({
+        "activeJobId": "",
+        "paused": False,
+        "jobs": [{"status": "queued", "modelId": "local::qwen3:8b"}],
+    })
+    assert local_state["waitOwner"] == "training"
+    assert seen[-1] == "local::qwen3:8b"
+
+
 def test_llm_remote_job_does_not_claim_shared_gpu(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(

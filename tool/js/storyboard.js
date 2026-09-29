@@ -942,7 +942,7 @@
 
     var editorRect = editor.getBoundingClientRect();
     var targetRect = target.getBoundingClientRect();
-    var fillsField = kind === 'concept' || kind === 'scene-prompt';
+    var fillsField = kind === 'concept' || kind === 'scene-prompt' || kind === 'repair';
     card.classList.toggle('is-field-overlay', fillsField);
     card.classList.toggle('is-structure-overlay', !fillsField && !fillsWorkspace);
 

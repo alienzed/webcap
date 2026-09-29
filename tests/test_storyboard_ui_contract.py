@@ -914,6 +914,7 @@ def test_storyboard_director_scene_plan_lock_excludes_scene_defaults():
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
     scenes = protection.split("if (target.kind === 'scenes')", 1)[1].split("if (target.kind === 'scene-prompt')", 1)[0]
     assert "#storyboard-story-overview button" in scenes
+    assert ".storyboard-director-tools-drawer button" in scenes
     assert "storyboard-story-aspect-ratio" not in scenes
     assert "storyboard-story-megapixels" not in scenes
     assert "storyboard-story-lora" not in scenes
@@ -921,7 +922,9 @@ def test_storyboard_director_scene_plan_lock_excludes_scene_defaults():
 
     story_action = protection.split("if (target.kind === 'story-action')", 1)[1].split("if (target.kind === 'concept')", 1)[0]
     assert "#storyboard-story-overview button" in story_action
+    assert ".storyboard-director-tools-drawer button" in story_action
     assert "#storyboard-story-authoring button" not in story_action
+    assert "storyboard-story-aspect-ratio" not in story_action
 
 def test_storyboard_continuity_header_actions_do_not_toggle_disclosure():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

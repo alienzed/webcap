@@ -633,6 +633,7 @@ function updateShellFolderLabel(pathText) {
 }
 
 function openHelpReadmeInPreview() {
+  openPrepActivity();
   setStatus('Loading help...');
   HttpModule.get('/app/help_readme', function (status, responseText) {
     if (status !== 200) {

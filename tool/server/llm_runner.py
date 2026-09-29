@@ -32,6 +32,8 @@ _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _monitor_lock = threading.Lock()
 _monitor_thread = None
+_local_gpu_drain_until = 0.0
+LOCAL_GPU_DRAIN_GRACE_SECONDS = 3.0
 _logger = logging.getLogger(__name__)
 
 
@@ -43,6 +45,15 @@ def _reserve_gpu():
 def _release_gpu():
     from .training_runner import release_gpu_for_external_work
     release_gpu_for_external_work(GPU_RESERVATION_OWNER)
+
+
+def _arm_local_gpu_drain_grace():
+    global _local_gpu_drain_until
+    _local_gpu_drain_until = time.monotonic() + LOCAL_GPU_DRAIN_GRACE_SECONDS
+
+
+def local_gpu_drain_pending():
+    return time.monotonic() < _local_gpu_drain_until
 
 
 def _job_view(job):
@@ -443,6 +454,8 @@ def _advance_queue():
                 execution_finish_job_transient(job_id, status="failed", error=str(exc))
             _logger.exception("Queued LLM job failed.")
         finally:
+            if local_gpu:
+                _arm_local_gpu_drain_grace()
             if release_gpu:
                 _release_gpu()
 

@@ -21,6 +21,7 @@ STORY_FILE = "story.json"
 VALID_STATUSES = {"active", "complete", "archived"}
 VALID_SEED_MODES = {"random", "fixed"}
 VALID_INVARIANT_KINDS = {"visual", "character", "location", "world", "sound", "custom"}
+VALID_STORY_ICONS = {"book", "image", "star", "film", "eye", "spark", "mountain", "calendar"}
 VALID_REFERENCE_ROLES = {"first_frame", "last_frame", "guide_frame"}
 VALID_REFERENCE_FRAMES = {"first", "last"}
 ASPECT_RATIO_OPTIONS = (
@@ -563,6 +564,9 @@ def _normalize_story(payload, existing=None, story_id=None):
     status = str(payload.get("status", current.get("status", "active")) or "active").strip().lower()
     if status not in VALID_STATUSES:
         raise ValueError("Story status must be active, complete, or archived.")
+    icon = str(payload.get("icon", current.get("icon", "")) or "").strip().lower()
+    if icon and icon not in VALID_STORY_ICONS:
+        raise ValueError("Story icon is unsupported.")
 
     scenes = current.get("scenes") if isinstance(current.get("scenes"), dict) else {}
     removed_scenes = current.get("removedScenes") if isinstance(current.get("removedScenes"), dict) else {}
@@ -581,6 +585,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "version": STORYBOARD_VERSION,
         "id": resolved_id,
         "title": str(payload.get("title", current.get("title", "")) or "").strip(),
+        "icon": icon,
         "concept": str(payload.get("concept", current.get("concept", "")) or ""),
         "previousConcept": current.get("previousConcept") if isinstance(current.get("previousConcept"), str) else None,
         "style": str(payload.get("style", current.get("style", "")) or ""),
@@ -618,6 +623,7 @@ def list_stories():
         stories.append({
             "id": story.get("id") or child.name,
             "title": story.get("title") or "",
+            "icon": story.get("icon") if story.get("icon") in VALID_STORY_ICONS else "",
             "concept": story.get("concept") or "",
             "tags": story.get("tags") if isinstance(story.get("tags"), list) else [],
             "status": story.get("status") or "active",
@@ -650,6 +656,7 @@ def duplicate_story(story_id):
     source_scenes = source.get("scenes") if isinstance(source.get("scenes"), dict) else {}
     duplicate = _normalize_story({
         "title": (str(source.get("title") or "Untitled Story").strip() + " Copy").strip(),
+        "icon": source.get("icon") or "",
         "concept": source.get("concept") or "",
         "style": source.get("style") or "",
         "repairInstruction": source.get("repairInstruction") or "",

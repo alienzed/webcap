@@ -366,7 +366,7 @@ The default archive destination is its sibling:
 
 Add an optional `filesystem.archive_root` setting. Blank means `app_config.output_root() / "archive"`; a configured value may point elsewhere.
 
-Before implementing archive, make the active managed-run root consistently follow `app_config.output_root() / "runs"`. `config.output_root()` already honors `filesystem.output_root`, while `training_action.actions_root()` currently hard-codes `FS_ROOT/output/runs`.
+The existing output-root inconsistency is adjacent but should not be folded casually into archive work: `config.output_root()` honors `filesystem.output_root`, while `training_action.actions_root()` currently hard-codes `FS_ROOT/output/runs`. Treat normalization of the active managed-run root as a separate compatibility-sensitive change unless archive implementation proves it is required. The archive default can safely derive from the existing active runs root's parent.
 
 The archive unit is the trainer timestamp run folder, not WebCap's outer action/capture wrapper. Once that folder has been finalized and moved under the archive root, **WebCap deliberately stops managing it**:
 
@@ -445,6 +445,35 @@ filesystem archive folder
 ```
 
 The retained manifest is portable evidence for the user or future tooling, not a reason for WebCap to maintain an archive database today.
+
+
+#### Deferred implementation notes / risks
+
+These are intentionally parked design notes, not current implementation work.
+
+- **Timestamp run is the archive unit.** One logical WebCap action can contain multiple trainer timestamp folders. Selecting an epoch in one timestamp run does not imply that sibling timestamp runs are obsolete or disposable. Finalize & Archive must operate on exactly one timestamp folder.
+- **The outer action remains an ownership container.** Do not delete the logical-run/action directory as a side effect of archiving one timestamp. Its sibling outputs, captures, jobs, or resume relationships may still matter.
+- **Training History is not archive authority.** `.webcap_training/recent_runs.json` is intentionally clearable/disposable. Training History may expose Finalize & Archive as a convenience, but the operation must remain available from filesystem-owned state even after History is cleared.
+- **Storage Manager should be the complete durable operational view.** Storage already enumerates managed Training actions from the runs tree. It should eventually expose timestamp outputs beneath those actions, their archive eligibility, and residual/orphan-like action data without depending on Recent Runs.
+- **Persist job -> timestamp output identity in the action.** Today the important `outputRunPath` binding primarily lives in queue/history job state. When WebCap identifies a trainer-authored timestamp directory, persist an action-relative association in `action.json` (for example, stage + job ID + `output/<timestamp>`). Do not store arbitrary absolute-path authority.
+- **Legacy output association must fail closed.** Existing actions may not contain that durable association. Storage may backfill only when existing action/job/log/config evidence identifies one timestamp unambiguously. Otherwise show the output as unassociated and withhold destructive archive actions rather than guessing.
+- **Capture cleanup is reference-aware.** Fresh jobs usually create their own immutable capture containing copied media/captions/configs/dataset TOMLs and optional initializer, but Resume can explicitly reuse an existing capture. Therefore archiving a timestamp must not automatically delete "its" capture. A capture becomes reclaimable only when no surviving job/output relationship needs it.
+- **Job-directory cleanup is also separate.** `jobs/<jobId>/` evidence may become residual after its timestamp output is archived, but it should be treated as a Storage cleanup candidate only after live/resume/reference checks.
+- **Empty-action cleanup is a later Storage concern.** An action with no timestamp output folders, no live/queued/resumable work, and no referenced captures/jobs may be considered an orphan-like shell and offered for cleanup. Do not make this an automatic archive cascade initially.
+- **Current Storage Training purge is too coarse for this model.** Storage presently allows an inactive managed action to be removed wholesale. Once timestamp-level ownership is exposed, that action-level purge needs to be tightened or clearly constrained so one sibling experiment cannot be destroyed merely because the action is not active.
+- **Archive ordering must protect the selected artifact.** Validate source identity, Selected epoch, retained evidence, destination, and collisions before destructive mutation. Same-filesystem moves may use atomic rename after compaction. Cross-filesystem archive must use copy -> verify -> remove-source semantics so a failed transfer cannot destroy the only selected LoRA.
+- **History may retain stale paths after archive.** That is acceptable. Archived output becoming unavailable in a historical convenience row is preferable to mutating History into a permanent archive ledger.
+- **Primary UI location remains a product choice.** Candidate Analysis is the natural place for the prominent Finalize & Archive action after selection; Storage Manager should also expose it for completeness. Training History can remain an optional convenience entry point. All surfaces must call the same semantic backend operation.
+- **Do not bundle active output-root migration into this feature by default.** Changing where existing managed runs are discovered could make live/history paths appear missing. Keep archive work isolated unless a separate migration is deliberately designed and tested.
+
+The implementation boundary to preserve is:
+
+```text
+trainer timestamp run = archive/finalization unit
+logical action        = ownership/storage container
+Training History      = disposable convenience view
+Storage Manager       = durable filesystem-backed operational view
+```
 
 ### 5.2 Test Generations - Set-local durable output
 

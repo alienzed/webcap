@@ -719,7 +719,7 @@ function setWorkspaceSurface(surface, options) {
     workspaceState.previousSurface = currentSurface;
   }
   workspaceState.surface = nextSurface;
-  workspaceState.sidebarHidden = !!opts.sidebarHidden || nextSurface === 'focus';
+  workspaceState.sidebarHidden = !!opts.sidebarHidden || nextSurface === 'focus' || nextSurface === 'grid';
   if (nextSurface === 'reviewOutput' && currentSurface !== 'reviewOutput' && typeof setReviewDetailTab === 'function') {
     setReviewDetailTab('metadata');
   }

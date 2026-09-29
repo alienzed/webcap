@@ -252,6 +252,11 @@ def activity_snapshot(limit=20, since=0):
                 "paused": bool(llm.get("paused")),
                 "pauseReason": str(llm.get("pauseReason") or ""),
                 "unavailable": bool(llm.get("unavailable")),
+                "jobs": [
+                    _execution_item("llm", job)
+                    for job in llm_jobs
+                    if str(job.get("status") or "") == "queued"
+                ],
             },
         },
     }

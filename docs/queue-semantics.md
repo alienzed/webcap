@@ -469,6 +469,10 @@ request in the queue and pause Inference. The failed attempt is the signal. The 
 problem and resumes the queue; WebCap does not need a separate "Retry" semantic that rebuilds or
 duplicates the request.
 
+Stopping the active Inference job is **job-local**. Once that job reaches a terminal state, normal
+Inference scheduling continues with the next queued job unless the Inference lane itself is paused.
+**Stop does not imply Pause.**
+
 ## 10. LLM / Director Queue semantics
 
 The LLM queue serializes Director, Prompt Assistant, Test Director, and Chat work according to its

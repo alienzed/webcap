@@ -510,6 +510,7 @@
     state.pending = true;
     return requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
       state.payload = payload;
+      window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);
       var activeErrorKeys = Object.create(null);
       (Array.isArray(payload.errors) ? payload.errors : []).forEach(function (item) {
         var key = String(item.area || 'activity') + ':' + String(item.error || '');

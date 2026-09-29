@@ -654,10 +654,16 @@ def test_phase_audit_restores_shared_editor_after_training_and_owns_checklist_vi
 def test_background_training_activity_is_discovered_on_app_startup():
     main = (ROOT / "tool" / "js" / "main.js").read_text(encoding="utf-8")
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
 
     assert "if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();" in main
     assert "function scheduleTrainingRunnerPoll()" in runner
     assert "if (!hasActiveJob) return;" in runner
+    assert "function reconcileTrainingRunnerActivity(activeItems)" in runner
+    assert "if (!isTrainingWorkspaceActive()) return;" in runner
+    assert "if (observedId !== localId) refreshTrainingRunnerStatus();" in runner
+    assert "window.reconcileTrainingRunnerActivity = reconcileTrainingRunnerActivity;" in runner
+    assert "window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);" in activity
 
 
 def test_retired_workflow_mode_does_not_survive_as_parallel_shell_state():

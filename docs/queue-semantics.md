@@ -524,15 +524,19 @@ Ordering is lane-local:
 - Inference Queue remains Queue-before-Backlog,
 - running work is not preempted merely because another lane receives newer work.
 
-Cross-lane GPU contention should preserve the existing simple resource-ownership behavior rather than
-grow a fairness scheduler, timestamp arbitration layer, weighted priority system, or other global
-ordering mechanism.
+Cross-lane GPU contention should preserve simple resource-ownership behavior rather than grow a
+fairness scheduler, timestamp arbitration layer, weighted priority system, or other global ordering
+mechanism.
 
-Training retains its deliberately special execution lifecycle. Existing LLM/Inference handoff
-behavior is status quo unless a concrete workflow problem justifies changing it.
+Training retains its deliberately special execution lifecycle.
 
-The North Star here is **KISS over theoretical fairness**: do not redesign cross-lane arbitration
-without an observed user-facing problem.
+One concrete exception is local LLM burst continuity: when a local LLM job has just completed, a
+brief in-memory continuation window may let the next dependent LLM request arrive before Inference
+takes the GPU and unloads the retained model. This is an anti-thrash debounce, not persistent
+ownership, a global priority policy, or a semantic admission guard.
+
+The North Star here is **KISS over theoretical fairness**: make narrow fixes for observed
+user-facing contention problems rather than redesign cross-lane arbitration.
 
 ## 14. Runtime and failure semantics
 

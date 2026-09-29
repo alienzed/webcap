@@ -2908,8 +2908,105 @@
     eye: '<path d="M4.5 15.5c2.2-4.7 5.2-7.1 9-7.1 2.4 0 4.5.8 6 2.4-1.6 4.7-4.6 7-9 7-2.4 0-4.4-.8-6-2.3z M12 11.2a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0-4.6z"/>',
     spark: '<path d="M12 4v16 M4 12h16 M6.3 6.3l11.4 11.4 M17.7 6.3 6.3 17.7"/>',
     mountain: '<path d="M5 17c2.5-4.6 5.2-7 8.2-7 2.3 0 4.2 1.2 5.8 3.5 M5 19h14 M8 8.5 10.5 5l2.3 3.5"/>',
-    calendar: '<path d="M5 6.5h14v11H5z M8 4.5v4 M16 4.5v4 M8 12h8"/>'
+    calendar: '<path d="M5 6.5h14v11H5z M8 4.5v4 M16 4.5v4 M8 12h8"/>',
+    camera: '<path d="M5 8h3l1.5-2h5L16 8h3v10H5z M12 10.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>',
+    clapperboard: '<path d="M5 9h14v10H5z M5 9l2-4h12l-2 4z M9 5l-2 4 M14 5l-2 4"/>',
+    music: '<path d="M9 6v10 M9 8l8-2v8 M6.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z M14.5 16a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>',
+    microphone: '<path d="M9 6a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0z M6.5 11.5a5.5 5.5 0 0 0 11 0 M12 17v3 M9 20h6"/>',
+    headphones: '<path d="M5 13a7 7 0 0 1 14 0v5h-3v-5h3 M8 13H5v5h3z"/>',
+    heart: '<path d="M12 19s-7-4.3-7-9a3.5 3.5 0 0 1 6-2.4L12 9l1-1.4A3.5 3.5 0 0 1 19 10c0 4.7-7 9-7 9z"/>',
+    moon: '<path d="M16.8 17.5A7 7 0 0 1 9.5 6.2 7 7 0 1 0 16.8 17.5z"/>',
+    sun: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v3 M12 18v3 M3 12h3 M18 12h3 M5.6 5.6l2.1 2.1 M16.3 16.3l2.1 2.1 M18.4 5.6l-2.1 2.1 M7.7 16.3l-2.1 2.1"/>',
+    cloud: '<path d="M6 17h11a3 3 0 0 0 .3-6A5.5 5.5 0 0 0 7 10.5 3.5 3.5 0 0 0 6 17z"/>',
+    lightning: '<path d="M13.5 3 7 13h4l-.5 8L17 10h-4z"/>',
+    fire: '<path d="M12 20c4 0 6-2.5 6-6 0-3-2-5-4-7 .2 2-1 3-2 3-1.5 0-1.2-2.5-.5-5C8 7.5 6 10.5 6 14c0 3.5 2 6 6 6z"/>',
+    compass: '<circle cx="12" cy="12" r="8"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
+    map: '<path d="M5 6l4-2 6 2 4-2v14l-4 2-6-2-4 2z M9 4v14 M15 6v14"/>',
+    globe: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16 M12 4c2 2 3 5 3 8s-1 6-3 8 M12 4c-2 2-3 5-3 8s1 6 3 8"/>',
+    home: '<path d="M4 11.5 12 5l8 6.5 M6.5 10.5V19h11v-8.5 M10 19v-5h4v5"/>',
+    building: '<path d="M6 20V5h9v15 M15 9h3v11 M9 8h2 M9 11h2 M9 14h2 M9 17h2"/>',
+    car: '<path d="M5 15h14l-1.5-5h-11z M6 15v3 M18 15v3 M8 18h8 M7.5 13h2 M14.5 13h2"/>',
+    train: '<path d="M7 4h10a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V6a2 2 0 0 1 2-2z M8 8h8 M9 18l-2 3 M15 18l2 3"/>',
+    plane: '<path d="m3 13 8-2 3-7 2 1-2 7 6 3-1 2-6-1-3 4-1-1 1-4-6-1z"/>',
+    ship: '<path d="M5 13h14l-2 5H7z M9 13V7h6v6 M12 4v3 M4 20c2 1 4 1 6 0 2 1 4 1 6 0 1 .5 2 .7 4 .5"/>',
+    tree: '<path d="M12 4 8 10h2l-3 5h4v5h2v-5h4l-3-5h2z"/>',
+    flower: '<circle cx="12" cy="12" r="2"/><path d="M12 10c-4-1-4-5-1-5 2 0 2 3 1 5z M14 12c1-4 5-4 5-1 0 2-3 2-5 1z M12 14c4 1 4 5 1 5-2 0-2-3-1-5z M10 12c-1 4-5 4-5 1 0-2 3-2 5-1z"/>',
+    paw: '<circle cx="12" cy="15" r="3"/><circle cx="7" cy="10" r="1.5"/><circle cx="10" cy="7" r="1.5"/><circle cx="14" cy="7" r="1.5"/><circle cx="17" cy="10" r="1.5"/>',
+    skull: '<path d="M7 17v-2a6 6 0 1 1 10 0v2l-2 2H9z M9 12h1 M14 12h1 M11 16h2 M10 19v2 M14 19v2"/>',
+    crown: '<path d="M5 8l4 4 3-6 3 6 4-4-2 10H7z"/>',
+    gem: '<path d="M7 6h10l3 4-8 10-8-10z M4 10h16 M9 6l-2 4 5 10 5-10-2-4"/>',
+    rocket: '<path d="M8 15c-1-4 1-8 6-11 3 5 2 9-2 12z M8 15l-3 1 3 3 1-3 M12 16l-1 4 4-2 1-3 M13 8h.01"/>',
+    robot: '<path d="M7 8h10v9H7z M12 5v3 M10 5h4 M9 12h.01 M15 12h.01 M10 15h4 M5 11H3 M21 11h-2"/>',
+    ghost: '<path d="M7 19V10a5 5 0 0 1 10 0v9l-2-2-2 2-2-2-2 2z M10 11h.01 M14 11h.01"/>',
+    mask: '<path d="M5 8c4-2 10-2 14 0v6c-2 4-5 6-7 6s-5-2-7-6z M8 12h2 M14 12h2 M10 16c1 .7 3 .7 4 0"/>',
+    coffee: '<path d="M6 8h10v8a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4z M16 10h2a2 2 0 0 1 0 4h-2 M9 4c-1 1 1 2 0 3 M13 4c-1 1 1 2 0 3"/>',
+    clock: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+    key: '<circle cx="8" cy="12" r="3"/><path d="M11 12h8 M16 12v3 M19 12v2"/>'
   };
+
+  var STORY_ICON_LABELS = {
+    book: 'Book', image: 'Image', star: 'Star', film: 'Film', eye: 'Eye', spark: 'Spark',
+    mountain: 'Mountain', calendar: 'Calendar', camera: 'Camera', clapperboard: 'Clapperboard',
+    music: 'Music', microphone: 'Microphone', headphones: 'Headphones', heart: 'Heart',
+    moon: 'Moon', sun: 'Sun', cloud: 'Cloud', lightning: 'Lightning', fire: 'Fire',
+    compass: 'Compass', map: 'Map', globe: 'Globe', home: 'Home', building: 'Building',
+    car: 'Car', train: 'Train', plane: 'Plane', ship: 'Ship', tree: 'Tree', flower: 'Flower',
+    paw: 'Paw', skull: 'Skull', crown: 'Crown', gem: 'Gem', rocket: 'Rocket', robot: 'Robot',
+    ghost: 'Ghost', mask: 'Mask', coffee: 'Coffee', clock: 'Clock', key: 'Key'
+  };
+
+  function storyIconSvgHtml(iconName) {
+    var path = STORY_RAIL_ICONS[iconName];
+    if (!path) return '';
+    return '<svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">' + path + '</svg>';
+  }
+
+  function renderStoryIconPicker() {
+    var menu = el('storyboard-story-icon-menu');
+    if (!menu) return;
+    var selected = String(el('storyboard-story-icon').value || '');
+    var autoIcon = storyRailIconName(storyState.story || {});
+    var html = '<button type="button" class="storyboard-icon-option' + (!selected ? ' active' : '') + '" data-story-icon-option="" role="menuitem" title="Auto">' +
+      '<span class="storyboard-icon-option-glyph">' + storyIconSvgHtml(autoIcon) + '</span>' +
+      '<span>Auto</span>' +
+    '</button>';
+    html += Object.keys(STORY_RAIL_ICONS).map(function (iconName) {
+      return '<button type="button" class="storyboard-icon-option' + (selected === iconName ? ' active' : '') +
+        '" data-story-icon-option="' + escapeHtml(iconName) + '" role="menuitem" title="' + escapeHtml(STORY_ICON_LABELS[iconName] || iconName) + '">' +
+        '<span class="storyboard-icon-option-glyph">' + storyIconSvgHtml(iconName) + '</span>' +
+        '<span>' + escapeHtml(STORY_ICON_LABELS[iconName] || iconName) + '</span>' +
+      '</button>';
+    }).join('');
+    menu.innerHTML = html;
+  }
+
+  function syncStoryIconPicker() {
+    var input = el('storyboard-story-icon');
+    var preview = el('storyboard-story-icon-preview');
+    var label = el('storyboard-story-icon-label');
+    if (!input || !preview || !label) return;
+    var selected = String(input.value || '');
+    var effective = selected && STORY_RAIL_ICONS[selected]
+      ? selected
+      : storyRailIconName(storyState.story || {});
+    preview.innerHTML = storyIconSvgHtml(effective);
+    label.textContent = selected ? (STORY_ICON_LABELS[selected] || selected) : 'Auto';
+    renderStoryIconPicker();
+  }
+
+  function setStoryIconSelection(iconName) {
+    var input = el('storyboard-story-icon');
+    if (!input) return;
+    iconName = String(iconName || '');
+    if (iconName && !STORY_RAIL_ICONS[iconName]) throw new Error('Unsupported Story icon: ' + iconName);
+    input.value = iconName;
+    syncStoryIconPicker();
+    var trigger = el('storyboard-story-icon-trigger');
+    var menu = el('storyboard-story-icon-menu');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    if (menu) menu.classList.add('hidden');
+    scheduleStorySave();
+  }
 
   function storyRailIconName(story) {
     var selected = String(story && story.icon || '');
@@ -3779,6 +3876,7 @@
 
     el('storyboard-story-title').value = storyState.story.title || '';
     el('storyboard-story-icon').value = STORY_RAIL_ICONS[storyState.story.icon] ? storyState.story.icon : '';
+    syncStoryIconPicker();
     el('storyboard-story-concept').value = storyState.story.concept || '';
     el('storyboard-story-style').value = storyState.story.style || '';
     el('storyboard-repair-instruction').value = storyState.story.repairInstruction || '';
@@ -5311,7 +5409,27 @@
       row.remove();
       scheduleStorySave();
     });
-    el('storyboard-story-icon').addEventListener('change', scheduleStorySave);
+    el('storyboard-story-icon-trigger').addEventListener('click', function (event) {
+      event.stopPropagation();
+      var menu = el('storyboard-story-icon-menu');
+      var opening = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !opening);
+      this.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      if (opening) renderStoryIconPicker();
+    });
+    el('storyboard-story-icon-menu').addEventListener('click', function (event) {
+      var option = event.target.closest('[data-story-icon-option]');
+      if (!option) return;
+      setStoryIconSelection(option.dataset.storyIconOption || '');
+    });
+    document.addEventListener('click', function (event) {
+      var picker = event.target.closest('.storyboard-icon-picker');
+      if (picker) return;
+      var menu = el('storyboard-story-icon-menu');
+      var trigger = el('storyboard-story-icon-trigger');
+      if (menu) menu.classList.add('hidden');
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    });
     el('storyboard-story-status').addEventListener('change', scheduleStorySave);
 
     el('storyboard-story-lora-list').addEventListener('input', function (event) {

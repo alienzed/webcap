@@ -326,6 +326,22 @@
   text-decoration: underline;
 }
 
+.storyboard-director-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.storyboard-director-action::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 20L15 9M12.5 6.5l5 5M18 2v4M16 4h4M6 3v6M3 6h6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 20L15 9M12.5 6.5l5 5M18 2v4M16 4h4M6 3v6M3 6h6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
 .storyboard-concept-field,
 .storyboard-style-field {
   grid-column: 1 / -1;
@@ -3590,6 +3606,16 @@
 
   .storyboard-library-header,
   .storyboard-library-list {
+    width: 62px;
+    transition: width .16s ease;
+  }
+
+  .storyboard-workspace.story-library-pinned > .storyboard-library .storyboard-library-header,
+  .storyboard-workspace.story-library-pinned > .storyboard-library .storyboard-library-list,
+  .storyboard-library:hover .storyboard-library-header,
+  .storyboard-library:hover .storyboard-library-list,
+  .storyboard-library:focus-within .storyboard-library-header,
+  .storyboard-library:focus-within .storyboard-library-list {
     width: 255px;
   }
 

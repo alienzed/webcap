@@ -394,20 +394,18 @@ function directorModelTestStart() {
     return;
   }
 
+  var prompt = String((directorModelTestEl('director-model-test-prompt') || {}).value || '').trim();
+  if (!prompt) {
+    var status = directorModelTestEl('director-model-test-status');
+    if (status) status.textContent = 'Enter a benchmark prompt.';
+    return;
+  }
+
   directorModelTestState.running = true;
   directorModelTestState.stopRequested = false;
   directorModelTestState.session = null;
   directorModelTestSyncControls();
   reportConsoleInfo('Director Model Test', 'Starting ' + String(models.length) + '-model ' + String((directorModelTestState.protocol || {}).id || 'benchmark') + '.');
-
-  var prompt = String((directorModelTestEl('director-model-test-prompt') || {}).value || '').trim();
-  if (!prompt) {
-    var status = directorModelTestEl('director-model-test-status');
-    if (status) status.textContent = 'Enter a benchmark prompt.';
-    directorModelTestState.running = false;
-    directorModelTestSyncControls();
-    return;
-  }
 
   directorModelTestPost({ action: 'start', models: models, prompt: prompt }).then(function (payload) {
     directorModelTestState.session = payload.session;

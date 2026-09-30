@@ -945,7 +945,6 @@
 
     var editorRect = editor.getBoundingClientRect();
     var targetRect = target.getBoundingClientRect();
-    card.classList.remove('is-field-overlay');
     card.classList.toggle('is-structure-overlay', !fillsRegion);
 
     card.style.height = '';
@@ -953,7 +952,8 @@
     if (fillsRegion) {
       var workspaceWidth = Math.max(0, targetRect.width - 48);
       var availableWidth = Math.max(0, editorRect.width - 24);
-      var cardWidth = Math.min(560, workspaceWidth || 560, availableWidth || 560);
+      var preferredOverlayWidth = 840;
+      var cardWidth = Math.min(preferredOverlayWidth, workspaceWidth || preferredOverlayWidth, availableWidth || preferredOverlayWidth);
       cardWidth = Math.max(320, cardWidth);
       if (cardWidth > availableWidth && availableWidth > 0) cardWidth = availableWidth;
       card.style.width = Math.round(cardWidth) + 'px';

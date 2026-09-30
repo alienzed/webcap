@@ -165,7 +165,7 @@ def test_generate_prompt_assistant_has_non_modal_live_activity():
     assert ".generate-director-activity" in css
     assert 'position: absolute;' in css
     assert "#generate-director-activity-trend svg" in css
-    assert "min-height: 86px;" in css
+    assert "min-height: 0;" in css
     assert '@app.route("/fs/director/activity", methods=["GET"])' in app
 
 

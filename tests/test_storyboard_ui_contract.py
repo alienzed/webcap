@@ -324,6 +324,7 @@ def test_storyboard_director_region_overlays_match_coarse_semantic_scopes():
     assert "kind === 'repair'" in positioning
     assert "var fillsOverview = kind === 'concept';" in positioning
     assert "var fillsRegion = fillsWorkspace || fillsOverview;" in positioning
+    assert "preferredOverlayWidth = 840;" in positioning
 
     assert ".storyboard-scene-workspace.director-protected" in css
     assert ".storyboard-story-overview.director-protected" in css
@@ -739,7 +740,7 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
     assert "storyboard-story-concept" in storyboard
     assert "bottomAlignedTop" not in storyboard
     assert "is-story-plan-overlay" not in storyboard
-    assert ".storyboard-director-activity.is-field-overlay" in css
+    assert ".storyboard-director-activity.is-field-overlay" not in css
     activity_css = css.split(".storyboard-director-activity {", 1)[1].split("}", 1)[0]
     picker_css = css.split(".storyboard-lora-picker-menu {", 1)[1].split("}", 1)[0]
     assert "pointer-events: none;" in activity_css
@@ -1392,8 +1393,8 @@ def test_storyboard_director_activity_exposes_hard_stop_control():
     assert "directorWasStopped(err)" in storyboard
     assert ".director-stop-btn {" in styles
     assert "position: absolute;" in styles
-    assert "right: 4px;" in styles
-    assert "bottom: 3px;" in styles
+    assert "right: 10px;" in styles
+    assert "bottom: 10px;" in styles
 
 
 def test_storyboard_stale_activity_mask_preserves_live_director_job_identity():

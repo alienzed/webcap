@@ -1008,3 +1008,17 @@ def test_director_graph_geometry_fits_the_available_card_width():
 
     block = generate_css.split("#generate-director-activity-trend svg {", 1)[1].split("}", 1)[0]
     assert "min-height: 0;" in block
+
+
+def test_director_stop_buttons_are_card_level_actions_not_graph_children():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+
+    for card_id, trend_id, stop_id in (
+        ("test-generations-director-activity", "test-generations-director-activity-trend", "test-generations-director-stop"),
+        ("generate-director-activity", "generate-director-activity-trend", "generate-director-stop"),
+        ("storyboard-director-activity", "storyboard-director-activity-trend", "storyboard-director-stop"),
+    ):
+        card = html.split(f'id="{card_id}"', 1)[1].split("</aside>", 1)[0]
+        trend = card.split(f'id="{trend_id}"', 1)[1].split("</div>", 1)[0]
+        assert f'id="{stop_id}"' in card
+        assert f'id="{stop_id}"' not in trend

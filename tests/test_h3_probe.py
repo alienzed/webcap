@@ -584,3 +584,56 @@ def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatc
     assert stopped["status"] == "stopping"
     assert any("kill -INT -- -4242" in command for command in launches)
     assert (probe_root / "cancel.request").is_file()
+
+
+def test_completed_h3_runtime_cleans_probe_after_published_calibration(tmp_path, monkeypatch):
+    probe_root = tmp_path / "h3-complete"
+    results = probe_root / "results"
+    results.mkdir(parents=True)
+    runtime_path = probe_root / "runtime.json"
+    runtime_path.write_text(json.dumps({
+        "probeId": "h3-complete",
+        "status": "running",
+        "pid": 4242,
+        "publishConfig": True,
+        "wslDistribution": "",
+    }), encoding="utf-8")
+    (results / "campaign_result.json").write_text(json.dumps({"status": "completed"}), encoding="utf-8")
+
+    monkeypatch.setattr(h3_probe_module, "_runtime_is_live", lambda _runtime: False)
+    monkeypatch.setattr(config_module, "reload_runtime_config", lambda: config_module.config)
+    monkeypatch.setattr(config_module, "config", {
+        "training": {"h3_calibration": {"results": {}, "safe_shapes": {"17": {"square": [512, 512]}}}}
+    })
+
+    runtime = h3_probe_module._refresh_runtime(runtime_path)
+
+    assert runtime["status"] == "completed"
+    assert not probe_root.exists()
+
+
+def test_failed_h3_runtime_keeps_probe_for_diagnosis(tmp_path, monkeypatch):
+    probe_root = tmp_path / "h3-failed"
+    results = probe_root / "results"
+    results.mkdir(parents=True)
+    runtime_path = probe_root / "runtime.json"
+    runtime_path.write_text(json.dumps({
+        "probeId": "h3-failed",
+        "status": "running",
+        "pid": 4242,
+        "publishConfig": True,
+        "wslDistribution": "",
+    }), encoding="utf-8")
+    (results / "campaign_result.json").write_text(json.dumps({"status": "trainer_failed"}), encoding="utf-8")
+
+    monkeypatch.setattr(h3_probe_module, "_runtime_is_live", lambda _runtime: False)
+    monkeypatch.setattr(config_module, "reload_runtime_config", lambda: config_module.config)
+    monkeypatch.setattr(config_module, "config", {
+        "training": {"h3_calibration": {"results": {}}}
+    })
+
+    runtime = h3_probe_module._refresh_runtime(runtime_path)
+
+    assert runtime["status"] == "trainer_failed"
+    assert probe_root.is_dir()
+    assert runtime_path.is_file()

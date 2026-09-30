@@ -8,7 +8,6 @@ var directorModelTestState = {
   currentPhase: '',
   protocol: null,
   models: [],
-  sessions: [],
   session: null
 };
 
@@ -106,28 +105,6 @@ function directorModelTestRenderModels() {
   }).join('');
 }
 
-function directorModelTestRenderSessions() {
-  var host = directorModelTestEl('director-model-test-sessions');
-  if (!host) return;
-  if (!directorModelTestState.sessions.length) {
-    host.innerHTML = '<p class="app-settings-help">No saved model tests yet.</p>';
-    return;
-  }
-
-  host.innerHTML = directorModelTestState.sessions.map(function (session) {
-    var date = session.startedAt ? new Date(session.startedAt).toLocaleString() : session.id;
-    var counts = String(session.runCount || 0) + '/' + String(session.modelCount || 0) + ' runs';
-    if (session.failedCount) counts += ' · ' + String(session.failedCount) + ' failed';
-    return '<div class="app-settings-environment-group-header">' +
-      '<span><strong>' + escapeHtml(date) + '</strong> · ' + escapeHtml(session.protocolId || '') + ' · ' + escapeHtml(counts) + '</span>' +
-      '<span>' +
-        '<button type="button" class="review-captions-btn" data-director-model-test-view="' + escapeHtml(session.id) + '">View</button> ' +
-        '<button type="button" class="review-captions-btn" data-director-model-test-delete="' + escapeHtml(session.id) + '">Delete</button>' +
-      '</span>' +
-      '</div>';
-  }).join('');
-}
-
 function directorModelTestPhaseText(phase) {
   if (phase === 'queued') return 'Queued';
   if (phase === 'preparing' || phase === 'freeing_comfy') return 'Preparing';
@@ -212,39 +189,31 @@ function directorModelTestRenderSession() {
     return;
   }
 
-  var rows = session.runs.map(function (run) {
-    var statusText = run.status === 'completed' ? 'OK' : (run.status || 'failed');
-    return '<tr>' +
-      '<td>' + escapeHtml(run.label || run.modelId || run.modelRef || '') + '</td>' +
-      '<td>' + escapeHtml(run.runtimeName || run.runtimeId || '') + '</td>' +
-      '<td>' + escapeHtml(statusText) + '</td>' +
-      '<td>' + escapeHtml(directorModelTestSeconds(run.totalSeconds)) + '</td>' +
-      '<td>' + escapeHtml(directorModelTestSeconds(run.queueSeconds)) + '</td>' +
-      '<td>' + escapeHtml(directorModelTestSeconds(run.preparingSeconds)) + '</td>' +
-      '<td>' + escapeHtml(directorModelTestSeconds(run.loadingSeconds)) + '</td>' +
-      '<td>' + escapeHtml(directorModelTestSeconds(run.generatingSeconds)) + '</td>' +
-      '<td>' + escapeHtml(directorModelTestTokenCount(run.promptTokens)) + ' / ' + escapeHtml(directorModelTestTokenCount(run.completionTokens)) + '</td>' +
-      '<td>' + escapeHtml(directorModelTestRate(run.tokensPerSecond)) + '</td>' +
-      '<td>' + escapeHtml(directorModelTestSize(run.sizeBytes)) + '</td>' +
-      '</tr>';
-  }).join('');
-
-  var outputs = session.runs.map(function (run) {
+  results.innerHTML = session.runs.map(function (run, index) {
+    var statusText = run.status === 'completed' ? 'Completed' : (run.status || 'Failed');
     var body = run.text || run.error || 'No output.';
-    return '<details class="app-settings-advanced">' +
-      '<summary>' + escapeHtml(run.label || run.modelId || run.modelRef || '') + ' output</summary>' +
-      '<div class="app-settings-disclosure-body"><pre class="app-settings-json">' + escapeHtml(body) + '</pre></div>' +
-      '</details>';
+    var metrics = [
+      directorModelTestSeconds(run.totalSeconds),
+      directorModelTestRate(run.tokensPerSecond) === '—' ? '' : directorModelTestRate(run.tokensPerSecond) + ' tok/s',
+      directorModelTestTokenCount(run.promptTokens) + ' → ' + directorModelTestTokenCount(run.completionTokens) + ' tokens',
+      directorModelTestSize(run.sizeBytes)
+    ].filter(Boolean).join(' · ');
+    return '<details class="app-settings-advanced director-model-test-result"' + (index === 0 ? ' open' : '') + '>' +
+      '<summary>' +
+        '<span><strong>' + escapeHtml(run.label || run.modelId || run.modelRef || '') + '</strong> · ' +
+        escapeHtml(run.runtimeName || run.runtimeId || '') + ' · ' + escapeHtml(statusText) + '</span>' +
+        '<span class="app-settings-help">' + escapeHtml(metrics) + '</span>' +
+      '</summary>' +
+      '<div class="app-settings-disclosure-body">' +
+        '<div class="app-settings-help">Queue ' + escapeHtml(directorModelTestSeconds(run.queueSeconds)) +
+        ' · Prep ' + escapeHtml(directorModelTestSeconds(run.preparingSeconds)) +
+        ' · Load ' + escapeHtml(directorModelTestSeconds(run.loadingSeconds)) +
+        ' · Generate ' + escapeHtml(directorModelTestSeconds(run.generatingSeconds)) + '</div>' +
+        '<pre class="app-settings-json director-model-test-output">' + escapeHtml(body) + '</pre>' +
+      '</div>' +
+    '</details>';
   }).join('');
-
-  results.innerHTML =
-    '<div class="table-responsive"><table class="table table-sm">' +
-      '<thead><tr><th>Model</th><th>Runtime</th><th>Status</th><th>Total</th><th>Queue</th><th>Prep</th><th>Load</th><th>Generate</th><th>In / Out</th><th>tok/s</th><th>Size</th></tr></thead>' +
-      '<tbody>' + rows + '</tbody>' +
-    '</table></div>' +
-    outputs;
 }
-
 function directorModelTestSyncControls() {
   var run = directorModelTestEl('director-model-test-run');
   var stop = directorModelTestEl('director-model-test-stop');
@@ -265,7 +234,7 @@ function directorModelTestRefresh() {
     var meta = responses[0];
     var models = responses[1];
     directorModelTestState.protocol = meta.protocol || null;
-    directorModelTestState.sessions = Array.isArray(meta.sessions) ? meta.sessions : [];
+    directorModelTestState.session = meta.session || directorModelTestState.session || null;
     directorModelTestState.models = Array.isArray(models.models) ? models.models : [];
     directorModelTestState.loaded = true;
 
@@ -280,7 +249,6 @@ function directorModelTestRefresh() {
       prompt.value = String(directorModelTestState.protocol.defaultPrompt || '');
     }
     directorModelTestRenderModels();
-    directorModelTestRenderSessions();
     directorModelTestRenderSession();
     directorModelTestSyncControls();
   }).catch(function (error) {
@@ -575,29 +543,6 @@ function directorModelTestStop() {
   });
 }
 
-function directorModelTestLoadSession(sessionId) {
-  return directorModelTestRequest('/app/director-model-test?id=' + encodeURIComponent(sessionId)).then(function (payload) {
-    directorModelTestState.session = payload.session;
-    directorModelTestRenderSession();
-  }).catch(function (error) {
-    reportConsoleError('Director Model Test', error);
-  });
-}
-
-function directorModelTestDeleteSession(sessionId) {
-  return directorModelTestRequest('/app/director-model-test?id=' + encodeURIComponent(sessionId), {
-    method: 'DELETE'
-  }).then(function () {
-    if (directorModelTestState.session && directorModelTestState.session.id === sessionId) {
-      directorModelTestState.session = null;
-      directorModelTestRenderSession();
-    }
-    return directorModelTestRefresh();
-  }).catch(function (error) {
-    reportConsoleError('Director Model Test', error);
-  });
-}
-
 function directorModelTestExport() {
   var session = directorModelTestState.session;
   if (!session) return;
@@ -628,18 +573,6 @@ function initializeDirectorModelTest() {
   directorModelTestEl('director-model-test-run').addEventListener('click', directorModelTestStart);
   directorModelTestEl('director-model-test-stop').addEventListener('click', directorModelTestStop);
   directorModelTestEl('director-model-test-export').addEventListener('click', directorModelTestExport);
-
-  directorModelTestEl('director-model-test-sessions').addEventListener('click', function (event) {
-    var view = event.target.closest('[data-director-model-test-view]');
-    if (view) {
-      directorModelTestLoadSession(String(view.getAttribute('data-director-model-test-view') || ''));
-      return;
-    }
-    var remove = event.target.closest('[data-director-model-test-delete]');
-    if (remove) {
-      directorModelTestDeleteSession(String(remove.getAttribute('data-director-model-test-delete') || ''));
-    }
-  });
 
   directorModelTestRenderSession();
   directorModelTestSyncControls();

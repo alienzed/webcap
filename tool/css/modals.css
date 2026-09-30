@@ -181,6 +181,14 @@
   gap: 14px;
 }
 
+.diagnostics-dialog {
+  width: min(1120px, calc(100vw - 30px));
+}
+
+.diagnostics-panels {
+  min-height: min(640px, calc(100vh - 190px));
+}
+
 .app-settings-tabs {
   display: flex;
   gap: 4px;

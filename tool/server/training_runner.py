@@ -1191,6 +1191,14 @@ def _launch_artifacts(job, artifacts):
     return dict(artifacts)
 
 
+def _archive_existing_run_log(log_path, launch_time):
+    """Preserve the previous attempt before a resumed job reuses run.log."""
+    if not log_path.is_file() or log_path.stat().st_size <= 0:
+        return
+    timestamp = datetime.fromtimestamp(launch_time).strftime("%Y%m%d-%H%M%S-%f")
+    log_path.replace(log_path.with_name("run." + timestamp + ".log"))
+
+
 def _launch_job(job, folder_path):
     launch_time = time.time()
     if not job.get("startedAt"):
@@ -1222,6 +1230,14 @@ def _launch_job(job, folder_path):
         return False
     script_wsl = _to_wsl_path(script_path, settings["wslDistribution"])
     log_path = job_dir / "run.log"
+    try:
+        _archive_existing_run_log(log_path, launch_time)
+    except OSError as exc:
+        job["status"] = "failed"
+        job["stage"] = "launch"
+        job["error"] = "Could not preserve the previous training log: " + str(exc)
+        job["finishedAt"] = time.time()
+        return False
     log_wsl = _to_wsl_path(log_path, settings["wslDistribution"])
     launch = "setsid bash " + shlex.quote(script_wsl) + " > " + shlex.quote(log_wsl) + " 2>&1 < /dev/null & echo $!"
     code, stdout, stderr = _run_wsl(launch, timeout=15, distribution=settings["wslDistribution"])

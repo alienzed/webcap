@@ -195,3 +195,23 @@ def test_empty_custom_prompt_is_rejected(model_test_root):
             "modelId": "qwen.gguf",
             "label": "qwen.gguf",
         }], prompt="   ")
+
+
+def test_model_test_surfaces_live_status_without_extra_polling():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
+    frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
+    styles = (root / "tool" / "css" / "modals.css").read_text(encoding="utf-8")
+
+    assert 'id="director-model-test-summary-status"' in html
+    assert 'id="director-model-test-status" class="app-settings-status director-model-test-status"' in html
+    assert 'aria-live="polite"' in html
+    assert 'class="director-model-test-models"' in html
+
+    assert "function directorModelTestRenderStatus()" in frontend
+    assert "directorModelTestState.currentPhase = phase;" in frontend
+    assert "directorModelTestRunOne(model, index + 1)" in frontend
+    assert "'Starting test · '" in frontend
+
+    assert ".director-model-test-status[data-state=\"running\"]::before" in styles
+    assert ".director-model-test-models .app-settings-runtime-scope" in styles

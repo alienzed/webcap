@@ -206,8 +206,7 @@ Current code still uses several transitional locations beneath `FS_ROOT`, includ
 
 - `.webcap/`;
 - `.webcap_training/`;
-- `.webcap_runtime/`;
-- `.webcap_model_tests/`.
+- `.webcap_runtime/`.
 
 Do not add new uses of these roots. Existing uses should be classified and migrated only when their lifecycle permits it.
 

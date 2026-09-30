@@ -205,11 +205,7 @@ function normalizeWorkspaceSurface(surface) {
 function setShellImmersive(nextImmersive) {
   shellNavigationState.immersive = !!nextImmersive;
   var frame = document.getElementById('app-frame');
-  var enterBtn = document.getElementById('shell-immersive-btn');
-  var exitBtn = document.getElementById('shell-immersive-exit-btn');
   if (frame) frame.classList.toggle('shell-immersive', shellNavigationState.immersive);
-  if (enterBtn) enterBtn.setAttribute('aria-pressed', shellNavigationState.immersive ? 'true' : 'false');
-  if (exitBtn) exitBtn.classList.toggle('hidden', !shellNavigationState.immersive);
 }
 
 function toggleShellImmersive() {
@@ -921,15 +917,12 @@ function wireWorkspaceHeaderUi() {
       closeTrainingWorkspaceConfigEditor();
     };
   }
-  var immersiveBtn = document.getElementById('shell-immersive-btn');
-  if (immersiveBtn && !immersiveBtn.__workspaceWired) {
-    immersiveBtn.__workspaceWired = true;
-    immersiveBtn.onclick = toggleShellImmersive;
-  }
-  var immersiveExitBtn = document.getElementById('shell-immersive-exit-btn');
-  if (immersiveExitBtn && !immersiveExitBtn.__workspaceWired) {
-    immersiveExitBtn.__workspaceWired = true;
-    immersiveExitBtn.onclick = function () { setShellImmersive(false); };
+  if (!window.__webcapShellF11Bound) {
+    window.__webcapShellF11Bound = true;
+    document.addEventListener('keydown', function (event) {
+      if (!event || event.key !== 'F11' || event.defaultPrevented || event.repeat) return;
+      toggleShellImmersive();
+    });
   }
   if (!window.__webcapWorkingModelShellBound) {
     window.__webcapWorkingModelShellBound = true;
@@ -959,10 +952,6 @@ function wireWorkspaceHeaderUi() {
         }
       }
       if (typeof isFocusedAnnotationOpen === 'function' && isFocusedAnnotationOpen()) return;
-      if (shellNavigationState.immersive) {
-        event.preventDefault();
-        setShellImmersive(false);
-      }
     });
   }
 

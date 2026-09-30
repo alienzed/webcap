@@ -938,17 +938,17 @@ def test_settings_uses_six_task_owned_tabs_and_progressive_disclosure():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
 
-    for tab in ["general", "models", "training", "testing", "director", "system"]:
+    for tab in ["general", "models", "training", "director", "system"]:
         assert f'data-app-settings-tab="{tab}"' in html
         assert f'data-app-settings-panel="{tab}"' in html
 
     assert 'data-app-settings-tab="workspace"' not in html
     assert 'data-app-settings-tab="advanced"' not in html
     assert 'data-app-settings-tab="storyboard"' not in html
-    assert "['general', 'models', 'training', 'testing', 'director', 'system']" in settings
+    assert "['general', 'models', 'training', 'director', 'system']" in settings
 
     assert "<summary>Captioning</summary>" in html
-    assert "<summary>Python / Environment</summary>" in html
+    assert "<summary>Runtime Environment</summary>" in html
     assert "<summary>Hardware Calibration</summary>" in html
     assert "<summary>Troubleshooting</summary>" in html
     assert "<summary>Candidate Copy Destinations</summary>" in html

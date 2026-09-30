@@ -851,6 +851,69 @@ def test_storyboard_director_work_is_not_refused_at_enqueue(llm_root):
 
 
 
+
+
+def test_storyboard_insert_scene_applies_one_director_scene_at_anchor(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "A set of related visual variations.",
+    })
+    story, first = storyboard_store.add_scene(story["id"], {
+        "title": "First",
+        "summary": "First variation.",
+        "prompt": "First prompt.",
+    })
+    story, second = storyboard_store.add_scene(story["id"], {
+        "title": "Second",
+        "summary": "Second variation.",
+        "prompt": "Second prompt.",
+    })
+
+    from tool.server.storyboard_llm_contract import build_request
+    contract = build_request(story, first["id"], "insert_scene")
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "data": {
+                "scene": {
+                    "title": "Inserted",
+                    "summary": "Distinct middle variation.",
+                    "prompt": "Three brisk visual beats form a distinct middle variation.",
+                    "suggestedDurationSeconds": 10,
+                }
+            },
+            "text": "{}",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        contract,
+        context={
+            "storyId": story["id"],
+            "sceneId": first["id"],
+            "operation": "insert_scene",
+            "sourceInstruction": "",
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    saved = storyboard_store.load_story(story["id"])
+    assert finished["status"] == "completed"
+    assert len(saved["sceneOrder"]) == 3
+    inserted_id = saved["sceneOrder"][1]
+    assert saved["sceneOrder"] == [first["id"], inserted_id, second["id"]]
+    assert saved["scenes"][inserted_id]["title"] == "Inserted"
+    assert saved["scenes"][inserted_id]["prompt"] == "Three brisk visual beats form a distinct middle variation."
+
+
 def test_storyboard_ingest_failure_is_distinguished_from_model_failure(llm_root, monkeypatch):
     story = storyboard_store.create_story({
         "title": "Story",

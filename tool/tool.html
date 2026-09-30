@@ -1916,22 +1916,22 @@
                 </div>
             </div>
         </div>
-        <div id="diagnostics-modal" class="diagnostics-modal hidden" aria-hidden="true" data-escape-close-id="diagnostics-close-btn">
-            <div class="diagnostics-dialog" role="dialog" aria-modal="true" aria-labelledby="diagnostics-title">
-                <div class="diagnostics-header">
+        <div id="diagnostics-modal" class="app-settings-modal diagnostics-modal hidden" aria-hidden="true" data-escape-close-id="diagnostics-close-btn">
+            <div class="app-settings-dialog diagnostics-dialog" role="dialog" aria-modal="true" aria-labelledby="diagnostics-title">
+                <div class="app-settings-header diagnostics-header">
                     <div class="app-settings-title-wrap">
                         <strong id="diagnostics-title">Diagnostics</strong>
                         <div class="app-settings-subtitle">Inspect, test, calibrate, and repair this WebCap installation without entering a core workspace.</div>
                     </div>
-                    <button id="diagnostics-close-btn" type="button" title="Close" aria-label="Close diagnostics">×</button>
+                    <button id="diagnostics-close-btn" type="button" class="modal-close-btn" title="Close" aria-label="Close diagnostics">×</button>
                 </div>
-                <div class="diagnostics-tabs" role="tablist" aria-label="Diagnostics sections">
-                    <button id="diagnostics-tab-health" type="button" class="diagnostics-tab active" data-diagnostics-tab="health" role="tab" aria-selected="true" aria-controls="diagnostics-panel-health">Health</button>
-                    <button id="diagnostics-tab-h3" type="button" class="diagnostics-tab" data-diagnostics-tab="h3" role="tab" aria-selected="false" aria-controls="diagnostics-panel-h3" tabindex="-1">H3 Calibration</button>
-                    <button id="diagnostics-tab-director" type="button" class="diagnostics-tab" data-diagnostics-tab="director" role="tab" aria-selected="false" aria-controls="diagnostics-panel-director" tabindex="-1">Director Model Test</button>
+                <div class="app-settings-tabs diagnostics-tabs" role="tablist" aria-label="Diagnostics sections">
+                    <button id="diagnostics-tab-health" type="button" class="app-settings-tab diagnostics-tab active" data-diagnostics-tab="health" role="tab" aria-selected="true" aria-controls="diagnostics-panel-health">Health</button>
+                    <button id="diagnostics-tab-h3" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="h3" role="tab" aria-selected="false" aria-controls="diagnostics-panel-h3" tabindex="-1">H3 Calibration</button>
+                    <button id="diagnostics-tab-director" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="director" role="tab" aria-selected="false" aria-controls="diagnostics-panel-director" tabindex="-1">Director Model Test</button>
                 </div>
-                <div class="diagnostics-panels">
-                    <div id="diagnostics-panel-health" class="diagnostics-panel" data-diagnostics-panel="health" role="tabpanel" aria-labelledby="diagnostics-tab-health">
+                <div class="app-settings-tab-panels diagnostics-panels">
+                    <div id="diagnostics-panel-health" class="app-settings-panel diagnostics-panel" data-diagnostics-panel="health" role="tabpanel" aria-labelledby="diagnostics-tab-health">
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Environment Health</div>
@@ -1950,7 +1950,7 @@
                             </details>
                         </section>
                     </div>
-                    <div id="diagnostics-panel-h3" class="diagnostics-panel hidden" data-diagnostics-panel="h3" role="tabpanel" aria-labelledby="diagnostics-tab-h3" hidden>
+                    <div id="diagnostics-panel-h3" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="h3" role="tabpanel" aria-labelledby="diagnostics-tab-h3" hidden>
                         <section class="app-settings-section" id="h3-calibration-settings">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">H3 Hardware Calibration</div>
@@ -1965,7 +1965,7 @@
                             </details>
                         </section>
                     </div>
-                    <div id="diagnostics-panel-director" class="diagnostics-panel hidden" data-diagnostics-panel="director" role="tabpanel" aria-labelledby="diagnostics-tab-director" hidden>
+                    <div id="diagnostics-panel-director" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="director" role="tabpanel" aria-labelledby="diagnostics-tab-director" hidden>
                         <section class="app-settings-section" id="director-model-test-settings">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Director Model Test <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>

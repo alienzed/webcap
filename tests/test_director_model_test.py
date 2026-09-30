@@ -168,16 +168,21 @@ def test_delete_session_removes_persisted_file(model_test_root):
         model_test._read_session(session["id"])
 
 
-def test_model_test_is_isolated_to_settings_and_feature_modules():
+def test_model_test_is_isolated_to_diagnostics_and_feature_modules():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
     app = (root / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
+    diagnostics = (root / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
     llm_runner = (root / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
     runtime = (root / "tool" / "server" / "storyboard_llm_runtime.py").read_text(encoding="utf-8")
 
+    assert 'id="diagnostics-modal"' in html
+    assert 'data-diagnostics-tab="director"' in html
     assert 'id="director-model-test-settings"' in html
+    assert '/static/js/diagnostics.js' in html
     assert '/static/js/director_model_test.js' in html
+    assert "directorModelTestRefresh()" in diagnostics
     assert "register_director_model_test_routes(app)" in app
     assert "/fs/director/job" in frontend
     assert "/fs/director/activity" in frontend

@@ -262,15 +262,15 @@ def build_request(story, scene_id, operation, instruction=""):
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append(
-            "[CURRENT TASK]\nExpand this Story concept into a richer creative overview that can drive later Scene planning. "
-            "Develop the experience, progression, subjects or characters, setting, themes, relationships, or ending direction "
-            "that the seed actually supports; do not force conventional plot, conflict, or character arcs onto a concept that "
-            "does not call for them. Be creatively useful and fill in sensible connective material rather than asking "
-            "questions. Preserve explicit facts from the original concept and Story invariants. Treat the supplied Visual / Atmosphere as authoritative: "
-            "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere in the expanded prose. Expand the narrative within it. Do not break the Story into "
-            "Scenes yet and do not write MiniMax H3 prompts. Aim for roughly 500-1000 words total when the concept supports it; "
+            "[CURRENT TASK]\nExpand this concept into a richer creative overview that can drive later Scene planning. "
+            "First understand what kind of concept it is rather than assuming a narrative arc. Develop the experience, subjects or characters, setting, themes, recurring format, variations, visual situations, progression, relationships, or ending only where the seed actually supports them. "
+            "A concept may be narrative, episodic, repetitive, montage-like, observational, variation-based, or something else entirely. "
+            "Be creatively useful and fill in sensible connective material when the concept calls for it rather than asking questions. "
+            "Preserve explicit facts from the original concept and Story invariants. Treat the supplied Visual / Atmosphere as authoritative: "
+            "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere. Enrich the concept within it. "
+            "Do not break the concept into Scenes yet and do not write MiniMax H3 prompts. Aim for roughly 500-1000 words total when the concept supports it; "
             "treat that as a useful target, not a minimum to pad toward. Stop once the concept is fully developed. "
-            "Return only the expanded Story concept as polished prose."
+            "Return only the expanded concept as polished prose."
         )
         return {
             "operation": operation,
@@ -300,14 +300,16 @@ def build_request(story, scene_id, operation, instruction=""):
         scene_count_guidance = (
             "Create exactly " + str(int(target_scene_count)) + " Scenes. "
             if target_scene_count is not None
-            else "Choose the Scene count that best fits the Story's natural progression and pacing. "
+            else "Choose the Scene count that best serves the concept and the amount of useful coverage it supports. "
         )
         blocks.append(
-            "[CURRENT TASK]\nDevelop the Story into a complete sequence of MiniMax H3 Scenes. "
+            "[CURRENT TASK]\nDevelop the complete concept into MiniMax H3 Scenes. "
             + scene_count_guidance
-            + "Each Scene is a short generation unit, normally about 10-15 seconds and never longer than 15 seconds. "
+            + "Consider the complete concept before writing individual Scenes. First decide what relationship, if any, the Scenes should have: progression, variations, repeated format, montage, parallel moments, independent alternatives, or another structure suggested by the concept. "
+            "Treat none of those as the default. Decide what each Scene contributes to the whole, then author the individual Scenes. "
+            "Each Scene is a short generation unit, normally about 10-15 seconds and never longer than 15 seconds. "
             "Use that window densely: unless uninterrupted time genuinely serves the material, give each Scene several meaningful shots, cuts, or distinct visual beats rather than idle coverage. "
-            "Keep the Story's progression clear and preserve explicit facts and supplied invariants where they matter, but do not force every Scene to behave like a literal continuation of the previous render. "
+            "Keep the relationship between Scenes appropriate to the concept. Preserve explicit facts and supplied invariants where they matter, but do not manufacture narrative progression or literal visual continuity when the concept does not call for it. "
             "Entry and exit state are optional planning notes; include them only when a specific handoff or visible state is genuinely useful. "
             "Write each Scene's complete H3 generation prompt yourself. WebCap will store that prompt as written and will not inject invariants, continuity blocks, field labels, shot labels, sound sections, or other creative text afterward. "
             "Follow the supplied H3 guidance roughly rather than mechanically. Be concrete and visually productive, but avoid repetitive continuity prose and unnecessary boilerplate. "
@@ -410,9 +412,11 @@ def build_request(story, scene_id, operation, instruction=""):
         previous_scene_context = _previous_scene_context(story, scene_id)
         if previous_scene_context:
             blocks.append(
-                "[PREVIOUS SCENE - CONTEXT ONLY]\n"
+                "[PREVIOUS SCENE - RELATIONSHIP CONTEXT]\n"
                 + previous_scene_context
-                + "\n\nUse this only when it genuinely helps the requested revision. Do not force a continuity handoff."
+                + "\n\nUse the previous Scene to judge the appropriate relationship and distinctness of this Scene. "
+                "Preserve continuity when the concept implies continuation; otherwise avoid merely echoing the previous Scene's composition, action, or prompt. "
+                "Variation, contrast, repetition, or independence may be the correct relationship."
             )
         blocks.append("[EXISTING PROMPT]\n" + existing_prompt)
         blocks.append(

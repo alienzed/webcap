@@ -1099,18 +1099,24 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
 
     for raw in payload["changes"]:
         if not isinstance(raw, dict):
-            continue
+            raise ValueError("Each Storyboard Scene repair change must be an object.")
         scene_number = raw.get("sceneNumber")
         if isinstance(scene_number, bool) or not isinstance(scene_number, int):
-            continue
+            raise ValueError("Storyboard Scene repair sceneNumber must be an integer.")
         if scene_number < 1 or scene_number > len(base_order):
-            continue
+            raise ValueError("Storyboard Scene repair sceneNumber is outside the current Scene plan.")
         fields = raw.get("fields")
-        if not isinstance(fields, dict):
-            continue
+        if not isinstance(fields, dict) or not fields:
+            raise ValueError("Storyboard Scene repair fields must be a non-empty object.")
+        unknown_fields = set(fields) - set(allowed_fields)
+        if unknown_fields:
+            raise ValueError(
+                "Storyboard Scene repair contains unsupported fields: "
+                + ", ".join(sorted(unknown_fields))
+            )
         if scene_number in seen_numbers:
-            _logger.warning("Ignoring duplicate optional Scene repair patch for Scene %s.", scene_number)
-            continue
+            raise ValueError("Storyboard Scene repair returned Scene " + str(scene_number) + " more than once.")
+
         scene_id = str(base_order[scene_number - 1] or "").strip()
         current = scenes.get(scene_id)
         base_scene = base_scenes.get(scene_id)
@@ -1118,14 +1124,11 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
             raise RuntimeError("A Scene changed structurally while Check & Repair was running. Run Check & Repair again.")
 
         patch = {}
-        for key in allowed_fields:
-            if key not in fields:
-                continue
-            value = fields.get(key)
+        for key, value in fields.items():
             if not isinstance(value, str):
-                continue
+                raise ValueError("Storyboard Scene repair " + key + " must be text.")
             if key in {"summary", "prompt"} and not value.strip():
-                continue
+                raise ValueError("Storyboard Scene repair " + key + " must not be empty.")
             current_value = str(current.get(key) or "")
             base_value = str(base_scene.get(key) or "")
             if current_value != base_value:
@@ -1138,8 +1141,8 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
             if normalized_value != current_value:
                 patch[key] = normalized_value
 
+        seen_numbers.add(scene_number)
         if patch:
-            seen_numbers.add(scene_number)
             prepared.append((scene_id, patch))
 
     if not prepared:

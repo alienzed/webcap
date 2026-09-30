@@ -306,13 +306,10 @@ def build_request(story, scene_id, operation, instruction=""):
             "[CURRENT TASK]\nDevelop the complete concept into MiniMax H3 Scenes. "
             + scene_count_guidance
             + "Consider the complete concept before writing individual Scenes. First decide what relationship, if any, the Scenes should have: progression, variations, repeated format, montage, parallel moments, independent alternatives, or another structure suggested by the concept. "
-            "Treat none of those as the default. Decide what each Scene contributes to the whole, then author the individual Scenes. "
-            "Each Scene is a short generation unit, normally about 10-15 seconds and never longer than 15 seconds. "
-            "Use that window densely: unless uninterrupted time genuinely serves the material, give each Scene several meaningful shots, cuts, or distinct visual beats rather than idle coverage. "
-            "Keep the relationship between Scenes appropriate to the concept. Preserve explicit facts and supplied invariants where they matter, but do not manufacture narrative progression or literal visual continuity when the concept does not call for it. "
-            "Entry and exit state are optional planning notes; include them only when a specific handoff or visible state is genuinely useful. "
-            "Write each Scene's complete H3 generation prompt yourself. WebCap will store that prompt as written and will not inject invariants, continuity blocks, field labels, shot labels, sound sections, or other creative text afterward. "
-            "Follow the supplied H3 guidance roughly rather than mechanically. Be concrete and visually productive, but avoid repetitive continuity prose and unnecessary boilerplate. "
+            "Choose the relationship that best serves the concept, decide what each Scene contributes to the whole, then author the individual Scenes. "
+            "Keep the relationship between Scenes appropriate to the concept, preserving relevant Story facts, invariants, and evolving state when continuity matters. "
+            "Use entry and exit state only when a specific handoff or visible state is genuinely useful. "
+            "Write each Scene's complete H3 generation prompt exactly as it should be used, following the supplied Director and H3 guidance. "
             "Return only JSON matching the supplied schema."
         )
         return {
@@ -354,12 +351,11 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene) + "\nGeneration prompt: " + _clean(after_scene.get("prompt")))
         blocks.append(
             "[CURRENT TASK]\nCreate exactly one new Scene to insert between these two existing Scenes. "
-            "Use the complete concept to decide what belongs in this gap. The adjacent Scenes are relationship and contrast context, not a requirement to create a literal bridge: "
-            "the new Scene may continue, contrast, vary, repeat a format, jump, or remain relatively independent as the concept warrants. "
+            "Use the complete concept to decide what belongs in this gap. Treat the adjacent Scenes as relationship and contrast context. "
+            "The new Scene may continue, contrast, vary, repeat a format, jump, or remain relatively independent as the concept warrants. "
             "Make it meaningfully distinct from both adjacent Scenes while still belonging to the same concept. "
-            "Use the short generation window densely: several meaningful shots, cuts, or distinct visual beats are normally expected unless uninterrupted time genuinely serves the material. "
-            "Entry and exit state are optional and should appear only when a real handoff matters. "
-            "Write the complete H3 prompt yourself; WebCap will store it as written. Return only JSON matching the supplied schema."
+            "Use entry and exit state when a real handoff matters. "
+            "Write the complete H3 prompt exactly as it should be used, following the supplied Director and H3 guidance. Return only JSON matching the supplied schema."
         )
         return {
             "operation": operation,
@@ -397,7 +393,7 @@ def build_request(story, scene_id, operation, instruction=""):
             "This is a targeted revision pass, not Story redevelopment. Preserve unaffected Scenes and fields. "
             "Do not add, remove, merge, split, or reorder Scenes unless the user's instruction explicitly asks for that; this operation currently applies sparse patches to the existing Scene list. "
             "Return only the Scene fields that actually need changing: summary, optional entryState/exitState, and/or the complete revised H3 prompt string. "
-            "When changing a prompt, author the complete prompt exactly as it should be stored; WebCap will not rebuild it, inject continuity text, or add H3 field labels. "
+            "When changing a prompt, author the complete prompt exactly as it should be used, following the supplied Director and H3 guidance. "
             "Use the 1-based sceneNumber values supplied above and return each Scene at most once. "
             "If the instruction does not require any repair, return {\"changes\":[]}."
         )
@@ -431,7 +427,7 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append(
             "[STORY INVARIANTS]\n"
             + story_invariants
-            + "\n\nUse these as context where relevant. Do not mechanically repeat them or turn them into a continuity preamble."
+            + "\n\nUse these as concise context where relevant, carrying the details that materially help the Scene."
         )
     if scene_context:
         blocks.append("[SCENE]\n" + scene_context)
@@ -442,11 +438,9 @@ def build_request(story, scene_id, operation, instruction=""):
         if not _clean(scene.get("summary")):
             raise ValueError("Scene summary / intent is required to write a prompt.")
         blocks.append(
-            "[CURRENT TASK]\nWrite the complete MiniMax H3 generation prompt for this Scene. "
-            "Use the short duration densely: several meaningful cuts, shots, or visual beats are normally expected unless uninterrupted time genuinely serves the material. "
-            "Preserve explicit Story facts and use relevant invariants naturally, without repeating a continuity block. "
-            "Return the prompt exactly as it should be stored. WebCap will not rewrite it. "
-            "If an exact first/last-frame reference is attached, respect that visual anchor; WebCap will add only the required mechanical alignment statement."
+            "[CURRENT TASK]\nWrite the complete MiniMax H3 generation prompt for this Scene exactly as it should be used. "
+            "Follow the supplied Director and H3 guidance, preserving relevant Story facts, invariants, evolving state, and exact visual anchors. "
+            "When an exact first/last-frame reference is attached, respect that visual anchor; WebCap will add only the required mechanical alignment statement."
         )
     else:
         existing_prompt = _clean(scene.get("prompt"))
@@ -461,16 +455,15 @@ def build_request(story, scene_id, operation, instruction=""):
                 "[PREVIOUS SCENE - RELATIONSHIP CONTEXT]\n"
                 + previous_scene_context
                 + "\n\nUse the previous Scene to judge the appropriate relationship and distinctness of this Scene. "
-                "Preserve continuity when the concept implies continuation; otherwise avoid merely echoing the previous Scene's composition, action, or prompt. "
-                "Variation, contrast, repetition, or independence may be the correct relationship."
+                "Preserve continuity when the concept implies continuation. When it does not, choose an appropriate relationship such as variation, contrast, repetition, or independence, keeping the Scene meaningfully distinct."
             )
         blocks.append("[EXISTING PROMPT]\n" + existing_prompt)
         blocks.append(
             "[CURRENT TASK]\nApply the requested correction faithfully to this Scene:\n"
             + correction
             + "\n\nReturn changed=false and reproduce the existing prompt unchanged when no edit is needed. "
-            "Otherwise return the complete revised prompt exactly as it should be stored, plus only any optional Scene fields the correction actually requires. "
-            "Preserve unrelated prompt details. Keep the Scene visually dense unless the requested change or material genuinely calls for uninterrupted time. "
+            "Otherwise return the complete revised prompt exactly as it should be used, plus only any optional Scene fields the correction actually requires. "
+            "Preserve unrelated prompt details and follow the supplied Director and H3 guidance. "
             "If the change materially alters the needed screen time, you may include durationSeconds between 6 and 15 seconds."
         )
 

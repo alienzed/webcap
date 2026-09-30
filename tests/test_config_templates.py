@@ -266,6 +266,16 @@ def test_filesystem_app_data_root_defaults_blank_and_preserves_configured_path(t
     assert configured["filesystem"]["app_data_root"] == str(configured_path)
 
 
+def test_default_app_data_root_uses_platform_conventions(monkeypatch, tmp_path):
+    monkeypatch.setattr(config_module.sys, "platform", "win32")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
+    assert config_module._default_app_data_root() == tmp_path / "LocalAppData" / "WebCap"
+
+    monkeypatch.setattr(config_module.sys, "platform", "linux")
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    assert config_module._default_app_data_root() == tmp_path / "xdg" / "WebCap"
+
+
 def test_app_data_helpers_use_configured_root(tmp_path, monkeypatch):
     root = tmp_path / "webcap-state"
     monkeypatch.setattr(config_module, "config", {

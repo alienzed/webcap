@@ -1,12 +1,8 @@
 import json
-import os
 import secrets
 from datetime import datetime, timezone
-from pathlib import Path
 
 from flask import jsonify, request
-
-from . import config as app_config
 
 
 SESSION_VERSION = 1
@@ -24,53 +20,39 @@ PROTOCOL = {
     ],
 }
 
+_session = None
+
+
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
-def _store_dir():
-    path = app_config.director_model_test_root()
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _session_path(session_id):
-    session_id = str(session_id or "").strip()
-    if not session_id or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for ch in session_id):
-        raise ValueError("Invalid Director model test session ID.")
-    return _store_dir() / (session_id + ".json")
+def _copy(value):
+    return json.loads(json.dumps(value))
 
 
 def _read_session(session_id):
-    path = _session_path(session_id)
-    if not path.is_file():
-        raise FileNotFoundError("Director model test session does not exist: " + str(session_id))
-    with path.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-    if not isinstance(payload, dict):
-        raise RuntimeError("Director model test session is invalid.")
-    return payload
+    session_id = str(session_id or "").strip()
+    if not isinstance(_session, dict) or str(_session.get("id") or "") != session_id:
+        raise FileNotFoundError("Director model test session does not exist: " + session_id)
+    return _copy(_session)
 
 
 def _write_session(session):
+    global _session
     if not isinstance(session, dict):
         raise ValueError("Director model test session must be an object.")
-    path = _session_path(session.get("id"))
-    temporary = path.with_name("." + path.name + "." + secrets.token_hex(4) + ".tmp")
-    try:
-        with temporary.open("w", encoding="utf-8") as handle:
-            json.dump(session, handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        try:
-            if temporary.exists():
-                temporary.unlink()
-        except OSError:
-            pass
-    return session
+    _session = _copy(session)
+    return _copy(_session)
+
+
+def current_session():
+    return _copy(_session) if isinstance(_session, dict) else None
+
+
+def clear_session():
+    global _session
+    _session = None
 
 
 def _model_snapshot(model):
@@ -187,40 +169,6 @@ def finish_session(session_id, status="completed"):
     return _write_session(session)
 
 
-def list_sessions():
-    sessions = []
-    for path in _store_dir().glob("*.json"):
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                session = json.load(handle)
-        except (OSError, ValueError, TypeError):
-            continue
-        if not isinstance(session, dict):
-            continue
-        runs = session.get("runs") if isinstance(session.get("runs"), list) else []
-        sessions.append({
-            "id": str(session.get("id") or path.stem),
-            "protocolId": str((session.get("protocol") or {}).get("id") or ""),
-            "status": str(session.get("status") or ""),
-            "startedAt": str(session.get("startedAt") or ""),
-            "finishedAt": str(session.get("finishedAt") or ""),
-            "modelCount": len(session.get("models") or []),
-            "runCount": len(runs),
-            "completedCount": sum(1 for run in runs if run.get("status") == "completed"),
-            "failedCount": sum(1 for run in runs if run.get("status") == "failed"),
-        })
-    sessions.sort(key=lambda item: item.get("startedAt") or "", reverse=True)
-    return sessions
-
-
-def delete_session(session_id):
-    path = _session_path(session_id)
-    if not path.is_file():
-        raise FileNotFoundError("Director model test session does not exist: " + str(session_id))
-    path.unlink()
-    return str(session_id)
-
-
 def enqueue_protocol_run(session_id, model_ref):
     from .llm_runner import enqueue
 
@@ -253,18 +201,15 @@ def register_routes(app):
     def director_model_test_route():
         try:
             if request.method == "GET":
-                session_id = str(request.args.get("id") or "").strip()
-                if session_id:
-                    return jsonify({"ok": True, "session": _read_session(session_id)})
                 return jsonify({
                     "ok": True,
                     "protocol": PROTOCOL,
-                    "sessions": list_sessions(),
+                    "session": current_session(),
                 })
 
             if request.method == "DELETE":
-                session_id = str(request.args.get("id") or "").strip()
-                return jsonify({"ok": True, "sessionId": delete_session(session_id)})
+                clear_session()
+                return jsonify({"ok": True})
 
             data = request.get_json(silent=True) or {}
             action = str(data.get("action") or "").strip()
@@ -285,6 +230,9 @@ def register_routes(app):
                     "ok": True,
                     "session": finish_session(data.get("sessionId"), data.get("status") or "completed"),
                 })
+            if action == "clear":
+                clear_session()
+                return jsonify({"ok": True, "session": None})
             raise ValueError("Unsupported Director model test action.")
         except FileNotFoundError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 404

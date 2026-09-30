@@ -665,7 +665,7 @@ def test_test_activity_menu_uses_recent_source_history_not_set_identity():
     assert "function buildTestActivityContextActions()" in script
     assert "function openTestBenchSource(folder, source, modelId, ownerAvailable)" in script
     assert "var key = modelId + '|' + source;" in script
-    assert "openTestBenchSource(folder, source, modelId)" in script
+    assert "openTestBenchSource(folder, source, modelId, item.ownerAvailable)" in script
     assert "Right-click for recent Test sources" in script
 
 

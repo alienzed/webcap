@@ -735,7 +735,7 @@ function wireAppSettingsUi() {
   });
   setAppSettingsTab(appSettingsActiveTab, false);
   if (ui.appSettingsModalEl) {
-    ui.appSettingsModalEl.addEventListener('click', function (e) {
+    ui.appSettingsModalEl.addEventListener('mousedown', function (e) {
       if (e.target === ui.appSettingsModalEl) {
         closeAppSettingsModal();
       }

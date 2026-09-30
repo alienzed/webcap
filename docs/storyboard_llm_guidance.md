@@ -1,419 +1,326 @@
 # Storyboard LLM Guidance
 
-## Prompt pipeline boundaries
+## Core vision
 
-Storyboard has three distinct contracts. Keep them separate.
+WebCap Storyboard is a local-first creative tool for turning a concept into short generated video Scenes and organizing multiple Takes for each Scene.
 
-1. **Director request contract** — the instructions and context WebCap sends to the selected LLM, plus the requested response shape. This layer is allowed to contain reasoning guidance, Story context, invariants, Scene state, model-writing rules, and task-specific instructions.
-2. **Storyboard authoring contract** — durable human-editable Story and Scene state. Do not make this representation mirror a provider prompt merely because the current generation model expects that syntax. The richer authoring schema is intentionally still under design.
-3. **Inference contract** — the exact effective model input assembled for the selected generation workflow. For H3 this includes the final prompt, reference inputs, effective LoRAs, duration, resolution, and seed actually encoded into the ComfyUI workflow.
+The architectural rule is simple:
 
-Do not silently infer semantic applicability while crossing these boundaries. WebCap may validate explicit storage structure, resolve declared references, and calculate mechanical generation values. It must not read prose and guess which character, location, continuity fact, or Story invariant applies to a Scene, and it must not rewrite Director-authored prompt text. The narrow exception is exact first/last-frame alignment syntax attached to a declared reference role.
+> **Director understands and authors. WebCap stores, orchestrates, and executes.**
 
-Visibility is part of correctness:
-- the current Director request should be inspectable from Storyboard;
-- generated Takes should retain the effective H3 input that produced them;
-- a preview must never be labeled exact if random seed or wildcard resolution has not happened yet.
+WebCap has no creative intelligence. It should not silently reinterpret, expand, repair, or rewrite Director-authored creative text. The selected LLM is responsible for understanding the concept, deciding what kind of Scene set it implies, and authoring the prompts that should be sent to the video model.
 
-
-This document defines the stable authoring contract for LLM assistance inside WebCap Storyboard.
-
-It is intentionally provider-neutral at the request-contract layer. The first runtime implementation uses WebCap-managed llama.cpp, but Storyboard must not depend on hidden provider memory, a particular Qwen checkpoint, or a persistent provider session.
-
-For MiniMax H3 prompt syntax and model-facing prompt rules, see `docs/mmh3-prompt-guidelines.md`.
-
-## Why the LLM is here
-
-WebCap Storyboard is not a chatbot and the LLM is not the owner of the Story.
-
-Storyboard exists to turn a longer creative idea into a sequence of short, independently generatable video Scenes, then organize multiple generated Takes for each Scene.
-
-The durable model is:
+The durable data model remains:
 
 ```text
 Story -> ordered Scenes -> Takes -> selected Take per Scene
 ```
 
-The LLM assists the human author by:
+“Ordered” is a storage/editing fact. It does **not** imply that the Scenes form a narrative progression. A concept may call for a continuing story, montage, repeated format, parallel moments, variations on a setup, independent alternatives, fashion/reality coverage, or another structure entirely.
 
-- proposing a sensible Scene breakdown from a Story concept;
-- expanding a Scene intent into a model-facing video prompt;
-- revising an existing Scene or prompt from a specific correction;
-- checking continuity across nearby Scenes;
-- identifying when a Scene is trying to accomplish too much for its duration.
+The Story object is WebCap's container. The **concept** is the creative source the Director should reason from.
 
-The human remains the director/editor. LLM output is proposed content applied to the same Story and Scene objects that can always be edited manually.
+## Prompt pipeline boundaries
 
-## Authority and preservation rules
+Storyboard has three distinct boundaries. Keep them separate.
 
-When instructions conflict, use this order:
+1. **Director request contract** — the task instructions, concept, atmosphere, invariants, relevant Scene context, references, and response shape sent to the selected LLM.
+2. **Storyboard authoring contract** — durable human-editable Story and Scene state.
+3. **Inference contract** — the effective generation input: prompt, references, LoRAs, duration, resolution, seed, and workflow settings sent to the video-generation runtime.
 
-1. The user's current explicit change or request.
-2. Canonical Story/Scene facts supplied by WebCap, including reference-image roles and established continuity.
-3. The current task contract: plan, write, revise, or review.
-4. Model-specific prompting guidance such as the MiniMax H3 format.
-5. Creative inference.
+WebCap may:
 
-Never silently change an established fact merely to make the output more interesting.
+- assemble relevant context for Director;
+- request and parse structured JSON where the UI needs structured data;
+- validate required storage shape and primitive types;
+- store Story/Scene state;
+- manage references, LoRAs, seeds, duration, dimensions, queues, Takes, and provenance;
+- add exact first/last-frame alignment syntax when the declared H3 reference mode requires it.
 
-Unless explicitly asked to change them, preserve:
+WebCap must **not**:
 
-- character identity and count;
-- wardrobe, hair, major physical traits, and carried objects;
-- location and spatial relationships;
-- time of day, weather, and persistent lighting conditions;
-- named props and their state;
-- Story-level visual style;
-- the intended action and narrative result of the current Scene.
+- infer which prose should be added to a prompt;
+- inject invariants or continuity prose after Director returns;
+- rebuild Director output into H3 sections;
+- invent missing creative Scenes;
+- repair wrong Scene counts;
+- force narrative progression;
+- force continuity between adjacent independently generated Scenes;
+- add hidden semantic audit/repair loops.
 
-If the supplied context is genuinely contradictory, expose the contradiction rather than quietly choosing one version.
+Malformed required structure should fail visibly. A creatively weak result should remain a visible model result rather than being silently “improved” by Python.
 
-## Continuity and descriptive redundancy
+## Why the LLM is here
 
-Story invariants are context for Director, not text for WebCap to inject into every prompt. Preserve explicit Story facts and recurring visual details when they materially matter to a Scene, but recognize that independently generated clips will naturally vary and text repetition cannot guarantee seamless visual continuity.
+The LLM exists primarily because writing many useful video prompts manually is slow.
 
-A Scene prompt should contain enough information to generate the intended beat, without ceremonial repetition of every Story invariant. LoRAs, references, and other conditioning are separate generation controls; WebCap must not infer from them which prose can be omitted or added.
+Director may:
 
-If stronger continuity is needed, the human can make it explicit in the concept, refine particular Scenes, or attach first/last-frame references. The default system should not assume every adjacent Scene is a literal visual continuation.
+- expand a rough concept without assuming that it is narrative;
+- develop the complete concept into a useful set of Scenes;
+- write a generation prompt for one Scene;
+- refine one Scene prompt from a specific correction;
+- revise selected Scene fields across an existing plan;
+- insert one new Scene between two existing Scenes.
 
-## Scene state, handoff, and duration discipline
+The human remains the editor/director. Every Scene and prompt remains directly editable.
 
-A Storyboard Scene is one short generation unit, normally 10–15 seconds and never longer than 15 seconds.
+## Concept-first planning
 
-Use that limited window densely. Unless uninterrupted time genuinely serves the material—such as a sustained conversation or continuous physical action—a Scene should normally contain several meaningful shots, cuts, or distinct visual beats. Favor visual progression over idle coverage.
+When developing Scenes, Director should consider the **complete concept before writing individual Scenes**.
 
-Entry and exit state are optional planning aids. Use them when a specific visible handoff, prop state, action state, or reference-frame relationship actually matters. Do not require them merely to create bookkeeping between otherwise independent renders, and do not make generation depend on them.
+First decide what relationship, if any, the Scenes should have. Examples include:
 
-An explicit requested Scene count is guidance to Director, not a count that WebCap fabricates or repairs after the fact. If the model fails the request, expose that result rather than inventing missing creative content.
+- progression;
+- variations;
+- repeated format;
+- montage;
+- parallel moments;
+- independent alternatives;
+- another structure suggested by the concept.
 
-Treat duration as a real creative budget, but do not use Python-side semantic checks to decide whether the Director's scene is artistically too dense or too sparse.
+None is the default.
 
-## Session and memory model
+Director should then decide what each Scene contributes to the whole and author the Scenes accordingly.
 
-Assume every LLM inference call is stateless.
+Do not manufacture setup, conflict, escalation, resolution, or ending simply because the data object is called a Story. Do not manufacture continuity merely because one Scene appears before another.
 
-The current llama.cpp runtime can maintain transient KV/prompt cache while a model remains loaded, but the first WebCap integration deliberately unloads the Director after each request to keep GPU ownership simple. Any such cache is therefore an optimization, never canonical memory.
+For Auto Scene count, Director chooses however many Scenes best serve the concept and provide useful coverage. When the user selects an explicit count, Director is instructed to create that many Scenes; WebCap does not fabricate or delete Scenes to enforce the request afterward.
 
-Therefore:
+## Scene density and generation-unit discipline
 
-- WebCap owns all context worth preserving.
-- A provider restart must not lose Story meaning.
-- A model change must not invalidate Story data.
-- The LLM must not rely on facts from an earlier call unless WebCap supplies them again.
-- Full conversational transcripts are not required for ordinary operation.
+A Storyboard Scene is one short generation unit, normally about 10–15 seconds and never longer than 15 seconds.
 
-A future Storyboard chat/revision UI may store a small revision history, but that history is WebCap data. It is not provider session state.
+Use that window aggressively.
 
-The default runtime request should be reconstructible from disk.
+Unless uninterrupted time genuinely serves the material — for example a sustained conversation, a continuous physical action, or an intentionally held moment — a Scene should normally contain several meaningful shots, cuts, or distinct visual beats.
+
+Favor productive visual progression over idle coverage.
+
+This density expectation is independent of whether the overall concept is narrative. A variation-based or repeated-format concept should still make each generation unit useful.
+
+## Continuity, invariants, and state
+
+Continuity is context, not a default requirement.
+
+Story invariants are supplied to Director as authoritative context where relevant. They are **not** blocks of prose that WebCap later pastes into every Scene prompt.
+
+Director should preserve explicit facts that matter to the current Scene, but independently generated clips will naturally vary. Text repetition cannot guarantee pixel-level continuity.
+
+When stronger continuity is genuinely needed, the human can make it explicit through:
+
+- the concept;
+- Scene refinement;
+- invariants;
+- LoRAs;
+- first/last-frame references;
+- other generation conditioning.
+
+### Entry and exit state
+
+Entry and exit state are optional planning notes.
+
+Use them only when a specific handoff, visible object state, physical state, or reference-frame relationship materially helps the Scene.
+
+Do not create state bookkeeping merely because Scenes are adjacent.
+
+Generation does not depend on Entry/Exit being populated.
+
+### Previous-Scene context during refinement
+
+Local prompt refinement may receive the previous Scene as **relationship context**.
+
+That context can help Director decide whether the current Scene should continue, contrast, vary, repeat, or remain independent.
+
+The previous Scene is not automatically a continuity handoff.
+
+## Current Director operations
+
+### `expand_concept`
+
+Enrich a rough concept without assuming a narrative structure.
+
+Director may develop characters/subjects, settings, themes, recurring format, visual situations, variations, relationships, progression, or endings **only where the seed concept supports them**.
+
+It does not create Scenes or H3 prompts.
+
+### `define_invariants`
+
+Suggest concise recurring Story facts that are useful enough to preserve across relevant Scenes.
+
+Invariants remain Story context. They are not prompt fragments for WebCap to inject later.
+
+### `develop_story`
+
+Develop the complete concept into a set of canonical Scenes in one Director call.
+
+Each Scene contains:
+
+- title;
+- short summary/intent;
+- complete Director-authored generation prompt;
+- suggested duration;
+- optional Entry State;
+- optional Exit State.
+
+Director owns the creative prompt text. WebCap stores it as returned.
+
+The operation intentionally does **not** return continuity graphs, carry-forward lists, invariant references, shared-context references, or other semantic bookkeeping.
+
+### `write_prompt`
+
+Write the complete generation prompt for one existing Scene.
+
+Director receives relevant Story context, Scene intent, H3 runtime guidance, references, and invariants.
+
+The returned prompt is stored as authored.
+
+### `refine_prompt`
+
+Apply one explicit correction to an existing Scene prompt.
+
+Preserve unrelated prompt details. Previous-Scene context may be supplied to help judge appropriate relationship/distinctness, not to force continuity.
+
+Director may optionally update Scene summary, Entry/Exit state, or duration when the requested correction genuinely requires it.
+
+### `repair_scenes` / Revise Scenes
+
+Apply sparse targeted changes to an existing Scene plan.
+
+This is not an autonomous semantic-validator loop. Director returns only fields that actually need changing.
+
+WebCap does not run hidden recursive review/repair passes.
+
+### `insert_scene`
+
+Create exactly one new Scene between two existing Scenes.
+
+Director receives the complete concept plus the Scene before and Scene after as relationship/contrast context.
+
+The inserted Scene is **not required to bridge them narratively**. It may continue, contrast, vary, repeat a format, jump, or remain relatively independent as the concept warrants.
+
+WebCap inserts the returned Scene at that exact gap.
 
 ## Runtime request assembly
 
-For an LLM-assisted operation, WebCap should assemble only the context needed for that operation.
+Requests should contain the context genuinely useful to the task, not every piece of Storyboard state.
 
-The default request should stay smaller than the conceptual maximum. Start with:
+Typical ingredients are:
 
 ```text
 [DIRECTOR CONTEXT]
-stable preservation/memory/duration rules
+Stable creative/directing guidance.
 
-[STORY STYLE]
-persistent atmosphere / visual language
+[STORY CONCEPT]
+The creative source.
 
-[CURRENT TASK]
-the one thing being requested
-```
+[STORY VISUAL / ATMOSPHERE]
+Persistent visual language when supplied.
 
-Add the current Scene when the operation acts on a Scene. Add Story concept, nearby Scenes, references, or model-specific guidance only when they materially affect that operation. A Story Planner normally needs concept but not H3 syntax; an H3 Prompt Writer needs H3 guidance but not the full Story; a local revision normally needs the existing Scene/prompt and the requested correction, not a transcript.
+[STORY INVARIANTS]
+Relevant recurring facts.
 
-Conceptually, the largest ordinary request may look like:
+[SCENE / NEARBY SCENE CONTEXT]
+Only for tasks that act on existing Scenes.
 
-```text
-[STABLE DIRECTOR CONTEXT]
-What Storyboard is, preservation rules, duration discipline.
-
-[MODEL-SPECIFIC GUIDANCE, ONLY WHEN NEEDED]
-For example, the MiniMax H3 prompt-writing rules only when producing or reviewing an H3 prompt.
-
-[STORY CONTEXT]
-Title, concept, persistent style, and only the continuity facts relevant to this request.
-
-[SCENE CONTEXT]
-Current Scene title, summary, optional entry/exit state, prompt, duration, and declared references where useful.
-
-[NEARBY SCENE CONTEXT, ONLY WHEN USEFUL]
-Include nearby Scene information for a revision or continuity-sensitive task when it materially helps. Do not manufacture a handoff by default.
+[H3 GUIDANCE]
+Only when the task authors or revises a generation prompt.
 
 [CURRENT TASK]
-Exactly one operation: plan, assess fit/splitting, write, revise, enrich, or review.
+One explicit operation.
 
 [OUTPUT CONTRACT]
-What shape to return and whether explanatory prose is allowed.
+Structured JSON shape where needed.
 ```
 
-Do not send the entire Story, all Takes, the H3 guide, or a long chat transcript by default. Context should be deliberate, inspectable, and small enough that the model can distinguish instructions from background information. Prefer `style + current task` until a concrete operation proves it needs more.
+Assume every LLM call is stateless. Context worth preserving must live in WebCap and be supplied again when relevant.
 
-## Current usable Director slice
+## H3 prompt ownership
 
-The Director now supports a simple creative ladder without becoming a chatbot:
+The active model-facing guidance is:
 
-- `expand_concept`: turn a rough Story seed into a richer persistent Story overview without creating Scenes yet.
-- `develop_story`: turn the saved Story concept/style into a complete ordered set of canonical Scenes in one structured pass, including Scene count, duration, entry/exit state, continuity metadata, and the full H3-ready prompt for every Scene.
-- `write_prompt`: create or replace one H3 model-facing prompt from the stored Scene intent.
-- `refine_prompt`: revise an existing prompt from one explicit human correction.
+- `docs/mmh3-prompt-runtime-context.txt`
 
-`develop_story` applies the complete validated result directly rather than requiring a separate accept/import ceremony. If active Scenes already exist, the UI requires explicit confirmation before replacement; those old Scenes and their Takes remain recoverable rather than being deleted.
+That file is intentionally concise and is what Director should use for ordinary H3 prompt writing.
 
-The current slice deliberately does not add branching/version graphs, open-ended chat history, autonomous recursive repair loops, or AI split/merge/insert operations. Those should follow observed creative workflow needs.
+Director should write clear observable audiovisual instructions, use dense cuts/beats where useful, keep chronology/timestamps sensible when used, preserve exact reference anchors, and include sound/dialogue/music when they actually help.
 
-The pure request builder in `tool/server/storyboard_llm_contract.py` remains the provider-neutral boundary before llama.cpp transport.
+WebCap does **not** require Director to emit MiniMax's documented three-field base syntax.
 
-## Task modes
+The longer file:
 
-### 1. Story Planner
+- `docs/mmh3-prompt-guidelines.md`
 
-Purpose: turn a Story concept into a complete, directly usable sequence of independently generatable Scenes.
+is reference material describing official MiniMax conventions and useful prompting ideas. It is **not** the runtime Storyboard contract and should not be treated as a list of mandatory output sections.
 
-Input normally includes:
+Likewise:
 
-- Story title;
-- Story concept;
-- persistent visual/style notes;
-- target total scope or approximate number of Scenes if known;
-- already-existing Scenes when extending rather than replacing a Story.
+- `docs/mmh3-prompt-template.txt`
 
-Planner rules:
+is an example/reference skeleton only.
 
-- each proposed Scene must be independently generatable;
-- preserve a clear narrative progression;
-- begin from the first Story state actually supplied; do not invent transportation, preceding actions, unseen rooms, or other setup to explain an arrival;
-- use natural scene boundaries where continuity can reset safely;
-- when `continuesPreviousScene` is true, the next Scene's `entryState` must be physically compatible with the previous Scene's `exitState`; do not hide unexplained movement between them;
-- keep each Scene summary focused on narrative/physical intent;
-- also write the complete H3-ready prompt for each Scene in the same pass so character, narrative, dialogue, sound, and visual decisions can be made with whole-Story context;
-- do not assume persistent Story context reaches the video model: when a recurring character lacks strong identity conditioning, repeat the compact visual identity cues needed for that Scene to reconstruct the same person;
-- use `continuity.carryForward` only for changed state that must remain true beyond the current Scene, such as an object being left behind or carried forward;
-- flag an intent that is too dense rather than hiding the problem.
+The exception is exact first/last-frame reference alignment syntax. WebCap owns that narrow mechanical adapter because it follows declared reference roles rather than creative interpretation.
 
-The canonical structured-output contract is `docs/storyboard-scene-plan.schema.json`.
+## Structural failure versus creative failure
 
-A planning call should return JSON only, matching that schema. WebCap assigns canonical Scene IDs after validation; the LLM should not invent IDs.
+WebCap should validate only what it genuinely needs to store or execute.
 
-The current contract intentionally combines Story planning and initial H3 prompt writing in one whole-Story pass. It captures:
+Examples of valid loud failures:
 
-- ordered Scene title and visible intent;
-- entry and exit state;
-- suggested duration;
-- whether continuity directly carries from the previous Scene;
-- changed state that must carry forward into later Scenes;
-- a complete H3-ready prompt for each Scene.
+- response is not valid JSON when JSON is required;
+- required Scene object/list is missing;
+- required title/summary/prompt is empty or the wrong primitive type;
+- duration is not a valid supported value;
+- a Director result is stale because the Story/Scene inputs changed while the job was running;
+- an exact referenced file is missing.
 
-This is intentional: the Director can make dialogue, performance, sound, and visual choices while it still has the complete Story arc in context. The prompts remain ordinary editable Scene fields after creation.
+Examples that are **not** Python validation responsibilities:
 
-The canonical Story concept/style remain WebCap-owned input. The planner does not return another paraphrased Story summary or duplicate the persistent visual bible, because those copies create drift without adding durable state.
+- the model chose a boring camera;
+- the Scene is creatively repetitive;
+- a requested count was missed;
+- continuity is imperfect;
+- the model made a weak narrative choice;
+- the prompt could have been written more elegantly.
 
-When continuing an existing Story, use the previous Scene's exit state to establish the next Scene's entry state where continuity actually carries across. Do not force a handoff across an intentional reset, relocation, or time jump.
+Those are model/user-editing issues, not reasons for WebCap to add hidden semantic machinery.
 
-WebCap parses and validates the complete response before applying any Scenes. Do not partially import a malformed result. The current implementation applies one schema-constrained result directly after deterministic validation; semantic audit/repair remains a later enhancement after real usage justifies the extra inference.
+## Generation ownership
 
+WebCap owns generation controls:
 
-## Model selection
-
-Storyboard should let the user select the compatible local text model used for LLM authoring rather than baking one checkpoint into Story data.
-
-Initial strategy:
-
-- expose one Storyboard-level **Director model** selector populated from local GGUFs the configured llama.cpp router can actually load;
-- use that selection for planning, auditing, prompt writing, and revision unless later testing proves per-task model selection worthwhile;
-- treat the selected model as runtime preference, not canonical Story meaning;
-- when an LLM proposal/audit is persisted for provenance, record the model identifier that produced it;
-- do not require a Story migration when the preferred model changes.
-
-Cross-model workflows are an optional quality tool, not the default. A future user may deliberately plan with one model and audit with another.
-
-## Validation, semantic audit, and repair
-
-LLM self-review is useful but is not a deterministic validator.
-
-For whole-Story planning, the current usable pipeline is intentionally smaller:
-
-```text
-Story context
-    -> planner + initial H3 prompts
-    -> schema-constrained JSON
-    -> deterministic WebCap validation
-    -> direct canonical Scene creation
-```
-
-A later quality pass may add semantic audit and one bounded repair before application, but that is not required for the first usable creative workflow.
-
-The mechanical and semantic responsibilities stay separate:
-
-1. **WebCap validation** checks JSON syntax, schema shape, required fields, types, and other facts that can be evaluated deterministically.
-2. **LLM semantic audit** checks fidelity and reasoning: invented facts, omitted Story beats, overloaded Scenes, broken entry/exit handoffs, lost persistent object state, inappropriate continuity resets, and violation of the requested ending.
-3. **Repair** receives the original Story context, the schema-valid proposed plan, and the audit issues, then returns a complete replacement plan matching `docs/storyboard-scene-plan.schema.json`.
-4. WebCap validates the replacement again before showing/applying it.
-
-The audit output contract is `docs/storyboard-plan-audit.schema.json`.
-
-A same-model audit is the default because it is simple and often improves a first pass. An optional different Director model may be selected as auditor later for cross-model critique.
-
-Do not create an open-ended agent loop. Start with at most one semantic audit and one repair pass. If the repaired plan still fails structural validation or materially conflicts with the Story, expose the result to the human rather than recursively asking the model to fix itself.
-
-For H3 prompt writing, the same pattern may later be used in a lighter form:
-
-```text
-draft prompt -> narrow checklist audit -> one revision
-```
-
-but only after the direct prompt-writing workflow is useful enough to justify the extra inference cost.
-
-### 2. H3 Prompt Writer
-
-Purpose: turn one Scene intent into a complete MiniMax H3 model-facing prompt.
-
-Input normally includes:
-
-- Story style/continuity needed for this Scene;
-- Scene summary;
+- seed / seed mode;
+- LoRAs and strengths;
 - duration;
-- workflow mode and reference roles;
-- exact dialogue/lyrics if present.
+- aspect ratio / megapixels;
+- first/last-frame references;
+- queueing and cancellation;
+- Take storage and provenance.
 
-Rules:
+For ordinary text-to-video generation, the stored Director/human-authored prompt is sent to H3 without creative rewriting.
 
-- follow the current FL2VA-family/base guidance in `docs/mmh3-prompt-guidelines.md`;
-- use only the base T2VA/I2VA/FL2VA/L2VA prompt vocabulary for the current Storyboard runtime; do not include Ref2VA's six-section format unless a future Ref2VA operation explicitly requests it;
-- preserve the Scene's narrative intent;
-- use observable audiovisual description rather than abstract plot summary;
-- fit action and camera changes into the duration;
-- do not add dialogue, text, props, characters, cuts, music, or decorative filmmaking choices unless supported by the intent/context or explicitly allowed;
-- prefer positive concrete visual specification over long negative-constraint lists;
-- when the task explicitly asks to develop, enrich, or make the Scene more cinematic, add useful visual, performance, camera, sound, and environmental detail while preserving Story facts and the Scene's narrative function;
-- do not emit wildcard syntax or invent LoRA trigger tokens as part of ordinary creative expansion; those are later workflow concerns unless explicitly supplied by WebCap;
-- output the model-facing prompt only unless the caller requests structured metadata.
+When first/last-frame references are attached, WebCap may prepend the exact mechanical alignment statement required for that reference mode.
 
-### 3. Scene Reviser
+## Review standard
 
-Purpose: apply one correction to an existing Scene or generated prompt.
+When changing Storyboard Director behavior, prefer the smallest normal solution.
 
-Input normally includes:
+Before adding machinery, ask:
 
-- existing Scene intent;
-- existing prompt;
-- explicit correction;
-- only the continuity facts necessary to prevent collateral changes.
+1. Can Director understand this from better context or clearer instructions?
+2. Is WebCap about to make a creative judgment it has no intelligence to make?
+3. Is the new field actually durable user-facing state, or just model reasoning that should remain internal?
+4. Is this protecting a real invariant, or hiding a model mistake?
+5. Can a failure remain visible instead of being silently repaired?
 
-Rules:
-
-- make the smallest coherent revision that satisfies the correction;
-- preserve unrelated details;
-- do not rewrite style, wardrobe, camera, dialogue, or timing merely for variety;
-- do not add extra Story beats to make an overloaded request fit; keep the revision narrow and preserve the supplied duration.
-
-When the caller asks for the revised H3 prompt, return only the revised prompt.
-
-### 4. Continuity Reviewer
-
-Purpose: inspect Story/Scene context and identify concrete continuity problems.
-
-Look for:
-
-- unexplained wardrobe or appearance changes;
-- location/time/weather conflicts;
-- object-state contradictions;
-- repeated or missing narrative beats;
-- a Scene beginning from a state the previous selected Scene cannot plausibly establish;
-- duration/action overload.
-
-Do not rewrite Scenes automatically unless asked. Report specific conflicts and the Scenes involved.
-
-## Persistent facts and Scene-local facts
-
-Do not promote a temporary Scene detail into permanent Story continuity unless WebCap explicitly marks it persistent.
-
-Examples:
-
-- a character's core appearance may be a Story invariant;
-- a coat worn only in one sequence may be Scene-local;
-- a prop picked up in one Scene remains relevant only while the Story state says it is carried;
-- lighting caused by a temporary event should not silently become the Story's global visual atmosphere.
-
-Keep durable Story facts in the Story concept, visual/atmosphere field, or concise Story invariants. Keep temporary action/state in the Scene. The Director should reason from those semantic fields rather than attempting to infer continuity coverage from LoRA or media configuration.
-
-## Hard anchors and incompatible requests
-
-Exact keyframes and other hard references are physical constraints, not suggestions.
-
-If a user request conflicts with an exact anchor, do not pretend both can be true. Identify the incompatibility or place the requested change after/before the anchored state when that is physically plausible.
-
-Example: if the exact first frame shows a red coat, a request that the Scene *starts* with a blue coat requires changing the first-frame reference. A request that the coat changes later in the Scene may be compatible.
-
-## Positive specification
-
-Prefer describing the desired visible state directly:
+The desired system is intentionally simple:
 
 ```text
-a dark green tufted sofa against the left wall beneath two brass sconces
+concept + atmosphere + invariants + relevant Scene context
+    -> Director
+    -> model-authored Scene records and prompts
+    -> WebCap storage/settings/queueing
+    -> H3
 ```
 
-rather than accumulating negative constraints such as:
-
-```text
-do not change the sofa, do not move the sconces, do not alter the wall
-```
-
-Negative instructions may be useful in the authoring/reasoning layer when identifying forbidden drift, but the final generation prompt should favor concrete positive audiovisual description unless a model-specific requirement says otherwise.
-
-## Reference media
-
-When WebCap supplies an image, video, or audio reference, treat the declared semantic role as authoritative.
-
-Examples:
-
-- `first_frame`: exact opening visual anchor;
-- `last_frame`: exact ending visual anchor;
-- `guide_frame`: intermediate visual anchor;
-- `character`: identity/appearance reference;
-- `style`: visual-style reference.
-
-Do not infer a different role merely from image content.
-
-When writing an H3 prompt, translate these semantic roles into the appropriate H3 workflow syntax through the model-specific prompt contract. Storyboard domain data should never depend on ComfyUI node IDs.
-
-## Output discipline
-
-The calling operation owns the output shape.
-
-When asked for JSON:
-
-- return valid JSON only;
-- use the supplied keys exactly;
-- do not wrap it in Markdown;
-- do not add commentary before or after it.
-
-When asked for a model-facing prompt:
-
-- return the prompt only;
-- do not explain the choices;
-- do not prepend "Here is your prompt";
-- do not append suggestions.
-
-When asked for review/advice, concise explanatory prose is allowed.
-
-## Confidence
-
-Fluent output is not evidence that the model understood the request.
-
-If a required fact is missing and materially changes the result, expose the ambiguity. Do not confidently invent a specific answer merely to avoid saying that context is missing.
-
-Storyboard should prefer a correct, narrow Scene over an elaborate but contradictory one.
-
-## Sources and implementation notes
-
-Current external references:
-
-- MiniMax H3 official model/recommended workflow: https://www.minimax.io/news/minimax-h3-open-source
-- MiniMax H3 base prompt-writing guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md
-- MiniMax H3 full-reference guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
-- llama.cpp server/router documentation: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
-- llama.cpp CUDA build documentation: https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md
+Keep it that way.

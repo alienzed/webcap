@@ -2,7 +2,7 @@ MINIMAX H3 STORYBOARD GUIDANCE
 
 Author a directly usable MiniMax H3 prompt for the Scene.
 
-Establish stable and current facts at scene level. Let shots inherit that setup and describe temporal progression, timing, synchronized events, camera changes, and meaningful changes in state.
+Establish stable and current facts at scene level. Let shots inherit that setup and describe what happens over time: actions, synchronized events, camera changes, and changes in state.
 
 ILLUSTRATIVE PROMPT SHAPE
 
@@ -14,38 +14,38 @@ Subject:
 Primary subject identity, appearance, wardrobe, and voice characteristics that matter throughout the Scene.
 
 Scene Overview:
-A concise description of the setting, action, progression, mood, and landing point.
+A concise description of the setting, action, mood, and overall intent.
 
 Environment / Continuity Anchors:
 Current spatial state, important location anchors, relevant props and their state, lighting, time of day, weather, and other visible conditions that carry through the Scene.
 
 Style / Visual Treatment:
-Overall visual language, composition, lens and depth character, camera energy, and movement style.
+Overall visual style, composition, lens and depth character, framing, and default camera movement.
 
 integrated_multimodal_description:
 
 [Shot 1] (0s–Xs)
-Action, performance, framing, camera behavior, synchronized events or dialogue, and meaningful changes from the scene-wide setup.
+What occurs in this interval, including action, performance, framing, camera behavior, synchronized sound or dialogue, and any shot-specific detail or deviation from the scene-level setup.
 
 [Shot 2] (Xs–Ys)
-The next meaningful change in action, framing, performance, information, perspective, or physical state.
+What occurs in this interval, including any changes in action, performance, framing, camera behavior, synchronized sound or dialogue, or physical state.
 
 [Shot 3] ... and additional shots as appropriate for the Scene.
 
 overall_soundscape:
-Scene-wide ambience, spatial audio, physical sounds, Foley, environmental texture, and other persistent diegetic sound.
+Persistent diegetic ambience, environmental sound, Foley, and spatial character that define the Scene.
 
 non_diegetic_music:
-Audience-only score and its character or progression when it serves the Scene.
+Audience-only score and its character or development when it serves the Scene.
 
 --- END EXAMPLE PROMPT SHAPE ---
 
-Use the 10–15 second generation window productively. Let each shot advance action, performance, framing, perspective, information, or physical state. Sustained treatment suits material that benefits from uninterrupted time.
+Use scene-level sections for shared facts and shots for what occurs at particular times. Keep shot timing plausible for the requested duration.
 
 Place shot-specific camera changes, synchronized sound, and dialogue in the relevant shot. Use stable speaker IDs when useful and MiniMax H3 dialogue notation such as <d>[English] Spoken line.</d> for spoken content.
 
 Carry supplied Story facts, visual atmosphere, relevant invariants, evolving physical state, and exact frame anchors where they materially support the generation.
 
-For exact first-frame or last-frame references, author the visual progression around the supplied anchor. WebCap adds the mechanical MiniMax reference-alignment statement.
+For exact first-frame or last-frame references, author the prompt around the supplied anchor. WebCap adds the mechanical MiniMax reference-alignment statement.
 
 Return the complete prompt text exactly as it should be stored and sent to H3.

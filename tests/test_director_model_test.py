@@ -210,6 +210,7 @@ def test_model_test_surfaces_live_status_without_extra_polling():
     assert 'id="director-model-test-sessions"' not in html
     assert ".webcap_model_tests" not in frontend
 
+    assert "directorModelTestState.session = meta.session || null;" in frontend
     assert "function directorModelTestRenderStatus()" in frontend
     assert "directorModelTestState.currentPhase = phase;" in frontend
     assert "directorModelTestRunOne(model, index + 1)" in frontend

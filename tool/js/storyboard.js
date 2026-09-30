@@ -1284,36 +1284,12 @@
       refreshDirectorActivity();
       return;
     }
-    directorActivityRequest('/fs/director/activity').then(function (activity) {
-      var localStartedAt = Number(storyState.director.activityStartedAt) || 0;
-      var phase = String(activity && activity.phase || '');
-      var terminal = ['complete', 'error', 'stopped'].indexOf(phase) !== -1;
-      var activityTime = Math.max(
-        Number(activity && activity.startedAt) || 0,
-        Number(activity && activity.updatedAt) || 0
-      );
-      if (terminal && (!localStartedAt || activityTime >= localStartedAt)) {
-        renderDirectorActivity(activity, null);
-        return;
-      }
-      var staleCard = el('storyboard-director-activity');
-      if (staleCard) staleCard.classList.add('hidden');
-      positionDirectorActivity();
-    }).catch(function () {
-      var card = el('storyboard-director-activity');
-      if (card) card.classList.add('hidden');
-      positionDirectorActivity();
-    }).then(function () {
-      setTimeout(function () {
-        var card = el('storyboard-director-activity');
-        if (!directorActivityActive() && card) {
-          card.classList.add('hidden');
-          positionDirectorActivity();
-          storyState.director.activityTarget = null;
-          storyState.director.activityStartedAt = 0;
-        }
-      }, 2200);
-    });
+
+    var card = el('storyboard-director-activity');
+    if (card) card.classList.add('hidden');
+    positionDirectorActivity();
+    storyState.director.activityTarget = null;
+    storyState.director.activityStartedAt = 0;
   }
 
   function updateSceneDirectorStatus(sceneId, text) {

@@ -116,6 +116,32 @@ def test_test_source_owner_refuses_missing_or_legacy_provenance(tmp_path, monkey
     assert bench._deterministic_source_owner(model, "legacy") == ""
 
 
+def test_browse_source_reports_missing_owner_without_erasing_provenance(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    model = bench.get_test_model()
+    monkeypatch.setattr(
+        bench,
+        "browse_test_source",
+        lambda _stage, _source="": {
+            "source": "staged/demo",
+            "parent": "staged",
+            "folders": [],
+            "files": ["epoch20.safetensors"],
+            "count": 1,
+        },
+    )
+    monkeypatch.setattr(bench, "_deterministic_source_owner", lambda _model, _source: "sets/moved")
+
+    missing = bench.browse_source(model.PROFILE_ID, source="staged/demo")
+
+    assert missing["ownerFolder"] == "sets/moved"
+    assert missing["ownerAvailable"] is False
+
+    (tmp_path / "sets" / "moved").mkdir(parents=True)
+    available = bench.browse_source(model.PROFILE_ID, source="staged/demo")
+    assert available["ownerAvailable"] is True
+
+
 def test_prepare_exposes_supported_test_aspect_ratios(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()
@@ -1383,6 +1409,32 @@ def test_output_root_session_media_and_rating_work_outside_fs_root(tmp_path, mon
     assert bench.open_session(set_folder, session.name)["resultFolder"] == ""
 
 
+def test_output_root_session_remains_usable_when_owner_set_is_missing(tmp_path, monkeypatch):
+    fs_root = tmp_path / "sets-root"
+    output_root = tmp_path / "creative-output"
+    moved_set = fs_root / "sets" / "moved-away"
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(bench.app_config, "output_root", lambda: output_root)
+
+    session = output_root / bench.TEST_RESULTS_DIR / "surviving-session"
+    session.mkdir(parents=True)
+    media = session / "result.png"
+    media.write_bytes(b"image")
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "source": "staged/demo",
+        "ownerFolder": "sets/moved-away",
+        "results": [{"mediaFile": media.name}],
+    })
+
+    assert not moved_set.exists()
+    assert [item["session"] for item in bench.list_sessions(moved_set, source="staged/demo")] == ["surviving-session"]
+    assert bench.open_session(moved_set, session.name)["session"] == session.name
+    assert bench.resolve_result_media(moved_set, session.name, media.name) == media
+    assert bench.rate_result(moved_set, session.name, media.name, 5)["rating"] == 5
+
+
 def test_output_root_result_media_rejects_path_escape(tmp_path, monkeypatch):
     fs_root = tmp_path / "sets-root"
     output_root = tmp_path / "creative-output"
@@ -1481,6 +1533,11 @@ def test_recent_test_sources_are_derived_from_central_session_metadata(tmp_path,
     assert recent[0]["folder"] == "sets/swimwear"
     assert recent[0]["modelId"] == "minimax_h3"
     assert recent[0]["sessionCount"] == 1
+    assert recent[0]["ownerAvailable"] is False
+
+    (tmp_path / "sets" / "swimwear").mkdir(parents=True)
+    monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
+    assert bench.recent_test_sets()[0]["ownerAvailable"] is True
 
 
 def test_direct_test_source_lora_is_read_only_without_webcap_provenance(tmp_path, monkeypatch):

@@ -8,7 +8,7 @@ Storyboard has three distinct contracts. Keep them separate.
 2. **Storyboard authoring contract** — durable human-editable Story and Scene state. Do not make this representation mirror a provider prompt merely because the current generation model expects that syntax. The richer authoring schema is intentionally still under design.
 3. **Inference contract** — the exact effective model input assembled for the selected generation workflow. For H3 this includes the final prompt, reference inputs, effective LoRAs, duration, resolution, and seed actually encoded into the ComfyUI workflow.
 
-Do not silently infer semantic applicability while crossing these boundaries. WebCap may validate explicit structure, resolve declared references, calculate mechanical values, and format provider syntax. It must not read prose and guess which character, location, continuity fact, or Story invariant applies to a Scene.
+Do not silently infer semantic applicability while crossing these boundaries. WebCap may validate explicit storage structure, resolve declared references, and calculate mechanical generation values. It must not read prose and guess which character, location, continuity fact, or Story invariant applies to a Scene, and it must not rewrite Director-authored prompt text. The narrow exception is exact first/last-frame alignment syntax attached to a declared reference role.
 
 Visibility is part of correctness:
 - the current Director request should be inspectable from Storyboard;
@@ -68,76 +68,25 @@ Unless explicitly asked to change them, preserve:
 
 If the supplied context is genuinely contradictory, expose the contradiction rather than quietly choosing one version.
 
-## Continuity anchoring and descriptive redundancy
+## Continuity and descriptive redundancy
 
-Continuity must not depend on the model remembering a previous Scene.
+Story invariants are context for Director, not text for WebCap to inject into every prompt. Preserve explicit Story facts and recurring visual details when they materially matter to a Scene, but recognize that independently generated clips will naturally vary and text repetition cannot guarantee seamless visual continuity.
 
-Story invariants are the current explicit Story-wide continuity contract. Keep them concise: recurring character identity, durable world facts, persistent visual atmosphere, soundtrack direction, or other facts that should remain available throughout the Story.
+A Scene prompt should contain enough information to generate the intended beat, without ceremonial repetition of every Story invariant. LoRAs, references, and other conditioning are separate generation controls; WebCap must not infer from them which prose can be omitted or added.
 
-Each independently generated Scene should contain enough established information to reconstruct the recurring elements that matter to that Scene. Do not reduce a recurring character or place to a vague "same person" / "same room" reference that an independent generation cannot understand.
-
-The current Director contract deliberately does **not** inspect LoRA names, strengths, trigger tokens, or media content to decide what description can be omitted. Those are generation/conditioning concerns, not reliable semantic context for the Director today. If explicit semantic conditioning awareness becomes useful later, add it deliberately rather than inferring it from filenames or workflow plumbing.
-
-The goal is not maximal verbosity. The goal is to make each Scene independently generatable while preserving the Story facts and invariants that matter.
+If stronger continuity is needed, the human can make it explicit in the concept, refine particular Scenes, or attach first/last-frame references. The default system should not assume every adjacent Scene is a literal visual continuation.
 
 ## Scene state, handoff, and duration discipline
 
-A Storyboard Scene is one generation unit.
+A Storyboard Scene is one short generation unit, normally 10–15 seconds and never longer than 15 seconds.
 
-Reason about each Scene as:
+Use that limited window densely. Unless uninterrupted time genuinely serves the material—such as a sustained conversation or continuous physical action—a Scene should normally contain several meaningful shots, cuts, or distinct visual beats. Favor visual progression over idle coverage.
 
-```text
-entry state -> action / progression -> exit state
-```
+Entry and exit state are optional planning aids. Use them when a specific visible handoff, prop state, action state, or reference-frame relationship actually matters. Do not require them merely to create bookkeeping between otherwise independent renders, and do not make generation depend on them.
 
-The entry state describes what must already be true when the Scene begins. The exit state describes what should be true when the Scene ends. This makes scene-to-scene continuity explicit without requiring a conversational LLM session.
+An explicit requested Scene count is guidance to Director, not a count that WebCap fabricates or repairs after the fact. If the model fails the request, expose that result rather than inventing missing creative content.
 
-When a Scene continues directly from the previous Scene, WebCap should normally provide the previous Scene's relevant exit state as context. When useful, it may also provide the previous selected Take or a frame/reference derived from it. Do not require the full previous prompt or full Story history when a compact exit-state handoff is enough.
-
-When a Scene is intentionally independent, relocated, time-skipped, or otherwise a continuity reset, do not carry previous-Scene details forward merely because they exist.
-
-Treat the requested duration as a hard creative budget. A Scene should contain a plausible amount of visible action, camera motion, dialogue, and state change for that duration.
-
-Do not compress a long chain of narrative events into one clip simply because they were mentioned in the Story overview.
-
-Scene-fit assessment is a first-class authoring result. A planning/revision call may return:
-
-```json
-{
-  "fit": "fits",
-  "reason": "",
-  "suggestedScenes": []
-}
-```
-
-or, when the intent is overloaded:
-
-```json
-{
-  "fit": "split",
-  "reason": "The requested state changes are unlikely to read clearly in one 8-second generation.",
-  "suggestedScenes": [
-    {
-      "title": "Door closes",
-      "summary": "She enters, closes the door, and pauses with her hand on the handle.",
-      "entryState": "...",
-      "exitState": "The door is closed; she has not yet noticed the footprints.",
-      "suggestedDurationSeconds": 6
-    },
-    {
-      "title": "Footprints",
-      "summary": "She turns from the door and notices the wet footprints.",
-      "entryState": "The door is closed; she is still beside it.",
-      "exitState": "She is focused on the footprints.",
-      "suggestedDurationSeconds": 6
-    }
-  ]
-}
-```
-
-The caller decides whether it wants a fit assessment, a final H3 prompt, or both. Do not mix a mandatory prompt-only output contract with a mandatory split explanation in the same call.
-
-For MiniMax H3, the current official model specification supports 4-15 second output; the actual WebCap workflow configuration remains authoritative for what can be generated locally.
+Treat duration as a real creative budget, but do not use Python-side semantic checks to decide whether the Director's scene is artistically too dense or too sparse.
 
 ## Session and memory model
 
@@ -189,10 +138,10 @@ For example, the MiniMax H3 prompt-writing rules only when producing or reviewin
 Title, concept, persistent style, and only the continuity facts relevant to this request.
 
 [SCENE CONTEXT]
-Current Scene title, summary, entry state, intended action/progression, exit state, prompt, duration, conditioning/reference coverage, and nearby Scene information where useful.
+Current Scene title, summary, optional entry/exit state, prompt, duration, and declared references where useful.
 
-[PREVIOUS-SCENE HANDOFF]
-Include the previous Scene's relevant exit state when the current Scene continues from it. Include a selected Take/frame reference only when it materially helps continuity. Omit this block for deliberate continuity resets.
+[NEARBY SCENE CONTEXT, ONLY WHEN USEFUL]
+Include nearby Scene information for a revision or continuity-sensitive task when it materially helps. Do not manufacture a handoff by default.
 
 [CURRENT TASK]
 Exactly one operation: plan, assess fit/splitting, write, revise, enrich, or review.

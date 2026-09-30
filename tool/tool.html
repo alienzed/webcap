@@ -1664,7 +1664,7 @@
                 <div class="app-settings-header">
                     <div class="app-settings-title-wrap">
                         <strong>App Settings</strong>
-                        <div class="app-settings-subtitle">Application, model, training, testing, and Director configuration.</div>
+                        <div class="app-settings-subtitle">Application, model, training, Director, and advanced configuration.</div>
                     </div>
                     <button id="app-settings-close-btn" type="button" title="Close" aria-label="Close app settings">×</button>
                 </div>
@@ -1672,7 +1672,6 @@
                     <button id="app-settings-tab-general" type="button" class="app-settings-tab active" data-app-settings-tab="general" role="tab" aria-selected="true" aria-controls="app-settings-panel-general">General</button>
                     <button id="app-settings-tab-models" type="button" class="app-settings-tab" data-app-settings-tab="models" role="tab" aria-selected="false" aria-controls="app-settings-panel-models" tabindex="-1">Models</button>
                     <button id="app-settings-tab-training" type="button" class="app-settings-tab" data-app-settings-tab="training" role="tab" aria-selected="false" aria-controls="app-settings-panel-training" tabindex="-1">Training</button>
-                    <button id="app-settings-tab-testing" type="button" class="app-settings-tab" data-app-settings-tab="testing" role="tab" aria-selected="false" aria-controls="app-settings-panel-testing" tabindex="-1">Testing</button>
                     <button id="app-settings-tab-director" type="button" class="app-settings-tab" data-app-settings-tab="director" role="tab" aria-selected="false" aria-controls="app-settings-panel-director" tabindex="-1">Director</button>
                     <button id="app-settings-tab-system" type="button" class="app-settings-tab" data-app-settings-tab="system" role="tab" aria-selected="false" aria-controls="app-settings-panel-system" tabindex="-1">Advanced</button>
                 </div>
@@ -1730,7 +1729,7 @@
                                 <div class="app-settings-section-title">Training Models</div>
                                 <div class="app-settings-section-copy">Choose which model families appear when creating new training runs.</div>
                             </div>
-                            <div class="app-settings-form-grid">
+                            <div class="app-settings-model-list">
                                 <div class="app-settings-model-option">
                                     <label class="app-settings-toggle"><input id="app-settings-training-profile-wan22" type="checkbox"><span>Wan 2.2 T2V</span></label>
                                     <a class="app-settings-model-link" href="https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B" target="_blank" rel="noopener noreferrer">HF files ↗</a>
@@ -1769,7 +1768,7 @@
                             </div>
                         </section>
                         <details class="app-settings-advanced app-settings-section-disclosure">
-                            <summary>Python / Environment</summary>
+                            <summary>Runtime Environment</summary>
                             <div class="app-settings-disclosure-body app-settings-form-grid">
                                 <label class="app-settings-field">
                                     <span class="app-settings-field-label">WSL Distribution</span>
@@ -1790,6 +1789,21 @@
                             </div>
                         </details>
                         <details class="app-settings-advanced app-settings-section-disclosure">
+                            <summary>Test Staging</summary>
+                            <div class="app-settings-disclosure-body">
+                                <p class="app-settings-help">Destinations used when training candidates are copied into Test Generations.</p>
+                                <div class="app-settings-disclosure-body app-settings-form-grid">
+                                <label class="app-settings-field"><span class="app-settings-field-label">H3 Root</span><input id="app-settings-training-test-copy-h3-root" type="text" placeholder="/path/to/lora-root"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Krea 2 Root</span><input id="app-settings-training-test-copy-krea2-root" type="text" placeholder="/path/to/lora-root"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.1 Root</span><input id="app-settings-training-test-copy-wan21-root" type="text" placeholder="/path/to/lora-root"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 High Root</span><input id="app-settings-training-test-copy-hi-root" type="text" placeholder="/path/to/lora-root"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 Low Root</span><input id="app-settings-training-test-copy-lo-root" type="text" placeholder="/path/to/lora-root"></label>
+                                <label class="app-settings-field"><span class="app-settings-field-label">Optional Subfolder</span><input id="app-settings-training-test-copy-subfolder" type="text" placeholder="az"></label>
+                                <p class="app-settings-help app-settings-field-wide">Example: <code>/path/to/lora-root/az/my-set/adapter_model_epoch12.safetensors</code>. The optional subfolder is one folder name only.</p>
+                            </div>
+                            </div>
+                        </details>
+                        <details class="app-settings-advanced app-settings-section-disclosure">
                             <summary>Troubleshooting</summary>
                             <div class="app-settings-disclosure-body">
                                 <label class="app-settings-toggle">
@@ -1801,56 +1815,42 @@
                         </details>
                     </div>
 
-                    <div id="app-settings-panel-testing" class="app-settings-panel hidden" data-app-settings-panel="testing" role="tabpanel" aria-labelledby="app-settings-tab-testing">
-                        <section class="app-settings-section">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Test Generations</div>
-                                <div class="app-settings-section-copy">Configure where saved candidate LoRAs are copied for testing.</div>
-                            </div>
-                            <p class="app-settings-help">These destinations are setup-level paths and normally do not need adjustment between test runs.</p>
-                        </section>
-                        <details class="app-settings-advanced app-settings-section-disclosure">
-                            <summary>Candidate Copy Destinations</summary>
-                            <div class="app-settings-disclosure-body app-settings-form-grid">
-                                <label class="app-settings-field"><span class="app-settings-field-label">H3 Root</span><input id="app-settings-training-test-copy-h3-root" type="text" placeholder="/path/to/lora-root"></label>
-                                <label class="app-settings-field"><span class="app-settings-field-label">Krea 2 Root</span><input id="app-settings-training-test-copy-krea2-root" type="text" placeholder="/path/to/lora-root"></label>
-                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.1 Root</span><input id="app-settings-training-test-copy-wan21-root" type="text" placeholder="/path/to/lora-root"></label>
-                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 High Root</span><input id="app-settings-training-test-copy-hi-root" type="text" placeholder="/path/to/lora-root"></label>
-                                <label class="app-settings-field"><span class="app-settings-field-label">Wan 2.2 Low Root</span><input id="app-settings-training-test-copy-lo-root" type="text" placeholder="/path/to/lora-root"></label>
-                                <label class="app-settings-field"><span class="app-settings-field-label">Optional Subfolder</span><input id="app-settings-training-test-copy-subfolder" type="text" placeholder="az"></label>
-                                <p class="app-settings-help app-settings-field-wide">Example: <code>/path/to/lora-root/az/my-set/adapter_model_epoch12.safetensors</code>. The optional subfolder is one folder name only.</p>
-                            </div>
-                        </details>
-                    </div>
-
                     <div id="app-settings-panel-director" class="app-settings-panel hidden" data-app-settings-panel="director" role="tabpanel" aria-labelledby="app-settings-tab-director">
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Director Runtimes</div>
-                                <div class="app-settings-section-copy">Local llama.cpp and any enabled remote OpenAI-compatible endpoints are discovered together.</div>
+                                <div class="app-settings-section-copy">Configure the local runtime and any remote runtimes that provide Director models.</div>
                             </div>
-                            <div id="app-settings-director-local" class="app-settings-runtime-scope">
-                                <div class="app-settings-form-grid">
-                                    <label class="app-settings-field app-settings-field-wide">
-                                        <span class="app-settings-field-label">Local llama-server Executable</span>
-                                        <input id="app-settings-storyboard-llama-server" type="text" placeholder="~/llama.cpp/build/bin/llama-server">
-                                    </label>
-                                    <label class="app-settings-field">
-                                        <span class="app-settings-field-label">Local Port</span>
-                                        <input id="app-settings-storyboard-port" type="number" min="1" max="65535" step="1" value="8189">
-                                    </label>
+                            <div class="app-settings-runtime-list">
+                                <div id="app-settings-director-local" class="app-settings-runtime-card">
+                                    <div class="app-settings-runtime-card-header">
+                                        <div>
+                                            <div class="app-settings-runtime-card-title">Local</div>
+                                            <div class="app-settings-runtime-card-copy">WebCap-managed llama.cpp runtime.</div>
+                                        </div>
+                                    </div>
+                                    <div class="app-settings-form-grid">
+                                        <label class="app-settings-field app-settings-field-wide">
+                                            <span class="app-settings-field-label">llama-server Executable</span>
+                                            <input id="app-settings-storyboard-llama-server" type="text" placeholder="~/llama.cpp/build/bin/llama-server">
+                                        </label>
+                                        <label class="app-settings-field app-settings-field-small">
+                                            <span class="app-settings-field-label">Port</span>
+                                            <input id="app-settings-storyboard-port" type="number" min="1" max="65535" step="1" value="8189">
+                                        </label>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="app-settings-runtime-scope">
-                                <div class="app-settings-section-header">
-                                    <div class="app-settings-section-title">Remote Endpoints</div>
-                                    <div class="app-settings-section-copy">Unavailable endpoints are skipped during model discovery.</div>
+                                <div class="app-settings-runtime-scope">
+                                    <div class="app-settings-section-header">
+                                        <div class="app-settings-section-title">Remote Runtimes</div>
+                                        <div class="app-settings-section-copy">Each enabled runtime contributes the models returned by its OpenAI-compatible <code>/models</code> endpoint.</div>
+                                    </div>
+                                    <div id="app-settings-director-endpoints" class="app-settings-runtime-list"></div>
+                                    <div><button id="app-settings-director-endpoint-add" type="button" class="review-captions-btn">+ Add Remote Runtime</button></div>
                                 </div>
-                                <div id="app-settings-director-endpoints"></div>
-                                <button id="app-settings-director-endpoint-add" type="button" class="review-captions-btn">Add Endpoint</button>
                             </div>
                             <details class="app-settings-advanced">
-                                <summary>Runtime Overrides</summary>
+                                <summary>Limits</summary>
                                 <div class="app-settings-disclosure-body app-settings-form-grid">
                                     <label class="app-settings-field">
                                         <span class="app-settings-field-label">Context Size Override</span>
@@ -1864,7 +1864,7 @@
                                     </label>
                                 </div>
                             </details>
-                            <p class="app-settings-help">Local models come from <code>&lt;Models Root&gt;/text_encoders</code>; each enabled remote contributes models from its <code>/models</code> API. Director model selection is shared globally across Director-enabled workspaces.</p>
+                            <p class="app-settings-help">Local models come from <code>&lt;Models Root&gt;/text_encoders</code>. Director model selection remains shared across Director-enabled workspaces.</p>
                             <p class="app-settings-help">Use <strong>Save + Reboot</strong> after changing Director runtime settings.</p>
                         </section>
                     </div>

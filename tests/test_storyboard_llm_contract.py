@@ -77,7 +77,7 @@ def test_h3_guidance_uses_one_fenced_authoring_example_without_schema_enforcemen
     assert prompt.count("--- BEGIN EXAMPLE PROMPT SHAPE ---") == 1
     assert prompt.count("--- END EXAMPLE PROMPT SHAPE ---") == 1
     assert "[Shot 3] ... and additional shots as appropriate for the Scene." in prompt
-    assert "Shots inherit that setup" in prompt
+    assert "shots inherit that setup" in prompt
     assert schema["required"] == ["prompt"]
     assert set(schema["properties"]) == {"prompt"}
 

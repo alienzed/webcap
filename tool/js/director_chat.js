@@ -235,14 +235,16 @@
   function activityForCurrentJob(activity) {
     var jobId = String(state.jobId || '');
     var queue = activity && activity.queue;
-    if (!jobId || !queue || !Array.isArray(queue.jobs)) return activity;
+    if (!jobId || !queue || !Array.isArray(queue.jobs)) return null;
     var job = queue.jobs.find(function (candidate) {
       return String(candidate && candidate.jobId || '') === jobId;
     });
-    if (!job) return activity;
+    if (!job) return null;
+
     var status = String(job.status || '');
-    if (status === 'queued' && String(queue.activeJobId || '') !== jobId) {
-      return Object.assign({}, activity || {}, {
+    var active = String(queue.activeJobId || '') === jobId;
+    if (status === 'queued' && !active) {
+      return {
         active: true,
         phase: 'queued',
         model: job.modelId || state.modelId,
@@ -250,7 +252,17 @@
         startedAt: job.createdAt,
         jobStatus: status,
         queuePosition: job.queuePosition || 0
-      });
+      };
+    }
+    if (!active) {
+      return {
+        active: true,
+        phase: 'preparing',
+        model: job.modelId || state.modelId,
+        operation: job.operation || 'freeform_chat',
+        startedAt: job.startedAt || job.createdAt,
+        jobStatus: status
+      };
     }
     return Object.assign({}, activity || {}, {
       jobStatus: status,

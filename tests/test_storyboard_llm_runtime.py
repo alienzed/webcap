@@ -3,6 +3,19 @@ import pytest
 from tool.server import storyboard_llm_runtime
 
 
+def test_director_runtime_dir_uses_app_cache(monkeypatch, tmp_path):
+    cache_root = tmp_path / "app-data" / "cache"
+    fs_root = tmp_path / "training"
+    monkeypatch.setattr(storyboard_llm_runtime.app_config, "app_cache_root", lambda: cache_root)
+    monkeypatch.setattr(storyboard_llm_runtime.app_config, "FS_ROOT", fs_root)
+
+    path = storyboard_llm_runtime._runtime_dir()
+
+    assert path == cache_root / "storyboard-director"
+    assert path.is_dir()
+    assert not (fs_root / ".webcap_runtime" / "storyboard-director").exists()
+
+
 def test_director_capacity_defaults_defer_to_runtime():
     assert storyboard_llm_runtime.DEFAULT_CONTEXT_SIZE is None
     assert storyboard_llm_runtime.DEFAULT_MAX_TOKENS is None

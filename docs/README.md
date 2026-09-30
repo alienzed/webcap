@@ -55,6 +55,7 @@ These describe implemented features, but they are narrower than `README.md` / `d
 These are useful product notes, not authoritative implementation references:
 
 - `docs/model-modules.md` - North Star for model-owned training configuration and policy boundaries
+- `docs/filesystem_state_contract.md` - North Star for app-data, cache, queue persistence, temporary work, and filesystem lifecycle ownership
 - `docs/ui_gold_master.md`
 - `docs/workspace_shell_architecture_audit.md` - pre-refactor shell audit retained as architecture history; superseded by the completed shell
 - `docs/ui_shell_refactor_plan.md` - completed phased migration record for the permanent activity rail/header shell

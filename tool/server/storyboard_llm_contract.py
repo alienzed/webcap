@@ -322,6 +322,52 @@ def build_request(story, scene_id, operation, instruction=""):
             "response_schema": _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema"),
         }
 
+    if operation == "insert_scene":
+        order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
+        scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+        if scene_id not in order:
+            raise FileNotFoundError("Scene does not exist.")
+        index = order.index(scene_id)
+        if index + 1 >= len(order):
+            raise ValueError("Insert Scene requires a following Scene.")
+        next_scene_id = order[index + 1]
+        before_scene = scenes.get(scene_id)
+        after_scene = scenes.get(next_scene_id)
+        if not isinstance(before_scene, dict) or not isinstance(after_scene, dict):
+            raise RuntimeError("Storyboard Scene order is invalid.")
+
+        blocks = ["[DIRECTOR CONTEXT]\n" + director_context]
+        title = _clean(story.get("title"))
+        if title:
+            blocks.append("[STORY TITLE]\n" + title)
+        concept = _clean(story.get("concept"))
+        if concept:
+            blocks.append("[STORY CONCEPT]\n" + concept)
+        style = _clean(story.get("style"))
+        if style:
+            blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
+        blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        blocks.append("[SCENE BEFORE]\n" + _scene_context(before_scene) + "\nGeneration prompt: " + _clean(before_scene.get("prompt")))
+        blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene) + "\nGeneration prompt: " + _clean(after_scene.get("prompt")))
+        blocks.append(
+            "[CURRENT TASK]\nCreate exactly one new Scene to insert between these two existing Scenes. "
+            "Use the complete concept to decide what belongs in this gap. The adjacent Scenes are relationship and contrast context, not a requirement to create a literal bridge: "
+            "the new Scene may continue, contrast, vary, repeat a format, jump, or remain relatively independent as the concept warrants. "
+            "Make it meaningfully distinct from both adjacent Scenes while still belonging to the same concept. "
+            "Use the short generation window densely: several meaningful shots, cuts, or distinct visual beats are normally expected unless uninterrupted time genuinely serves the material. "
+            "Entry and exit state are optional and should appear only when a real handoff matters. "
+            "Write the complete H3 prompt yourself; WebCap will store it as written. Return only JSON matching the supplied schema."
+        )
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+            "response_schema": _single_scene_response_schema(),
+        }
+
     if operation == "repair_scenes":
         correction = _clean(instruction)
         if not correction:

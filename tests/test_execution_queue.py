@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,58 @@ def queue_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
+    execution_queue.ephemeral_lane("llm").clear()
     return tmp_path
+
+
+def test_ephemeral_llm_queue_does_not_write_execution_state(queue_root):
+    queue = execution_queue.ephemeral_lane("llm")
+    job = queue.enqueue({"prompt": "secret"}, metadata={"client": "chat"})
+
+    state_path = app_config.execution_queue_state_path()
+    assert not state_path.exists()
+    assert queue.get_job(job["id"], include_payload=True)["payload"]["prompt"] == "secret"
+    assert queue.lane_snapshot()["jobs"][0]["id"] == job["id"]
+
+
+def test_ephemeral_llm_queue_discards_old_persisted_lane(queue_root):
+    state_path = app_config.execution_queue_state_path()
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps({
+            "version": execution_queue.STATE_VERSION,
+            "lanes": {
+                "llm": {
+                    "paused": False,
+                    "pauseReason": "",
+                    "activeJobId": "",
+                    "jobs": [{
+                        "id": "old-llm-job",
+                        "lane": "llm",
+                        "status": "queued",
+                        "queuePosition": 1,
+                        "createdAt": 1,
+                        "updatedAt": 1,
+                        "startedAt": None,
+                        "finishedAt": None,
+                        "error": "",
+                        "metadata": {"client": "chat"},
+                        "details": {},
+                        "result": {},
+                        "requestedAction": "",
+                        "payload": {"prompt": "old"},
+                    }],
+                    "recent": [],
+                    "guards": {},
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    assert execution_queue.discard_persisted_lane("llm") is True
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert "llm" not in state["lanes"]
 
 
 def test_execution_queue_preserves_fifo_and_snapshots_payload(queue_root):

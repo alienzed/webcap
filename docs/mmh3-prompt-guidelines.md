@@ -1,6 +1,6 @@
 # MiniMax H3 Prompt Guidance Reference
 
-This document is reference material for WebCap's Storyboard Director.
+This document is reference material for WebCap's Director.
 
 The active runtime guidance is:
 
@@ -10,24 +10,24 @@ Director authors the complete creative prompt text. WebCap stores and sends that
 
 ## Recommended authoring shape
 
-WebCap recommends a scene-level H3 authoring shape built around one principle:
+The runtime guidance contains the canonical illustrative prompt shape built around one principle:
 
-> Establish stable and current facts at scene level. Let shots inherit that setup and describe temporal progression, timing, synchronized events, camera changes, and meaningful changes in state.
+> Establish stable and current facts at scene level. Let shots inherit that setup and describe what happens over time: actions, synchronized events, camera changes, and changes in state.
 
-The runtime guidance contains the canonical illustrative prompt shape. It covers:
+The shape covers:
 
 - subject identity, appearance, wardrobe, and voice;
-- Scene overview and progression;
+- Scene setting, action, mood, and intent;
 - spatial state, location anchors, props and prop state;
 - lighting, time of day, weather, and other visible continuity conditions;
 - scene-wide visual and camera treatment;
-- timed shots, action, performance, framing, dialogue, synchronized sound, and evolving physical state;
+- timed shots, action, performance, framing, dialogue, synchronized sound, and physical state;
 - persistent diegetic soundscape;
 - non-diegetic music.
 
 This is a recommended authoring shape, not an enforced serialization schema.
 
-## MiniMax H3 base structure
+## MiniMax H3 base vocabulary
 
 MiniMax's documented base vocabulary includes:
 
@@ -39,23 +39,23 @@ overall_soundscape: ...
 non_diegetic_music: ...
 ```
 
-WebCap recommends using this vocabulary because it gives H3 clear audiovisual organization while leaving Director free to adapt section detail, ordering, and shot count to the Scene.
+This vocabulary gives H3 clear audiovisual organization while leaving Director free to adapt section detail, ordering, and shot count to the Scene.
 
 ## Scene-level setup and shots
 
 Scene-level sections establish defaults for the generation.
 
-Shots inherit those defaults and focus on what changes over time: action, performance, framing, perspective, camera movement, synchronized events, dialogue, and physical state.
+Shots inherit those defaults and focus on what occurs at particular times: action, performance, framing, perspective, camera movement, synchronized events, dialogue, and changes in physical state.
 
 A Storyboard Scene is normally 10–15 seconds. Choose the shot count that best serves the material. Sustained treatment fits material that benefits from uninterrupted time.
 
 ## Camera and motion
 
-Scene-level visual treatment establishes the overall framing, lens/depth character, camera energy, and movement language.
+Scene-level visual treatment establishes overall framing, lens/depth character, and default camera movement.
 
 Individual shots specify camera moves, framing changes, and deviations from that overall treatment.
 
-Intermediate physical states give H3 a visible path through actions and transitions.
+Intermediate physical states give H3 a clear visual path through actions and transitions.
 
 ## Dialogue and voice
 
@@ -69,21 +69,23 @@ Timed dialogue belongs in the shot where it occurs. Stable speaker IDs help recu
 
 ## Sound and music
 
-`overall_soundscape` carries scene-wide ambience, spatial audio, Foley, physical sounds, environmental texture, and other persistent diegetic sound.
+`overall_soundscape` carries persistent diegetic ambience, environmental sound, Foley, and spatial character.
 
 Shot-level audio carries synchronized sound tied to a particular moment.
 
-`non_diegetic_music` carries audience-only score and its musical development.
+`non_diegetic_music` carries audience-only score and its character or development.
 
 ## Continuity and evolving state
 
 Director receives Story invariants and Story/Scene context as working context.
 
-Scene-level Environment / Continuity Anchors are useful for current spatial state, location identity, props and prop state, lighting, time, weather, and other visible conditions that should carry through the generation.
+Scene-level Environment / Continuity Anchors are useful for current spatial state, location identity, props and prop state, lighting, time, weather, and other visible conditions that carry through the generation.
 
 Shots describe coherent changes to those conditions over time.
 
-Story invariants remain the durable source for recurring Story facts. Entry/Exit state remains optional planning context for meaningful handoffs.
+When Scenes are connected, relevant shared facts and evolving state can carry across them. Independent or variation-based Scenes carry only the shared elements the concept calls for.
+
+Entry/Exit state remains optional planning context for meaningful handoffs.
 
 ## Exact frame grounding
 
@@ -91,9 +93,9 @@ Exact first and last frames are declared visual anchors.
 
 - **First frame:** opening visual state.
 - **Last frame:** ending visual state.
-- **First + last frame:** a visible path between both anchors.
+- **First + last frame:** the visual path between both anchors.
 
-WebCap may prepend the exact MiniMax alignment statement derived from the selected reference roles. This is mechanical adapter syntax rather than creative prompt reconstruction.
+WebCap may add the exact MiniMax alignment statement derived from the selected reference roles. This is mechanical adapter syntax rather than creative prompt reconstruction.
 
 ## Revision
 

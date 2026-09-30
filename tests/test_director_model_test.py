@@ -8,8 +8,9 @@ from tool.server import director_model_test_store as model_test
 
 @pytest.fixture
 def model_test_root(tmp_path, monkeypatch):
-    monkeypatch.setattr(app_config, "FS_ROOT", tmp_path)
-    return tmp_path
+    store_root = tmp_path / "app-data" / "state" / "diagnostics" / "model-tests"
+    monkeypatch.setattr(app_config, "director_model_test_root", lambda: store_root)
+    return store_root
 
 
 def test_protocol_is_fixed_versioned_expansion_task():
@@ -49,7 +50,7 @@ def test_session_freezes_models_and_persists_each_run(model_test_root):
         "macbook::qwen3:8b",
         "local::gemma.gguf",
     ]
-    session_path = model_test_root / ".webcap_model_tests" / (session["id"] + ".json")
+    session_path = model_test_root / (session["id"] + ".json")
     assert session_path.is_file()
 
     saved = model_test.save_run(session["id"], {

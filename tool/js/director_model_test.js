@@ -234,7 +234,7 @@ function directorModelTestRefresh() {
     var meta = responses[0];
     var models = responses[1];
     directorModelTestState.protocol = meta.protocol || null;
-    directorModelTestState.session = meta.session || directorModelTestState.session || null;
+    directorModelTestState.session = meta.session || null;
     directorModelTestState.models = Array.isArray(models.models) ? models.models : [];
     directorModelTestState.loaded = true;
 

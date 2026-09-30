@@ -540,11 +540,15 @@ def test_run_contract_exposes_lifecycle_activity(monkeypatch):
     assert final["phase"] == "complete"
 
 
-def test_run_contract_preserves_existing_prompt_for_explicit_refine_no_change(monkeypatch):
+
+def test_run_contract_parses_refine_no_change_without_rewriting(monkeypatch):
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "chat",
-        lambda *_args, **_kwargs: {"text": '{"changed": false}', "model": "qwen-large"},
+        lambda *_args, **_kwargs: {
+            "text": '{"changed":false,"prompt":"Existing prompt stays byte-for-byte unchanged."}',
+            "model": "qwen-large",
+        },
     )
 
     result = storyboard_llm_runtime.run_contract(
@@ -555,23 +559,19 @@ def test_run_contract_preserves_existing_prompt_for_explicit_refine_no_change(mo
             "output": "json",
             "response_schema": {
                 "type": "object",
-                "required": ["changed"],
-                "properties": {"changed": {"type": "boolean"}},
-            },
-            "result_renderer": {
-                "type": "h3_base",
-                "mode": "T2VA",
-                "duration": 10,
-                "allow_unchanged": True,
-                "existing_prompt": "Existing prompt stays byte-for-byte unchanged.",
+                "required": ["changed", "prompt"],
+                "properties": {
+                    "changed": {"type": "boolean"},
+                    "prompt": {"type": "string"},
+                },
             },
         },
     )
 
-    assert result["noChange"] is True
-    assert result["text"] == "Existing prompt stays byte-for-byte unchanged."
-    assert result["data"] == {"changed": False}
-
+    assert result["data"] == {
+        "changed": False,
+        "prompt": "Existing prompt stays byte-for-byte unchanged.",
+    }
 
 def test_run_contract_requires_prompt(monkeypatch):
     with pytest.raises(ValueError, match="prompt is empty"):
@@ -785,24 +785,20 @@ def test_run_contract_parses_schema_constrained_json(monkeypatch):
     assert result["data"] == {"scenes": []}
 
 
-def test_run_contract_renders_structured_h3_result(monkeypatch):
+
+def test_run_contract_keeps_model_authored_prompt_text_inside_json(monkeypatch):
     schema = {
         "type": "object",
-        "properties": {
-            "integrated_multimodal_description": {"type": "string"},
-            "overall_soundscape": {"type": "string"},
-            "non_diegetic_music": {"type": "string"},
-        },
+        "required": ["prompt"],
+        "properties": {"prompt": {"type": "string"}},
     }
+
+    authored = "A brisk three-cut sequence through the lobby."
 
     def fake_chat(model_id, messages, response_schema=None, max_tokens=None, sampling=None):
         assert response_schema == schema
         return {
-            "text": (
-                '{"integrated_multimodal_description":"She turns toward the door.",'
-                '"overall_soundscape":"Room tone.",'
-                '"non_diegetic_music":"N/A"}'
-            ),
+            "text": '{"prompt":"A brisk three-cut sequence through the lobby."}',
             "model": model_id,
         }
 
@@ -813,67 +809,41 @@ def test_run_contract_renders_structured_h3_result(monkeypatch):
         "prompt": "Write it.",
         "output": "json",
         "response_schema": schema,
-        "result_renderer": {
-            "type": "h3_base",
-            "mode": "I2VA",
-            "duration": 6,
-            "shared_context": "Mara: dark bob and pale raincoat.\nLobby: dark terrazzo and brass fixtures.",
-        },
     })
 
-    assert result["data"]["overall_soundscape"] == "Room tone."
-    assert result["text"].startswith(
-        "For the target video, at 0.00 seconds into the target video, "
-        "<Picture 1> (from [Shot 1]) is fully referenced.\n\n"
-        "integrated_multimodal_description: [Shot 1] Continuity anchors — Mara: dark bob and pale raincoat. "
-        "Lobby: dark terrazzo and brass fixtures. She turns toward the door."
-    )
-    assert result["text"].endswith(
-        "overall_soundscape: Room tone.\n\nnon_diegetic_music: N/A"
-    )
+    assert result["data"]["prompt"] == authored
+    assert result["text"] == '{"prompt":"A brisk three-cut sequence through the lobby."}'
 
 
-def test_refine_renderer_uses_optional_returned_duration(monkeypatch):
+def test_run_contract_preserves_optional_refine_duration_as_model_data(monkeypatch):
     schema = {
         "type": "object",
+        "required": ["changed", "prompt"],
         "properties": {
-            "integrated_multimodal_description": {"type": "string"},
-            "overall_soundscape": {"type": "string"},
-            "non_diegetic_music": {"type": "string"},
+            "changed": {"type": "boolean"},
+            "prompt": {"type": "string"},
             "durationSeconds": {"type": "number"},
         },
     }
 
-    def fake_chat(model_id, messages, response_schema=None, max_tokens=None, sampling=None):
-        return {
-            "text": (
-                '{"integrated_multimodal_description":"She crosses the room.",'
-                '"overall_soundscape":"Room tone.",'
-                '"non_diegetic_music":"N/A",'
-                '"durationSeconds":12}'
-            ),
-            "model": model_id,
-        }
-
-    monkeypatch.setattr(storyboard_llm_runtime, "chat", fake_chat)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "chat",
+        lambda *_args, **_kwargs: {
+            "text": '{"changed":true,"prompt":"She crosses the room in three brisk cuts.","durationSeconds":12}',
+            "model": "director",
+        },
+    )
 
     result = storyboard_llm_runtime.run_contract("director", {
         "operation": "refine_prompt",
         "prompt": "Refine it.",
         "output": "json",
         "response_schema": schema,
-        "result_renderer": {
-            "type": "h3_base",
-            "mode": "L2VA",
-            "duration": 10,
-            "duration_field": "durationSeconds",
-            "shared_context": "",
-        },
     })
 
-    assert result["durationOverride"] == 12
-    assert "12.00-second mark" in result["text"]
-
+    assert result["data"]["durationSeconds"] == 12
+    assert result["data"]["prompt"] == "She crosses the room in three brisk cuts."
 
 def test_chat_wraps_json_schema_for_llama_cpp(monkeypatch):
     calls = []

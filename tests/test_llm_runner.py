@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ def llm_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "output_root", lambda: Path(tmp_path) / "output")
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
+    execution_queue.ephemeral_lane("llm").clear()
     llm_runner._startup_reconciled = True
     llm_runner._monitor_thread = None
     llm_runner._local_gpu_drain_until = 0.0
@@ -79,6 +81,21 @@ def test_llm_test_client_rejects_unowned_operations(llm_root, monkeypatch):
     finished = llm_runner.job_status(job["jobId"])
     assert finished["status"] == "failed"
     assert "Unsupported Test Generations LLM operation" in finished["error"]
+
+
+def test_llm_queue_payload_never_reaches_execution_state_file(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+
+    job = llm_runner.enqueue(
+        "chat",
+        "qwen",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "secret"}]},
+        label="Director Chat",
+    )
+
+    state_path = app_config.execution_queue_state_path()
+    assert not state_path.exists()
+    assert llm_runner.job_status(job["jobId"])["status"] == "queued"
 
 
 def test_llm_chat_job_runs_through_shared_lane_without_persisting_conversation(llm_root, monkeypatch):

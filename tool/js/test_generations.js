@@ -109,6 +109,7 @@
         }
         testSource = String(payload.source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
         renderTestSourceBrowser(payload);
+        renderWildcardDirector();
         var ownerFolder = String(payload.ownerFolder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
         var currentFolder = String(state && state.folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
         if (ownerFolder && ownerFolder !== currentFolder) {
@@ -201,9 +202,11 @@
     wildcardDirector.modelId = renderDirectorModelOptions(select, wildcardDirector.models, wildcardDirector.modelId);
     if (wildcardDirector.modelId) setDirectorModelPreference('webcap.testGenerations.directorModel', wildcardDirector.modelId);
     select.value = wildcardDirector.modelId;
+    var ownerAvailable = !sourceBrowser || sourceBrowser.ownerAvailable !== false;
     select.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
-    button.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
+    button.disabled = wildcardDirector.busy || !wildcardDirector.modelId || !ownerAvailable;
     button.textContent = wildcardDirector.busy ? 'Analyzing…' : 'Generate Wildcard';
+    button.title = ownerAvailable ? 'Generate a wildcard prompt from this Set\'s captions' : 'Original Set is unavailable';
   }
 
   function renderWildcardAnalysis(analysis) {

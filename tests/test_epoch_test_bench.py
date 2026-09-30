@@ -568,6 +568,8 @@ def test_remove_candidate_refuses_shared_active_session_result_mutation(tmp_path
     bench._atomic_write_json(session / "test.json", {
         "status": "queued",
         "modelId": bench.get_test_model().PROFILE_ID,
+        "source": "HH4013",
+        "ownerFolder": "HH4013",
         "inferenceJobs": [child["id"]],
         "results": [],
         "failures": [],
@@ -586,7 +588,8 @@ def test_activity_snapshot_projects_shared_test_session(tmp_path, monkeypatch):
     configure_execution_queue(monkeypatch, tmp_path)
     set_folder = tmp_path / "HH4013"
     staged = tmp_path / "staged"
-    session = set_folder / bench.TEST_RESULTS_DIR / "session-a"
+    session = tmp_path / "output" / bench.TEST_RESULTS_DIR / "session-a"
+    set_folder.mkdir(parents=True)
     staged.mkdir(parents=True)
     session.mkdir(parents=True)
     (staged / "epoch10.safetensors").write_bytes(b"weights")
@@ -623,11 +626,17 @@ def test_activity_snapshot_projects_shared_test_session(tmp_path, monkeypatch):
     assert payload["current"]["hasTestData"] is True
     assert payload["active"] == [{
         "folder": "HH4013",
+        "source": "HH4013",
+        "modelId": bench.get_test_model().PROFILE_ID,
         "session": session.name,
         "status": "running",
         "completed": 0,
         "total": 1,
+        "ownerAvailable": True,
     }]
+
+    set_folder.rename(tmp_path / "moved-HH4013")
+    assert bench.activity_snapshot()["active"][0]["ownerAvailable"] is False
 
 
 def test_remove_staged_candidate_is_independent_of_other_active_inference(tmp_path, monkeypatch):
@@ -1535,9 +1544,12 @@ def test_recent_test_sources_are_derived_from_central_session_metadata(tmp_path,
     assert recent[0]["sessionCount"] == 1
     assert recent[0]["ownerAvailable"] is False
 
-    (tmp_path / "sets" / "swimwear").mkdir(parents=True)
-    monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
+    owner = tmp_path / "sets" / "swimwear"
+    owner.mkdir(parents=True)
     assert bench.recent_test_sets()[0]["ownerAvailable"] is True
+
+    owner.rmdir()
+    assert bench.recent_test_sets()[0]["ownerAvailable"] is False
 
 
 def test_direct_test_source_lora_is_read_only_without_webcap_provenance(tmp_path, monkeypatch):

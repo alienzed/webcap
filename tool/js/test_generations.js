@@ -21,6 +21,7 @@
   var selectedCandidates = null;
   var testSource = null;
   var pendingTestSource = null;
+  var pendingLaunchFolder = '';
   var pendingActivitySession = '';
   var pendingSourceOwnerFolder = '';
   var sourceBrowser = null;
@@ -111,6 +112,11 @@
         var ownerFolder = String(payload.ownerFolder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
         var currentFolder = String(state && state.folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
         if (ownerFolder && ownerFolder !== currentFolder) {
+          if (payload.ownerAvailable === false) {
+            launchFolder = ownerFolder;
+            pendingSourceOwnerFolder = '';
+            return payload;
+          }
           pendingSourceOwnerFolder = ownerFolder;
           pendingTestSource = testSource;
           openTrainingWorkspaceFolder(ownerFolder);
@@ -813,14 +819,15 @@
     return 'Test root';
   }
 
-  function openTestBenchSource(folder, source, modelId) {
+  function openTestBenchSource(folder, source, modelId, ownerAvailable) {
     var targetFolder = String(folder || '');
     pendingTestSource = String(source || '');
     if (modelId) setWorkingModelProfileId(String(modelId), targetFolder);
-    if (targetFolder) {
+    if (targetFolder && ownerAvailable !== false) {
       openTestBenchFolder(targetFolder, false);
       return;
     }
+    pendingLaunchFolder = targetFolder;
     openPane();
   }
 
@@ -841,7 +848,7 @@
       var total = Number(item.total || 0);
       actions.push({
         label: 'Running · ' + testSourceLabel(item) + (total ? ' · ' + completed + ' / ' + total : ''),
-        run: function () { openTestBenchSource(folder, source, modelId); }
+        run: function () { openTestBenchSource(folder, source, modelId, item.ownerAvailable); }
       });
     });
 
@@ -2895,7 +2902,9 @@
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
     if (!node || !frame) throw new Error('Test Generations requires the app frame and Test workspace.');
-    launchFolder = owningSetFolder(state && state.folder || '');
+    var logicalFolder = pendingLaunchFolder || (isOpen() ? launchFolder : '') || (state && state.folder) || '';
+    launchFolder = owningSetFolder(logicalFolder);
+    pendingLaunchFolder = '';
     var requestedModelId = currentTestModelId();
     if (pendingTestSource !== null) {
       testSource = String(pendingTestSource || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');

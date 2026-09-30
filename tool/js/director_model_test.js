@@ -614,13 +614,7 @@ function directorModelTestExport() {
 
 function initializeDirectorModelTest() {
   var details = directorModelTestEl('director-model-test-settings');
-  if (!details) throw new Error('Director model test Settings markup is missing.');
-
-  details.addEventListener('toggle', function () {
-    if (details.open && !directorModelTestState.loaded) {
-      directorModelTestRefresh();
-    }
-  });
+  if (!details) throw new Error('Director model test Diagnostics markup is missing.');
 
   directorModelTestEl('director-model-test-refresh').addEventListener('click', function () {
     directorModelTestRefresh();

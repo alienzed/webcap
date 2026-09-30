@@ -96,7 +96,7 @@ def delete_prompt(prompt_id):
 
 
 def reference_root():
-    root = Path(app_config.FS_ROOT) / ".webcap_runtime" / "generate-references"
+    root = app_config.generate_reference_root()
     root.mkdir(parents=True, exist_ok=True)
     return root
 

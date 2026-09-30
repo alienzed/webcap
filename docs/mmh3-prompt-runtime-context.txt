@@ -4,7 +4,7 @@ Write a directly usable video-generation prompt for the Scene.
 
 Describe observable audiovisual content and the Scene's progression clearly enough for MiniMax H3 to generate it. Use concrete visual detail, performance, environment, camera treatment, movement, sound, dialogue, music, cuts, and timestamps when they genuinely help this Scene.
 
-Follow MiniMax H3 conventions roughly rather than mechanically. A Scene may be one continuous shot or several shots. If you use multiple shots, keep their chronology and timing plausible for the requested duration.
+Use the short generation window aggressively. For a typical 10–15 second Scene, several meaningful cuts, shots, or distinct visual beats are expected; avoid spending a whole generation on idle coverage when the concept supports richer progression. A sustained conversation, continuous physical action, or intentionally uninterrupted moment can justify a single shot. Follow MiniMax H3 conventions roughly rather than mechanically, and keep shot chronology and timing plausible for the requested duration.
 
 Preserve explicit Story facts, important invariants, and exact first/last-frame references when supplied. Treat invariants as context: use the details that matter to the Scene without mechanically repeating a continuity block.
 

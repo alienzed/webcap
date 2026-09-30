@@ -1,6 +1,6 @@
 # App Settings
 
-Last reviewed against code: 2026-09-28
+Last reviewed against code: 2026-09-30
 
 The app settings modal is the global configuration surface for values stored in `tool/config.json`. Its navigation is organized by user-facing ownership rather than implementation details.
 
@@ -12,21 +12,20 @@ The app settings modal is the global configuration surface for values stored in 
 - **Training → Runtime**: Diffusion Pipe/WSL runtime, Conda or activation script, and repeat-reference epochs.
 - **Training → Models**: profiles available for new training runs.
 - **Training → Testing**: per-stage LoRA destinations used by Copy to Test.
-- **Training → Hardware Calibration**: MiniMax H3 bucket calibration.
 - **Training → Advanced Training**: uncommon H3 troubleshooting behavior.
 - **Director**: local llama.cpp plus zero or more enabled remote OpenAI-compatible endpoints. Healthy runtimes are discovered together; unavailable remotes are skipped. Director model selection is shared across Director-enabled workspaces.
-- **Advanced → Environment & Diagnostics**: whole-app environment check, explicit **Install / Repair Python Requirements**, and debug logging. Requirements repair runs `python -m pip install -r requirements.txt` with the same Python executable that is running WebCap and reports command output/failures in the WebCap Console. With **Debug mode** enabled, Director LLM calls also log effective request metadata and response diagnostics such as model, message size, configured context/output settings, sampling/thinking flags, wall-clock response time, finish reason, usage, and backend timing fields when the runtime supplies them. This is observational only and does not change generation limits or request behavior.
-- **Advanced → Optional Analysis**: Face Focus and MediaPipe analysis. Environment Check disables and unchecks an analyzer control when its required Python package or vendored MediaPipe task models are unavailable; saving Settings persists that disabled selection. After requirements are repaired and Environment Check is rerun, the control becomes available again but remains opt-in.
+- **Advanced → Debug Logging**: persistent debug logging. With **Debug mode** enabled, Director LLM calls log effective request metadata and response diagnostics such as model, message size, configured context/output settings, sampling/thinking flags, wall-clock response time, finish reason, usage, and backend timing fields when the runtime supplies them. This is observational only and does not change generation limits or request behavior.
+- **Advanced → Optional Analysis**: persistent Face Focus and MediaPipe enablement. Diagnostics reports whether their dependencies are available; choosing whether WebCap uses them remains a Settings decision.
 - **Advanced → Raw Configuration**: direct JSON editing.
 - **Advanced → Reset App**: restore stock requirement terms.
 
 ## Information architecture
 
-The four top-level tabs are **Workspace**, **Training**, **Director**, and **Advanced**.
+The top-level tabs are **General**, **Models**, **Training**, **Testing**, **Director**, and **Advanced**.
 
-Settings should stay under the feature or resource they actually affect. Whole-app resources such as Models Root do not belong to Training merely because Training consumes them. Likewise, the environment check belongs under Advanced because it reports Core, Training, Inference, Director, and Optional Analysis readiness.
+Settings owns persistent configuration. Whole-app resources such as Models Root do not belong to Training merely because Training consumes them. One-off inspection, environment health, repair, calibration, and model benchmarking belong to the separate **Diagnostics** utility surface.
 
-Missing optional analysis dependencies do not make ordinary media metadata loading fail. WebCap skips the unavailable analyzer, keeps normal metadata usable, and reports the feature-specific problem to the global Console with the Settings repair path.
+Missing optional analysis dependencies do not make ordinary media metadata loading fail. WebCap skips the unavailable analyzer, keeps normal metadata usable, and reports the feature-specific problem to the global Console with the Diagnostics repair path.
 
 Specialist controls should prefer a local disclosure such as **Advanced Training** or **Runtime Overrides** over creating another top-level settings category.
 
@@ -60,6 +59,7 @@ Use **Save + Reboot** to apply runtime settings immediately.
 
 - Frontend modal markup: `tool/tool.html`
 - Frontend modal logic: `tool/js/app_settings.js`
+- Diagnostics utility: `tool/js/diagnostics.js` and `docs/diagnostics.md`
 - Frontend styling: `tool/css/modals.css`
 - Backend validation and persistence: `tool/server/config.py`
 - Available training profiles: `tool/server/training_profiles.py`

@@ -658,7 +658,10 @@ def _staged_candidate_runs(lora_files, model):
         provenance = _staged_lora_provenance(lora_file)
         job_id = str(provenance.get("sourceJobId") or "").strip()
         if job_id:
-            runs[job_id] = {"jobId": job_id}
+            runs[job_id] = {
+                "jobId": job_id,
+                "folder": str(provenance.get("sourceFolder") or "").strip(),
+            }
     return list(runs.values())
 
 

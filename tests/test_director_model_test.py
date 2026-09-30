@@ -1,15 +1,14 @@
-import json
-
 import pytest
 
 from tool.server import config as app_config
 from tool.server import director_model_test_store as model_test
 
 
-@pytest.fixture
-def model_test_root(tmp_path, monkeypatch):
-    monkeypatch.setattr(app_config, "FS_ROOT", tmp_path)
-    return tmp_path
+@pytest.fixture(autouse=True)
+def clear_model_test_session():
+    model_test.clear_session()
+    yield
+    model_test.clear_session()
 
 
 def test_protocol_is_fixed_versioned_expansion_task():
@@ -22,7 +21,7 @@ def test_protocol_is_fixed_versioned_expansion_task():
     assert "350–500 words" in prompt
 
 
-def test_session_freezes_models_and_persists_each_run(model_test_root):
+def test_session_freezes_models_and_keeps_each_run_in_memory():
     session = model_test.start_session([
         {
             "modelRef": "macbook::qwen3:8b",
@@ -49,9 +48,6 @@ def test_session_freezes_models_and_persists_each_run(model_test_root):
         "macbook::qwen3:8b",
         "local::gemma.gguf",
     ]
-    session_path = model_test_root / ".webcap_model_tests" / (session["id"] + ".json")
-    assert session_path.is_file()
-
     saved = model_test.save_run(session["id"], {
         "modelRef": "macbook::qwen3:8b",
         "status": "completed",
@@ -75,11 +71,11 @@ def test_session_freezes_models_and_persists_each_run(model_test_root):
     assert len(saved["runs"]) == 1
     assert saved["runs"][0]["runtimeName"] == "MacBook Pro"
     assert saved["runs"][0]["completionTokens"] == 200
-    on_disk = json.loads(session_path.read_text(encoding="utf-8"))
-    assert on_disk["runs"][0]["text"] == "Expanded prompt."
+    current = model_test.current_session()
+    assert current["runs"][0]["text"] == "Expanded prompt."
 
 
-def test_failed_run_is_data_and_does_not_fail_session(model_test_root):
+def test_failed_run_is_data_and_does_not_fail_session():
     session = model_test.start_session([{
         "modelRef": "offline::qwen",
         "runtimeId": "offline",
@@ -99,10 +95,10 @@ def test_failed_run_is_data_and_does_not_fail_session(model_test_root):
     assert saved["runs"][0]["status"] == "failed"
     assert "connect" in saved["runs"][0]["error"]
     assert finished["status"] == "completed"
-    assert model_test.list_sessions()[0]["failedCount"] == 1
+    assert model_test.current_session()["runs"][0]["status"] == "failed"
 
 
-def test_run_must_belong_to_frozen_session(model_test_root):
+def test_run_must_belong_to_frozen_session():
     session = model_test.start_session([{
         "modelRef": "local::qwen.gguf",
         "runtimeId": "local",
@@ -118,7 +114,7 @@ def test_run_must_belong_to_frozen_session(model_test_root):
         })
 
 
-def test_protocol_run_uses_session_frozen_prompt(monkeypatch, model_test_root):
+def test_protocol_run_uses_session_frozen_prompt(monkeypatch):
     captured = {}
 
     def fake_enqueue(client, model_ref, contract, context=None, label=""):
@@ -152,7 +148,7 @@ def test_protocol_run_uses_session_frozen_prompt(monkeypatch, model_test_root):
     assert captured["label"] == "Director Model Test"
 
 
-def test_delete_session_removes_persisted_file(model_test_root):
+def test_clear_session_discards_current_results():
     session = model_test.start_session([{
         "modelRef": "local::qwen.gguf",
         "runtimeId": "local",
@@ -161,9 +157,9 @@ def test_delete_session_removes_persisted_file(model_test_root):
         "label": "qwen.gguf",
     }])
 
-    model_test.delete_session(session["id"])
-
-    assert model_test.list_sessions() == []
+    assert model_test.current_session()["id"] == session["id"]
+    model_test.clear_session()
+    assert model_test.current_session() is None
     with pytest.raises(FileNotFoundError):
         model_test._read_session(session["id"])
 
@@ -191,7 +187,7 @@ def test_model_test_is_isolated_to_diagnostics_and_feature_modules():
     assert "director_model_test" not in runtime
 
 
-def test_empty_custom_prompt_is_rejected(model_test_root):
+def test_empty_custom_prompt_is_rejected():
     with pytest.raises(ValueError, match="prompt is required"):
         model_test.start_session([{
             "modelRef": "local::qwen.gguf",

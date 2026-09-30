@@ -571,6 +571,44 @@ def test_release_loaded_model_for_gpu_work_is_noop_for_remote_mode(monkeypatch):
     assert storyboard_llm_runtime.release_loaded_model_for_gpu_work() is False
 
 
+def test_release_loaded_model_for_gpu_work_ignores_remote_request_lock(monkeypatch):
+    calls = []
+
+    class FakeProcess:
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_process", FakeProcess())
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "local"},
+    )
+    storyboard_llm_runtime._set_activity(
+        "generating",
+        model_id="workstation::qwen",
+        operation="freeform_chat",
+        active=True,
+    )
+    storyboard_llm_runtime._request_lock.acquire()
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda *args, **kwargs: {
+            "data": [{"id": "qwen-local", "path": "/qwen.gguf", "status": {"value": "loaded"}}]
+        },
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append(model_id))
+
+    try:
+        assert storyboard_llm_runtime.release_loaded_model_for_gpu_work() is True
+    finally:
+        storyboard_llm_runtime._request_lock.release()
+        storyboard_llm_runtime._set_activity("idle", model_id="", operation="", active=False)
+
+    assert calls == ["qwen-local"]
+
+
 def test_director_sampling_profiles_are_explicit_and_conservative():
     develop = storyboard_llm_runtime._sampling_profile("develop_story")
     expand = storyboard_llm_runtime._sampling_profile("expand_concept")

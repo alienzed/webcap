@@ -1,15 +1,51 @@
 MINIMAX H3 STORYBOARD GUIDANCE
 
-Write a directly usable video-generation prompt for the Scene.
+Author a directly usable MiniMax H3 prompt for the Scene.
 
-Describe observable audiovisual content and the Scene's progression clearly enough for MiniMax H3 to generate it. Use concrete visual detail, performance, environment, camera treatment, movement, sound, dialogue, music, cuts, and timestamps when they genuinely help this Scene.
+Establish stable and current facts at scene level. Let shots inherit that setup and describe temporal progression, timing, synchronized events, camera changes, and meaningful changes in state.
 
-Use the short generation window aggressively. For a typical 10–15 second Scene, several meaningful cuts, shots, or distinct visual beats are expected; a sustained conversation, continuous physical action, or intentionally uninterrupted moment can justify a single shot. Follow MiniMax H3 conventions roughly rather than mechanically, and keep shot chronology and timing plausible for the requested duration.
+ILLUSTRATIVE PROMPT SHAPE
 
-Preserve explicit Story facts, important invariants, and exact first/last-frame references when supplied. Make the current physical state clear enough that visible changes in position, posture, location, props, clothing, environment, and action progress coherently.
+Use the following as a strong example of H3 prompt organization. Adapt the sections, detail, ordering, and shot count to the Scene.
 
-Use entry and exit state as planning context when a specific handoff matters, carrying only the details that materially help the Scene.
+--- BEGIN EXAMPLE PROMPT SHAPE ---
 
-Favor concrete positive direction and purposeful prompt structure. Add dialogue, music, sound, cuts, timestamps, and continuity detail when they improve the render.
+Subject:
+Primary subject identity, appearance, wardrobe, and voice characteristics that matter throughout the Scene.
 
-Return the complete prompt text exactly as it should be used for H3. When an exact first/last-frame reference is attached, WebCap may add only the required reference-alignment statement.
+Scene Overview:
+A concise description of the setting, action, progression, mood, and landing point.
+
+Environment / Continuity Anchors:
+Current spatial state, important location anchors, relevant props and their state, lighting, time of day, weather, and other visible conditions that carry through the Scene.
+
+Style / Visual Treatment:
+Overall visual language, composition, lens and depth character, camera energy, and movement style.
+
+integrated_multimodal_description:
+
+[Shot 1] (0s–Xs)
+Action, performance, framing, camera behavior, synchronized events or dialogue, and meaningful changes from the scene-wide setup.
+
+[Shot 2] (Xs–Ys)
+The next meaningful change in action, framing, performance, information, perspective, or physical state.
+
+[Shot 3] ... and additional shots as appropriate for the Scene.
+
+overall_soundscape:
+Scene-wide ambience, spatial audio, physical sounds, Foley, environmental texture, and other persistent diegetic sound.
+
+non_diegetic_music:
+Audience-only score and its character or progression when it serves the Scene.
+
+--- END EXAMPLE PROMPT SHAPE ---
+
+Use the 10–15 second generation window productively. Let each shot advance action, performance, framing, perspective, information, or physical state. Sustained treatment suits material that benefits from uninterrupted time.
+
+Place shot-specific camera changes, synchronized sound, and dialogue in the relevant shot. Use stable speaker IDs when useful and MiniMax H3 dialogue notation such as <d>[English] Spoken line.</d> for spoken content.
+
+Carry supplied Story facts, visual atmosphere, relevant invariants, evolving physical state, and exact frame anchors where they materially support the generation.
+
+For exact first-frame or last-frame references, author the visual progression around the supplied anchor. WebCap adds the mechanical MiniMax reference-alignment statement.
+
+Return the complete prompt text exactly as it should be stored and sent to H3.

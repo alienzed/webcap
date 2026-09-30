@@ -231,6 +231,29 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
+    if operation == "insert_scene":
+        scene_id = str(context.get("sceneId") or "").strip()
+        if not scene_id:
+            raise RuntimeError("Storyboard Insert Scene job is missing its anchor Scene ID.")
+        data = copy.deepcopy(llm_result.get("data"))
+        if not isinstance(data, dict) or not isinstance(data.get("scene"), dict):
+            raise ValueError("Storyboard Director Insert Scene response must contain a scene object.")
+        from .storyboard_store import insert_director_scene_after
+        story, scene = insert_director_scene_after(
+            story_id,
+            scene_id,
+            data["scene"],
+            model_id=llm_result["model"],
+        )
+        return {
+            "storyId": story["id"],
+            "sceneId": scene["id"],
+            "insertedAfterSceneId": scene_id,
+            "model": llm_result["model"],
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if operation in {"write_prompt", "refine_prompt"}:
         scene_id = str(context.get("sceneId") or "").strip()
         if not scene_id:
@@ -493,7 +516,7 @@ def _storyboard_target(context, operation):
         return None
     if operation in {"expand_concept", "define_invariants"}:
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
-    if operation == "develop_story":
+    if operation in {"develop_story", "insert_scene"}:
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
     if operation == "repair_scenes":
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}

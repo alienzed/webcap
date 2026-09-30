@@ -10,7 +10,7 @@ H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
 SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"
-VALID_OPERATIONS = {"expand_concept", "define_invariants", "develop_story", "repair_scenes", "write_prompt", "refine_prompt"}
+VALID_OPERATIONS = {"expand_concept", "define_invariants", "develop_story", "insert_scene", "repair_scenes", "write_prompt", "refine_prompt"}
 
 
 def _read_text(path, label):
@@ -68,6 +68,20 @@ def _prompt_response_schema(allow_duration=False, allow_scene_fields=False, allo
             ),
         }
     return schema
+
+
+def _single_scene_response_schema():
+    plan_schema = _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema")
+    try:
+        scene_schema = plan_schema["properties"]["scenes"]["items"]
+    except (KeyError, TypeError) as exc:
+        raise RuntimeError("Storyboard Scene plan schema is missing its Scene item shape.") from exc
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["scene"],
+        "properties": {"scene": scene_schema},
+    }
 
 
 def _read_json(path, label):
@@ -135,38 +149,6 @@ def _story_invariants_text(story):
     return "\n\n".join(lines)
 
 
-def _scene_invariants_text(story, scene):
-    refs = scene.get("invariantRefs") if isinstance(scene.get("invariantRefs"), list) else []
-    if not refs:
-        return ""
-    by_key = {}
-    invariants = story.get("invariants") if isinstance(story.get("invariants"), list) else []
-    for item in invariants:
-        if not isinstance(item, dict):
-            continue
-        kind = _clean(item.get("kind")).lower()
-        title = _clean(item.get("title"))
-        text = _clean(item.get("text"))
-        if kind not in {"character", "location"} or not title or not text:
-            continue
-        by_key[(kind, title.casefold())] = {
-            "kind": kind,
-            "title": title,
-            "text": text,
-        }
-
-    lines = []
-    for ref in refs:
-        if not isinstance(ref, dict):
-            continue
-        kind = _clean(ref.get("kind")).lower()
-        title = _clean(ref.get("title"))
-        item = by_key.get((kind, title.casefold()))
-        if item is not None:
-            lines.append(item["kind"].capitalize() + ": " + item["title"] + "\n" + item["text"])
-    return "\n\n".join(lines)
-
-
 def _repair_scene_plan(story):
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
@@ -187,51 +169,6 @@ def _repair_scene_plan(story):
             "prompt": _clean(scene.get("prompt")),
         })
     return result
-
-
-def _scene_shared_context_text(story, scene):
-    refs = scene.get("sharedContextRefs") if isinstance(scene.get("sharedContextRefs"), list) else []
-    if not refs:
-        return ""
-    development = story.get("development") if isinstance(story.get("development"), dict) else {}
-    plan = development.get("plan") if isinstance(development.get("plan"), dict) else {}
-    shared = plan.get("sharedContext") if isinstance(plan.get("sharedContext"), dict) else {}
-    by_id = {}
-    for category in ("subjects", "wardrobes", "locations", "persistentFacts"):
-        items = shared.get(category) if isinstance(shared.get(category), list) else []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            context_id = _clean(item.get("id"))
-            description = _clean(item.get("description"))
-            if context_id and description:
-                by_id[context_id] = {
-                    "label": _clean(item.get("label")) or context_id,
-                    "description": description,
-                }
-    lines = []
-    for ref in refs:
-        item = by_id.get(_clean(ref))
-        if item is not None:
-            lines.append(item["label"] + ": " + item["description"])
-    return "\n".join(lines)
-
-
-def _previous_handoff(story, scene_id):
-    order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
-    if scene_id not in order:
-        return ""
-    index = order.index(scene_id)
-    if index <= 0:
-        return ""
-    previous = (story.get("scenes") or {}).get(order[index - 1])
-    if not isinstance(previous, dict):
-        return ""
-    exit_state = _clean(previous.get("exitState"))
-    if not exit_state:
-        return ""
-    return exit_state
-
 
 
 def _previous_scene_context(story, scene_id):
@@ -325,15 +262,15 @@ def build_request(story, scene_id, operation, instruction=""):
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append(
-            "[CURRENT TASK]\nExpand this Story concept into a richer creative overview that can drive later Scene planning. "
-            "Develop the experience, progression, subjects or characters, setting, themes, relationships, or ending direction "
-            "that the seed actually supports; do not force conventional plot, conflict, or character arcs onto a concept that "
-            "does not call for them. Be creatively useful and fill in sensible connective material rather than asking "
-            "questions. Preserve explicit facts from the original concept and Story invariants. Treat the supplied Visual / Atmosphere as authoritative: "
-            "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere in the expanded prose. Expand the narrative within it. Do not break the Story into "
-            "Scenes yet and do not write MiniMax H3 prompts. Aim for roughly 500-1000 words total when the concept supports it; "
+            "[CURRENT TASK]\nExpand this concept into a richer creative overview that can drive later Scene planning. "
+            "First understand what kind of concept it is rather than assuming a narrative arc. Develop the experience, subjects or characters, setting, themes, recurring format, variations, visual situations, progression, relationships, or ending only where the seed actually supports them. "
+            "A concept may be narrative, episodic, repetitive, montage-like, observational, variation-based, or something else entirely. "
+            "Be creatively useful and fill in sensible connective material when the concept calls for it rather than asking questions. "
+            "Preserve explicit facts from the original concept and Story invariants. Treat the supplied Visual / Atmosphere as authoritative: "
+            "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere. Enrich the concept within it. "
+            "Do not break the concept into Scenes yet and do not write MiniMax H3 prompts. Aim for roughly 500-1000 words total when the concept supports it; "
             "treat that as a useful target, not a minimum to pad toward. Stop once the concept is fully developed. "
-            "Return only the expanded Story concept as polished prose."
+            "Return only the expanded concept as polished prose."
         )
         return {
             "operation": operation,
@@ -363,14 +300,16 @@ def build_request(story, scene_id, operation, instruction=""):
         scene_count_guidance = (
             "Create exactly " + str(int(target_scene_count)) + " Scenes. "
             if target_scene_count is not None
-            else "Choose the Scene count that best fits the Story's natural progression and pacing. "
+            else "Choose the Scene count that best serves the concept and the amount of useful coverage it supports. "
         )
         blocks.append(
-            "[CURRENT TASK]\nDevelop the Story into a complete sequence of MiniMax H3 Scenes. "
+            "[CURRENT TASK]\nDevelop the complete concept into MiniMax H3 Scenes. "
             + scene_count_guidance
-            + "Each Scene is a short generation unit, normally about 10-15 seconds and never longer than 15 seconds. "
+            + "Consider the complete concept before writing individual Scenes. First decide what relationship, if any, the Scenes should have: progression, variations, repeated format, montage, parallel moments, independent alternatives, or another structure suggested by the concept. "
+            "Treat none of those as the default. Decide what each Scene contributes to the whole, then author the individual Scenes. "
+            "Each Scene is a short generation unit, normally about 10-15 seconds and never longer than 15 seconds. "
             "Use that window densely: unless uninterrupted time genuinely serves the material, give each Scene several meaningful shots, cuts, or distinct visual beats rather than idle coverage. "
-            "Keep the Story's progression clear and preserve explicit facts and supplied invariants where they matter, but do not force every Scene to behave like a literal continuation of the previous render. "
+            "Keep the relationship between Scenes appropriate to the concept. Preserve explicit facts and supplied invariants where they matter, but do not manufacture narrative progression or literal visual continuity when the concept does not call for it. "
             "Entry and exit state are optional planning notes; include them only when a specific handoff or visible state is genuinely useful. "
             "Write each Scene's complete H3 generation prompt yourself. WebCap will store that prompt as written and will not inject invariants, continuity blocks, field labels, shot labels, sound sections, or other creative text afterward. "
             "Follow the supplied H3 guidance roughly rather than mechanically. Be concrete and visually productive, but avoid repetitive continuity prose and unnecessary boilerplate. "
@@ -381,6 +320,52 @@ def build_request(story, scene_id, operation, instruction=""):
             "output": "json",
             "prompt": "\n\n".join(blocks).strip() + "\n",
             "response_schema": _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema"),
+        }
+
+    if operation == "insert_scene":
+        order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
+        scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+        if scene_id not in order:
+            raise FileNotFoundError("Scene does not exist.")
+        index = order.index(scene_id)
+        if index + 1 >= len(order):
+            raise ValueError("Insert Scene requires a following Scene.")
+        next_scene_id = order[index + 1]
+        before_scene = scenes.get(scene_id)
+        after_scene = scenes.get(next_scene_id)
+        if not isinstance(before_scene, dict) or not isinstance(after_scene, dict):
+            raise RuntimeError("Storyboard Scene order is invalid.")
+
+        blocks = ["[DIRECTOR CONTEXT]\n" + director_context]
+        title = _clean(story.get("title"))
+        if title:
+            blocks.append("[STORY TITLE]\n" + title)
+        concept = _clean(story.get("concept"))
+        if concept:
+            blocks.append("[STORY CONCEPT]\n" + concept)
+        style = _clean(story.get("style"))
+        if style:
+            blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
+        blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        blocks.append("[SCENE BEFORE]\n" + _scene_context(before_scene) + "\nGeneration prompt: " + _clean(before_scene.get("prompt")))
+        blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene) + "\nGeneration prompt: " + _clean(after_scene.get("prompt")))
+        blocks.append(
+            "[CURRENT TASK]\nCreate exactly one new Scene to insert between these two existing Scenes. "
+            "Use the complete concept to decide what belongs in this gap. The adjacent Scenes are relationship and contrast context, not a requirement to create a literal bridge: "
+            "the new Scene may continue, contrast, vary, repeat a format, jump, or remain relatively independent as the concept warrants. "
+            "Make it meaningfully distinct from both adjacent Scenes while still belonging to the same concept. "
+            "Use the short generation window densely: several meaningful shots, cuts, or distinct visual beats are normally expected unless uninterrupted time genuinely serves the material. "
+            "Entry and exit state are optional and should appear only when a real handoff matters. "
+            "Write the complete H3 prompt yourself; WebCap will store it as written. Return only JSON matching the supplied schema."
+        )
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+            "response_schema": _single_scene_response_schema(),
         }
 
     if operation == "repair_scenes":
@@ -473,9 +458,11 @@ def build_request(story, scene_id, operation, instruction=""):
         previous_scene_context = _previous_scene_context(story, scene_id)
         if previous_scene_context:
             blocks.append(
-                "[PREVIOUS SCENE - CONTEXT ONLY]\n"
+                "[PREVIOUS SCENE - RELATIONSHIP CONTEXT]\n"
                 + previous_scene_context
-                + "\n\nUse this only when it genuinely helps the requested revision. Do not force a continuity handoff."
+                + "\n\nUse the previous Scene to judge the appropriate relationship and distinctness of this Scene. "
+                "Preserve continuity when the concept implies continuation; otherwise avoid merely echoing the previous Scene's composition, action, or prompt. "
+                "Variation, contrast, repetition, or independence may be the correct relationship."
             )
         blocks.append("[EXISTING PROMPT]\n" + existing_prompt)
         blocks.append(

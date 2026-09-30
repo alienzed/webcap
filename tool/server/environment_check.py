@@ -59,7 +59,7 @@ def _python_package_check(package_name, label, group="optional_analysis", requir
     guidance = ""
     if not available:
         guidance = (
-            "Use Settings > Advanced > Install / Repair Python Requirements."
+            "Use Diagnostics > Health > Install / Repair Python Requirements."
             if not required
             else "Run python -m pip install -r requirements.txt in the WebCap environment."
         )
@@ -135,7 +135,7 @@ def _append_optional_analysis_checks(checks):
         bool(deface_path),
         "deface command is available." if deface_path else "deface command is not available.",
         deface_path or "",
-        "Use Settings > Advanced > Install / Repair Python Requirements." if not deface_path else "",
+        "Use Diagnostics > Health > Install / Repair Python Requirements." if not deface_path else "",
     ))
 
     model_root = Path(__file__).resolve().parents[1] / "vendor" / "mediapipe" / "models"

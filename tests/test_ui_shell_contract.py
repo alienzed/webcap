@@ -989,12 +989,22 @@ def test_assistant_stop_is_owned_by_active_progress_card_and_director_graphs_are
     assert "overflow: hidden;" in svg
 
 
-def test_director_graph_geometry_fits_the_available_card_space_without_curve_clipping():
+def test_director_graph_geometry_fits_the_available_card_width():
     generate_css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+    styles = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    trend = styles.split(".director-activity-trend {", 1)[1].split("}", 1)[0]
+    legend = styles.split(".director-activity-trend-legend {", 1)[1].split("}", 1)[0]
+    assert "min-width: 0;" in trend
+    assert "min-width: 0;" in legend
+    assert "flex-wrap: wrap;" in legend
+
+    svg = styles.split(".director-activity-trend svg {", 1)[1].split("}", 1)[0]
+    assert "width: 100%;" in svg
+
     for script_name in ("generate.js", "storyboard.js", "test_generations.js"):
         script = (ROOT / "tool" / "js" / script_name).read_text(encoding="utf-8")
-        assert "var x = 1 + Math.max(0, Math.min(1, (sample.time - cutoff) / 60000)) * 118;" in script
+        assert "var x = Math.max(0, Math.min(120, (sample.time - cutoff) / 60000 * 120));" in script
 
     block = generate_css.split("#generate-director-activity-trend svg {", 1)[1].split("}", 1)[0]
     assert "min-height: 0;" in block
-    assert "min-height: 86px;" not in block

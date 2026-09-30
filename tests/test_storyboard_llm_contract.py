@@ -52,8 +52,8 @@ def test_write_prompt_gives_director_context_without_postprocessing_contract():
     assert "[STORY INVARIANTS]" in prompt
     assert "Mara has a dark bob" in prompt
     assert "[REFERENCE MODE]\nI2VA" in prompt
-    assert "several meaningful cuts, shots, or visual beats" in prompt
-    assert "WebCap will not rewrite it" in prompt
+    assert "Make the current physical state clear enough" in prompt
+    assert "exactly as it should be used" in prompt
     assert "Continuity anchors" not in prompt
     assert "integrated_multimodal_description:" not in request["response_schema"]["properties"]
 
@@ -125,11 +125,11 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert "invariantRefs" not in scene_schema["properties"]
     assert "sharedContextRefs" not in scene_schema["properties"]
     assert "Create exactly 12 Scenes." in prompt
-    assert "several meaningful shots, cuts, or distinct visual beats" in prompt
-    assert "Treat none of those as the default" in prompt
-    assert "do not manufacture narrative progression or literal visual continuity" in prompt
-    assert "Entry and exit state are optional planning notes" in prompt
-    assert "WebCap will store that prompt as written" in prompt
+    assert "USE EACH GENERATION UNIT WELL." in prompt
+    assert "Choose the relationship that best serves the concept" in prompt
+    assert "evolving state when continuity matters" in prompt
+    assert "Use entry and exit state only when a specific handoff or visible state is genuinely useful" in prompt
+    assert "exactly as it should be used" in prompt
     assert "200-400 words" not in prompt
     assert "Continuity anchors" not in prompt
 
@@ -156,10 +156,10 @@ def test_insert_scene_uses_adjacent_scenes_as_relationship_context_not_bridge_re
     assert set(scene_schema["required"]) == {"title", "summary", "prompt", "suggestedDurationSeconds"}
     assert "[SCENE BEFORE]" in prompt
     assert "[SCENE AFTER]" in prompt
-    assert "not a requirement to create a literal bridge" in prompt
+    assert "Treat the adjacent Scenes as relationship and contrast context" in prompt
     assert "continue, contrast, vary, repeat a format, jump, or remain relatively independent" in prompt
     assert "meaningfully distinct from both adjacent Scenes" in prompt
-    assert "several meaningful shots, cuts, or distinct visual beats" in prompt
+    assert "USE EACH GENERATION UNIT WELL." in prompt
 
 
 def test_insert_scene_requires_a_following_scene():
@@ -179,7 +179,7 @@ def test_repair_scenes_is_sparse_and_prompt_is_complete_string():
     assert set(fields["properties"]) == {"summary", "entryState", "exitState", "prompt"}
     assert fields["properties"]["prompt"]["type"] == "string"
     assert "complete revised H3 prompt string" in prompt
-    assert "WebCap will not rebuild it" in prompt
+    assert "following the supplied Director and H3 guidance" in prompt
     assert "Continuity anchors" not in prompt
 
 

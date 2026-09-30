@@ -106,6 +106,20 @@ def _runtime_is_live(runtime):
     return code == 0 and "h3_shape_probe.py" in command_line
 
 
+def _cleanup_completed_probe(probe_root):
+    calibration = app_config.config.get("training") if isinstance(app_config.config, dict) else None
+    calibration = calibration.get("h3_calibration") if isinstance(calibration, dict) else None
+    if not isinstance(calibration, dict) or not calibration.get("safe_shapes"):
+        return False
+    probe_root = Path(probe_root)
+    shutil.rmtree(probe_root)
+    try:
+        probe_root.parent.rmdir()
+    except OSError:
+        pass
+    return True
+
+
 def _refresh_runtime(runtime_path):
     runtime = _read_json(runtime_path)
     if not runtime:
@@ -118,6 +132,8 @@ def _refresh_runtime(runtime_path):
         _write_json(runtime_path, runtime)
         if runtime.get("publishConfig"):
             app_config.reload_runtime_config()
+        if runtime.get("status") == "completed" and runtime.get("publishConfig"):
+            _cleanup_completed_probe(Path(runtime_path).parent)
     return runtime
 
 

@@ -18,6 +18,10 @@
     jobId: ''
   };
   var contextualModes = {};
+  var inputHistory = [];
+  var inputHistoryIndex = 0;
+  var inputHistoryDraft = '';
+  var applyingHistoryValue = false;
 
   function el(id) {
     return document.getElementById(id);
@@ -516,6 +520,10 @@
     var content = String(input.value || '').trim();
     if (!content || !state.modelId) return;
 
+    if (!inputHistory.length || inputHistory[inputHistory.length - 1] !== content) inputHistory.push(content);
+    inputHistoryIndex = inputHistory.length;
+    inputHistoryDraft = '';
+
     var messages = currentMessages();
     var elapsedMap = currentElapsedMap();
     var metricsMap = currentMetricsMap();
@@ -659,8 +667,44 @@
       if (Array.prototype.some.call(model.options, function (option) { return option.value === selected; })) model.value = selected;
       syncControls();
     });
-    input.addEventListener('input', syncControls);
+    input.addEventListener('input', function () {
+      if (!applyingHistoryValue) {
+        inputHistoryIndex = inputHistory.length;
+        inputHistoryDraft = input.value;
+      }
+      syncControls();
+    });
     input.addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        var start = Number(input.selectionStart || 0);
+        var end = Number(input.selectionEnd || 0);
+        var onFirstLine = input.value.lastIndexOf('\n', Math.max(0, start - 1)) === -1;
+        var onLastLine = input.value.indexOf('\n', end) === -1;
+        var direction = event.key === 'ArrowUp' ? -1 : 1;
+
+        if ((direction < 0 && onFirstLine) || (direction > 0 && onLastLine)) {
+          if (inputHistory.length) {
+            if (direction < 0) {
+              if (inputHistoryIndex === inputHistory.length) inputHistoryDraft = input.value;
+              if (inputHistoryIndex > 0) inputHistoryIndex -= 1;
+            } else if (inputHistoryIndex < inputHistory.length) {
+              inputHistoryIndex += 1;
+            }
+
+            if (inputHistoryIndex >= 0 && inputHistoryIndex <= inputHistory.length) {
+              event.preventDefault();
+              applyingHistoryValue = true;
+              input.value = inputHistoryIndex === inputHistory.length
+                ? inputHistoryDraft
+                : inputHistory[inputHistoryIndex];
+              applyingHistoryValue = false;
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              input.setSelectionRange(input.value.length, input.value.length);
+            }
+          }
+          return;
+        }
+      }
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         sendMessage();

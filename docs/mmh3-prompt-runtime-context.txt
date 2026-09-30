@@ -1,52 +1,15 @@
-MINIMAX H3 STORYBOARD WRITING RULES
+MINIMAX H3 STORYBOARD GUIDANCE
 
-Write one short, independently generatable video Scene.
+Write a directly usable video-generation prompt for the Scene.
 
-Describe observable audiovisual content, not plot summary. Present what happens in chronological order and fit it to the supplied duration.
+Describe observable audiovisual content and the Scene's progression clearly enough for MiniMax H3 to generate it. Use concrete visual detail, performance, environment, camera treatment, movement, sound, dialogue, music, cuts, and timestamps when they genuinely help this Scene.
 
-Preserve supplied Story/Scene facts, Story invariants, entry/exit state, and exact frame anchors. Add dialogue, visible text, characters, props, music, or new Story events only when supplied or when they clearly serve the current Scene and task.
+Follow MiniMax H3 conventions roughly rather than mechanically. A Scene may be one continuous shot or several shots. If you use multiple shots, keep their chronology and timing plausible for the requested duration.
 
-The core output fields are:
-integrated_multimodal_description
-overall_soundscape
-non_diegetic_music
+Preserve explicit Story facts, important invariants, and exact first/last-frame references when supplied. Treat invariants as context: use the details that matter to the Scene without mechanically repeating a continuity block.
 
-For integrated_multimodal_description, normally organize the content so the model can quickly identify the Scene's subject, overall intent/progression, visual/camera treatment, and then the chronological shot-by-shot execution. The preferred example below demonstrates this as Subject, Overview, Style, then [Shot 1] and later timestamped shots. Follow that organization when it fits the Scene rather than collapsing everything into one undifferentiated paragraph; omit or adapt a concern only when it genuinely does not apply.
+Entry and exit state are optional planning context. Use them when a specific handoff matters; do not force the prompt to restate them when it would add noise.
 
-Shot rules:
-- [Shot 1] has no timestamp.
-- Only later shots have cut timestamps.
-- Later timestamps must increase and remain inside the Scene duration.
-- Use shot changes when they add useful progression, information, perspective, action, or rhythm; several meaningful shots are normal when the material supports them.
+Prefer concrete positive direction over negative constraint lists. Do not add sections, dialogue, music, or continuity detail merely to satisfy a template.
 
-PREFERRED FORMAT EXAMPLE ONLY:
-The example below is not Story content, context, or material to continue or copy. It demonstrates organization, chronological density, and concrete audiovisual detail only. Adapt the number of shots, timing, pacing, camera treatment, dialogue, sound, and music to the actual material. A continuous single-shot Scene remains valid when uninterrupted time is the stronger directorial choice.
-
-{
-  "integrated_multimodal_description": "Subject: A technician working alone at a central bench with a compact equipment case and a small component. Overview: The technician arrives, opens the case, performs one focused adjustment, verifies the result, and leaves for the next workstation. Style: Match the supplied Story visual atmosphere; let camera treatment and shot rhythm serve the action. [Shot 1] A technician enters a bright workshop carrying a compact equipment case, sets it on the center bench, opens it, and immediately begins arranging the tools inside. [Shot 2: 0:04] From the side, the technician selects a tool, adjusts a small component on the bench, then leans closer to inspect the result. [Shot 3: 0:09] A wider view as the technician finishes the adjustment, closes the case, picks it up, and moves toward the next workstation.",
-  "overall_soundscape": "Footsteps, case latches, light tool handling, quiet room ventilation, and distant workshop activity.",
-  "non_diegetic_music": "N/A"
-}
-
-END FORMAT EXAMPLE.
-
-Reference rules:
-- T2VA: no exact frame anchor.
-- I2VA: supplied first frame is the exact opening visual state.
-- L2VA: supplied last frame is the exact ending visual state.
-- FL2VA: supplied first and last frames are exact opening/ending states; describe a plausible path between them.
-- Do not contradict an exact frame anchor.
-
-Dialogue:
-- Add dialogue only when explicitly supplied/requested, or when the current Director task explicitly permits inventing it.
-- Preserve supplied dialogue verbatim.
-- Use H3 dialogue tags only when dialogue exists.
-
-Sound:
-- overall_soundscape is ambience/Foley/diegetic non-dialogue sound.
-- non_diegetic_music is audience-only score.
-- Use N/A when no score is intended.
-
-Prefer concrete positive visual description over negative constraint lists.
-
-When WebCap supplies a structured response schema, return exactly the requested semantic H3 fields and do not typeset field labels or alignment preambles yourself; WebCap renders the final model-facing prompt deterministically. In structured whole-Story tasks, apply these rules independently inside each Scene prompt object.
+Return the complete prompt text that should be stored and sent to H3. WebCap will not rewrite it. When an exact first/last-frame reference is attached, WebCap may add only the required reference-alignment statement.

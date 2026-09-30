@@ -32,7 +32,7 @@ _TRANSIENT_RECEIPT_LIMIT = 200
 
 
 def _state_path():
-    return Path(app_config.FS_ROOT) / ".webcap" / "execution_queue.json"
+    return app_config.execution_queue_state_path()
 
 
 def _default_state():

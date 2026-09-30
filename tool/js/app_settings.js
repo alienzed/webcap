@@ -15,7 +15,7 @@ var appSettingsTestCopyRoots = [
 ];
 
 function setAppSettingsTab(tabName, focusTab) {
-  var next = ['general', 'models', 'training', 'testing', 'director', 'system'].indexOf(tabName) !== -1 ? tabName : 'general';
+  var next = ['general', 'models', 'training', 'director', 'system'].indexOf(tabName) !== -1 ? tabName : 'general';
   appSettingsActiveTab = next;
   var selectedButton = null;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
@@ -132,18 +132,26 @@ function renderAppSettingsDirectorEndpoints(endpoints) {
   endpoints = Array.isArray(endpoints) ? endpoints : [];
   ui.appSettingsDirectorEndpointsEl.innerHTML = '';
   endpoints.forEach(function (endpoint, index) {
-    var row = document.createElement('div');
-    row.className = 'app-settings-form-grid';
-    row.dataset.directorEndpointRow = String(index);
-    row.innerHTML =
-      '<label class="app-settings-field"><span class="app-settings-field-label">Name</span>' +
-      '<input type="text" data-director-endpoint-name value="' + escapeHtml(String(endpoint.name || '')) + '" placeholder="MacBook Pro"></label>' +
-      '<label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Endpoint</span>' +
-      '<input type="text" data-director-endpoint-url value="' + escapeHtml(String(endpoint.endpoint || '')) + '" placeholder="http://192.168.1.20:11434/v1"></label>' +
-      '<label class="app-settings-check-row"><input type="checkbox" data-director-endpoint-enabled' + (endpoint.enabled !== false ? ' checked' : '') + '><span>Enabled</span></label>' +
-      '<button type="button" class="review-captions-btn" data-director-endpoint-remove>Remove</button>';
-    row.dataset.endpointId = appSettingsEndpointId(endpoint.id, index);
-    ui.appSettingsDirectorEndpointsEl.appendChild(row);
+    var card = document.createElement('div');
+    card.className = 'app-settings-runtime-card app-settings-runtime-card-remote';
+    card.dataset.directorEndpointRow = String(index);
+    card.dataset.endpointId = appSettingsEndpointId(endpoint.id, index);
+    card.innerHTML =
+      '<div class="app-settings-runtime-card-header">' +
+        '<label class="app-settings-field app-settings-runtime-name-field">' +
+          '<span class="app-settings-field-label">Name</span>' +
+          '<input type="text" data-director-endpoint-name value="' + escapeHtml(String(endpoint.name || '')) + '" placeholder="Work PC">' +
+        '</label>' +
+        '<div class="app-settings-runtime-card-actions">' +
+          '<label class="app-settings-check-row"><input type="checkbox" data-director-endpoint-enabled' + (endpoint.enabled !== false ? ' checked' : '') + '><span>Enabled</span></label>' +
+          '<button type="button" class="review-captions-btn" data-director-endpoint-remove>Remove</button>' +
+        '</div>' +
+      '</div>' +
+      '<label class="app-settings-field app-settings-field-wide">' +
+        '<span class="app-settings-field-label">Endpoint</span>' +
+        '<input type="text" data-director-endpoint-url value="' + escapeHtml(String(endpoint.endpoint || '')) + '" placeholder="http://192.168.1.20:11434/v1">' +
+      '</label>';
+    ui.appSettingsDirectorEndpointsEl.appendChild(card);
   });
 }
 
@@ -502,7 +510,7 @@ function wireAppSettingsUi() {
       setAppSettingsTab(button.getAttribute('data-app-settings-tab'), false);
     };
     button.onkeydown = function (event) {
-      var tabs = ['general', 'models', 'training', 'testing', 'director', 'system'];
+      var tabs = ['general', 'models', 'training', 'director', 'system'];
       var current = tabs.indexOf(button.getAttribute('data-app-settings-tab'));
       var next = current;
       if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;

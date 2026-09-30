@@ -847,38 +847,6 @@ def _normalize_developed_shared_context(value):
 def _validate_developed_plan(plan, target_scene_count=None, story_invariants=None):
     if not isinstance(plan, dict):
         raise ValueError("Developed Story plan must be an object.")
-    if "scenes" not in plan:
-        raise ValueError("Developed Story plan is missing Scenes.")
-
-    shared_context = {
-        "subjects": [],
-        "wardrobes": [],
-        "locations": [],
-        "persistentFacts": [],
-    }
-    raw_shared_context = plan.get("sharedContext")
-    if raw_shared_context is not None:
-        try:
-            shared_context = _normalize_developed_shared_context(raw_shared_context)
-        except ValueError as exc:
-            _logger.warning(
-                "Ignoring unusable optional Director sharedContext; Scenes remain usable: %s",
-                exc,
-            )
-    shared_context_id_map = {
-        item["id"].casefold(): item["id"]
-        for category in shared_context.values()
-        for item in category
-    }
-    invariant_map = {}
-    for invariant in story_invariants if isinstance(story_invariants, list) else []:
-        if not isinstance(invariant, dict):
-            continue
-        kind = str(invariant.get("kind") or "").strip().lower()
-        title = str(invariant.get("title") or "").strip()
-        text = str(invariant.get("text") or "").strip()
-        if kind in {"character", "location"} and title and text:
-            invariant_map[(kind, title.casefold())] = {"kind": kind, "title": title}
 
     scenes = plan.get("scenes")
     if not isinstance(scenes, list):
@@ -886,106 +854,45 @@ def _validate_developed_plan(plan, target_scene_count=None, story_invariants=Non
     if not scenes:
         raise ValueError("Storyboard Director returned no Scenes.")
 
-    scene_keys = {
-        "title",
-        "summary",
-        "entryState",
-        "exitState",
-        "prompt",
-        "suggestedDurationSeconds",
-        "continuity",
-    }
-    continuity_keys = {"continuesPreviousScene", "carryForward"}
     normalized = []
     for index, item in enumerate(scenes, start=1):
         if not isinstance(item, dict):
             raise ValueError("Developed Story Scene " + str(index) + " must be an object.")
-        if not scene_keys.issubset(item):
-            raise ValueError("Developed Story Scene " + str(index) + " is missing required fields.")
 
-        text_fields = {}
-        for key in ("title", "summary", "entryState", "exitState", "prompt"):
-            value = item.get(key)
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError("Developed Story Scene " + str(index) + " has invalid " + key + ".")
-            text_fields[key] = value.strip()
-
-        refs = item.get("sharedContextRefs", [])
-        normalized_refs = []
-        seen_refs = set()
-        if isinstance(refs, list):
-            for value in refs:
-                if not isinstance(value, str) or not value.strip():
-                    continue
-                ref = value.strip()
-                key = ref.casefold()
-                if key in seen_refs or key not in shared_context_id_map:
-                    continue
-                seen_refs.add(key)
-                normalized_refs.append(shared_context_id_map[key])
-        elif refs not in (None, ""):
-            _logger.warning(
-                "Ignoring optional Director sharedContextRefs for Scene %s because they are not an array.",
-                index,
-            )
-
-        raw_invariant_refs = item.get("invariantRefs", [])
-        normalized_invariant_refs = []
-        seen_invariant_refs = set()
-        if isinstance(raw_invariant_refs, list):
-            for ref in raw_invariant_refs:
-                if not isinstance(ref, dict):
-                    continue
-                kind = str(ref.get("kind") or "").strip().lower()
-                title = str(ref.get("title") or "").strip()
-                canonical = invariant_map.get((kind, title.casefold()))
-                if canonical is None:
-                    continue
-                key = (canonical["kind"], canonical["title"].casefold())
-                if key in seen_invariant_refs:
-                    continue
-                seen_invariant_refs.add(key)
-                normalized_invariant_refs.append(dict(canonical))
-        elif raw_invariant_refs not in (None, ""):
-            _logger.warning(
-                "Ignoring optional Director invariantRefs for Scene %s because they are not an array.",
-                index,
-            )
+        title = item.get("title")
+        summary = item.get("summary")
+        prompt = item.get("prompt")
+        if not isinstance(title, str) or not title.strip():
+            raise ValueError("Developed Story Scene " + str(index) + " has invalid title.")
+        if not isinstance(summary, str) or not summary.strip():
+            raise ValueError("Developed Story Scene " + str(index) + " has invalid summary.")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError("Developed Story Scene " + str(index) + " has invalid prompt.")
 
         duration_value = item.get("suggestedDurationSeconds")
         if isinstance(duration_value, bool) or not isinstance(duration_value, (int, float)):
-            raise ValueError("Developed Story Scene duration must be numeric.")
+            raise ValueError("Developed Story Scene " + str(index) + " duration must be numeric.")
         duration = float(duration_value)
         if duration < 6 or duration > 15:
-            raise ValueError("Developed Story Scene duration must be between 6 and 15 seconds.")
+            raise ValueError("Developed Story Scene " + str(index) + " duration must be between 6 and 15 seconds.")
 
-        continuity = item.get("continuity")
-        if not isinstance(continuity, dict) or not continuity_keys.issubset(continuity):
-            raise ValueError("Developed Story Scene continuity is missing required fields.")
-        continues_previous = continuity.get("continuesPreviousScene")
-        if not isinstance(continues_previous, bool):
-            raise ValueError("Developed Story Scene continuesPreviousScene must be boolean.")
-        carry_forward = continuity.get("carryForward")
-        if (
-            not isinstance(carry_forward, list)
-            or any(not isinstance(value, str) or not value.strip() for value in carry_forward)
-        ):
-            raise ValueError("Developed Story Scene carryForward must be a list of non-empty strings.")
+        entry_state = item.get("entryState", "")
+        exit_state = item.get("exitState", "")
+        if not isinstance(entry_state, str):
+            raise ValueError("Developed Story Scene " + str(index) + " entryState must be text when supplied.")
+        if not isinstance(exit_state, str):
+            raise ValueError("Developed Story Scene " + str(index) + " exitState must be text when supplied.")
 
         normalized.append({
-            **text_fields,
+            "title": title.strip(),
+            "summary": summary.strip(),
+            "entryState": entry_state.strip(),
+            "exitState": exit_state.strip(),
+            "prompt": prompt.strip(),
             "durationSeconds": duration,
-            "invariantRefs": normalized_invariant_refs,
-            "sharedContextRefs": normalized_refs,
-            "continuity": {
-                "continuesPreviousScene": continues_previous,
-                "carryForward": [value.strip() for value in carry_forward],
-            },
         })
-    return {
-        "sharedContext": shared_context,
-        "scenes": normalized,
-    }
+
+    return {"scenes": normalized}
 
 
 @_serialized_mutation
@@ -1192,18 +1099,24 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
 
     for raw in payload["changes"]:
         if not isinstance(raw, dict):
-            continue
+            raise ValueError("Each Storyboard Scene repair change must be an object.")
         scene_number = raw.get("sceneNumber")
         if isinstance(scene_number, bool) or not isinstance(scene_number, int):
-            continue
+            raise ValueError("Storyboard Scene repair sceneNumber must be an integer.")
         if scene_number < 1 or scene_number > len(base_order):
-            continue
+            raise ValueError("Storyboard Scene repair sceneNumber is outside the current Scene plan.")
         fields = raw.get("fields")
-        if not isinstance(fields, dict):
-            continue
+        if not isinstance(fields, dict) or not fields:
+            raise ValueError("Storyboard Scene repair fields must be a non-empty object.")
+        unknown_fields = set(fields) - set(allowed_fields)
+        if unknown_fields:
+            raise ValueError(
+                "Storyboard Scene repair contains unsupported fields: "
+                + ", ".join(sorted(unknown_fields))
+            )
         if scene_number in seen_numbers:
-            _logger.warning("Ignoring duplicate optional Scene repair patch for Scene %s.", scene_number)
-            continue
+            raise ValueError("Storyboard Scene repair returned Scene " + str(scene_number) + " more than once.")
+
         scene_id = str(base_order[scene_number - 1] or "").strip()
         current = scenes.get(scene_id)
         base_scene = base_scenes.get(scene_id)
@@ -1211,14 +1124,11 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
             raise RuntimeError("A Scene changed structurally while Check & Repair was running. Run Check & Repair again.")
 
         patch = {}
-        for key in allowed_fields:
-            if key not in fields:
-                continue
-            value = fields.get(key)
+        for key, value in fields.items():
             if not isinstance(value, str):
-                continue
+                raise ValueError("Storyboard Scene repair " + key + " must be text.")
             if key in {"summary", "prompt"} and not value.strip():
-                continue
+                raise ValueError("Storyboard Scene repair " + key + " must not be empty.")
             current_value = str(current.get(key) or "")
             base_value = str(base_scene.get(key) or "")
             if current_value != base_value:
@@ -1231,8 +1141,8 @@ def apply_scene_repairs(story_id, payload, repair_base, model_id="", job_id=""):
             if normalized_value != current_value:
                 patch[key] = normalized_value
 
+        seen_numbers.add(scene_number)
         if patch:
-            seen_numbers.add(scene_number)
             prepared.append((scene_id, patch))
 
     if not prepared:

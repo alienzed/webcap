@@ -202,72 +202,16 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         }
 
     if operation == "repair_scenes":
-        from .h3_prompt_contract import inject_shared_context_text, mode_from_reference_roles, render_base_prompt
-        from .storyboard_store import (
-            apply_scene_repairs,
-            load_story,
-            resolve_scene_invariant_context,
-            resolve_scene_shared_context,
-        )
+        from .storyboard_store import apply_scene_repairs
 
-        current_story = load_story(story_id)
         repair_payload = copy.deepcopy(llm_result.get("data"))
         if not isinstance(repair_payload, dict) or not isinstance(repair_payload.get("changes"), list):
             raise ValueError("Storyboard Scene repair response must contain a changes array.")
-        repair_base = context.get("repairBase")
-        base_order = repair_base.get("sceneOrder") if isinstance(repair_base, dict) else None
-        if not isinstance(base_order, list):
-            raise RuntimeError("Storyboard Scene repair is missing its frozen Scene order.")
-
-        scenes = current_story.get("scenes") if isinstance(current_story.get("scenes"), dict) else {}
-        for change in repair_payload["changes"]:
-            if not isinstance(change, dict) or not isinstance(change.get("fields"), dict):
-                continue
-            fields = change["fields"]
-            if "prompt" not in fields:
-                continue
-            prompt_data = fields.get("prompt")
-            if not isinstance(prompt_data, dict):
-                _logger.warning("Ignoring malformed optional Scene repair prompt patch; expected structured H3 content.")
-                fields.pop("prompt", None)
-                continue
-            scene_number = change.get("sceneNumber")
-            if isinstance(scene_number, bool) or not isinstance(scene_number, int):
-                continue
-            if scene_number < 1 or scene_number > len(base_order):
-                continue
-            scene_id = str(base_order[scene_number - 1] or "").strip()
-            scene = scenes.get(scene_id)
-            if not isinstance(scene, dict):
-                raise RuntimeError("A Scene changed structurally while Check & Repair was running.")
-            roles = [
-                str(reference.get("role") or "").strip()
-                for reference in scene.get("references") or []
-                if isinstance(reference, dict)
-            ]
-            continuity = "\n".join(
-                part
-                for part in (
-                    resolve_scene_invariant_context(current_story, scene),
-                    resolve_scene_shared_context(current_story, scene),
-                )
-                if part
-            )
-            try:
-                structured = inject_shared_context_text(prompt_data, continuity)
-                fields["prompt"] = render_base_prompt(
-                    structured,
-                    mode=mode_from_reference_roles(roles),
-                    duration=scene.get("durationSeconds"),
-                )
-            except (TypeError, ValueError) as exc:
-                _logger.warning("Ignoring malformed optional Scene repair prompt patch: %s", exc)
-                fields.pop("prompt", None)
 
         story, changed_scene_count, changed_field_count = apply_scene_repairs(
             story_id,
             repair_payload,
-            repair_base,
+            context.get("repairBase"),
             model_id=llm_result["model"],
             job_id=job_id,
         )
@@ -281,19 +225,16 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         }
 
     if operation == "develop_story":
-        from .h3_prompt_contract import render_story_plan_prompts
         from .storyboard_generation import generation_queue
-        from .storyboard_store import apply_developed_plan, load_story
+        from .storyboard_store import apply_developed_plan
         active_generation = generation_queue(story_id)
         if active_generation.get("jobs"):
             raise RuntimeError(
                 "Story has pending Take generation. Stop or finish it before applying developed Scenes."
             )
-        current_story = load_story(story_id)
-        plan = render_story_plan_prompts(
-            llm_result.get("data"),
-            current_story.get("invariants"),
-        )
+        plan = copy.deepcopy(llm_result.get("data"))
+        if not isinstance(plan, dict):
+            raise ValueError("Storyboard Director returned an invalid Scene plan.")
         story = apply_developed_plan(
             story_id,
             plan,
@@ -311,27 +252,36 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         scene_id = str(context.get("sceneId") or "").strip()
         if not scene_id:
             raise RuntimeError("Storyboard Scene Director job is missing its Scene ID.")
-        if operation == "refine_prompt" and llm_result.get("noChange"):
+
+        data = llm_result.get("data")
+        if not isinstance(data, dict):
+            raise ValueError("Storyboard Director returned invalid structured Scene prompt data.")
+
+        if operation == "refine_prompt" and data.get("changed") is False:
             from .storyboard_store import load_story
             story = load_story(story_id)
             scene = (story.get("scenes") or {}).get(scene_id)
             if not isinstance(scene, dict):
                 raise FileNotFoundError("Scene does not exist.")
         else:
+            prompt = str(data.get("prompt") or "").strip()
+            if not prompt:
+                raise ValueError("Storyboard Director returned an empty Scene prompt.")
             from .storyboard_store import apply_director_prompt
             scene_fields = {}
-            if operation == "refine_prompt" and isinstance(llm_result.get("data"), dict):
+            if operation == "refine_prompt":
                 for key in ("summary", "entryState", "exitState"):
-                    if key in llm_result["data"]:
-                        scene_fields[key] = llm_result["data"][key]
+                    if key in data:
+                        scene_fields[key] = data[key]
+            duration_override = data.get("durationSeconds") if operation == "refine_prompt" else None
             story, scene = apply_director_prompt(
                 story_id,
                 scene_id,
-                llm_result.get("text"),
+                prompt,
                 model_id=llm_result["model"],
                 job_id=job_id,
                 operation=operation,
-                duration_override=llm_result.get("durationOverride"),
+                duration_override=duration_override,
                 scene_fields=scene_fields,
             )
         return {

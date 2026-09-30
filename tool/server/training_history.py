@@ -119,7 +119,7 @@ def _training_path_for_entry(entry, host_root, training_root):
 
 
 def _recent_runs_path():
-    return Path(app_config.FS_ROOT) / ".webcap_training" / RECENT_RUNS_FILE_NAME
+    return app_config.training_history_state_path()
 
 
 def _folder_key(folder_path):
@@ -158,7 +158,7 @@ def _read_recent_runs():
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError("Could not read Recent Runs; it was left unchanged: " + str(path)) from exc
     if not isinstance(data, dict) or data.get("version") not in (1, RECENT_RUNS_VERSION) or not isinstance(data.get("jobs"), list):
-        raise ValueError("Unsupported Recent Runs state. Rename FS_ROOT/.webcap_training for the action-layout reset; it was left unchanged: " + str(path))
+        raise ValueError("Unsupported Recent Runs state; it was left unchanged: " + str(path))
     # Version 2 made the persisted job records richer without changing their
     # container shape. Read the established version-1 index in place and let
     # the next ordinary write upgrade it atomically.

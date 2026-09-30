@@ -37,7 +37,6 @@ from .training_progress import (
     sync_job_progress as _sync_job_progress,
 )
 from .training_runtime import (
-    TRAINING_RUNTIME_DIR_NAME,
     build_training_launcher,
     configured_training_settings as _training_settings,
     has_conda_runtime,
@@ -51,7 +50,6 @@ from .training_run_manifest import clear_selected_epoch as _clear_selected_epoch
 from .execution_queue import reserve_resource as reserve_execution_resource, release_resource as release_execution_resource, resource_owner as execution_resource_owner
 
 
-RUNNER_DIR_NAME = TRAINING_RUNTIME_DIR_NAME
 STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
 ACTIVE_STATUSES = {"starting", "running", "stopping"}
@@ -82,11 +80,11 @@ _DISK_INSPECTION_NOTICE_PREFIX = "Training disk-space protection could not inspe
 
 
 def _runtime_root():
-    return Path(app_config.FS_ROOT) / RUNNER_DIR_NAME
+    return app_config.training_runtime_root()
 
 
 def _state_path():
-    return _runtime_root() / STATE_FILE_NAME
+    return app_config.training_queue_state_path()
 
 
 def _jobs_root():

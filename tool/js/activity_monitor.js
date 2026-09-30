@@ -100,7 +100,7 @@
   function activityTitle(item) {
     var kind = kindLabel(item);
     if (item.kind === 'director') {
-      var client = item.client === 'generate' ? 'Generate' : item.client === 'storyboard' ? 'Storyboard' : item.client === 'test' ? 'Test' : item.client === 'review' ? 'Review' : item.client === 'chat' ? 'Chat' : '';
+      var client = item.client === 'generate' ? 'Generate' : item.client === 'storyboard' ? 'Storyboard' : item.client === 'test' ? 'Test' : item.client === 'chat' ? 'Chat' : '';
       return client ? kind + ' · ' + client : kind;
     }
     return item.label ? kind + ' · ' + String(item.label) : kind;
@@ -185,11 +185,9 @@
         window.openGenerateActivity(target);
       } else if (item.client === 'test' && typeof window.openTestBenchActivity === 'function') {
         window.openTestBenchActivity(target);
-      } else if (item.client === 'review' && typeof window.openReviewDatasetAssistantActivity === 'function') {
-        window.openReviewDatasetAssistantActivity(target);
       } else if (item.client === 'chat' && typeof window.openDirectorChatActivity === 'function') {
         window.openDirectorChatActivity(target);
-      } else if (item.client === 'storyboard' && typeof window.openStoryboardActivity === 'function') {
+      } else if (typeof window.openStoryboardActivity === 'function') {
         window.openStoryboardActivity(target);
       }
     }
@@ -421,7 +419,6 @@
       repair_scenes: 'Revise Scenes',
       write_prompt: 'Write Scene Prompt',
       refine_prompt: 'Refine Scene Prompt',
-      analyze_caption_set: 'Review Dataset',
       freeform_chat: 'Chat'
     };
     return labels[operation] || String(job && job.label || operation || 'Director request').replace(/_/g, ' ');
@@ -432,7 +429,6 @@
     return client === 'storyboard' ? 'Storyboard'
       : client === 'generate' ? 'Generate'
       : client === 'test' ? 'Test'
-      : client === 'review' ? 'Review'
       : client === 'chat' ? 'Chat'
       : 'Director';
   }
@@ -501,7 +497,6 @@
         test: 'activity-test-btn',
         storyboard: 'activity-storyboard-btn',
         storage: 'activity-storage-btn',
-        review: 'director-chat-rail-btn',
         chat: 'director-chat-rail-btn'
       }[kind];
       if (id) activeIds[id] = true;

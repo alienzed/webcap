@@ -394,7 +394,7 @@
   function directorTargetFromJob(job) {
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
     if (job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
-    if (job.operation === 'develop_story') return { kind: 'scenes', storyId: job.storyId };
+    if (job.operation === 'develop_story' || job.operation === 'insert_scene') return { kind: 'scenes', storyId: job.storyId };
     if (job.operation === 'repair_scenes') return { kind: 'repair', storyId: job.storyId };
     if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId, operation: job.operation };
@@ -451,6 +451,20 @@
           syncSceneRefineState(sceneId);
           updateSceneDirectorStatus(sceneId, 'Director completed.');
         }
+      } else if (operation === 'insert_scene') {
+        storyState.story.sceneOrder = canonical.sceneOrder || [];
+        storyState.story.scenes = canonical.scenes || {};
+        storyState.story.updatedAt = canonical.updatedAt;
+        var anchorIndex = storyState.story.sceneOrder.indexOf(sceneId);
+        var insertedSceneId = anchorIndex >= 0 ? storyState.story.sceneOrder[anchorIndex + 1] : '';
+        if (insertedSceneId) {
+          storyState.sceneViewMode = 'focus';
+          storyState.activeSceneId = insertedSceneId;
+          window.localStorage.setItem('webcap.storyboard.sceneView', 'focus');
+        }
+        renderScenes();
+        renderStoryReadiness();
+        setSaveState('Saved');
       } else if (operation === 'define_invariants') {
         storyState.story.invariants = canonical.invariants || [];
         storyState.story.updatedAt = canonical.updatedAt;
@@ -2431,6 +2445,7 @@
           '<summary title="Scene actions" aria-label="Scene actions">•••</summary>' +
           '<div class="storyboard-scene-menu-popover">' +
             '<button type="button" data-scene-action="duplicate">Duplicate Scene</button>' +
+            '<button type="button" data-scene-action="insert-director"' + (index === order.length - 1 ? ' disabled' : '') + '>Insert Director Scene After</button>' +
             '<button type="button" data-scene-action="up"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
             '<button type="button" data-scene-action="down"' + (index === order.length - 1 ? ' disabled' : '') + '>Move later</button>' +
             '<button type="button" class="danger" data-scene-action="delete">Remove Scene</button>' +
@@ -4257,6 +4272,56 @@
     }).catch(reportError);
   }
 
+  function insertDirectorSceneAfter(sceneId) {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    var order = Array.isArray(storyState.story.sceneOrder) ? storyState.story.sceneOrder : [];
+    var index = order.indexOf(sceneId);
+    if (index < 0 || index + 1 >= order.length) {
+      reportError(new Error('Insert Director Scene requires a following Scene.'));
+      return;
+    }
+    var directorTarget = { kind: 'scenes', storyId: storyId };
+    if (directorTargetBlocked(directorTarget)) {
+      reportError(new Error('This Story already has Director work that conflicts with Scene insertion.'));
+      return;
+    }
+    var modelId = storyState.director.modelId;
+    if (!modelId) {
+      reportError(new Error('Choose a Storyboard Director model first.'));
+      return;
+    }
+
+    setDirectorPending(directorTarget, true);
+    setSaveState('Director inserting Scene...');
+    startDirectorActivity();
+    flushPendingSaves().then(function () {
+      return directorRequest({
+        storyId: storyId,
+        sceneId: sceneId,
+        operation: 'insert_scene',
+        model: modelId
+      });
+    }).then(function (payload) {
+      return applyDirectorResultToVisibleStory({
+        storyId: storyId,
+        sceneId: sceneId,
+        operation: 'insert_scene',
+        jobId: payload.jobId
+      }).then(function () {
+        return consumeDirectorJob(payload.jobId);
+      });
+    }).then(function () {
+      setSaveState('Saved');
+      return refreshLibrary();
+    }).catch(function (err) {
+      if (!directorWasStopped(err)) reportError(err);
+    }).finally(function () {
+      setDirectorPending(directorTarget, false);
+      finishDirectorActivity();
+    });
+  }
+
   function duplicateScene(sceneId) {
     setSaveState('Saving...');
     flushPendingSaves().then(function () { return request({
@@ -5012,6 +5077,7 @@
     if (action === 'up') reorderScene(sceneId, -1);
     else if (action === 'down') reorderScene(sceneId, 1);
     else if (action === 'duplicate') duplicateScene(sceneId);
+    else if (action === 'insert-director') insertDirectorSceneAfter(sceneId);
     else if (action === 'delete') deleteScene(sceneId);
   }
 

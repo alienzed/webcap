@@ -1146,8 +1146,19 @@ def release_loaded_model_for_gpu_work():
     if settings.get("mode", "local") == "remote":
         return False
 
-    if not _request_lock.acquire(blocking=False):
-        raise DirectorRuntimeBusy("Prompt Assistant / Director runtime is still finishing current work.")
+    with _activity_lock:
+        active_model = (
+            str(_activity.get("model") or "").strip()
+            if _activity.get("active")
+            else ""
+        )
+    remote_request_active = bool(active_model) and not uses_local_gpu(active_model)
+
+    request_lock_acquired = False
+    if not remote_request_active:
+        if not _request_lock.acquire(blocking=False):
+            raise DirectorRuntimeBusy("Prompt Assistant / Director runtime is still finishing current work.")
+        request_lock_acquired = True
     try:
         process = _process
         if process is not None and process.poll() is not None:
@@ -1165,7 +1176,8 @@ def release_loaded_model_for_gpu_work():
             released = True
         return released
     finally:
-        _request_lock.release()
+        if request_lock_acquired:
+            _request_lock.release()
 
 
 def _sampling_profile(operation):

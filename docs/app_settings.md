@@ -11,9 +11,9 @@ The app settings modal is the global configuration surface for values stored in 
 - **Workspace → Caption Defaults**: app-wide fallback caption template.
 - **Training → Runtime**: Diffusion Pipe/WSL runtime, Conda or activation script, and repeat-reference epochs.
 - **Training → Models**: profiles available for new training runs.
-- **Training → Testing**: per-stage LoRA destinations used by Copy to Test.
+- **Training → Test Staging**: per-stage LoRA destinations used by Copy to Test.
 - **Training → Advanced Training**: uncommon H3 troubleshooting behavior.
-- **Director**: local llama.cpp plus zero or more enabled remote OpenAI-compatible endpoints. Healthy runtimes are discovered together; unavailable remotes are skipped. Director model selection is shared across Director-enabled workspaces.
+- **Director**: one local llama.cpp runtime plus zero or more named remote OpenAI-compatible runtimes. Each runtime is presented as a distinct configuration card; unavailable remotes are skipped during discovery. Director model selection is shared across Director-enabled workspaces.
 - **Advanced → Debug Logging**: persistent debug logging. With **Debug mode** enabled, Director LLM calls log effective request metadata and response diagnostics such as model, message size, configured context/output settings, sampling/thinking flags, wall-clock response time, finish reason, usage, and backend timing fields when the runtime supplies them. This is observational only and does not change generation limits or request behavior.
 - **Advanced → Optional Analysis**: persistent Face Focus and MediaPipe enablement. Diagnostics reports whether their dependencies are available; choosing whether WebCap uses them remains a Settings decision.
 - **Advanced → Raw Configuration**: direct JSON editing.
@@ -21,13 +21,13 @@ The app settings modal is the global configuration surface for values stored in 
 
 ## Information architecture
 
-The top-level tabs are **General**, **Models**, **Training**, **Testing**, **Director**, and **Advanced**.
+The top-level tabs are **General**, **Models**, **Training**, **Director**, and **Advanced**.
 
 Settings owns persistent configuration. Whole-app resources such as Models Root do not belong to Training merely because Training consumes them. One-off inspection, environment health, repair, calibration, and model benchmarking belong to the separate **Diagnostics** utility surface.
 
 Missing optional analysis dependencies do not make ordinary media metadata loading fail. WebCap skips the unavailable analyzer, keeps normal metadata usable, and reports the feature-specific problem to the global Console with the Diagnostics repair path.
 
-Specialist controls should prefer a local disclosure such as **Advanced Training** or **Runtime Overrides** over creating another top-level settings category.
+Specialist controls should prefer a local disclosure such as **Runtime Environment**, **Test Staging**, or **Limits** over creating another top-level settings category.
 
 ## Director output limit
 

@@ -1270,7 +1270,7 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
     )
 
 
-def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None):
+def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None, allow_truncated=False):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director messages are required.")
 
@@ -1330,7 +1330,7 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserve
                 _debug_llm_failure(model_ref, time.perf_counter() - request_started, exc)
                 raise
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
-            return _completion_result(response, model_ref)
+            return _completion_result(response, model_ref, allow_truncated=allow_truncated)
 
         if not gpu_reserved:
             _reserve_gpu()
@@ -1361,7 +1361,7 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserve
                 raise
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
             _relay_log_updates()
-            result = _completion_result(response, model_ref)
+            result = _completion_result(response, model_ref, allow_truncated=allow_truncated)
             completed = True
             return result
         finally:
@@ -1388,7 +1388,7 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserve
                 raise cleanup_error
 
 
-def _completion_result(response, model_id):
+def _completion_result(response, model_id, allow_truncated=False):
     choices = response.get("choices") if isinstance(response, dict) else None
     choice = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
     message = choice.get("message") if isinstance(choice, dict) else None
@@ -1397,9 +1397,11 @@ def _completion_result(response, model_id):
         raise RuntimeError("Director runtime returned an empty response.")
     finish_reason = str(choice.get("finish_reason") or "").strip().lower() if isinstance(choice, dict) else ""
     if finish_reason in {"length", "max_tokens"}:
-        raise RuntimeError(
-            "Director output was truncated because the runtime reached its available token/context limit."
-        )
+        if not allow_truncated:
+            raise RuntimeError(
+                "Director output was truncated because the runtime reached its available token/context limit."
+            )
+        content += "\n\n[Output truncated by model/runtime token or context limit.]"
     return {
         "text": content,
         "model": model_id,
@@ -1446,7 +1448,7 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
                 operation=operation,
                 context_size=(settings.get("context_size") or 0) if settings.get("mode", "local") == "local" else 0,
             )
-            result = chat(model_id, normalized, gpu_reserved=bool(gpu_reserved))
+            result = chat(model_id, normalized, gpu_reserved=bool(gpu_reserved), allow_truncated=True)
             _set_activity(
                 "complete",
                 model_id=model_id,

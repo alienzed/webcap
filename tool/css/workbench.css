@@ -16,7 +16,6 @@
 .app.shell-revamp .review-output-surface-header {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
 }
 
 .app.shell-revamp .config-editor-toolbar {

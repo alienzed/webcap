@@ -682,13 +682,6 @@
   window.openAssistant = function (target) {
     target = target && typeof target === 'object' ? target : {};
     setOpen(true, target.mode || 'chat');
-    if (Object.prototype.hasOwnProperty.call(target, 'instruction')) {
-      var input = el('director-chat-input');
-      if (input) {
-        input.value = String(target.instruction || '');
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    }
   };
   window.setDirectorChatOpen = setOpen;
   window.openDirectorChatActivity = function (target) {

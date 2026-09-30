@@ -1,10 +1,5 @@
 (function () {
   var activeJobId = '';
-  var DEFAULT_REVIEW_INSTRUCTION = 'Perform a full read-only review of this caption set. Focus on consistency, semantic coverage, balance, repetition, annotation hygiene, outliers, and noisy training signals.';
-
-  function el(id) {
-    return document.getElementById(id);
-  }
 
   function requestJson(url, options) {
     return fetch(url, options || {}).then(function (response) {
@@ -17,36 +12,24 @@
     });
   }
 
-  function reviewWorkspaceAvailable() {
-    var workspace = el('review-output-surface');
-    if (!workspace || workspace.classList.contains('hidden')) return false;
-    var availability = getReviewAvailability();
-    return !!(availability && availability.enabled);
-  }
-
-  function jobRequest(jobId) {
-    return requestJson('/fs/director/job?job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
-      if (!payload.job) throw new Error('Review Dataset job response is missing its job.');
-      return payload.job;
-    });
-  }
-
   function waitForJob(job) {
-    if (!job || !job.jobId) throw new Error('Review Dataset did not return a queued job.');
-    activeJobId = String(job.jobId);
+    activeJobId = String(job.jobId || '');
 
     function poll(current) {
-      var status = String(current && current.status || '');
-      if (status === 'completed') return current;
+      var status = String(current.status || '');
+      if (status === 'completed') return Promise.resolve(current);
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
-        var error = new Error(current.error || ('Review Dataset job ' + status + '.'));
+        var error = new Error(current.error || ('Assistant job ' + status + '.'));
         error.jobStatus = status;
         throw error;
       }
-      var delay = status === 'queued' ? 2000 : 1000;
-      return new Promise(function (resolve) { setTimeout(resolve, delay); })
-        .then(function () { return jobRequest(activeJobId); })
-        .then(poll);
+      return new Promise(function (resolve) {
+        setTimeout(resolve, status === 'queued' ? 2000 : 1000);
+      }).then(function () {
+        return requestJson('/fs/director/job?job=' + encodeURIComponent(activeJobId) + '&consume=1');
+      }).then(function (payload) {
+        return poll(payload.job);
+      });
     }
 
     return poll(job).then(function (finished) {
@@ -58,97 +41,64 @@
     });
   }
 
-  function runReviewDataset(request) {
-    var availability = getReviewAvailability();
-    if (!availability.enabled) return Promise.reject(new Error(availability.message || 'Review Dataset is unavailable.'));
-
+  function buildPrompt(instruction) {
     var items = getVisibleReviewItems();
-    var files = items.map(function (item) { return String(item && item.fileName || '').trim(); }).filter(Boolean);
-    if (!files.length) return Promise.reject(new Error('Review Dataset requires at least one visible media file.'));
+    return [
+      'You are reviewing one WebCap training Set. This is analysis only: do not rewrite captions.',
+      '',
+      'Review the supplied captions as a set, not one by one. Look for useful corpus-level issues a human may miss while scanning quickly:',
+      '- inconsistent subject/identity wording, attributes, terminology, or descriptive granularity',
+      '- meaningful coverage or balance skews in recurring concepts actually present in the captions',
+      '- repeated/template-like captions, copy/paste residue, suspicious one-off wording, or outliers',
+      '- missing captions and unusually sparse or verbose captions',
+      '- recurring caption patterns that may create noisy or misleading training associations',
+      '- useful groups of filenames that deserve inspection together',
+      '',
+      'Be evidence-based. Do not invent desired categories. Rare terms are not automatically problems. Mention filenames when useful.',
+      '',
+      'User focus: ' + String(instruction || 'Give me a concise full review.'),
+      '',
+      'CAPTIONS',
+      buildCombinedCaptionsText(items)
+    ].join('\n');
+  }
 
-    return requestJson('/fs/review/assistant', {
+  function runReview(request) {
+    return requestJson('/fs/director/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        folder: state.folder,
-        files: files,
-        instruction: String(request && request.instruction || '').trim(),
-        directorModel: String(request && request.modelId || '').trim()
+        model: String(request.modelId || ''),
+        messages: [{ role: 'user', content: buildPrompt(request.instruction) }]
       })
     }).then(function (payload) {
       return waitForJob(payload.job);
     }).then(function (job) {
-      var result = job && job.result && typeof job.result === 'object' ? job.result : {};
-      if (!String(result.text || '').trim()) throw new Error('Review Dataset returned an empty report.');
-      return { text: String(result.text) };
+      return { text: String(job.result && job.result.text || '') };
     });
   }
 
-  function cancelReviewDataset() {
-    if (!activeJobId) return Promise.resolve();
-    return requestJson('/fs/director/job', {
+  function cancelReview() {
+    return activeJobId ? requestJson('/fs/director/job', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operation: 'stop_or_cancel',
-        jobId: activeJobId
-      })
-    });
+      body: JSON.stringify({ operation: 'stop_or_cancel', jobId: activeJobId })
+    }) : Promise.resolve();
   }
 
   window.registerAssistantMode({
     id: 'review-dataset',
     label: 'Review Dataset',
-    description: 'Read-only analysis of the current visible caption set. Captions are never changed.',
-    placeholder: 'What should the caption-set review focus on?',
-    successMessage: 'Dataset caption review completed.',
-    presets: [
-      {
-        label: 'Full review',
-        title: 'Audit the whole visible caption set for useful corpus-level issues',
-        instruction: DEFAULT_REVIEW_INSTRUCTION
-      },
-      {
-        label: 'Consistency',
-        title: 'Focus on naming drift, recurring attribute consistency, and inconsistent granularity',
-        instruction: 'Review this caption set for consistency problems: stable identity terms, naming drift, contradictions, synonym drift, and inconsistent descriptive granularity. Do not rewrite captions.'
-      },
-      {
-        label: 'Balance',
-        title: 'Focus on recurring semantic dimensions and concrete skews in the caption corpus',
-        instruction: 'Review this caption set for concrete balance and coverage skews inside semantic dimensions that are actually present. Identify dominant and sparse recurring modes without inventing categories. Do not rewrite captions.'
-      },
-      {
-        label: 'Outliers',
-        title: 'Focus on unusual captions, missing captions, copy/paste residue, and annotation hygiene',
-        instruction: 'Review this caption set for outliers and annotation hygiene problems: missing captions, unusual wording, suspicious one-off terminology, exact or near-template repetition, formatting artifacts, and unusually short or long captions. Do not rewrite captions.'
-      }
-    ],
-    available: reviewWorkspaceAvailable,
-    execute: runReviewDataset,
-    cancel: cancelReviewDataset
+    description: 'Read-only analysis of the current visible caption set.',
+    placeholder: 'What should the review focus on?',
+    available: function () {
+      return !document.getElementById('review-output-surface').classList.contains('hidden');
+    },
+    execute: runReview,
+    cancel: cancelReview
   });
 
-  window.openReviewDatasetAssistantActivity = function () {
-    if (!reviewWorkspaceAvailable()) {
-      setStatus('Open Review Set to return to the active Review Dataset Assistant request.');
-      return;
-    }
+  document.getElementById('review-output-assistant-btn').onclick = function () {
     window.openAssistant({ mode: 'review-dataset' });
-  };
-
-  var button = el('review-output-assistant-btn');
-  if (!button) throw new Error('Review Dataset Assistant button is missing.');
-
-  button.onclick = function () {
-    var availability = getReviewAvailability();
-    if (!availability.enabled) {
-      setStatus(availability.message + '.');
-      return;
-    }
-    window.openAssistant({
-      mode: 'review-dataset',
-      instruction: DEFAULT_REVIEW_INSTRUCTION
-    });
   };
 })();

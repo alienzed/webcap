@@ -41,6 +41,20 @@ def _fake_runtime(monkeypatch):
     monkeypatch.setattr(training_bundle, "to_wsl_path", as_wsl)
 
 
+def test_relaunch_archives_existing_training_log(tmp_path):
+    job_dir = tmp_path / "job"
+    job_dir.mkdir()
+    log_path = job_dir / "run.log"
+    log_path.write_text("first attempt\n", encoding="utf-8")
+
+    training_runner._archive_existing_run_log(log_path, 1_759_237_200.123456)
+
+    archived = list(job_dir.glob("run.*.log"))
+    assert len(archived) == 1
+    assert archived[0].read_text(encoding="utf-8") == "first attempt\n"
+    assert not log_path.exists()
+
+
 def test_training_yields_retained_director_after_reserving_gpu(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)

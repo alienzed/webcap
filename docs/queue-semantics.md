@@ -516,7 +516,7 @@ Stopping the currently running LLM job is also job-local. Once that job reaches 
 the LLM queue continues automatically with the next queued job in FIFO order. Stopping one job does
 not implicitly pause the whole LLM lane.
 
-LLM work is **server-session-bound**:
+LLM work is **server-session-bound** and its execution lane is held in backend memory rather than the durable execution-state file:
 
 - browser refresh, navigation, or returning to the feature does not end the server session; queued
   or running LLM work remains authoritative and the UI should reconnect to it,

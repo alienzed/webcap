@@ -592,6 +592,7 @@ def test_scene_loras_are_persisted_ordered_and_duplicated(storyboard_fs):
         })
 
 
+
 def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "concept": "A short film.", "targetSceneCount": 2})
     story, old_scene = storyboard_store.add_scene(story["id"], {"title": "Old", "prompt": "Old prompt"})
@@ -601,27 +602,20 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
     old_media = storyboard_fs / "output" / "storyboards" / story["id"] / old_take["mediaPath"]
 
     plan = {
-        "sharedContext": _shared_context(),
         "scenes": [
             {
                 "title": "Opening",
                 "summary": "A woman enters a quiet lobby.",
-                "entryState": "She stands outside the lobby doors.",
-                "exitState": "She is inside the lobby.",
-                "prompt": "integrated_multimodal_description: [Shot 1] She enters.\n\noverall_soundscape: Rain.\n\nnon_diegetic_music: None.",
-                "sharedContextRefs": ["mara", "coat", "lobby"],
-                "suggestedDurationSeconds": 6,
-                "continuity": {"continuesPreviousScene": False, "carryForward": []},
+                "prompt": "Three brisk shots carry her from the doors into the lobby.",
+                "suggestedDurationSeconds": 10,
             },
             {
                 "title": "Desk",
                 "summary": "She approaches the empty desk.",
-                "entryState": "She is inside the lobby.",
-                "exitState": "She stands at the empty desk.",
-                "prompt": "integrated_multimodal_description: [Shot 1] She crosses the lobby.\n\noverall_soundscape: Footsteps.\n\nnon_diegetic_music: Low drone.",
-                "sharedContextRefs": ["mara", "coat", "lobby"],
-                "suggestedDurationSeconds": 8,
-                "continuity": {"continuesPreviousScene": True, "carryForward": ["She remains inside the hotel."]},
+                "entryState": "Inside the lobby.",
+                "exitState": "At the desk.",
+                "prompt": "A dense visual sequence follows her across the lobby to the desk.",
+                "suggestedDurationSeconds": 12,
             },
         ]
     }
@@ -631,64 +625,44 @@ def test_apply_developed_plan_replaces_active_scenes_and_preserves_old_takes(sto
     assert len(developed["sceneOrder"]) == 2
     assert old_scene["id"] not in developed["scenes"]
     assert old_scene["id"] in developed["removedScenes"]
-    assert developed["removedScenes"][old_scene["id"]]["removedReason"] == "replaced_by_develop_story"
     assert old_media.read_bytes() == b"old-video"
-    assert developed["development"]["model"] == "director.gguf"
     assert developed["development"]["plan"] == plan
 
     first = developed["scenes"][developed["sceneOrder"][0]]
-    assert first["title"] == "Opening"
-    assert first["durationSeconds"] == 6
-    assert "integrated_multimodal_description" in first["prompt"]
+    assert first["prompt"] == "Three brisk shots carry her from the doors into the lobby."
+    assert first["entryState"] == ""
+    assert first["exitState"] == ""
     assert first["promptDirectorModel"] == "director.gguf"
-    assert first["planDirectorModel"] == "director.gguf"
-    assert first["sharedContextRefs"] == ["mara", "coat", "lobby"]
 
 
-def test_apply_developed_plan_harvests_only_known_story_invariant_refs(storyboard_fs):
+def test_apply_developed_plan_does_not_harvest_invariant_refs(storyboard_fs):
     story = storyboard_store.create_story({
         "title": "Story",
         "invariants": [
-            {"kind": "character", "title": "Elena", "text": "White woman, early 30s, hazel eyes, dark brown shoulder-length hair."},
-            {"kind": "location", "title": "Cemetery", "text": "Old hillside cemetery."},
+            {"kind": "character", "title": "Elena", "text": "Stable visual definition."},
         ],
     })
     scene = {
         "title": "Funeral",
-        "summary": "Elena stands at the cemetery.",
-        "entryState": "At the cemetery.",
-        "exitState": "She remains by the grave.",
-        "prompt": "Prompt.",
-        "invariantRefs": [
-            {"kind": "character", "title": "Elena"},
-            {"kind": "location", "title": "Cemetery"},
-            {"kind": "character", "title": "Unknown"},
-            {"kind": "world", "title": "Mood"},
-            "bad",
-        ],
-        "suggestedDurationSeconds": 6,
-        "continuity": {"continuesPreviousScene": False, "carryForward": []},
+        "summary": "Elena stands by the grave.",
+        "prompt": "Director-authored prompt already contains the useful details.",
+        "suggestedDurationSeconds": 10,
     }
 
     developed = storyboard_store.apply_developed_plan(story["id"], {"scenes": [scene]})
     saved = developed["scenes"][developed["sceneOrder"][0]]
 
-    assert saved["invariantRefs"] == [
-        {"kind": "character", "title": "Elena"},
-        {"kind": "location", "title": "Cemetery"},
-    ]
+    assert saved["prompt"] == scene["prompt"]
+    assert saved["invariantRefs"] == []
 
 
-def test_apply_developed_plan_accepts_scenes_without_shared_context(storyboard_fs):
+def test_apply_developed_plan_accepts_minimal_scene_shape(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "targetSceneCount": 2})
     scene = {
         "title": "Opening",
         "summary": "A woman enters.",
-        "entryState": "Outside.",
-        "exitState": "Inside.",
-        "prompt": "integrated_multimodal_description: [Shot 1] She enters.\n\noverall_soundscape: Rain.\n\nnon_diegetic_music: N/A",
-        "suggestedDurationSeconds": 6,
-        "continuity": {"continuesPreviousScene": False, "carryForward": []},
+        "prompt": "A fast three-beat entrance sequence.",
+        "suggestedDurationSeconds": 10,
     }
 
     developed = storyboard_store.apply_developed_plan(
@@ -697,72 +671,50 @@ def test_apply_developed_plan_accepts_scenes_without_shared_context(storyboard_f
         model_id="director.gguf",
     )
 
-    assert len(developed["sceneOrder"]) == 1
     saved = developed["scenes"][developed["sceneOrder"][0]]
     assert saved["title"] == "Opening"
-    assert saved["sharedContextRefs"] == []
+    assert saved["entryState"] == ""
+    assert saved["exitState"] == ""
+    assert saved["prompt"] == "A fast three-beat entrance sequence."
 
 
-def test_apply_developed_plan_ignores_unusable_optional_shared_context(storyboard_fs):
+def test_apply_developed_plan_does_not_depend_on_legacy_shared_context(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     scene = {
         "title": "Opening",
         "summary": "Elena enters.",
-        "entryState": "Outside.",
-        "exitState": "Inside.",
-        "prompt": "integrated_multimodal_description: [Shot 1] Elena enters.\n\noverall_soundscape: Rain.\n\nnon_diegetic_music: N/A",
-        "sharedContextRefs": ["character:elena", "elena"],
-        "suggestedDurationSeconds": 6,
-        "continuity": {"continuesPreviousScene": False, "carryForward": []},
-    }
-    malformed = {
-        "subjects": [
-            {"id": "character:elena", "label": "Elena", "description": "Dark shoulder-length hair."},
-            {"id": "elena", "label": "Elena duplicate", "description": "Same person."},
-        ],
-        "wardrobes": [
-            {"id": "elena", "label": "Elena wardrobe", "description": "Black wool coat."},
-        ],
-        "locations": [],
-        "persistentFacts": [],
+        "prompt": "Elena crosses the lobby in several quick visual beats.",
+        "suggestedDurationSeconds": 10,
     }
 
     developed = storyboard_store.apply_developed_plan(
         story["id"],
-        {"sharedContext": malformed, "scenes": [scene]},
+        {"scenes": [scene]},
     )
 
     saved = developed["scenes"][developed["sceneOrder"][0]]
-    assert saved["title"] == "Opening"
+    assert saved["prompt"] == scene["prompt"]
     assert saved["sharedContextRefs"] == []
 
 
-def test_apply_developed_plan_treats_scene_count_as_target_but_keeps_semantic_validation(storyboard_fs):
+def test_apply_developed_plan_does_not_enforce_target_count_but_validates_storage_shape(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "targetSceneCount": 2})
     good_scene = {
         "title": "Short plan",
         "summary": "One useful Scene.",
-        "entryState": "Start.",
-        "exitState": "End.",
-        "prompt": "Prompt.",
-        "sharedContextRefs": ["mara", "coat", "lobby"],
-        "suggestedDurationSeconds": 6,
-        "continuity": {"continuesPreviousScene": False, "carryForward": []},
+        "prompt": "A dense, useful generation prompt.",
+        "suggestedDurationSeconds": 10,
     }
-    developed = storyboard_store.apply_developed_plan(
-        story["id"],
-        {"sharedContext": _shared_context(), "scenes": [good_scene]},
-    )
+    developed = storyboard_store.apply_developed_plan(story["id"], {"scenes": [good_scene]})
     assert len(developed["sceneOrder"]) == 1
 
     with pytest.raises(ValueError, match="returned no Scenes"):
-        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": []})
+        storyboard_store.apply_developed_plan(story["id"], {"scenes": []})
 
     bad_scene = dict(good_scene)
     bad_scene["suggestedDurationSeconds"] = 20
-    with pytest.raises(ValueError, match="between 4 and 15"):
-        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": [bad_scene]})
-
+    with pytest.raises(ValueError, match="between 6 and 15"):
+        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_scene]})
 
 def test_concept_expansion_preserves_initial_prompt_after_restore(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story", "concept": "One sentence."})
@@ -815,44 +767,30 @@ def test_restore_scene_clears_replanning_removal_metadata(storyboard_fs):
     assert "removedReason" not in restored["scenes"][scene["id"]]
 
 
-def test_developed_plan_ignores_harmless_extra_fields_but_rejects_ambiguous_content(storyboard_fs):
+
+def test_developed_plan_rejects_missing_or_invalid_required_content(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     base_scene = {
         "title": "Scene",
         "summary": "Summary.",
-        "entryState": "Start.",
-        "exitState": "End.",
         "prompt": "Prompt.",
-        "sharedContextRefs": ["mara", "coat", "lobby"],
-        "suggestedDurationSeconds": 6,
-        "continuity": {"continuesPreviousScene": False, "carryForward": []},
+        "suggestedDurationSeconds": 10,
     }
-
-    tolerant_scene = dict(base_scene)
-    tolerant_scene["extra"] = "ignored model annotation"
-    tolerant_context = _shared_context()
-    tolerant_context["extra"] = [{"id": "ignored"}]
-    tolerant_context["subjects"][0]["extra"] = "ignored"
-    developed = storyboard_store.apply_developed_plan(
-        story["id"],
-        {"sharedContext": tolerant_context, "scenes": [tolerant_scene], "extra": True},
-    )
-    assert len(developed["sceneOrder"]) == 1
-
-    bad_ref = dict(base_scene)
-    bad_ref["sharedContextRefs"] = ["missing"]
-    developed = storyboard_store.apply_developed_plan(
-        story["id"],
-        {"sharedContext": _shared_context(), "scenes": [bad_ref]},
-    )
-    saved = developed["scenes"][developed["sceneOrder"][0]]
-    assert saved["sharedContextRefs"] == []
 
     bad_type = dict(base_scene)
     bad_type["title"] = 42
     with pytest.raises(ValueError, match="invalid title"):
-        storyboard_store.apply_developed_plan(story["id"], {"sharedContext": _shared_context(), "scenes": [bad_type, dict(base_scene)]})
+        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_type]})
 
+    missing_prompt = dict(base_scene)
+    missing_prompt["prompt"] = ""
+    with pytest.raises(ValueError, match="invalid prompt"):
+        storyboard_store.apply_developed_plan(story["id"], {"scenes": [missing_prompt]})
+
+    bad_entry = dict(base_scene)
+    bad_entry["entryState"] = {"unexpected": True}
+    with pytest.raises(ValueError, match="entryState must be text"):
+        storyboard_store.apply_developed_plan(story["id"], {"scenes": [bad_entry]})
 
 def test_take_label_is_editable_and_persists(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
@@ -1202,14 +1140,21 @@ def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
     assert storyboard_store.load_story(story["id"])["concept"] == "Newer concept."
 
 
-def test_scene_repair_ignores_duplicate_patch_after_first_valid_patch(storyboard_fs):
+
+def test_scene_repair_rejects_duplicate_scene_patch(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {
-        "summary": "Original summary.",
+        "title": "Scene",
+        "summary": "Original.",
         "prompt": "Original prompt.",
     })
     base = {
-        "storyContext": {"title": "Story", "concept": "", "style": "", "invariants": []},
+        "storyContext": {
+            "title": story["title"],
+            "concept": story["concept"],
+            "style": story["style"],
+            "invariants": story["invariants"],
+        },
         "sceneOrder": [scene["id"]],
         "scenes": {
             scene["id"]: {
@@ -1225,29 +1170,31 @@ def test_scene_repair_ignores_duplicate_patch_after_first_valid_patch(storyboard
         },
     }
 
-    repaired, scene_count, field_count = storyboard_store.apply_scene_repairs(
-        story["id"],
-        {"changes": [
-            {"sceneNumber": 1, "fields": {"summary": "First valid repair."}},
-            {"sceneNumber": 1, "fields": {"summary": "Duplicate must be ignored."}},
-        ]},
-        base,
-        model_id="director",
-    )
-
-    assert scene_count == 1
-    assert field_count == 1
-    assert repaired["scenes"][scene["id"]]["summary"] == "First valid repair."
+    with pytest.raises(ValueError, match="more than once"):
+        storyboard_store.apply_scene_repairs(
+            story["id"],
+            {"changes": [
+                {"sceneNumber": 1, "fields": {"summary": "First."}},
+                {"sceneNumber": 1, "fields": {"summary": "Second."}},
+            ]},
+            base,
+        )
 
 
-def test_scene_repair_allows_later_valid_patch_after_malformed_duplicate_candidate(storyboard_fs):
+def test_scene_repair_rejects_malformed_patch_instead_of_skipping_it(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {
-        "summary": "Original summary.",
+        "title": "Scene",
+        "summary": "Original.",
         "prompt": "Original prompt.",
     })
     base = {
-        "storyContext": {"title": "Story", "concept": "", "style": "", "invariants": []},
+        "storyContext": {
+            "title": story["title"],
+            "concept": story["concept"],
+            "style": story["style"],
+            "invariants": story["invariants"],
+        },
         "sceneOrder": [scene["id"]],
         "scenes": {
             scene["id"]: {
@@ -1263,19 +1210,14 @@ def test_scene_repair_allows_later_valid_patch_after_malformed_duplicate_candida
         },
     }
 
-    repaired, scene_count, field_count = storyboard_store.apply_scene_repairs(
-        story["id"],
-        {"changes": [
-            {"sceneNumber": 1, "fields": "bad"},
-            {"sceneNumber": 1, "fields": {"summary": "Valid repair survives."}},
-        ]},
-        base,
-        model_id="director",
-    )
-
-    assert scene_count == 1
-    assert field_count == 1
-    assert repaired["scenes"][scene["id"]]["summary"] == "Valid repair survives."
+    with pytest.raises(ValueError, match="must be text"):
+        storyboard_store.apply_scene_repairs(
+            story["id"],
+            {"changes": [
+                {"sceneNumber": 1, "fields": {"prompt": {"bad": True}}},
+            ]},
+            base,
+        )
 
 def test_scene_refine_completion_is_persisted_only_for_successful_refine(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})

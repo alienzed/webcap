@@ -1140,14 +1140,21 @@ def test_scene_repair_refuses_stale_whole_story_context(storyboard_fs):
     assert storyboard_store.load_story(story["id"])["concept"] == "Newer concept."
 
 
-def test_scene_repair_ignores_duplicate_patch_after_first_valid_patch(storyboard_fs):
+
+def test_scene_repair_rejects_duplicate_scene_patch(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {
-        "summary": "Original summary.",
+        "title": "Scene",
+        "summary": "Original.",
         "prompt": "Original prompt.",
     })
     base = {
-        "storyContext": {"title": "Story", "concept": "", "style": "", "invariants": []},
+        "storyContext": {
+            "title": story["title"],
+            "concept": story["concept"],
+            "style": story["style"],
+            "invariants": story["invariants"],
+        },
         "sceneOrder": [scene["id"]],
         "scenes": {
             scene["id"]: {
@@ -1163,29 +1170,31 @@ def test_scene_repair_ignores_duplicate_patch_after_first_valid_patch(storyboard
         },
     }
 
-    repaired, scene_count, field_count = storyboard_store.apply_scene_repairs(
-        story["id"],
-        {"changes": [
-            {"sceneNumber": 1, "fields": {"summary": "First valid repair."}},
-            {"sceneNumber": 1, "fields": {"summary": "Duplicate must be ignored."}},
-        ]},
-        base,
-        model_id="director",
-    )
-
-    assert scene_count == 1
-    assert field_count == 1
-    assert repaired["scenes"][scene["id"]]["summary"] == "First valid repair."
+    with pytest.raises(ValueError, match="more than once"):
+        storyboard_store.apply_scene_repairs(
+            story["id"],
+            {"changes": [
+                {"sceneNumber": 1, "fields": {"summary": "First."}},
+                {"sceneNumber": 1, "fields": {"summary": "Second."}},
+            ]},
+            base,
+        )
 
 
-def test_scene_repair_allows_later_valid_patch_after_malformed_duplicate_candidate(storyboard_fs):
+def test_scene_repair_rejects_malformed_patch_instead_of_skipping_it(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {
-        "summary": "Original summary.",
+        "title": "Scene",
+        "summary": "Original.",
         "prompt": "Original prompt.",
     })
     base = {
-        "storyContext": {"title": "Story", "concept": "", "style": "", "invariants": []},
+        "storyContext": {
+            "title": story["title"],
+            "concept": story["concept"],
+            "style": story["style"],
+            "invariants": story["invariants"],
+        },
         "sceneOrder": [scene["id"]],
         "scenes": {
             scene["id"]: {
@@ -1201,19 +1210,14 @@ def test_scene_repair_allows_later_valid_patch_after_malformed_duplicate_candida
         },
     }
 
-    repaired, scene_count, field_count = storyboard_store.apply_scene_repairs(
-        story["id"],
-        {"changes": [
-            {"sceneNumber": 1, "fields": "bad"},
-            {"sceneNumber": 1, "fields": {"summary": "Valid repair survives."}},
-        ]},
-        base,
-        model_id="director",
-    )
-
-    assert scene_count == 1
-    assert field_count == 1
-    assert repaired["scenes"][scene["id"]]["summary"] == "Valid repair survives."
+    with pytest.raises(ValueError, match="must be text"):
+        storyboard_store.apply_scene_repairs(
+            story["id"],
+            {"changes": [
+                {"sceneNumber": 1, "fields": {"prompt": {"bad": True}}},
+            ]},
+            base,
+        )
 
 def test_scene_refine_completion_is_persisted_only_for_successful_refine(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})

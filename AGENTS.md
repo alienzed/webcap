@@ -24,6 +24,7 @@ Do not treat the current structure as accidental.
 - Load order matters.
 - Backend is Python under `tool/server/`.
 - State is file-based. There is no database.
+- Global app-private filesystem state follows `docs/filesystem_state_contract.md`: classify by lifecycle first, use centralized path ownership, do not add new `FS_ROOT/.webcap*` roots, and clean proven temporary work at its lifecycle boundary rather than waiting for startup.
 - Per-folder and per-item artifacts live beside the user's data.
 
 Important examples:

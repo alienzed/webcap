@@ -25,8 +25,8 @@ class ComfyHttpError(RuntimeError):
     def __init__(self, status, detail):
         self.status = int(status)
         super().__init__("ComfyUI request failed (HTTP " + str(self.status) + "): " + str(detail or ""))
-COMFY_PROVIDER_STATE_VERSION = 1
-COMFY_PROVIDER_STATE_FILE = "comfy_provider.json"
+PROVIDER_STATE_VERSION = 1
+PROVIDER_STATE_FILE = "providers.json"
 _logger = logging.getLogger(__name__)
 
 
@@ -467,22 +467,43 @@ def download_output(output_ref):
 
 
 def _provider_state_path():
-    return Path(app_config.FS_ROOT) / ".webcap_runtime" / COMFY_PROVIDER_STATE_FILE
+    return app_config.app_state_root() / PROVIDER_STATE_FILE
+
+
+def _read_provider_state():
+    path = _provider_state_path()
+    if path.parent.is_symlink() or not path.is_file() or path.is_symlink():
+        return {"version": PROVIDER_STATE_VERSION, "providers": {}}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"version": PROVIDER_STATE_VERSION, "providers": {}}
+    if not isinstance(payload, dict) or payload.get("version") != PROVIDER_STATE_VERSION:
+        return {"version": PROVIDER_STATE_VERSION, "providers": {}}
+    providers = payload.get("providers")
+    if not isinstance(providers, dict):
+        payload["providers"] = {}
+    return payload
 
 
 def _write_provider_state(root):
     path = _provider_state_path()
-    runtime_root = path.parent
-    if runtime_root.is_symlink():
-        raise OSError("Refusing to write ComfyUI provider state through a symlinked runtime root.")
-    runtime_root.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "version": COMFY_PROVIDER_STATE_VERSION,
+    state_root = path.parent
+    if state_root.is_symlink():
+        raise OSError("Refusing to write provider state through a symlinked app-data state root.")
+    state_root.mkdir(parents=True, exist_ok=True)
+    payload = _read_provider_state()
+    providers = dict(payload.get("providers") or {})
+    providers["comfyui"] = {
         "root": str(Path(root).resolve()),
         "learnedAt": time.time(),
     }
+    payload = {
+        "version": PROVIDER_STATE_VERSION,
+        "providers": providers,
+    }
     fd, temp_name = tempfile.mkstemp(
-        prefix=COMFY_PROVIDER_STATE_FILE + ".",
+        prefix=PROVIDER_STATE_FILE + ".",
         suffix=".tmp",
         dir=str(path.parent),
     )
@@ -527,16 +548,10 @@ def _remember_provider_root(output_path):
 
 
 def known_provider_root():
-    path = _provider_state_path()
-    if path.parent.is_symlink() or not path.is_file() or path.is_symlink():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(payload, dict) or payload.get("version") != COMFY_PROVIDER_STATE_VERSION:
-        return None
-    raw_root = str(payload.get("root") or "").strip()
+    payload = _read_provider_state()
+    providers = payload.get("providers") if isinstance(payload.get("providers"), dict) else {}
+    provider = providers.get("comfyui") if isinstance(providers.get("comfyui"), dict) else {}
+    raw_root = str(provider.get("root") or "").strip()
     if not raw_root:
         return None
     root = Path(raw_root)

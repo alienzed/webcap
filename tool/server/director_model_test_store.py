@@ -29,7 +29,7 @@ def _now_iso():
 
 
 def _store_dir():
-    path = Path(app_config.FS_ROOT) / ".webcap_model_tests"
+    path = app_config.director_model_test_root()
     path.mkdir(parents=True, exist_ok=True)
     return path
 

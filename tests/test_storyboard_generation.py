@@ -42,6 +42,7 @@ def test_storyboard_terminal_generation_receipt_is_removed_when_consumed(storybo
         execution_queue.get_job(queued["id"])
 
 
+
 def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs, monkeypatch):
     monkeypatch.setattr(storyboard_generation.secrets, "randbelow", lambda _limit: 4242)
     scene = {
@@ -56,32 +57,22 @@ def test_scene_settings_preserve_manual_prompt_and_render_controls(storyboard_fs
 
     settings = storyboard_generation._scene_settings(scene)
 
-    assert settings == {
-        "prompt": "A quiet hallway.",
-        "sourcePrompt": "A quiet hallway.",
-        "sharedContext": "",
-        "entryState": "The hall is empty.",
-        "exitState": "A door at the far end opens.",
-        "aspectRatio": "16:9 (Widescreen)",
-        "megapixels": 0.4,
-        "duration": 8.0,
-        "seed": 4242,
-        "seedMode": "random",
-        "references": [],
-        "loras": [],
-    }
+    assert settings["prompt"] == "A quiet hallway."
+    assert settings["sourcePrompt"] == "A quiet hallway."
+    assert settings["entryState"] == "The hall is empty."
+    assert settings["exitState"] == "A door at the far end opens."
+    assert settings["seed"] == 4242
 
 
-
-def test_scene_settings_compile_shared_continuity_into_final_prompt(storyboard_fs, monkeypatch):
+def test_scene_settings_does_not_inject_legacy_shared_continuity(storyboard_fs, monkeypatch):
     monkeypatch.setattr(storyboard_generation.secrets, "randbelow", lambda _limit: 7)
     story = {
         "development": {
             "plan": {
                 "sharedContext": {
                     "subjects": [{"id": "mara", "label": "Mara", "description": "Mara has a dark bob."}],
-                    "wardrobes": [{"id": "coat", "label": "Wardrobe", "description": "Mara wears a pale raincoat."}],
-                    "locations": [{"id": "lobby", "label": "Lobby", "description": "Dark terrazzo lobby with brass fixtures."}],
+                    "wardrobes": [],
+                    "locations": [],
                     "persistentFacts": [],
                 }
             }
@@ -89,25 +80,41 @@ def test_scene_settings_compile_shared_continuity_into_final_prompt(storyboard_f
         "generationDefaults": {"aspectRatio": "4:3 (Standard)", "megapixels": 0.2},
     }
     scene = {
-        "prompt": (
-            "integrated_multimodal_description: [Shot 1] Mara crosses the room.\n\n"
-            "overall_soundscape: Footsteps.\n\nnon_diegetic_music: N/A"
-        ),
-        "sharedContextRefs": ["mara", "coat", "lobby"],
+        "prompt": "Director-authored prompt stays untouched.",
+        "sharedContextRefs": ["mara"],
         "durationSeconds": 6,
         "seedMode": "random",
     }
 
     settings = storyboard_generation._scene_settings(scene, story)
 
-    assert settings["prompt"].count("Continuity anchors —") == 1
-    assert "Mara: Mara has a dark bob." in settings["prompt"]
-    assert "Wardrobe: Mara wears a pale raincoat." in settings["prompt"]
-    assert "Lobby: Dark terrazzo lobby with brass fixtures." in settings["prompt"]
-    assert "Continuity anchors —" not in settings["sourcePrompt"]
-    assert "Continuity anchors —" in settings["prompt"]
-    assert settings["sharedContext"].startswith("Mara: Mara has a dark bob.")
+    assert settings["prompt"] == "Director-authored prompt stays untouched."
+    assert settings["sourcePrompt"] == "Director-authored prompt stays untouched."
+    assert "Continuity anchors" not in settings["prompt"]
 
+
+def test_storyboard_request_adds_only_reference_alignment_to_authored_prompt():
+    settings = {
+        "prompt": "Director-authored prompt.",
+        "sourcePrompt": "Director-authored prompt.",
+        "aspectRatio": "16:9 (Widescreen)",
+        "megapixels": 0.4,
+        "duration": 10,
+        "seed": 1,
+        "loras": [],
+        "entryState": "",
+        "exitState": "",
+        "seedMode": "fixed",
+        "references": [{"role": "first_frame", "mediaPath": "references/start.png"}],
+    }
+
+    request = storyboard_generation._storyboard_request(settings)
+
+    assert request["sourcePrompt"] == "Director-authored prompt."
+    assert request["prompt"].endswith("\n\nDirector-authored prompt.")
+    assert request["prompt"].startswith(
+        "For the target video, at 0.00 seconds into the target video, "
+    )
 
 def test_scene_settings_inherit_story_generation_defaults(storyboard_fs, monkeypatch):
     monkeypatch.setattr(storyboard_generation.secrets, "randbelow", lambda _limit: 99)

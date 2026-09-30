@@ -53,6 +53,7 @@ def test_write_prompt_gives_director_context_without_postprocessing_contract():
     assert "Mara has a dark bob" in prompt
     assert "[REFERENCE MODE]\nI2VA" in prompt
     assert "Establish stable and current facts at scene level" in prompt
+    assert "Let the concept determine the structure" in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
     assert "Environment / Continuity Anchors:" in prompt
     assert "integrated_multimodal_description:" in prompt
@@ -78,6 +79,7 @@ def test_h3_guidance_uses_one_fenced_authoring_example_without_schema_enforcemen
     assert prompt.count("--- END EXAMPLE PROMPT SHAPE ---") == 1
     assert "[Shot 3] ... and additional shots as appropriate for the Scene." in prompt
     assert "shots inherit that setup" in prompt
+    assert "what occurs at particular times" in prompt
     assert schema["required"] == ["prompt"]
     assert set(schema["properties"]) == {"prompt"}
 
@@ -143,8 +145,10 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert "sharedContextRefs" not in scene_schema["properties"]
     assert "Create exactly 12 Scenes." in prompt
     assert "USE EACH GENERATION UNIT WELL." in prompt
+    assert "Simplify or abstract elements when added specificity creates more drift than value." in prompt
     assert "Choose the relationship that best serves the concept" in prompt
     assert "evolving state when continuity matters" in prompt
+    assert "When Scenes are connected" in prompt
     assert "Use entry and exit state only when a specific handoff or visible state is genuinely useful" in prompt
     assert "exactly as it should be used" in prompt
     assert "200-400 words" not in prompt

@@ -521,10 +521,6 @@ def app_diagnostics_root():
     return app_state_root() / "diagnostics"
 
 
-def director_model_test_root():
-    return Path(FS_ROOT) / ".webcap_model_tests"
-
-
 def work_root():
     return output_root() / "work"
 

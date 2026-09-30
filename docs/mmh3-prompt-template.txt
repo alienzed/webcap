@@ -1,9 +1,10 @@
-# MiniMax H3 Base Prompt Output Skeleton
+# MiniMax H3 Base Prompt Syntax Example
 
-This file intentionally mirrors the current official MiniMax H3 base-mode output contract.
-Use `docs/mmh3-prompt-guidelines.md` for WebCap-specific authoring guidance.
+This file is a **reference example only**.
 
-For T2VA:
+It mirrors MiniMax's documented base prompt syntax so it is easy to inspect when testing H3 behavior. Storyboard does **not** require Director to emit this exact structure, and WebCap does not rewrite ordinary prompts into it.
+
+A documented T2VA-style example is:
 
 ```text
 integrated_multimodal_description: [Shot 1] ...
@@ -13,38 +14,40 @@ overall_soundscape: ...
 non_diegetic_music: ...
 ```
 
-For I2VA, prepend exactly:
+For exact first/last-frame modes, MiniMax also documents reference-alignment statements. WebCap may add those narrow mechanical alignment lines because they are derived from declared reference roles.
+
+Examples:
+
+I2VA-style first-frame alignment:
 
 ```text
 For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
 ```
 
-Then one blank line and the three base fields.
-
-For FL2VA, prepend the official first/last alignment line:
+FL2VA first/last alignment:
 
 ```text
 How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the S.SS-second mark of the target video.
 ```
 
-Then one blank line and the three base fields.
-
-For L2VA, prepend the official last-frame alignment line:
+L2VA-style last-frame alignment:
 
 ```text
 How the reference pictures align with the target video — <Picture 1> (from [Shot N]) aligns with the S.SS-second mark of the target video.
 ```
 
-Then one blank line and the three base fields.
-
 Notes:
 
-- This is the current Storyboard runtime contract because Storyboard uses the FL2VA task-family checkpoint and ComfyUI `MiniMaxH3ImageToVideo`.
-- The same base-family contract covers Storyboard's text-only, first-frame-only, first+last-frame, and last-frame-only cases.
-- `[Shot 1]` has no timestamp.
-- Later shots use strictly increasing cut times inside the requested duration.
-- `S.SS` is the effective duration formatted to exactly two decimal places.
-- Ref2VA does **not** use this three-field base skeleton; follow the official six-section reference-mode structure documented in `docs/mmh3-prompt-guidelines.md`.
+- These examples are **not** Storyboard's required creative prompt contract.
+- Director may use ordinary audiovisual prose when that works better.
+- WebCap should store and send Director-authored prompt text unchanged.
+- `[Shot 1]`, later shot timestamps, and the three documented field labels are conventions, not mandatory WebCap formatting rules.
+- `S.SS` represents the effective clip duration in the mechanical alignment syntax.
+- Ref2VA uses a separate task family and is outside the current Storyboard runtime.
 
-Official source of truth:
-`MiniMax-AI/MiniMax-H3/skills/h3-prompt-writing/references/base-en.txt`
+For active Director guidance, see:
+- `docs/storyboard-director-context.txt`
+- `docs/mmh3-prompt-runtime-context.txt`
+
+For longer upstream-reference notes, see:
+- `docs/mmh3-prompt-guidelines.md`

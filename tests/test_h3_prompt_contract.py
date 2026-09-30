@@ -29,3 +29,19 @@ def test_alignment_rejects_invalid_mode_and_duration():
         h3_prompt_contract.alignment_line("REF2VA", 10)
     with pytest.raises(ValueError, match="numeric"):
         h3_prompt_contract.alignment_line("L2VA", "nope")
+
+
+def test_apply_alignment_replaces_or_removes_legacy_app_owned_prefix():
+    legacy = (
+        "How the reference pictures align with the target video — <Picture 1> (from [Shot N]) "
+        "aligns with the 6.00-second mark of the target video.\n\n"
+        "A woman crosses a lobby."
+    )
+
+    replaced = h3_prompt_contract.apply_alignment(legacy, "I2VA", 8)
+    assert replaced == (
+        "For the target video, at 0.00 seconds into the target video, "
+        "<Picture 1> (from [Shot 1]) is fully referenced.\n\n"
+        "A woman crosses a lobby."
+    )
+    assert h3_prompt_contract.apply_alignment(legacy, "T2VA", 8) == "A woman crosses a lobby."

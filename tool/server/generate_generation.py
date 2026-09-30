@@ -162,15 +162,14 @@ def prepare_request(data):
         references[role] = str(relative_path)
 
     prompt = source_prompt
-    if model.PROFILE_ID == "minimax_h3" and references:
-        from .h3_prompt_contract import alignment_line, mode_from_reference_roles
+    if model.PROFILE_ID == "minimax_h3":
+        from .h3_prompt_contract import apply_alignment, mode_from_reference_roles
 
-        preamble = alignment_line(
+        prompt = apply_alignment(
+            prompt,
             mode_from_reference_roles(references.keys()),
             settings.get("duration"),
         )
-        if preamble and not prompt.startswith(preamble):
-            prompt = preamble + "\n\n" + prompt
 
     return {
         "modelId": model.PROFILE_ID,

@@ -150,14 +150,12 @@ def _storyboard_request(settings):
             references[role] = media_path
             reference_roles.append(role)
 
-    if reference_roles:
-        from .h3_prompt_contract import alignment_line, mode_from_reference_roles
-        preamble = alignment_line(
-            mode_from_reference_roles(reference_roles),
-            settings["duration"],
-        )
-        if preamble:
-            prompt = preamble + "\n\n" + prompt
+    from .h3_prompt_contract import apply_alignment, mode_from_reference_roles
+    prompt = apply_alignment(
+        prompt,
+        mode_from_reference_roles(reference_roles),
+        settings["duration"],
+    )
 
     return {
         "modelId": "minimax_h3",

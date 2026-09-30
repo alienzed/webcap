@@ -48,3 +48,30 @@ def alignment_line(mode, duration=None):
         "with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the "
         + duration_text + "-second mark of the target video."
     )
+
+
+def _without_alignment_prefix(prompt):
+    text = str(prompt or "").strip()
+    if not text:
+        return ""
+    first, separator, rest = text.partition("\n\n")
+    first = first.strip()
+    if first == (
+        "For the target video, at 0.00 seconds into the target video, "
+        "<Picture 1> (from [Shot 1]) is fully referenced."
+    ):
+        return rest.strip() if separator else ""
+    if (
+        first.startswith("How the reference pictures align with the target video — ")
+        and first.endswith("-second mark of the target video.")
+    ):
+        return rest.strip() if separator else ""
+    return text
+
+
+def apply_alignment(prompt, mode="T2VA", duration=None):
+    text = _without_alignment_prefix(prompt)
+    preamble = alignment_line(mode, duration)
+    if not preamble:
+        return text
+    return preamble if not text else preamble + "\n\n" + text

@@ -698,3 +698,34 @@ def test_owned_comfy_reference_cleanup_is_scoped_to_job_prefix(tmp_path, monkeyp
     assert not owned.exists()
     assert other.read_bytes() == b"other"
 
+
+
+def test_storyboard_request_canonicalizes_legacy_alignment_prefix():
+    legacy = (
+        "How the reference pictures align with the target video — <Picture 1> (from [Shot N]) "
+        "aligns with the 6.00-second mark of the target video.\n\n"
+        "A woman crosses a lobby."
+    )
+    settings = {
+        "sourcePrompt": legacy,
+        "prompt": legacy,
+        "aspectRatio": "16:9 (Widescreen)",
+        "megapixels": 1.0,
+        "duration": 8,
+        "seed": 7,
+        "seedMode": "fixed",
+        "references": [{"role": "first_frame", "mediaPath": "refs/first.png"}],
+        "loras": [],
+    }
+
+    request = storyboard_generation._storyboard_request(settings)
+
+    assert request["prompt"] == (
+        "For the target video, at 0.00 seconds into the target video, "
+        "<Picture 1> (from [Shot 1]) is fully referenced.\n\n"
+        "A woman crosses a lobby."
+    )
+
+    settings["references"] = []
+    request = storyboard_generation._storyboard_request(settings)
+    assert request["prompt"] == "A woman crosses a lobby."

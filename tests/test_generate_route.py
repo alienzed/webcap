@@ -280,12 +280,24 @@ def test_generate_prepare_adds_h3_reference_alignment_at_frozen_request_boundary
     assert prepared["prompt"] == expected + "\n\nA woman crosses a lobby."
     assert prepared["references"] == reference_paths
 
-    already_aligned = generate_generation.prepare_request({
+    legacy = (
+        "How the reference pictures align with the target video — <Picture 1> (from [Shot N]) "
+        "aligns with the 6.00-second mark of the target video.\n\n"
+        "A woman crosses a lobby."
+    )
+    canonicalized = generate_generation.prepare_request({
         "modelId": "minimax_h3",
-        "prompt": expected + "\n\nA woman crosses a lobby.",
+        "prompt": legacy,
         "references": reference_paths,
     })
-    assert already_aligned["prompt"].count(expected) == 1
+    assert canonicalized["prompt"] == expected + "\n\nA woman crosses a lobby."
+
+    no_references = generate_generation.prepare_request({
+        "modelId": "minimax_h3",
+        "prompt": legacy,
+        "references": {},
+    })
+    assert no_references["prompt"] == "A woman crosses a lobby."
 
 
 def test_generate_capabilities_keeps_healthy_models_when_one_is_unavailable(monkeypatch):

@@ -1042,3 +1042,18 @@ def test_test_generations_director_queue_preserves_remote_runtime_identity():
     assert "runtimeMode: activity && activity.runtimeMode" in queued_block
     assert "runtimeProvider: activity && activity.runtimeProvider" in queued_block
     assert "showRemoteModelTelemetry = phaseName !== 'queued'" in script
+
+
+def test_test_generations_exposes_training_candidates_link_from_unique_run_provenance():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    candidates = (ROOT / "tool" / "js" / "training_candidates.js").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-candidates-btn"' in html
+    assert "function syncCandidatesButton(payload)" in script
+    assert "payload.candidateRuns" in script
+    assert "runs.length === 1" in script
+    assert "openTrainingCandidates({ id: jobId, folder: folder }" in script
+    assert "refreshStagedFilesAfterCandidates" in script
+    assert "trainingCandidatesCloseHook" in candidates
+    assert "options && typeof options.onClose === 'function'" in candidates

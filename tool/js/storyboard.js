@@ -4292,10 +4292,11 @@
       return;
     }
 
+    var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     setSaveState('Director inserting Scene...');
     startDirectorActivity();
-    flushPendingSaves().then(function () {
+    saveBarrier.then(function () {
       return directorRequest({
         storyId: storyId,
         sceneId: sceneId,

@@ -1179,11 +1179,11 @@
     );
     if (activityTime >= localStartedAt) return activity;
 
-    return {
+    return Object.assign({}, activity, {
       phase: 'preparing',
       active: true,
       startedAt: localStartedAt
-    };
+    });
   }
 
   function refreshDirectorActivity() {

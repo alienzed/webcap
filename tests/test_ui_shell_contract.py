@@ -963,3 +963,26 @@ def test_settings_uses_six_task_owned_tabs_and_progressive_disclosure():
     assert "function syncAppSettingsDirectorModeVisibility()" in settings
     assert "details.open = !core.ready;" in settings
 
+
+
+def test_assistant_stop_is_owned_by_active_progress_card_and_director_graphs_are_clipped():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    styles = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    progress = html.split('id="director-chat-progress"', 1)[1].split(
+        'id="director-chat-messages"', 1
+    )[0]
+    composer = html.split('class="director-chat-composer"', 1)[1].split(
+        '</div>', 3
+    )[0]
+
+    assert 'id="director-chat-stop"' in progress
+    assert 'id="director-chat-stop"' not in composer
+    assert "grid-template-columns: auto minmax(0, 1fr) auto auto;" in shell_css
+    assert ".director-chat-progress-copy #director-chat-stop" in shell_css
+    assert ".director-activity-trend {" in styles
+    trend = styles.split(".director-activity-trend {", 1)[1].split("}", 1)[0]
+    svg = styles.split(".director-activity-trend svg {", 1)[1].split("}", 1)[0]
+    assert "overflow: hidden;" in trend
+    assert "overflow: hidden;" in svg

@@ -1396,6 +1396,18 @@ def test_storyboard_director_activity_exposes_hard_stop_control():
     assert "bottom: 3px;" in styles
 
 
+def test_storyboard_stale_activity_mask_preserves_live_director_job_identity():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    block = storyboard.split("function directorActivityForCurrentRun(activity)", 1)[1].split(
+        "function refreshDirectorActivity()", 1
+    )[0]
+
+    assert "return Object.assign({}, activity, {" in block
+    assert "phase: 'preparing'" in block
+    assert "startedAt: localStartedAt" in block
+
+
 def test_storyboard_director_stop_dismisses_only_the_stopped_activity_target():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 

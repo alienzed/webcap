@@ -2197,8 +2197,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-progress-copy {
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: baseline;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: 9px;
 }
 
@@ -2223,6 +2223,15 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
+  white-space: nowrap;
+}
+
+
+.director-chat-progress-copy #director-chat-stop {
+  width: auto;
+  min-width: 54px;
+  min-height: 28px;
+  padding: 4px 9px;
   white-space: nowrap;
 }
 

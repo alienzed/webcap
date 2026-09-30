@@ -38,28 +38,6 @@
   grid-area: workspace;
 }
 
-.shell-immersive-exit-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 80;
-  min-height: 28px;
-  padding: 4px 9px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-  color: var(--muted);
-  font-size: 11px;
-  opacity: 0.22;
-  transition: opacity 120ms ease;
-}
-
-.shell-immersive-exit-btn:hover,
-.shell-immersive-exit-btn:focus-visible {
-  opacity: 1;
-  color: var(--text);
-}
-
 .app-frame.shell-immersive > #console-panel {
   left: 8px;
   max-height: calc(100% - var(--shell-status-height) - 16px);

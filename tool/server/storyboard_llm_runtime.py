@@ -314,7 +314,7 @@ def _server_url(path):
 
 
 def _runtime_dir():
-    path = Path(app_config.FS_ROOT) / ".webcap_runtime" / "storyboard-director"
+    path = app_config.app_cache_root() / "storyboard-director"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

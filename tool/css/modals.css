@@ -671,6 +671,27 @@
   margin-top: 2px;
 }
 
+#director-model-test-results {
+  display: grid;
+  gap: 8px;
+}
+
+.director-model-test-result > summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.director-model-test-output {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 420px;
+  overflow: auto;
+}
+
 .director-model-test-status {
   display: flex;
   align-items: center;

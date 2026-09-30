@@ -226,7 +226,7 @@ def _append_director_checks(checks, source):
             configured,
             "Remote Director endpoint is configured." if configured else "Remote Director endpoint is not configured.",
             endpoint,
-            "Set an OpenAI-compatible endpoint in App Settings > Storyboard." if not configured else "",
+            "Set an OpenAI-compatible endpoint in App Settings > Director." if not configured else "",
         ))
         if configured:
             try:
@@ -268,7 +268,7 @@ def _append_director_checks(checks, source):
         executable_ok,
         "llama-server is available." if executable_ok else "llama-server is not available.",
         executable_details,
-        "Install a recent llama.cpp build or configure App Settings > Storyboard > llama-server executable." if not executable_ok else "",
+        "Install a recent llama.cpp build or configure App Settings > Director > llama-server executable." if not executable_ok else "",
     ))
 
     models_root = str(filesystem.get("models") or "").strip()

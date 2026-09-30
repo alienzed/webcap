@@ -10,7 +10,7 @@ H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
 SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"
-VALID_OPERATIONS = {"expand_concept", "define_invariants", "develop_story", "repair_scenes", "write_prompt", "refine_prompt"}
+VALID_OPERATIONS = {"expand_concept", "define_invariants", "develop_story", "insert_scene", "repair_scenes", "write_prompt", "refine_prompt"}
 
 
 def _read_text(path, label):
@@ -68,6 +68,20 @@ def _prompt_response_schema(allow_duration=False, allow_scene_fields=False, allo
             ),
         }
     return schema
+
+
+def _single_scene_response_schema():
+    plan_schema = _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema")
+    try:
+        scene_schema = plan_schema["properties"]["scenes"]["items"]
+    except (KeyError, TypeError) as exc:
+        raise RuntimeError("Storyboard Scene plan schema is missing its Scene item shape.") from exc
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["scene"],
+        "properties": {"scene": scene_schema},
+    }
 
 
 def _read_json(path, label):
@@ -135,38 +149,6 @@ def _story_invariants_text(story):
     return "\n\n".join(lines)
 
 
-def _scene_invariants_text(story, scene):
-    refs = scene.get("invariantRefs") if isinstance(scene.get("invariantRefs"), list) else []
-    if not refs:
-        return ""
-    by_key = {}
-    invariants = story.get("invariants") if isinstance(story.get("invariants"), list) else []
-    for item in invariants:
-        if not isinstance(item, dict):
-            continue
-        kind = _clean(item.get("kind")).lower()
-        title = _clean(item.get("title"))
-        text = _clean(item.get("text"))
-        if kind not in {"character", "location"} or not title or not text:
-            continue
-        by_key[(kind, title.casefold())] = {
-            "kind": kind,
-            "title": title,
-            "text": text,
-        }
-
-    lines = []
-    for ref in refs:
-        if not isinstance(ref, dict):
-            continue
-        kind = _clean(ref.get("kind")).lower()
-        title = _clean(ref.get("title"))
-        item = by_key.get((kind, title.casefold()))
-        if item is not None:
-            lines.append(item["kind"].capitalize() + ": " + item["title"] + "\n" + item["text"])
-    return "\n\n".join(lines)
-
-
 def _repair_scene_plan(story):
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
@@ -187,51 +169,6 @@ def _repair_scene_plan(story):
             "prompt": _clean(scene.get("prompt")),
         })
     return result
-
-
-def _scene_shared_context_text(story, scene):
-    refs = scene.get("sharedContextRefs") if isinstance(scene.get("sharedContextRefs"), list) else []
-    if not refs:
-        return ""
-    development = story.get("development") if isinstance(story.get("development"), dict) else {}
-    plan = development.get("plan") if isinstance(development.get("plan"), dict) else {}
-    shared = plan.get("sharedContext") if isinstance(plan.get("sharedContext"), dict) else {}
-    by_id = {}
-    for category in ("subjects", "wardrobes", "locations", "persistentFacts"):
-        items = shared.get(category) if isinstance(shared.get(category), list) else []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            context_id = _clean(item.get("id"))
-            description = _clean(item.get("description"))
-            if context_id and description:
-                by_id[context_id] = {
-                    "label": _clean(item.get("label")) or context_id,
-                    "description": description,
-                }
-    lines = []
-    for ref in refs:
-        item = by_id.get(_clean(ref))
-        if item is not None:
-            lines.append(item["label"] + ": " + item["description"])
-    return "\n".join(lines)
-
-
-def _previous_handoff(story, scene_id):
-    order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
-    if scene_id not in order:
-        return ""
-    index = order.index(scene_id)
-    if index <= 0:
-        return ""
-    previous = (story.get("scenes") or {}).get(order[index - 1])
-    if not isinstance(previous, dict):
-        return ""
-    exit_state = _clean(previous.get("exitState"))
-    if not exit_state:
-        return ""
-    return exit_state
-
 
 
 def _previous_scene_context(story, scene_id):

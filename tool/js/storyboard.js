@@ -999,7 +999,7 @@
 
   function directorActivityForTargetQueue(activity, queue) {
     var target = storyState.director.activityTarget;
-    if (!target || !queue || !Array.isArray(queue.jobs)) return activity;
+    if (!target || !queue || !Array.isArray(queue.jobs)) return null;
 
     var targetKey = directorTargetKey(target);
     var job = queue.jobs.find(function (candidate) {
@@ -1007,13 +1007,31 @@
       if (target.kind === 'story-action') {
         return candidateTarget && String(candidateTarget.storyId || '') === String(target.storyId || '');
       }
+      if (target.kind === 'repair') {
+        return candidateTarget
+          && candidateTarget.kind === 'scene-prompt'
+          && String(candidateTarget.storyId || '') === String(target.storyId || '')
+          && candidate.operation === 'refine_prompt';
+      }
       return candidateTarget && directorTargetKey(candidateTarget) === targetKey;
     });
-    if (!job) return activity;
+    if (!job) return null;
 
     var jobId = String(job.jobId || '');
     var jobStatus = String(job.status || '');
-    if (jobStatus !== 'queued' || String(queue.activeJobId || '') === jobId) {
+    var active = String(queue.activeJobId || '') === jobId;
+    if (jobStatus !== 'queued' || active) {
+      if (!active && jobStatus !== 'queued') {
+        return {
+          active: true,
+          phase: 'preparing',
+          model: job.modelId || '',
+          operation: job.operation || '',
+          startedAt: job.startedAt || job.createdAt,
+          jobId: jobId,
+          jobStatus: jobStatus
+        };
+      }
       return Object.assign({}, activity || {}, {
         jobId: jobId,
         jobStatus: jobStatus
@@ -1028,12 +1046,12 @@
       ? String(ahead) + ' Director / Prompt Assistant request' + (ahead === 1 ? ' is' : 's are') + ' ahead.'
       : String(queue.waitReason || '');
 
-    return Object.assign({}, activity || {}, {
+    return {
       active: true,
       phase: 'queued',
-      model: job.modelId || (activity && activity.model) || '',
-      operation: job.operation || (activity && activity.operation) || '',
-      startedAt: job.createdAt || (activity && activity.startedAt),
+      model: job.modelId || '',
+      operation: job.operation || '',
+      startedAt: job.createdAt,
       queuePosition: queuedPosition,
       queueAhead: ahead,
       queueDepth: Number(queue.queueDepth) || 0,
@@ -1041,7 +1059,7 @@
       waitReason: waitReason,
       jobId: jobId,
       jobStatus: jobStatus
-    });
+    };
   }
 
   function directorQueuedLabel(activity) {
@@ -1266,36 +1284,12 @@
       refreshDirectorActivity();
       return;
     }
-    directorActivityRequest('/fs/director/activity').then(function (activity) {
-      var localStartedAt = Number(storyState.director.activityStartedAt) || 0;
-      var phase = String(activity && activity.phase || '');
-      var terminal = ['complete', 'error', 'stopped'].indexOf(phase) !== -1;
-      var activityTime = Math.max(
-        Number(activity && activity.startedAt) || 0,
-        Number(activity && activity.updatedAt) || 0
-      );
-      if (terminal && (!localStartedAt || activityTime >= localStartedAt)) {
-        renderDirectorActivity(activity, null);
-        return;
-      }
-      var staleCard = el('storyboard-director-activity');
-      if (staleCard) staleCard.classList.add('hidden');
-      positionDirectorActivity();
-    }).catch(function () {
-      var card = el('storyboard-director-activity');
-      if (card) card.classList.add('hidden');
-      positionDirectorActivity();
-    }).then(function () {
-      setTimeout(function () {
-        var card = el('storyboard-director-activity');
-        if (!directorActivityActive() && card) {
-          card.classList.add('hidden');
-          positionDirectorActivity();
-          storyState.director.activityTarget = null;
-          storyState.director.activityStartedAt = 0;
-        }
-      }, 2200);
-    });
+
+    var card = el('storyboard-director-activity');
+    if (card) card.classList.add('hidden');
+    positionDirectorActivity();
+    storyState.director.activityTarget = null;
+    storyState.director.activityStartedAt = 0;
   }
 
   function updateSceneDirectorStatus(sceneId, text) {

@@ -1627,3 +1627,36 @@ def test_assistant_chat_remains_freeform_and_separate_from_contextual_modes():
     assert "' tok/s'" in assistant
     assert "completedResponseMetrics(result)" in assistant
     assert "usage.completion_tokens" in assistant
+
+
+def test_director_status_cards_are_scoped_to_their_own_jobs():
+    assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assistant_scope = assistant.split("function activityForCurrentJob(activity)", 1)[1].split(
+        "function renderProgress(activity)", 1
+    )[0]
+    assert "if (!jobId || !queue || !Array.isArray(queue.jobs)) return null;" in assistant_scope
+    assert "if (!job) return null;" in assistant_scope
+    assert "var active = String(queue.activeJobId || '') === jobId;" in assistant_scope
+
+    storyboard_scope = storyboard.split("function directorActivityForTargetQueue(activity, queue)", 1)[1].split(
+        "function directorQueuedLabel(activity)", 1
+    )[0]
+    assert "if (!target || !queue || !Array.isArray(queue.jobs)) return null;" in storyboard_scope
+    assert "if (!job) return null;" in storyboard_scope
+    assert "target.kind === 'repair'" in storyboard_scope
+    assert "candidateTarget.kind === 'scene-prompt'" in storyboard_scope
+    assert "candidate.operation === 'refine_prompt'" in storyboard_scope
+
+
+def test_storyboard_director_completion_does_not_fall_back_to_global_activity():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    finish = storyboard.split("function finishDirectorActivity()", 1)[1].split(
+        "function updateSceneDirectorStatus", 1
+    )[0]
+    assert "/fs/director/activity" not in finish
+    assert "card.classList.add('hidden')" in finish
+    assert "storyState.director.activityTarget = null;" in finish
+    assert "storyState.director.activityStartedAt = 0;" in finish

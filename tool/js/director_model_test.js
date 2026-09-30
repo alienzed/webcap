@@ -3,6 +3,9 @@ var directorModelTestState = {
   running: false,
   stopRequested: false,
   currentJobId: '',
+  currentModelLabel: '',
+  currentModelNumber: 0,
+  currentPhase: '',
   protocol: null,
   models: [],
   sessions: [],
@@ -125,20 +128,82 @@ function directorModelTestRenderSessions() {
   }).join('');
 }
 
+function directorModelTestPhaseText(phase) {
+  if (phase === 'queued') return 'Queued';
+  if (phase === 'preparing' || phase === 'freeing_comfy') return 'Preparing';
+  if (phase === 'loading_model') return 'Loading model';
+  if (phase === 'generating') return 'Generating';
+  if (phase === 'completed') return 'Completed';
+  if (phase === 'failed') return 'Failed';
+  if (phase === 'stopped' || phase === 'cancelled' || phase === 'interrupted') return 'Stopped';
+  return 'Testing';
+}
+
+function directorModelTestStatusState(session) {
+  if (directorModelTestState.running) return directorModelTestState.stopRequested ? 'stopping' : 'running';
+  var status = String(session && session.status || '');
+  if (status === 'completed') return 'complete';
+  if (status === 'failed') return 'failed';
+  if (status === 'stopped') return 'stopped';
+  if (status === 'running') return 'running';
+  return 'ready';
+}
+
 function directorModelTestStatusText(session) {
-  if (!session) return 'Ready.';
+  if (!session) return directorModelTestState.running ? 'Starting test…' : 'Ready to run a Director model test.';
   var done = Array.isArray(session.runs) ? session.runs.length : 0;
   var total = Array.isArray(session.models) ? session.models.length : 0;
-  if (session.status === 'running') return 'Running · ' + String(done) + ' / ' + String(total);
-  return String(session.status || 'complete') + ' · ' + String(done) + ' / ' + String(total);
+  var failed = Array.isArray(session.runs) ? session.runs.filter(function (run) { return run.status === 'failed'; }).length : 0;
+
+  if (directorModelTestState.running && directorModelTestState.stopRequested) {
+    return 'Stopping' + (directorModelTestState.currentModelLabel ? ' · ' + directorModelTestState.currentModelLabel : '') +
+      ' · ' + String(done) + ' / ' + String(total) + ' complete';
+  }
+  if (directorModelTestState.running && directorModelTestState.currentModelLabel) {
+    return directorModelTestPhaseText(directorModelTestState.currentPhase) + ' · ' +
+      directorModelTestState.currentModelLabel + ' · ' +
+      String(directorModelTestState.currentModelNumber) + ' / ' + String(total);
+  }
+  if (session.status === 'running') return 'Running · ' + String(done) + ' / ' + String(total) + ' complete';
+
+  var text = String(session.status || 'completed') + ' · ' + String(done) + ' / ' + String(total);
+  if (session.status === 'completed') text = 'Completed · ' + String(done) + ' / ' + String(total);
+  if (session.status === 'stopped') text = 'Stopped · ' + String(done) + ' / ' + String(total);
+  if (session.status === 'failed') text = 'Failed · ' + String(done) + ' / ' + String(total) + ' · see Console';
+  if (failed) text += ' · ' + String(failed) + ' failed';
+  return text;
+}
+
+function directorModelTestSetStatus(text, state, summaryText) {
+  var status = directorModelTestEl('director-model-test-status');
+  if (status) {
+    status.textContent = text;
+    status.dataset.state = state || 'ready';
+  }
+  var summary = directorModelTestEl('director-model-test-summary-status');
+  if (summary) {
+    summary.textContent = summaryText || 'Ready';
+    summary.dataset.state = state || 'ready';
+  }
+}
+
+function directorModelTestRenderStatus() {
+  var session = directorModelTestState.session;
+  var state = directorModelTestStatusState(session);
+  var summary = 'Ready';
+  if (state === 'running') summary = 'Running';
+  if (state === 'stopping') summary = 'Stopping';
+  if (state === 'complete') summary = 'Complete';
+  if (state === 'stopped') summary = 'Stopped';
+  if (state === 'failed') summary = 'Failed';
+  directorModelTestSetStatus(directorModelTestStatusText(session), state, summary);
 }
 
 function directorModelTestRenderSession() {
   var session = directorModelTestState.session;
-  var status = directorModelTestEl('director-model-test-status');
   var results = directorModelTestEl('director-model-test-results');
   var exportButton = directorModelTestEl('director-model-test-export');
-  if (status) status.textContent = directorModelTestStatusText(session);
+  directorModelTestRenderStatus();
   if (exportButton) exportButton.disabled = !session;
 
   if (!results) return;
@@ -220,8 +285,7 @@ function directorModelTestRefresh() {
     directorModelTestSyncControls();
   }).catch(function (error) {
     reportConsoleError('Director Model Test', error);
-    var status = directorModelTestEl('director-model-test-status');
-    if (status) status.textContent = 'Could not load model test data. See Console.';
+    directorModelTestSetStatus('Could not load model test data. See Console.', 'failed', 'Failed');
     throw error;
   });
 }
@@ -257,6 +321,8 @@ function directorModelTestObservePhase(tracker, activity, jobId) {
   }
   tracker.phase = phase;
   tracker.phaseStartedAt = now;
+  directorModelTestState.currentPhase = phase;
+  directorModelTestRenderStatus();
 }
 
 function directorModelTestClosePhase(tracker) {
@@ -357,9 +423,13 @@ function directorModelTestConsumeJob(jobId) {
   });
 }
 
-function directorModelTestRunOne(model) {
+function directorModelTestRunOne(model, modelNumber) {
   var tracker = { phase: '', phaseStartedAt: 0, phases: {} };
   var localStartedAt = Date.now() / 1000;
+  directorModelTestState.currentModelLabel = String(model.label || model.modelId || model.modelRef || 'Model');
+  directorModelTestState.currentModelNumber = modelNumber;
+  directorModelTestState.currentPhase = 'queued';
+  directorModelTestRenderStatus();
   return directorModelTestPost({
     action: 'enqueue',
     sessionId: directorModelTestState.session.id,
@@ -371,6 +441,8 @@ function directorModelTestRunOne(model) {
     return directorModelTestWaitForJob(directorModelTestState.currentJobId, tracker);
   }).then(function (job) {
     var run = directorModelTestBuildRun(model, job, tracker, localStartedAt);
+    directorModelTestState.currentPhase = run.status;
+    directorModelTestRenderStatus();
     return directorModelTestPost({
       action: 'save_run',
       sessionId: directorModelTestState.session.id,
@@ -382,6 +454,10 @@ function directorModelTestRunOne(model) {
     });
   }).finally(function () {
     directorModelTestState.currentJobId = '';
+    directorModelTestState.currentModelLabel = '';
+    directorModelTestState.currentModelNumber = 0;
+    directorModelTestState.currentPhase = '';
+    directorModelTestRenderStatus();
   });
 }
 
@@ -389,22 +465,28 @@ function directorModelTestStart() {
   if (directorModelTestState.running) return;
   var models = directorModelTestSelectedModels();
   if (!models.length) {
-    var status = directorModelTestEl('director-model-test-status');
-    if (status) status.textContent = 'Choose at least one model.';
+    directorModelTestSetStatus('Choose at least one model.', 'ready', 'Ready');
     return;
   }
 
   var prompt = String((directorModelTestEl('director-model-test-prompt') || {}).value || '').trim();
   if (!prompt) {
-    var status = directorModelTestEl('director-model-test-status');
-    if (status) status.textContent = 'Enter a benchmark prompt.';
+    directorModelTestSetStatus('Enter a benchmark prompt.', 'ready', 'Ready');
     return;
   }
 
   directorModelTestState.running = true;
   directorModelTestState.stopRequested = false;
   directorModelTestState.session = null;
+  directorModelTestState.currentModelLabel = '';
+  directorModelTestState.currentModelNumber = 0;
+  directorModelTestState.currentPhase = '';
   directorModelTestSyncControls();
+  directorModelTestSetStatus(
+    'Starting test · ' + String(models.length) + ' model' + (models.length === 1 ? '' : 's') + ' selected',
+    'running',
+    'Running'
+  );
   reportConsoleInfo('Director Model Test', 'Starting ' + String(models.length) + '-model ' + String((directorModelTestState.protocol || {}).id || 'benchmark') + '.');
 
   directorModelTestPost({ action: 'start', models: models, prompt: prompt }).then(function (payload) {
@@ -412,10 +494,10 @@ function directorModelTestStart() {
     directorModelTestRenderSession();
 
     var chain = Promise.resolve();
-    models.forEach(function (model) {
+    models.forEach(function (model, index) {
       chain = chain.then(function () {
         if (directorModelTestState.stopRequested) return;
-        return directorModelTestRunOne(model).catch(function (error) {
+        return directorModelTestRunOne(model, index + 1).catch(function (error) {
           if (directorModelTestState.stopRequested) return;
           reportConsoleError('Director Model Test', error);
           var failedRun = {
@@ -465,7 +547,11 @@ function directorModelTestStart() {
   }).finally(function () {
     directorModelTestState.running = false;
     directorModelTestState.currentJobId = '';
+    directorModelTestState.currentModelLabel = '';
+    directorModelTestState.currentModelNumber = 0;
+    directorModelTestState.currentPhase = '';
     directorModelTestSyncControls();
+    directorModelTestRenderStatus();
     directorModelTestRefresh().catch(function () {});
   });
 }
@@ -473,6 +559,7 @@ function directorModelTestStart() {
 function directorModelTestStop() {
   if (!directorModelTestState.running) return;
   directorModelTestState.stopRequested = true;
+  directorModelTestRenderStatus();
   var button = directorModelTestEl('director-model-test-stop');
   if (button) button.disabled = true;
   if (!directorModelTestState.currentJobId) return;

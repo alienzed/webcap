@@ -43,6 +43,21 @@
   max-height: calc(100% - var(--shell-status-height) - 16px);
 }
 
+.app-frame.director-chat-pinned {
+  grid-template-columns: 42px minmax(0, 1fr) clamp(360px, 36vw, 560px);
+  grid-template-areas:
+    "header header header"
+    "rail workspace assistant"
+    "rail status status";
+}
+
+.app-frame.shell-immersive.director-chat-pinned {
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 36vw, 560px);
+  grid-template-areas:
+    "workspace assistant"
+    "status status";
+}
+
 .app-header {
   grid-area: header;
   min-width: 0;
@@ -1953,6 +1968,22 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   backdrop-filter: blur(10px);
 }
 
+.app-frame.director-chat-pinned > .director-chat-drawer {
+  position: relative;
+  z-index: 1;
+  grid-area: assistant;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  width: auto;
+  min-width: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
 .director-chat-drawer.hidden {
   display: none;
 }
@@ -2003,6 +2034,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   white-space: nowrap;
 }
 
+.director-chat-pin,
 .director-chat-close {
   width: 30px;
   min-width: 30px;
@@ -2012,17 +2044,43 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   border-radius: 7px;
   background: transparent;
   color: var(--muted);
-  font-size: 20px;
-  line-height: 1;
   cursor: pointer;
 }
 
+.director-chat-close {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.director-chat-pin svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.director-chat-pin.active {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.director-chat-pin:hover,
+.director-chat-pin:focus-visible,
 .director-chat-close:hover,
 .director-chat-close:focus-visible {
   border-color: var(--border);
   background: var(--hover);
   color: var(--text);
   outline: none;
+}
+
+.director-chat-pin.active:hover,
+.director-chat-pin.active:focus-visible {
+  color: var(--accent);
 }
 
 .director-chat-mode-row {

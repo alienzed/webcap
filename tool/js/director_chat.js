@@ -1,6 +1,7 @@
 (function () {
   var state = {
     open: false,
+    pinned: window.localStorage.getItem('webcap.directorChat.pinned') === '1',
     pending: false,
     modelsLoaded: false,
     modelId: getDirectorModelPreference('webcap.directorChat.model'),
@@ -590,9 +591,31 @@
     });
   }
 
+  function syncPinnedUi() {
+    var frame = el('app-frame');
+    var pin = el('director-chat-pin');
+    if (!frame || !pin) return;
+
+    frame.classList.toggle('director-chat-pinned', state.pinned && state.open);
+    pin.classList.toggle('active', state.pinned);
+    pin.setAttribute('aria-pressed', state.pinned ? 'true' : 'false');
+    pin.setAttribute('aria-label', state.pinned ? 'Unpin Assistant' : 'Pin Assistant');
+    pin.title = state.pinned ? 'Unpin Assistant' : 'Pin Assistant';
+  }
+
+  function setPinned(pinned) {
+    state.pinned = !!pinned;
+    window.localStorage.setItem('webcap.directorChat.pinned', state.pinned ? '1' : '0');
+    syncPinnedUi();
+  }
+
   function setOpen(open, modeId) {
     if (modeId) setMode(modeId);
     state.open = !!open;
+    if (!state.open && state.pinned) {
+      state.pinned = false;
+      window.localStorage.setItem('webcap.directorChat.pinned', '0');
+    }
     var drawer = el('director-chat-drawer');
     var toggle = el('director-chat-rail-btn');
     if (!drawer || !toggle) return;
@@ -606,6 +629,7 @@
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     toggle.classList.toggle('active', state.open);
     toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
+    syncPinnedUi();
 
     if (state.open) {
       syncModeUi();
@@ -619,6 +643,7 @@
   function bind() {
     var toggle = el('director-chat-rail-btn');
     var drawer = el('director-chat-drawer');
+    var pin = el('director-chat-pin');
     var close = el('director-chat-close');
     var clear = el('director-chat-clear');
     var send = el('director-chat-send');
@@ -628,9 +653,10 @@
     var refresh = el('director-chat-model-refresh');
     var modeSwitch = el('director-chat-mode-switch');
     var presetsHost = el('director-chat-mode-presets');
-    if (!toggle || !drawer || !close || !clear || !send || !stop || !input || !model || !refresh || !modeSwitch || !presetsHost) return;
+    if (!toggle || !drawer || !pin || !close || !clear || !send || !stop || !input || !model || !refresh || !modeSwitch || !presetsHost) return;
 
     toggle.onclick = function () { setOpen(!state.open); };
+    pin.onclick = function () { setPinned(!state.pinned); };
     close.onclick = function () { setOpen(false); };
     clear.onclick = newChat;
     send.onclick = sendMessage;
@@ -711,14 +737,18 @@
       }
     });
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || drawer.contains(event.target) || toggle.contains(event.target)) return;
+      if (!state.open || state.pinned || drawer.contains(event.target) || toggle.contains(event.target)) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && state.open) setOpen(false);
     });
 
-    syncModeUi();
+    if (state.pinned) setOpen(true);
+    else {
+      syncPinnedUi();
+      syncModeUi();
+    }
   }
 
   window.registerAssistantMode = registerContextMode;

@@ -1161,7 +1161,7 @@ def _sampling_profile(operation):
     operation = str(operation or "").strip()
     profiles = {
         "expand_concept": {"temperature": 0.35, "top_p": 0.9},
-        "develop_story": {"temperature": 0.2, "top_p": 0.85},
+        "develop_story": {"temperature": 0.3, "top_p": 0.9},
         "write_prompt": {"temperature": 0.15, "top_p": 0.85},
         "refine_prompt": {"temperature": 0.1, "top_p": 0.8},
     }

@@ -140,7 +140,7 @@ When WebCap can prove an intermediate is no longer needed, delete it at that lif
 
 - after durable provider output is ingested;
 - after an operation is explicitly abandoned/cancelled and no active job references it;
-- after a probe reaches a terminal state and its durable calibration result has been recorded, when the probe bundle itself has no remaining diagnostic value by contract.
+- after an H3 probe successfully publishes its durable calibration ceilings, delete the completed probe bundle immediately; failed, interrupted, or cancelled probes may remain temporarily for diagnosis.
 
 Startup reconciliation is only a fallback for crash leftovers, not the normal cleanup mechanism.
 
@@ -167,7 +167,7 @@ Browser-only interaction state should remain in browser memory or `sessionStorag
 
 Do not write chat drafts, transient Assistant input, calibration form scratch, or similar UI-only state into the filesystem unless a product requirement explicitly makes it durable.
 
-Backend session state that must survive browser refresh but not server restart remains in backend memory.
+Backend session state that must survive browser refresh but not server restart remains in backend memory. Director Model Test results are one such diagnostic session: the current test remains available while WebCap is running, and Export JSON is the explicit persistence path.
 
 ## 7. Queue/state consolidation direction
 

@@ -637,3 +637,22 @@ def test_failed_h3_runtime_keeps_probe_for_diagnosis(tmp_path, monkeypatch):
     assert runtime["status"] == "trainer_failed"
     assert probe_root.is_dir()
     assert runtime_path.is_file()
+
+
+def test_h3_status_keeps_completed_runtime_after_probe_cleanup(monkeypatch):
+    completed = {
+        "probeId": "h3-complete",
+        "status": "completed",
+        "finishedAt": "2026-09-30T19:00:00+00:00",
+        "campaignStatus": "completed",
+    }
+    monkeypatch.setattr(h3_probe_module, "_active_runtime_path", lambda: None)
+    monkeypatch.setattr(h3_probe_module, "_latest_runtime", completed)
+    monkeypatch.setattr(h3_probe_module, "_calibration_status_fields", lambda: {"savedResultCount": 12, "calibrated": True})
+
+    status = h3_probe_module.h3_probe_status()
+
+    assert status["active"] is False
+    assert status["probeId"] == "h3-complete"
+    assert status["status"] == "completed"
+    assert status["calibrated"] is True

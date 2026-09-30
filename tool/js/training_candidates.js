@@ -24,6 +24,7 @@ function trainingCandidatesNumber(value, fallback) {
 }
 
 var TRAINING_CANDIDATES_DISPLAY_SESSION_KEY = 'webcap.trainingCandidates.display.v1';
+var trainingCandidatesCloseHook = null;
 
 function trainingCandidatesDefaultDisplayState() {
   return { smoothing: .99, yMin: null, yMax: null, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
@@ -803,6 +804,8 @@ function toggleTrainingCandidatesFullscreen() {
 
 function closeTrainingCandidates() {
   var els = trainingCandidatesElements();
+  var closeHook = trainingCandidatesCloseHook;
+  trainingCandidatesCloseHook = null;
   clearTrainingCandidatesAutoRefresh();
   trainingWorkspaceState.candidateRequestVersion++;
   trainingWorkspaceState.candidateModalOpen = false;
@@ -814,11 +817,13 @@ function closeTrainingCandidates() {
   trainingCandidatesClearChartWiring();
   if (document.fullscreenElement === els.dialog && document.exitFullscreen) document.exitFullscreen().catch(function (err) { setStatus('Could not exit fullscreen: ' + String(err.message || err)); });
   if (els.modal) { els.modal.classList.add('hidden'); els.modal.setAttribute('aria-hidden', 'true'); }
+  if (closeHook) closeHook();
 }
 
-function openTrainingCandidates(job) {
+function openTrainingCandidates(job, options) {
   if (!job || !job.id || !job.folder) { setStatus('Candidate analysis requires a training run.'); return; }
   var els = trainingCandidatesElements();
+  trainingCandidatesCloseHook = options && typeof options.onClose === 'function' ? options.onClose : null;
   trainingWorkspaceState.candidateJobId = String(job.id);
   trainingWorkspaceState.candidateFolder = String(job.folder);
   trainingWorkspaceState.candidateAlgorithm = 'v5';

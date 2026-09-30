@@ -11,6 +11,7 @@ import os
 import re
 import tempfile
 import traceback
+import sys
 
 from .permissions import normalize_path_permissions
 from .training_profiles import PROFILE_IDS
@@ -191,10 +192,14 @@ def validate_config_payload(payload):
 
     root = _as_clean_str(filesystem.get("root"), "filesystem.root")
     output_root = str(filesystem.get("output_root") or "").strip()
+    app_data_root = str(filesystem.get("app_data_root") or "").strip()
+    if app_data_root and not Path(app_data_root).expanduser().is_absolute():
+        raise ValueError("Config.filesystem.app_data_root must be blank or an absolute path.")
     models = str(filesystem.get("models") or "").strip()
     out["filesystem"] = {
         "root": root,
         "output_root": output_root,
+        "app_data_root": app_data_root,
         "models": models,
     }
 
@@ -476,6 +481,40 @@ def get_config_snapshot():
 def output_root():
     configured = str((config.get("filesystem") or {}).get("output_root") or "").strip()
     return Path(configured) if configured else Path(FS_ROOT) / "output"
+
+
+def _default_app_data_root():
+    if sys.platform.startswith("win"):
+        local_app_data = str(os.environ.get("LOCALAPPDATA") or "").strip()
+        if local_app_data:
+            return Path(local_app_data) / "WebCap"
+        return Path.home() / "AppData" / "Local" / "WebCap"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "WebCap"
+    xdg_data_home = str(os.environ.get("XDG_DATA_HOME") or "").strip()
+    if xdg_data_home:
+        candidate = Path(xdg_data_home).expanduser()
+        if candidate.is_absolute():
+            return candidate / "WebCap"
+    return Path.home() / ".local" / "share" / "WebCap"
+
+
+def app_data_root():
+    configured = str((config.get("filesystem") or {}).get("app_data_root") or "").strip()
+    if configured:
+        path = Path(configured).expanduser()
+        if not path.is_absolute():
+            raise ValueError("Config.filesystem.app_data_root must be blank or an absolute path.")
+        return path
+    return _default_app_data_root()
+
+
+def app_state_root():
+    return app_data_root() / "state"
+
+
+def app_cache_root():
+    return app_data_root() / "cache"
 
 
 reload_runtime_config()

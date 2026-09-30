@@ -284,220 +284,11 @@ function openAppSettingsModal() {
       appSettingsLoadedConfig = normalizeAppConfigShape(cfg);
       setRuntimeAppConfig(cfg);
       fillAppSettingsForm(appSettingsLoadedConfig);
-      refreshH3CalibrationSettings();
       setAppSettingsStatus('', false);
     } catch (e) {
       setAppSettingsStatus('Failed to parse settings JSON.', true);
     }
   });
-}
-
-function refreshH3CalibrationSettings() {
-  var summary = document.getElementById('h3-calibration-summary');
-  var source = document.getElementById('h3-calibration-source');
-  var run = document.getElementById('h3-calibration-run-btn');
-  var stop = document.getElementById('h3-calibration-stop-btn');
-  var reset = document.getElementById('h3-calibration-reset-btn');
-  if (!summary || !source || !run || !stop || !reset) return;
-  var calibration = appSettingsLoadedConfig && appSettingsLoadedConfig.training && appSettingsLoadedConfig.training.h3_calibration;
-  renderH3CalibrationResults(calibration);
-  var results = calibration && calibration.results ? calibration.results : {};
-  var hardware = calibration && calibration.hardware;
-  summary.textContent = hardware
-    ? ('Saved hardware: ' + hardware.gpu_model + ' · ' + hardware.total_vram_mib + ' MiB VRAM · ' + Object.keys(results).length + ' tested candidates.')
-    : 'No saved calibration results.';
-  reset.classList.toggle('hidden', !calibration);
-  fetch('/fs/media_metadata?folder=' + encodeURIComponent(state.folder || ''))
-    .then(function (response) { return response.json(); })
-    .then(function (metadataRows) {
-      var metadata = {};
-      (Array.isArray(metadataRows) ? metadataRows : []).forEach(function (row) {
-        metadata[row.file] = { duration: Number(String(row.duration || '').replace('s', '')), frames: Number(row.frames || 0) };
-      });
-      source.innerHTML = '';
-      var choices = (state.items || []).filter(function (item) {
-        var ext = String(item.fileName || '').split('.').pop().toLowerCase();
-        var data = metadata && metadata[item.fileName];
-        return item.hasCaption && ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'avi', 'm4v'].indexOf(ext) !== -1 && data && Number(data.duration) >= 102 / 24;
-      }).sort(function (a, b) {
-        var ad = Number(metadata[a.fileName].duration || 0);
-        var bd = Number(metadata[b.fileName].duration || 0);
-        return bd - ad || String(a.fileName).localeCompare(String(b.fileName));
-      });
-      choices.forEach(function (item) {
-        var option = document.createElement('option');
-        option.value = item.fileName;
-        option.textContent = item.fileName + ' · ' + Number(metadata[item.fileName].duration).toFixed(1) + 's';
-        source.appendChild(option);
-      });
-      run.disabled = !choices.length;
-      if (!choices.length) summary.textContent += ' Choose or prepare a captioned video at least 4.25 seconds long.';
-    })
-    .catch(function (error) { summary.textContent = 'Could not load calibration source metadata: ' + error.message; run.disabled = true; });
-  fetch('/fs/h3_probe/status').then(function (response) { return response.json(); }).then(function (status) {
-    var active = !!(status && status.active);
-    stop.classList.toggle('hidden', !active);
-    run.classList.toggle('hidden', active);
-  });
-}
-
-function resetH3CalibrationSettings() {
-  if (!confirm('Reset saved H3 calibration results? Existing probe logs and dataset TOMLs are unchanged.')) return;
-  var payload = normalizeAppConfigShape(appSettingsLoadedConfig || {});
-  delete payload.training.h3_calibration;
-  HttpModule.postJson('/app/config', payload, function (status, responseText) {
-    if (status !== 200) { setAppSettingsStatus(getErrorMessage(responseText, 'Could not reset H3 calibration.'), true); return; }
-    appSettingsLoadedConfig = normalizeAppConfigShape(JSON.parse(responseText).config || payload);
-    fillAppSettingsForm(appSettingsLoadedConfig);
-    refreshH3CalibrationSettings();
-  });
-}
-
-function renderEnvironmentCheck(payload) {
-  var summaryEl = ui.appSettingsEnvironmentSummaryEl;
-  var resultsEl = ui.appSettingsEnvironmentResultsEl;
-  if (!summaryEl || !resultsEl) return;
-  if (!payload || !Array.isArray(payload.checks)) {
-    summaryEl.textContent = 'Environment check did not return a valid report.';
-    resultsEl.innerHTML = '';
-    resultsEl.classList.add('hidden');
-    return;
-  }
-  var summary = payload.summary || {};
-  var groupOrder = ['core', 'training', 'inference', 'director', 'optional_analysis'];
-  var groupLabels = {
-    core: 'Core',
-    training: 'Training',
-    inference: 'Inference',
-    director: 'Director',
-    optional_analysis: 'Optional Analysis'
-  };
-  var core = summary.core || {};
-  summaryEl.textContent = core.ready
-    ? ('WebCap ready · ' + Number(summary.passed || 0) + '/' + Number(summary.total || 0) + ' checks passed')
-    : (Number(core.requiredFailures || 0) + ' core issue(s) · ' + Number(summary.passed || 0) + '/' + Number(summary.total || 0) + ' checks passed');
-  resultsEl.innerHTML = groupOrder.map(function (groupName) {
-    var checks = payload.checks.filter(function (check) { return check.group === groupName; });
-    if (!checks.length) return '';
-    var groupSummary = summary[groupName] || {};
-    var requiredFailures = Number(groupSummary.requiredFailures || 0);
-    var optionalFailures = Number(groupSummary.optionalFailures || 0);
-    var groupState = requiredFailures
-      ? (requiredFailures + ' issue(s)')
-      : (optionalFailures ? ('Ready · ' + optionalFailures + ' optional unavailable') : 'Ready');
-    var rows = checks.map(function (check) {
-      var stateClass = check.ok ? 'ok' : (check.required ? 'failed' : 'optional');
-      var detail = check.details ? '<div class="app-settings-environment-detail">' + escapeHtml(check.details) + '</div>' : '';
-      var guidance = check.guidance ? '<div class="app-settings-environment-guidance">' + escapeHtml(check.guidance) + '</div>' : '';
-      return '<div class="app-settings-environment-check ' + stateClass + '">' +
-        '<span class="app-settings-environment-mark">' + (check.ok ? '&#10003;' : '!') + '</span>' +
-        '<span><strong>' + escapeHtml(check.message || check.id) + '</strong>' + detail + guidance + '</span>' +
-        '</div>';
-    }).join('');
-    return '<section class="app-settings-environment-group">' +
-      '<div class="app-settings-environment-group-header"><strong>' + escapeHtml(groupLabels[groupName] || groupName) + '</strong><span>' + escapeHtml(groupState) + '</span></div>' +
-      rows +
-      '</section>';
-  }).join('');
-  var checksById = {};
-  (payload.checks || []).forEach(function (check) {
-    checksById[String(check.id || '')] = check;
-  });
-  var faceReady = (!checksById.package_deface || checksById.package_deface.ok) &&
-    (!checksById.package_imageio || checksById.package_imageio.ok);
-  var poseReady = (!checksById.package_mediapipe || checksById.package_mediapipe.ok) &&
-    (!checksById.analysis_mediapipe_models || checksById.analysis_mediapipe_models.ok);
-  var analysisSelectionChanged = false;
-  if (ui.appSettingsEnableFaceAnalysisEl) {
-    ui.appSettingsEnableFaceAnalysisEl.disabled = !faceReady;
-    if (!faceReady && ui.appSettingsEnableFaceAnalysisEl.checked) {
-      ui.appSettingsEnableFaceAnalysisEl.checked = false;
-      analysisSelectionChanged = true;
-    }
-  }
-  if (ui.appSettingsEnableMediaPipeAnalysisEl) {
-    ui.appSettingsEnableMediaPipeAnalysisEl.disabled = !poseReady;
-    if (!poseReady && ui.appSettingsEnableMediaPipeAnalysisEl.checked) {
-      ui.appSettingsEnableMediaPipeAnalysisEl.checked = false;
-      analysisSelectionChanged = true;
-    }
-  }
-  if (analysisSelectionChanged) syncAppSettingsJsonFromForm();
-  resultsEl.classList.remove('hidden');
-  var details = document.getElementById('app-settings-environment-details');
-  if (details) details.open = !core.ready;
-}
-
-function appendRequirementsOutputToConsole(payload) {
-  payload = payload && typeof payload === 'object' ? payload : {};
-  var command = Array.isArray(payload.command) ? payload.command.join(' ') : '';
-  if (command) reportConsoleInfo('Python Requirements', '$ ' + command);
-  String(payload.stdout || '').split(/\r?\n/).forEach(function (line) {
-    if (line) reportConsoleInfo('Python Requirements', line);
-  });
-  String(payload.stderr || '').split(/\r?\n/).forEach(function (line) {
-    if (line) reportConsoleWarning('Python Requirements', line);
-  });
-}
-
-function installPythonRequirements() {
-  var button = ui.appSettingsEnvironmentInstallBtnEl;
-  if (button) {
-    button.disabled = true;
-    button.textContent = 'Installing...';
-  }
-  reportConsoleInfo('Python Requirements', 'Installing / repairing requirements.txt in the current WebCap Python environment...');
-  fetch('/app/environment/install-requirements', { method: 'POST' })
-    .then(function (response) {
-      return response.json().then(function (payload) {
-        appendRequirementsOutputToConsole(payload);
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload && payload.error ? payload.error : 'Python requirements install failed.');
-        }
-        return payload;
-      });
-    })
-    .then(function () {
-      reportConsoleInfo('Python Requirements', 'Install / repair completed successfully.');
-      return runEnvironmentCheck();
-    })
-    .catch(function (error) {
-      reportConsoleError('Python Requirements', error);
-      if (ui.appSettingsEnvironmentSummaryEl) {
-        ui.appSettingsEnvironmentSummaryEl.textContent = 'Requirements install failed. See Console.';
-      }
-    })
-    .finally(function () {
-      if (button) {
-        button.disabled = false;
-        button.textContent = 'Install / Repair Python Requirements';
-      }
-    });
-}
-
-function runEnvironmentCheck() {
-  var button = ui.appSettingsEnvironmentRunBtnEl;
-  if (button) button.disabled = true;
-  if (ui.appSettingsEnvironmentSummaryEl) ui.appSettingsEnvironmentSummaryEl.textContent = 'Checking...';
-  return fetch('/app/environment')
-    .then(function (response) {
-      return response.json().then(function (payload) {
-        if (!response.ok) throw new Error(payload && payload.error ? payload.error : 'Environment check failed.');
-        return payload;
-      });
-    })
-    .then(renderEnvironmentCheck)
-    .catch(function (error) {
-      reportConsoleError('Environment Check', error);
-      if (ui.appSettingsEnvironmentSummaryEl) ui.appSettingsEnvironmentSummaryEl.textContent = 'Environment check failed.';
-      if (ui.appSettingsEnvironmentResultsEl) {
-        ui.appSettingsEnvironmentResultsEl.innerHTML = '<div class="app-settings-environment-check failed"><span class="app-settings-environment-mark">!</span><span><strong>' + escapeHtml(error.message || String(error)) + '</strong></span></div>';
-        ui.appSettingsEnvironmentResultsEl.classList.remove('hidden');
-      }
-    })
-    .finally(function () {
-      if (button) button.disabled = false;
-    });
 }
 
 function closeAppSettingsModal() {
@@ -695,15 +486,6 @@ function wireAppSettingsUi() {
   if (ui.appSettingsResetBtn) {
     ui.appSettingsResetBtn.onclick = resetAppSettings;
   }
-  var h3Run = document.getElementById('h3-calibration-run-btn');
-  var h3Stop = document.getElementById('h3-calibration-stop-btn');
-  var h3Reset = document.getElementById('h3-calibration-reset-btn');
-  var h3Console = document.getElementById('h3-calibration-console-btn');
-  if (h3Run) h3Run.onclick = function () { runH3Calibration({ fileName: document.getElementById('h3-calibration-source').value }); };
-  if (h3Stop) h3Stop.onclick = stopH3Calibration;
-  if (h3Reset) h3Reset.onclick = resetH3CalibrationSettings;
-  if (h3Console) h3Console.onclick = showConsolePanel;
-  if (ui.appSettingsEnvironmentRunBtnEl) ui.appSettingsEnvironmentRunBtnEl.onclick = runEnvironmentCheck;
   if (ui.appSettingsDirectorEndpointAddBtnEl) ui.appSettingsDirectorEndpointAddBtnEl.onclick = addAppSettingsDirectorEndpoint;
   if (ui.appSettingsDirectorEndpointsEl) {
     ui.appSettingsDirectorEndpointsEl.addEventListener('click', function (event) {
@@ -715,7 +497,6 @@ function wireAppSettingsUi() {
     ui.appSettingsDirectorEndpointsEl.addEventListener('input', syncAppSettingsJsonFromForm);
     ui.appSettingsDirectorEndpointsEl.addEventListener('change', syncAppSettingsJsonFromForm);
   }
-  if (ui.appSettingsEnvironmentInstallBtnEl) ui.appSettingsEnvironmentInstallBtnEl.onclick = installPythonRequirements;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
     button.onclick = function () {
       setAppSettingsTab(button.getAttribute('data-app-settings-tab'), false);

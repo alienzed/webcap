@@ -948,6 +948,20 @@ def test_test_wildcard_helper_is_optional_and_does_not_leave_cross_set_output():
     assert "showError(err);" not in open_block.split("refreshWildcardDirector()", 1)[1].split("refreshTestSourceBrowser()", 1)[0]
 
 
+def test_test_wildcard_is_unavailable_when_original_set_is_missing():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    render_block = script.split("function renderWildcardDirector()", 1)[1].split("function renderWildcardAnalysis", 1)[0]
+    assert "sourceBrowser.ownerAvailable !== false" in render_block
+    assert "button.disabled = wildcardDirector.busy || !wildcardDirector.modelId || !ownerAvailable;" in render_block
+    assert "Original Set is unavailable" in render_block
+
+    browser_block = script.split("function refreshTestSourceBrowser()", 1)[1].split("function chooseTestSource", 1)[0]
+    assert "renderTestSourceBrowser(payload);" in browser_block
+    assert "renderWildcardDirector();" in browser_block
+    assert browser_block.index("renderTestSourceBrowser(payload);") < browser_block.index("renderWildcardDirector();")
+
+
 def test_generated_wildcard_variations_are_collapsed_by_default():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

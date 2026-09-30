@@ -721,7 +721,7 @@ def _active_generate_reference_tokens():
 def _runtime_items(cache):
     rows = []
     root = Path(app_config.FS_ROOT)
-    reference_root = root / ".webcap_runtime" / "generate-references"
+    reference_root = app_config.generate_reference_root()
     active_reference_tokens = _active_generate_reference_tokens()
     if reference_root.is_dir() and not reference_root.is_symlink():
         for reference in sorted(reference_root.iterdir(), key=lambda path: path.name, reverse=True):
@@ -740,7 +740,7 @@ def _runtime_items(cache):
                 protected_reason=("Referenced by queued or active Generate work." if active else ""),
                 cache=cache,
             ))
-    probes_root = root / ".webcap_training" / "h3-probes"
+    probes_root = app_config.h3_probe_root()
     if probes_root.is_dir():
         for probe in sorted(probes_root.iterdir(), key=lambda p: p.name, reverse=True):
             if not probe.is_dir() or probe.is_symlink():
@@ -1146,7 +1146,7 @@ def _resolve_h3_probe(item_id):
     if not name or Path(name).name != name:
         raise ValueError("H3 probe storage ID is invalid.")
 
-    raw_root = Path(app_config.FS_ROOT) / ".webcap_training" / "h3-probes"
+    raw_root = app_config.h3_probe_root()
     raw_path = raw_root / name
     if raw_root.is_symlink() or raw_path.is_symlink():
         raise ValueError("H3 probe storage path is symlinked.")
@@ -1192,7 +1192,7 @@ def _resolve_generate_reference(item_id):
     if not GENERATE_REFERENCE_TOKEN_RE.fullmatch(token):
         raise ValueError("Generate reference storage ID is invalid.")
 
-    raw_root = Path(app_config.FS_ROOT) / ".webcap_runtime" / "generate-references"
+    raw_root = app_config.generate_reference_root()
     raw_path = raw_root / token
     if raw_root.is_symlink() or raw_path.is_symlink():
         raise ValueError("Generate reference storage path is symlinked.")
@@ -1653,7 +1653,7 @@ def open_path(area, item_id, folder=""):
 
 
 def _training_queue_reference_map():
-    path = Path(app_config.FS_ROOT) / ".webcap_training" / "queue.json"
+    path = app_config.training_queue_state_path()
     try:
         path.stat()
     except FileNotFoundError:

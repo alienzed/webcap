@@ -18,3 +18,7 @@ def test_review_dataset_assistant_stays_local_to_review_and_existing_chat():
     assert "/fs/review/assistant" not in script
     assert "/caption/save" not in script
     assert "window.openAssistant({ mode: 'review-dataset' })" in script
+    assert "label: 'Full review'" in script
+    assert "label: 'Consistency'" in script
+    assert "label: 'Balance'" in script
+    assert "label: 'Outliers'" in script

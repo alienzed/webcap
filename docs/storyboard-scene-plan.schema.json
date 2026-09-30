@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "storyboard-scene-plan.schema.json",
   "title": "WebCap Storyboard Scene Plan",
-  "description": "Structured output contract for planning an ordered Story into independently generatable Scenes. WebCap assigns canonical Scene IDs after validation.",
+  "description": "Structured Scene records authored by Director. WebCap stores the model-authored prompt text without semantic rewriting.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,12 +17,8 @@
         "required": [
           "title",
           "summary",
-          "entryState",
-          "exitState",
           "prompt",
-          "suggestedDurationSeconds",
-          "invariantRefs",
-          "continuity"
+          "suggestedDurationSeconds"
         ],
         "properties": {
           "title": {
@@ -32,98 +28,26 @@
           "summary": {
             "type": "string",
             "minLength": 1,
-            "description": "Concrete visible/audible intent for this one generation unit. Detailed cinematography belongs to the prompt unless essential to Story intent."
+            "description": "Short Scene overview / intent."
           },
           "entryState": {
             "type": "string",
-            "minLength": 1,
-            "description": "What must already be true when this Scene begins."
+            "description": "Optional planning note for a specific starting state or handoff."
           },
           "exitState": {
             "type": "string",
+            "description": "Optional planning note for a specific ending state or handoff."
+          },
+          "prompt": {
+            "type": "string",
             "minLength": 1,
-            "description": "What should be true when this Scene ends."
+            "description": "Complete model-authored MiniMax H3 generation prompt. WebCap stores it as authored."
           },
           "suggestedDurationSeconds": {
             "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "Suggested MiniMax H3 clip duration in seconds. Aim for about 10 seconds by default, allow up to 15 seconds when the Scene benefits from the extra time, and never go below 6 seconds.",
             "minimum": 6,
-            "maximum": 15
-          },
-          "continuity": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "continuesPreviousScene",
-              "carryForward"
-            ],
-            "properties": {
-              "continuesPreviousScene": {
-                "type": "boolean",
-                "description": "True when this Scene directly inherits the previous Scene's exit state rather than acting as a continuity reset."
-              },
-              "carryForward": {
-                "type": "array",
-                "description": "Changed state established by this Scene that must remain true later until superseded.",
-                "items": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              }
-            }
-          },
-          "prompt": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "integrated_multimodal_description",
-              "overall_soundscape",
-              "non_diegetic_music"
-            ],
-            "description": "Scene-specific MiniMax H3 base prompt content.",
-            "properties": {
-              "integrated_multimodal_description": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Chronological audiovisual action/camera description for this Scene. Begin with [Shot 1]; later shots may use H3 cut timestamps."
-              },
-              "overall_soundscape": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Clip-wide ambience, Foley, impacts, and non-dialogue diegetic sound."
-              },
-              "non_diegetic_music": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Audience-only score, or N/A when no non-diegetic score is intended."
-              }
-            }
-          },
-          "invariantRefs": {
-            "type": "array",
-            "description": "Exact Story character/location invariants relevant to this Scene. Use an empty array when none apply.",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "kind",
-                "title"
-              ],
-              "properties": {
-                "kind": {
-                  "type": "string",
-                  "enum": [
-                    "character",
-                    "location"
-                  ]
-                },
-                "title": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              }
-            }
+            "maximum": 15,
+            "description": "Suggested clip duration in seconds."
           }
         }
       }

@@ -25,7 +25,7 @@ function setDiagnosticsTab(tabName, focusTab) {
   });
 
   if (next === 'h3') refreshH3CalibrationSettings();
-  if (next === 'director') directorModelTestRefresh();
+  if (next === 'director' && !directorModelTestState.loaded) directorModelTestRefresh();
   if (focusTab && selectedButton) selectedButton.focus();
 }
 

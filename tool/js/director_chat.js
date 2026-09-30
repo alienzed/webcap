@@ -697,8 +697,8 @@
               input.value = inputHistoryIndex === inputHistory.length
                 ? inputHistoryDraft
                 : inputHistory[inputHistoryIndex];
-              applyingHistoryValue = false;
               input.dispatchEvent(new Event('input', { bubbles: true }));
+              applyingHistoryValue = false;
               input.setSelectionRange(input.value.length, input.value.length);
             }
           }

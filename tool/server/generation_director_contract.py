@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .h3_prompt_contract import content_schema, final_shape, mode_from_reference_roles
+from .h3_prompt_contract import mode_from_reference_roles
 
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
@@ -30,22 +30,25 @@ def build_request(model_id, operation, prompt="", instruction="", settings=None,
         "[DIRECTOR CONTEXT]\n"
         "You are helping write one standalone image or video generation prompt inside WebCap Generate. "
         "There is no Story or Scene continuity unless the user explicitly supplies it. Preserve explicit facts, "
-        "avoid inventing unrelated narrative, and return only the output shape requested below without commentary."
+        "avoid inventing unrelated narrative, and return only the complete model-facing prompt without commentary."
     ]
 
-    h3_mode = None
-    duration = settings.get("duration")
     if model_id == "minimax_h3":
         h3_mode = mode_from_reference_roles(reference_roles)
         blocks.append("[MODEL GUIDANCE]\n" + _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context"))
+        duration = settings.get("duration")
         if duration not in (None, ""):
             blocks.append("[OUTPUT BUDGET]\nTarget duration: " + str(duration) + " seconds.")
-        blocks.append("[H3 MODE]\n" + h3_mode)
-        blocks.append(
-            "[H3 FINAL SHAPE]\n"
-            + final_shape(h3_mode, duration)
-            + "\n\nWebCap owns the final labels and alignment syntax. Return only the three semantic field values through the supplied JSON schema."
-        )
+        blocks.append("[REFERENCE MODE]\n" + h3_mode)
+        if h3_mode != "T2VA":
+            blocks.append(
+                "[REFERENCE HANDLING]\n"
+                "Attached exact reference roles: "
+                + ", ".join(reference_roles)
+                + ". Treat them as conditioning anchors. WebCap will prepend the required mechanical "
+                "MiniMax H3 reference-alignment statement when the generation request is frozen. "
+                "Do not reproduce or invent that alignment syntax in your answer."
+            )
     elif model_id == "krea2_raw":
         blocks.append(
             "[MODEL GUIDANCE]\nWrite a concrete image-generation prompt using visible subject, wardrobe, "
@@ -59,7 +62,8 @@ def build_request(model_id, operation, prompt="", instruction="", settings=None,
         blocks.append("[USER IDEA]\n" + prompt)
         blocks.append(
             "[CURRENT TASK]\nTurn the user idea into a polished prompt for the selected generation model. "
-            "Preserve the requested subject and intent; add useful production detail only where it supports that intent."
+            "Preserve the requested subject and intent; add useful production detail only where it supports that intent. "
+            "Return only the complete prompt text."
         )
     else:
         if not prompt:
@@ -67,21 +71,14 @@ def build_request(model_id, operation, prompt="", instruction="", settings=None,
         if not instruction:
             raise ValueError("A refinement instruction is required.")
         blocks.append("[EXISTING PROMPT]\n" + prompt)
-        blocks.append("[CURRENT TASK]\nApply this correction with the smallest coherent change:\n" + instruction)
+        blocks.append(
+            "[CURRENT TASK]\nApply this correction with the smallest coherent change:\n"
+            + instruction
+            + "\n\nPreserve unrelated prompt details and return only the complete revised prompt text."
+        )
 
-    contract = {
+    return {
         "operation": operation,
         "output": "text",
         "prompt": "\n\n".join(blocks).strip() + "\n",
     }
-    if model_id == "minimax_h3":
-        contract.update({
-            "output": "json",
-            "response_schema": content_schema(),
-            "result_renderer": {
-                "type": "h3_base",
-                "mode": h3_mode,
-                "duration": duration,
-            },
-        })
-    return contract

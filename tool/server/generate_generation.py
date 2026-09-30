@@ -161,11 +161,22 @@ def prepare_request(data):
         resolve_reference_path(relative_path)
         references[role] = str(relative_path)
 
+    prompt = source_prompt
+    if model.PROFILE_ID == "minimax_h3" and references:
+        from .h3_prompt_contract import alignment_line, mode_from_reference_roles
+
+        preamble = alignment_line(
+            mode_from_reference_roles(references.keys()),
+            settings.get("duration"),
+        )
+        if preamble and not prompt.startswith(preamble):
+            prompt = preamble + "\n\n" + prompt
+
     return {
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,
         "sourcePrompt": source_prompt,
-        "prompt": source_prompt,
+        "prompt": prompt,
         "settings": settings,
         "loras": loras,
         "references": references,

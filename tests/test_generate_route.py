@@ -245,6 +245,49 @@ def test_generate_prepare_preserves_wildcard_syntax_for_comfyui(monkeypatch):
     assert "promptNeedsResolve" not in prepared
 
 
+def test_generate_prepare_adds_h3_reference_alignment_at_frozen_request_boundary(monkeypatch):
+    class FakeModel:
+        PROFILE_ID = "minimax_h3"
+        MEDIA_KIND = "video"
+        TEMPLATE_PATH = Path("workflow.json")
+        references = ("first_frame", "last_frame")
+
+        def load_template(self):
+            return {}
+
+        def normalize_settings(self, _template, _new_seed, _values):
+            return {"duration": 8, "seed": 42}
+
+    monkeypatch.setattr(generate_generation, "get_inference_model", lambda _model_id: FakeModel())
+    monkeypatch.setattr(generate_generation, "resolve_reference_path", lambda path: Path(path))
+
+    reference_paths = {
+        "first_frame": "runtime/first.png",
+        "last_frame": "runtime/last.png",
+    }
+    prepared = generate_generation.prepare_request({
+        "modelId": "minimax_h3",
+        "prompt": "A woman crosses a lobby.",
+        "references": reference_paths,
+    })
+
+    expected = (
+        "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns "
+        "with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the "
+        "8.00-second mark of the target video."
+    )
+    assert prepared["sourcePrompt"] == "A woman crosses a lobby."
+    assert prepared["prompt"] == expected + "\n\nA woman crosses a lobby."
+    assert prepared["references"] == reference_paths
+
+    already_aligned = generate_generation.prepare_request({
+        "modelId": "minimax_h3",
+        "prompt": expected + "\n\nA woman crosses a lobby.",
+        "references": reference_paths,
+    })
+    assert already_aligned["prompt"].count(expected) == 1
+
+
 def test_generate_capabilities_keeps_healthy_models_when_one_is_unavailable(monkeypatch):
     class FakeModel:
         def __init__(self, profile_id, label):

@@ -76,8 +76,8 @@ def test_refine_prompt_preserves_existing_prompt_and_keeps_scene_fields_optional
     schema = request["response_schema"]
 
     assert "EXISTING SECOND PROMPT" in prompt
-    assert "[PREVIOUS SCENE - CONTEXT ONLY]" in prompt
-    assert "only when it genuinely helps" in prompt
+    assert "[PREVIOUS SCENE - RELATIONSHIP CONTEXT]" in prompt
+    assert "judge the appropriate relationship and distinctness" in prompt
     assert "Keep the camera behind her" in prompt
     assert schema["required"] == ["changed", "prompt"]
     assert {"summary", "entryState", "exitState", "durationSeconds"}.issubset(schema["properties"])
@@ -126,7 +126,8 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert "sharedContextRefs" not in scene_schema["properties"]
     assert "Create exactly 12 Scenes." in prompt
     assert "several meaningful shots, cuts, or distinct visual beats" in prompt
-    assert "do not force every Scene to behave like a literal continuation" in prompt
+    assert "Treat none of those as the default" in prompt
+    assert "do not manufacture narrative progression or literal visual continuity" in prompt
     assert "Entry and exit state are optional planning notes" in prompt
     assert "WebCap will store that prompt as written" in prompt
     assert "200-400 words" not in prompt
@@ -139,9 +140,31 @@ def test_develop_story_auto_scene_count_leaves_count_to_director():
 
     prompt = storyboard_llm_contract.build_request(story, "", "develop_story")["prompt"]
 
-    assert "Choose the Scene count that best fits" in prompt
+    assert "Choose the Scene count that best serves the concept" in prompt
     assert "Create exactly 12 Scenes." not in prompt
 
+
+
+def test_insert_scene_uses_adjacent_scenes_as_relationship_context_not_bridge_requirement():
+    request = storyboard_llm_contract.build_request(_story(), "scene-1", "insert_scene")
+    prompt = request["prompt"]
+    schema = request["response_schema"]
+
+    assert request["operation"] == "insert_scene"
+    assert schema["required"] == ["scene"]
+    scene_schema = schema["properties"]["scene"]
+    assert set(scene_schema["required"]) == {"title", "summary", "prompt", "suggestedDurationSeconds"}
+    assert "[SCENE BEFORE]" in prompt
+    assert "[SCENE AFTER]" in prompt
+    assert "not a requirement to create a literal bridge" in prompt
+    assert "continue, contrast, vary, repeat a format, jump, or remain relatively independent" in prompt
+    assert "meaningfully distinct from both adjacent Scenes" in prompt
+    assert "several meaningful shots, cuts, or distinct visual beats" in prompt
+
+
+def test_insert_scene_requires_a_following_scene():
+    with pytest.raises(ValueError, match="following Scene"):
+        storyboard_llm_contract.build_request(_story(), "scene-2", "insert_scene")
 
 def test_repair_scenes_is_sparse_and_prompt_is_complete_string():
     request = storyboard_llm_contract.build_request(
@@ -167,7 +190,9 @@ def test_expand_concept_still_preserves_story_context_without_scene_planning():
     assert "[CURRENT CONCEPT]" in request["prompt"]
     assert "[STORY VISUAL / ATMOSPHERE]" in request["prompt"]
     assert "[STORY INVARIANTS]" in request["prompt"]
-    assert "Do not break the Story into Scenes yet" in request["prompt"]
+    assert "Do not break the concept into Scenes yet" in request["prompt"]
+    assert "rather than assuming a narrative arc" in request["prompt"]
+    assert "variation-based" in request["prompt"]
 
 
 def test_define_invariants_remains_context_generation_not_scene_authoring():

@@ -1,201 +1,121 @@
 # MiniMax H3 Prompt Guidance Reference
 
-This document is **reference material**, not WebCap's runtime Director contract.
+This document is reference material for WebCap's Storyboard Director.
 
-The active Storyboard guidance sent to Director is:
+The active runtime guidance is:
 
 - `docs/mmh3-prompt-runtime-context.txt`
 
-That runtime guidance is intentionally concise. Director owns the complete creative prompt text. WebCap does not parse or rebuild Director output into a required H3 field structure.
+Director authors the complete creative prompt text. WebCap stores and sends that prompt as authored, with mechanical first/last-frame reference alignment as the narrow adapter exception.
 
-## Why this document exists
+## Recommended authoring shape
 
-MiniMax publishes useful prompt-writing conventions for H3, including:
+WebCap recommends a scene-level H3 authoring shape built around one principle:
 
-- observable audiovisual description;
-- chronological shot progression;
-- camera language;
-- dialogue/voice notation;
-- sound/music guidance;
-- first/last-frame grounding;
-- an official base prompt structure using named fields.
+> Establish stable and current facts at scene level. Let shots inherit that setup and describe temporal progression, timing, synchronized events, camera changes, and meaningful changes in state.
 
-Those conventions are useful reference material when diagnosing prompt quality or experimenting with H3 behavior.
+The runtime guidance contains the canonical illustrative prompt shape. It covers:
 
-They are **not all mandatory WebCap output requirements**.
+- subject identity, appearance, wardrobe, and voice;
+- Scene overview and progression;
+- spatial state, location anchors, props and prop state;
+- lighting, time of day, weather, and other visible continuity conditions;
+- scene-wide visual and camera treatment;
+- timed shots, action, performance, framing, dialogue, synchronized sound, and evolving physical state;
+- persistent diegetic soundscape;
+- non-diegetic music.
 
-A prompt that works well without the documented field labels is still a valid Storyboard prompt. WebCap should not introduce format enforcement merely because a convention appears in the upstream guide.
+This is a recommended authoring shape, not an enforced serialization schema.
 
-Official references:
+## MiniMax H3 base structure
 
-- Base T2VA / I2VA / FL2VA / L2VA guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md
-- Full-reference guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
-- H3 model/recommended workflow: https://www.minimax.io/news/minimax-h3-open-source
-
-## Current Storyboard runtime scope
-
-Storyboard currently uses the FL2VA-family H3 workflow through ComfyUI's `MiniMaxH3ImageToVideo` path.
-
-Current reference modes are:
-
-- **T2VA-style** — text only;
-- **I2VA-style** — exact first frame;
-- **FL2VA** — exact first and last frames;
-- **L2VA-style** — exact last frame.
-
-Ref2VA remains a separate future task family and should not be mixed into ordinary Storyboard prompting until WebCap actually supports that workflow.
-
-## What WebCap requires
-
-For ordinary H3 prompt writing, WebCap requires only a complete usable prompt string.
-
-Director should generally:
-
-- describe observable visual and audible content;
-- make action/camera progression clear;
-- use the short 10–15 second window productively;
-- favor several meaningful cuts/shots/beats unless uninterrupted time genuinely serves the material;
-- keep chronology and timestamps sensible when used;
-- preserve explicit facts and exact frame anchors;
-- include dialogue, ambience, music, or other audio detail when relevant;
-- avoid negative-constraint padding and ceremonial continuity repetition.
-
-WebCap does **not** require:
-
-- `integrated_multimodal_description:`;
-- `overall_soundscape:`;
-- `non_diegetic_music:`;
-- a mandatory `[Shot 1]` label;
-- timestamps for every cut;
-- fixed Subject / Overview / Style sections;
-- a Python-generated continuity block.
-
-Those may be useful conventions, but Director decides whether they improve the prompt.
-
-## Official three-field base structure
-
-MiniMax's documented base format commonly uses:
+MiniMax's documented base vocabulary includes:
 
 ```text
-integrated_multimodal_description: [Shot 1] ...
+integrated_multimodal_description: ...
 
 overall_soundscape: ...
 
 non_diegetic_music: ...
 ```
 
-Treat this as an **official reference pattern**, not a WebCap schema.
+WebCap recommends using this vocabulary because it gives H3 clear audiovisual organization while leaving Director free to adapt section detail, ordering, and shot count to the Scene.
 
-If a Director model produces this structure naturally and it works well, WebCap should store and send it unchanged.
+## Scene-level setup and shots
 
-If Director produces an effective ordinary audiovisual prompt without those labels, WebCap should likewise store and send it unchanged.
+Scene-level sections establish defaults for the generation.
 
-Do not add a post-processing layer that converts one form into the other.
+Shots inherit those defaults and focus on what changes over time: action, performance, framing, perspective, camera movement, synchronized events, dialogue, and physical state.
 
-## Shots and timestamps
+A Storyboard Scene is normally 10–15 seconds. Choose the shot count that best serves the material. Sustained treatment fits material that benefits from uninterrupted time.
 
-Useful upstream conventions include:
+## Camera and motion
 
-- Shot 1 may be untimestamped;
-- later cuts may use increasing timestamps;
-- cut times should stay inside the requested duration;
-- a cut should normally add meaningful new information.
+Scene-level visual treatment establishes the overall framing, lens/depth character, camera energy, and movement language.
 
-Storyboard's own creative guidance is stronger on density than the generic upstream advice: for a typical 10–15 second generation unit, multiple meaningful cuts, shots, or distinct visual beats are expected unless a sustained uninterrupted treatment genuinely serves the material.
+Individual shots specify camera moves, framing changes, and deviations from that overall treatment.
 
-Timestamps are tools, not mandatory ceremony.
+Intermediate physical states give H3 a visible path through actions and transitions.
 
-## Camera and physical motion
+## Dialogue and voice
 
-Concrete camera language can help:
+Subject-level guidance can establish stable voice characteristics such as timbre, cadence, accent, or delivery.
 
-- push / pull;
-- pan;
-- track / truck;
-- tilt;
-- pedestal;
-- arc;
-- POV;
-- static;
-- controlled shake.
+Timed dialogue belongs in the shot where it occurs. Stable speaker IDs help recurring speakers remain clear. MiniMax H3 dialogue notation may be written as:
 
-Describe movement naturally in the Scene rather than stacking detached camera keywords.
-
-Intermediate physical states are often more useful than compressed plot summaries because they give H3 a visible temporal path.
-
-## Dialogue and vocals
-
-MiniMax documents structured dialogue notation. Use it when it helps and when exact dialogue matters.
-
-Preserve user-supplied dialogue or lyrics unless the user explicitly asks for rewriting.
-
-Do not invent dialogue merely because the prompt format allows it.
+```text
+<d>[English] Spoken line.</d>
+```
 
 ## Sound and music
 
-Sound can be described either naturally in the audiovisual prompt or, when using MiniMax's official field structure, split into the documented sound/music fields.
+`overall_soundscape` carries scene-wide ambience, spatial audio, Foley, physical sounds, environmental texture, and other persistent diegetic sound.
 
-Storyboard does not require those sections.
+Shot-level audio carries synchronized sound tied to a particular moment.
 
-The useful distinction remains:
+`non_diegetic_music` carries audience-only score and its musical development.
 
-- diegetic sound belongs to the Scene;
-- non-diegetic music is audience-only score.
+## Continuity and evolving state
 
-Do not add music merely to fill a field.
+Director receives Story invariants and Story/Scene context as working context.
+
+Scene-level Environment / Continuity Anchors are useful for current spatial state, location identity, props and prop state, lighting, time, weather, and other visible conditions that should carry through the generation.
+
+Shots describe coherent changes to those conditions over time.
+
+Story invariants remain the durable source for recurring Story facts. Entry/Exit state remains optional planning context for meaningful handoffs.
 
 ## Exact frame grounding
 
-Exact first/last-frame references are different from ordinary creative guidance because they are declared generation constraints.
+Exact first and last frames are declared visual anchors.
 
-### First frame
+- **First frame:** opening visual state.
+- **Last frame:** ending visual state.
+- **First + last frame:** a visible path between both anchors.
 
-Treat it as the exact opening visual state.
-
-### Last frame
-
-Treat it as the exact ending visual state.
-
-### First + last frame
-
-Describe a plausible path between the two anchors. Depending on the material, a continuous shot may be preferable, but Storyboard's normal dense/multi-cut guidance can still apply when it does not conflict with the anchors.
-
-### WebCap-owned alignment syntax
-
-WebCap may prepend the exact MiniMax alignment statement for first/last-frame modes.
-
-This is the narrow exception to the rule that WebCap does not rewrite model-authored prompt text. It is mechanical adapter syntax derived from declared reference roles, not a creative judgment.
-
-## Continuity and invariants
-
-H3 generations are independent unless generation conditioning ties them together.
-
-Director receives Story invariants as context and should use the facts relevant to the Scene.
-
-WebCap should **not** infer that missing LoRAs/references require it to paste descriptive continuity prose into the prompt. That judgment belongs to Director or the human.
-
-If stronger continuity is needed, use the concept, prompt refinement, LoRAs, exact references, or other conditioning deliberately.
-
-Do not assume that phrases such as “same woman” or “same room” guarantee visual continuity, but also do not solve that limitation by mechanically repeating a full visual bible in every Scene.
+WebCap may prepend the exact MiniMax alignment statement derived from the selected reference roles. This is mechanical adapter syntax rather than creative prompt reconstruction.
 
 ## Revision
 
-When refining an existing prompt, make the requested change while preserving unrelated details.
+Prompt refinement applies the requested change while preserving unrelated authored details.
 
-Previous-Scene context may be supplied to judge whether the current Scene should continue, contrast, vary, repeat, or remain independent. Do not automatically treat adjacency as a continuity handoff.
+Previous-Scene context can help Director choose continuation, contrast, variation, repetition, or independence according to the concept.
 
-## Ref2VA
+## Runtime scope
 
-Full-reference / Ref2VA remains outside the current Storyboard runtime.
+Storyboard currently uses the H3 base T2VA/I2VA/L2VA/FL2VA family through ComfyUI's `MiniMaxH3ImageToVideo` path.
 
-Its separate upstream vocabulary is useful reference material, but must not be injected into ordinary Storyboard Director requests.
+Current reference modes are:
 
-When WebCap gains a real Ref2VA workflow, give it a deliberate task-specific adapter rather than expanding the existing prompt contract speculatively.
+- **T2VA-style** — text only;
+- **I2VA-style** — exact first frame;
+- **L2VA-style** — exact last frame;
+- **FL2VA** — exact first and last frames.
 
-## Practical rule
+Ref2VA remains a separate task family for a future dedicated adapter.
 
-When deciding whether to promote something from this document into runtime guidance, ask:
+Official references:
 
-> Does H3 actually need this for WebCap's current workflow, or is it merely one documented way to write a good prompt?
-
-Prefer the smallest useful guidance. Do not turn a recommendation into a contract without evidence.
+- Base T2VA / I2VA / FL2VA / L2VA guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md
+- Full-reference guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
+- H3 model/recommended workflow: https://www.minimax.io/news/minimax-h3-open-source

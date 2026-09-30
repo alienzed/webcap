@@ -129,6 +129,14 @@
     cancel: cancelReviewDataset
   });
 
+  window.openReviewDatasetAssistantActivity = function () {
+    if (!reviewWorkspaceAvailable()) {
+      setStatus('Open Review Set to return to the active Review Dataset Assistant request.');
+      return;
+    }
+    window.openAssistant({ mode: 'review-dataset' });
+  };
+
   var button = el('review-output-assistant-btn');
   if (!button) throw new Error('Review Dataset Assistant button is missing.');
 

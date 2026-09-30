@@ -522,7 +522,7 @@ def app_diagnostics_root():
 
 
 def director_model_test_root():
-    return app_diagnostics_root() / "model-tests"
+    return Path(FS_ROOT) / ".webcap_model_tests"
 
 
 def work_root():
@@ -530,7 +530,7 @@ def work_root():
 
 
 def h3_probe_root():
-    return work_root() / "h3-probes"
+    return training_runtime_root() / "h3-probes"
 
 
 def execution_queue_state_path():

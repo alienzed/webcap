@@ -52,9 +52,13 @@ def test_write_prompt_gives_director_context_without_postprocessing_contract():
     assert "[STORY INVARIANTS]" in prompt
     assert "Mara has a dark bob" in prompt
     assert "[REFERENCE MODE]\nI2VA" in prompt
-    assert "Make the current physical state clear enough" in prompt
+    assert "Establish stable and current facts at scene level" in prompt
+    assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
+    assert "Environment / Continuity Anchors:" in prompt
+    assert "integrated_multimodal_description:" in prompt
+    assert "overall_soundscape:" in prompt
+    assert "non_diegetic_music:" in prompt
     assert "exactly as it should be used" in prompt
-    assert "Continuity anchors" not in prompt
     assert "integrated_multimodal_description:" not in request["response_schema"]["properties"]
 
 
@@ -63,6 +67,19 @@ def test_write_prompt_does_not_force_previous_scene_handoff():
 
     assert "[PREVIOUS SCENE HANDOFF]" not in prompt
     assert "Previous exit state:" not in prompt
+
+
+def test_h3_guidance_uses_one_fenced_authoring_example_without_schema_enforcement():
+    request = storyboard_llm_contract.build_request(_story(), "scene-2", "write_prompt")
+    prompt = request["prompt"]
+    schema = request["response_schema"]
+
+    assert prompt.count("--- BEGIN EXAMPLE PROMPT SHAPE ---") == 1
+    assert prompt.count("--- END EXAMPLE PROMPT SHAPE ---") == 1
+    assert "[Shot 3] ... and additional shots as appropriate for the Scene." in prompt
+    assert "Shots inherit that setup" in prompt
+    assert schema["required"] == ["prompt"]
+    assert set(schema["properties"]) == {"prompt"}
 
 
 def test_refine_prompt_preserves_existing_prompt_and_keeps_scene_fields_optional():
@@ -131,7 +148,8 @@ def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
     assert "Use entry and exit state only when a specific handoff or visible state is genuinely useful" in prompt
     assert "exactly as it should be used" in prompt
     assert "200-400 words" not in prompt
-    assert "Continuity anchors" not in prompt
+    assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
+    assert "Environment / Continuity Anchors:" in prompt
 
 
 def test_develop_story_auto_scene_count_leaves_count_to_director():
@@ -180,7 +198,8 @@ def test_repair_scenes_is_sparse_and_prompt_is_complete_string():
     assert fields["properties"]["prompt"]["type"] == "string"
     assert "complete revised H3 prompt string" in prompt
     assert "following the supplied Director and H3 guidance" in prompt
-    assert "Continuity anchors" not in prompt
+    assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
+    assert "Environment / Continuity Anchors:" in prompt
 
 
 def test_expand_concept_still_preserves_story_context_without_scene_planning():

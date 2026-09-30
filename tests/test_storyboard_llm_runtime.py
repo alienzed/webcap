@@ -507,8 +507,8 @@ def test_director_sampling_profiles_are_explicit_and_conservative():
     refine = storyboard_llm_runtime._sampling_profile("refine_prompt")
 
     assert develop == {
-        "temperature": 0.2,
-        "top_p": 0.85,
+        "temperature": 0.3,
+        "top_p": 0.9,
         "presence_penalty": 0.0,
         "frequency_penalty": 0.0,
     }

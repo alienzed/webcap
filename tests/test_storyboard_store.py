@@ -256,6 +256,50 @@ def test_story_scene_lifecycle(storyboard_fs):
     assert restored["sceneOrder"] == [second["id"], duplicate["id"], first["id"]]
 
 
+
+
+def test_insert_director_scene_after_creates_one_scene_at_gap(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, first = storyboard_store.add_scene(story["id"], {"title": "First", "prompt": "First prompt."})
+    story, second = storyboard_store.add_scene(story["id"], {"title": "Second", "prompt": "Second prompt."})
+
+    story, inserted = storyboard_store.insert_director_scene_after(
+        story["id"],
+        first["id"],
+        {
+            "title": "Inserted",
+            "summary": "A distinct middle variation.",
+            "prompt": "Three brisk visual beats create a distinct middle variation.",
+            "suggestedDurationSeconds": 10,
+        },
+        model_id="director.gguf",
+    )
+
+    assert story["sceneOrder"] == [first["id"], inserted["id"], second["id"]]
+    assert inserted["title"] == "Inserted"
+    assert inserted["entryState"] == ""
+    assert inserted["exitState"] == ""
+    assert inserted["promptDirectorModel"] == "director.gguf"
+    assert inserted["planDirectorModel"] == "director.gguf"
+
+
+def test_insert_director_scene_after_requires_existing_gap(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, only = storyboard_store.add_scene(story["id"], {"title": "Only"})
+
+    with pytest.raises(ValueError, match="following Scene"):
+        storyboard_store.insert_director_scene_after(
+            story["id"],
+            only["id"],
+            {
+                "title": "Inserted",
+                "summary": "Summary.",
+                "prompt": "Prompt.",
+                "suggestedDurationSeconds": 10,
+            },
+        )
+
+
 def test_concept_restore_keeps_initial_prompt_as_fixed_baseline(storyboard_fs):
     story = storyboard_store.create_story({
         "title": "Story",

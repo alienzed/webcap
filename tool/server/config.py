@@ -517,6 +517,42 @@ def app_cache_root():
     return app_data_root() / "cache"
 
 
+def app_diagnostics_root():
+    return app_state_root() / "diagnostics"
+
+
+def director_model_test_root():
+    return app_diagnostics_root() / "model-tests"
+
+
+def work_root():
+    return output_root() / "work"
+
+
+def h3_probe_root():
+    return work_root() / "h3-probes"
+
+
+def execution_queue_state_path():
+    return Path(FS_ROOT) / ".webcap" / "execution_queue.json"
+
+
+def training_runtime_root():
+    return Path(FS_ROOT) / ".webcap_training"
+
+
+def training_queue_state_path():
+    return training_runtime_root() / "queue.json"
+
+
+def training_history_state_path():
+    return training_runtime_root() / "recent_runs.json"
+
+
+def generate_reference_root():
+    return Path(FS_ROOT) / ".webcap_runtime" / "generate-references"
+
+
 reload_runtime_config()
 
 def safe_join_fs_root(rel_path):

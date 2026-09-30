@@ -367,6 +367,17 @@ def test_storyboard_can_develop_concept_directly_into_scenes():
     assert "Develop Again" in storyboard
 
 
+
+
+def test_storyboard_can_insert_director_scene_between_existing_scenes():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert "Insert Director Scene After" in storyboard
+    assert "function insertDirectorSceneAfter(sceneId)" in storyboard
+    assert "operation: 'insert_scene'" in storyboard
+    assert "job.operation === 'develop_story' || job.operation === 'insert_scene'" in storyboard
+
+
 def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
@@ -381,7 +392,7 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
 def test_storyboard_director_captures_unsaved_target_before_locking_it():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    for function_name in ("defineInvariants", "expandConcept", "developStory", "runDirector", "reviseScenes"):
+    for function_name in ("defineInvariants", "expandConcept", "developStory", "runDirector", "reviseScenes", "insertDirectorSceneAfter"):
         block = storyboard.split("function " + function_name, 1)[1].split("\n  function ", 1)[0]
         assert block.index("var saveBarrier = flushPendingSaves();") < block.index("setDirectorPending(directorTarget, true);")
         assert "saveBarrier.then(function () {" in block

@@ -1,6 +1,6 @@
 # MiniMax H3 Illustrative Prompt Shape
 
-This file mirrors the canonical authoring example used by Storyboard Director.
+This file mirrors the canonical authoring example used by the Director.
 
 It is an authoring example, not a storage schema. Director may adapt section detail, ordering, and shot count to the Scene. WebCap stores Director-authored prompt text unchanged.
 
@@ -10,33 +10,33 @@ Subject:
 Primary subject identity, appearance, wardrobe, and voice characteristics that matter throughout the Scene.
 
 Scene Overview:
-A concise description of the setting, action, progression, mood, and landing point.
+A concise description of the setting, action, mood, and overall intent.
 
 Environment / Continuity Anchors:
 Current spatial state, important location anchors, relevant props and their state, lighting, time of day, weather, and other visible conditions that carry through the Scene.
 
 Style / Visual Treatment:
-Overall visual language, composition, lens and depth character, camera energy, and movement style.
+Overall visual style, composition, lens and depth character, framing, and default camera movement.
 
 integrated_multimodal_description:
 
 [Shot 1] (0s–Xs)
-Action, performance, framing, camera behavior, synchronized events or dialogue, and meaningful changes from the scene-wide setup.
+What occurs in this interval, including action, performance, framing, camera behavior, synchronized sound or dialogue, and any shot-specific detail or deviation from the scene-level setup.
 
 [Shot 2] (Xs–Ys)
-The next meaningful change in action, framing, performance, information, perspective, or physical state.
+What occurs in this interval, including any changes in action, performance, framing, camera behavior, synchronized sound or dialogue, or physical state.
 
 [Shot 3] ... and additional shots as appropriate for the Scene.
 
 overall_soundscape:
-Scene-wide ambience, spatial audio, physical sounds, Foley, environmental texture, and other persistent diegetic sound.
+Persistent diegetic ambience, environmental sound, Foley, and spatial character that define the Scene.
 
 non_diegetic_music:
-Audience-only score and its character or progression when it serves the Scene.
+Audience-only score and its character or development when it serves the Scene.
 
 --- END EXAMPLE PROMPT SHAPE ---
 
-Scene-level sections establish shared defaults. Shots inherit them and describe progression, timing, synchronized events, camera changes, and meaningful changes in state.
+Scene-level sections establish shared defaults. Shots inherit them and describe what occurs at particular times.
 
 Exact first/last-frame modes may also receive WebCap-owned MiniMax alignment syntax derived from the selected reference roles.
 

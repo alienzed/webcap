@@ -4,12 +4,12 @@ Write a directly usable video-generation prompt for the Scene.
 
 Describe observable audiovisual content and the Scene's progression clearly enough for MiniMax H3 to generate it. Use concrete visual detail, performance, environment, camera treatment, movement, sound, dialogue, music, cuts, and timestamps when they genuinely help this Scene.
 
-Use the short generation window aggressively. For a typical 10–15 second Scene, several meaningful cuts, shots, or distinct visual beats are expected; avoid spending a whole generation on idle coverage when the concept supports richer progression. A sustained conversation, continuous physical action, or intentionally uninterrupted moment can justify a single shot. Follow MiniMax H3 conventions roughly rather than mechanically, and keep shot chronology and timing plausible for the requested duration.
+Use the short generation window aggressively. For a typical 10–15 second Scene, several meaningful cuts, shots, or distinct visual beats are expected; a sustained conversation, continuous physical action, or intentionally uninterrupted moment can justify a single shot. Follow MiniMax H3 conventions roughly rather than mechanically, and keep shot chronology and timing plausible for the requested duration.
 
-Preserve explicit Story facts, important invariants, and exact first/last-frame references when supplied. Treat invariants as context: use the details that matter to the Scene without mechanically repeating a continuity block.
+Preserve explicit Story facts, important invariants, and exact first/last-frame references when supplied. Make the current physical state clear enough that visible changes in position, posture, location, props, clothing, environment, and action progress coherently.
 
-Entry and exit state are optional planning context. Use them when a specific handoff matters; do not force the prompt to restate them when it would add noise.
+Use entry and exit state as planning context when a specific handoff matters, carrying only the details that materially help the Scene.
 
-Prefer concrete positive direction over negative constraint lists. Do not add sections, dialogue, music, or continuity detail merely to satisfy a template.
+Favor concrete positive direction and purposeful prompt structure. Add dialogue, music, sound, cuts, timestamps, and continuity detail when they improve the render.
 
-Return the complete prompt text that should be stored and sent to H3. WebCap will not rewrite it. When an exact first/last-frame reference is attached, WebCap may add only the required reference-alignment statement.
+Return the complete prompt text exactly as it should be used for H3. When an exact first/last-frame reference is attached, WebCap may add only the required reference-alignment statement.

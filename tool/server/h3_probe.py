@@ -21,7 +21,6 @@ from .training_runtime import activation_prefix, build_runtime_command, configur
 ROOT = Path(__file__).resolve().parents[2]
 PLAN_PATH = ROOT / "scripts" / "h3_shape_probe_plan.json"
 SCRIPT_PATH = ROOT / "scripts" / "h3_shape_probe.py"
-PROBE_ROOT_NAME = ".webcap_training"
 RUNTIME_FILE_NAME = "runtime.json"
 CANCEL_FILE_NAME = "cancel.request"
 H3_CAPTURE_FPS = 24
@@ -123,7 +122,7 @@ def _refresh_runtime(runtime_path):
 
 
 def _active_runtime_path():
-    root = Path(app_config.FS_ROOT) / PROBE_ROOT_NAME / "h3-probes"
+    root = app_config.h3_probe_root()
     if not root.is_dir():
         return None
     for path in root.glob("*/" + RUNTIME_FILE_NAME):
@@ -194,7 +193,7 @@ def prepare_h3_probe(folder, file_name):
     if not PLAN_PATH.is_file() or not SCRIPT_PATH.is_file():
         raise FileNotFoundError("H3 envelope probe script files are missing.")
 
-    runtime_root = Path(app_config.FS_ROOT) / PROBE_ROOT_NAME / "h3-probes"
+    runtime_root = app_config.h3_probe_root()
     probe_id = _probe_id()
     probe_root = runtime_root / probe_id
     source_root = probe_root / "source"
@@ -300,7 +299,7 @@ def h3_probe_status():
     path = _active_runtime_path()
     if path:
         return {"ok": True, "active": True, **_calibration_status_fields(), **_public_runtime(_read_json(path))}
-    root = Path(app_config.FS_ROOT) / PROBE_ROOT_NAME / "h3-probes"
+    root = app_config.h3_probe_root()
     candidates = sorted(root.glob("*/" + RUNTIME_FILE_NAME), key=lambda item: item.stat().st_mtime, reverse=True) if root.is_dir() else []
     if not candidates:
         return {"ok": True, "active": False, **_calibration_status_fields()}

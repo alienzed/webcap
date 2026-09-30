@@ -1,53 +1,50 @@
-# MiniMax H3 Base Prompt Syntax Example
+# MiniMax H3 Illustrative Prompt Shape
 
-This file is a **reference example only**.
+This file mirrors the canonical authoring example used by Storyboard Director.
 
-It mirrors MiniMax's documented base prompt syntax so it is easy to inspect when testing H3 behavior. Storyboard does **not** require Director to emit this exact structure, and WebCap does not rewrite ordinary prompts into it.
+It is an authoring example, not a storage schema. Director may adapt section detail, ordering, and shot count to the Scene. WebCap stores Director-authored prompt text unchanged.
 
-A documented T2VA-style example is:
+--- BEGIN EXAMPLE PROMPT SHAPE ---
 
-```text
-integrated_multimodal_description: [Shot 1] ...
+Subject:
+Primary subject identity, appearance, wardrobe, and voice characteristics that matter throughout the Scene.
 
-overall_soundscape: ...
+Scene Overview:
+A concise description of the setting, action, progression, mood, and landing point.
 
-non_diegetic_music: ...
-```
+Environment / Continuity Anchors:
+Current spatial state, important location anchors, relevant props and their state, lighting, time of day, weather, and other visible conditions that carry through the Scene.
 
-For exact first/last-frame modes, MiniMax also documents reference-alignment statements. WebCap may add those narrow mechanical alignment lines because they are derived from declared reference roles.
+Style / Visual Treatment:
+Overall visual language, composition, lens and depth character, camera energy, and movement style.
 
-Examples:
+integrated_multimodal_description:
 
-I2VA-style first-frame alignment:
+[Shot 1] (0s–Xs)
+Action, performance, framing, camera behavior, synchronized events or dialogue, and meaningful changes from the scene-wide setup.
 
-```text
-For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
-```
+[Shot 2] (Xs–Ys)
+The next meaningful change in action, framing, performance, information, perspective, or physical state.
 
-FL2VA first/last alignment:
+[Shot 3] ... and additional shots as appropriate for the Scene.
 
-```text
-How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the S.SS-second mark of the target video.
-```
+overall_soundscape:
+Scene-wide ambience, spatial audio, physical sounds, Foley, environmental texture, and other persistent diegetic sound.
 
-L2VA-style last-frame alignment:
+non_diegetic_music:
+Audience-only score and its character or progression when it serves the Scene.
 
-```text
-How the reference pictures align with the target video — <Picture 1> (from [Shot N]) aligns with the S.SS-second mark of the target video.
-```
+--- END EXAMPLE PROMPT SHAPE ---
 
-Notes:
+Scene-level sections establish shared defaults. Shots inherit them and describe progression, timing, synchronized events, camera changes, and meaningful changes in state.
 
-- These examples are **not** Storyboard's required creative prompt contract.
-- Director may use ordinary audiovisual prose when that works better.
-- WebCap should store and send Director-authored prompt text unchanged.
-- `[Shot 1]`, later shot timestamps, and the three documented field labels are conventions, not mandatory WebCap formatting rules.
-- `S.SS` represents the effective clip duration in the mechanical alignment syntax.
-- Ref2VA uses a separate task family and is outside the current Storyboard runtime.
+Exact first/last-frame modes may also receive WebCap-owned MiniMax alignment syntax derived from the selected reference roles.
 
 For active Director guidance, see:
+
 - `docs/storyboard-director-context.txt`
 - `docs/mmh3-prompt-runtime-context.txt`
 
-For longer upstream-reference notes, see:
+For longer reference notes, see:
+
 - `docs/mmh3-prompt-guidelines.md`

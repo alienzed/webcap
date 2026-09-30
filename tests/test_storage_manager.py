@@ -14,6 +14,11 @@ def isolate_storage_output_root(monkeypatch):
         "output_root",
         lambda: Path(storage_manager.app_config.FS_ROOT) / "output",
     )
+    monkeypatch.setattr(
+        storage_manager.app_config,
+        "app_cache_root",
+        lambda: Path(storage_manager.app_config.FS_ROOT) / ".test-webcap-app-data" / "cache",
+    )
 
 
 def _write_json(path, payload):
@@ -209,7 +214,8 @@ def test_measure_is_item_scoped_and_cached(monkeypatch, tmp_path):
     item = payload["items"]["generate"][0]
     assert item["measured"] is True
     assert item["bytes"] == measured["bytes"]
-    assert (tmp_path / ".webcap" / "storage_usage.json").is_file()
+    assert (tmp_path / ".test-webcap-app-data" / "cache" / "storage_usage.json").is_file()
+    assert not (tmp_path / ".webcap" / "storage_usage.json").exists()
 
 
 def test_measure_refuses_symlinked_root(monkeypatch, tmp_path):

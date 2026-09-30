@@ -863,7 +863,7 @@
       var sessionCount = Number(item.sessionCount || 0);
       recentActions.push({
         label: testSourceLabel(item) + (sessionCount ? ' · ' + sessionCount + ' session' + (sessionCount === 1 ? '' : 's') : ''),
-        run: function () { openTestBenchSource(folder, source, modelId); }
+        run: function () { openTestBenchSource(folder, source, modelId, item.ownerAvailable); }
       });
       return recentActions.length >= 5;
     });

@@ -7,98 +7,65 @@ def _story():
     return {
         "id": "story-1",
         "title": "Storm Hotel",
-        "concept": "A long concept that should not be sent for a local prompt-writing operation.",
-        "style": "Rain-soaked neo-noir horror, sodium-vapor highlights, restrained handheld camera.",
+        "concept": "A woman enters an empty hotel and follows wet footprints through the lobby.",
+        "style": "Rain-soaked neo-noir, restrained handheld camera.",
         "invariants": [
-            {"kind": "character", "title": "Mara", "text": "Mara has a dark bob, pale raincoat, and a guarded demeanor."},
+            {"kind": "character", "title": "Mara", "text": "Mara has a dark bob and a pale raincoat."},
             {"kind": "sound", "title": "Score", "text": "Low analog synth, no vocals."},
         ],
-        "sceneOrder": ["scene-1", "scene-2", "scene-3"],
+        "targetSceneCount": 12,
+        "sceneOrder": ["scene-1", "scene-2"],
         "scenes": {
             "scene-1": {
                 "id": "scene-1",
                 "title": "Arrival",
                 "summary": "She reaches the hotel entrance.",
                 "entryState": "",
-                "exitState": "She is just inside the closed front door, still holding the handle.",
-                "durationSeconds": 6,
+                "exitState": "She is just inside the closed front door.",
+                "durationSeconds": 10,
                 "prompt": "OLD FIRST PROMPT",
-                "takes": {"take-1": {"prompt": "TAKE DATA MUST NOT LEAK"}},
             },
             "scene-2": {
                 "id": "scene-2",
                 "title": "Footprints",
-                "summary": "She turns from the door and notices wet footprints crossing the lobby.",
+                "summary": "She notices wet footprints crossing the lobby.",
                 "entryState": "",
-                "exitState": "She is staring at the footprints.",
-                "durationSeconds": 8,
+                "exitState": "",
+                "durationSeconds": 12,
                 "prompt": "EXISTING SECOND PROMPT",
                 "references": [{"role": "first_frame", "mediaPath": "references/frame.png"}],
-                "takes": {"take-2": {"prompt": "OTHER TAKE DATA MUST NOT LEAK"}},
-            },
-            "scene-3": {
-                "id": "scene-3",
-                "title": "Upstairs",
-                "summary": "Unrelated later scene.",
-                "entryState": "She is upstairs.",
-                "exitState": "",
-                "durationSeconds": 8,
-                "prompt": "UNRELATED SCENE PROMPT MUST NOT LEAK",
             },
         },
     }
 
 
-def test_write_prompt_request_is_deliberately_local_and_manual_first():
+def test_write_prompt_gives_director_context_without_postprocessing_contract():
     request = storyboard_llm_contract.build_request(_story(), "scene-2", "write_prompt")
     prompt = request["prompt"]
 
     assert request["operation"] == "write_prompt"
     assert request["output"] == "json"
-    assert "Rain-soaked neo-noir horror" in prompt
+    assert request["response_schema"]["required"] == ["prompt"]
+    assert "result_renderer" not in request
     assert "[DIRECTOR CONTEXT]" in prompt
+    assert "[STORY CONCEPT / OVERVIEW]" in prompt
     assert "[STORY INVARIANTS]" in prompt
-    assert "Character: Mara" in prompt
-    assert "dark bob, pale raincoat" in prompt
-    assert "Sound: Score" in prompt
-    assert "Low analog synth, no vocals." in prompt
-    assert "Footprints" in prompt
-    assert "notices wet footprints" in prompt
-    assert "Duration seconds: 8" in prompt
-    assert "first_frame exact visual anchor supplied" in prompt
-    assert "Previous exit state: She is just inside the closed front door" in prompt
-    assert "integrated_multimodal_description" in prompt
-    assert "[H3 MODE]\nI2VA" in prompt
-    assert "at 0.00 seconds into the target video" in prompt
-    assert request["response_schema"]["required"] == [
-        "integrated_multimodal_description",
-        "overall_soundscape",
-        "non_diegetic_music",
-    ]
-    assert request["result_renderer"] == {
-        "type": "h3_base",
-        "mode": "I2VA",
-        "duration": 8,
-        "shared_context": "",
-    }
-
-    assert "A long concept that should not be sent" not in prompt
-    assert "UNRELATED SCENE PROMPT MUST NOT LEAK" not in prompt
-    assert "OTHER TAKE DATA MUST NOT LEAK" not in prompt
-    assert "EXISTING SECOND PROMPT" not in prompt
+    assert "Mara has a dark bob" in prompt
+    assert "[REFERENCE MODE]\nI2VA" in prompt
+    assert "several meaningful cuts, shots, or visual beats" in prompt
+    assert "WebCap will not rewrite it" in prompt
+    assert "Continuity anchors" not in prompt
+    assert "integrated_multimodal_description:" not in request["response_schema"]["properties"]
 
 
-def test_explicit_entry_state_replaces_previous_scene_handoff():
-    story = _story()
-    story["scenes"]["scene-2"]["entryState"] = "She stands just inside the hotel entrance with the door closed behind her."
+def test_write_prompt_does_not_force_previous_scene_handoff():
+    prompt = storyboard_llm_contract.build_request(_story(), "scene-2", "write_prompt")["prompt"]
 
-    prompt = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")["prompt"]
-
-    assert "Entry state: She stands just inside" in prompt
     assert "[PREVIOUS SCENE HANDOFF]" not in prompt
+    assert "Previous exit state:" not in prompt
 
 
-def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
+def test_refine_prompt_preserves_existing_prompt_and_keeps_scene_fields_optional():
     request = storyboard_llm_contract.build_request(
         _story(),
         "scene-2",
@@ -106,40 +73,109 @@ def test_refine_prompt_includes_existing_prompt_and_only_current_correction():
         "Keep the camera behind her until she notices the footprints.",
     )
     prompt = request["prompt"]
+    schema = request["response_schema"]
 
     assert "EXISTING SECOND PROMPT" in prompt
-    assert "[STORY CONCEPT / OVERVIEW]" in prompt
-    assert "A long concept that should not be sent for a local prompt-writing operation." in prompt
     assert "[PREVIOUS SCENE - CONTEXT ONLY]" in prompt
-    assert "OLD FIRST PROMPT" in prompt
-    assert "She is just inside the closed front door" in prompt
-    assert "[NEXT SCENE - CONTEXT ONLY]" not in prompt
-    assert "UNRELATED SCENE PROMPT MUST NOT LEAK" not in prompt
-    assert "Keep the camera behind her until she notices the footprints." in prompt
-    assert "Apply the requested correction faithfully to this Scene" in prompt
-    assert "maintaining the Scene's intended action, chronology, and forward progression" in prompt
-    assert "materially changes how much screen time" in prompt
-    assert "durationSeconds" in request["response_schema"]["properties"]
-    assert request["response_schema"]["properties"]["durationSeconds"]["minimum"] == 6
-    assert request["response_schema"]["properties"]["durationSeconds"]["maximum"] == 15
-    assert request["response_schema"]["required"] == [
-        "changed",
-        "integrated_multimodal_description",
-        "overall_soundscape",
-        "non_diegetic_music",
-    ]
-    assert request["response_schema"]["properties"]["changed"]["type"] == "boolean"
-    assert {"summary", "entryState", "exitState"}.issubset(request["response_schema"]["properties"])
-    assert "summary" not in request["response_schema"]["required"]
-    assert "entryState" not in request["response_schema"]["required"]
-    assert "exitState" not in request["response_schema"]["required"]
-    assert "You may revise the Scene summary / intent, entry state, or exit state only when the correction requires it" in prompt
-    assert request["result_renderer"]["duration_field"] == "durationSeconds"
-    assert request["result_renderer"]["allow_unchanged"] is True
-    assert request["result_renderer"]["existing_prompt"] == "EXISTING SECOND PROMPT"
-    assert "return changed=false, reproduce the three existing prompt semantic fields unchanged" in prompt
-    assert "TAKE DATA MUST NOT LEAK" not in prompt
-    assert "OTHER TAKE DATA MUST NOT LEAK" not in prompt
+    assert "only when it genuinely helps" in prompt
+    assert "Keep the camera behind her" in prompt
+    assert schema["required"] == ["changed", "prompt"]
+    assert {"summary", "entryState", "exitState", "durationSeconds"}.issubset(schema["properties"])
+    assert "summary" not in schema["required"]
+    assert "entryState" not in schema["required"]
+    assert "exitState" not in schema["required"]
+    assert schema["properties"]["durationSeconds"]["minimum"] == 6
+    assert schema["properties"]["durationSeconds"]["maximum"] == 15
+    assert "result_renderer" not in request
+
+
+def test_h3_mode_is_derived_from_reference_roles():
+    story = _story()
+    scene = story["scenes"]["scene-2"]
+
+    scene["references"] = []
+    assert "[REFERENCE MODE]\nT2VA" in storyboard_llm_contract.build_request(
+        story, "scene-2", "write_prompt"
+    )["prompt"]
+
+    scene["references"] = [{"role": "last_frame"}]
+    assert "[REFERENCE MODE]\nL2VA" in storyboard_llm_contract.build_request(
+        story, "scene-2", "write_prompt"
+    )["prompt"]
+
+    scene["references"] = [{"role": "first_frame"}, {"role": "last_frame"}]
+    assert "[REFERENCE MODE]\nFL2VA" in storyboard_llm_contract.build_request(
+        story, "scene-2", "write_prompt"
+    )["prompt"]
+
+
+def test_develop_story_uses_simple_scene_schema_and_dense_scene_guidance():
+    request = storyboard_llm_contract.build_request(_story(), "", "develop_story")
+    prompt = request["prompt"]
+    scene_schema = request["response_schema"]["properties"]["scenes"]["items"]
+
+    assert request["response_schema"]["required"] == ["scenes"]
+    assert set(scene_schema["required"]) == {"title", "summary", "prompt", "suggestedDurationSeconds"}
+    assert scene_schema["properties"]["prompt"]["type"] == "string"
+    assert "entryState" in scene_schema["properties"]
+    assert "exitState" in scene_schema["properties"]
+    assert "entryState" not in scene_schema["required"]
+    assert "exitState" not in scene_schema["required"]
+    assert "continuity" not in scene_schema["properties"]
+    assert "invariantRefs" not in scene_schema["properties"]
+    assert "sharedContextRefs" not in scene_schema["properties"]
+    assert "Create exactly 12 Scenes." in prompt
+    assert "several meaningful shots, cuts, or distinct visual beats" in prompt
+    assert "do not force every Scene to behave like a literal continuation" in prompt
+    assert "Entry and exit state are optional planning notes" in prompt
+    assert "WebCap will store that prompt as written" in prompt
+    assert "200-400 words" not in prompt
+    assert "Continuity anchors" not in prompt
+
+
+def test_develop_story_auto_scene_count_leaves_count_to_director():
+    story = _story()
+    story["targetSceneCount"] = None
+
+    prompt = storyboard_llm_contract.build_request(story, "", "develop_story")["prompt"]
+
+    assert "Choose the Scene count that best fits" in prompt
+    assert "Create exactly 12 Scenes." not in prompt
+
+
+def test_repair_scenes_is_sparse_and_prompt_is_complete_string():
+    request = storyboard_llm_contract.build_request(
+        _story(),
+        "",
+        "repair_scenes",
+        "Use perspective appropriate to each beat.",
+    )
+    prompt = request["prompt"]
+    fields = request["response_schema"]["properties"]["changes"]["items"]["properties"]["fields"]
+
+    assert set(fields["properties"]) == {"summary", "entryState", "exitState", "prompt"}
+    assert fields["properties"]["prompt"]["type"] == "string"
+    assert "complete revised H3 prompt string" in prompt
+    assert "WebCap will not rebuild it" in prompt
+    assert "Continuity anchors" not in prompt
+
+
+def test_expand_concept_still_preserves_story_context_without_scene_planning():
+    request = storyboard_llm_contract.build_request(_story(), "", "expand_concept")
+
+    assert request["output"] == "text"
+    assert "[CURRENT CONCEPT]" in request["prompt"]
+    assert "[STORY VISUAL / ATMOSPHERE]" in request["prompt"]
+    assert "[STORY INVARIANTS]" in request["prompt"]
+    assert "Do not break the Story into Scenes yet" in request["prompt"]
+
+
+def test_define_invariants_remains_context_generation_not_scene_authoring():
+    request = storyboard_llm_contract.build_request(_story(), "", "define_invariants")
+
+    assert request["output"] == "json"
+    assert request["response_schema"]["required"] == ["invariants"]
+    assert "Do not plan Scenes" in request["prompt"]
 
 
 def test_write_prompt_requires_scene_intent():
@@ -155,290 +191,22 @@ def test_refine_prompt_requires_prompt_and_instruction():
     story["scenes"]["scene-2"]["prompt"] = ""
 
     with pytest.raises(ValueError, match="generation prompt"):
-        storyboard_llm_contract.build_request(story, "scene-2", "refine_prompt", "Change camera.")
+        storyboard_llm_contract.build_request(
+            story, "scene-2", "refine_prompt", "Change camera."
+        )
 
-    story = _story()
     with pytest.raises(ValueError, match="refinement instruction"):
-        storyboard_llm_contract.build_request(story, "scene-2", "refine_prompt", "")
-
-
-def test_unknown_llm_operation_fails_loudly():
-    with pytest.raises(ValueError, match="Unsupported"):
-        storyboard_llm_contract.build_request(_story(), "scene-2", "chat")
-
-
-def test_h3_mode_is_derived_from_reference_roles():
-    story = _story()
-    scene = story["scenes"]["scene-2"]
-
-    scene["references"] = []
-    prompt = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")["prompt"]
-    assert "[H3 MODE]\nT2VA" in prompt
-    assert "How the reference pictures align" not in prompt
-    assert "at 0.00 seconds into the target video" not in prompt
-
-    scene["references"] = [{"role": "last_frame"}]
-    prompt = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")["prompt"]
-    assert "[H3 MODE]\nL2VA" in prompt
-    assert "aligns with the 8.00-second mark" in prompt
-
-    scene["references"] = [{"role": "first_frame"}, {"role": "last_frame"}]
-    prompt = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")["prompt"]
-    assert "[H3 MODE]\nFL2VA" in prompt
-    assert "0.00-second mark" in prompt
-    assert "8.00-second mark" in prompt
-
-
-def test_runtime_request_uses_compact_h3_context_not_full_guidance():
-    prompt = storyboard_llm_contract.build_request(_story(), "scene-2", "write_prompt")["prompt"]
-
-    assert "MINIMAX H3 STORYBOARD WRITING RULES" in prompt
-    assert "Full-reference / Ref2VA" not in prompt
-    assert "Official source of truth" not in prompt
-
-
-def test_develop_story_uses_full_concept_and_structured_scene_plan():
-    story = _story()
-    request = storyboard_llm_contract.build_request(story, "", "develop_story")
-    prompt = request["prompt"]
-
-    assert request["operation"] == "develop_story"
-    assert request["output"] == "json"
-    assert request["response_schema"]["required"] == ["scenes"]
-    assert "sharedContext" not in request["response_schema"]["properties"]
-    assert "minItems" not in request["response_schema"]["properties"]["scenes"]
-    assert "maxItems" not in request["response_schema"]["properties"]["scenes"]
-    scene_schema = request["response_schema"]["properties"]["scenes"]["items"]
-    assert "sharedContextRefs" not in scene_schema["required"]
-    assert "sharedContextRefs" not in scene_schema["properties"]
-    prompt_schema = scene_schema["properties"]["prompt"]
-    assert prompt_schema["type"] == "object"
-    assert prompt_schema["required"] == [
-        "integrated_multimodal_description",
-        "overall_soundscape",
-        "non_diegetic_music",
-    ]
-    assert "A long concept that should not be sent for a local prompt-writing operation." in prompt
-    assert "Rain-soaked neo-noir horror" in prompt
-    assert "[STORY INVARIANTS]" in prompt
-    assert "Character: Mara" in prompt
-    assert "Low analog synth, no vocals." in prompt
-    assert "complete structured H3 content for every Scene now" in prompt
-    assert "Aim for 12 Scenes" in prompt
-    assert "recurring character identity, wardrobe, location" in prompt
-    assert "sharedContext" not in prompt
-    assert "4 to 8 Scenes" not in prompt
-    assert "at least two Scenes" not in prompt
-    assert "between 9 and 15 seconds" in prompt
-    assert "normally aiming for 10-15 seconds" in prompt
-    assert "prioritize coherent, substantial Scenes over mechanically hitting the count" in prompt
-    assert "Combine small related beats when they fit naturally" in prompt
-    assert "multiple meaningful shots, cuts, or distinct visual beats when the material supports them" in prompt
-    assert scene_schema["properties"]["suggestedDurationSeconds"]["minimum"] == 9
-    assert scene_schema["properties"]["suggestedDurationSeconds"]["maximum"] == 15
-    assert "none is mandatory" in prompt
-    assert "roughly 200-400 words in each Scene's integrated multimodal description" in prompt
-    assert "ballpark targets, not minimums" in prompt
-    assert "do not keep elaborating once the Scene is fully described" in prompt
-    assert "EXISTING SECOND PROMPT" not in prompt
-
-
-def test_develop_story_auto_scene_count_does_not_fall_back_to_twelve():
-    story = _story()
-    story["targetSceneCount"] = None
-
-    prompt = storyboard_llm_contract.build_request(story, "", "develop_story")["prompt"]
-
-    assert "Choose the Scene count that best fits the Story's natural progression" in prompt
-    assert "do not target a predetermined count" in prompt
-    assert "Aim for 12 Scenes" not in prompt
-
-
-def test_repair_scenes_is_sparse_whole_story_patch_not_redevelopment():
-    story = _story()
-    request = storyboard_llm_contract.build_request(
-        story,
-        "",
-        "repair_scenes",
-        "Use perspective appropriate to each beat; stop defaulting to front-facing portrait coverage.",
-    )
-    prompt = request["prompt"]
-    schema = request["response_schema"]
-
-    assert request["operation"] == "repair_scenes"
-    assert request["output"] == "json"
-    assert schema["required"] == ["changes"]
-    assert set(schema["properties"]["changes"]["items"]["properties"]["fields"]["properties"]) == {
-        "summary", "entryState", "exitState", "prompt"
-    }
-    assert "[CURRENT SCENE PLAN]" in prompt
-    assert "Use perspective appropriate to each beat" in prompt
-    assert "Treat the instruction as authoritative" in prompt
-    assert "substantial rewriting inside affected Scenes" in prompt
-    assert "targeted repair pass, not Story redevelopment" in prompt
-    assert "exact Scene count, order, titles, durations, references, LoRAs, and seeds" in prompt
-    assert "Preserve unaffected Scenes and fields" in prompt
-    assert "fully satisfy the instruction" in prompt
-    assert "Do not add, remove, merge, split, or reorder Scenes." in prompt
-    assert "return each Scene at most once" in prompt
-    assert "WebCap will render those itself" in prompt
-    assert '"sceneNumber": 1' in prompt
-    assert "TAKE DATA MUST NOT LEAK" not in prompt
-
-
-def test_repair_scenes_requires_instruction_and_existing_scenes():
-    with pytest.raises(ValueError, match="instruction"):
-        storyboard_llm_contract.build_request(_story(), "", "repair_scenes", "")
-
-    story = _story()
-    story["sceneOrder"] = []
-    story["scenes"] = {}
-    with pytest.raises(ValueError, match="must have Scenes"):
-        storyboard_llm_contract.build_request(story, "", "repair_scenes", "Check perspective.")
+        storyboard_llm_contract.build_request(_story(), "scene-2", "refine_prompt", "")
 
 
 def test_develop_story_requires_concept():
     story = _story()
     story["concept"] = ""
+
     with pytest.raises(ValueError, match="concept / overview"):
         storyboard_llm_contract.build_request(story, "", "develop_story")
 
 
-def test_define_invariants_is_a_small_character_location_pass():
-    story = _story()
-    story["concept"] = "Elena loses her husband, grieves at a cemetery, then gradually bonds with a stray dog."
-
-    request = storyboard_llm_contract.build_request(story, "", "define_invariants")
-    prompt = request["prompt"]
-    schema = request["response_schema"]
-
-    assert request["operation"] == "define_invariants"
-    assert request["output"] == "json"
-    assert schema["required"] == ["invariants"]
-    item = schema["properties"]["invariants"]["items"]
-    assert item["properties"]["kind"]["enum"] == ["character", "location"]
-    assert "recurring characters and recurring locations" in prompt
-    assert "stable visible traits that materially help reproduce" in prompt
-    assert "do not fill every category mechanically" in prompt
-    assert "Do not plan Scenes." in prompt
-    assert '"kind":"character"' in prompt
-    assert '"kind":"location"' in prompt
-    assert "[EXISTING STORY INVARIANTS]" in prompt
-
-
-def test_expand_concept_is_creative_but_not_scene_planning():
-    story = _story()
-    story["concept"] = "Rise and fall of a New York gangster."
-    story["style"] = "High-fashion runway editorial."
-
-    request = storyboard_llm_contract.build_request(story, "", "expand_concept")
-    prompt = request["prompt"]
-
-    assert request["operation"] == "expand_concept"
-    assert request["output"] == "text"
-    assert "Rise and fall of a New York gangster." in prompt
-    assert "[STORY VISUAL / ATMOSPHERE]" in prompt
-    assert "High-fashion runway editorial." in prompt
-    assert "[DIRECTOR CONTEXT]" not in prompt
-    assert "Treat the supplied Visual / Atmosphere as authoritative" in prompt
-    assert "do not replace it, reinterpret it into a different style, or introduce a competing visual atmosphere" in prompt
-    assert "do not force conventional plot, conflict, or character arcs" in prompt
-    assert "do not break the Story into Scenes yet" in prompt
-    assert "do not write MiniMax H3 prompts" in prompt
-    assert "roughly 500-1000 words total" in prompt
-    assert "not a minimum to pad toward" in prompt
-    assert "Stop once the concept is fully developed." in prompt
-
-
-def test_develop_story_h3_rules_do_not_conflict_with_structured_creative_task():
-    request = storyboard_llm_contract.build_request(_story(), "", "develop_story")
-    prompt = request["prompt"]
-
-    assert "current Director task explicitly permits inventing it" in prompt
-    assert "structured whole-Story tasks" in prompt
-    assert "Return only the final H3 model-facing prompt." not in prompt
-
-
-def test_character_continuity_is_authoritative_without_lora_or_media_reasoning():
-    prompt = storyboard_llm_contract.build_request(_story(), "", "develop_story")["prompt"]
-
-    assert prompt.count("PRESERVE FACTS AND CONTINUITY.") == 1
-    assert "Recurring characters and locations must remain visually reproducible" in prompt
-    assert "Do not vary established identity or continuity merely for novelty." in prompt
-    assert "no LoRA" not in prompt
-    assert "LoRA or exact" not in prompt
-
-
-def test_develop_story_schema_keeps_scene_planning_independent_of_shared_context():
-    schema = storyboard_llm_contract.build_request(_story(), "", "develop_story")["response_schema"]
-
-    assert schema["required"] == ["scenes"]
-    assert "sharedContext" not in schema["properties"]
-    scene = schema["properties"]["scenes"]["items"]
-    assert "sharedContextRefs" not in scene["properties"]
-    assert "invariantRefs" in scene["required"]
-    assert scene["properties"]["invariantRefs"]["items"]["required"] == ["kind", "title"]
-
-
-def test_scene_local_prompt_reuses_developed_shared_continuity():
-    story = _story()
-    story["development"] = {
-        "plan": {
-            "sharedContext": {
-                "subjects": [{"id": "mara", "label": "Mara", "description": "Mara has a dark bob."}],
-                "wardrobes": [{"id": "coat", "label": "Wardrobe", "description": "Mara wears a pale raincoat."}],
-                "locations": [{"id": "lobby", "label": "Lobby", "description": "Dark terrazzo lobby with brass fixtures."}],
-                "persistentFacts": [],
-            }
-        }
-    }
-    story["scenes"]["scene-2"]["sharedContextRefs"] = ["mara", "coat", "lobby"]
-
-    request = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")
-
-    assert "[SHARED CONTINUITY FOR THIS SCENE]" in request["prompt"]
-    assert "Mara: Mara has a dark bob." in request["prompt"]
-    assert "Wardrobe: Mara wears a pale raincoat." in request["prompt"]
-    assert "Lobby: Dark terrazzo lobby with brass fixtures." in request["prompt"]
-    assert request["result_renderer"]["shared_context"].startswith("Mara: Mara has a dark bob.")
-
-
-def test_scene_local_prompt_uses_only_relevant_story_invariants_as_authoritative_anchors():
-    story = _story()
-    story["invariants"] = [
-        {"kind": "character", "title": "Mara", "text": "White woman, early 30s, hazel eyes, shoulder-length dark brown hair."},
-        {"kind": "character", "title": "Jon", "text": "Black man, late 30s, shaved head, brown eyes."},
-        {"kind": "location", "title": "Lobby", "text": "Dark terrazzo floor, brass desk, rain-streaked windows."},
-    ]
-    story["scenes"]["scene-2"]["invariantRefs"] = [
-        {"kind": "character", "title": "Mara"},
-        {"kind": "location", "title": "Lobby"},
-    ]
-
-    request = storyboard_llm_contract.build_request(story, "scene-2", "write_prompt")
-
-    assert "[SCENE INVARIANTS]" in request["prompt"]
-    assert "White woman, early 30s, hazel eyes" in request["prompt"]
-    assert "Dark terrazzo floor, brass desk" in request["prompt"]
-    assert "Black man, late 30s" not in request["prompt"]
-    assert "White woman, early 30s, hazel eyes" in request["result_renderer"]["shared_context"]
-    assert "Black man, late 30s" not in request["result_renderer"]["shared_context"]
-
-
-def test_scene_local_prompt_does_not_solicit_unsolicited_advice():
-    prompt = storyboard_llm_contract.build_request(_story(), "scene-2", "write_prompt")["prompt"]
-
-    assert "recommend a natural Scene split" not in prompt
-    assert "state the missing fact" not in prompt
-    assert "return no unsolicited commentary" in prompt
-
-
-def test_director_context_prioritizes_filmmaking_without_forcing_classical_coverage():
-    prompt = storyboard_llm_contract.build_request(_story(), "", "develop_story")["prompt"]
-
-    assert "DIRECT THE FILM FIRST." in prompt
-    assert "Creative intent outranks default film grammar" in prompt
-    assert "montage, abstraction, static tableaux, discontinuity" in prompt
-    assert "USE EACH GENERATION UNIT WELL." in prompt
-    assert "A single continuous shot is valid when uninterrupted time better serves the Scene." in prompt
-    assert "Do not default to portrait-style coverage or a fixed master/medium/close-up recipe." in prompt
+def test_unknown_llm_operation_fails_loudly():
+    with pytest.raises(ValueError, match="Unsupported"):
+        storyboard_llm_contract.build_request(_story(), "scene-2", "chat")

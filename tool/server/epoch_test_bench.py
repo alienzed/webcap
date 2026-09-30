@@ -166,7 +166,10 @@ def recent_test_sets(limit=8):
     now = time.monotonic()
     cached_items = _recent_sets_cache.get("items") if isinstance(_recent_sets_cache.get("items"), list) else []
     if now < float(_recent_sets_cache.get("expires") or 0):
-        return [dict(item) for item in cached_items[:max(1, int(limit or 8))]]
+        recent = [dict(item) for item in cached_items[:max(1, int(limit or 8))]]
+        for item in recent:
+            item["ownerAvailable"] = _owner_folder_available(item.get("folder"))
+        return recent
 
     recent_by_key = {}
     seen_sessions = set()
@@ -207,11 +210,12 @@ def recent_test_sets(limit=8):
         key=lambda item: (float(item.get("modified") or 0), str(item.get("latestSession") or "")),
         reverse=True,
     )
-    for item in recent:
-        item["ownerAvailable"] = _owner_folder_available(item.get("folder"))
     _recent_sets_cache["items"] = [dict(item) for item in recent]
     _recent_sets_cache["expires"] = time.monotonic() + 10.0
-    return recent[:max(1, int(limit or 8))]
+    result = [dict(item) for item in recent[:max(1, int(limit or 8))]]
+    for item in result:
+        item["ownerAvailable"] = _owner_folder_available(item.get("folder"))
+    return result
 
 
 def remove_candidate(folder_path, file_name, session_name=None, model_id=None, source=None):
@@ -1992,14 +1996,16 @@ def activity_snapshot(folder_path=None):
             visible = _sync_inference_session(session_directory)
         except Exception:
             continue
+        owner_folder = str(visible.get("ownerFolder") or key[0])
         active.append({
-            "folder": str(visible.get("ownerFolder") or key[0]),
+            "folder": owner_folder,
             "source": _session_source(visible, set_folder),
             "modelId": str(visible.get("modelId") or visible.get("model") or ""),
             "session": key[1],
             "status": str(visible.get("status") or "running"),
             "completed": int(visible.get("completed") or 0),
             "total": int(visible.get("total") or 0),
+            "ownerAvailable": _owner_folder_available(owner_folder),
         })
     current = test_presence(folder_path) if folder_path is not None else None
     return {"active": active, "current": current, "recent": recent_test_sets()}

@@ -63,16 +63,25 @@ def _release_gpu():
 
 def _local_llm_work_pending():
     from .storyboard_llm_runtime import uses_local_gpu
-    if not uses_local_gpu():
-        return False
+
     snapshot = execution_lane_snapshot("llm", include_terminal=False)
-    if snapshot.get("activeJobId"):
-        return True
+    jobs = snapshot.get("jobs", [])
+
+    def job_uses_local_gpu(job):
+        metadata = job.get("metadata") if isinstance((job or {}).get("metadata"), dict) else {}
+        model_id = str(metadata.get("modelId") or "").strip()
+        return bool(model_id) and uses_local_gpu(model_id)
+
+    active_id = str(snapshot.get("activeJobId") or "").strip()
+    if active_id:
+        active = next((job for job in jobs if str(job.get("id") or "") == active_id), None)
+        return bool(active) and job_uses_local_gpu(active)
+
     if snapshot.get("paused"):
         return False
     return any(
-        str(job.get("status") or "") == "queued"
-        for job in snapshot.get("jobs", [])
+        str(job.get("status") or "") == "queued" and job_uses_local_gpu(job)
+        for job in jobs
     )
 
 

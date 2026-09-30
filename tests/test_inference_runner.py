@@ -325,7 +325,7 @@ def test_inference_yields_when_local_llm_work_is_already_queued(inference_root, 
         {"contract": {}},
         metadata={"client": "storyboard"},
     )
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
         inference_runner,
         "_reserve_gpu",
@@ -336,6 +336,20 @@ def test_inference_yields_when_local_llm_work_is_already_queued(inference_root, 
 
     assert execution_queue.get_job(queued["jobId"])["status"] == "queued"
     assert execution_queue.resource_owner() == ""
+
+
+def test_inference_does_not_yield_to_remote_llm_work(inference_root, monkeypatch):
+    remote = execution_queue.enqueue(
+        "llm",
+        {"contract": {"operation": "freeform_chat"}, "clientContext": {}},
+        metadata={"client": "chat", "modelId": "macbook::qwen"},
+    )
+
+    assert inference_runner._local_llm_work_pending() is False
+
+    execution_queue.claim_next("llm")
+    assert execution_queue.lane_snapshot("llm", include_terminal=False)["activeJobId"] == remote["id"]
+    assert inference_runner._local_llm_work_pending() is False
 
 
 def test_inference_yields_while_llm_retains_gpu_during_grace(inference_root, monkeypatch):

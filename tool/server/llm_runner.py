@@ -56,6 +56,13 @@ def local_gpu_drain_pending():
     return time.monotonic() < _local_gpu_drain_until
 
 
+def _job_model_id(job):
+    if not isinstance(job, dict):
+        return ""
+    metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+    return str(metadata.get("modelId") or job.get("modelId") or "").strip()
+
+
 def _job_view(job):
     if not isinstance(job, dict):
         return None
@@ -399,7 +406,7 @@ def _advance_queue():
 
         from .storyboard_llm_runtime import uses_local_gpu
         next_job = queued[0]
-        next_model_id = str(next_job.get("modelId") or "").strip()
+        next_model_id = _job_model_id(next_job)
         local_gpu = uses_local_gpu(next_model_id)
         reserved_here = False
         owner = execution_resource_owner()
@@ -452,7 +459,7 @@ def _advance_queue():
                         and (
                             any(
                                 str(job.get("status") or "") == "queued"
-                                and uses_local_gpu(str(job.get("modelId") or ""))
+                                and uses_local_gpu(_job_model_id(job))
                                 for job in current.get("jobs", [])
                             )
                             or local_gpu_drain_pending()
@@ -632,7 +639,7 @@ def _queue_wait_state(current):
         }
 
     from .storyboard_llm_runtime import uses_local_gpu
-    next_model_id = str((queued[0] or {}).get("modelId") or "").strip()
+    next_model_id = _job_model_id(queued[0])
     if not uses_local_gpu(next_model_id):
         return {"queueDepth": len(queued), "waitOwner": "", "waitReason": ""}
 

@@ -426,7 +426,6 @@ def test_llm_wait_state_uses_queued_model_runtime(llm_root, monkeypatch):
 
 
 def test_llm_remote_job_does_not_claim_shared_gpu(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         llm_runner,
         "_reserve_gpu",
@@ -449,13 +448,43 @@ def test_llm_remote_job_does_not_claim_shared_gpu(llm_root, monkeypatch):
 
     job = llm_runner.enqueue(
         "generate",
-        "remote-model",
+        "macbook::remote-model",
         {"operation": "refine_prompt", "prompt": "Refine.", "output": "text"},
     )
     llm_runner._advance_queue()
 
     assert llm_runner.job_status(job["jobId"])["status"] == "completed"
-    assert captured == {"model": "remote-model", "gpu_reserved": False}
+    assert captured == {"model": "macbook::remote-model", "gpu_reserved": False}
+
+
+def test_remote_llm_job_releases_retained_local_gpu_hold_before_running(llm_root, monkeypatch):
+    execution_queue._resource_owner = "llm"
+    calls = []
+
+    monkeypatch.setattr(
+        llm_runner,
+        "_release_gpu",
+        lambda: calls.append("release") or execution_queue.release_resource("llm"),
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda model_id, contract, gpu_reserved=False: {
+            "text": "Remote result",
+            "model": model_id,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "generate",
+        "macbook::qwen",
+        {"operation": "write_prompt", "prompt": "Prompt.", "output": "text"},
+    )
+    llm_runner._advance_queue()
+
+    assert llm_runner.job_status(job["jobId"])["status"] == "completed"
+    assert calls == ["release"]
+    assert execution_queue.resource_owner() == ""
 
 
 def test_storyboard_llm_job_rejects_inconsistent_frozen_identity(llm_root, monkeypatch):

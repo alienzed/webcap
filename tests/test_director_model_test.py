@@ -1,6 +1,5 @@
 import pytest
 
-from tool.server import config as app_config
 from tool.server import director_model_test_store as model_test
 
 
@@ -208,6 +207,8 @@ def test_model_test_surfaces_live_status_without_extra_polling():
     assert 'id="director-model-test-status" class="app-settings-status director-model-test-status"' in html
     assert 'aria-live="polite"' in html
     assert 'class="director-model-test-models"' in html
+    assert 'id="director-model-test-sessions"' not in html
+    assert ".webcap_model_tests" not in frontend
 
     assert "function directorModelTestRenderStatus()" in frontend
     assert "directorModelTestState.currentPhase = phase;" in frontend

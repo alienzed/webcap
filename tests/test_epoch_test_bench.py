@@ -568,6 +568,8 @@ def test_remove_candidate_refuses_shared_active_session_result_mutation(tmp_path
     bench._atomic_write_json(session / "test.json", {
         "status": "queued",
         "modelId": bench.get_test_model().PROFILE_ID,
+        "source": "HH4013",
+        "ownerFolder": "HH4013",
         "inferenceJobs": [child["id"]],
         "results": [],
         "failures": [],
@@ -586,7 +588,8 @@ def test_activity_snapshot_projects_shared_test_session(tmp_path, monkeypatch):
     configure_execution_queue(monkeypatch, tmp_path)
     set_folder = tmp_path / "HH4013"
     staged = tmp_path / "staged"
-    session = set_folder / bench.TEST_RESULTS_DIR / "session-a"
+    session = tmp_path / "output" / bench.TEST_RESULTS_DIR / "session-a"
+    set_folder.mkdir(parents=True)
     staged.mkdir(parents=True)
     session.mkdir(parents=True)
     (staged / "epoch10.safetensors").write_bytes(b"weights")
@@ -623,6 +626,8 @@ def test_activity_snapshot_projects_shared_test_session(tmp_path, monkeypatch):
     assert payload["current"]["hasTestData"] is True
     assert payload["active"] == [{
         "folder": "HH4013",
+        "source": "HH4013",
+        "modelId": bench.get_test_model().PROFILE_ID,
         "session": session.name,
         "status": "running",
         "completed": 0,

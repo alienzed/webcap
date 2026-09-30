@@ -645,6 +645,9 @@ function trainingPlannedStepCount(job) {
 }
 
 function trainingPlannedEpochCount(job) {
+  var settings = job && job.trainingSettings && typeof job.trainingSettings === 'object' ? job.trainingSettings : {};
+  var runEpochs = Number(settings.epochs);
+  if (isFinite(runEpochs) && runEpochs > 0) return runEpochs;
   var plan = job && job.progressPlan && typeof job.progressPlan === 'object' ? job.progressPlan : {};
   var names = [String(job && job.stages || '')];
   return names.reduce(function (total, name) {
@@ -690,7 +693,7 @@ function buildQueuedResumePointHtml(job) {
   }
   var step = Number(point.step);
   var epoch = Number(point.epoch);
-  var expectedEpochs = Number(point.expectedEpochs);
+  var expectedEpochs = trainingPlannedEpochCount(job) || Number(point.expectedEpochs);
   var plannedSteps = trainingPlannedStepCount(job);
   var percent = plannedSteps > 0 && step > 0 ? step / plannedSteps * 100 : expectedEpochs > 0 && epoch > 0 ? epoch / expectedEpochs * 100 : 0;
   percent = Math.max(0, Math.min(100, percent));

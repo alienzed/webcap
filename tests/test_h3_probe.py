@@ -480,7 +480,6 @@ def test_prepare_route_captures_exact_video_and_returns_command(tmp_path, monkey
     source.with_suffix(".txt").write_text("probe caption", encoding="utf-8")
     (folder / "config.h3.toml").write_text(h3_config_text(), encoding="utf-8")
     monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
-    monkeypatch.setattr(config_module, "h3_probe_root", lambda: fs_root / "output" / "work" / "h3-probes")
     scoped = []
     def metadata(_folder, scoped_filenames=None):
         scoped.append(scoped_filenames)
@@ -517,7 +516,6 @@ def test_prepare_route_uses_canonical_config_when_set_has_none(tmp_path, monkeyp
     source.write_bytes(b"video")
     source.with_suffix(".txt").write_text("probe caption", encoding="utf-8")
     monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
-    monkeypatch.setattr(config_module, "h3_probe_root", lambda: fs_root / "output" / "work" / "h3-probes")
     monkeypatch.setattr(h3_probe_module, "update_media_metadata", lambda _folder, scoped_filenames=None: {"probe.mp4": {"fps": 24, "duration": 10.0}})
 
     def copy_capture(src, dest, _fps, _source_fps):
@@ -550,9 +548,9 @@ def test_prepare_route_fails_visibly_without_saved_caption(tmp_path, monkeypatch
 
 def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatch):
     fs_root = tmp_path / "fs"
-    probe_root = fs_root / "output" / "work" / "h3-probes" / "h3-test"
+    probe_root = fs_root / ".webcap_training" / "h3-probes" / "h3-test"
     probe_root.mkdir(parents=True)
-    stale_runtime = fs_root / "output" / "work" / "h3-probes" / "h3-stale" / "runtime.json"
+    stale_runtime = fs_root / ".webcap_training" / "h3-probes" / "h3-stale" / "runtime.json"
     stale_runtime.parent.mkdir()
     stale_runtime.write_text("not valid JSON", encoding="utf-8")
     seed_path = probe_root / "seed.json"
@@ -560,7 +558,6 @@ def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatc
     config_path = tmp_path / "config.json"
     config_path.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
-    monkeypatch.setattr(config_module, "h3_probe_root", lambda: fs_root / "output" / "work" / "h3-probes")
     monkeypatch.setattr(config_module, "CONFIG_PATH", config_path)
     monkeypatch.setattr(h3_probe_module, "prepare_h3_probe", lambda _folder, _file: {
         "ok": True, "probeId": "h3-test", "seedPath": str(seed_path), "command": "ignored",

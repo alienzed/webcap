@@ -247,6 +247,44 @@ def test_output_root_blank_uses_legacy_fs_output_location(tmp_path, monkeypatch)
     assert config_module.output_root() == tmp_path / "output"
 
 
+def test_filesystem_app_data_root_defaults_blank_and_preserves_configured_path(tmp_path):
+    defaulted = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "training": {},
+    })
+    assert defaulted["filesystem"]["app_data_root"] == ""
+
+    configured_path = tmp_path / "webcap-state"
+    configured = config_module.validate_config_payload({
+        "filesystem": {
+            "root": "C:/training",
+            "app_data_root": str(configured_path),
+            "models": "",
+        },
+        "training": {},
+    })
+    assert configured["filesystem"]["app_data_root"] == str(configured_path)
+
+
+def test_app_data_helpers_use_configured_root(tmp_path, monkeypatch):
+    root = tmp_path / "webcap-state"
+    monkeypatch.setattr(config_module, "config", {
+        "filesystem": {"root": str(tmp_path / "sets"), "app_data_root": str(root), "models": ""}
+    })
+
+    assert config_module.app_data_root() == root
+    assert config_module.app_state_root() == root / "state"
+    assert config_module.app_cache_root() == root / "cache"
+
+
+def test_filesystem_app_data_root_rejects_relative_override():
+    with pytest.raises(ValueError, match="app_data_root"):
+        config_module.validate_config_payload({
+            "filesystem": {"root": "C:/training", "app_data_root": "relative/app-data", "models": ""},
+            "training": {},
+        })
+
+
 def test_filesystem_output_root_defaults_blank_and_preserves_configured_path():
     defaulted = config_module.validate_config_payload({
         "filesystem": {"root": "C:/training", "models": ""},

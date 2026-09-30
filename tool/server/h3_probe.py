@@ -4,6 +4,8 @@ import json
 import os
 import shutil
 import shlex
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +26,7 @@ SCRIPT_PATH = ROOT / "scripts" / "h3_shape_probe.py"
 RUNTIME_FILE_NAME = "runtime.json"
 CANCEL_FILE_NAME = "cancel.request"
 H3_CAPTURE_FPS = 24
+_latest_runtime = None
 
 
 def _utc_now():
@@ -120,6 +123,11 @@ def _cleanup_completed_probe(probe_root):
     return True
 
 
+def _remember_runtime(runtime):
+    global _latest_runtime
+    _latest_runtime = dict(runtime) if isinstance(runtime, dict) else None
+
+
 def _refresh_runtime(runtime_path):
     runtime = _read_json(runtime_path)
     if not runtime:
@@ -132,9 +140,22 @@ def _refresh_runtime(runtime_path):
         _write_json(runtime_path, runtime)
         if runtime.get("publishConfig"):
             app_config.reload_runtime_config()
+        _remember_runtime(runtime)
         if runtime.get("status") == "completed" and runtime.get("publishConfig"):
             _cleanup_completed_probe(Path(runtime_path).parent)
     return runtime
+
+
+def _monitor_runtime(runtime_path):
+    runtime_path = Path(runtime_path)
+    while runtime_path.is_file():
+        runtime = _read_json(runtime_path)
+        if not runtime or runtime.get("status") not in ("running", "stopping"):
+            return
+        if not _runtime_is_live(runtime):
+            _refresh_runtime(runtime_path)
+            return
+        time.sleep(2)
 
 
 def _active_runtime_path():
@@ -307,7 +328,10 @@ def start_h3_probe(folder, file_name):
         "wslDistribution": settings["wslDistribution"],
         "publishConfig": True,
     }
-    _write_json(_runtime_path(probe_root), runtime)
+    runtime_path = _runtime_path(probe_root)
+    _write_json(runtime_path, runtime)
+    _remember_runtime(runtime)
+    threading.Thread(target=_monitor_runtime, args=(runtime_path,), daemon=True).start()
     return {"ok": True, **_public_runtime(runtime)}
 
 
@@ -315,6 +339,8 @@ def h3_probe_status():
     path = _active_runtime_path()
     if path:
         return {"ok": True, "active": True, **_calibration_status_fields(), **_public_runtime(_read_json(path))}
+    if isinstance(_latest_runtime, dict) and _latest_runtime.get("status") not in ("running", "stopping"):
+        return {"ok": True, "active": False, **_calibration_status_fields(), **_public_runtime(_latest_runtime)}
     root = app_config.h3_probe_root()
     candidates = sorted(root.glob("*/" + RUNTIME_FILE_NAME), key=lambda item: item.stat().st_mtime, reverse=True) if root.is_dir() else []
     if not candidates:

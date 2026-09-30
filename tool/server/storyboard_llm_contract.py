@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from .h3_prompt_contract import content_schema, final_shape, mode_from_reference_roles
+from .h3_prompt_contract import mode_from_reference_roles
 
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
@@ -25,13 +25,24 @@ def _clean(value):
 
 
 def _prompt_response_schema(allow_duration=False, allow_scene_fields=False, allow_unchanged=False):
-    schema = content_schema()
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["prompt"],
+        "properties": {
+            "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Complete MiniMax H3 generation prompt, authored exactly as it should be stored.",
+            },
+        },
+    }
     if allow_unchanged:
         schema["properties"]["changed"] = {
             "type": "boolean",
             "description": "False only when the requested refinement does not require any change to this Scene.",
         }
-        schema["required"] = ["changed"] + schema["required"]
+        schema["required"] = ["changed", "prompt"]
     if allow_scene_fields:
         schema["properties"]["summary"] = {
             "type": "string",
@@ -347,24 +358,22 @@ def build_request(story, scene_id, operation, instruction=""):
         invariants = _story_invariants_text(story)
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
-        blocks.append("[H3 WRITING RULES]\n" + h3_runtime_context)
+        blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
         target_scene_count = story.get("targetSceneCount")
         scene_count_guidance = (
-            "Aim for " + str(int(target_scene_count)) + " Scenes, but prioritize coherent, substantial Scenes over mechanically hitting the count. "
+            "Create exactly " + str(int(target_scene_count)) + " Scenes. "
             if target_scene_count is not None
-            else "Choose the Scene count that best fits the Story's natural progression, pacing, and generatability; do not target a predetermined count. "
+            else "Choose the Scene count that best fits the Story's natural progression and pacing. "
         )
         blocks.append(
-            "[CURRENT TASK]\nDevelop the Story into a complete production-ready sequence of MiniMax H3 T2VA Scenes. "
+            "[CURRENT TASK]\nDevelop the Story into a complete sequence of MiniMax H3 Scenes. "
             + scene_count_guidance
-            + "Combine small related beats when they fit naturally; split material when a separate Scene improves clarity, pacing, or generatability. "
-            "Aim for about 10 seconds per Scene by default. Use up to 15 seconds when the Scene genuinely benefits from the extra time, and never propose less than 6 seconds. Use the available duration efficiently, normally with multiple meaningful shots, cuts, or distinct visual beats when the material supports them; use a single continuous shot when uninterrupted time is the stronger directorial choice. Preserve coherent progression appropriate to the concept, explicit entry/exit states, continuity where relevant, supplied Story facts, Story invariants, recurring character identity, wardrobe, location, and persistent visible state across the sequence. "
-            "For every Scene, invariantRefs must contain the exact kind/title pairs of only the supplied character and location invariants actually present or materially relevant in that Scene; use an empty array when none apply. Do not introduce a character or location merely to justify a reference. WebCap will inject those invariant descriptions verbatim into the final H3 prompt, so do not rewrite their identity details merely for variety. "
-            "Provide complete structured H3 content for every Scene now, not a placeholder; WebCap will render the exact model-facing field labels and spacing. Be creatively useful, but invent supporting performance, camera behavior, sound, dialogue, or music only when they serve the supplied concept; none is mandatory. "
-            "Each Scene prompt must be independently generatable and follow the supplied H3 base prompt rules. "
-            "For scale, aim for roughly 200-400 words in each Scene's integrated multimodal description; keep the supporting "
-            "soundscape and music fields concise, normally one sentence each. Treat these as ballpark targets, not minimums, "
-            "and do not keep elaborating once the Scene is fully described. "
+            + "Each Scene is a short generation unit, normally about 10-15 seconds and never longer than 15 seconds. "
+            "Use that window densely: unless uninterrupted time genuinely serves the material, give each Scene several meaningful shots, cuts, or distinct visual beats rather than idle coverage. "
+            "Keep the Story's progression clear and preserve explicit facts and supplied invariants where they matter, but do not force every Scene to behave like a literal continuation of the previous render. "
+            "Entry and exit state are optional planning notes; include them only when a specific handoff or visible state is genuinely useful. "
+            "Write each Scene's complete H3 generation prompt yourself. WebCap will store that prompt as written and will not inject invariants, continuity blocks, field labels, shot labels, sound sections, or other creative text afterward. "
+            "Follow the supplied H3 guidance roughly rather than mechanically. Be concrete and visually productive, but avoid repetitive continuity prose and unnecessary boilerplate. "
             "Return only JSON matching the supplied schema."
         )
         return {
@@ -399,14 +408,12 @@ def build_request(story, scene_id, operation, instruction=""):
         blocks.append("[CURRENT SCENE PLAN]\n" + json.dumps(scene_plan, indent=2, ensure_ascii=False))
         blocks.append(
             "[USER REPAIR INSTRUCTION]\n" + correction
-            + "\n\n[CURRENT TASK]\nApply the user's repair instruction to the whole current Scene plan. Treat the instruction as authoritative: "
-            "if it asks to change who or what appears, an action, framing, setting detail, continuity, or another existing Scene detail, make the requested change even when that requires substantial rewriting inside affected Scenes. "
-            "This is a targeted repair pass, not Story redevelopment. Keep the exact Scene count, order, titles, durations, references, LoRAs, and seeds. "
-            "Do not add, remove, merge, split, or reorder Scenes. Preserve unaffected Scenes and fields rather than rewriting them for style or variety. "
-            "Return every field patch needed to fully satisfy the instruction, and no unrelated changes. Allowed fields are summary, entryState, exitState, and prompt. "
-            "Use the 1-based sceneNumber values supplied above; never invent or return WebCap IDs, and return each Scene at most once. "
-            "If a generation prompt needs repair, return complete semantic H3 prompt content in fields.prompt using the supplied three-field structure; "
-            "do not reproduce WebCap's app-owned Continuity anchors prefix or final field labels. WebCap will render those itself. "
+            + "\n\n[CURRENT TASK]\nApply the user's instruction to the current Scene plan. "
+            "This is a targeted revision pass, not Story redevelopment. Preserve unaffected Scenes and fields. "
+            "Do not add, remove, merge, split, or reorder Scenes unless the user's instruction explicitly asks for that; this operation currently applies sparse patches to the existing Scene list. "
+            "Return only the Scene fields that actually need changing: summary, optional entryState/exitState, and/or the complete revised H3 prompt string. "
+            "When changing a prompt, author the complete prompt exactly as it should be stored; WebCap will not rebuild it, inject continuity text, or add H3 field labels. "
+            "Use the 1-based sceneNumber values supplied above and return each Scene at most once. "
             "If the instruction does not require any repair, return {\"changes\":[]}."
         )
         return {
@@ -424,55 +431,37 @@ def build_request(story, scene_id, operation, instruction=""):
 
     style = _clean(story.get("style"))
     story_invariants = _story_invariants_text(story)
-    scene_invariants = _scene_invariants_text(story, scene)
     scene_context = _scene_context(scene)
-    shared_context = _scene_shared_context_text(story, scene)
-    previous_handoff = _previous_handoff(story, scene_id)
-    previous_scene_context = _previous_scene_context(story, scene_id)
     h3_mode = mode_from_reference_roles(_reference_roles(scene))
-    h3_output = final_shape(h3_mode, scene.get("durationSeconds"))
 
     blocks = [
         "[DIRECTOR CONTEXT]\n" + director_context,
     ]
+    concept = _clean(story.get("concept"))
+    if concept:
+        blocks.append("[STORY CONCEPT / OVERVIEW]\n" + concept)
     if style:
         blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
-    if scene_invariants:
+    if story_invariants:
         blocks.append(
-            "[SCENE INVARIANTS]\n"
-            + scene_invariants
-            + "\n\nThese are the authoritative character/location definitions relevant to this Scene. WebCap will inject them verbatim into the rendered H3 prompt after your response. Use them when writing the Scene action, but do not rewrite, paraphrase, or duplicate them in your structured fields."
-        )
-    elif story_invariants:
-        blocks.append("[STORY INVARIANTS]\n" + story_invariants)
-    if shared_context:
-        blocks.append(
-            "[SHARED CONTINUITY FOR THIS SCENE]\n"
-            + shared_context
-            + "\n\nThese legacy shared definitions are authoritative. WebCap will inject them verbatim into the rendered H3 prompt after your response. Use them when writing the Scene action, but do not rewrite, paraphrase, or duplicate the app-owned continuity block in your structured fields."
+            "[STORY INVARIANTS]\n"
+            + story_invariants
+            + "\n\nUse these as context where relevant. Do not mechanically repeat them or turn them into a continuity preamble."
         )
     if scene_context:
         blocks.append("[SCENE]\n" + scene_context)
-    if previous_handoff and not _clean(scene.get("entryState")):
-        blocks.append("[PREVIOUS SCENE HANDOFF]\nPrevious exit state: " + previous_handoff)
+    blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+    blocks.append("[REFERENCE MODE]\n" + h3_mode)
 
     if operation == "write_prompt":
         if not _clean(scene.get("summary")):
             raise ValueError("Scene summary / intent is required to write a prompt.")
         blocks.append(
-            "[H3 WRITING RULES]\n" + h3_runtime_context
-        )
-        blocks.append(
-            "[H3 MODE]\n" + h3_mode
-        )
-        blocks.append(
-            "[H3 OUTPUT CONTRACT]\n"
-            + h3_output
-            + "\n\nWebCap owns the final labels, alignment syntax, and shared continuity prefix. Do not reproduce any app-owned 'Continuity anchors' prefix yourself. Return only the three semantic field values through the supplied JSON schema."
-        )
-        blocks.append(
-            "[CURRENT TASK]\nWrite the MiniMax H3 prompt for this Scene. "
-            "Preserve supplied facts. Do not add unrelated Story events, dialogue, text, characters, props, or music."
+            "[CURRENT TASK]\nWrite the complete MiniMax H3 generation prompt for this Scene. "
+            "Use the short duration densely: several meaningful cuts, shots, or visual beats are normally expected unless uninterrupted time genuinely serves the material. "
+            "Preserve explicit Story facts and use relevant invariants naturally, without repeating a continuity block. "
+            "Return the prompt exactly as it should be stored. WebCap will not rewrite it. "
+            "If an exact first/last-frame reference is attached, respect that visual anchor; WebCap will add only the required mechanical alignment statement."
         )
     else:
         existing_prompt = _clean(scene.get("prompt"))
@@ -481,51 +470,22 @@ def build_request(story, scene_id, operation, instruction=""):
             raise ValueError("Scene generation prompt is required to refine a prompt.")
         if not correction:
             raise ValueError("A refinement instruction is required.")
-        concept = _clean(story.get("concept"))
-        if concept:
-            blocks.append("[STORY CONCEPT / OVERVIEW]\n" + concept)
+        previous_scene_context = _previous_scene_context(story, scene_id)
         if previous_scene_context:
             blocks.append(
                 "[PREVIOUS SCENE - CONTEXT ONLY]\n"
                 + previous_scene_context
-                + "\n\nUse this only to understand what immediately precedes the current Scene. Do not modify or repeat the previous Scene."
+                + "\n\nUse this only when it genuinely helps the requested revision. Do not force a continuity handoff."
             )
         blocks.append("[EXISTING PROMPT]\n" + existing_prompt)
         blocks.append(
-            "[H3 WRITING RULES]\n" + h3_runtime_context
-        )
-        blocks.append(
-            "[H3 MODE]\n" + h3_mode
-        )
-        blocks.append(
-            "[H3 OUTPUT CONTRACT]\n"
-            + h3_output
-            + "\n\nPreserve all prompt details unrelated to the requested correction, except do not reproduce the app-owned 'Continuity anchors' prefix from the existing prompt. WebCap will restore the authoritative shared continuity block after your response. If the correction does not apply to this Scene, return changed=false, reproduce the three existing prompt semantic fields unchanged, and omit optional Scene fields. If it does apply, return changed=true, all three revised prompt semantic field values, plus only any optional Scene fields the correction actually requires. WebCap owns the final labels and alignment syntax."
-        )
-        blocks.append(
             "[CURRENT TASK]\nApply the requested correction faithfully to this Scene:\n"
             + correction
-            + "\n\nMake the changes needed to satisfy the instruction while maintaining the Scene's intended action, chronology, and forward progression. "
-            "When the instruction itself calls for changing that progression, carry out that change directly. "
-            "You may revise the Scene summary / intent, entry state, or exit state when the correction requires it; "
-            "otherwise omit those fields and preserve them exactly. Revise the generation prompt only as much as needed to keep it coherent with any Scene-field change. "
-            "If the requested change materially changes how much screen time this Scene needs, "
-            "include a revised durationSeconds between 6 and 15 seconds, normally aiming for about 10 seconds unless the Scene clearly benefits from more time. "
-            "Otherwise omit durationSeconds and keep the current duration unchanged."
+            + "\n\nReturn changed=false and reproduce the existing prompt unchanged when no edit is needed. "
+            "Otherwise return the complete revised prompt exactly as it should be stored, plus only any optional Scene fields the correction actually requires. "
+            "Preserve unrelated prompt details. Keep the Scene visually dense unless the requested change or material genuinely calls for uninterrupted time. "
+            "If the change materially alters the needed screen time, you may include durationSeconds between 6 and 15 seconds."
         )
-
-    result_renderer = {
-        "type": "h3_base",
-        "mode": h3_mode,
-        "duration": scene.get("durationSeconds"),
-        "shared_context": "\n".join(
-            part for part in (scene_invariants, shared_context) if part
-        ),
-    }
-    if operation == "refine_prompt":
-        result_renderer["duration_field"] = "durationSeconds"
-        result_renderer["allow_unchanged"] = True
-        result_renderer["existing_prompt"] = existing_prompt
 
     return {
         "operation": operation,
@@ -536,5 +496,4 @@ def build_request(story, scene_id, operation, instruction=""):
             allow_scene_fields=operation == "refine_prompt",
             allow_unchanged=operation == "refine_prompt",
         ),
-        "result_renderer": result_renderer,
     }

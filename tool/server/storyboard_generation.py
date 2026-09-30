@@ -23,7 +23,6 @@ from .storyboard_store import (
     load_story,
     resolve_scene_generation_defaults,
     resolve_scene_loras,
-    resolve_scene_shared_context,
     storyboard_root,
 )
 
@@ -79,11 +78,7 @@ def _scene_settings(scene, story=None):
     source_prompt = str(scene.get("prompt") or "").strip()
     if not source_prompt:
         raise ValueError("Scene generation prompt is empty.")
-    shared_context = resolve_scene_shared_context(story or {}, scene)
     prompt = source_prompt
-    if shared_context:
-        from .h3_prompt_contract import inject_shared_context_into_rendered_prompt
-        prompt = inject_shared_context_into_rendered_prompt(source_prompt, shared_context)
 
     resolved_defaults = resolve_scene_generation_defaults(story or {}, scene)
     aspect_ratio = resolved_defaults["aspectRatio"]
@@ -110,7 +105,6 @@ def _scene_settings(scene, story=None):
         "entryState": str(scene.get("entryState") or ""),
         "exitState": str(scene.get("exitState") or ""),
         "sourcePrompt": source_prompt,
-        "sharedContext": shared_context,
         "aspectRatio": aspect_ratio,
         "megapixels": megapixels,
         "duration": duration,
@@ -140,6 +134,7 @@ def _storyboard_request(settings):
     prompt = str(settings.get("prompt") or "").strip()
 
     references = {}
+    reference_roles = []
     for reference in settings.get("references") or []:
         if not isinstance(reference, dict):
             continue
@@ -153,6 +148,16 @@ def _storyboard_request(settings):
         media_path = str(reference.get("mediaPath") or "").strip()
         if media_path:
             references[role] = media_path
+            reference_roles.append(role)
+
+    if reference_roles:
+        from .h3_prompt_contract import alignment_line, mode_from_reference_roles
+        preamble = alignment_line(
+            mode_from_reference_roles(reference_roles),
+            settings["duration"],
+        )
+        if preamble:
+            prompt = preamble + "\n\n" + prompt
 
     return {
         "modelId": "minimax_h3",

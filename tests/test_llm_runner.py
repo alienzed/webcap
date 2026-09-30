@@ -579,6 +579,7 @@ def test_storyboard_develop_rejects_changed_story_inputs_before_replacing_scenes
     assert stored["scenes"][original_scene["id"]]["title"] == "Original Scene"
 
 
+
 def test_storyboard_scene_refine_rejects_changed_duration_instead_of_overwriting_it(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story", "style": "Grounded."})
     story, scene = storyboard_store.add_scene(story["id"], {
@@ -595,14 +596,8 @@ def test_storyboard_scene_refine_rejects_changed_duration_instead_of_overwriting
     def run_and_change_duration(*_args, **_kwargs):
         storyboard_store.update_scene(story["id"], scene["id"], {"durationSeconds": 14})
         return {
-            "text": "Refined prompt.",
-            "data": {
-                "integrated_multimodal_description": "Refined prompt.",
-                "soundscape": "",
-                "music": "",
-                "durationSeconds": 12,
-            },
-            "durationOverride": 12,
+            "text": '{"changed":true,"prompt":"Refined prompt.","durationSeconds":12}',
+            "data": {"changed": True, "prompt": "Refined prompt.", "durationSeconds": 12},
             "model": "qwen",
             "usage": None,
             "timings": None,
@@ -659,9 +654,8 @@ def test_storyboard_scene_refine_no_change_does_not_mutate_scene(llm_root, monke
         storyboard_llm_runtime,
         "run_contract",
         lambda *_args, **_kwargs: {
-            "text": before["prompt"],
-            "data": {"changed": False},
-            "noChange": True,
+            "text": '{"changed":false,"prompt":"Original prompt stays exactly as written."}',
+            "data": {"changed": False, "prompt": "Original prompt stays exactly as written."},
             "model": "qwen",
             "usage": None,
             "timings": None,
@@ -685,7 +679,6 @@ def test_storyboard_scene_refine_no_change_does_not_mutate_scene(llm_root, monke
     after = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
     assert finished["status"] == "completed"
     assert after == before
-
 
 def test_storyboard_llm_job_applies_expanded_concept_before_completion(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story", "concept": "Short concept."})
@@ -768,6 +761,7 @@ def test_storyboard_define_invariants_appends_only_missing_character_and_locatio
     ]
 
 
+
 def test_storyboard_scene_prompt_job_writes_only_its_target_on_backend(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story"})
     story, first = storyboard_store.add_scene(story["id"], {
@@ -783,7 +777,8 @@ def test_storyboard_scene_prompt_job_writes_only_its_target_on_backend(llm_root,
         storyboard_llm_runtime,
         "run_contract",
         lambda *_args, **_kwargs: {
-            "text": "New first prompt.",
+            "text": '{"prompt":"New first prompt."}',
+            "data": {"prompt": "New first prompt."},
             "model": "qwen",
             "usage": None,
             "timings": None,
@@ -793,7 +788,7 @@ def test_storyboard_scene_prompt_job_writes_only_its_target_on_backend(llm_root,
     job = llm_runner.enqueue(
         "storyboard",
         "qwen",
-        {"operation": "write_prompt", "prompt": "Write.", "output": "text"},
+        {"operation": "write_prompt", "prompt": "Write.", "output": "json"},
         context={
             "storyId": story["id"],
             "sceneId": first["id"],
@@ -807,9 +802,7 @@ def test_storyboard_scene_prompt_job_writes_only_its_target_on_backend(llm_root,
     assert finished["status"] == "completed"
     assert stored["scenes"][first["id"]]["prompt"] == "New first prompt."
     assert stored["scenes"][first["id"]]["previousPrompt"] == "Old first prompt."
-    assert stored["scenes"][first["id"]]["promptDirectorJobId"] == job["jobId"]
     assert stored["scenes"][second["id"]]["prompt"] == "Second prompt stays untouched."
-
 
 def test_storyboard_director_work_is_not_refused_at_enqueue(llm_root):
     story_a = storyboard_store.create_story({"title": "A"})
@@ -857,6 +850,7 @@ def test_storyboard_director_work_is_not_refused_at_enqueue(llm_root):
     assert llm_runner.storyboard_target_busy(story_a["id"], "concept") is False
 
 
+
 def test_storyboard_ingest_failure_is_distinguished_from_model_failure(llm_root, monkeypatch):
     story = storyboard_store.create_story({
         "title": "Story",
@@ -872,18 +866,11 @@ def test_storyboard_ingest_failure_is_distinguished_from_model_failure(llm_root,
                 "scenes": [{
                     "title": "Lobby",
                     "summary": "She crosses the lobby.",
-                    "entryState": "At the door.",
-                    "exitState": "At the desk.",
-                    "prompt": {
-                        "integrated_multimodal_description": "She crosses the lobby.",
-                        "overall_soundscape": "Footsteps.",
-                        "non_diegetic_music": "N/A",
-                    },
+                    "prompt": "She crosses the lobby in several quick cuts.",
                     "suggestedDurationSeconds": 20,
-                    "continuity": {"continuesPreviousScene": False, "carryForward": []},
                 }],
             },
-            "text": "{\"scenes\":[{\"title\":\"Lobby\"}]}",
+            "text": "{}",
             "model": "qwen",
             "usage": None,
             "timings": None,
@@ -900,13 +887,11 @@ def test_storyboard_ingest_failure_is_distinguished_from_model_failure(llm_root,
 
     finished = llm_runner.job_status(job["jobId"])
     assert finished["status"] == "failed"
-    assert finished["error"].startswith(
-        "WebCap ingest failed after a successful model response:"
-    )
-    assert "duration must be between 4 and 15 seconds" in finished["error"]
+    assert finished["error"].startswith("WebCap ingest failed after a successful model response:")
+    assert "duration must be between 6 and 15 seconds" in finished["error"]
 
 
-def test_storyboard_optional_shared_context_cannot_block_scene_ingest(llm_root, monkeypatch):
+def test_storyboard_develop_accepts_minimal_scene_without_continuity_metadata(llm_root, monkeypatch):
     story = storyboard_store.create_story({
         "title": "Story",
         "concept": "Elena enters a lobby.",
@@ -918,33 +903,14 @@ def test_storyboard_optional_shared_context_cannot_block_scene_ingest(llm_root, 
         "run_contract",
         lambda *_args, **_kwargs: {
             "data": {
-                "sharedContext": {
-                    "subjects": [
-                        {"id": "character:elena", "label": "Elena", "description": "Dark shoulder-length hair."},
-                        {"id": "elena", "label": "Elena duplicate", "description": "Same woman."},
-                    ],
-                    "wardrobes": [
-                        {"id": "elena", "label": "Elena wardrobe", "description": "Black wool coat."},
-                    ],
-                    "locations": [],
-                    "persistentFacts": [],
-                },
                 "scenes": [{
                     "title": "Lobby",
                     "summary": "Elena crosses the lobby.",
-                    "entryState": "At the door.",
-                    "exitState": "At the desk.",
-                    "prompt": {
-                        "integrated_multimodal_description": "Elena crosses the lobby.",
-                        "overall_soundscape": "Footsteps.",
-                        "non_diegetic_music": "N/A",
-                    },
-                    "sharedContextRefs": ["character:elena", "elena"],
-                    "suggestedDurationSeconds": 6,
-                    "continuity": {"continuesPreviousScene": False, "carryForward": []},
+                    "prompt": "Elena crosses the lobby in a dense three-shot sequence.",
+                    "suggestedDurationSeconds": 10,
                 }],
             },
-            "text": "{\"sharedContext\":{},\"scenes\":[{\"title\":\"Lobby\"}]}",
+            "text": "{}",
             "model": "qwen",
             "usage": None,
             "timings": None,
@@ -960,13 +926,12 @@ def test_storyboard_optional_shared_context_cannot_block_scene_ingest(llm_root, 
     llm_runner._advance_queue()
 
     finished = llm_runner.job_status(job["jobId"])
-    assert finished["status"] == "completed"
-    assert finished["result"]["sceneCount"] == 1
     saved = storyboard_store.load_story(story["id"])
     scene = saved["scenes"][saved["sceneOrder"][0]]
-    assert scene["title"] == "Lobby"
-    assert scene["sharedContextRefs"] == []
-
+    assert finished["status"] == "completed"
+    assert scene["prompt"] == "Elena crosses the lobby in a dense three-shot sequence."
+    assert scene["entryState"] == ""
+    assert scene["exitState"] == ""
 
 def test_storyboard_develop_result_refuses_to_replace_scene_with_active_take(llm_root, monkeypatch):
     story = storyboard_store.create_story({
@@ -1028,15 +993,17 @@ def test_storyboard_develop_result_refuses_to_replace_scene_with_active_take(llm
     assert storyboard_store.load_story(story["id"])["sceneOrder"] == []
 
 
-def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_root, monkeypatch):
+
+def test_storyboard_develop_stores_director_prompt_without_rendering(llm_root, monkeypatch):
     story = storyboard_store.create_story({
         "title": "Story",
         "concept": "Elena crosses a silent lobby.",
         "targetSceneCount": 1,
         "invariants": [
-            {"kind": "character", "title": "Elena", "text": "White woman in her early 30s with fair skin, hazel eyes, and shoulder-length dark brown wavy hair."},
+            {"kind": "character", "title": "Elena", "text": "Stable Elena description."},
         ],
     })
+    authored = "Wide entrance, hard cut to profile tracking, then a low angle as Elena reaches the desk."
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -1046,18 +1013,8 @@ def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_r
                 "scenes": [{
                     "title": "Lobby",
                     "summary": "She crosses the lobby.",
-                    "entryState": "She stands at the door.",
-                    "exitState": "She reaches the desk.",
-                    "prompt": {
-                        "integrated_multimodal_description": "Elena crosses the lobby toward the desk.",
-                        "overall_soundscape": "Soft footsteps and distant rain.",
-                        "non_diegetic_music": "N/A",
-                    },
-                    "invariantRefs": [
-                        {"kind": "character", "title": "Elena"},
-                    ],
-                    "suggestedDurationSeconds": 6,
-                    "continuity": {"continuesPreviousScene": False, "carryForward": []},
+                    "prompt": authored,
+                    "suggestedDurationSeconds": 10,
                 }]
             },
             "text": "{}",
@@ -1071,28 +1028,17 @@ def test_storyboard_develop_job_renders_structured_h3_prompts_before_store(llm_r
         "storyboard",
         "qwen",
         {"operation": "develop_story", "prompt": "Develop.", "output": "json"},
-        context={
-            "storyId": story["id"],
-            "operation": "develop_story",
-        },
+        context={"storyId": story["id"], "operation": "develop_story"},
     )
     llm_runner._advance_queue()
 
     finished = llm_runner.job_status(job["jobId"])
     stored = storyboard_store.load_story(story["id"])
-    prompt = stored["scenes"][stored["sceneOrder"][0]]["prompt"]
+    scene = stored["scenes"][stored["sceneOrder"][0]]
 
     assert finished["status"] == "completed"
-    assert prompt == (
-        "integrated_multimodal_description: [Shot 1] Continuity anchors — "
-        "Character Elena: White woman in her early 30s with fair skin, hazel eyes, and shoulder-length dark brown wavy hair. "
-        "Elena crosses the lobby toward the desk.\n\n"
-        "overall_soundscape: Soft footsteps and distant rain.\n\n"
-        "non_diegetic_music: N/A"
-    )
-    scene = stored["scenes"][stored["sceneOrder"][0]]
-    assert scene["invariantRefs"] == [{"kind": "character", "title": "Elena"}]
-
+    assert scene["prompt"] == authored
+    assert scene["invariantRefs"] == []
 
 def test_llm_restart_discards_all_outstanding_execution_state(llm_root):
     active = execution_queue.enqueue(
@@ -1119,25 +1065,22 @@ def test_llm_restart_discards_all_outstanding_execution_state(llm_root):
         llm_runner.job_status(queued["id"])
 
 
-def test_storyboard_scene_repair_renders_prompt_and_patches_only_returned_fields(llm_root, monkeypatch):
+
+def test_storyboard_scene_repair_stores_returned_prompt_without_rendering(llm_root, monkeypatch):
     story = storyboard_store.create_story({
         "title": "Story",
         "concept": "Elena attends a funeral.",
-        "invariants": [
-            {"kind": "character", "title": "Elena", "text": "White woman in her early 30s with hazel eyes and dark brown hair."},
-        ],
+        "invariants": [{"kind": "character", "title": "Elena", "text": "Stable Elena description."}],
     })
     story, scene = storyboard_store.add_scene(story["id"], {
         "title": "Funeral",
         "summary": "Elena stands by the grave.",
-        "entryState": "At the cemetery.",
-        "exitState": "She remains after the mourners leave.",
         "prompt": "OLD PROMPT",
-        "invariantRefs": [{"kind": "character", "title": "Elena"}],
-        "durationSeconds": 6,
+        "durationSeconds": 10,
     })
     base = {
         "storyContext": {
+            "title": story["title"],
             "concept": story["concept"],
             "style": story["style"],
             "invariants": story["invariants"],
@@ -1152,27 +1095,17 @@ def test_storyboard_scene_repair_renders_prompt_and_patches_only_returned_fields
                 "prompt": scene["prompt"],
                 "durationSeconds": scene["durationSeconds"],
                 "referenceRoles": [],
-                "invariantRefs": scene["invariantRefs"],
+                "invariantRefs": [],
             }
         },
     }
+    authored = "Wide observational shot, cut to hands at the flowers, then pull back as mourners leave."
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_contract",
         lambda *_args, **_kwargs: {
-            "data": {
-                "changes": [{
-                    "sceneNumber": 1,
-                    "fields": {
-                        "prompt": {
-                            "integrated_multimodal_description": "A wide observational view keeps Elena small beside the grave.",
-                            "overall_soundscape": "Wind in trees and distant footsteps.",
-                            "non_diegetic_music": "N/A",
-                        }
-                    },
-                }]
-            },
+            "data": {"changes": [{"sceneNumber": 1, "fields": {"prompt": authored}}]},
             "text": "{}",
             "model": "qwen",
             "usage": None,
@@ -1184,26 +1117,16 @@ def test_storyboard_scene_repair_renders_prompt_and_patches_only_returned_fields
         "storyboard",
         "qwen",
         {"operation": "repair_scenes", "prompt": "Heal.", "output": "json"},
-        context={
-            "storyId": story["id"],
-            "operation": "repair_scenes",
-            "repairBase": base,
-        },
+        context={"storyId": story["id"], "operation": "repair_scenes", "repairBase": base},
     )
     llm_runner._advance_queue()
 
     finished = llm_runner.job_status(job["jobId"])
-    stored = storyboard_store.load_story(story["id"])
-    repaired = stored["scenes"][scene["id"]]
+    repaired = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
 
     assert finished["status"] == "completed"
-    assert finished["result"]["changedSceneCount"] == 1
-    assert repaired["title"] == "Funeral"
-    assert repaired["summary"] == "Elena stands by the grave."
-    assert "Continuity anchors — Character Elena:" in repaired["prompt"]
-    assert "wide observational view" in repaired["prompt"]
+    assert repaired["prompt"] == authored
     assert repaired["previousPrompt"] == "OLD PROMPT"
-
 
 def test_storyboard_scene_repair_does_not_refuse_other_director_enqueue(llm_root):
     story = storyboard_store.create_story({"title": "Story"})
@@ -1244,11 +1167,17 @@ def test_storyboard_scene_repair_does_not_refuse_other_director_enqueue(llm_root
     assert llm_runner.storyboard_target_busy(story["id"], "repair") is True
 
 
-def test_storyboard_scene_repair_discards_malformed_optional_prompt_patch(llm_root, monkeypatch):
+
+def test_storyboard_scene_repair_fails_loudly_on_malformed_prompt_patch(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {"summary": "Original.", "prompt": "Original prompt."})
     base = {
-        "storyContext": {"concept": "", "style": "", "invariants": []},
+        "storyContext": {
+            "title": story["title"],
+            "concept": story["concept"],
+            "style": story["style"],
+            "invariants": story["invariants"],
+        },
         "sceneOrder": [scene["id"]],
         "scenes": {
             scene["id"]: {
@@ -1268,15 +1197,7 @@ def test_storyboard_scene_repair_discards_malformed_optional_prompt_patch(llm_ro
         storyboard_llm_runtime,
         "run_contract",
         lambda *_args, **_kwargs: {
-            "data": {
-                "changes": [{
-                    "sceneNumber": 1,
-                    "fields": {
-                        "summary": "Valid summary repair.",
-                        "prompt": "MALFORMED RAW PROMPT MUST NOT BE APPLIED",
-                    },
-                }]
-            },
+            "data": {"changes": [{"sceneNumber": 1, "fields": {"prompt": {"bad": True}}}]},
             "text": "{}",
             "model": "qwen",
             "usage": None,
@@ -1294,10 +1215,9 @@ def test_storyboard_scene_repair_discards_malformed_optional_prompt_patch(llm_ro
 
     finished = llm_runner.job_status(job["jobId"])
     stored = storyboard_store.load_story(story["id"])
-    assert finished["status"] == "completed"
-    assert stored["scenes"][scene["id"]]["summary"] == "Valid summary repair."
+    assert finished["status"] == "failed"
+    assert "must be text" in finished["error"]
     assert stored["scenes"][scene["id"]]["prompt"] == "Original prompt."
-
 
 def test_llm_snapshot_explains_inference_gpu_blocker(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)

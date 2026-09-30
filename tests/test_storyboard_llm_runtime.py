@@ -79,6 +79,24 @@ def test_completion_result_rejects_token_limit_truncation():
         storyboard_llm_runtime._completion_result(response, "director")
 
 
+def test_completion_result_can_return_partial_text_for_freeform_chat():
+    response = {
+        "choices": [{
+            "message": {"content": "Useful partial answer"},
+            "finish_reason": "length",
+        }]
+    }
+
+    result = storyboard_llm_runtime._completion_result(
+        response,
+        "director",
+        allow_truncated=True,
+    )
+
+    assert result["text"].startswith("Useful partial answer")
+    assert "[Output truncated by model/runtime token or context limit.]" in result["text"]
+
+
 def test_normalize_models_exposes_local_gguf_identity_and_status():
     payload = {
         "data": [

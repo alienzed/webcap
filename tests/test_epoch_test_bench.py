@@ -627,7 +627,11 @@ def test_activity_snapshot_projects_shared_test_session(tmp_path, monkeypatch):
         "status": "running",
         "completed": 0,
         "total": 1,
+        "ownerAvailable": True,
     }]
+
+    set_folder.rename(tmp_path / "moved-HH4013")
+    assert bench.activity_snapshot()["active"][0]["ownerAvailable"] is False
 
 
 def test_remove_staged_candidate_is_independent_of_other_active_inference(tmp_path, monkeypatch):
@@ -1535,9 +1539,12 @@ def test_recent_test_sources_are_derived_from_central_session_metadata(tmp_path,
     assert recent[0]["sessionCount"] == 1
     assert recent[0]["ownerAvailable"] is False
 
-    (tmp_path / "sets" / "swimwear").mkdir(parents=True)
-    monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
+    owner = tmp_path / "sets" / "swimwear"
+    owner.mkdir(parents=True)
     assert bench.recent_test_sets()[0]["ownerAvailable"] is True
+
+    owner.rmdir()
+    assert bench.recent_test_sets()[0]["ownerAvailable"] is False
 
 
 def test_direct_test_source_lora_is_read_only_without_webcap_provenance(tmp_path, monkeypatch):

@@ -5,26 +5,30 @@ import threading
 import time
 
 from .execution_queue import (
-    cancel_pending_transient as execution_cancel_pending_transient,
-    clear_lane as execution_clear_lane,
-    consume_terminal_job as execution_consume_terminal_job,
-    claim_next as execution_claim_next,
-    enqueue as execution_enqueue,
-    finish_job_transient as execution_finish_job_transient,
-    get_job as execution_get_job,
-    lane_snapshot as execution_lane_snapshot,
-    mark_running as execution_mark_running,
-    pause_lane as execution_pause_lane,
-    transient_receipt as execution_transient_receipt,
-    reorder_job as execution_reorder_job,
-    request_stop as execution_request_stop,
+    discard_persisted_lane as execution_discard_persisted_lane,
+    ephemeral_lane as execution_ephemeral_lane,
     resource_owner as execution_resource_owner,
-    resume_lane as execution_resume_lane,
+    transient_receipt as execution_transient_receipt,
 )
 
 
 EXECUTION_LANE = "llm"
 GPU_RESERVATION_OWNER = EXECUTION_LANE
+_execution_queue = execution_ephemeral_lane(EXECUTION_LANE)
+
+execution_cancel_pending_transient = _execution_queue.cancel_pending_transient
+execution_clear_lane = _execution_queue.clear
+execution_consume_terminal_job = _execution_queue.consume_terminal_job
+execution_claim_next = _execution_queue.claim_next
+execution_enqueue = _execution_queue.enqueue
+execution_finish_job_transient = _execution_queue.finish_job_transient
+execution_get_job = _execution_queue.get_job
+execution_lane_snapshot = _execution_queue.lane_snapshot
+execution_mark_running = _execution_queue.mark_running
+execution_pause_lane = _execution_queue.pause_lane
+execution_reorder_job = _execution_queue.reorder_job
+execution_request_stop = _execution_queue.request_stop
+execution_resume_lane = _execution_queue.resume_lane
 
 _dispatch_lock = threading.Lock()
 _enqueue_lock = threading.Lock()
@@ -96,7 +100,8 @@ def _ensure_execution_reconciled():
         # LLM requests are session work, not durable history or restartable
         # backlog. Successfully applied Story/prompt state already lives in its
         # real store; everything else is intentionally forgotten on restart.
-        execution_clear_lane(EXECUTION_LANE)
+        execution_discard_persisted_lane(EXECUTION_LANE)
+        execution_clear_lane()
         _startup_reconciled = True
 
 
@@ -702,7 +707,7 @@ def action(operation, job_id="", direction="", position=None):
         assert_stop_supported()
         stopping = current if status == "stopping" else execution_request_stop(job_id)
         stop_active_request()
-        # The worker may finish and remove the durable job while hard-stop is
+        # The worker may finish and remove the in-memory job while hard-stop is
         # synchronously shutting llama.cpp down. Return the stopping snapshot
         # captured before that race instead of re-reading a job that may already
         # be an in-memory terminal receipt.

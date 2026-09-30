@@ -9,7 +9,7 @@ HONOR THE CONCEPT'S CENTER OF GRAVITY.
 Spend the available screen time on what the concept is actually about. Setup, transitions, reactions, atmosphere, and aftermath should support that material rather than displace it.
 
 USE EACH GENERATION UNIT WELL.
-A Scene is one generation unit. Make it substantial enough to justify a render. Combine small related beats when they fit naturally; split material when a separate Scene improves clarity, pacing, or generatability. A Scene may contain several shots or one continuous shot.
+A Scene is one generation unit, normally about 10–15 seconds and never longer than 15 seconds. Make every render dense enough to earn its place in the sequence. Unless the material genuinely benefits from uninterrupted time—such as a sustained conversation or a deliberately continuous action—use several meaningful shots, cuts, or distinct visual beats inside the Scene. Favor brisk visual progression over idle coverage. Combine small related beats when they fit naturally; split material only when a separate generation unit improves clarity, pacing, or generatability.
 
 USE CONTINUITY AS CONTEXT, NOT A STRAITJACKET.
 Preserve explicit Story facts and important recurring visual details when they matter. Supplied invariants are useful context, not text that must be repeated mechanically. Independently generated Scenes will naturally vary, so do not waste prompt space trying to guarantee perfect visual continuity through repetition alone.

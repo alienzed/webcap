@@ -91,6 +91,28 @@
     label: 'Review Dataset',
     description: 'Read-only analysis of the current visible caption set.',
     placeholder: 'What should the review focus on?',
+    presets: [
+      {
+        label: 'Full review',
+        title: 'Review the visible caption set across all useful corpus-level signals',
+        instruction: 'Give me a concise full review.'
+      },
+      {
+        label: 'Consistency',
+        title: 'Focus on naming drift, contradictions, terminology, and descriptive consistency',
+        instruction: 'Focus on consistency: subject and identity wording, recurring attributes, terminology drift, contradictions, and inconsistent descriptive granularity.'
+      },
+      {
+        label: 'Balance',
+        title: 'Focus on meaningful coverage and balance skews in recurring caption concepts',
+        instruction: 'Focus on coverage and balance: identify meaningful skews in recurring concepts that are actually present in the captions. Do not invent desired categories.'
+      },
+      {
+        label: 'Outliers',
+        title: 'Focus on unusual captions, repetition, missing captions, and annotation hygiene',
+        instruction: 'Focus on outliers and annotation hygiene: repeated or template-like captions, copy/paste residue, suspicious one-off wording, missing captions, and unusually sparse or verbose captions.'
+      }
+    ],
     available: function () {
       return !document.getElementById('review-output-surface').classList.contains('hidden');
     },

@@ -166,6 +166,19 @@
                     </svg>
                 </button>
                 <button
+                    id="shell-diagnostics-btn"
+                    type="button"
+                    class="activity-rail-btn"
+                    title="Diagnostics"
+                    aria-label="Diagnostics"
+                    aria-haspopup="dialog"
+                    aria-controls="diagnostics-modal"
+                >
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M14.7 6.3a4 4 0 0 0-5 5L4 17l3 3 5.7-5.7a4 4 0 0 0 5-5l-2.2 2.2-3-3z"></path>
+                    </svg>
+                </button>
+                <button
                     id="shell-settings-btn"
                     type="button"
                     class="activity-rail-btn"
@@ -1651,7 +1664,7 @@
                 <div class="app-settings-header">
                     <div class="app-settings-title-wrap">
                         <strong>App Settings</strong>
-                        <div class="app-settings-subtitle">Application, model, training, testing, Director, and system configuration.</div>
+                        <div class="app-settings-subtitle">Application, model, training, testing, and Director configuration.</div>
                     </div>
                     <button id="app-settings-close-btn" type="button" title="Close" aria-label="Close app settings">×</button>
                 </div>
@@ -1661,7 +1674,7 @@
                     <button id="app-settings-tab-training" type="button" class="app-settings-tab" data-app-settings-tab="training" role="tab" aria-selected="false" aria-controls="app-settings-panel-training" tabindex="-1">Training</button>
                     <button id="app-settings-tab-testing" type="button" class="app-settings-tab" data-app-settings-tab="testing" role="tab" aria-selected="false" aria-controls="app-settings-panel-testing" tabindex="-1">Testing</button>
                     <button id="app-settings-tab-director" type="button" class="app-settings-tab" data-app-settings-tab="director" role="tab" aria-selected="false" aria-controls="app-settings-panel-director" tabindex="-1">Director</button>
-                    <button id="app-settings-tab-system" type="button" class="app-settings-tab" data-app-settings-tab="system" role="tab" aria-selected="false" aria-controls="app-settings-panel-system" tabindex="-1">System</button>
+                    <button id="app-settings-tab-system" type="button" class="app-settings-tab" data-app-settings-tab="system" role="tab" aria-selected="false" aria-controls="app-settings-panel-system" tabindex="-1">Advanced</button>
                 </div>
                 <div class="app-settings-tab-panels">
                     <div id="app-settings-panel-general" class="app-settings-panel" data-app-settings-panel="general" role="tabpanel" aria-labelledby="app-settings-tab-general">
@@ -1776,19 +1789,6 @@
                                 </label>
                             </div>
                         </details>
-                        <details class="app-settings-advanced app-settings-section-disclosure" id="h3-calibration-settings">
-                            <summary>Hardware Calibration</summary>
-                            <div class="app-settings-disclosure-body">
-                                <p class="app-settings-help">Test H3 video buckets on this training hardware. Calibration can approach OOM; concurrent GPU work makes results unreliable.</p>
-                                <div id="h3-calibration-summary" class="app-settings-help">Loading calibration status…</div>
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Calibration Source From Current Folder</span><select id="h3-calibration-source"></select></label>
-                                <div class="app-settings-actions app-settings-actions-inline"><button id="h3-calibration-run-btn" type="button">Run Calibration</button><button id="h3-calibration-stop-btn" type="button" class="hidden">Stop</button><button id="h3-calibration-reset-btn" type="button" class="hidden">Reset Calibration</button><button id="h3-calibration-console-btn" type="button">Show Console</button></div>
-                                <details class="app-settings-advanced">
-                                    <summary>Calibration Results</summary>
-                                    <div id="h3-calibration-results"><p class="app-settings-help">No saved calibration results.</p></div>
-                                </details>
-                            </div>
-                        </details>
                         <details class="app-settings-advanced app-settings-section-disclosure">
                             <summary>Troubleshooting</summary>
                             <div class="app-settings-disclosure-body">
@@ -1867,61 +1867,9 @@
                             <p class="app-settings-help">Local models come from <code>&lt;Models Root&gt;/text_encoders</code>; each enabled remote contributes models from its <code>/models</code> API. Director model selection is shared globally across Director-enabled workspaces.</p>
                             <p class="app-settings-help">Use <strong>Save + Reboot</strong> after changing Director runtime settings.</p>
                         </section>
-                        <details class="app-settings-advanced app-settings-section-disclosure" id="director-model-test-settings">
-                            <summary>Model Test <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></summary>
-                            <div class="app-settings-disclosure-body">
-                                <p class="app-settings-help">Run one fixed expansion protocol sequentially across selected Director models. Results are saved after every model; no quality score is inferred.</p>
-                                <div id="director-model-test-protocol" class="app-settings-help">Open to load the protocol and available models.</div>
-                                <label class="app-settings-field app-settings-field-wide">
-                                    <span class="app-settings-field-label">Benchmark Prompt</span>
-                                    <textarea id="director-model-test-prompt" rows="14" spellcheck="true"></textarea>
-                                    <span class="app-settings-note">The exact text is frozen into the saved session when the test starts.</span>
-                                </label>
-                                <div class="director-model-test-model-header">
-                                    <span class="app-settings-field-label">Models</span>
-                                    <div class="director-model-test-model-actions">
-                                        <button id="director-model-test-refresh" type="button" class="review-captions-btn">Refresh Models</button>
-                                        <button id="director-model-test-select-all" type="button" class="review-captions-btn">All</button>
-                                        <button id="director-model-test-select-none" type="button" class="review-captions-btn">None</button>
-                                    </div>
-                                </div>
-                                <div id="director-model-test-models" class="director-model-test-models"></div>
-                                <div class="app-settings-actions app-settings-actions-inline director-model-test-actions">
-                                    <button id="director-model-test-run" type="button">Run Selected</button>
-                                    <button id="director-model-test-stop" type="button" class="hidden">Stop</button>
-                                    <button id="director-model-test-export" type="button" class="review-captions-btn" disabled>Export JSON</button>
-                                </div>
-                                <div id="director-model-test-status" class="app-settings-status director-model-test-status" data-state="ready" aria-live="polite">Ready to run a Director model test.</div>
-                                <details class="app-settings-advanced">
-                                    <summary>Results</summary>
-                                    <div id="director-model-test-results" class="app-settings-disclosure-body"><p class="app-settings-help">No results yet.</p></div>
-                                </details>
-                                <details class="app-settings-advanced">
-                                    <summary>Saved Sessions</summary>
-                                    <div id="director-model-test-sessions" class="app-settings-disclosure-body"><p class="app-settings-help">No saved model tests yet.</p></div>
-                                </details>
-                            </div>
-                        </details>
                     </div>
 
                     <div id="app-settings-panel-system" class="app-settings-panel hidden" data-app-settings-panel="system" role="tabpanel" aria-labelledby="app-settings-tab-system">
-                        <section class="app-settings-section">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Environment</div>
-                                <div class="app-settings-section-copy">Check this WebCap installation and repair Python requirements when needed.</div>
-                            </div>
-                            <div class="app-settings-environment-actions">
-                                <button id="app-settings-environment-run-btn" type="button" class="review-captions-btn">Check Environment</button>
-                                <button id="app-settings-environment-install-btn" type="button" class="review-captions-btn">Install / Repair Python Requirements</button>
-                                <span id="app-settings-environment-summary" class="app-settings-environment-summary">Not checked yet.</span>
-                            </div>
-                            <details id="app-settings-environment-details" class="app-settings-advanced app-settings-section-disclosure">
-                                <summary>Environment Details</summary>
-                                <div class="app-settings-disclosure-body">
-                                    <div id="app-settings-environment-results" class="app-settings-environment-results hidden" aria-live="polite"></div>
-                                </div>
-                            </details>
-                        </section>
                         <details class="app-settings-advanced app-settings-section-disclosure">
                             <summary>Optional Features</summary>
                             <div class="app-settings-disclosure-body app-settings-form-grid">
@@ -1965,6 +1913,95 @@
                     <button id="app-settings-save-btn" type="button">Save</button>
                     <button id="app-settings-save-reload-btn" type="button">Save + Reboot</button>
                     <button id="app-settings-cancel-btn" type="button">Cancel</button>
+                </div>
+            </div>
+        </div>
+        <div id="diagnostics-modal" class="diagnostics-modal hidden" aria-hidden="true" data-escape-close-id="diagnostics-close-btn">
+            <div class="diagnostics-dialog" role="dialog" aria-modal="true" aria-labelledby="diagnostics-title">
+                <div class="diagnostics-header">
+                    <div class="app-settings-title-wrap">
+                        <strong id="diagnostics-title">Diagnostics</strong>
+                        <div class="app-settings-subtitle">Inspect, test, calibrate, and repair this WebCap installation without entering a core workspace.</div>
+                    </div>
+                    <button id="diagnostics-close-btn" type="button" title="Close" aria-label="Close diagnostics">×</button>
+                </div>
+                <div class="diagnostics-tabs" role="tablist" aria-label="Diagnostics sections">
+                    <button id="diagnostics-tab-health" type="button" class="diagnostics-tab active" data-diagnostics-tab="health" role="tab" aria-selected="true" aria-controls="diagnostics-panel-health">Health</button>
+                    <button id="diagnostics-tab-h3" type="button" class="diagnostics-tab" data-diagnostics-tab="h3" role="tab" aria-selected="false" aria-controls="diagnostics-panel-h3" tabindex="-1">H3 Calibration</button>
+                    <button id="diagnostics-tab-director" type="button" class="diagnostics-tab" data-diagnostics-tab="director" role="tab" aria-selected="false" aria-controls="diagnostics-panel-director" tabindex="-1">Director Model Test</button>
+                </div>
+                <div class="diagnostics-panels">
+                    <div id="diagnostics-panel-health" class="diagnostics-panel" data-diagnostics-panel="health" role="tabpanel" aria-labelledby="diagnostics-tab-health">
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Environment Health</div>
+                                <div class="app-settings-section-copy">Check Core, Training, Inference, Director, and optional-analysis readiness. Repair the WebCap Python environment only when a check identifies a requirements problem.</div>
+                            </div>
+                            <div class="app-settings-environment-actions">
+                                <button id="app-settings-environment-run-btn" type="button" class="review-captions-btn">Check Environment</button>
+                                <button id="app-settings-environment-install-btn" type="button" class="review-captions-btn">Install / Repair Python Requirements</button>
+                                <span id="app-settings-environment-summary" class="app-settings-environment-summary">Not checked yet.</span>
+                            </div>
+                            <details id="app-settings-environment-details" class="app-settings-advanced app-settings-section-disclosure">
+                                <summary>Environment Details</summary>
+                                <div class="app-settings-disclosure-body">
+                                    <div id="app-settings-environment-results" class="app-settings-environment-results hidden" aria-live="polite"></div>
+                                </div>
+                            </details>
+                        </section>
+                    </div>
+                    <div id="diagnostics-panel-h3" class="diagnostics-panel hidden" data-diagnostics-panel="h3" role="tabpanel" aria-labelledby="diagnostics-tab-h3" hidden>
+                        <section class="app-settings-section" id="h3-calibration-settings">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">H3 Hardware Calibration</div>
+                                <div class="app-settings-section-copy">Measure safe H3 video buckets on this training hardware. Calibration can approach OOM; concurrent GPU work makes results unreliable.</div>
+                            </div>
+                            <div id="h3-calibration-summary" class="app-settings-help">Loading calibration status…</div>
+                            <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Calibration Source From Current Folder</span><select id="h3-calibration-source"></select></label>
+                            <div class="app-settings-actions app-settings-actions-inline"><button id="h3-calibration-run-btn" type="button">Run Calibration</button><button id="h3-calibration-stop-btn" type="button" class="hidden">Stop</button><button id="h3-calibration-reset-btn" type="button" class="hidden">Reset Calibration</button><button id="h3-calibration-console-btn" type="button">Show Console</button></div>
+                            <details class="app-settings-advanced">
+                                <summary>Calibration Results</summary>
+                                <div id="h3-calibration-results"><p class="app-settings-help">No saved calibration results.</p></div>
+                            </details>
+                        </section>
+                    </div>
+                    <div id="diagnostics-panel-director" class="diagnostics-panel hidden" data-diagnostics-panel="director" role="tabpanel" aria-labelledby="diagnostics-tab-director" hidden>
+                        <section class="app-settings-section" id="director-model-test-settings">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Director Model Test <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
+                                <div class="app-settings-section-copy">Run one fixed expansion protocol sequentially across selected Director models. Results are saved after every model; no quality score is inferred.</div>
+                            </div>
+                            <div id="director-model-test-protocol" class="app-settings-help">Open this tab to load the protocol and available models.</div>
+                            <label class="app-settings-field app-settings-field-wide">
+                                <span class="app-settings-field-label">Benchmark Prompt</span>
+                                <textarea id="director-model-test-prompt" rows="14" spellcheck="true"></textarea>
+                                <span class="app-settings-note">The exact text is frozen into the saved session when the test starts.</span>
+                            </label>
+                            <div class="director-model-test-model-header">
+                                <span class="app-settings-field-label">Models</span>
+                                <div class="director-model-test-model-actions">
+                                    <button id="director-model-test-refresh" type="button" class="review-captions-btn">Refresh Models</button>
+                                    <button id="director-model-test-select-all" type="button" class="review-captions-btn">All</button>
+                                    <button id="director-model-test-select-none" type="button" class="review-captions-btn">None</button>
+                                </div>
+                            </div>
+                            <div id="director-model-test-models" class="director-model-test-models"></div>
+                            <div class="app-settings-actions app-settings-actions-inline director-model-test-actions">
+                                <button id="director-model-test-run" type="button">Run Selected</button>
+                                <button id="director-model-test-stop" type="button" class="hidden">Stop</button>
+                                <button id="director-model-test-export" type="button" class="review-captions-btn" disabled>Export JSON</button>
+                            </div>
+                            <div id="director-model-test-status" class="app-settings-status director-model-test-status" data-state="ready" aria-live="polite">Ready to run a Director model test.</div>
+                            <details class="app-settings-advanced">
+                                <summary>Results</summary>
+                                <div id="director-model-test-results" class="app-settings-disclosure-body"><p class="app-settings-help">No results yet.</p></div>
+                            </details>
+                            <details class="app-settings-advanced">
+                                <summary>Saved Sessions</summary>
+                                <div id="director-model-test-sessions" class="app-settings-disclosure-body"><p class="app-settings-help">No saved model tests yet.</p></div>
+                            </details>
+                        </section>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2138,6 +2175,7 @@
         <script src="/static/js/balance_distribution_wheel.js"></script>
         <script src="/static/js/h3_calibration_results.js"></script>
         <script src="/static/js/app_settings.js"></script>
+        <script src="/static/js/diagnostics.js"></script>
         <script src="/static/js/director_model_test.js"></script>
         <script src="/static/js/smart_set.js"></script>
         <script src="/static/js/media_context_actions.js"></script>

@@ -47,7 +47,6 @@ from .generate_generation import capabilities as generate_capabilities, prepare_
 from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
 from .test_wildcard_contract import build_request as test_wildcard_build_request
-from .review_assistant_contract import build_request as review_assistant_build_request
 from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, prepare_startup_backlog as prepare_inference_startup_backlog, snapshot as inference_snapshot, stop_storyboard_jobs
 from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot, storyboard_story_busy as llm_storyboard_story_busy, storyboard_target_busy as llm_storyboard_target_busy
 from .activity_monitor import activity_snapshot
@@ -960,63 +959,6 @@ def director_chat_route():
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:
         app.logger.exception("DIRECTOR CHAT FAILED: %s", exc)
-        return jsonify({"ok": False, "error": str(exc)}), 400
-
-
-@app.route("/fs/review/assistant", methods=["POST"])
-def review_assistant_route():
-    data = request.get_json(silent=True) or {}
-    try:
-        folder = str(data.get("folder") or "").strip()
-        if not folder:
-            raise ValueError("Review Dataset requires a Set folder.")
-
-        raw_files = data.get("files")
-        if not isinstance(raw_files, list) or not raw_files:
-            raise ValueError("Review Dataset requires at least one visible media file.")
-
-        requested_files = []
-        for value in raw_files:
-            file_name = str(value or "").strip()
-            if file_name and file_name not in requested_files:
-                requested_files.append(file_name)
-        if not requested_files:
-            raise ValueError("Review Dataset requires at least one visible media file.")
-
-        available_files = set(list_media_files(folder))
-        unknown_files = [file_name for file_name in requested_files if file_name not in available_files]
-        if unknown_files:
-            raise ValueError(
-                "Review Dataset scope contains media that is not in the current Set: "
-                + ", ".join(unknown_files[:10])
-            )
-
-        rows = [
-            {
-                "fileName": file_name,
-                "caption": str(load_caption_text(folder, file_name).get("caption") or ""),
-            }
-            for file_name in requested_files
-        ]
-        contract = review_assistant_build_request(
-            rows,
-            instruction=str(data.get("instruction") or "").strip(),
-        )
-        job = enqueue_llm(
-            "review",
-            str(data.get("directorModel") or "").strip(),
-            contract,
-            context={"folder": folder},
-            label="Review Dataset",
-        )
-        return jsonify({
-            "ok": True,
-            "itemCount": len(rows),
-            "captionCount": sum(1 for row in rows if str(row.get("caption") or "").strip()),
-            "job": job,
-        }), 202
-    except Exception as exc:
-        app.logger.exception("REVIEW DATASET ASSISTANT FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

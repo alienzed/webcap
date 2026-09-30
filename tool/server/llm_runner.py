@@ -151,23 +151,6 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
-    if client == "review":
-        operation = str((frozen_contract or {}).get("operation") or "").strip()
-        if operation != "analyze_caption_set":
-            raise RuntimeError("Unsupported Review Dataset LLM operation: " + (operation or "empty"))
-        from .review_assistant_contract import normalize_result, render_report
-        source_files = (frozen_contract or {}).get("source_files") or []
-        scope = copy.deepcopy((frozen_contract or {}).get("scope") or {})
-        analysis = normalize_result(llm_result.get("data"), allowed_files=source_files)
-        return {
-            "text": render_report(analysis, scope=scope),
-            "analysis": analysis,
-            "scope": scope,
-            "model": llm_result["model"],
-            "usage": llm_result.get("usage"),
-            "timings": llm_result.get("timings"),
-        }
-
     if client != "storyboard":
         raise RuntimeError("Unsupported LLM client: " + (client or "empty"))
 
@@ -613,7 +596,7 @@ def enqueue(client, model_id, contract, context=None, label=""):
     _ensure_execution_reconciled()
     client = str(client or "").strip()
     model_id = str(model_id or "").strip()
-    if client not in {"storyboard", "generate", "test", "review", "chat"}:
+    if client not in {"storyboard", "generate", "test", "chat"}:
         raise ValueError("Unsupported LLM client: " + (client or "empty"))
     if not model_id:
         raise ValueError("LLM model is required.")

@@ -40,7 +40,7 @@ class _TrainingQueueStateError(RuntimeError):
 
 
 def _cache_path():
-    return Path(app_config.FS_ROOT) / ".webcap" / CACHE_FILE
+    return app_config.app_cache_root() / CACHE_FILE
 
 
 def _read_cache():

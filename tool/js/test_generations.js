@@ -1026,6 +1026,30 @@
       : 'Test Generations is not available for the selected Base Model.';
   }
 
+  function syncCandidatesButton(payload) {
+    var button = el('test-generations-candidates-btn');
+    if (!button) return;
+    var runs = payload && Array.isArray(payload.candidateRuns) ? payload.candidateRuns : [];
+    var connected = runs.length === 1 && runs[0] && runs[0].jobId && runs[0].folder;
+    button.classList.toggle('hidden', !connected);
+    if (connected) {
+      button.dataset.candidateJobId = String(runs[0].jobId);
+      button.dataset.candidateFolder = String(runs[0].folder);
+    } else {
+      delete button.dataset.candidateJobId;
+      delete button.dataset.candidateFolder;
+    }
+  }
+
+  function refreshStagedFilesAfterCandidates() {
+    return request('test_prepare', { modelId: getWorkingModelProfileId() }).then(function (payload) {
+      prepared = payload;
+      renderStagedFiles(payload);
+      syncCandidatesButton(payload);
+      syncActiveRunControls(currentStatus);
+    });
+  }
+
   function stagedFileParts(fileName) {
     var name = String(fileName || '');
     var match = name.match(/^(.*)__epoch(\d+)\.safetensors$/i);
@@ -2970,6 +2994,7 @@
     }).then(function (payload) {
       if (!payload) return;
       prepared = payload;
+      syncCandidatesButton(payload);
       if (Array.isArray(payload.warnings)) {
         payload.warnings.forEach(function (warning) {
           if (String(warning || '').trim()) reportConsoleWarning('Test Generations', warning);
@@ -3212,6 +3237,18 @@
     };
     el('test-generations-view-compare-btn').onclick = function () {
       setResultsView('compare');
+    };
+    el('test-generations-candidates-btn').onclick = function () {
+      var button = this;
+      var jobId = String(button.dataset.candidateJobId || '');
+      var folder = String(button.dataset.candidateFolder || '');
+      if (!jobId || !folder) return;
+      if (typeof openTrainingCandidates !== 'function') throw new Error('Training Candidates is unavailable.');
+      openTrainingCandidates({ id: jobId, folder: folder }, {
+        onClose: function () {
+          refreshStagedFilesAfterCandidates().catch(showError);
+        }
+      });
     };
     el('test-generations-files').addEventListener('change', function (event) {
       var checkbox = event.target.closest('[data-candidate-select]');

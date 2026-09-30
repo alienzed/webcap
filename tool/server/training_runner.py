@@ -583,6 +583,14 @@ def _candidate_run_snapshot(folder, job_id):
         }
 
 
+def candidate_run_available(folder, job_id):
+    try:
+        candidate_run_folder_path(folder, job_id)
+        return True
+    except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
+        return False
+
+
 def candidate_run_folder_path(folder, job_id):
     """Resolve an existing recorded run directory without accepting a client path."""
     raw_run_path, _ = _candidate_run_snapshot(folder, job_id)

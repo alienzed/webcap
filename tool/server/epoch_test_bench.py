@@ -650,6 +650,21 @@ def _is_webcap_staged_lora(lora_file, model):
         return False
 
 
+def _staged_candidate_runs(lora_files, model):
+    runs = {}
+    for lora_file in lora_files:
+        if not _is_webcap_staged_lora(lora_file, model):
+            continue
+        provenance = _staged_lora_provenance(lora_file)
+        job_id = str(provenance.get("sourceJobId") or "").strip()
+        if job_id:
+            runs[job_id] = {
+                "jobId": job_id,
+                "folder": str(provenance.get("sourceFolder") or "").strip(),
+            }
+    return list(runs.values())
+
+
 def _deterministic_source_owner(model, source):
     try:
         directory = test_source_path(model.STAGING_KEY, str(source or "").strip())
@@ -759,6 +774,7 @@ def prepare(folder_path, model_id=None, source=None):
             path.name for path in loras
             if _is_webcap_staged_lora(path, model)
         ],
+        "candidateRuns": _staged_candidate_runs(loras, model),
         "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, source=selected_source),
         "sessions": list_sessions(folder_path, source=selected_source, model_id=model.PROFILE_ID),
         "latest": status(folder_path, model_id=model.PROFILE_ID, source=selected_source),

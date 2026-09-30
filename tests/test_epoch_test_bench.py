@@ -1647,3 +1647,34 @@ def test_legacy_test_migration_creates_inert_backlog(tmp_path, monkeypatch):
     assert jobs
     assert {job["status"] for job in jobs} == {"backlog"}
     assert inference_runner._monitor_has_work() is False
+
+
+def test_prepare_exposes_unique_training_run_provenance_for_staged_loras(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
+
+    first = staged / "run-03__epoch20.safetensors"
+    first.write_bytes(b"weights")
+    first.with_suffix(".webcap.json").write_text(json.dumps({
+        "version": 1,
+        "stage": bench.get_test_model().STAGING_KEY,
+        "sourceJobId": "job-03",
+        "sourceFolder": "sets/demo",
+        "sourceFileName": first.name,
+        "sourceEpoch": 20,
+    }), encoding="utf-8")
+
+    second = staged / "run-03__epoch25.safetensors"
+    second.write_bytes(b"weights")
+    second.with_suffix(".webcap.json").write_text(json.dumps({
+        "version": 1,
+        "stage": bench.get_test_model().STAGING_KEY,
+        "sourceJobId": "job-03",
+        "sourceFolder": "sets/demo",
+        "sourceFileName": second.name,
+        "sourceEpoch": 25,
+    }), encoding="utf-8")
+
+    payload = bench.prepare(tmp_path)
+    assert payload["candidateRuns"] == [{"jobId": "job-03", "folder": "sets/demo"}]

@@ -903,8 +903,19 @@ def _list_models_for_current_runtime(reload=False):
     discovery_timeout = 10 if settings.get("mode", "local") == "local" else 3
     models = _normalize_models(_http_json("/models" + suffix, timeout=discovery_timeout))
     if settings.get("mode", "local") == "local":
+        available_models = []
         for model in models:
-            model["sizeBytes"] = _model_file_size(model)
+            try:
+                model["sizeBytes"] = _model_file_size(model)
+            except OSError as exc:
+                _logger.info(
+                    "Skipping unavailable local Director model %s: %s",
+                    model.get("id") or model.get("label") or "unknown",
+                    exc,
+                )
+                continue
+            available_models.append(model)
+        models = available_models
     elif _remote_is_ollama(refresh=reload):
         try:
             sizes = _ollama_model_sizes()

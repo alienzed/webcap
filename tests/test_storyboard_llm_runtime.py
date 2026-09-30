@@ -214,6 +214,45 @@ def test_model_file_size_fails_loudly_when_stat_fails(monkeypatch, tmp_path):
     assert str(models_dir / "missing.gguf") in str(exc.value)
 
 
+def test_local_model_discovery_skips_removed_file_without_breaking_healthy_models(monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"mode": "local"},
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda *_args, **_kwargs: {
+            "data": [
+                {
+                    "id": "active",
+                    "path": "/models/active.gguf",
+                    "status": {"value": "loaded"},
+                },
+                {
+                    "id": "removed",
+                    "path": "/models/removed.gguf",
+                    "status": {"value": "unloaded"},
+                },
+            ]
+        },
+    )
+
+    def fake_size(model):
+        if model["id"] == "removed":
+            raise OSError("file disappeared")
+        return 4096
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_file_size", fake_size)
+
+    models = storyboard_llm_runtime._list_models_for_current_runtime(reload=True)
+
+    assert [model["id"] for model in models] == ["active"]
+    assert models[0]["sizeBytes"] == 4096
+
+
 def test_director_activity_completion_preserves_usage_timings_and_context():
     storyboard_llm_runtime._set_activity(
         "preparing",

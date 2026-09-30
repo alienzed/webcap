@@ -476,19 +476,23 @@ def test_shell_initialization_has_no_reparent_or_rebuild_fossils():
     assert "style.display" not in console
 
 
-def test_shell_immersive_mode_is_shell_owned_and_escape_exits():
+def test_shell_immersive_mode_is_f11_only_and_does_not_block_browser_fullscreen():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
-    assert 'id="shell-immersive-btn"' in html
-    assert 'id="shell-immersive-exit-btn"' in html
+    assert 'id="shell-immersive-btn"' not in html
+    assert 'id="shell-immersive-exit-btn"' not in html
     assert "function setShellImmersive(nextImmersive)" in shell
-    assert "event.key !== 'Escape' || event.defaultPrevented" in shell
+    assert "event.key !== 'F11' || event.defaultPrevented || event.repeat" in shell
+    f11 = shell[shell.index("if (!window.__webcapShellF11Bound)"):shell.index("if (!window.__webcapWorkingModelShellBound)")]
+    assert "toggleShellImmersive();" in f11
+    assert "preventDefault" not in f11
     assert "shellNavigationState.immersive" in shell
     assert ".app-frame.shell-immersive" in css
     assert ".app-frame.shell-immersive > .app-header" in css
     assert ".app-frame.shell-immersive > .activity-rail" in css
+    assert ".shell-immersive-exit-btn" not in css
 
 
 def test_responsive_shell_compresses_header_without_dropping_permanent_rail():
@@ -546,7 +550,6 @@ def test_activity_navigation_and_escape_precedence_are_accessible():
     assert "#app-overlay-root > :not(.hidden)[data-escape-close-id]" in shell
     assert "closeBtn.click();" in shell
     assert "isFocusedAnnotationOpen()" in shell
-    assert "setShellImmersive(false);" in shell
 
 
 def test_reload_location_uses_hash_route_not_transient_ui_persistence():

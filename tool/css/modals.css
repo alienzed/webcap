@@ -462,6 +462,79 @@
   margin-top: 2px;
 }
 
+.app-settings-model-list {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.app-settings-model-list .app-settings-model-option {
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.app-settings-runtime-list {
+  display: grid;
+  gap: 10px;
+}
+
+.app-settings-runtime-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 2.5%, transparent);
+}
+
+.app-settings-runtime-card-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.app-settings-runtime-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.app-settings-runtime-card-copy {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.app-settings-runtime-name-field {
+  flex: 1 1 280px;
+  max-width: 420px;
+}
+
+.app-settings-runtime-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.app-settings-check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.app-settings-check-row input {
+  width: auto;
+  margin: 0;
+}
+
 .app-settings-model-option {
   display: flex;
   align-items: flex-start;
@@ -650,6 +723,19 @@
 }
 
 @media (max-width: 760px) {
+  .app-settings-runtime-card-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .app-settings-runtime-name-field {
+    max-width: none;
+  }
+
+  .app-settings-runtime-card-actions {
+    justify-content: space-between;
+  }
+
   .app-settings-dialog {
     width: min(100vw - 18px, 980px);
     max-height: calc(100vh - 18px);
@@ -659,6 +745,11 @@
   .app-settings-form-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+html[data-theme="dark"] .app-settings-runtime-card {
+  background: #111827;
+  border-color: var(--border);
 }
 
 html[data-theme="dark"] .app-settings-section {

@@ -663,10 +663,32 @@ def test_test_activity_menu_uses_recent_source_history_not_set_identity():
     assert '"source": source' in backend
     assert '"modelId": model_id' in backend
     assert "function buildTestActivityContextActions()" in script
-    assert "function openTestBenchSource(folder, source, modelId)" in script
+    assert "function openTestBenchSource(folder, source, modelId, ownerAvailable)" in script
     assert "var key = modelId + '|' + source;" in script
     assert "openTestBenchSource(folder, source, modelId)" in script
     assert "Right-click for recent Test sources" in script
+
+
+
+def test_detached_test_history_keeps_logical_owner_without_folder_navigation():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    source_block = script.split("function openTestBenchSource(", 1)[1].split("function buildTestActivityContextActions", 1)[0]
+    assert "ownerAvailable !== false" in source_block
+    assert "pendingLaunchFolder = targetFolder;" in source_block
+    assert "openTrainingWorkspaceFolder" not in source_block
+
+    browser_block = script.split("function refreshTestSourceBrowser()", 1)[1].split("function chooseTestSource", 1)[0]
+    assert "payload.ownerAvailable === false" in browser_block
+    assert "launchFolder = ownerFolder;" in browser_block
+    assert "openTrainingWorkspaceFolder(ownerFolder);" in browser_block
+
+    pane_block = script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
+    assert "pendingLaunchFolder || (isOpen() ? launchFolder : '') || (state && state.folder) || ''" in pane_block
+
+    recent_block = script.split("recent.some(function (item)", 1)[1].split("return recentActions.length >= 5;", 1)[0]
+    assert "openTestBenchSource(folder, source, modelId, item.ownerAvailable)" in recent_block
+
 
 def test_test_execution_uses_backend_model_capabilities_even_when_workspace_is_opened_indirectly():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

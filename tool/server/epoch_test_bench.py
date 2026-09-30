@@ -61,17 +61,33 @@ def _resolved_test_directory(folder_path, model, source=None):
     return _test_directory(folder_path, model) if source is None else _test_directory(folder_path, model, source=source)
 
 
+def _owner_folder_available(owner_folder):
+    owner = str(owner_folder or "").strip().replace("\\", "/").strip("/")
+    if not owner:
+        return False
+    relative = PurePosixPath(owner)
+    if relative.is_absolute() or any(part in ("", ".", "..") for part in relative.parts):
+        return False
+    try:
+        path = app_config.safe_join_fs_root(relative.as_posix())
+    except (OSError, ValueError):
+        return False
+    return path.is_dir() and not path.is_symlink()
+
+
 def browse_source(model_id=None, source=None, set_name=""):
     model = get_test_model(model_id)
     default_source = test_source_for_set(model.STAGING_KEY, set_name) if str(set_name or "").strip() else ""
     resolved_source = default_source if source is None and default_source else str(source or "")
     payload = browse_test_source(model.STAGING_KEY, resolved_source)
+    owner_folder = _deterministic_source_owner(model, resolved_source)
     payload.update({
         "operation": "test_source_browse",
         "modelId": model.PROFILE_ID,
         "modelLabel": str(model.profile["label"]),
         "defaultSource": default_source,
-        "ownerFolder": _deterministic_source_owner(model, resolved_source),
+        "ownerFolder": owner_folder,
+        "ownerAvailable": _owner_folder_available(owner_folder),
     })
     return payload
 
@@ -191,6 +207,8 @@ def recent_test_sets(limit=8):
         key=lambda item: (float(item.get("modified") or 0), str(item.get("latestSession") or "")),
         reverse=True,
     )
+    for item in recent:
+        item["ownerAvailable"] = _owner_folder_available(item.get("folder"))
     _recent_sets_cache["items"] = [dict(item) for item in recent]
     _recent_sets_cache["expires"] = time.monotonic() + 10.0
     return recent[:max(1, int(limit or 8))]

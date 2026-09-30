@@ -290,6 +290,282 @@ def _public_job(job):
     return result
 
 
+class EphemeralExecutionQueue:
+    """In-memory execution lane with the same job semantics as the durable queue."""
+
+    def __init__(self, lane_name):
+        lane_name = str(lane_name or "").strip()
+        if lane_name != "llm":
+            raise ValueError("Only the LLM lane is currently ephemeral.")
+        self.lane_name = lane_name
+        self._state = {"version": STATE_VERSION, "lanes": {lane_name: _default_lane()}}
+
+    def _lane(self):
+        return self._state["lanes"][self.lane_name]
+
+    def enqueue(self, payload, metadata=None, job_id=None, initial_status="queued"):
+        if initial_status not in QUEUE_STATUSES:
+            raise ValueError("Ephemeral execution queue initial status must be queued.")
+        now = time.time()
+        with _lock:
+            lane = self._lane()
+            job = {
+                "id": str(job_id or secrets.token_hex(12)),
+                "lane": self.lane_name,
+                "status": initial_status,
+                "queuePosition": 0,
+                "createdAt": now,
+                "updatedAt": now,
+                "startedAt": None,
+                "finishedAt": None,
+                "error": "",
+                "metadata": copy.deepcopy(metadata if isinstance(metadata, dict) else {}),
+                "details": {},
+                "result": {},
+                "requestedAction": "",
+                "payload": copy.deepcopy(payload if isinstance(payload, dict) else {}),
+            }
+            if any(item.get("id") == job["id"] for item in lane.get("jobs", [])):
+                raise ValueError("Execution queue job ID already exists.")
+            lane["jobs"].append(job)
+            _prune_terminal(lane)
+            _refresh_positions(lane)
+            return _public_job(job)
+
+    def _find_job(self, job_id):
+        wanted = str(job_id or "").strip()
+        if not wanted:
+            return None
+        for job in self._lane().get("jobs", []):
+            if str(job.get("id") or "") == wanted:
+                return job
+        return None
+
+    def get_job(self, job_id, include_payload=False):
+        with _lock:
+            job = self._find_job(job_id)
+            if job is None:
+                raise FileNotFoundError("Execution queue job does not exist.")
+            if include_payload:
+                return copy.deepcopy(job)
+            return _public_job(job)
+
+    def consume_terminal_job(self, job_id):
+        with _lock:
+            job = self._find_job(job_id)
+            if job is None:
+                raise FileNotFoundError("Execution queue job does not exist.")
+            if job.get("status") not in TERMINAL_STATUSES:
+                raise ValueError("Only a terminal execution job can be consumed.")
+            result = _public_job(job)
+            lane = self._lane()
+            lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+            _refresh_positions(lane)
+            return result
+
+    def lane_snapshot(self, include_terminal=True):
+        with _lock:
+            lane = self._lane()
+            jobs = lane.get("jobs", [])
+            if not include_terminal:
+                jobs = [job for job in jobs if job.get("status") not in TERMINAL_STATUSES]
+            return {
+                "lane": self.lane_name,
+                "paused": bool(lane.get("paused")),
+                "pauseReason": str(lane.get("pauseReason") or ""),
+                "activeJobId": str(lane.get("activeJobId") or ""),
+                "jobs": [_public_job(job) for job in jobs],
+            }
+
+    def pause_lane(self, reason="Queue paused by the user."):
+        with _lock:
+            lane = self._lane()
+            lane["paused"] = True
+            lane["pauseReason"] = str(reason or "Queue paused.")
+            return self.lane_snapshot()
+
+    def resume_lane(self):
+        with _lock:
+            lane = self._lane()
+            lane["paused"] = False
+            lane["pauseReason"] = ""
+            return self.lane_snapshot()
+
+    def claim_next(self, expected_job_id=""):
+        now = time.time()
+        expected_job_id = str(expected_job_id or "").strip()
+        with _lock:
+            lane = self._lane()
+            if lane.get("paused") or lane.get("activeJobId"):
+                return None
+            job = next((item for item in lane.get("jobs", []) if item.get("status") == "queued"), None)
+            if job is None:
+                return None
+            if expected_job_id and str(job.get("id") or "") != expected_job_id:
+                return None
+            job["status"] = "starting"
+            job["startedAt"] = now
+            job["updatedAt"] = now
+            job["queuePosition"] = 0
+            lane["activeJobId"] = job["id"]
+            _refresh_positions(lane)
+            return _public_job(job)
+
+    def mark_running(self, job_id, details=None):
+        now = time.time()
+        with _lock:
+            job = self._find_job(job_id)
+            if job is None:
+                raise FileNotFoundError("Execution queue job does not exist.")
+            lane = self._lane()
+            if lane.get("activeJobId") != job["id"]:
+                raise RuntimeError("Execution queue job is not the active job for its lane.")
+            if job.get("status") == "stopping":
+                return _public_job(job)
+            if job.get("status") not in {"starting", "running"}:
+                raise ValueError("Only a starting execution job can become running.")
+            job["status"] = "running"
+            if isinstance(details, dict):
+                job.setdefault("details", {}).update(copy.deepcopy(details))
+            job["updatedAt"] = now
+            return _public_job(job)
+
+    def update_job(self, job_id, details):
+        if not isinstance(details, dict):
+            raise ValueError("Execution queue job details must be an object.")
+        now = time.time()
+        with _lock:
+            job = self._find_job(job_id)
+            if job is None:
+                raise FileNotFoundError("Execution queue job does not exist.")
+            if job.get("status") in TERMINAL_STATUSES:
+                raise ValueError("Execution queue job is already finished.")
+            job.setdefault("details", {}).update(copy.deepcopy(details))
+            job["updatedAt"] = now
+            return _public_job(job)
+
+    def finish_job_transient(self, job_id, status="completed", result=None, error=""):
+        if status not in TERMINAL_STATUSES:
+            raise ValueError("Execution queue finish status must be terminal.")
+        now = time.time()
+        with _lock:
+            job = self._find_job(job_id)
+            if job is None:
+                raise FileNotFoundError("Execution queue job does not exist.")
+            if job.get("status") not in ACTIVE_STATUSES:
+                raise ValueError("Only an active execution job can be finished.")
+            lane = self._lane()
+            job["status"] = status
+            job["finishedAt"] = now
+            job["updatedAt"] = now
+            job["error"] = str(error or "")
+            if isinstance(result, dict):
+                job.setdefault("result", {}).update(copy.deepcopy(result))
+            receipt = _public_job(job)
+            lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+            if lane.get("activeJobId") == job["id"]:
+                lane["activeJobId"] = ""
+            _refresh_positions(lane)
+            _remember_transient_receipt(receipt)
+            return receipt
+
+    def cancel_pending_transient(self, job_id):
+        now = time.time()
+        with _lock:
+            job = self._find_job(job_id)
+            if job is None:
+                raise FileNotFoundError("Execution queue job does not exist.")
+            if job.get("status") not in PENDING_STATUSES:
+                raise ValueError("Only pending execution jobs can be cancelled.")
+            lane = self._lane()
+            job["status"] = "cancelled"
+            job["finishedAt"] = now
+            job["updatedAt"] = now
+            job["requestedAction"] = ""
+            receipt = _public_job(job)
+            lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+            _refresh_positions(lane)
+            _remember_transient_receipt(receipt)
+            return receipt
+
+    def request_stop(self, job_id):
+        now = time.time()
+        with _lock:
+            job = self._find_job(job_id)
+            if job is None:
+                raise FileNotFoundError("Execution queue job does not exist.")
+            if job.get("status") not in ACTIVE_STATUSES:
+                raise ValueError("Only active execution jobs can be stopped.")
+            job["requestedAction"] = "stop"
+            job["status"] = "stopping"
+            job["updatedAt"] = now
+            _refresh_positions(self._lane())
+            return _public_job(job)
+
+    def reorder_job(self, job_id, direction=None, position=None):
+        with _lock:
+            job = self._find_job(job_id)
+            if job is None:
+                raise FileNotFoundError("Execution queue job does not exist.")
+            if job.get("status") != "queued":
+                raise ValueError("Only queued execution jobs can be reordered.")
+            lane = self._lane()
+            queued = [item for item in lane.get("jobs", []) if item.get("status") == "queued"]
+            current = queued.index(job)
+            if position is not None:
+                target = max(0, min(len(queued) - 1, int(position)))
+            elif direction == "up":
+                target = current - 1
+            elif direction == "down":
+                target = current + 1
+            else:
+                raise ValueError("Queue reorder requires up, down, or a target position.")
+            if target < 0 or target >= len(queued):
+                raise ValueError("Execution queue job cannot move further.")
+            if target == current:
+                return self.lane_snapshot()
+            other = queued[target]
+            jobs = lane["jobs"]
+            a = jobs.index(job)
+            b = jobs.index(other)
+            jobs[a], jobs[b] = jobs[b], jobs[a]
+            now = time.time()
+            job["updatedAt"] = now
+            other["updatedAt"] = now
+            _refresh_positions(lane)
+            return self.lane_snapshot()
+
+    def clear(self):
+        with _lock:
+            self._state = {"version": STATE_VERSION, "lanes": {self.lane_name: _default_lane()}}
+            clear_transient_receipts(self.lane_name)
+        release_resource(self.lane_name)
+
+    def recent_snapshot(self, limit=30):
+        try:
+            limit = max(1, min(int(limit), 80))
+        except (TypeError, ValueError):
+            limit = 30
+        with _lock:
+            recent = self._lane().get("recent") if isinstance(self._lane().get("recent"), list) else []
+            return [copy.deepcopy(item) for item in reversed(recent[-limit:]) if isinstance(item, dict)]
+
+
+_ephemeral_queues = {}
+
+
+def ephemeral_lane(lane_name):
+    lane_name = str(lane_name or "").strip()
+    if lane_name != "llm":
+        raise ValueError("Only the LLM lane is currently ephemeral.")
+    with _lock:
+        queue = _ephemeral_queues.get(lane_name)
+        if queue is None:
+            queue = EphemeralExecutionQueue(lane_name)
+            _ephemeral_queues[lane_name] = queue
+        return queue
+
+
 def reserve_resource(owner):
     owner = str(owner or "").strip()
     if not owner:
@@ -696,6 +972,19 @@ def discard_terminal_and_recent(lane_name):
         lane["recent"] = []
         _refresh_positions(lane)
         _write_state(state)
+
+
+def discard_persisted_lane(lane_name):
+    """Discard only the durable state for a lane during a lifecycle migration."""
+    lane_name = str(lane_name or "").strip()
+    if not lane_name:
+        raise ValueError("Execution queue lane is required.")
+    with _lock:
+        state = _read_state()
+        removed = state.setdefault("lanes", {}).pop(lane_name, None) is not None
+        if removed:
+            _write_state(state)
+        return removed
 
 
 def clear_lane(lane_name):

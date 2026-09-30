@@ -350,7 +350,7 @@
     history.forEach(function (sample) {
       var value = sample[key];
       if (!isFinite(value)) return;
-      var x = Math.max(0, Math.min(120, (sample.time - cutoff) / 60000 * 120));
+      var x = 1 + Math.max(0, Math.min(1, (sample.time - cutoff) / 60000)) * 118;
       var y = 28 - Math.max(0, Math.min(100, value)) * 0.26;
       path += (path ? ' L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
     });

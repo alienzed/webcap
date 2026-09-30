@@ -1016,7 +1016,7 @@
 }
 
 #generate-director-activity-trend svg {
-  min-height: 86px;
+  min-height: 0;
   height: 100%;
 }
 

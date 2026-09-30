@@ -984,5 +984,17 @@ def test_assistant_stop_is_owned_by_active_progress_card_and_director_graphs_are
     assert ".director-activity-trend {" in styles
     trend = styles.split(".director-activity-trend {", 1)[1].split("}", 1)[0]
     svg = styles.split(".director-activity-trend svg {", 1)[1].split("}", 1)[0]
-    assert "overflow: hidden;" in trend
+    assert "min-width: 0;" in trend
+    assert "min-height: 0;" in trend
     assert "overflow: hidden;" in svg
+
+
+def test_director_graph_geometry_fits_the_available_card_space_without_curve_clipping():
+    generate_css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+    for script_name in ("generate.js", "storyboard.js", "test_generations.js"):
+        script = (ROOT / "tool" / "js" / script_name).read_text(encoding="utf-8")
+        assert "var x = 1 + Math.max(0, Math.min(1, (sample.time - cutoff) / 60000)) * 118;" in script
+
+    block = generate_css.split("#generate-director-activity-trend svg {", 1)[1].split("}", 1)[0]
+    assert "min-height: 0;" in block
+    assert "min-height: 86px;" not in block

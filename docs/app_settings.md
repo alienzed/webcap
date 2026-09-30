@@ -6,7 +6,7 @@ The app settings modal is the global configuration surface for values stored in 
 
 ## Current sections
 
-- **Workspace → Storage**: media/dataset root, generated output root, and shared models root.
+- **Workspace → Storage**: media/dataset root, generated output root, and shared models root. The optional raw-config field `filesystem.app_data_root` overrides WebCap's conventional host-local app-data location; blank uses the platform default.
 - **Workspace → Appearance**: browser-scoped theme.
 - **Workspace → Caption Defaults**: app-wide fallback caption template.
 - **Training → Runtime**: Diffusion Pipe/WSL runtime, Conda or activation script, and repeat-reference epochs.

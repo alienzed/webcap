@@ -1,6 +1,12 @@
 from tool.server import inference_runtime
 
 
+@pytest.fixture(autouse=True)
+def isolate_provider_state(monkeypatch, tmp_path):
+    state_root = tmp_path / "app-data" / "state"
+    monkeypatch.setattr(inference_runtime.app_config, "app_state_root", lambda: state_root)
+
+
 def test_windows_curl_connection_failure_is_provider_unavailable(monkeypatch):
     monkeypatch.setattr(
         inference_runtime.subprocess,
@@ -128,8 +134,11 @@ def test_local_saved_output_path_remembers_proven_provider_root(monkeypatch, tmp
     }) == saved
 
     assert inference_runtime.known_provider_root() == provider.resolve()
-    state_path = fs_root / ".webcap_runtime" / "comfy_provider.json"
+    state_path = tmp_path / "app-data" / "state" / "providers.json"
     assert state_path.is_file()
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    assert payload["providers"]["comfyui"]["root"] == str(provider.resolve())
+    assert not (fs_root / ".webcap_runtime" / "comfy_provider.json").exists()
 
 
 def test_known_provider_root_rejects_symlinked_provider(monkeypatch, tmp_path):
@@ -142,32 +151,46 @@ def test_known_provider_root_rejects_symlinked_provider(monkeypatch, tmp_path):
         provider_link.symlink_to(real_provider, target_is_directory=True)
     except OSError:
         return
-    state_path = fs_root / ".webcap_runtime" / "comfy_provider.json"
+    state_path = tmp_path / "app-data" / "state" / "providers.json"
     state_path.parent.mkdir(parents=True)
     state_path.write_text(
-        '{"version": 1, "root": "' + str(provider_link).replace("\\", "\\\\") + '", "learnedAt": 1}\n',
+        json.dumps({
+            "version": 1,
+            "providers": {
+                "comfyui": {
+                    "root": str(provider_link),
+                    "learnedAt": 1,
+                }
+            },
+        }) + "\n",
         encoding="utf-8",
     )
 
     assert inference_runtime.known_provider_root() is None
 
 
-def test_known_provider_root_rejects_symlinked_runtime_state_root(monkeypatch, tmp_path):
-    fs_root = tmp_path / "fs"
-    fs_root.mkdir()
-    monkeypatch.setattr(inference_runtime.app_config, "FS_ROOT", fs_root)
+def test_known_provider_root_rejects_symlinked_app_state_root(monkeypatch, tmp_path):
     provider = tmp_path / "ComfyUI"
     (provider / "output").mkdir(parents=True)
-    outside = tmp_path / "outside-runtime"
+    outside = tmp_path / "outside-state"
     outside.mkdir()
-    runtime_link = fs_root / ".webcap_runtime"
+    state_link = tmp_path / "linked-state"
     try:
-        runtime_link.symlink_to(outside, target_is_directory=True)
+        state_link.symlink_to(outside, target_is_directory=True)
     except OSError:
         return
-    state_path = outside / "comfy_provider.json"
+    monkeypatch.setattr(inference_runtime.app_config, "app_state_root", lambda: state_link)
+    state_path = outside / "providers.json"
     state_path.write_text(
-        '{"version": 1, "root": "' + str(provider).replace("\\", "\\\\") + '", "learnedAt": 1}\n',
+        json.dumps({
+            "version": 1,
+            "providers": {
+                "comfyui": {
+                    "root": str(provider),
+                    "learnedAt": 1,
+                }
+            },
+        }) + "\n",
         encoding="utf-8",
     )
 

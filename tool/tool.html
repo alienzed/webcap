@@ -1969,13 +1969,13 @@
                         <section class="app-settings-section" id="director-model-test-settings">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Director Model Test <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
-                                <div class="app-settings-section-copy">Run one fixed expansion protocol sequentially across selected Director models. Results are saved after every model; no quality score is inferred.</div>
+                                <div class="app-settings-section-copy">Run one fixed expansion protocol sequentially across selected Director models. Results remain available for this WebCap session; export JSON to keep them.</div>
                             </div>
                             <div id="director-model-test-protocol" class="app-settings-help">Open this tab to load the protocol and available models.</div>
                             <label class="app-settings-field app-settings-field-wide">
                                 <span class="app-settings-field-label">Benchmark Prompt</span>
                                 <textarea id="director-model-test-prompt" rows="14" spellcheck="true"></textarea>
-                                <span class="app-settings-note">The exact text is frozen into the saved session when the test starts.</span>
+                                <span class="app-settings-note">The exact text is frozen into the current test session when the test starts.</span>
                             </label>
                             <div class="director-model-test-model-header">
                                 <span class="app-settings-field-label">Models</span>
@@ -1992,14 +1992,7 @@
                                 <button id="director-model-test-export" type="button" class="review-captions-btn" disabled>Export JSON</button>
                             </div>
                             <div id="director-model-test-status" class="app-settings-status director-model-test-status" data-state="ready" aria-live="polite">Ready to run a Director model test.</div>
-                            <details class="app-settings-advanced">
-                                <summary>Results</summary>
-                                <div id="director-model-test-results" class="app-settings-disclosure-body"><p class="app-settings-help">No results yet.</p></div>
-                            </details>
-                            <details class="app-settings-advanced">
-                                <summary>Saved Sessions</summary>
-                                <div id="director-model-test-sessions" class="app-settings-disclosure-body"><p class="app-settings-help">No saved model tests yet.</p></div>
-                            </details>
+                            <div id="director-model-test-results"><p class="app-settings-help">No results yet.</p></div>
                         </section>
                     </div>
                 </div>

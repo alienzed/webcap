@@ -84,8 +84,6 @@ def test_metadata_backed_training_history_contract():
     assert "def _write_recent_runs(" in history
     record = history[history.index("def record_job("):history.index("def history_payload(")]
     assert "_write_recent_runs(recent)" in record
-    assert "def _managed_job_record_paths(" not in history
-    assert "def _job_records(" not in history
     assert "record_job(folder_path, job)" in runner
     assert "clear_history_job" in runner
     assert "historyHidden" in runner

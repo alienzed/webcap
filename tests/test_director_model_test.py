@@ -216,3 +216,107 @@ def test_model_test_surfaces_live_status_without_extra_polling():
 
     assert ".director-model-test-status[data-state=\"running\"]::before" in styles
     assert ".director-model-test-models .app-settings-runtime-scope" in styles
+
+
+
+def test_calibration_protocol_is_progressive_and_versioned():
+    protocol = model_test.calibration_protocol()
+
+    assert protocol["contextSteps"] == [8192, 16384, 24576, 32768]
+    assert protocol["outputSteps"] == [2048, 4096, 8192]
+    assert protocol["marker"] == model_test.CALIBRATION_MARKER
+    prompt = model_test._calibration_output_prompt(4096)
+    assert "exactly 180 numbered items" in prompt
+    assert model_test.CALIBRATION_MARKER in prompt
+
+
+def test_context_calibration_enqueues_local_runtime_override(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        "tool.server.storyboard_llm_runtime.list_models",
+        lambda reload=False: [{
+            "id": "local::director.gguf",
+            "runtimeId": "local",
+            "runtimeName": "Local",
+            "modelId": "director.gguf",
+            "label": "director.gguf",
+        }],
+    )
+
+    def fake_enqueue(client, model_ref, contract, context=None, label=""):
+        captured.update({
+            "client": client,
+            "modelRef": model_ref,
+            "contract": contract,
+            "context": context,
+            "label": label,
+        })
+        return {"jobId": "calibration-job"}
+
+    monkeypatch.setattr("tool.server.llm_runner.enqueue", fake_enqueue)
+
+    job = model_test.enqueue_calibration_run(
+        "local::director.gguf",
+        "context",
+        16384,
+    )
+
+    assert job == {"jobId": "calibration-job"}
+    assert captured["client"] == "chat"
+    assert captured["context"]["runtimeOverrides"] == {
+        "contextSize": 16384,
+        "maxTokens": 64,
+    }
+    assert captured["contract"]["messages"][0]["content"] == "Reply with exactly: CONTEXT_OK"
+
+
+def test_output_calibration_uses_proven_local_context(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        "tool.server.storyboard_llm_runtime.list_models",
+        lambda reload=False: [{
+            "id": "local::director.gguf",
+            "runtimeId": "local",
+            "runtimeName": "Local",
+            "modelId": "director.gguf",
+            "label": "director.gguf",
+        }],
+    )
+    monkeypatch.setattr(
+        "tool.server.llm_runner.enqueue",
+        lambda client, model_ref, contract, context=None, label="": captured.update({
+            "context": context,
+            "contract": contract,
+        }) or {"jobId": "output-job"},
+    )
+
+    model_test.enqueue_calibration_run(
+        "local::director.gguf",
+        "output",
+        4096,
+        context_size=24576,
+    )
+
+    assert captured["context"]["runtimeOverrides"] == {
+        "maxTokens": 4096,
+        "contextSize": 24576,
+    }
+    assert model_test.CALIBRATION_MARKER in captured["contract"]["messages"][0]["content"]
+
+
+def test_remote_context_calibration_is_rejected(monkeypatch):
+    monkeypatch.setattr(
+        "tool.server.storyboard_llm_runtime.list_models",
+        lambda reload=False: [{
+            "id": "remote::qwen",
+            "runtimeId": "remote",
+            "runtimeName": "Remote",
+            "modelId": "qwen",
+            "label": "qwen",
+        }],
+    )
+
+    with pytest.raises(ValueError, match="local llama.cpp"):
+        model_test.enqueue_calibration_run("remote::qwen", "context", 8192)

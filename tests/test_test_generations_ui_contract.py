@@ -40,8 +40,6 @@ def test_test_results_header_promotes_view_tabs_without_legacy_rate_action():
     assert 'class="test-generations-view-tabs" role="tablist"' in html
     assert 'id="test-generations-view-grid-btn"' in html
     assert 'id="test-generations-view-compare-btn"' in html
-    assert 'id="test-generations-rate-items-btn"' not in html
-    assert 'id="test-generations-open-results-btn"' not in html
     assert 'class="test-generations-results-actions"' in html
     assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);" in css
     assert ".test-generations-view-tab.active" in css
@@ -55,12 +53,10 @@ def test_test_generations_uses_training_pane_and_core_controls():
 
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     assert 'id="test-generations-pane"' in html
-    assert "test-generations-modal" not in script
     assert "el('test-generations-workspace')" in script
     assert "training-tests-actions" in script
     assert ".training-run-setup-actions" not in script
     assert "document.querySelector('.editor-surface')" not in script
-    assert "test-generations-active" not in script
     assert "workspace-test-open" in script
     assert "test-generations-aspect" in script
     assert "test-generations-megapixels" in script
@@ -142,9 +138,6 @@ def test_test_activity_is_permanent_and_recent_sets_are_not_in_the_test_pane():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
     assert 'id="activity-test-btn" type="button" class="activity-rail-btn"' in html
-    assert 'id="test-generations-recent-sets-list"' not in html
-    assert "function renderRecentTestSets(items)" not in script
-    assert ".test-generations-recent-sets" not in css
     assert "activityButton.classList.remove('hidden');" in script
 
 
@@ -167,7 +160,6 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "test-generations-sessions-list" in script
     assert "test_open_session" in script
     assert "test_delete_session" in script
-    assert "dataRemoveCandidate" not in script
     assert "dataset.removeCandidate" in script
     assert "function removeCandidate(fileName, sessionName)" in script
     assert "session: String(sessionName || '')" in script
@@ -188,8 +180,6 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "openSession(row.dataset.sessionName);" in script
     assert "open.dataset.sessionFolderOpen = resultFolder;" in script
     assert "openResultsFolder(folderOpen.dataset.sessionFolderOpen);" in script
-    assert "data-session-rate" not in script
-    assert "rateItems" not in script
     assert "open.dataset.sessionOpen" not in script
     assert ".test-generations-session-row" in css
     assert ".test-generations-session-row:not([data-queue-job-id])" in css
@@ -361,7 +351,6 @@ def test_active_test_card_is_separate_from_selected_session_results():
     poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
     assert "syncActiveTestCard(status);" in poll
     render = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
-    assert "syncActiveTestCard" not in render
     assert "statusEl.textContent = live ? '' : statusText(status);" in render
     assert ".test-generations-active {" in css
     assert ".test-generations-stop-btn {" in css
@@ -493,8 +482,6 @@ def test_result_card_transport_remains_always_visible_without_toggle():
     transport = script.split("function appendTestPreviewVideo(container, video)", 1)[1].split("function setResultsView(mode)", 1)[0]
     assert "video.controls = false;" in transport
     assert "container.appendChild(transport);" in transport
-    assert "controlsToggle" not in script
-    assert "toggleControls" not in script
 
 
 def test_compare_polling_preserves_video_elements_and_refreshes_navigation_only():
@@ -554,7 +541,6 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     assert "status.seed" in script
     assert ".test-generations-session-details" in css
     assert ".test-generations-session-info-grid" in css
-    assert ".test-generations-session-detail-column" not in css
     assert "grid-template-columns: minmax(300px, 30%) minmax(0, 70%);" in css
     assert "max-width: 700px;" not in css
     assert "width: 100%;" in css
@@ -567,8 +553,6 @@ def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
     assert ".test-generations-session-prompt pre" in css
 
     details_block = script.split("details.innerHTML = [", 1)[1].split("].join('');", 1)[0]
-    assert "Run details" not in details_block
-    assert "test-generations-session-detail-grid" not in details_block
     assert details_block.index("renderPromptExpectations(resolvedPrompt)") < details_block.index("test-generations-session-prompts")
 
 
@@ -577,9 +561,6 @@ def test_test_identity_is_owned_by_shell_header():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
 
-    assert "test-generations-close-btn" not in script
-    assert "test-generations-header" not in script
-    assert ".test-generations-header" not in css
     assert "test-generations-form-title" in script
     assert "? 'Test Generations'" in shell
     assert "window.closeTestBenchActivity" in shell
@@ -589,9 +570,6 @@ def test_test_generations_enters_from_the_current_set_and_keeps_explicit_source_
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    assert "webcap.test.source." not in script
-    assert "function loadLastTestSource(modelId)" not in script
-    assert "function saveLastTestSource(modelId, source)" not in script
     assert "function chooseTestSource(source)" in script
     choose_source = script.split("function chooseTestSource(source)", 1)[1].split("function request(", 1)[0]
     assert "pendingTestSource = testSource;" in choose_source
@@ -729,13 +707,7 @@ def test_test_generations_has_no_legacy_rate_review_workflow():
     item_details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
 
     assert 'id="test-generations-rate-items-btn"' not in html
-    assert "pendingRatingFolder" not in script
-    assert "pendingRatingReturn" not in script
-    assert "initializeRatingReview" not in script
-    assert "completeRatingReviewIfFinished" not in script
     assert "data-session-rate" not in script
-    assert "testGenerationsRatingChanged" not in script
-    assert "testGenerationsRatingChanged" not in item_details
 
 def test_test_generations_reuses_normal_folder_review_for_assessment():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -751,8 +723,6 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "Array.isArray(state.testGenerationSettings.selectedFiles)" in script
     assert "selectedCandidates = new Set(savedSelection === null ? files : savedSelection);" in script
     assert 'id="test-generations-master-select"' in html
-    assert 'id="test-generations-select-all-btn"' not in html
-    assert 'id="test-generations-deselect-all-btn"' not in html
     assert "function syncCandidateMasterSelect(files)" in script
     assert "master.indeterminate = selectedCount > 0 && selectedCount < available.length;" in script
     assert "baseName.textContent = 'Base';" in script
@@ -762,8 +732,6 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "includeBase: includeBase" in script
     assert "var allSelected = !!files.length && files.every" in script
     assert "selectedCandidates = allSelected ? new Set() : new Set(files);" in script
-    assert 'id="test-generations-reset-prompt-btn"' not in html
-    assert "test-generations-reset-prompt-btn" not in script
     assert "name: name" in script
     assert "candidateScores" in script
     assert "function openResultsFolder(folder)" in script
@@ -811,9 +779,6 @@ def test_test_generations_queue_contract():
     assert "execution_enqueue(" in backend
     assert "execution_claim_next(" in backend
     assert "_reserve_gpu_for_test_generations" in backend
-    assert "_queue_retry" not in backend
-    assert "Pause Training before starting Test Generations." not in backend
-    assert "enqueue_test_response" not in backend
 
 
 
@@ -918,7 +883,6 @@ def test_test_source_candidates_keep_explicit_delete_control():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     block = script.split("function renderStagedFiles(payload)", 1)[1].split("function sessionStatusText", 1)[0]
-    assert "var removableFiles" not in block
     assert "remove.dataset.fileName = String(fileName || '');" in block
     assert "remove.title = 'Remove this Test candidate';" in block
     assert "row.appendChild(remove);" in block

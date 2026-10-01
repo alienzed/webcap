@@ -530,7 +530,7 @@ def h3_probe_root():
 
 
 def execution_queue_state_path():
-    return Path(FS_ROOT) / ".webcap" / "execution_queue.json"
+    return app_state_root() / "execution_queue.json"
 
 
 def training_runtime_root():

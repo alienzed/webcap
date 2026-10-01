@@ -423,8 +423,12 @@ function loadTrainingHistoryIndex(force) {
       trainingWorkspaceState.history.runs = previous.runs || [];
       trainingWorkspaceState.history.resumeDefaults = previous.resumeDefaults || {};
       trainingWorkspaceState.historyLoaded = true;
-      if (typeof window.refreshApplicationRecentSets === 'function') {
-        window.refreshApplicationRecentSets(true).catch(function () {});
+      if (typeof window.syncApplicationRecentSetsFromJobs === 'function') {
+        window.syncApplicationRecentSetsFromJobs(
+          trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
+            ? trainingWorkspaceState.history.jobs
+            : []
+        );
       }
       return trainingWorkspaceState.history;
     });

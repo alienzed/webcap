@@ -413,6 +413,9 @@ function refreshCurrentDirectory() {
               hasCaption: !!(cap.error || (text && text.trim().length))
             };
           });
+          if (typeof window.rememberApplicationSetContext === 'function' && isSetFolderContext(path, state.items)) {
+            window.rememberApplicationSetContext(path);
+          }
           // --- Load and apply folder state fields ---
            var folderState = resp.folder_state || {};
            applyFolderStateToDom(folderState);

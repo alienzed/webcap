@@ -227,6 +227,13 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
     unknown = [epoch for epoch in retained if epoch not in context["epochs"]]
     if unknown:
         raise ValueError("Requested retained epoch is unavailable: " + ", ".join(map(str, unknown)))
+    for epoch in retained:
+        artifacts = [
+            path for path in context["epochs"][epoch].iterdir()
+            if path.is_file() and not path.is_symlink() and path.suffix.lower() == ".safetensors"
+        ]
+        if len(artifacts) != 1:
+            raise RuntimeError("Retained alternate epoch " + str(epoch) + " must contain exactly one .safetensors artifact.")
 
     root = archive_root()
     root.mkdir(parents=True, exist_ok=True)

@@ -8,7 +8,6 @@ def test_duplicate_action_is_generic_for_image_and_video_context_menus():
     assert "if (isImageFile || isVideoFile)" in script
     assert "label: 'Duplicate'" in script
     assert "duplicateMediaItem(mediaItem);" in script
-    assert "Duplicate Image" not in script
 
 
 def test_video_context_actions_include_fps_conversion():

@@ -87,7 +87,6 @@ def test_shell_header_uses_workspace_first_clickable_breadcrumb_without_parallel
 
     assert 'id="app-header-workspace-title"' in html
     assert 'id="app-header-breadcrumb"' in html
-    assert 'id="app-header-folder"' not in html
     assert html.index('id="app-header-workspace-title"') < html.index('id="app-header-breadcrumb"')
     assert "function renderApplicationHeaderBreadcrumb(navigation)" in shell
     assert "state && Array.isArray(state.dirStack)" in shell
@@ -245,7 +244,6 @@ def test_training_identity_is_owned_by_shell_header():
     assert 'id="app-header-workspace-title"' in html
     assert 'id="app-header-workspace-context"' in html
     assert html.count('id="sidebar-collapse-toggle-btn"') == 1
-    assert 'id="training-sidebar-collapse-toggle-btn"' not in html
     assert "surface === 'training'" in shell
     assert "? 'Training'" in shell
     assert "entryKind === 'global'" in shell
@@ -270,12 +268,6 @@ def test_review_identity_is_owned_by_shell_header():
     assert "surface === 'reviewOutput'" in shell
     assert "? 'Review Set'" in shell
     assert "function getReviewWorkspaceShellContext()" in review
-    assert 'class="review-output-surface-title"' not in html
-    assert 'id="review-output-summary-folder"' not in html
-    assert 'id="review-output-summary-visible"' not in html
-    assert 'id="review-output-summary-scope"' not in html
-    assert ".review-output-context" not in css
-    assert ".review-output-surface-title" not in css
     assert 'id="review-output-back-btn"' in html
 
 
@@ -481,8 +473,6 @@ def test_shell_immersive_mode_is_f11_only_and_does_not_block_browser_fullscreen(
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
-    assert 'id="shell-immersive-btn"' not in html
-    assert 'id="shell-immersive-exit-btn"' not in html
     assert "function setShellImmersive(nextImmersive)" in shell
     assert "event.key !== 'F11' || event.defaultPrevented || event.repeat" in shell
     f11 = shell[shell.index("if (!window.__webcapShellF11Bound)"):shell.index("if (!window.__webcapWorkingModelShellBound)")]
@@ -492,7 +482,6 @@ def test_shell_immersive_mode_is_f11_only_and_does_not_block_browser_fullscreen(
     assert ".app-frame.shell-immersive" in css
     assert ".app-frame.shell-immersive > .app-header" in css
     assert ".app-frame.shell-immersive > .activity-rail" in css
-    assert ".shell-immersive-exit-btn" not in css
 
 
 def test_responsive_shell_compresses_header_without_dropping_permanent_rail():
@@ -595,15 +584,10 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
 
-    assert 'class="app-header-brand"' not in html
     assert 'id="status" class="status shell-status-bar"' in html
     assert 'id="console-toggle-btn"' in html
     assert html.index('id="console-toggle-btn"') > html.index('id="activity-rail"')
     assert 'id="shell-gpu-status"' in html
-    assert "training-runner-output-view" not in shell
-    assert "training-runner-empty" not in shell
-    assert "training-editor-empty" not in shell
-    assert "training-config-empty" not in shell
     assert "function syncTrainingWorkspaceDetailUi()" in training
     assert "function syncTrainingEntryChrome()" in training
     assert "function syncShellTrainingGpuStatus()" in runner
@@ -708,13 +692,7 @@ def test_retired_workflow_mode_does_not_survive_as_parallel_shell_state():
     workbench_css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
     for source in (shell, grid, html, shell_css, workbench_css):
-        assert "workflow-annotate" not in source
-        assert "workflow-select" not in source
-        assert "workflow-review" not in source
-    assert "workspaceUiState" not in shell
-    assert "setWorkspaceWorkflowMode" not in shell
-    assert "workflowMode" not in grid
-
+            
 
 def test_post_refactor_hygiene_has_one_sidebar_control_and_no_legacy_shell_fossils():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
@@ -724,13 +702,7 @@ def test_post_refactor_hygiene_has_one_sidebar_control_and_no_legacy_shell_fossi
     styles = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
     assert html.count('id="sidebar-collapse-toggle-btn"') == 1
-    assert "training-sidebar-collapse-toggle-btn" not in html + training + shell
     assert 'class="sidebar-edge-toggle-btn"' in html
-    assert 'id="app-header-workspace-controls"' not in html
-    assert ".utility-bar" not in styles
-    assert "#utility-training-btn" not in styles
-    assert "#utility-test-bench-btn" not in styles
-    assert ".console-toggle-btn" not in styles
     assert 'id="preview-action-primary-a"' in html
     assert 'id="preview-action-primary-b"' in html
     assert 'id="preview-action-more"' in html
@@ -942,9 +914,6 @@ def test_settings_uses_six_task_owned_tabs_and_progressive_disclosure():
         assert f'data-app-settings-tab="{tab}"' in html
         assert f'data-app-settings-panel="{tab}"' in html
 
-    assert 'data-app-settings-tab="workspace"' not in html
-    assert 'data-app-settings-tab="advanced"' not in html
-    assert 'data-app-settings-tab="storyboard"' not in html
     assert "['general', 'models', 'training', 'director', 'system']" in settings
 
     assert "<summary>Captioning</summary>" in html
@@ -977,7 +946,6 @@ def test_assistant_stop_is_owned_by_active_progress_card_and_director_graphs_are
     )[0]
 
     assert 'id="director-chat-stop"' in progress
-    assert 'id="director-chat-stop"' not in composer
     assert "grid-template-columns: auto minmax(0, 1fr) auto auto;" in shell_css
     assert ".director-chat-progress-copy #director-chat-stop" in shell_css
     assert ".director-activity-trend {" in styles

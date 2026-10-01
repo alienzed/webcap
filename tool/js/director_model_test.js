@@ -10,6 +10,10 @@ var directorModelTestState = {
   startedAt: 0,
   activityTimer: 0,
   protocol: null,
+  calibrationProtocol: null,
+  calibrationProfiles: [],
+  calibrationTotal: 0,
+  mode: '',
   models: [],
   session: null
 };
@@ -130,6 +134,11 @@ function directorModelTestStatusState(session) {
 }
 
 function directorModelTestStatusText(session) {
+  if (!session && directorModelTestState.running && directorModelTestState.mode === 'calibration') {
+    return directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued') +
+      (directorModelTestState.currentModelLabel ? ' · ' + directorModelTestState.currentModelLabel : '') +
+      (directorModelTestState.calibrationTotal > 0 ? ' · ' + String(directorModelTestState.currentModelNumber) + ' / ' + String(directorModelTestState.calibrationTotal) : '');
+  }
   if (!session) return directorModelTestState.running ? 'Starting test…' : 'Ready to run a Director model test.';
   var done = Array.isArray(session.runs) ? session.runs.length : 0;
   var total = Array.isArray(session.models) ? session.models.length : 0;
@@ -176,7 +185,9 @@ function directorModelTestRenderActivity() {
   }
 
   var session = directorModelTestState.session;
-  var total = Array.isArray(session && session.models) ? session.models.length : 0;
+  var total = directorModelTestState.mode === 'calibration'
+    ? Number(directorModelTestState.calibrationTotal || 0)
+    : (Array.isArray(session && session.models) ? session.models.length : 0);
   var number = Number(directorModelTestState.currentModelNumber || 0);
   var model = directorModelTestState.currentModelLabel || 'Preparing next model…';
   var runtime = directorModelTestState.currentRuntimeName || '';
@@ -190,7 +201,7 @@ function directorModelTestRenderActivity() {
     '<article class="activity-monitor-card status-running director-model-test-activity-card">' +
       '<span class="activity-monitor-dot active"></span>' +
       '<div class="activity-monitor-copy">' +
-        '<strong>Director Model Test</strong>' +
+        '<strong>' + (directorModelTestState.mode === 'calibration' ? 'Director Model Calibration' : 'Director Model Test') + '</strong>' +
         '<span>' + escapeHtml(detail) + '</span>' +
         '<small>' + escapeHtml(meta) + '</small>' +
         '<div class="activity-monitor-progress"><span style="width:' + progress.toFixed(1) + '%"></span></div>' +
@@ -239,7 +250,8 @@ function directorModelTestRenderSession() {
       directorModelTestSeconds(run.totalSeconds),
       directorModelTestRate(run.tokensPerSecond) === '—' ? '' : directorModelTestRate(run.tokensPerSecond) + ' tok/s',
       directorModelTestTokenCount(run.promptTokens) + ' → ' + directorModelTestTokenCount(run.completionTokens) + ' tokens',
-      directorModelTestSize(run.sizeBytes)
+      directorModelTestSize(run.sizeBytes),
+      run.finishReason ? 'finish=' + run.finishReason : ''
     ].filter(Boolean).join(' · ');
     return '<details class="app-settings-advanced director-model-test-result"' + (index === 0 ? ' open' : '') + '>' +
       '<summary>' +
@@ -259,9 +271,13 @@ function directorModelTestRenderSession() {
 }
 function directorModelTestSyncControls() {
   var run = directorModelTestEl('director-model-test-run');
+  var calibrate = directorModelTestEl('director-model-test-calibrate');
+  var clearCalibration = directorModelTestEl('director-model-test-clear-calibration');
   var stop = directorModelTestEl('director-model-test-stop');
   var refresh = directorModelTestEl('director-model-test-refresh');
   if (run) run.disabled = directorModelTestState.running || !directorModelTestState.models.length;
+  if (calibrate) calibrate.disabled = directorModelTestState.running || !directorModelTestState.models.length;
+  if (clearCalibration) clearCalibration.disabled = directorModelTestState.running || !directorModelTestState.calibrationProfiles.length;
   if (refresh) refresh.disabled = directorModelTestState.running;
   if (stop) {
     stop.classList.toggle('hidden', !directorModelTestState.running);
@@ -277,6 +293,8 @@ function directorModelTestRefresh() {
     var meta = responses[0];
     var models = responses[1];
     directorModelTestState.protocol = meta.protocol || null;
+    directorModelTestState.calibrationProtocol = meta.calibrationProtocol || null;
+    directorModelTestState.calibrationProfiles = Array.isArray(meta.calibrationProfiles) ? meta.calibrationProfiles : [];
     directorModelTestState.session = meta.session || null;
     directorModelTestState.models = Array.isArray(models.models) ? models.models : [];
     directorModelTestState.loaded = true;
@@ -292,6 +310,7 @@ function directorModelTestRefresh() {
       prompt.value = String(directorModelTestState.protocol.defaultPrompt || '');
     }
     directorModelTestRenderModels();
+    directorModelTestRenderCalibrationProfiles();
     directorModelTestRenderSession();
     directorModelTestSyncControls();
   }).catch(function (error) {
@@ -321,8 +340,250 @@ function directorModelTestSelectedModels() {
   });
 }
 
+function directorModelTestFormatCapacity(value) {
+  var count = Number(value);
+  if (!isFinite(count) || count <= 0) return 'runtime-managed';
+  if (count >= 1024 && count % 1024 === 0) return String(count / 1024) + 'k';
+  return String(Math.round(count));
+}
+
+function directorModelTestRenderCalibrationProfiles() {
+  var host = directorModelTestEl('director-model-test-calibration-profiles');
+  if (!host) return;
+  var profiles = Array.isArray(directorModelTestState.calibrationProfiles) ? directorModelTestState.calibrationProfiles : [];
+  if (!profiles.length) {
+    host.innerHTML = '<p class="app-settings-help">No calibrated model profiles yet.</p>';
+    return;
+  }
+  host.innerHTML = profiles.map(function (profile) {
+    var contextText = profile.contextMode === 'calibrated'
+      ? directorModelTestFormatCapacity(profile.contextSize) + ' context'
+      : (Number(profile.contextSize || 0) > 0
+        ? directorModelTestFormatCapacity(profile.contextSize) + ' runtime context'
+        : 'runtime-managed context');
+    var outputText = directorModelTestFormatCapacity(profile.maxTokens) + ' output';
+    var date = profile.calibratedAt ? new Date(profile.calibratedAt).toLocaleString() : '';
+    return '<div class="director-model-calibration-profile">' +
+      '<div><strong>' + escapeHtml(profile.label || profile.modelId || profile.modelRef || '') + '</strong>' +
+      '<span>' + escapeHtml(profile.runtimeName || profile.runtimeId || '') + '</span></div>' +
+      '<div class="app-settings-help">' + escapeHtml(contextText + ' · ' + outputText + (date ? ' · ' + date : '')) + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
+  var tracker = { phase: '', phaseStartedAt: 0, phases: {}, observedContextSize: 0 };
+  var localStartedAt = Date.now() / 1000;
+  directorModelTestState.currentPhase = 'queued';
+  directorModelTestRenderStatus();
+  return directorModelTestPost({
+    action: 'enqueue_calibration',
+    modelRef: model.modelRef,
+    kind: kind,
+    target: target,
+    contextSize: contextSize || null
+  }).then(function (payload) {
+    directorModelTestState.currentJobId = String(payload.job && payload.job.jobId || '');
+    if (!directorModelTestState.currentJobId) throw new Error('Director calibration did not receive a job ID.');
+    reportConsoleInfo(
+      'Director Model Calibration',
+      (kind === 'context' ? 'Context ' : 'Output ') + directorModelTestFormatCapacity(target) +
+        ' · ' + (model.label || model.modelId || model.modelRef)
+    );
+    return directorModelTestWaitForJob(directorModelTestState.currentJobId, tracker);
+  }).then(function (job) {
+    directorModelTestClosePhase(tracker);
+    job = job || {};
+    var result = job.result && typeof job.result === 'object' ? job.result : {};
+    var usage = result.usage && typeof result.usage === 'object' ? result.usage : {};
+    var timings = result.timings && typeof result.timings === 'object' ? result.timings : {};
+    var text = String(result.text || '');
+    var finishReason = String(result.finishReason || '').toLowerCase();
+    var promptTokens = directorModelTestMetric(usage, 'prompt_tokens') || directorModelTestMetric(timings, 'prompt_n');
+    var completionTokens = directorModelTestMetric(usage, 'completion_tokens') || directorModelTestMetric(timings, 'predicted_n');
+    var observedContext = Number(result.contextSize || tracker.observedContextSize || 0);
+    var totalSeconds = Math.max(0, (Number(job.finishedAt) || Date.now() / 1000) - (Number(job.createdAt) || localStartedAt));
+    var tokensPerSecond = directorModelTestMetric(timings, 'predicted_per_second');
+    var terminalStatus = String(job.status || '');
+    var passed = terminalStatus === 'completed';
+
+    if (kind === 'context') {
+      passed = passed && observedContext >= Number(target);
+    } else {
+      var calibrationProtocol = directorModelTestState.calibrationProtocol || {};
+      var expectedItems = Number((calibrationProtocol.outputItemCounts || {})[String(target)] || 0);
+      var finalItemPattern = expectedItems > 0
+        ? new RegExp('(^|\\n)\\s*' + String(expectedItems) + '[\\.\\)]\\s+', 'm')
+        : null;
+      passed = passed &&
+        ['length', 'max_tokens'].indexOf(finishReason) === -1 &&
+        text.indexOf(String(calibrationProtocol.marker || 'WEB_CAP_CALIBRATION_COMPLETE')) !== -1 &&
+        (!finalItemPattern || finalItemPattern.test(text));
+    }
+
+    return {
+      kind: kind,
+      target: Number(target),
+      status: passed ? 'passed' : 'failed',
+      finishReason: finishReason,
+      error: String(job.error || (passed ? '' : 'Calibration target did not complete cleanly.')),
+      promptTokens: promptTokens,
+      completionTokens: completionTokens,
+      observedContextSize: isFinite(observedContext) && observedContext > 0 ? observedContext : 0,
+      totalSeconds: totalSeconds,
+      tokensPerSecond: tokensPerSecond
+    };
+  }).finally(function () {
+    var jobId = directorModelTestState.currentJobId;
+    directorModelTestState.currentJobId = '';
+    return jobId ? directorModelTestConsumeJob(jobId) : null;
+  });
+}
+
+function directorModelTestCalibrateOne(model, modelNumber) {
+  var protocol = directorModelTestState.calibrationProtocol || {};
+  var contextSteps = Array.isArray(protocol.contextSteps) ? protocol.contextSteps : [];
+  var outputSteps = Array.isArray(protocol.outputSteps) ? protocol.outputSteps : [];
+  var attempts = [];
+  var contextMode = model.runtimeId === 'local' ? 'calibrated' : 'runtime';
+  var contextSize = 0;
+  var maxTokens = 0;
+
+  directorModelTestState.currentModelLabel = String(model.label || model.modelId || model.modelRef || 'Model');
+  directorModelTestState.currentModelNumber = modelNumber;
+  directorModelTestState.currentRuntimeName = String(model.runtimeName || model.runtimeId || 'runtime');
+
+  var chain = Promise.resolve();
+  if (model.runtimeId === 'local') {
+    contextSteps.forEach(function (target) {
+      chain = chain.then(function () {
+        if (directorModelTestState.stopRequested || (attempts.length && attempts[attempts.length - 1].kind === 'context' && attempts[attempts.length - 1].status === 'failed')) return;
+        return directorModelTestCalibrationAttempt(model, 'context', target).then(function (attempt) {
+          attempts.push(attempt);
+          if (attempt.status === 'passed') contextSize = Number(target);
+        });
+      });
+    });
+  }
+
+  outputSteps.forEach(function (target) {
+    chain = chain.then(function () {
+      if (directorModelTestState.stopRequested) return;
+      if (contextMode === 'calibrated' && !contextSize) return;
+      var previousOutput = attempts.filter(function (attempt) { return attempt.kind === 'output'; });
+      if (previousOutput.length && previousOutput[previousOutput.length - 1].status === 'failed') return;
+      return directorModelTestCalibrationAttempt(model, 'output', target, contextMode === 'calibrated' ? contextSize : null).then(function (attempt) {
+        attempts.push(attempt);
+        if (attempt.observedContextSize > contextSize && contextMode === 'runtime') {
+          contextSize = attempt.observedContextSize;
+        }
+        if (attempt.status === 'passed') maxTokens = Number(target);
+      });
+    });
+  });
+
+  return chain.then(function () {
+    if (directorModelTestState.stopRequested) return null;
+    if (contextMode === 'calibrated' && !contextSize) {
+      reportConsoleWarning('Director Model Calibration', 'No local context tier passed for ' + model.label + '; profile was not saved.');
+      return null;
+    }
+    if (!maxTokens) {
+      reportConsoleWarning('Director Model Calibration', 'No output tier passed for ' + model.label + '; profile was not saved.');
+      return null;
+    }
+    return directorModelTestPost({
+      action: 'save_calibration_profile',
+      profile: {
+        modelRef: model.modelRef,
+        runtimeId: model.runtimeId,
+        runtimeName: model.runtimeName,
+        modelId: model.modelId,
+        label: model.label,
+        contextMode: contextMode,
+        contextSize: contextSize,
+        maxTokens: maxTokens,
+        attempts: attempts
+      }
+    }).then(function (payload) {
+      directorModelTestState.calibrationProfiles = Array.isArray(payload.calibrationProfiles) ? payload.calibrationProfiles : [];
+      directorModelTestRenderCalibrationProfiles();
+      reportConsoleInfo(
+        'Director Model Calibration',
+        'Saved ' + model.label + ' · ' +
+          (contextMode === 'calibrated' ? directorModelTestFormatCapacity(contextSize) + ' context · ' : '') +
+          directorModelTestFormatCapacity(maxTokens) + ' output.'
+      );
+      return payload.profile || null;
+    });
+  });
+}
+
+function directorModelTestStartCalibration() {
+  if (directorModelTestState.running) return;
+  var models = directorModelTestSelectedModels();
+  if (!models.length) {
+    directorModelTestSetStatus('Choose at least one model.', 'ready', 'Ready');
+    return;
+  }
+  if (!directorModelTestState.calibrationProtocol) {
+    throw new Error('Director model calibration protocol is missing.');
+  }
+
+  directorModelTestState.running = true;
+  directorModelTestState.mode = 'calibration';
+  directorModelTestState.stopRequested = false;
+  directorModelTestState.calibrationTotal = models.length;
+  directorModelTestState.startedAt = Date.now() / 1000;
+  directorModelTestState.session = null;
+  directorModelTestSyncControls();
+  directorModelTestRenderStatus();
+  reportConsoleInfo('Director Model Calibration', 'Starting progressive calibration for ' + String(models.length) + ' model' + (models.length === 1 ? '' : 's') + '.');
+
+  var chain = Promise.resolve();
+  models.forEach(function (model, index) {
+    chain = chain.then(function () {
+      if (directorModelTestState.stopRequested) return;
+      return directorModelTestCalibrateOne(model, index + 1);
+    });
+  });
+
+  chain.catch(function (error) {
+    reportConsoleError('Director Model Calibration', error);
+  }).finally(function () {
+    directorModelTestState.running = false;
+    directorModelTestState.currentJobId = '';
+    directorModelTestState.currentModelLabel = '';
+    directorModelTestState.currentModelNumber = 0;
+    directorModelTestState.currentPhase = '';
+    directorModelTestState.currentRuntimeName = '';
+    directorModelTestState.calibrationTotal = 0;
+    directorModelTestState.startedAt = 0;
+    directorModelTestState.mode = '';
+    directorModelTestSyncControls();
+    directorModelTestRenderStatus();
+    directorModelTestRefresh().catch(function () {});
+  });
+}
+
+function directorModelTestClearCalibration() {
+  if (directorModelTestState.running) return;
+  directorModelTestPost({ action: 'clear_calibration_profiles' }).then(function (payload) {
+    directorModelTestState.calibrationProfiles = Array.isArray(payload.calibrationProfiles) ? payload.calibrationProfiles : [];
+    directorModelTestRenderCalibrationProfiles();
+    directorModelTestSyncControls();
+    reportConsoleInfo('Director Model Calibration', 'Cleared saved calibration profiles.');
+  }).catch(function (error) {
+    reportConsoleError('Director Model Calibration', error);
+  });
+}
+
 function directorModelTestObservePhase(tracker, activity, jobId) {
   if (!activity || !activity.queue || String(activity.queue.activeJobId || '') !== String(jobId || '')) return;
+  var observedContext = Number(activity.contextSize || (activity.slot && activity.slot.contextSize) || 0);
+  if (isFinite(observedContext) && observedContext > 0) {
+    tracker.observedContextSize = Math.max(Number(tracker.observedContextSize || 0), observedContext);
+  }
   var phase = String(activity.phase || '');
   if (!phase || phase === 'queued' || phase === 'complete' || phase === 'error' || phase === 'stopped') return;
   var now = Date.now() / 1000;
@@ -402,6 +663,8 @@ function directorModelTestBuildRun(model, job, tracker, localStartedAt) {
     outputChars: text.length,
     usage: usage,
     backendTimings: timings,
+    finishReason: String(result.finishReason || ''),
+    contextSize: Number(result.contextSize || tracker.observedContextSize || 0),
     text: text,
     error: String(job.error || '')
   };
@@ -462,6 +725,12 @@ function directorModelTestRunOne(model, modelNumber) {
     }).then(function (payload) {
       directorModelTestState.session = payload.session;
       directorModelTestRenderSession();
+      reportConsoleInfo(
+        'Director Model Test',
+        'Completed ' + (model.label || model.modelId || model.modelRef) +
+          ' · finish_reason=' + (run.finishReason || 'unknown') +
+          ' · completion_tokens=' + String(Math.round(run.completionTokens || 0))
+      );
       return directorModelTestConsumeJob(directorModelTestState.currentJobId).then(function () { return run; });
     });
   }).finally(function () {
@@ -486,6 +755,7 @@ function directorModelTestStart() {
   }
 
   directorModelTestState.running = true;
+  directorModelTestState.mode = 'test';
   directorModelTestState.stopRequested = false;
   directorModelTestState.startedAt = Date.now() / 1000;
   if (directorModelTestState.activityTimer) window.clearInterval(directorModelTestState.activityTimer);
@@ -567,6 +837,7 @@ function directorModelTestStart() {
     directorModelTestState.currentPhase = '';
     directorModelTestState.currentRuntimeName = '';
     directorModelTestState.startedAt = 0;
+    directorModelTestState.mode = '';
     if (directorModelTestState.activityTimer) {
       window.clearInterval(directorModelTestState.activityTimer);
       directorModelTestState.activityTimer = 0;
@@ -624,6 +895,8 @@ function initializeDirectorModelTest() {
     Array.prototype.forEach.call(document.querySelectorAll('[data-director-model-test-model]'), function (input) { input.checked = false; });
   });
   directorModelTestEl('director-model-test-run').addEventListener('click', directorModelTestStart);
+  directorModelTestEl('director-model-test-calibrate').addEventListener('click', directorModelTestStartCalibration);
+  directorModelTestEl('director-model-test-clear-calibration').addEventListener('click', directorModelTestClearCalibration);
   directorModelTestEl('director-model-test-stop').addEventListener('click', directorModelTestStop);
   directorModelTestEl('director-model-test-export').addEventListener('click', directorModelTestExport);
 

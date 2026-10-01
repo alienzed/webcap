@@ -1422,12 +1422,14 @@ def _completion_result(response, model_id, allow_truncated=False):
     if finish_reason in {"length", "max_tokens"}:
         if not allow_truncated:
             raise RuntimeError(
-                "Director output was truncated because the runtime reached its available token/context limit."
+                "Director output was truncated because the runtime reached its available token/context limit "
+                + "(finish_reason=" + finish_reason + ")."
             )
         content += "\n\n[Output truncated by model/runtime token or context limit.]"
     return {
         "text": content,
         "model": model_id,
+        "finishReason": finish_reason,
         "usage": response.get("usage") if isinstance(response, dict) else None,
         "timings": response.get("timings") if isinstance(response, dict) else None,
     }

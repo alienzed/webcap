@@ -132,7 +132,7 @@ function renderTrainingHistory() {
   var runs = Array.isArray(history.runs) ? history.runs : [];
   var latest = jobs.length ? jobs[0] : null;
   if (els.historyContent) els.historyContent.classList.toggle('hidden', trainingWorkspaceState.historyCollapsed);
-  if (els.historyTools) els.historyTools.classList.toggle('hidden', trainingWorkspaceState.historyCollapsed);
+  if (els.historyTools) els.historyTools.classList.toggle('hidden', archiveActive || trainingWorkspaceState.historyCollapsed);
   if (els.historyCollapseBtn) {
     els.historyCollapseBtn.textContent = 'Training History' + (jobs.length ? ' · ' + jobs.length : '');
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');

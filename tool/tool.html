@@ -918,7 +918,11 @@
                             </section>
                             <section class="training-history-card" aria-label="Training History">
                                 <div class="training-history-heading">
-                                    <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Training History</button>
+                                    <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Training</button>
+                                    <div id="training-history-tabs" class="training-history-tabs" role="tablist" aria-label="Training records">
+                                        <button type="button" class="training-history-tab active" data-training-history-tab="history" role="tab" aria-selected="true">History</button>
+                                        <button type="button" class="training-history-tab" data-training-history-tab="archive" role="tab" aria-selected="false">Archive</button>
+                                    </div>
                                     <div id="training-history-tools" class="training-history-tools hidden">
                                         <div id="training-history-scope" class="training-history-scope hidden" role="group" aria-label="Training History scope">
                                             <button type="button" class="review-captions-btn" data-training-history-scope="set" aria-pressed="false">Current Set</button>

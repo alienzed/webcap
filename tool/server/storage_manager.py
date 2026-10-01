@@ -15,6 +15,7 @@ from .execution_queue import ExecutionQueueStateError, get_job as execution_get_
 from . import inference_runtime
 from .storyboard_store import delete_take, list_stories, load_story, storyboard_root
 from .training_action import managed_actions, read_action
+from .training_archive import archive_root as training_archive_root, list_archives as list_training_archives
 from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
 

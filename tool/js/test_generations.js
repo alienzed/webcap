@@ -1155,8 +1155,9 @@
     }
     files.forEach(function (fileName) {
       var parts = stagedFileParts(fileName);
+      var metadata = candidateMetadata[String(fileName || '')] || null;
       var row = document.createElement('div');
-      row.className = 'test-generations-staged-row';
+      row.className = 'test-generations-staged-row' + (metadata && metadata.selected ? ' is-selected' : '');
       row.title = parts.fileName;
       var include = document.createElement('input');
       include.type = 'checkbox';

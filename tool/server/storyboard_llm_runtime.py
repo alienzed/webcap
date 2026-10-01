@@ -1329,7 +1329,8 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
     if context_size is not None and runtime_id != "local":
         raise ValueError("Director context_size override is supported only by the local llama.cpp runtime.")
 
-    base_settings = _runtime_settings(runtime_id)
+    with _use_runtime(runtime_id):
+        base_settings = _director_config()
     profile = None
     needs_profile_context = (
         runtime_id == "local"

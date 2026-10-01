@@ -5358,3 +5358,57 @@ html[data-theme="dark"] iframe {
   stroke: #ef8a62;
   stroke-width: 1.7;
 }
+
+
+.training-history-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.training-history-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 7px;
+  font: inherit;
+  cursor: pointer;
+}
+.training-history-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.training-history-finalize {
+  white-space: nowrap;
+  min-height: 28px;
+  padding: 4px 8px;
+}
+.training-archive-dialog {
+  width: min(720px, calc(100vw - 32px));
+}
+.training-archive-recap {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.training-archive-alternates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+}
+.training-archive-alternate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+}

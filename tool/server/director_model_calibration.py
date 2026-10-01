@@ -82,7 +82,7 @@ def _positive_int(value, field):
 def _normalize_attempt(attempt):
     attempt = attempt if isinstance(attempt, dict) else {}
     kind = str(attempt.get("kind") or "").strip()
-    if kind not in {"context", "output"}:
+    if kind not in {"context", "output", "prose"}:
         raise ValueError("Director calibration attempt kind is invalid.")
     status = str(attempt.get("status") or "").strip()
     if status not in {"passed", "failed"}:
@@ -159,6 +159,13 @@ def save_profile(profile):
         for attempt in normalized_attempts
     ):
         raise ValueError("Director calibration maxTokens must match a passed output attempt.")
+    if not any(
+        attempt["kind"] == "prose"
+        and attempt["status"] == "passed"
+        and attempt["target"] == max_tokens
+        for attempt in normalized_attempts
+    ):
+        raise ValueError("Director calibration maxTokens must also match a passed long-form prose attempt.")
     if context_mode == "calibrated" and not any(
         attempt["kind"] == "context"
         and attempt["status"] == "passed"

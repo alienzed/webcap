@@ -224,6 +224,7 @@ def test_calibration_protocol_is_progressive_and_versioned():
 
     assert protocol["contextSteps"] == [8192, 16384, 24576, 32768]
     assert protocol["outputSteps"] == [2048, 4096, 8192]
+    assert protocol["outputItemCounts"] == {"2048": 90, "4096": 180, "8192": 360}
     assert protocol["marker"] == model_test.CALIBRATION_MARKER
     prompt = model_test._calibration_output_prompt(4096)
     assert "exactly 180 numbered items" in prompt
@@ -320,3 +321,19 @@ def test_remote_context_calibration_is_rejected(monkeypatch):
 
     with pytest.raises(ValueError, match="local llama.cpp"):
         model_test.enqueue_calibration_run("remote::qwen", "context", 8192)
+
+
+
+def test_model_test_diagnostics_exposes_progressive_calibration_controls():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
+    frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
+
+    assert 'id="director-model-test-calibrate"' in html
+    assert 'id="director-model-test-clear-calibration"' in html
+    assert 'id="director-model-test-calibration-profiles"' in html
+    assert "function directorModelTestStartCalibration()" in frontend
+    assert "function directorModelTestCalibrationAttempt(" in frontend
+    assert "outputItemCounts" in frontend
+    assert "finish_reason=" in frontend
+    assert "save_calibration_profile" in frontend

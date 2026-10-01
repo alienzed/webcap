@@ -395,10 +395,16 @@ def _execute_claimed(job_id, gpu_reserved):
     from .storyboard_llm_runtime import run_contract, run_freeform_chat
     try:
         if client == "chat":
+            overrides = context.get("runtimeOverrides") if isinstance(context.get("runtimeOverrides"), dict) else {}
+            chat_kwargs = {"gpu_reserved": bool(gpu_reserved)}
+            if "maxTokens" in overrides:
+                chat_kwargs["max_tokens"] = overrides["maxTokens"]
+            if "contextSize" in overrides:
+                chat_kwargs["context_size"] = overrides["contextSize"]
             llm_result = run_freeform_chat(
                 model_id,
                 contract.get("messages"),
-                gpu_reserved=bool(gpu_reserved),
+                **chat_kwargs,
             )
         else:
             llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
@@ -651,6 +657,21 @@ def enqueue(client, model_id, contract, context=None, label=""):
         raise ValueError("LLM contract must be an object.")
 
     context = copy.deepcopy(context) if isinstance(context, dict) else {}
+    runtime_overrides = context.get("runtimeOverrides")
+    if runtime_overrides is not None:
+        if client != "chat" or not isinstance(runtime_overrides, dict):
+            raise ValueError("LLM runtimeOverrides are supported only for chat jobs.")
+        unknown_overrides = set(runtime_overrides) - {"maxTokens", "contextSize"}
+        if unknown_overrides:
+            raise ValueError("Unsupported LLM runtime override: " + sorted(unknown_overrides)[0])
+        for field in ("maxTokens", "contextSize"):
+            if field not in runtime_overrides:
+                continue
+            value = runtime_overrides[field]
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError("LLM runtime override " + field + " must be a positive integer.")
+        if "contextSize" in runtime_overrides and runtime_overrides["contextSize"] < 1024:
+            raise ValueError("LLM runtime override contextSize must be at least 1024.")
     request_diagnostic = _request_diagnostic(client, contract)
     with _enqueue_lock:
         job = execution_enqueue(

@@ -52,7 +52,8 @@
       dismissedActivityTargetKey: '',
       sceneCompletions: {},
       activityErrorReported: false,
-      activitySlotSample: null
+      activitySlotSample: null,
+      requestByJobId: {}
     }
   };
 
@@ -388,7 +389,9 @@
   }
 
   function consumeDirectorJob(jobId) {
-    return directorJobRequest(jobId, true);
+    return directorJobRequest(jobId, true).finally(function () {
+      delete storyState.director.requestByJobId[String(jobId || '')];
+    });
   }
 
   function directorTargetFromJob(job) {
@@ -571,6 +574,7 @@
           throw new Error((body && body.error) || 'Storyboard Director request failed.');
         }
         if (payload && body.job) {
+          if (body.job.request) storyState.director.requestByJobId[String(body.job.jobId || '')] = body.job.request;
           trackTransientLlmJob(body.job);
           return waitForDirectorJob(body.job).then(function (result) {
             result.jobId = body.job.jobId;
@@ -1078,12 +1082,26 @@
     return parts;
   }
 
+  function directorRequestDiagnosticLabel(request) {
+    request = request && typeof request === 'object' ? request : null;
+    if (!request) return '';
+    var count = Number(request.messageCount) || 0;
+    var chars = Number(request.contentChars) || 0;
+    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Copy';
+  }
+
+  function copyDirectorRequestDiagnostic(request) {
+    if (!request || !Array.isArray(request.messages)) throw new Error('Director request diagnostic is missing its messages.');
+    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
+  }
+
   function renderDirectorActivity(activity, system) {
     var card = el('storyboard-director-activity');
     var phase = el('storyboard-director-activity-phase');
     var detail = el('storyboard-director-activity-detail');
     var stop = el('storyboard-director-stop');
-    if (!card || !phase || !detail || !stop) throw new Error('Storyboard Director activity markup is missing.');
+    var copy = el('storyboard-director-prompt-copy');
+    if (!card || !phase || !detail || !stop || !copy) throw new Error('Storyboard Director activity markup is missing.');
 
     var phaseName = String(activity && activity.phase || '');
     var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
@@ -1101,6 +1119,12 @@
     stop.classList.toggle('hidden', !canStop);
     stop.disabled = jobStatus === 'stopping';
     stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
+    var requestDiagnostic = storyState.director.requestByJobId[jobId] || null;
+    var requestLabel = directorRequestDiagnosticLabel(requestDiagnostic);
+    copy.classList.toggle('hidden', !requestLabel);
+    copy.textContent = requestLabel;
+    copy.dataset.directorJobId = jobId;
+    copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
     positionDirectorActivity();
     if (!visible) return;
     updateDirectorTrend(activity, system);
@@ -5205,6 +5229,18 @@
     }, { passive: true });
     el('storyboard-director-stop').onclick = function () {
       stopDirectorJob();
+    };
+    el('storyboard-director-prompt-copy').onclick = function () {
+      var button = this;
+      var jobId = String(button.dataset.directorJobId || '');
+      var requestDiagnostic = storyState.director.requestByJobId[jobId];
+      copyDirectorRequestDiagnostic(requestDiagnostic).then(function () {
+        var original = directorRequestDiagnosticLabel(requestDiagnostic);
+        button.textContent = 'Copied';
+        window.setTimeout(function () {
+          if (storyState.director.requestByJobId[jobId]) button.textContent = original;
+        }, 1200);
+      }).catch(reportError);
     };
     el('storyboard-story-action-cancel').onclick = cancelStoryAction;
     el('storyboard-first-cut-btn').onclick = startFirstCut;

@@ -35,7 +35,7 @@ LEGACY_EXECUTION_LANE = "test-generations"
 TEST_ASPECT_RATIO_OPTIONS = tuple(getattr(get_test_model(), "ASPECT_RATIO_OPTIONS", ()))
 _status_lock = threading.RLock()
 _recent_sets_cache = {"expires": 0.0, "items": []}
-_recent_prompts_cache = {"expires": 0.0, "items": []}
+_recent_prompts_cache = {"expires": 0.0, "items": [], "root": None}
 _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _logger = logging.getLogger(__name__)
@@ -235,8 +235,9 @@ def recent_test_sets(limit=8):
 def recent_test_prompts(limit=8):
     """Return recent distinct source prompts from Test sessions."""
     now = time.monotonic()
+    root_key = tuple(str(path) for path in (_central_session_root(), _legacy_central_session_root()))
     cached_items = _recent_prompts_cache.get("items") if isinstance(_recent_prompts_cache.get("items"), list) else []
-    if now < float(_recent_prompts_cache.get("expires") or 0):
+    if _recent_prompts_cache.get("root") == root_key and now < float(_recent_prompts_cache.get("expires") or 0):
         return [dict(item) for item in cached_items[:max(1, int(limit or 8))]]
 
     items = []
@@ -276,6 +277,7 @@ def recent_test_prompts(limit=8):
         if len(items) >= max(1, int(limit or 8)):
             break
     _recent_prompts_cache["items"] = [dict(item) for item in items]
+    _recent_prompts_cache["root"] = root_key
     _recent_prompts_cache["expires"] = time.monotonic() + 10.0
     return items
 

@@ -16,19 +16,57 @@ EXECUTION_LANE = "llm"
 GPU_RESERVATION_OWNER = EXECUTION_LANE
 _execution_queue = execution_ephemeral_lane(EXECUTION_LANE)
 
+def _require_llm_lane(lane_name):
+    if str(lane_name or "").strip() != EXECUTION_LANE:
+        raise ValueError("LLM execution lane is required.")
+
+
 execution_cancel_pending_transient = _execution_queue.cancel_pending_transient
 execution_clear_lane = _execution_queue.clear
 execution_consume_terminal_job = _execution_queue.consume_terminal_job
-execution_claim_next = _execution_queue.claim_next
-execution_enqueue = _execution_queue.enqueue
+
+
+def execution_claim_next(lane_name, runnable_backlog_ids=None, expected_job_id=""):
+    _require_llm_lane(lane_name)
+    if runnable_backlog_ids:
+        raise ValueError("LLM execution does not support a backlog.")
+    return _execution_queue.claim_next(expected_job_id=expected_job_id)
+
+
+def execution_enqueue(lane_name, payload, metadata=None, job_id=None, initial_status="queued"):
+    _require_llm_lane(lane_name)
+    return _execution_queue.enqueue(
+        payload,
+        metadata=metadata,
+        job_id=job_id,
+        initial_status=initial_status,
+    )
+
+
 execution_finish_job_transient = _execution_queue.finish_job_transient
 execution_get_job = _execution_queue.get_job
-execution_lane_snapshot = _execution_queue.lane_snapshot
+
+
+def execution_lane_snapshot(lane_name, include_terminal=True):
+    _require_llm_lane(lane_name)
+    return _execution_queue.lane_snapshot(include_terminal=include_terminal)
+
+
 execution_mark_running = _execution_queue.mark_running
-execution_pause_lane = _execution_queue.pause_lane
+
+
+def execution_pause_lane(lane_name, reason="Queue paused by the user."):
+    _require_llm_lane(lane_name)
+    return _execution_queue.pause_lane(reason=reason)
+
+
 execution_reorder_job = _execution_queue.reorder_job
 execution_request_stop = _execution_queue.request_stop
-execution_resume_lane = _execution_queue.resume_lane
+
+
+def execution_resume_lane(lane_name):
+    _require_llm_lane(lane_name)
+    return _execution_queue.resume_lane()
 
 _dispatch_lock = threading.Lock()
 _enqueue_lock = threading.Lock()

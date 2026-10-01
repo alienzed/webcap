@@ -160,6 +160,10 @@ def test_test_navigation_uses_global_set_context_and_local_run_choice():
     assert "function setApplicationSetContext(folder)" in shell
     assert "fetch('/fs/training_history/all')" in shell
     assert "status !== 'completed' && status !== 'finished_early'" in shell
+    assert "label=\"Recent Sets\"" in shell
+    assert "label=\"Training History\"" in shell
+    assert "!historySeen[item.folder]" in shell
+    assert "rememberShellRecentSet(targetFolder);" in shell
     assert "window.prepareTestBenchSetSwitch(targetFolder);" in shell
     assert "window.setApplicationSetContext(targetFolder);" in script
     assert "openTrainingWorkspaceFolder(targetFolder);" not in script

@@ -77,8 +77,7 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "training-candidates-open-generations" in script
     assert "Remove from Test" in script
     assert "selectionLabel = isSelected ? 'Selected' : 'Select'" in script
-    assert "/fs/test_generations/keep_lora" in script
-    assert "/fs/training_candidates/select" in script
+    assert "/fs/training_candidates/save" in script
     assert "openKeepLora(" in script
     assert "training-candidates-select-toggle" in script
     assert "training-candidates-pinned-actions-secondary" in script
@@ -237,14 +236,15 @@ assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipD
   assert(testedActions.includes('Remove from Test'));
   assert(testedActions.includes('data-training-candidate-test-action="remove"'));
   assert(testedActions.includes('<span>Select</span>'));
-  assert(!testedActions.includes('training-candidates-select-toggle is-select" data-training-candidate-select-epoch="1" title="Save this tested LoRA and mark this epoch as the chosen result." disabled'));
+  assert(testedActions.includes('title="Save this LoRA and mark this epoch as the chosen result."'));
+  assert(!testedActions.includes('training-candidates-select-toggle is-select" data-training-candidate-select-epoch="1" title="Save this LoRA and mark this epoch as the chosen result." disabled'));
   assert(testedActions.includes('aria-label="Open Epoch Folder"'));
   const uncopiedData = Object.assign({}, savedData, {savedArtifacts:[{epoch:1,status:'available',fileName:'adapter.safetensors',inTestFolder:false}]});
   const uncopiedActions = context.trainingCandidatesPinnedActionsHtml(1,uncopiedData);
   assert(uncopiedActions.includes('<span>Test</span>'));
   assert(uncopiedActions.includes('data-training-candidate-test-action="copy"'));
-  assert(uncopiedActions.includes('Test this epoch before selecting it.'));
-  assert(uncopiedActions.includes('disabled'));
+  assert(uncopiedActions.includes('title="Save this LoRA and mark this epoch as the chosen result."'));
+  assert(!uncopiedActions.includes('training-candidates-select-toggle is-select" data-training-candidate-select-epoch="1" title="Save this LoRA and mark this epoch as the chosen result." disabled'));
   const selectedData = Object.assign({}, savedData, {selected:{epoch:1}});
   const selectedActions = context.trainingCandidatesPinnedActionsHtml(1,selectedData);
   assert(selectedActions.includes('<span>Selected</span>'));

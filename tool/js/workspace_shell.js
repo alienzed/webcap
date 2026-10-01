@@ -1117,6 +1117,7 @@ window.exitWorkspaceSurface = exitWorkspaceSurface;
 window.syncWorkspaceConfigEditorUi = syncWorkspaceConfigEditorUi;
 window.syncApplicationShellContext = syncApplicationShellContext;
 window.setApplicationSetContext = setApplicationSetContext;
+window.rememberApplicationSetContext = rememberShellRecentSet;
 window.refreshApplicationRecentSets = refreshApplicationRecentSets;
 window.syncApplicationRecentSetsFromJobs = syncApplicationRecentSetsFromJobs;
 window.deriveShellNavigationState = deriveShellNavigationState;

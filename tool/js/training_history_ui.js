@@ -423,6 +423,9 @@ function loadTrainingHistoryIndex(force) {
       trainingWorkspaceState.history.runs = previous.runs || [];
       trainingWorkspaceState.history.resumeDefaults = previous.resumeDefaults || {};
       trainingWorkspaceState.historyLoaded = true;
+      if (typeof window.refreshApplicationRecentSets === 'function') {
+        window.refreshApplicationRecentSets(true).catch(function () {});
+      }
       return trainingWorkspaceState.history;
     });
   trainingWorkspaceState.historyLoadPromise = request;

@@ -384,7 +384,7 @@ def test_legacy_set_sessions_remain_readable_without_global_recent_scan(tmp_path
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
 
-    assert bench.list_sessions(set_folder, source="HH4013")[0]["session"] == session.name
+    assert bench.list_sessions(set_folder)[0]["session"] == session.name
     assert bench.recent_test_sets() == []
 
 
@@ -1427,7 +1427,7 @@ def test_new_output_test_root_wins_same_name_collision_with_legacy_central(tmp_p
     opened = bench.open_session(set_folder, "same-session")
 
     assert opened["name"] == "Current"
-    assert [item["session"] for item in bench.list_sessions(set_folder, source="shared")] == ["same-session"]
+    assert [item["session"] for item in bench.list_sessions(set_folder)] == ["same-session"]
 
 
 def test_legacy_central_test_sessions_remain_readable_after_output_alignment(tmp_path, monkeypatch):
@@ -1495,7 +1495,7 @@ def test_output_root_session_remains_usable_when_owner_set_is_missing(tmp_path, 
     })
 
     assert not moved_set.exists()
-    assert [item["session"] for item in bench.list_sessions(moved_set, source="staged/demo")] == ["surviving-session"]
+    assert [item["session"] for item in bench.list_sessions(moved_set)] == ["surviving-session"]
     assert bench.open_session(moved_set, session.name)["session"] == session.name
     assert bench.resolve_result_media(moved_set, session.name, media.name) == media
     assert bench.rate_result(moved_set, session.name, media.name, 5)["rating"] == 5
@@ -1550,8 +1550,8 @@ def test_central_test_sessions_are_scoped_to_their_owning_set(tmp_path, monkeypa
         "results": [],
     })
 
-    assert [item["session"] for item in bench.list_sessions(first_set, source="shared-source")] == ["first-session"]
-    assert [item["session"] for item in bench.list_sessions(second_set, source="shared-source")] == ["second-session"]
+    assert [item["session"] for item in bench.list_sessions(first_set)] == ["first-session"]
+    assert [item["session"] for item in bench.list_sessions(second_set)] == ["second-session"]
     assert bench.open_session(first_set, "first-session")["session"] == "first-session"
     with pytest.raises(FileNotFoundError, match="this Set"):
         bench.open_session(first_set, "second-session")

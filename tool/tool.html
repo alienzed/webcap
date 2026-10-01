@@ -46,6 +46,12 @@
                     <button id="storyboard-story-toggle" type="button" class="review-captions-btn hidden" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Overview</button>
                 </div>
                 <div id="app-header-global" class="app-header-global">
+                    <label id="app-header-set-control" class="app-header-set-control">
+                        <span class="app-header-set-label">Set</span>
+                        <select id="app-header-set-select" aria-label="Working Set">
+                            <option value="">Select set…</option>
+                        </select>
+                    </label>
                     <div id="shell-gpu-status" class="shell-gpu-status hidden" aria-live="polite"></div>
                 </div>
             </header>
@@ -918,11 +924,7 @@
                             </section>
                             <section class="training-history-card" aria-label="Training History">
                                 <div class="training-history-heading">
-                                    <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Training</button>
-                                    <div id="training-history-tabs" class="training-history-tabs" role="tablist" aria-label="Training records">
-                                        <button type="button" class="training-history-tab active" data-training-history-tab="history" role="tab" aria-selected="true">History</button>
-                                        <button type="button" class="training-history-tab" data-training-history-tab="archive" role="tab" aria-selected="false">Archive</button>
-                                    </div>
+                                    <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Training History</button>
                                     <div id="training-history-tools" class="training-history-tools hidden">
                                         <div id="training-history-scope" class="training-history-scope hidden" role="group" aria-label="Training History scope">
                                             <button type="button" class="review-captions-btn" data-training-history-scope="set" aria-pressed="false">Current Set</button>
@@ -936,8 +938,6 @@
                                 <div id="training-history-content" class="training-history-content hidden">
                                     <div id="training-history-summary" class="training-history-summary">No managed training runs yet.</div>
                                     <div id="training-history-list" class="training-history-list"></div>
-                                    <div id="training-archive-summary" class="training-history-summary hidden">No archived training runs yet.</div>
-                                    <div id="training-archive-list" class="training-history-list hidden"></div>
                                 </div>
                             </section>
                         </section>
@@ -1030,10 +1030,13 @@
                                         </div>
                                         <span id="test-generations-summary" class="test-generations-summary">Loading Test folder...</span>
                                     </div>
-                                    <label class="training-run-option test-generations-prompt">
-                                        <span>Prompt</span>
+                                    <div class="training-run-option test-generations-prompt">
+                                        <div class="test-generations-prompt-heading">
+                                            <span>Prompt</span>
+                                            <button id="test-generations-recent-prompts-btn" type="button" class="review-captions-btn" title="Reuse a recent prompt">Recent</button>
+                                        </div>
                                         <textarea id="test-generations-prompt" rows="5"></textarea>
-                                    </label>
+                                    </div>
                                     <div class="test-generations-wildcard-tools">
                                         <select id="test-generations-wildcard-model" aria-label="Wildcard Director model"></select>
                                         <button id="test-generations-wildcard-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
@@ -1624,32 +1627,6 @@
                         <div id="training-candidates-modal-content" class="training-candidates-modal-content"></div>
                     </section>
                 </div>
-        <div id="training-archive-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="training-archive-close">
-            <section class="keep-lora-dialog training-archive-dialog" role="dialog" aria-modal="true" aria-labelledby="training-archive-title">
-                <header class="keep-lora-header">
-                    <div>
-                        <h2 id="training-archive-title">Finalize &amp; Archive</h2>
-                        <p class="keep-lora-source">Review the final cleanup before removing training artifacts.</p>
-                    </div>
-                    <button id="training-archive-close" type="button" class="training-review-modal-close" aria-label="Close Finalize & Archive">&times;</button>
-                </header>
-                <div class="keep-lora-content">
-                    <div id="training-archive-recap" class="training-archive-recap"></div>
-                    <div class="keep-lora-field">
-                        <label for="training-archive-name">Archive folder name</label>
-                        <input id="training-archive-name" type="text" spellcheck="false" autocomplete="off">
-                    </div>
-                    <div class="keep-lora-field">
-                        <label>Keep alternate epochs as backup</label>
-                        <div id="training-archive-alternates" class="training-archive-alternates"></div>
-                    </div>
-                </div>
-                <footer class="keep-lora-footer">
-                    <button id="training-archive-cancel" type="button" class="review-captions-btn">Cancel</button>
-                    <button id="training-archive-confirm" type="button" class="training-btn">Finalize &amp; Archive</button>
-                </footer>
-            </section>
-        </div>
         <div id="keep-lora-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="keep-lora-close">
             <section class="keep-lora-dialog" role="dialog" aria-modal="true" aria-labelledby="keep-lora-title">
                 <header class="keep-lora-header">

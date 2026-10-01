@@ -36,6 +36,13 @@ def _profile(**overrides):
                 "completionTokens": 3600,
                 "finishReason": "stop",
             },
+            {
+                "kind": "prose",
+                "target": 4096,
+                "status": "passed",
+                "completionTokens": 3500,
+                "finishReason": "stop",
+            },
         ],
     }
     value.update(overrides)
@@ -91,6 +98,13 @@ def test_calibration_profile_rejects_unproven_limits(calibration_root):
 
     with pytest.raises(ValueError, match="passed output attempt"):
         calibration.save_profile(_profile(maxTokens=8192))
+
+    missing_prose = _profile()
+    missing_prose["attempts"] = [
+        attempt for attempt in missing_prose["attempts"] if attempt["kind"] != "prose"
+    ]
+    with pytest.raises(ValueError, match="long-form prose"):
+        calibration.save_profile(missing_prose)
 
     with pytest.raises(ValueError, match="passed context attempt"):
         calibration.save_profile(_profile(contextSize=32768))

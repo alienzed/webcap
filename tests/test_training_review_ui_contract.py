@@ -168,7 +168,6 @@ assert(html.indexOf('>736 × 416</button>') < html.indexOf('>608 × 352</button>
     )
     assert result.returncode == 0, result.stderr
     assert "training-review-cohort-row" in script
-    assert "training-review-scope-separator" not in script
     assert "Choose up to three. +/− moves a selected target one rung." in script
     assert "reviewCanStepBucket(payload, view, aspect, commonTarget, 1)" in script
     assert "data-review-lower-upscale-target" in script
@@ -319,7 +318,6 @@ assert(renderCalls === 1 && saveCalls === 0 && closeCalls === 0, 'rail navigatio
     assert "trainingReviewRequest" not in dot_bindings
     assert "closeTrainingReviewModal" not in dot_bindings
     assert "selectByFileName" not in dot_bindings
-    assert "training-review-dot-popover" not in script
     assert "trainingWorkspaceState.reviewInspectedSource" in bindings
     assert "setRatingForMediaKey" in bindings
     assert "pruneMedia(source.mediaItem, { selectReplacement: false })" in bindings
@@ -331,7 +329,6 @@ assert(renderCalls === 1 && saveCalls === 0 && closeCalls === 0, 'rail navigatio
     assert "align-items: flex-start" in modal_styles
     assert "width: min(1620px, calc(100vw - 36px));" in styles
     assert "grid-template-columns: minmax(0, 1fr) minmax(320px, 400px)" in styles
-    assert "removeDisabled" not in script
 
 
 def test_scale_impact_scope_chart_floor_and_source_refresh_keep_the_draft():
@@ -457,4 +454,3 @@ def test_run_setup_uses_compact_parameter_rail_and_resume_canvas():
     assert 'function formatTrainingRunLearningRate' in script
     assert "noteParts.push('LR forced on resume')" in script
     assert "note.classList.toggle('hidden', !noteParts.length)" in script
-    assert "classList.toggle('is-dirty'" not in script

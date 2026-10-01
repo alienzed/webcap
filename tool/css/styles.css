@@ -5269,6 +5269,28 @@ html[data-theme="dark"] iframe {
   grid-template-rows: 1fr !important;
 }
 
+.director-prompt-copy-btn {
+  width: fit-content;
+  min-height: 26px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 84%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.director-prompt-copy-btn:hover,
+.director-prompt-copy-btn:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  color: var(--text);
+  outline: none;
+}
+
 .director-stop-btn {
   position: absolute;
   right: 10px;

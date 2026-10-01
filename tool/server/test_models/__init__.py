@@ -64,6 +64,16 @@ def _build_models():
 _MODELS = _build_models()
 
 
+def get_test_model_for_staging_key(staging_key):
+    key = str(staging_key or "").strip().lower()
+    if not key:
+        raise ValueError("Test Generations requires a staging key.")
+    matches = [model for model in _MODELS.values() if model.STAGING_KEY.lower() == key]
+    if len(matches) != 1:
+        raise ValueError("Test Generations has no unique model for staging key: " + key)
+    return matches[0]
+
+
 def get_test_model(profile_id=None):
     model_id = str(profile_id or "").strip()
     if not model_id:

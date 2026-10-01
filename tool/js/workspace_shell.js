@@ -535,6 +535,10 @@ function setApplicationSetContext(folder) {
   if (!targetFolder) throw new Error('A Set folder is required.');
   if (!state.dirStack || !state.dirStack.length) throw new Error('A library root must be selected before switching Sets.');
   if (String(state.folder || '') === targetFolder) return;
+  if (deriveShellNavigationState().activity === 'test') {
+    if (typeof window.prepareTestBenchSetSwitch !== 'function') throw new Error('Test Generations Set switching is unavailable.');
+    window.prepareTestBenchSetSwitch(targetFolder);
+  }
   if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
     clearFocusSet();
   }

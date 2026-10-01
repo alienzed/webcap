@@ -2227,7 +2227,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .director-chat-progress-copy {
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 9px;
 }
@@ -2256,6 +2256,13 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   white-space: nowrap;
 }
 
+
+.director-chat-progress-copy #director-chat-prompt-copy {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .director-chat-progress-copy #director-chat-stop {
   width: auto;

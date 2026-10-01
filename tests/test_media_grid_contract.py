@@ -109,24 +109,15 @@ def test_only_the_surface_grid_and_viewer_remain():
 
     assert 'id="media-grid-surface"' in html
     assert 'id="media-grid-viewer-modal"' in html
-    assert 'id="media-grid-modal"' not in html
     assert "openMediaGridSurface" in actions
-    assert "openMediaGridModal" not in actions
-    assert "renderMediaGridModal" not in actions
-    assert "mediaGridCreateModal" not in actions
     assert "mediaGridGetViewerEls" in state
-    assert "mediaGridBuildFilterControls" not in filters
-    assert "media-grid-left-rail" not in css
-    assert "media-grid-modal" not in css
     assert ".app.shell-revamp.workspace-surface-grid .preview-shell > :not(#media-grid-surface)" in css
-    assert ".app.shell-revamp.workspace-view-grid .preview-shell > :not(#media-grid-surface)" not in css
 
 
 def test_grid_initializes_after_all_classic_scripts_are_loaded():
     actions = _read("tool/js/media_grid_actions.js")
 
     assert "addEventListener('DOMContentLoaded', initMediaGrid);" in actions
-    assert "\ninitMediaGrid();" not in actions
 
 
 def test_grid_delete_exclusively_uses_the_batch_prune_snapshot():

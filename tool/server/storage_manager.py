@@ -737,7 +737,7 @@ def _active_generate_reference_tokens():
             parts = PurePosixPath(str(raw_path or "").replace("\\", "/")).parts
             if (
                 len(parts) >= 4
-                and parts[0] == ".webcap_runtime"
+                and parts[0] == "work"
                 and parts[1] == "generate-references"
                 and GENERATE_REFERENCE_TOKEN_RE.fullmatch(parts[2])
             ):

@@ -133,3 +133,26 @@ def test_activity_snapshot_keeps_other_domains_when_execution_state_is_unavailab
     assert payload["queues"]["inference"]["unavailable"] is True
     assert payload["queues"]["director"]["unavailable"] is True
     assert {item["area"] for item in payload["errors"]} == {"inference", "director"}
+
+
+def test_execution_item_exposes_llm_finish_diagnostics():
+    item = activity_monitor._execution_item("llm", {
+        "id": "llm-done",
+        "status": "completed",
+        "metadata": {
+            "client": "chat",
+            "modelId": "hemmingway",
+            "operation": "freeform_chat",
+        },
+        "result": {
+            "finishReason": "stop",
+            "usage": {
+                "prompt_tokens": 4210,
+                "completion_tokens": 3781,
+            },
+        },
+    })
+
+    assert item["finishReason"] == "stop"
+    assert item["promptTokens"] == 4210
+    assert item["outputTokens"] == 3781

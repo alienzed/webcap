@@ -78,13 +78,27 @@ def test_llm_activity_cards_expose_copy_only_prompt_diagnostics():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    generate = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    test_generations = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    assert 'id="director-chat-prompt-copy"' in html
-    assert 'id="storyboard-director-prompt-copy"' in html
+    for control_id in (
+        "director-chat-prompt-copy",
+        "storyboard-director-prompt-copy",
+        "generate-director-prompt-copy",
+        "test-generations-director-prompt-copy",
+    ):
+        assert f'id="{control_id}"' in html
+
     assert "JSON.stringify(request.messages, null, 2)" in assistant
     assert "payload.job.request || null" in assistant
     assert "requestByJobId" in storyboard
     assert "JSON.stringify(request.messages, null, 2)" in storyboard
-    assert "Prompt sent · " in assistant
-    assert "Prompt sent · " in storyboard
+    assert "response.job && response.job.request || null" in generate
+    assert "JSON.stringify(request.messages, null, 2)" in generate
+    assert "payload.job && payload.job.request || null" in test_generations
+    assert "JSON.stringify(request.messages, null, 2)" in test_generations
+
+    for script in (assistant, storyboard, generate, test_generations):
+        assert "Prompt sent · " in script
+
     assert "<pre" not in html

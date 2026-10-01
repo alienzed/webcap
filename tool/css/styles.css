@@ -2976,6 +2976,11 @@ iframe {
   min-width: 0;
   font-size: 12px;
 }
+.test-generations-staged-row.is-selected {
+  border-radius: 5px;
+  background: color-mix(in srgb, #f7d56a 12%, transparent);
+  box-shadow: inset 2px 0 0 #d9a441;
+}
 .test-generations-staged-copy {
   display: grid;
   min-width: 0;

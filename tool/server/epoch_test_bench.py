@@ -50,7 +50,7 @@ def _owning_set_directory(folder_path):
 
 
 def _test_directory(folder_path, model, source=None):
-    return test_copy_path(model.STAGING_KEY, _owning_set_directory(folder_path).name)
+    return test_copy_path(model.STAGING_KEY, _relative_set_folder(folder_path))
 
 
 def _owner_folder_available(owner_folder):

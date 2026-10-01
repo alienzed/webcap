@@ -231,6 +231,47 @@ def recent_test_sets(limit=8):
     return result
 
 
+def recent_test_prompts(limit=8):
+    """Return recent distinct source prompts from Test sessions."""
+    items = []
+    seen_prompts = set()
+    sessions = []
+    seen_sessions = set()
+    for central_root in (_central_session_root(), _legacy_central_session_root()):
+        if not central_root.is_dir() or central_root.is_symlink():
+            continue
+        for session in central_root.iterdir():
+            if session.name in seen_sessions:
+                continue
+            if session.is_symlink() or not session.is_dir() or not (session / "test.json").is_file():
+                continue
+            seen_sessions.add(session.name)
+            try:
+                modified = (session / "test.json").stat().st_mtime
+            except OSError:
+                modified = 0
+            sessions.append((modified, session))
+    sessions.sort(key=lambda item: item[0], reverse=True)
+
+    for modified, session in sessions:
+        payload = _read_status(session) or {}
+        prompt = str(payload.get("sourcePrompt") or "").strip()
+        if not prompt or prompt in seen_prompts:
+            continue
+        seen_prompts.add(prompt)
+        items.append({
+            "prompt": prompt,
+            "folder": str(payload.get("ownerFolder") or "").strip(),
+            "source": str(payload.get("source") or "").strip(),
+            "modelId": str(payload.get("modelId") or payload.get("model") or "").strip(),
+            "session": session.name,
+            "modified": modified,
+        })
+        if len(items) >= max(1, int(limit or 8)):
+            break
+    return items
+
+
 def remove_candidate(folder_path, file_name, session_name=None, model_id=None, source=None):
     name = str(file_name or "").strip()
     if (
@@ -674,6 +715,9 @@ def _staged_candidate_runs(lora_files, model):
             runs[job_id] = {
                 "jobId": job_id,
                 "folder": str(provenance.get("sourceFolder") or "").strip(),
+                "runName": str(provenance.get("sourceRunName") or "").strip(),
+                "runSequence": str(provenance.get("sourceRunSequence") or "").strip(),
+                "runSummary": provenance.get("runSummary") if isinstance(provenance.get("runSummary"), dict) else {},
             }
     return list(runs.values())
 
@@ -2068,5 +2112,10 @@ def activity_snapshot(folder_path=None):
             "ownerAvailable": _owner_folder_available(owner_folder),
         })
     current = test_presence(folder_path) if folder_path is not None else None
-    return {"active": active, "current": current, "recent": recent_test_sets()}
+    return {
+        "active": active,
+        "current": current,
+        "recent": recent_test_sets(),
+        "recentPrompts": recent_test_prompts(),
+    }
 

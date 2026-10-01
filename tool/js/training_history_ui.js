@@ -255,7 +255,7 @@ function renderTrainingHistory() {
        '</div></div>';
   }).join('');
   if (els.historyShowAllBtn) {
-    els.historyShowAllBtn.classList.toggle('hidden', jobs.length <= 2);
+    els.historyShowAllBtn.classList.toggle('hidden', archiveActive || jobs.length <= 2);
     els.historyShowAllBtn.textContent = trainingWorkspaceState.historyExpanded ? 'Show less' : 'Show all (' + jobs.length + ')';
   }
   var selectedCheckpoint = String(els.checkpointSelect.value || '');

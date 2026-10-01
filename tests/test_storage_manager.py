@@ -19,6 +19,11 @@ def isolate_storage_output_root(monkeypatch):
         "app_cache_root",
         lambda: Path(storage_manager.app_config.FS_ROOT) / ".test-webcap-app-data" / "cache",
     )
+    monkeypatch.setattr(
+        storage_manager.app_config,
+        "app_state_root",
+        lambda: Path(storage_manager.app_config.FS_ROOT) / ".test-webcap-app-data" / "state",
+    )
 
 
 def _write_json(path, payload):

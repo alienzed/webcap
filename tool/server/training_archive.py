@@ -284,7 +284,7 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
         except OSError:
             pass
 
-    clear_history_job(folder, job_id)
+    clear_history_job(app_config.safe_join_fs_root(folder), job_id)
     return {
         "archiveName": destination_name,
         "archivePath": str(destination),

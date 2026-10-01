@@ -1596,6 +1596,21 @@ def test_recent_test_sources_are_derived_from_central_session_metadata(tmp_path,
 
 
 
+def test_legacy_session_without_source_matches_nested_current_source(tmp_path):
+    folder = tmp_path / "sets" / "demo"
+    folder.mkdir(parents=True)
+
+    payload = {
+        "status": "complete",
+        "ownerFolder": "sets/demo",
+        "results": [],
+    }
+
+    assert bench._session_matches_source(payload, folder, "demo")
+    assert bench._session_matches_source(payload, folder, "archive/demo")
+    assert not bench._session_matches_source(payload, folder, "archive/other")
+
+
 def test_recent_test_prompts_are_distinct_and_newest_first(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench, "_recent_prompts_cache", {"expires": 0.0, "items": [], "root": None})

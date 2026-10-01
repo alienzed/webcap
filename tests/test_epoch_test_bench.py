@@ -1285,21 +1285,24 @@ def test_test_enqueue_failure_cleans_inert_children_and_incomplete_session(tmp_p
 
 
 
-def test_test_directory_is_derived_from_current_set_not_arbitrary_source(tmp_path, monkeypatch):
+def test_test_directory_preserves_full_current_set_path(tmp_path, monkeypatch):
     model = bench.get_test_model()
     seen = {}
-    expected = tmp_path / "test-root" / "demo"
+    expected = tmp_path / "test-root" / "sets" / "demo"
 
-    def fake_test_copy_path(stage, set_name):
+    def fake_test_copy_path(stage, set_folder):
         seen["stage"] = stage
-        seen["setName"] = set_name
+        seen["setFolder"] = set_folder
         return expected
 
     monkeypatch.setattr(bench, "test_copy_path", fake_test_copy_path)
-    resolved = bench._test_directory(tmp_path / "sets" / "demo", model, source="ignored/manual")
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    set_folder = tmp_path / "sets" / "demo"
+    set_folder.mkdir(parents=True)
+    resolved = bench._test_directory(set_folder, model, source="ignored/manual")
 
     assert resolved == expected
-    assert seen == {"stage": model.STAGING_KEY, "setName": "demo"}
+    assert seen == {"stage": model.STAGING_KEY, "setFolder": "sets/demo"}
 
 
 def test_prepare_returns_only_candidates_owned_by_current_set(tmp_path, monkeypatch):

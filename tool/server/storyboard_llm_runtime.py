@@ -1433,7 +1433,7 @@ def _completion_result(response, model_id, allow_truncated=False):
     }
 
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False):
+def normalize_freeform_messages(messages):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director Chat messages are required.")
 
@@ -1448,6 +1448,11 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
         if not content:
             raise ValueError("Director Chat messages cannot be empty.")
         normalized.append({"role": role, "content": content})
+    return normalized
+
+
+def run_freeform_chat(model_id, messages, gpu_reserved=False):
+    normalized = normalize_freeform_messages(messages)
 
     operation = "freeform_chat"
     with _request_lock:

@@ -2557,7 +2557,7 @@ iframe {
   position: relative;
   display: grid;
   grid-template-columns: minmax(120px, .75fr) minmax(150px, 1.25fr);
-  grid-template-areas: "label trend" "phase trend" "detail trend" "load trend";
+  grid-template-areas: "label trend" "phase trend" "detail trend" "load trend" "copy trend";
   align-items: stretch;
   column-gap: 14px;
   row-gap: 4px;
@@ -2594,6 +2594,7 @@ iframe {
 
 #test-generations-director-activity-detail { grid-area: detail; }
 #test-generations-director-model-load { grid-area: load; }
+#test-generations-director-prompt-copy { grid-area: copy; margin-top: 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #test-generations-director-activity-trend {
   grid-area: trend;
   min-width: 0;
@@ -2608,7 +2609,7 @@ iframe {
 @media (max-width: 760px) {
   .test-generations-director-activity {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "label" "phase" "detail" "load" "trend";
+    grid-template-areas: "label" "phase" "detail" "load" "copy" "trend";
   }
 }
 
@@ -5268,6 +5269,28 @@ html[data-theme="dark"] iframe {
 .director-activity-trend.is-remote {
   min-height: 32px !important;
   grid-template-rows: 1fr !important;
+}
+
+.director-prompt-copy-btn {
+  width: fit-content;
+  min-height: 26px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 84%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.director-prompt-copy-btn:hover,
+.director-prompt-copy-btn:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  color: var(--text);
+  outline: none;
 }
 
 .director-stop-btn {

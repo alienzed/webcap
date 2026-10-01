@@ -3230,7 +3230,7 @@
   margin: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(150px, 42%);
-  grid-template-areas: "label trend" "phase trend" "detail trend" "load trend";
+  grid-template-areas: "label trend" "phase trend" "detail trend" "load trend" "copy trend";
   align-items: center;
   column-gap: 16px;
   row-gap: 4px;
@@ -3272,6 +3272,7 @@
 
 #storyboard-director-activity-detail { grid-area: detail; }
 #storyboard-director-model-load { grid-area: load; }
+#storyboard-director-prompt-copy { grid-area: copy; margin-top: 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #storyboard-director-activity-trend { grid-area: trend; }
 
 #storyboard-director-activity-trend svg {
@@ -3282,7 +3283,7 @@
   .storyboard-director-activity {
     width: min(340px, calc(100% - 24px));
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "label" "phase" "detail" "load" "trend";
+    grid-template-areas: "label" "phase" "detail" "load" "copy" "trend";
     row-gap: 5px;
   }
 
@@ -3513,7 +3514,8 @@
     "label trend"
     "phase trend"
     "detail trend"
-    "load trend";
+    "load trend"
+    "copy trend";
   align-items: stretch;
   padding: 16px 18px;
 }
@@ -3537,6 +3539,7 @@
       "phase"
       "detail"
       "load"
+      "copy"
       "trend";
   }
 }

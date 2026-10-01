@@ -615,6 +615,21 @@ def storyboard_story_busy(story_id):
     )
 
 
+def _request_diagnostic(client, contract):
+    if client == "chat":
+        from .storyboard_llm_runtime import normalize_freeform_messages
+        messages = normalize_freeform_messages(contract.get("messages"))
+    else:
+        prompt = str(contract.get("prompt") or "").strip()
+        messages = [{"role": "user", "content": prompt}] if prompt else []
+
+    return {
+        "messages": copy.deepcopy(messages),
+        "messageCount": len(messages),
+        "contentChars": sum(len(str(message.get("content") or "")) for message in messages),
+    }
+
+
 def enqueue(client, model_id, contract, context=None, label=""):
     _ensure_execution_reconciled()
     client = str(client or "").strip()
@@ -643,8 +658,11 @@ def enqueue(client, model_id, contract, context=None, label=""):
                 "sceneId": str(context.get("sceneId") or ""),
             },
         )
+    request_diagnostic = _request_diagnostic(client, contract)
     _ensure_monitor_started()
-    return _job_view(execution_get_job(job["id"]))
+    view = _job_view(execution_get_job(job["id"]))
+    view["request"] = request_diagnostic
+    return view
 
 
 def job_status(job_id, consume=False):

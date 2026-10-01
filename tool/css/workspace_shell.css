@@ -2288,6 +2288,12 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   animation: director-chat-progress-slide 1.15s ease-in-out infinite;
 }
 
+.director-chat-progress[data-phase="loading_model"][data-load-known="1"] .director-chat-progress-track span {
+  animation: none;
+  transform: none;
+  transition: width 180ms linear;
+}
+
 .director-chat-progress[data-phase="error"] .director-chat-progress-track span {
   width: 100%;
   animation: none;

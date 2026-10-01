@@ -21,8 +21,8 @@ from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
-MEASURABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy"}
-PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}
+MEASURABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy"}
+PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}
 ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
 ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
 GENERATE_REFERENCE_TOKEN_RE = re.compile(r"^[0-9]+-[0-9a-f]{12}$")

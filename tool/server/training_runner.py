@@ -583,6 +583,14 @@ def _candidate_run_snapshot(folder, job_id):
         }
 
 
+def candidate_run_snapshot(folder, job_id):
+    raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    run_dir = host_path_for_training_path(raw_run_path)
+    if not run_dir.is_dir() or run_dir.is_symlink():
+        raise FileNotFoundError("Recorded training run directory is unavailable.")
+    return run_dir.resolve(strict=True), run
+
+
 def candidate_run_available(folder, job_id):
     try:
         candidate_run_folder_path(folder, job_id)

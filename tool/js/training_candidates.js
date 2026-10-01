@@ -464,8 +464,8 @@ function trainingCandidatesPinnedActionsHtml(epoch, data) {
   var selectionLabel = isSelected ? 'Selected' : 'Select';
   var selectionTitle = isSelected
     ? 'This is the selected epoch for this run.'
-    : (inTestFolder ? 'Save this tested LoRA and mark this epoch as the chosen result.' : 'Test this epoch before selecting it.');
-  var selectionDisabled = isSelected || !inTestFolder ? ' disabled' : '';
+    : 'Save this LoRA and mark this epoch as the chosen result.';
+  var selectionDisabled = isSelected ? ' disabled' : '';
 
   var testAction = inTestFolder ? 'remove' : 'copy';
   var testTitle = inTestFolder ? 'Remove from Test' : 'Copy this epoch into Test Generations.';
@@ -753,13 +753,11 @@ function closeKeepLora() {
 
 function openKeepLora(epoch, data) {
   var artifact = trainingCandidatesAvailableArtifact(epoch, data);
-  if (!artifact || artifact.inTestFolder !== true || !artifact.testFileName) {
-    throw new Error('This epoch is not currently staged in Test Generations.');
-  }
+  if (!artifact) throw new Error('This epoch has no available saved LoRA.');
+
   var run = trainingWorkspaceState.candidatePayload && trainingWorkspaceState.candidatePayload.run || {};
-  var stage = String(artifact.testStage || run.stages || '').trim().toLowerCase();
-  var source = String(artifact.testSource || '').trim();
-  if (!stage || !source) throw new Error('This Test candidate has no usable staging location.');
+  var stage = String(run.stages || '').trim().toLowerCase();
+  if (!stage) throw new Error('This training run has no usable model stage.');
 
   var els = keepLoraElements();
   var setName = String(run.folder || '').replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'set';
@@ -767,8 +765,6 @@ function openKeepLora(epoch, data) {
   keepLoraState = {
     open: true,
     stage: stage,
-    source: source,
-    candidateFile: String(artifact.testFileName || ''),
     destination: '',
     filename: '',
     epoch: Number(epoch),
@@ -776,7 +772,7 @@ function openKeepLora(epoch, data) {
     jobId: String(trainingWorkspaceState.candidateJobId || ''),
     modelLabel: modelLabel
   };
-  els.source.textContent = 'Epoch ' + String(epoch) + ' · ' + keepLoraState.candidateFile;
+  els.source.textContent = 'Epoch ' + String(epoch) + ' · ' + String(artifact.fileName || '.safetensors');
   els.filename.value = '';
   els.save.disabled = true;
   keepLoraSetStatus('Loading destination folders…', false);
@@ -811,55 +807,24 @@ function saveKeepLora() {
   }
 
   els.save.disabled = true;
-  keepLoraSetStatus('Saving…', false);
-  var savedPayload = null;
-  fetch('/fs/test_generations/keep_lora', {
+  keepLoraSetStatus('Saving and selecting…', false);
+  trainingRunnerRequest('/fs/training_candidates/save', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       folder: selectionFolder,
-      stage: keepLoraState.stage,
-      source: keepLoraState.source,
-      candidateFile: keepLoraState.candidateFile,
+      jobId: selectionJobId,
+      epoch: selectedEpoch,
       destination: keepLoraState.destination,
       filename: filename
     })
-  }).then(function (response) {
-    return response.json().then(function (payload) {
-      if (!response.ok || !payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Could not save selected LoRA.');
-      return payload;
-    });
   }).then(function (payload) {
-    savedPayload = payload;
-    keepLoraSetStatus('Marking epoch selected…', false);
-    return trainingRunnerRequest('/fs/training_candidates/select', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder: selectionFolder, jobId: selectionJobId, epoch: selectedEpoch })
-    });
-  }).then(function (selectionResponse) {
     var analysisPayload = ((trainingWorkspaceState.candidatePayload || {}).analysis || {});
-    analysisPayload.selected = selectionResponse && selectionResponse.selected ? selectionResponse.selected : null;
-    var artifacts = analysisPayload.savedArtifacts || [];
-    artifacts.forEach(function (artifact) {
-      if (Number(artifact.epoch) === selectedEpoch) artifact.inTestFolder = false;
-    });
+    analysisPayload.selected = payload && payload.selected ? payload.selected : null;
     renderTrainingCandidates();
-    var cleanupNote = savedPayload && savedPayload.cleanupError ? ' The Test copy could not be removed: ' + savedPayload.cleanupError : '';
     closeKeepLora();
-    setStatus('Saved ' + String(savedPayload && savedPayload.fileName || filename) + ' and selected epoch ' + String(selectedEpoch) + '.' + cleanupNote);
+    setStatus('Saved ' + String(payload && payload.fileName || filename) + ' and selected epoch ' + String(selectedEpoch) + '.');
   }).catch(function (err) {
-    if (savedPayload) {
-      var artifacts = (((trainingWorkspaceState.candidatePayload || {}).analysis || {}).savedArtifacts || []);
-      artifacts.forEach(function (artifact) {
-        if (Number(artifact.epoch) === selectedEpoch) artifact.inTestFolder = false;
-      });
-      renderTrainingCandidates();
-      closeKeepLora();
-      setStatus('Saved ' + String(savedPayload.fileName || filename) + ', but could not mark epoch ' + String(selectedEpoch) + ' selected: ' + String(err.message || err));
-      reportConsoleError('Training Candidates', err);
-      return;
-    }
     els.save.disabled = false;
     keepLoraSetStatus(String(err.message || err), true);
   });

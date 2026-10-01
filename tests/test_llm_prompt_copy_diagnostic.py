@@ -102,3 +102,18 @@ def test_llm_activity_cards_expose_copy_only_prompt_diagnostics():
         assert "Prompt sent · " in script
 
     assert "<pre" not in html
+
+
+def test_invalid_freeform_request_does_not_leave_a_queued_job(llm_root):
+    with pytest.raises(ValueError, match="supports only user and assistant messages"):
+        llm_runner.enqueue(
+            "chat",
+            "qwen",
+            {
+                "operation": "freeform_chat",
+                "messages": [{"role": "system", "content": "Unexpected"}],
+            },
+            label="Director Chat",
+        )
+
+    assert llm_runner.snapshot()["jobs"] == []

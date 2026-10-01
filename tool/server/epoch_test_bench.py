@@ -161,9 +161,6 @@ def keep_test_candidate(
 ):
     model = get_test_model_for_staging_key(stage)
     candidate = _test_candidate_source_path(folder_path, model, source, candidate_name)
-    if _active_test_candidate(folder_path, model, source, candidate_name):
-        raise RuntimeError("This Test candidate is still queued or running.")
-
     destination_directory = test_source_path(model.STAGING_KEY, destination)
     if destination_directory.is_symlink() or not destination_directory.is_dir():
         raise FileNotFoundError("Keep LoRA destination folder does not exist.")

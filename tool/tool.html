@@ -2065,10 +2065,21 @@
                             <div id="director-model-test-models" class="director-model-test-models"></div>
                             <div class="app-settings-actions app-settings-actions-inline director-model-test-actions">
                                 <button id="director-model-test-run" type="button">Run Selected</button>
+                                <button id="director-model-test-calibrate" type="button">Calibrate Selected</button>
                                 <button id="director-model-test-stop" type="button" class="hidden">Stop</button>
                                 <button id="director-model-test-export" type="button" class="review-captions-btn" disabled>Export JSON</button>
                             </div>
                             <div id="director-model-test-activity" class="director-model-test-activity" aria-live="polite"></div>
+                            <details class="app-settings-advanced director-model-calibration">
+                                <summary>
+                                    <span>Calibration Profiles</span>
+                                    <button id="director-model-test-clear-calibration" type="button" class="review-captions-btn" disabled>Clear Profiles</button>
+                                </summary>
+                                <div class="app-settings-disclosure-body">
+                                    <p class="app-settings-help">Progressively verifies local llama.cpp context capacity and clean output ceilings per model. Remote context remains runtime-managed. Explicit Director settings still take priority.</p>
+                                    <div id="director-model-test-calibration-profiles"><p class="app-settings-help">No calibrated model profiles yet.</p></div>
+                                </div>
+                            </details>
                             <div id="director-model-test-results"><p class="app-settings-help">No results yet.</p></div>
                         </section>
                     </div>

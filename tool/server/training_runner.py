@@ -773,7 +773,24 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename):
         with source.open("rb") as source_handle, destination_path.open("xb") as destination_handle:
             shutil.copyfileobj(source_handle, destination_handle)
             created = True
-        selected = select_candidate_epoch(folder, job_id, epoch)["selected"]
+        raw_run_path, selected_run = _candidate_run_snapshot(folder, job_id)
+        run_dir = host_path_for_training_path(raw_run_path)
+        if not run_dir.is_dir() or run_dir.is_symlink():
+            raise FileNotFoundError("Recorded training run directory is unavailable.")
+        analysis = _analyze_run_directory(run_dir, algorithm="v5")
+        step = _candidate_epoch_step(analysis, epoch)
+        identity = _candidate_manifest_id(selected_run)
+        if not identity:
+            raise RuntimeError("Recorded training job has no managed action identity for durable selection.")
+        selected = _select_epoch(
+            run_dir.resolve(strict=True),
+            identity,
+            int(epoch),
+            step,
+            saved_stage=stage,
+            saved_destination=str(destination or ""),
+            saved_file_name=destination_path.name,
+        )
     except Exception:
         if created:
             try:

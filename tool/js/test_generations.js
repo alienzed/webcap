@@ -3115,8 +3115,41 @@
     }).catch(showError);
   }
 
+  function removeDeletedSessionRow(sessionName) {
+    var host = el('test-generations-sessions-list');
+    if (!host) return;
+    var key = 'session:' + String(sessionName || '');
+    var row = null;
+    Array.prototype.some.call(host.querySelectorAll('[data-session-row-key]'), function (candidate) {
+      if (String(candidate.dataset.sessionRowKey || '') !== key) return false;
+      row = candidate;
+      return true;
+    });
+    if (!row) return;
+    var group = row.closest('[data-session-group]');
+    row.remove();
+
+    if (group) {
+      var body = group.querySelector('[data-session-group-list]');
+      if (body && !body.children.length) group.remove();
+    }
+
+    var countEl = el('test-generations-sessions-count');
+    if (countEl) {
+      countEl.textContent = String(Math.max(0, Number(countEl.textContent || 0) - 1));
+    }
+
+    if (!host.querySelector('[data-session-row-key]') && !host.querySelector('.test-generations-library-empty')) {
+      var empty = document.createElement('div');
+      empty.className = 'test-generations-library-empty';
+      empty.textContent = 'No test sessions yet.';
+      host.appendChild(empty);
+    }
+  }
+
   function deleteSession(sessionName) {
     return request('test_delete_session', { session: String(sessionName || '') }).then(function (payload) {
+      removeDeletedSessionRow(payload && payload.deleted);
       if (currentSession === String(payload.deleted || '')) {
         currentSession = '';
         currentSessionFolder = '';
@@ -3126,10 +3159,6 @@
         if (payload.latest && payload.latest.session) selectSessionStatus(payload.latest);
         else renderStatus({ status: 'idle' });
       }
-      // The delete response is scoped to the deleted session's source/model.
-      // Re-render from the authoritative session + shared queue queries so
-      // unrelated queued/running Test sessions are not temporarily removed.
-      return refreshSessions();
     });
   }
 

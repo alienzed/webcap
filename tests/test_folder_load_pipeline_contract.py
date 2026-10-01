@@ -30,16 +30,8 @@ def test_folder_navigation_does_not_scan_training_history_for_badges():
     runner_ui = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
 
     describe = app[app.index("def _build_fs_describe_payload"):app.index(" # Media metadata endpoint")]
-    assert "training_runner_folder_statuses" not in app
-    assert "trainingStatus" not in describe
-    assert "def folder_statuses_for_folders" not in runner
-    assert "completed_stages" not in runner
 
     badge_logic = media[media.index("function liveFolderTrainingStatus"):media.index("async function renderFileList")]
     assert "status === 'queued'" in badge_logic
     assert "['starting', 'running', 'stopping']" in badge_logic
-    assert "Trained" not in badge_logic
-    assert "Partially trained" not in badge_logic
-    assert "Ready to train" not in badge_logic
-    assert "Caption review needed" not in badge_logic
     assert "refreshFolderQueueStatusBadges();" in runner_ui

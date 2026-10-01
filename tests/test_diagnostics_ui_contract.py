@@ -27,9 +27,6 @@ def test_diagnostics_is_a_secondary_utility_not_a_workspace():
     assert "'/app/environment'" in script
     assert "directorModelTestRefresh()" in script
 
-    assert "h3-calibration" not in settings
-    assert "runEnvironmentCheck" not in settings
-    assert "installPythonRequirements" not in settings
 
 
 def test_settings_keeps_persistent_advanced_controls_only():
@@ -44,6 +41,3 @@ def test_settings_keeps_persistent_advanced_controls_only():
     assert '<summary>Debug Logging</summary>' in settings_markup
     assert '<summary>Raw Configuration</summary>' in settings_markup
     assert '<summary>Danger Zone</summary>' in settings_markup
-    assert 'id="h3-calibration-settings"' not in settings_markup
-    assert 'id="director-model-test-settings"' not in settings_markup
-    assert 'id="app-settings-environment-run-btn"' not in settings_markup

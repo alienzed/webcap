@@ -4,8 +4,18 @@ from datetime import datetime, timezone
 
 from flask import jsonify, request
 
+from .director_model_calibration import clear_profiles, list_profiles, save_profile
+
 
 SESSION_VERSION = 1
+CONTEXT_STEPS = (8192, 16384, 24576, 32768)
+OUTPUT_STEPS = (2048, 4096, 8192)
+OUTPUT_ITEM_COUNTS = {
+    2048: 70,
+    4096: 140,
+    8192: 280,
+}
+CALIBRATION_MARKER = "WEB_CAP_CALIBRATION_COMPLETE"
 DEFAULT_PROMPT = "Expand the source concept below into a polished, production-ready cinematic generation prompt suitable for a high-quality text-to-video model.\n\nDevelop the scene with useful visual specificity. Enrich the environment, composition, camera perspective and movement, lighting, weather, physical motion, textures, body language, spatial relationships, atmosphere, and small observable details that would help the generation model create a coherent and convincing scene.\n\nUse your judgment about which details are worth developing. Preserve the identity, setting, mood, and essential situation of the source concept while making it substantially richer and more visually complete.\n\nKeep the scene internally consistent from beginning to end. Details such as the subject's appearance and clothing, location, weather, lighting, time of day, and overall atmosphere should remain coherent throughout the prompt.\n\nWrite the result as one directly usable generation prompt rather than commentary, analysis, an outline, or an explanation of your choices.\n\nAim for approximately 350–500 words.\n\nSource concept:\n\nA woman in her early thirties stands alone at a nearly empty roadside bus stop late at night. She wears a dark green wool coat over office clothes and carries a small black shoulder bag. It has been raining for some time. The pavement is wet and reflective, but the rain is now light. She looks tired and slightly cold, occasionally checking the empty road for the bus. A glass shelter beside her is lit by a single cool fluorescent tube. Across the road are closed storefronts with their signs turned off. The mood is quiet, lonely, and realistic rather than frightening. Nothing dramatic happens; she simply waits."
 PROTOCOL = {
     "id": "expansion-v1",
@@ -169,6 +179,76 @@ def finish_session(session_id, status="completed"):
     return _write_session(session)
 
 
+def _calibration_output_prompt(target):
+    target = int(target)
+    item_count = OUTPUT_ITEM_COUNTS[target]
+    return (
+        "This is a deterministic output-capacity calibration. "
+        "Write exactly " + str(item_count) + " numbered items, starting at 1 and ending at "
+        + str(item_count) + ". Each item must be one concrete cinematic sentence of 12-18 words. "
+        "Do not summarize, skip numbers, stop early, or add a preamble. "
+        "After item " + str(item_count) + ", write this exact marker on its own line: "
+        + CALIBRATION_MARKER + "."
+    )
+
+
+def calibration_protocol():
+    return {
+        "contextSteps": list(CONTEXT_STEPS),
+        "outputSteps": list(OUTPUT_STEPS),
+        "marker": CALIBRATION_MARKER,
+        "description": (
+            "Local llama.cpp context is tested progressively at fixed tiers. "
+            "Output capacity is tested progressively with bounded long-form completion tasks."
+        ),
+    }
+
+
+def enqueue_calibration_run(model_ref, kind, target):
+    from .llm_runner import enqueue
+    from .storyboard_llm_runtime import list_models
+
+    model_ref = str(model_ref or "").strip()
+    kind = str(kind or "").strip()
+    try:
+        target = int(target)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Director calibration target must be an integer.") from exc
+
+    models = list_models(reload=False)
+    model = next((item for item in models if str(item.get("id") or "") == model_ref), None)
+    if model is None:
+        raise FileNotFoundError("Director calibration model is not available: " + model_ref)
+
+    if kind == "context":
+        if str(model.get("runtimeId") or "") != "local":
+            raise ValueError("Context calibration is available only for the local llama.cpp runtime.")
+        if target not in CONTEXT_STEPS:
+            raise ValueError("Unsupported Director context calibration target.")
+        messages = [{"role": "user", "content": "Reply with exactly: CONTEXT_OK"}]
+        overrides = {"contextSize": target, "maxTokens": 64}
+        label = "Director Context Calibration"
+    elif kind == "output":
+        if target not in OUTPUT_STEPS:
+            raise ValueError("Unsupported Director output calibration target.")
+        messages = [{"role": "user", "content": _calibration_output_prompt(target)}]
+        overrides = {"maxTokens": target}
+        label = "Director Output Calibration"
+    else:
+        raise ValueError("Director calibration kind must be context or output.")
+
+    return enqueue(
+        "chat",
+        model_ref,
+        {
+            "operation": "freeform_chat",
+            "messages": messages,
+        },
+        context={"runtimeOverrides": overrides},
+        label=label,
+    )
+
+
 def enqueue_protocol_run(session_id, model_ref):
     from .llm_runner import enqueue
 
@@ -204,6 +284,8 @@ def register_routes(app):
                 return jsonify({
                     "ok": True,
                     "protocol": PROTOCOL,
+                    "calibrationProtocol": calibration_protocol(),
+                    "calibrationProfiles": list_profiles(),
                     "session": current_session(),
                 })
 
@@ -220,6 +302,22 @@ def register_routes(app):
                     "ok": True,
                     "job": enqueue_protocol_run(data.get("sessionId"), data.get("modelRef")),
                 }), 202
+            if action == "enqueue_calibration":
+                return jsonify({
+                    "ok": True,
+                    "job": enqueue_calibration_run(data.get("modelRef"), data.get("kind"), data.get("target")),
+                }), 202
+            if action == "save_calibration_profile":
+                return jsonify({
+                    "ok": True,
+                    "profile": save_profile(data.get("profile")),
+                    "calibrationProfiles": list_profiles(),
+                })
+            if action == "clear_calibration_profiles":
+                return jsonify({
+                    "ok": True,
+                    "calibrationProfiles": clear_profiles(),
+                })
             if action == "save_run":
                 return jsonify({
                     "ok": True,

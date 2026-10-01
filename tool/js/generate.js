@@ -8,6 +8,7 @@
     lorasByModel: {},
     loraMode: window.localStorage.getItem('webcap.generate.loraMode') === 'sweep' ? 'sweep' : 'selected',
     sweepFolderByModel: {},
+    sweepSubmissionSerial: 0,
     promptLibrary: { items: [], open: false, activeId: '', query: '' },
     director: {
       models: [],
@@ -444,17 +445,24 @@
     });
   }
 
-  function collectReferences() {
-    var model = currentModel();
-    var references = {};
-    var uploadedPaths = [];
-    var roles = (model && model.references || []).slice();
-    var chain = Promise.resolve();
-
-    roles.forEach(function (role) {
+  function captureReferenceFiles(model) {
+    var files = {};
+    (model && Array.isArray(model.references) ? model.references : []).forEach(function (role) {
       var input = el('generate-reference-' + role);
       var file = input && input.files && input.files[0];
-      if (!file) return;
+      if (file) files[role] = file;
+    });
+    return files;
+  }
+
+  function uploadReferenceFiles(referenceFiles) {
+    var files = referenceFiles && typeof referenceFiles === 'object' ? referenceFiles : {};
+    var references = {};
+    var uploadedPaths = [];
+    var chain = Promise.resolve();
+
+    Object.keys(files).forEach(function (role) {
+      var file = files[role];
       chain = chain.then(function () {
         return uploadReference(file).then(function (path) {
           references[role] = path;
@@ -470,6 +478,10 @@
         throw err;
       });
     });
+  }
+
+  function collectReferences() {
+    return uploadReferenceFiles(captureReferenceFiles(currentModel()));
   }
 
   function promptLibraryItem(promptId) {
@@ -634,7 +646,7 @@
     return settings;
   }
 
-  function runGenerateSweep() {
+  function captureSweepSubmission() {
     if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before generating.');
     var model = currentModel();
     var prompt = String(el('generate-prompt').value || '').trim();
@@ -643,52 +655,66 @@
 
     var folders = sweepFolders(model);
     var folder = savedSweepFolder(model.id, folders);
-    var names = sweepLoras(model, folder);
+    var names = sweepLoras(model, folder).slice();
     var includeBase = !!(el('generate-sweep-base') && el('generate-sweep-base').checked);
     var strength = Number(el('generate-sweep-strength').value);
     if (!Number.isFinite(strength)) throw new Error('Sweep LoRA strength must be numeric.');
     if (!names.length && !includeBase) throw new Error('The selected Sweep folder contains no LoRAs.');
 
-    var items = includeBase ? [null].concat(names) : names.slice();
-    var settings = frozenSweepSettings();
-    var button = el('generate-run-btn');
+    generateState.sweepSubmissionSerial += 1;
+    return {
+      id: generateState.sweepSubmissionSerial,
+      modelId: String(model.id || ''),
+      prompt: prompt,
+      settings: Object.assign({}, frozenSweepSettings()),
+      strength: strength,
+      items: includeBase ? [null].concat(names) : names,
+      referenceFiles: captureReferenceFiles(model)
+    };
+  }
+
+  function setSweepSubmissionStatus(submission, message, tone) {
+    if (submission.id === generateState.sweepSubmissionSerial) setStatus(message, tone);
+  }
+
+  function runGenerateSweep() {
+    var submission = captureSweepSubmission();
     var queued = 0;
-    button.dataset.generateSubmitBusy = '1';
-    button.disabled = true;
-    syncPromptAssistantDependencies();
-    setStatus('Preparing Sweep…');
+    setSweepSubmissionStatus(submission, 'Queueing Sweep…');
 
     var chain = Promise.resolve();
-    items.forEach(function (name) {
+    submission.items.forEach(function (name) {
       chain = chain.then(function () {
-        return collectReferences();
+        return uploadReferenceFiles(submission.referenceFiles);
       }).then(function (references) {
         return postJson('/fs/generate', {
-          modelId: model.id,
-          prompt: prompt,
-          settings: Object.assign({}, settings),
-          loras: name ? [{ name: name, strength: strength }] : [],
+          modelId: submission.modelId,
+          prompt: submission.prompt,
+          settings: Object.assign({}, submission.settings),
+          loras: name ? [{ name: name, strength: submission.strength }] : [],
           references: references
         });
       }).then(function (payload) {
         queued += 1;
         trackGenerateJob(payload.job && payload.job.jobId);
         syncGenerationPreviewCard(payload.job);
-        setStatus('Queued Sweep · ' + queued + ' / ' + items.length);
+        setSweepSubmissionStatus(submission, 'Queued Sweep · ' + queued + ' / ' + submission.items.length);
       });
     });
 
     return chain.then(function () {
       return typeof window.refreshInferenceQueue === 'function' ? window.refreshInferenceQueue() : null;
     }).then(function () {
-      setStatus('Sweep queued · ' + queued + ' generation' + (queued === 1 ? '' : 's') + '.');
+      setSweepSubmissionStatus(
+        submission,
+        'Sweep queued · ' + queued + ' generation' + (queued === 1 ? '' : 's') + '.'
+      );
     }).catch(function (err) {
-      reportError(err, 'Sweep stopped · ' + queued + ' / ' + items.length + ' queued');
-    }).then(function () {
-      delete button.dataset.generateSubmitBusy;
-      button.disabled = false;
-      syncGenerateRunLabel();
-      syncPromptAssistantDependencies();
+      if (submission.id === generateState.sweepSubmissionSerial) {
+        reportError(err, 'Sweep stopped · ' + queued + ' / ' + submission.items.length + ' queued');
+      } else if (typeof window.reportConsoleError === 'function') {
+        window.reportConsoleError('Generate', String(err && err.message ? err.message : err));
+      }
     });
   }
 

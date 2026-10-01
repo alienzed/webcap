@@ -678,6 +678,35 @@ def _staged_candidate_runs(lora_files, model):
     return list(runs.values())
 
 
+def _staged_candidate_metadata(lora_files, model):
+    selected_by_run = {}
+    result = {}
+    for lora_file in lora_files:
+        if not _is_webcap_staged_lora(lora_file, model):
+            continue
+        provenance = _staged_lora_provenance(lora_file)
+        folder = str(provenance.get("sourceFolder") or "").strip()
+        job_id = str(provenance.get("sourceJobId") or "").strip()
+        epoch = int(provenance.get("sourceEpoch"))
+        run_key = (folder, job_id)
+        if run_key not in selected_by_run:
+            try:
+                selected_by_run[run_key] = candidate_selected_epoch(folder, job_id)
+            except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
+                selected_by_run[run_key] = None
+        selected = selected_by_run[run_key]
+        result[lora_file.name] = {
+            "jobId": job_id,
+            "folder": folder,
+            "epoch": epoch,
+            "stage": str(provenance.get("stage") or "").strip().lower(),
+            "sourceFileName": str(provenance.get("sourceFileName") or "").strip(),
+            "selected": bool(selected and int(selected.get("epoch") or 0) == epoch),
+            "selectedEpoch": selected,
+        }
+    return result
+
+
 def _deterministic_source_owner(model, source):
     try:
         directory = test_source_path(model.STAGING_KEY, str(source or "").strip())

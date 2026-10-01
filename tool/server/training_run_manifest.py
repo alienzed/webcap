@@ -103,7 +103,7 @@ def _write_unlocked(run_dir, payload):
             pass
 
 
-def select_epoch(run_dir, run_id, epoch, step):
+def select_epoch(run_dir, run_id, epoch, step, saved_stage=None, saved_destination=None, saved_file_name=None):
     identity = _validate_run_id(run_id)
     try:
         epoch_number = int(epoch)

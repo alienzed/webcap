@@ -851,6 +851,14 @@ def _candidate_selected_epoch(run_dir, run):
     return _selected_epoch(run_dir, identity) if identity else None
 
 
+def candidate_selected_epoch(folder, job_id):
+    raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    run_dir = host_path_for_training_path(raw_run_path)
+    if not run_dir.is_dir() or run_dir.is_symlink():
+        raise FileNotFoundError("Recorded training run directory is unavailable.")
+    return _candidate_selected_epoch(run_dir.resolve(strict=True), run)
+
+
 def _candidate_epoch_step(analysis, epoch):
     wanted = int(epoch)
     for point in analysis.get("epochLossPoints") or []:

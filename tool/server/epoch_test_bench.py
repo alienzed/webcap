@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 from . import config as app_config
 from .folder_state_store import read_folder_state, set_media_rating
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
-from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path
+from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path, test_source_root_for_stage
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
@@ -156,8 +156,15 @@ def keep_test_candidate(
     destination_directory = test_source_path(model.STAGING_KEY, destination)
     if destination_directory.is_symlink() or not destination_directory.is_dir():
         raise FileNotFoundError("Keep LoRA destination folder does not exist.")
-    if candidate.resolve() == destination_directory.resolve():
-        raise ValueError("Keep LoRA destination must be outside the Test staging folder.")
+    staging_root = test_source_root_for_stage(model.STAGING_KEY).resolve()
+    candidate_directory = candidate.parent.resolve()
+    destination_resolved = destination_directory.resolve()
+    if destination_resolved == candidate_directory:
+        raise ValueError("Keep LoRA destination must be outside the Test candidate folder.")
+    try:
+        destination_resolved.relative_to(staging_root)
+    except ValueError as exc:
+        raise ValueError("Keep LoRA destination must stay inside the configured Test staging root.") from exc
 
     requested_name = str(filename or "").strip()
     if not requested_name or requested_name in (".", "..") or Path(requested_name).name != requested_name or "/" in requested_name or "\\" in requested_name:

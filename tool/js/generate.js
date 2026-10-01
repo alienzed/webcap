@@ -6,6 +6,8 @@
     unavailableModels: [],
     modelId: window.localStorage.getItem('webcap.generate.model') || '',
     lorasByModel: {},
+    loraMode: window.localStorage.getItem('webcap.generate.loraMode') === 'sweep' ? 'sweep' : 'selected',
+    sweepFolderByModel: {},
     promptLibrary: { items: [], open: false, activeId: '', query: '' },
     director: {
       models: [],
@@ -131,6 +133,105 @@
     window.localStorage.setItem('webcap.generate.loras.' + id, JSON.stringify(savedLoras(id)));
   }
 
+  function loraFolder(name) {
+    var normalized = String(name || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    var index = normalized.lastIndexOf('/');
+    return index === -1 ? '' : normalized.slice(0, index);
+  }
+
+  function sweepFolders(model) {
+    var seen = {};
+    (model && Array.isArray(model.loras) ? model.loras : []).forEach(function (name) {
+      seen[loraFolder(name)] = true;
+    });
+    return Object.keys(seen).sort(function (left, right) {
+      if (!left) return -1;
+      if (!right) return 1;
+      return left.localeCompare(right, undefined, { sensitivity: 'base' });
+    });
+  }
+
+  function savedSweepFolder(modelId, folders) {
+    var id = String(modelId || '');
+    var available = Array.isArray(folders) ? folders : [];
+    if (!Object.prototype.hasOwnProperty.call(generateState.sweepFolderByModel, id)) {
+      var saved = window.localStorage.getItem('webcap.generate.sweepFolder.' + id);
+      generateState.sweepFolderByModel[id] = saved === null ? '' : String(saved);
+    }
+    var selected = String(generateState.sweepFolderByModel[id] || '');
+    if (available.indexOf(selected) === -1) selected = available.length ? available[0] : '';
+    generateState.sweepFolderByModel[id] = selected;
+    return selected;
+  }
+
+  function sweepLoras(model, folder) {
+    return (model && Array.isArray(model.loras) ? model.loras : []).filter(function (name) {
+      return loraFolder(name) === String(folder || '');
+    });
+  }
+
+  function syncGenerateRunLabel() {
+    var button = el('generate-run-btn');
+    if (!button || button.dataset.generateSubmitBusy === '1') return;
+    if (generateState.loraMode !== 'sweep') {
+      button.textContent = 'Generate';
+      return;
+    }
+    var model = currentModel();
+    var folders = sweepFolders(model);
+    var folder = savedSweepFolder(model && model.id, folders);
+    var count = sweepLoras(model, folder).length + (el('generate-sweep-base') && el('generate-sweep-base').checked ? 1 : 0);
+    button.textContent = count ? 'Generate Sweep (' + count + ')' : 'Generate Sweep';
+  }
+
+  function renderSweep() {
+    var model = currentModel();
+    var select = el('generate-sweep-folder');
+    var summary = el('generate-sweep-summary');
+    var host = el('generate-sweep-list');
+    if (!select || !summary || !host) throw new Error('Generate Sweep controls are missing.');
+
+    var folders = sweepFolders(model);
+    var selected = savedSweepFolder(model && model.id, folders);
+    select.innerHTML = folders.map(function (folder) {
+      var label = folder || '(Root)';
+      return '<option value="' + escapeHtml(folder) + '">' + escapeHtml(label) + '</option>';
+    }).join('');
+    select.disabled = !folders.length;
+    if (folders.length) select.value = selected;
+
+    var names = sweepLoras(model, selected);
+    summary.textContent = names.length
+      ? names.length + ' LoRA' + (names.length === 1 ? '' : 's') + ' in ' + (selected || 'root')
+      : 'No LoRAs available for Sweep.';
+    host.innerHTML = names.map(function (name) {
+      var leaf = String(name || '').split('/').pop();
+      return '<div class="generate-sweep-row" title="' + escapeHtml(name) + '">' + escapeHtml(leaf) + '</div>';
+    }).join('');
+    syncGenerateRunLabel();
+  }
+
+  function setLoraMode(mode) {
+    var selectedMode = mode === 'sweep' ? 'sweep' : 'selected';
+    generateState.loraMode = selectedMode;
+    window.localStorage.setItem('webcap.generate.loraMode', selectedMode);
+
+    var selectedTab = el('generate-lora-selected-tab');
+    var sweepTab = el('generate-lora-sweep-tab');
+    var selectedPanel = el('generate-lora-selected-panel');
+    var sweepPanel = el('generate-lora-sweep-panel');
+    if (!selectedTab || !sweepTab || !selectedPanel || !sweepPanel) throw new Error('Generate LoRA mode controls are missing.');
+
+    selectedTab.classList.toggle('active', selectedMode === 'selected');
+    sweepTab.classList.toggle('active', selectedMode === 'sweep');
+    selectedTab.setAttribute('aria-selected', selectedMode === 'selected' ? 'true' : 'false');
+    sweepTab.setAttribute('aria-selected', selectedMode === 'sweep' ? 'true' : 'false');
+    selectedPanel.classList.toggle('hidden', selectedMode !== 'selected');
+    sweepPanel.classList.toggle('hidden', selectedMode !== 'sweep');
+    if (selectedMode === 'sweep') renderSweep();
+    else syncGenerateRunLabel();
+  }
+
   function populateModelSelector() {
     var select = el('generate-model');
     if (!select) return;
@@ -215,6 +316,8 @@
         : 'No required workflow LoRAs.';
     }
     renderLoras();
+    renderSweep();
+    setLoraMode(generateState.loraMode);
   }
 
   function renderLoras() {
@@ -513,6 +616,78 @@
       reportError(err, conciseGenerateError(err, 'Generation failed'));
     }).then(function () {
       delete button.dataset.generateSubmitBusy;
+      syncPromptAssistantDependencies();
+    });
+  }
+
+
+  function frozenSweepSettings() {
+    var settings = collectSettings();
+    if (Object.prototype.hasOwnProperty.call(settings, 'seed')) {
+      var seed = Number(settings.seed);
+      if (!Number.isFinite(seed) || seed < 0) {
+        var values = new Uint32Array(1);
+        window.crypto.getRandomValues(values);
+        settings.seed = String(values[0]);
+      }
+    }
+    return settings;
+  }
+
+  function runGenerateSweep() {
+    if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before generating.');
+    var model = currentModel();
+    var prompt = String(el('generate-prompt').value || '').trim();
+    if (!model) throw new Error('Choose a Base Model.');
+    if (!prompt) throw new Error('Enter a generation prompt.');
+
+    var folders = sweepFolders(model);
+    var folder = savedSweepFolder(model.id, folders);
+    var names = sweepLoras(model, folder);
+    var includeBase = !!(el('generate-sweep-base') && el('generate-sweep-base').checked);
+    var strength = Number(el('generate-sweep-strength').value);
+    if (!Number.isFinite(strength)) throw new Error('Sweep LoRA strength must be numeric.');
+    if (!names.length && !includeBase) throw new Error('The selected Sweep folder contains no LoRAs.');
+
+    var items = includeBase ? [null].concat(names) : names.slice();
+    var settings = frozenSweepSettings();
+    var button = el('generate-run-btn');
+    var queued = 0;
+    button.dataset.generateSubmitBusy = '1';
+    button.disabled = true;
+    syncPromptAssistantDependencies();
+    setStatus('Preparing Sweep…');
+
+    var chain = Promise.resolve();
+    items.forEach(function (name) {
+      chain = chain.then(function () {
+        return collectReferences();
+      }).then(function (references) {
+        return postJson('/fs/generate', {
+          modelId: model.id,
+          prompt: prompt,
+          settings: Object.assign({}, settings),
+          loras: name ? [{ name: name, strength: strength }] : [],
+          references: references
+        });
+      }).then(function (payload) {
+        queued += 1;
+        trackGenerateJob(payload.job && payload.job.jobId);
+        syncGenerationPreviewCard(payload.job);
+        setStatus('Queued Sweep · ' + queued + ' / ' + items.length);
+      });
+    });
+
+    return chain.then(function () {
+      return typeof window.refreshInferenceQueue === 'function' ? window.refreshInferenceQueue() : null;
+    }).then(function () {
+      setStatus('Sweep queued · ' + queued + ' generation' + (queued === 1 ? '' : 's') + '.');
+    }).catch(function (err) {
+      reportError(err, 'Sweep stopped · ' + queued + ' / ' + items.length + ' queued');
+    }).then(function () {
+      delete button.dataset.generateSubmitBusy;
+      button.disabled = false;
+      syncGenerateRunLabel();
       syncPromptAssistantDependencies();
     });
   }
@@ -1761,8 +1936,21 @@
     el('generate-lora-add').onclick = function () {
       try { addLora(); } catch (err) { reportError(err); }
     };
+    el('generate-lora-selected-tab').onclick = function () { setLoraMode('selected'); };
+    el('generate-lora-sweep-tab').onclick = function () { setLoraMode('sweep'); };
+    el('generate-sweep-folder').addEventListener('change', function () {
+      generateState.sweepFolderByModel[generateState.modelId] = this.value;
+      window.localStorage.setItem('webcap.generate.sweepFolder.' + generateState.modelId, this.value);
+      renderSweep();
+    });
+    el('generate-sweep-base').addEventListener('change', syncGenerateRunLabel);
     el('generate-run-btn').onclick = function () {
-      try { runGenerate(); } catch (err) { reportError(err, conciseGenerateError(err, 'Generation blocked')); }
+      try {
+        if (generateState.loraMode === 'sweep') runGenerateSweep();
+        else runGenerate();
+      } catch (err) {
+        reportError(err, conciseGenerateError(err, generateState.loraMode === 'sweep' ? 'Sweep blocked' : 'Generation blocked'));
+      }
     };
     el('generate-director-write').onclick = function () {
       try { runDirector('write_prompt'); } catch (err) { reportError(err); }

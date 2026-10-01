@@ -60,6 +60,18 @@ def _read_unlocked(run_dir, run_id):
             raise ValueError("Training run manifest has an invalid selected epoch.") from exc
         if epoch <= 0 or step < 0:
             raise ValueError("Training run manifest has an invalid selected epoch.")
+        saved_stage = selected.get("savedStage")
+        saved_destination = selected.get("savedDestination")
+        saved_file_name = selected.get("savedFileName")
+        if any(value is not None for value in (saved_stage, saved_destination, saved_file_name)):
+            if not all(isinstance(value, str) and value.strip() for value in (saved_stage, saved_file_name)):
+                raise ValueError("Training run manifest has invalid saved LoRA evidence.")
+            destination = str(saved_destination or "").strip()
+            if destination.startswith("/") or "\\" in destination or ".." in PurePosixPath(destination).parts:
+                raise ValueError("Training run manifest has invalid saved LoRA destination evidence.")
+            file_name = str(saved_file_name).strip()
+            if Path(file_name).name != file_name or "/" in file_name or "\\" in file_name:
+                raise ValueError("Training run manifest has invalid saved LoRA filename evidence.")
     return payload
 
 

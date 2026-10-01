@@ -751,28 +751,30 @@ function closeKeepLora() {
   }
 }
 
-function openKeepLora(epoch, data) {
-  var artifact = trainingCandidatesAvailableArtifact(epoch, data);
-  if (!artifact) throw new Error('This epoch has no available saved LoRA.');
-
-  var run = trainingWorkspaceState.candidatePayload && trainingWorkspaceState.candidatePayload.run || {};
-  var stage = String(run.stages || '').trim().toLowerCase();
-  if (!stage) throw new Error('This training run has no usable model stage.');
+function openEpochSaveModal(context) {
+  var input = context || {};
+  var epoch = Number(input.epoch);
+  var stage = String(input.stage || '').trim().toLowerCase();
+  var runFolder = String(input.folder || '').trim();
+  var jobId = String(input.jobId || '').trim();
+  if (!isFinite(epoch) || epoch <= 0 || !stage || !runFolder || !jobId) {
+    throw new Error('Epoch save requires training-run provenance.');
+  }
 
   var els = keepLoraElements();
-  var setName = String(run.folder || '').replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'set';
+  var setName = runFolder.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'set';
   var modelLabel = '';
   keepLoraState = {
     open: true,
     stage: stage,
     destination: '',
-    filename: '',
-    epoch: Number(epoch),
-    runFolder: String(trainingWorkspaceState.candidateFolder || run.folder || ''),
-    jobId: String(trainingWorkspaceState.candidateJobId || ''),
-    modelLabel: modelLabel
+    epoch: epoch,
+    runFolder: runFolder,
+    jobId: jobId,
+    modelLabel: modelLabel,
+    onSaved: typeof input.onSaved === 'function' ? input.onSaved : null
   };
-  els.source.textContent = 'Epoch ' + String(epoch) + ' · ' + String(artifact.fileName || '.safetensors');
+  els.source.textContent = 'Epoch ' + String(epoch) + ' · ' + String(input.fileName || '.safetensors');
   els.filename.value = '';
   els.save.disabled = true;
   keepLoraSetStatus('Loading destination folders…', false);
@@ -788,6 +790,19 @@ function openKeepLora(epoch, data) {
   }).catch(function (err) {
     els.save.disabled = true;
     keepLoraSetStatus(String(err.message || err), true);
+  });
+}
+
+function openKeepLora(epoch, data) {
+  var artifact = trainingCandidatesAvailableArtifact(epoch, data);
+  if (!artifact) throw new Error('This epoch has no available saved LoRA.');
+  var run = trainingWorkspaceState.candidatePayload && trainingWorkspaceState.candidatePayload.run || {};
+  openEpochSaveModal({
+    epoch: epoch,
+    stage: run.stages,
+    folder: String(trainingWorkspaceState.candidateFolder || run.folder || ''),
+    jobId: String(trainingWorkspaceState.candidateJobId || ''),
+    fileName: artifact.fileName
   });
 }
 

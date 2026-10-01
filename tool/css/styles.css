@@ -3218,6 +3218,26 @@ iframe {
   color: var(--danger, #f87171);
   cursor: pointer;
 }
+.test-generations-prompt-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.test-generations-prompt-heading > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.test-generations-prompt-heading .review-captions-btn {
+  min-height: 24px;
+  padding: 2px 8px;
+}
+
 .test-generations-prompt textarea {
   box-sizing: border-box;
   width: 100%;

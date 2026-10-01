@@ -1746,6 +1746,9 @@ def purge(area, item_id, folder=""):
             path.parent.rmdir()
         except OSError:
             pass
+    elif area == "archive":
+        path = resolve_item("archive", item_id)
+        shutil.rmtree(path)
     elif area == "tests":
         session = _resolve_test(folder, item_id)
         session_payload = _read_test_session_manifest(session)

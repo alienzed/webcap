@@ -462,6 +462,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   outputSteps.forEach(function (target) {
     chain = chain.then(function () {
       if (directorModelTestState.stopRequested) return;
+      if (contextMode === 'calibrated' && !contextSize) return;
       var previousOutput = attempts.filter(function (attempt) { return attempt.kind === 'output'; });
       if (previousOutput.length && previousOutput[previousOutput.length - 1].status === 'failed') return;
       return directorModelTestCalibrationAttempt(model, 'output', target, contextMode === 'calibrated' ? contextSize : null).then(function (attempt) {

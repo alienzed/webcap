@@ -110,7 +110,7 @@ Keep the UI efficient and calm.
 - Prefer visible status over hidden magic.
 - Do not force extra steps when a workflow can stay direct.
 - Polling and live refreshes must preserve DOM identity for stateful or interactive elements (especially video/audio playback, inputs, selection, scroll, and expanded controls). Reconcile by stable key and add/update/remove only what actually changed; do not replace whole live containers on a timer unless an intentional context reset requires it.
-- For a local list mutation (delete, remove, rename, update, etc.), mutate only the affected keyed element when the operation succeeds. Do not use a scoped mutation response to re-render a broader list: its payload may intentionally omit unrelated items. Use a full list refresh only when the operation changes the list context or the response is explicitly authoritative for the whole list.
+- For a local list mutation, prefer updating/removing only the affected keyed element when the mutation's effect is local. If the operation legitimately changes other rows, ordering, grouping, filtering, or collection-wide state, use an authoritative refresh; do not use a scoped response to reconstruct unrelated items.
 
 ## Analysis / Metadata Rules
 

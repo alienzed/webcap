@@ -132,9 +132,9 @@ def test_overview_enumerates_known_producer_roots_without_measuring(monkeypatch,
 
 def test_storage_manager_surfaces_training_archives(monkeypatch, tmp_path):
     fs_root = tmp_path / "sets"
-    output_root = tmp_path / "output"
+    output_root = tmp_path / "creative"
     fs_root.mkdir()
-    archive = output_root / "archive" / "2026-10-01-demo"
+    archive = fs_root / "output" / "archive" / "2026-10-01-demo"
     archive.mkdir(parents=True)
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", fs_root)
     monkeypatch.setattr(storage_manager.app_config, "output_root", lambda: output_root)

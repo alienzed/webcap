@@ -625,7 +625,7 @@ def test_workspace_scan_cancellation_is_checked_during_recursive_inspection(monk
 
 
 def _h3_probe(root, probe_id="h3-20260923-120000-deadbeef", status="completed"):
-    probe = root / ".webcap_training" / "h3-probes" / probe_id
+    probe = root / "output" / "work" / "h3-probes" / probe_id
     probe.mkdir(parents=True)
     _write_json(probe / "seed.json", {
         "version": 1,
@@ -663,7 +663,7 @@ def test_runtime_h3_probe_is_purgeable_only_when_inactive(monkeypatch, tmp_path)
 
 def test_runtime_h3_probe_requires_matching_ownership_seed(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
-    probe = tmp_path / ".webcap_training" / "h3-probes" / "h3-demo"
+    probe = tmp_path / "output" / "work" / "h3-probes" / "h3-demo"
     probe.mkdir(parents=True)
     _write_json(probe / "seed.json", {"version": 1, "id": "someone-else"})
 
@@ -929,7 +929,7 @@ def test_generate_purge_rechecks_active_shared_inference_job(monkeypatch, tmp_pa
 
 
 def _generate_reference(root, token="1790180000000-abcdef123456"):
-    directory = root / ".webcap_runtime" / "generate-references" / token
+    directory = root / "output" / "work" / "generate-references" / token
     directory.mkdir(parents=True)
     (directory / "reference.png").write_bytes(b"reference")
     return directory
@@ -970,7 +970,7 @@ def test_generate_reference_bundle_is_protected_while_queued(monkeypatch, tmp_pa
         "payload": {
             "request": {
                 "references": {
-                    "first": ".webcap_runtime/generate-references/" + token + "/reference.png"
+                    "first": "work/generate-references/" + token + "/reference.png"
                 }
             }
         },
@@ -1000,7 +1000,7 @@ def test_generate_reference_bundle_is_protected_while_queued(monkeypatch, tmp_pa
 
 def test_generate_reference_bundle_refuses_unknown_or_symlinked_tokens(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
-    root = tmp_path / ".webcap_runtime" / "generate-references"
+    root = tmp_path / "output" / "work" / "generate-references"
     root.mkdir(parents=True)
     unknown = root / "not-a-webcap-token"
     unknown.mkdir()

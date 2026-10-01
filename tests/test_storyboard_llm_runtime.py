@@ -108,6 +108,7 @@ def test_completion_result_can_return_partial_text_for_freeform_chat():
 
     assert result["text"].startswith("Useful partial answer")
     assert "[Output truncated by model/runtime token or context limit.]" in result["text"]
+    assert result["finishReason"] == "length"
 
 
 def test_normalize_models_exposes_local_gguf_identity_and_status():

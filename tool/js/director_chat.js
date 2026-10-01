@@ -17,7 +17,13 @@
     generationStartedAt: 0,
     lastGeneratedTokens: 0,
     jobId: '',
-    requestDiagnostic: null
+    requestDiagnostic: null,
+    systemStatus: null,
+    systemStatusAt: 0,
+    systemStatusRequest: null,
+    activityLastMemory: null,
+    activityLoadBaseline: null,
+    activityLoadModelId: ''
   };
   var contextualModes = {};
   var inputHistory = [];
@@ -228,6 +234,87 @@
     }[String(phase || '')] || 'Working';
   }
 
+  function directorBytesGiB(bytes) {
+    var value = Number(bytes);
+    return isFinite(value) && value > 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
+  }
+
+  function directorMemorySample(system) {
+    var gpu = system && system.gpu;
+    var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
+    var ram = system && system.ram;
+    var ramBytes = ram && ram.available ? Number(ram.used) : NaN;
+    var vramMiB = primary ? Number(primary.memoryUsed) : NaN;
+    if (!isFinite(ramBytes) || !isFinite(vramMiB)) return null;
+    return {
+      ramBytes: ramBytes,
+      vramBytes: vramMiB * 1024 * 1024
+    };
+  }
+
+  function progressSystemStatus(activity) {
+    if (String(activity && activity.runtimeMode || '') === 'remote') return Promise.resolve(null);
+    var now = performance.now();
+    if (state.systemStatus && now - state.systemStatusAt < 1250) return Promise.resolve(state.systemStatus);
+    if (state.systemStatusRequest) return state.systemStatusRequest;
+
+    state.systemStatusRequest = requestJson('/fs/system_status').then(function (system) {
+      state.systemStatus = system;
+      state.systemStatusAt = performance.now();
+      return system;
+    }).catch(function () {
+      return state.systemStatus;
+    }).then(function (system) {
+      state.systemStatusRequest = null;
+      return system;
+    });
+    return state.systemStatusRequest;
+  }
+
+  function updateModelLoadProgress(activity, system) {
+    var progress = el('director-chat-progress');
+    var fill = progress && progress.querySelector('.director-chat-progress-track span');
+    if (!progress || !fill) return '';
+
+    var phase = String(activity && activity.phase || '');
+    var sample = directorMemorySample(system);
+    if (phase !== 'loading_model') {
+      delete progress.dataset.loadKnown;
+      fill.style.width = '';
+      if (sample) state.activityLastMemory = sample;
+      if (phase === 'preparing' || phase === 'queued' || phase === 'freeing_comfy') {
+        state.activityLoadBaseline = null;
+        state.activityLoadModelId = '';
+      }
+      return '';
+    }
+
+    var modelId = String(activity && activity.model || state.modelId || '');
+    if (state.activityLoadModelId !== modelId) {
+      state.activityLoadModelId = modelId;
+      state.activityLoadBaseline = state.activityLastMemory || sample;
+    } else if (!state.activityLoadBaseline && sample) {
+      state.activityLoadBaseline = state.activityLastMemory || sample;
+    }
+
+    var modelSizeBytes = Number(activity && activity.modelSizeBytes);
+    var baseline = state.activityLoadBaseline;
+    if (!sample || !baseline || !isFinite(modelSizeBytes) || modelSizeBytes <= 0) {
+      delete progress.dataset.loadKnown;
+      fill.style.width = '';
+      return '';
+    }
+
+    var ramDelta = Math.max(0, sample.ramBytes - baseline.ramBytes);
+    var vramDelta = Math.max(0, sample.vramBytes - baseline.vramBytes);
+    var residentBytes = Math.max(0, ramDelta + vramDelta);
+    var displayBytes = Math.min(modelSizeBytes, residentBytes);
+    var percent = Math.max(0, Math.min(100, residentBytes / modelSizeBytes * 100));
+    progress.dataset.loadKnown = '1';
+    fill.style.width = percent.toFixed(1) + '%';
+    return '≈ ' + directorBytesGiB(displayBytes) + ' / ' + directorBytesGiB(modelSizeBytes) + ' · ~' + Math.round(percent) + '%';
+  }
+
   function setProgressVisible(visible) {
     var progress = el('director-chat-progress');
     if (progress) progress.classList.toggle('hidden', !visible);
@@ -287,7 +374,7 @@
     return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
   }
 
-  function renderProgress(activity) {
+  function renderProgress(activity, system) {
     var phaseEl = el('director-chat-progress-phase');
     var detailEl = el('director-chat-progress-detail');
     var elapsedEl = el('director-chat-progress-elapsed');
@@ -302,8 +389,10 @@
     if (phase === 'queued') {
       var position = Number(activity && activity.queuePosition || 0);
       detail = position > 1 ? ('Queue #' + position) : 'Waiting for Director runtime';
-    } else if (phase === 'loading_model') detail = 'Loading ' + String(activity && activity.model || state.modelId || 'model');
-    else if (phase === 'generating') {
+    } else if (phase === 'loading_model') {
+      var loadDetail = updateModelLoadProgress(activity, system);
+      detail = String(activity && activity.model || state.modelId || 'model') + (loadDetail ? (' · ' + loadDetail) : '');
+    } else if (phase === 'generating') {
       var now = performance.now();
       if (!state.generationStartedAt) state.generationStartedAt = now;
       var slot = activity && activity.slot && typeof activity.slot === 'object' ? activity.slot : {};
@@ -319,6 +408,7 @@
       detail = liveParts.join(' · ');
     } else if (phase === 'freeing_comfy') detail = 'Releasing local GPU resources';
     else detail = String(activity && activity.model || state.modelId || '');
+    if (phase !== 'loading_model') updateModelLoadProgress(activity, system);
 
     var jobStatus = String(activity && activity.jobStatus || '');
     var terminal = ['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(jobStatus) !== -1;
@@ -349,9 +439,11 @@
     if (!state.pending) return;
     requestJson('/fs/director/activity').then(function (activity) {
       observeTransientLlmActivity(activity);
-      if (state.pending) renderProgress(activity);
+      return progressSystemStatus(activity).then(function (system) {
+        if (state.pending) renderProgress(activity, system);
+      });
     }).catch(function () {
-      if (state.pending) renderProgress(null);
+      if (state.pending) renderProgress(null, null);
     }).then(function () {
       if (state.pending) state.progressTimer = setTimeout(pollProgress, 500);
     });
@@ -362,6 +454,8 @@
     state.generationStartedAt = 0;
     state.lastGeneratedTokens = 0;
     state.requestDiagnostic = null;
+    state.activityLoadBaseline = null;
+    state.activityLoadModelId = '';
     setProgressVisible(true);
     renderProgress(null);
     pollProgress();

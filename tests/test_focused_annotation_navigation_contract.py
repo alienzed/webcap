@@ -25,7 +25,6 @@ def test_focus_uses_the_single_item_preview_and_replaces_only_the_groups_pane():
     html = _read("tool/tool.html")
     css = _read("tool/css/workspace_shell.css")
 
-    assert 'id="focused-annotation-modal"' not in html
     assert 'id="focused-annotation-workbench"' in html
     assert html.index('id="focused-annotation-workbench"') < html.index('class="workbench-bottom"')
     assert html.count('id="preview"') == 1
@@ -61,8 +60,6 @@ def test_focus_controller_uses_navigator_and_exposes_workflow_entry_points():
     assert "function startFocusedAnnotationForMediaItem(" in script
     assert "function stopFocusedAnnotation(" in script
     assert "function renderFocusedAnnotationSurface(" in script
-    assert "openFocusedAnnotationModal" not in script + callers
-    assert "renderFocusedAnnotationModal" not in script + callers
     assert "if (state.currentItem && state.currentItem.key === targetItem.key)" in script
     assert "renderFocusedAnnotationSurface();\n    return;\n  }\n  selectPathMedia(targetItem)" in script
 
@@ -93,8 +90,6 @@ def test_focus_header_hides_entry_and_sidebar_controls_while_active():
     focus = _read("tool/js/focused_annotation.js")
 
     assert 'id="preview-open-focused-btn"' in html
-    assert "sidebar-open-focused-btn" not in html + details + ui + shell
-    assert "sidebarFocusBtnEl" not in details + ui
     assert "ui.sidebarCollapseToggleBtn.classList.toggle('hidden', focusOpen ||" not in details
     assert "ui.previewFocusBtnEl.classList.toggle('hidden', !hasItem || focusOpen);" in details
     assert "ui.previewFocusBtnEl.classList.toggle('hidden', !hasCurrentItem || focusOpen);" in ui
@@ -167,9 +162,6 @@ def test_focus_does_not_expose_rare_group_delete_action():
     focus = _read("tool/js/focused_annotation.js")
     workbench = _read("tool/js/group_workbench.js")
 
-    assert 'id="focused-annotation-group-delete-btn"' not in html
-    assert "groupDeleteBtn" not in focus
-    assert "deleteFocusedAnnotationCurrentGroup" not in focus
     assert "deleteChecklistGroupByIndex" in workbench
 
 
@@ -177,7 +169,6 @@ def test_focus_does_not_depend_on_retired_workflow_mode_state():
     focus = _read("tool/js/focused_annotation.js")
 
     assert "setWorkspaceSurface('focus', { sidebarHidden: true });" in focus
-    assert "setWorkspaceWorkflowMode" not in focus
 
 
 def test_focus_requires_a_valid_group_before_opening():

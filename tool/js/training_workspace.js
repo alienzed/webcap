@@ -775,6 +775,11 @@ function wireTrainingWorkspace() {
     if (historyMoreMenu && event.target.closest('[data-training-history-output], [data-training-history-action], [data-training-history-clear]')) {
       historyMoreMenu.removeAttribute('open');
     }
+    var finalizeButton = event.target.closest('[data-training-history-finalize]');
+    if (finalizeButton) {
+      openTrainingArchiveModal(finalizeButton.getAttribute('data-training-history-finalize'));
+      return;
+    }
     var logId = event.target.getAttribute('data-training-history-log');
     var candidateId = event.target.getAttribute('data-training-history-candidates');
     var outputJobId = event.target.getAttribute('data-training-history-output');

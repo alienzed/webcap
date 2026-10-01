@@ -659,10 +659,10 @@ def _candidate_test_directory_for_run(run, create_missing):
     stage = str(run.get("stages") or "").strip().lower()
     if stage not in TEST_COPY_STAGE_LABELS:
         raise ValueError("Recorded training job has no supported Copy to Test model stage.")
-    set_name = PurePosixPath(str(run.get("folder") or "")).name
-    if not set_name or set_name in (".", ".."):
-        raise RuntimeError("Recorded training folder has no usable set name.")
-    root, parts = test_copy_destination(stage, set_name)
+    set_folder = str(run.get("folder") or "").strip().replace("\\", "/").strip("/")
+    if not set_folder:
+        raise RuntimeError("Recorded training folder has no usable Set path.")
+    root, parts = test_copy_destination(stage, set_folder)
     return _copy_to_test_directory(root, parts, create_missing=create_missing)
 
 
@@ -734,7 +734,7 @@ def _annotate_candidate_test_folder_status(run, analysis):
         try:
             artifact["testSource"] = test_source_for_set(
                 artifact["testStage"],
-                PurePosixPath(str(run.get("folder") or "")).name,
+                str(run.get("folder") or ""),
             )
         except (ValueError, OSError):
             artifact["testSource"] = ""

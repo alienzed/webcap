@@ -21,7 +21,8 @@
       activityLoadBaseline: null,
       activityLoadModelId: '',
       activitySlotSample: null,
-      jobId: ''
+      jobId: '',
+      requestDiagnostic: null
     },
     trackedJobIds: loadTrackedGenerateJobs(),
     results: [],
@@ -1068,8 +1069,22 @@
     return postJson('/fs/generate/director', payload).then(function (response) {
       trackTransientLlmJob(response.job);
       generateState.director.jobId = String(response.job && response.job.jobId || '');
+      generateState.director.requestDiagnostic = response.job && response.job.request || null;
       return waitForDirectorJob(response.job);
     });
+  }
+
+  function generateDirectorRequestDiagnosticLabel(request) {
+    request = request && typeof request === 'object' ? request : null;
+    if (!request) return '';
+    var count = Number(request.messageCount) || 0;
+    var chars = Number(request.contentChars) || 0;
+    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Copy';
+  }
+
+  function copyGenerateDirectorRequestDiagnostic(request) {
+    if (!request || !Array.isArray(request.messages)) throw new Error('Prompt Assistant request diagnostic is missing its messages.');
+    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
   }
 
   function directorActivityForCurrentJob(activity, queue) {
@@ -1351,7 +1366,8 @@
     var phase = el('generate-director-activity-phase');
     var detail = el('generate-director-activity-detail');
     var stop = el('generate-director-stop');
-    if (!card || !phase || !detail || !stop) throw new Error('Prompt Assistant activity markup is missing.');
+    var copy = el('generate-director-prompt-copy');
+    if (!card || !phase || !detail || !stop || !copy) throw new Error('Prompt Assistant activity markup is missing.');
 
     var phaseName = String(activity && activity.phase || '');
     var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
@@ -1363,6 +1379,10 @@
     stop.classList.toggle('hidden', !canStop);
     stop.disabled = jobStatus === 'stopping';
     stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
+    var requestLabel = generateDirectorRequestDiagnosticLabel(generateState.director.requestDiagnostic);
+    copy.classList.toggle('hidden', !requestLabel);
+    copy.textContent = requestLabel;
+    copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
     if (!visible) return;
 
     positionDirectorActivity();
@@ -1456,6 +1476,7 @@
     if (assistant) assistant.open = true;
     generateState.director.activityStartedAt = Date.now() / 1000;
     generateState.director.activityHistory = [];
+    generateState.director.requestDiagnostic = null;
     generateState.director.activitySlotSample = null;
     renderDirectorActivity({ phase: 'preparing', active: true, startedAt: generateState.director.activityStartedAt }, null);
     refreshDirectorActivity();
@@ -1761,6 +1782,19 @@
     };
     el('generate-director-stop').onclick = function () {
       stopDirectorJob();
+    };
+    el('generate-director-prompt-copy').onclick = function () {
+      var button = this;
+      var requestDiagnostic = generateState.director.requestDiagnostic;
+      copyGenerateDirectorRequestDiagnostic(requestDiagnostic).then(function () {
+        var original = generateDirectorRequestDiagnosticLabel(requestDiagnostic);
+        button.textContent = 'Copied';
+        window.setTimeout(function () {
+          if (generateState.director.requestDiagnostic === requestDiagnostic) button.textContent = original;
+        }, 1200);
+      }).catch(function (err) {
+        reportError(err);
+      });
     };
     window.addEventListener('resize', function () {
       if (directorActivityActive()) positionDirectorActivity();

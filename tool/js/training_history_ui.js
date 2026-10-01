@@ -279,6 +279,109 @@ function renderTrainingHistory() {
   syncManagedTrainingResumeUi();
 }
 
+function loadTrainingArchives(force) {
+  if (!force && trainingWorkspaceState.archivesLoaded) return Promise.resolve(trainingWorkspaceState.archives || []);
+  return trainingRunnerRequest('/fs/training_archive').then(function (payload) {
+    trainingWorkspaceState.archives = Array.isArray(payload.archives) ? payload.archives : [];
+    trainingWorkspaceState.archivesLoaded = true;
+    renderTrainingHistory();
+    return trainingWorkspaceState.archives;
+  });
+}
+
+function renderTrainingArchives() {
+  var els = getTrainingWorkspaceEls();
+  if (!els.archiveList) return;
+  var rows = Array.isArray(trainingWorkspaceState.archives) ? trainingWorkspaceState.archives : [];
+  if (els.archiveSummary) {
+    els.archiveSummary.textContent = rows.length ? '' : 'No archived training runs yet.';
+    els.archiveSummary.classList.toggle('hidden', !!rows.length || trainingWorkspaceState.historyPrimaryTab !== 'archive');
+  }
+  els.archiveList.innerHTML = rows.map(function (archive) {
+    var summary = archive.runSummary && typeof archive.runSummary === 'object' ? archive.runSummary : {};
+    var settings = [];
+    if (summary.lr !== undefined) settings.push('LR ' + summary.lr);
+    if (summary.dropout !== undefined) settings.push('dropout ' + summary.dropout);
+    if (summary.shift !== undefined) settings.push('shift ' + summary.shift);
+    var alternates = Array.isArray(archive.retainedAlternateEpochs) ? archive.retainedAlternateEpochs : [];
+    return '<div class="training-history-item has-selected-epoch">' +
+      '<div class="training-history-primary"><strong>Archived</strong><span class="training-history-time">' + escapeHtml(formatTrainingHistoryTime(archive.archivedAt)) + '</span></div>' +
+      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(archive.runName || archive.name) + '</div><div class="training-history-set">' + escapeHtml(archive.sourceFolder || '') + '</div></div>' +
+      '<div class="training-history-details"><div>Selected Epoch ' + escapeHtml(String(archive.selectedEpoch || '')) +
+        (alternates.length ? ' · backups ' + escapeHtml(alternates.join(', ')) : '') + '</div>' +
+        (settings.length ? '<div>' + escapeHtml(settings.join(' · ')) + '</div>' : '') +
+        '<div>' + escapeHtml(archive.productionFileName || '') + '</div></div>' +
+      '</div>';
+  }).join('');
+}
+
+function closeTrainingArchiveModal() {
+  var els = getTrainingWorkspaceEls();
+  trainingWorkspaceState.archivePreview = null;
+  trainingWorkspaceState.archiveJobId = '';
+  els.archiveModal.classList.add('hidden');
+  els.archiveModal.setAttribute('aria-hidden', 'true');
+}
+
+function openTrainingArchiveModal(jobId) {
+  var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs) ? trainingWorkspaceState.history.jobs : [];
+  var job = jobs.filter(function (item) { return String(item.id || '') === String(jobId || ''); })[0];
+  if (!job || !job.folder) throw new Error('Training History entry does not identify its run.');
+  trainingRunnerRequest('/fs/training_archive/preview?folder=' + encodeURIComponent(job.folder) + '&jobId=' + encodeURIComponent(job.id))
+    .then(function (payload) {
+      var preview = payload.preview;
+      var els = getTrainingWorkspaceEls();
+      trainingWorkspaceState.archivePreview = preview;
+      trainingWorkspaceState.archiveJobId = String(job.id || '');
+      els.archiveName.value = String(preview.archiveName || '');
+      els.archiveRecap.innerHTML =
+        '<div><strong>Production keeper:</strong> Epoch ' + escapeHtml(String(preview.selectedEpoch && preview.selectedEpoch.epoch || '')) + ' · ' + escapeHtml(preview.productionFileName || '') + '</div>' +
+        '<div><strong>Training cleanup:</strong> ' + escapeHtml(String(preview.epochCount || 0)) + ' epoch folders · ' + escapeHtml(String(preview.globalStepCount || 0)) + ' global-step folders</div>' +
+        '<div><strong>Staged Test candidates:</strong> ' + escapeHtml(String(preview.stagedCandidateCount || 0)) + ' will be removed; completed Test sessions are kept.</div>' +
+        '<div><strong>Related runs:</strong> ' + escapeHtml(String(preview.relatedRunCount || 0)) + (preview.siblingOutputCount ? ' · ' + escapeHtml(String(preview.siblingOutputCount)) + ' sibling output(s) remain' : ' · this is the last managed output') + '</div>';
+      els.archiveAlternates.innerHTML = (preview.availableAlternateEpochs || []).length
+        ? preview.availableAlternateEpochs.map(function (epoch) {
+            return '<label class="training-archive-alternate"><input type="checkbox" value="' + escapeHtml(String(epoch)) + '"> Epoch ' + escapeHtml(String(epoch)) + '</label>';
+          }).join('')
+        : '<div class="training-history-summary">No alternate epochs available.</div>';
+      els.archiveModal.classList.remove('hidden');
+      els.archiveModal.setAttribute('aria-hidden', 'false');
+    })
+    .catch(function (err) {
+      setStatus('Could not prepare Finalize & Archive: ' + String(err.message || err));
+      throw err;
+    });
+}
+
+function finalizeTrainingArchive() {
+  var els = getTrainingWorkspaceEls();
+  var preview = trainingWorkspaceState.archivePreview;
+  if (!preview) throw new Error('Archive preview is unavailable.');
+  var retainEpochs = Array.prototype.map.call(els.archiveAlternates.querySelectorAll('input[type="checkbox"]:checked'), function (input) {
+    return Number(input.value);
+  });
+  els.archiveModalConfirm.disabled = true;
+  trainingRunnerRequest('/fs/training_archive/finalize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder: preview.folder,
+      jobId: preview.jobId,
+      archiveName: String(els.archiveName.value || '').trim(),
+      retainEpochs: retainEpochs
+    })
+  }).then(function (payload) {
+    closeTrainingArchiveModal();
+    trainingWorkspaceState.archivesLoaded = false;
+    setStatus('Finalized and archived ' + String(payload.archive && payload.archive.archiveName || '') + '.');
+    return refreshTrainingHistory(true).then(function () { return loadTrainingArchives(true); });
+  }).catch(function (err) {
+    els.archiveModalConfirm.disabled = false;
+    setStatus('Finalize & Archive failed: ' + String(err.message || err));
+    throw err;
+  });
+}
+
 function clearTrainingHistory() {
   if (!window.confirm('Clear all Training History? Output files, logs, and checkpoints will remain.')) return;
   trainingRunnerRequest('/fs/training_history/clear', {

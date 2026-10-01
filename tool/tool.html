@@ -1243,12 +1243,27 @@
                             </section>
                             <section class="generate-conditioning">
                             <div class="generate-conditioning-heading"><strong>LoRAs</strong><span id="generate-base-loras"></span></div>
-                            <div class="generate-lora-picker-row">
-                            <input id="generate-lora-picker" class="generate-lora-picker" type="search" list="generate-lora-options" placeholder="Filter / choose LoRA…" autocomplete="off">
-                            <datalist id="generate-lora-options"></datalist>
-                            <button id="generate-lora-add" type="button" class="review-captions-btn">Add LoRA</button>
+                            <div class="generate-lora-tabs" role="tablist" aria-label="LoRA mode">
+                                <button id="generate-lora-selected-tab" type="button" class="review-captions-btn active" role="tab" aria-selected="true" aria-controls="generate-lora-selected-panel">Selected</button>
+                                <button id="generate-lora-sweep-tab" type="button" class="review-captions-btn" role="tab" aria-selected="false" aria-controls="generate-lora-sweep-panel">Sweep</button>
                             </div>
-                            <div id="generate-lora-list" class="generate-lora-list"></div>
+                            <div id="generate-lora-selected-panel" class="generate-lora-mode-panel" role="tabpanel">
+                                <div class="generate-lora-picker-row">
+                                <input id="generate-lora-picker" class="generate-lora-picker" type="search" list="generate-lora-options" placeholder="Filter / choose LoRA…" autocomplete="off">
+                                <datalist id="generate-lora-options"></datalist>
+                                <button id="generate-lora-add" type="button" class="review-captions-btn">Add LoRA</button>
+                                </div>
+                                <div id="generate-lora-list" class="generate-lora-list"></div>
+                            </div>
+                            <div id="generate-lora-sweep-panel" class="generate-lora-mode-panel hidden" role="tabpanel">
+                                <label class="generate-field"><span>Folder</span><select id="generate-sweep-folder" aria-label="Sweep LoRA folder"></select></label>
+                                <div class="generate-sweep-options">
+                                    <label class="generate-field"><span>Strength</span><input id="generate-sweep-strength" type="number" min="-2" max="2" step="0.05" value="0.9"></label>
+                                    <label class="generate-sweep-base"><input id="generate-sweep-base" type="checkbox"> Include Base</label>
+                                </div>
+                                <div id="generate-sweep-summary" class="generate-empty-inline"></div>
+                                <div id="generate-sweep-list" class="generate-sweep-list"></div>
+                            </div>
                             </section>
                             <details id="generate-references" class="generate-references generate-collapsible hidden">
                             <summary><strong>References</strong><span>Optional exact frame anchors</span></summary>

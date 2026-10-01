@@ -236,6 +236,9 @@ def _runtime_settings(runtime_id=""):
             runtime_id = "local"
 
     if runtime_id == "local":
+        context_size_override = getattr(_runtime_context, "context_size_override", None)
+        if context_size_override is not None:
+            base = {**base, "context_size": int(context_size_override)}
         if base["models_dir"] is None:
             raise ValueError("WebCap Model Root is required for local Storyboard Director model discovery.")
         if base["port"] <= 0 or base["port"] > 65535:
@@ -267,6 +270,31 @@ def _runtime_settings(runtime_id=""):
 
 def _director_config():
     return _runtime_settings()
+
+
+@contextlib.contextmanager
+def _use_context_size_override(context_size):
+    previous = getattr(_runtime_context, "context_size_override", None)
+    if context_size is None:
+        yield
+        return
+    try:
+        value = int(context_size)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Director context_size override must be an integer.") from exc
+    if value < 1024:
+        raise ValueError("Director context_size override must be at least 1024.")
+    _runtime_context.context_size_override = value
+    try:
+        yield
+    finally:
+        if previous is None:
+            try:
+                delattr(_runtime_context, "context_size_override")
+            except AttributeError:
+                pass
+        else:
+            _runtime_context.context_size_override = previous
 
 
 @contextlib.contextmanager
@@ -1293,12 +1321,14 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
     )
 
 
-def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None, allow_truncated=False):
+def chat(model_ref, messages, response_schema=None, max_tokens=None, context_size=None, gpu_reserved=False, sampling=None, allow_truncated=False):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director messages are required.")
 
     runtime_id, model_id = _split_model_ref(model_ref)
-    with _request_lock, _use_runtime(runtime_id):
+    if context_size is not None and runtime_id != "local":
+        raise ValueError("Director context_size override is supported only by the local llama.cpp runtime.")
+    with _request_lock, _use_runtime(runtime_id), _use_context_size_override(context_size):
         _ensure_server()
         _model_record(model_ref)
         settings = _director_config()
@@ -1453,7 +1483,7 @@ def normalize_freeform_messages(messages):
     return normalized
 
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False):
+def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None):
     normalized = normalize_freeform_messages(messages)
 
     operation = "freeform_chat"
@@ -1478,7 +1508,14 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
                 operation=operation,
                 context_size=(settings.get("context_size") or 0) if settings.get("mode", "local") == "local" else 0,
             )
-            result = chat(model_id, normalized, gpu_reserved=bool(gpu_reserved), allow_truncated=True)
+            result = chat(
+                model_id,
+                normalized,
+                max_tokens=max_tokens,
+                context_size=context_size,
+                gpu_reserved=bool(gpu_reserved),
+                allow_truncated=True,
+            )
             _set_activity(
                 "complete",
                 model_id=model_id,

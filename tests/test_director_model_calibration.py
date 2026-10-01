@@ -88,3 +88,9 @@ def test_calibration_profile_rejects_unproven_limits(calibration_root):
 
     with pytest.raises(ValueError, match="contextSize"):
         calibration.save_profile(_profile(contextSize=0))
+
+    with pytest.raises(ValueError, match="passed output attempt"):
+        calibration.save_profile(_profile(maxTokens=8192))
+
+    with pytest.raises(ValueError, match="passed context attempt"):
+        calibration.save_profile(_profile(contextSize=32768))

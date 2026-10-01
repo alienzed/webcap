@@ -33,6 +33,7 @@
     available: false,
     busy: false,
     jobId: '',
+    requestDiagnostic: null,
     requestFolder: '',
     analysis: null,
     activityStartedAt: 0,
@@ -473,12 +474,26 @@
     });
   }
 
+  function wildcardDirectorRequestDiagnosticLabel(request) {
+    request = request && typeof request === 'object' ? request : null;
+    if (!request) return '';
+    var count = Number(request.messageCount) || 0;
+    var chars = Number(request.contentChars) || 0;
+    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Copy';
+  }
+
+  function copyWildcardDirectorRequestDiagnostic(request) {
+    if (!request || !Array.isArray(request.messages)) throw new Error('Wildcard Director request diagnostic is missing its messages.');
+    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
+  }
+
   function renderWildcardDirectorActivity(activity, system) {
     var card = el('test-generations-director-activity');
     var phase = el('test-generations-director-activity-phase');
     var detail = el('test-generations-director-activity-detail');
     var stop = el('test-generations-director-stop');
-    if (!card || !phase || !detail || !stop) throw new Error('Test Generations Director activity markup is missing.');
+    var copy = el('test-generations-director-prompt-copy');
+    if (!card || !phase || !detail || !stop || !copy) throw new Error('Test Generations Director activity markup is missing.');
 
     var phaseName = String(activity && activity.phase || '');
     var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
@@ -491,6 +506,10 @@
     stop.classList.toggle('hidden', !canStop);
     stop.disabled = jobStatus === 'stopping';
     stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
+    var requestLabel = wildcardDirectorRequestDiagnosticLabel(wildcardDirector.requestDiagnostic);
+    copy.classList.toggle('hidden', !requestLabel);
+    copy.textContent = requestLabel;
+    copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
     if (!visible) return;
 
     updateWildcardDirectorTrend(activity, system);
@@ -563,6 +582,7 @@
   function startWildcardDirectorActivity() {
     wildcardDirector.activityStartedAt = Date.now() / 1000;
     wildcardDirector.activityHistory = [];
+    wildcardDirector.requestDiagnostic = null;
     renderWildcardDirectorActivity({
       phase: 'preparing',
       active: true,
@@ -641,6 +661,7 @@
       directorModel: wildcardDirector.modelId
     }).then(function (payload) {
       wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
+      wildcardDirector.requestDiagnostic = payload.job && payload.job.request || null;
       trackTransientLlmJob(payload.job);
       return waitForWildcardJob(payload.job);
     }).then(function (result) {
@@ -3229,6 +3250,17 @@
       if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) modelSelect.value = selected;
     });
     el('test-generations-director-stop').onclick = stopWildcardDirectorJob;
+    el('test-generations-director-prompt-copy').onclick = function () {
+      var button = this;
+      var requestDiagnostic = wildcardDirector.requestDiagnostic;
+      copyWildcardDirectorRequestDiagnostic(requestDiagnostic).then(function () {
+        var original = wildcardDirectorRequestDiagnosticLabel(requestDiagnostic);
+        button.textContent = 'Copied';
+        window.setTimeout(function () {
+          if (wildcardDirector.requestDiagnostic === requestDiagnostic) button.textContent = original;
+        }, 1200);
+      }).catch(showError);
+    };
     el('test-generations-wildcard-use-btn').onclick = function () {
       try { useGeneratedWildcard(); } catch (err) { showError(err); }
     };

@@ -41,14 +41,28 @@ def test_source_root_for_stage(stage):
     return test_source_root(stage)
 
 
-def test_source_for_set(stage, set_name):
-    """Return the Copy to Test destination for a Set, relative to the browsable Test root."""
-    selected_set_name = str(set_name or "").strip()
-    if not selected_set_name or selected_set_name in (".", ".."):
-        raise ValueError("The current set has no usable folder name.")
+def _set_relative_parts(set_folder):
+    raw = str(set_folder or "").strip().replace("\\", "/").strip("/")
+    relative = PurePosixPath(raw)
+    if not raw or relative.is_absolute() or any(part in ("", ".", "..") for part in relative.parts):
+        raise ValueError("The current Set has no usable relative folder path.")
+    return list(relative.parts)
+
+
+def _subfolder_parts(subfolder):
+    raw = str(subfolder or "").strip().replace("\\", "/").strip("/")
+    if not raw:
+        return []
+    relative = PurePosixPath(raw)
+    if relative.is_absolute() or any(part in ("", ".", "..") for part in relative.parts):
+        raise ValueError("The configured Test LoRA subfolder must be a relative folder path.")
+    return list(relative.parts)
+
+
+def test_source_for_set(stage, set_folder):
+    """Return the Copy to Test destination for a Set, preserving its full relative path."""
     _root, subfolder = _configured_test_root(stage)
-    parts = ([subfolder] if subfolder else []) + [selected_set_name]
-    return PurePosixPath(*parts).as_posix()
+    return PurePosixPath(*(_subfolder_parts(subfolder) + _set_relative_parts(set_folder))).as_posix()
 
 
 def test_source_path(stage, relative_path=""):
@@ -102,21 +116,17 @@ def browse_test_source(stage, relative_path=""):
     }
 
 
-def test_copy_destination(stage, set_name):
-    """Return the configured Copy to Test root and relative destination parts."""
+def test_copy_destination(stage, set_folder):
+    """Return the configured Copy to Test root and full Set-relative destination parts."""
     selected_stage = str(stage or "").strip().lower()
     if selected_stage not in TEST_COPY_STAGE_LABELS:
         raise ValueError("No supported Copy to Test model stage was provided.")
 
-    selected_set_name = str(set_name or "").strip()
-    if not selected_set_name or selected_set_name in (".", ".."):
-        raise ValueError("The current set has no usable folder name.")
-
     root, subfolder = _configured_test_root(selected_stage)
-    parts = ([subfolder] if subfolder else []) + [selected_set_name]
+    parts = _subfolder_parts(subfolder) + _set_relative_parts(set_folder)
     return root, parts
 
 
-def test_copy_path(stage, set_name):
-    root, parts = test_copy_destination(stage, set_name)
+def test_copy_path(stage, set_folder):
+    root, parts = test_copy_destination(stage, set_folder)
     return root.joinpath(*parts)

@@ -2994,6 +2994,51 @@ iframe {
 }
 .test-generations-staged-copy strong { font-size: 12px; }
 .test-generations-staged-copy span { color: var(--muted); font-size: 12px; }
+.test-generations-staged-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.test-generations-selected-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: #d9a441 !important;
+}
+.test-generations-selected-mark svg,
+.test-generations-save-candidate svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.test-generations-staged-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.test-generations-save-candidate {
+  width: 29px;
+  min-width: 29px;
+  height: 29px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.test-generations-save-candidate:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.test-generations-save-candidate.is-selected {
+  color: #d9a441;
+  border-color: color-mix(in srgb, #d9a441 65%, var(--border));
+  opacity: 1;
+}
 .test-generations-base-row {
   padding-bottom: 5px;
   margin-bottom: 2px;

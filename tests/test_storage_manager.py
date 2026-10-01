@@ -125,6 +125,47 @@ def test_overview_enumerates_known_producer_roots_without_measuring(monkeypatch,
     assert "workspace-wide Test inventory" in tests["note"]
 
 
+def test_storage_manager_surfaces_training_archives(monkeypatch, tmp_path):
+    fs_root = tmp_path / "sets"
+    output_root = tmp_path / "output"
+    fs_root.mkdir()
+    archive = output_root / "archive" / "2026-10-01-demo"
+    archive.mkdir(parents=True)
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(storage_manager.app_config, "output_root", lambda: output_root)
+    _write_json(archive / "webcap-run.json", {
+        "schemaVersion": 1,
+        "runId": "demo--123/001-h3",
+        "selected": {
+            "epoch": 44,
+            "step": 8000,
+            "selectedAt": "2026-10-01T12:00:00Z",
+            "savedStage": "h3",
+            "savedDestination": "production",
+            "savedFileName": "demo.safetensors",
+        },
+        "archive": {
+            "archivedAt": 1,
+            "archiveName": "2026-10-01-demo",
+            "sourceFolder": "demo",
+            "runName": "demo",
+            "stage": "h3",
+            "runSummary": {"lr": 0.0001},
+            "productionFileName": "demo.safetensors",
+            "selectedEpoch": 44,
+            "retainedAlternateEpochs": [42, 46],
+        },
+    })
+
+    payload = storage_manager.overview("")
+    item = payload["items"]["archive"][0]
+
+    assert item["id"] == "2026-10-01-demo"
+    assert item["purgeable"] is True
+    assert item["meta"]["retainedAlternateEpochs"] == [42, 46]
+    assert storage_manager.resolve_item("archive", item["id"]) == archive.resolve()
+
+
 def test_storage_manager_finds_generations_in_configured_output_root(monkeypatch, tmp_path):
     fs_root = tmp_path / "sets"
     output_root = tmp_path / "creative"

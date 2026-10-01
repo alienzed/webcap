@@ -521,7 +521,7 @@ def test_storage_ui_is_isolated_global_activity():
     assert "workspace === 'storage'" in shell
     assert "activity === 'storage'" in shell
     assert "os.walk" not in backend
-    assert 'PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}' in backend
+    assert 'PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}' in backend
     assert '"set": _set_items(cache, folder)' in backend
     assert '"staged": _staged_items(cache, folder)' in backend
     assert '"comfy": _comfy_items(cache)' in backend

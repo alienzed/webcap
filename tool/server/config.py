@@ -526,7 +526,7 @@ def work_root():
 
 
 def h3_probe_root():
-    return training_runtime_root() / "h3-probes"
+    return work_root() / "h3-probes"
 
 
 def execution_queue_state_path():
@@ -546,7 +546,7 @@ def training_history_state_path():
 
 
 def generate_reference_root():
-    return Path(FS_ROOT) / ".webcap_runtime" / "generate-references"
+    return work_root() / "generate-references"
 
 
 reload_runtime_config()

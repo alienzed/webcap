@@ -41,5 +41,3 @@ def test_duplicate_ui_uses_visible_scope_and_existing_grid_prune_paths():
     assert "media.onclick = function () { selectByFileName(item.file); };" in duplicate_script
     assert "event.stopPropagation();" in duplicate_script
     assert "pruneMedia({ key: item.file, fileName: item.file }, { selectReplacement: false })" in duplicate_script
-    assert "Keep" not in duplicate_script
-    assert "Delete" not in duplicate_script

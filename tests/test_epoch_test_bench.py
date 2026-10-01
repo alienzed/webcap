@@ -285,6 +285,36 @@ def test_remove_candidate_deletes_only_current_session_result(tmp_path, monkeypa
     assert payload["sessionStatus"]["total"] == 0
 
 
+def test_remove_candidate_removes_session_result_when_staged_file_is_already_gone(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+
+    session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "total": 1,
+        "completed": 1,
+        "failed": 0,
+        "failures": [],
+        "results": [{
+            "kind": "lora",
+            "sourceLoRA": "epoch10.safetensors",
+            "candidateFile": "epoch10.safetensors",
+            "outputVideo": "epoch10.mp4",
+        }],
+    })
+    (session / "epoch10.mp4").write_bytes(b"video")
+
+    payload = bench.remove_candidate(tmp_path, "epoch10.safetensors", session_name=session.name)
+
+    assert payload["sessionStatus"]["results"] == []
+    assert payload["sessionStatus"]["completed"] == 0
+    assert payload["sessionStatus"]["total"] == 0
+    assert not (session / "epoch10.mp4").exists()
+
+
 def test_remove_candidate_cleans_historical_session_when_result_files_are_already_gone(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()
@@ -510,6 +540,56 @@ def test_historical_running_session_is_marked_interrupted_on_open(tmp_path, monk
     assert payload["current"] == ""
 
 
+def test_remove_candidate_allows_completed_result_while_another_candidate_is_active(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    candidate = staged / "epoch10.safetensors"
+    candidate.write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+
+    session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
+    session.mkdir(parents=True)
+    active_job = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": bench.get_test_model().PROFILE_ID}},
+        metadata={
+            "client": "test",
+            "folder": ".",
+            "sessionId": session.name,
+            "candidateKind": "lora",
+            "candidateFile": "epoch20.safetensors",
+        },
+        job_id="active-other-candidate",
+    )
+    bench._atomic_write_json(session / "test.json", {
+        "status": "running",
+        "modelId": bench.get_test_model().PROFILE_ID,
+        "inferenceJobs": [active_job["id"]],
+        "results": [{
+            "jobId": "completed-epoch10",
+            "kind": "lora",
+            "sourceLoRA": candidate.name,
+            "candidateFile": candidate.name,
+            "outputVideo": "epoch10.mp4",
+        }],
+        "failures": [],
+        "completed": 1,
+        "failed": 0,
+        "total": 2,
+    })
+    (session / "epoch10.mp4").write_bytes(b"video")
+
+    payload = bench.remove_candidate(tmp_path, candidate.name, session_name=session.name)
+
+    assert payload["sessionStatus"]["results"] == []
+    assert payload["sessionStatus"]["completed"] == 0
+    assert payload["sessionStatus"]["total"] == 1
+    assert execution_queue.get_job(active_job["id"])["status"] == "queued"
+    assert not candidate.exists()
+    assert not (session / "epoch10.mp4").exists()
+
+
 def test_remove_candidate_refuses_shared_active_session_result_mutation(tmp_path, monkeypatch):
     configure_execution_queue(monkeypatch, tmp_path)
     staged = tmp_path / "staged"
@@ -538,7 +618,7 @@ def test_remove_candidate_refuses_shared_active_session_result_mutation(tmp_path
         "total": 1,
     })
 
-    with pytest.raises(RuntimeError, match="active Test Generations session"):
+    with pytest.raises(RuntimeError, match="active Test Generations candidate"):
         bench.remove_candidate(tmp_path, candidate.name, session_name=session.name)
 
     assert candidate.is_file()

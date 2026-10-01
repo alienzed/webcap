@@ -1106,6 +1106,17 @@ def _session_has_nonterminal_jobs(session_directory):
     )
 
 
+def _session_candidate_has_nonterminal_job(status, candidate_name):
+    for job in _session_job_records(status):
+        job_status = str(job.get("status") or "")
+        if job_status not in {"backlog", "queued", "starting", "running", "stopping"}:
+            continue
+        _kind, candidate_file, _label = _job_candidate_identity(job)
+        if candidate_file == candidate_name:
+            return True
+    return False
+
+
 def _sync_inference_session(session_directory):
     with _status_lock:
         status = _read_status(session_directory) or {}
@@ -1948,10 +1959,6 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
     session = _session_directory(folder_path, session_name)
     session_payload = _read_status(session) or {}
     status_payload = session_payload
-    if _session_has_nonterminal_jobs(session):
-        raise RuntimeError("Cannot remove results from an active Test Generations session. Stop it first.")
-
-    status_payload = status_payload or _read_status(session) or {}
     results = status_payload.get("results") if isinstance(status_payload.get("results"), list) else []
     failures = status_payload.get("failures") if isinstance(status_payload.get("failures"), list) else []
     removed_results = [
@@ -1964,6 +1971,8 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
         if isinstance(failure, dict)
         and str(failure.get("candidateFile") or failure.get("sourceLoRA") or "") == candidate_name
     ]
+    if _session_candidate_has_nonterminal_job(status_payload, candidate_name):
+        raise RuntimeError("Cannot remove an active Test Generations candidate. Stop its generation first.")
     for result in removed_results:
         output_name = _result_media_file(result)
         if output_name:

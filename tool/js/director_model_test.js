@@ -6,6 +6,9 @@ var directorModelTestState = {
   currentModelLabel: '',
   currentModelNumber: 0,
   currentPhase: '',
+  currentRuntimeName: '',
+  startedAt: 0,
+  activityTimer: 0,
   protocol: null,
   models: [],
   session: null
@@ -151,17 +154,57 @@ function directorModelTestStatusText(session) {
   return text;
 }
 
-function directorModelTestSetStatus(text, state, summaryText) {
-  var status = directorModelTestEl('director-model-test-status');
-  if (status) {
-    status.textContent = text;
-    status.dataset.state = state || 'ready';
+function directorModelTestFormatElapsed(startedAt) {
+  var started = Number(startedAt);
+  if (!isFinite(started) || started <= 0) return '';
+  var seconds = Math.max(0, Math.floor(Date.now() / 1000 - started));
+  if (seconds < 60) return String(seconds) + 's elapsed';
+  var minutes = Math.floor(seconds / 60);
+  var remainder = seconds % 60;
+  if (minutes < 60) return String(minutes) + 'm ' + String(remainder).padStart(2, '0') + 's elapsed';
+  var hours = Math.floor(minutes / 60);
+  return String(hours) + 'h ' + String(minutes % 60).padStart(2, '0') + 'm elapsed';
+}
+
+function directorModelTestRenderActivity() {
+  var host = directorModelTestEl('director-model-test-activity');
+  if (!host) return;
+  if (!directorModelTestState.running) {
+    host.innerHTML = '';
+    host.classList.add('hidden');
+    return;
   }
+
+  var session = directorModelTestState.session;
+  var total = Array.isArray(session && session.models) ? session.models.length : 0;
+  var number = Number(directorModelTestState.currentModelNumber || 0);
+  var model = directorModelTestState.currentModelLabel || 'Preparing next model…';
+  var runtime = directorModelTestState.currentRuntimeName || '';
+  var phase = directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued');
+  var progress = total > 0 && number > 0 ? Math.max(0, Math.min(100, number / total * 100)) : 0;
+  var detail = [model, runtime].filter(Boolean).join(' · ');
+  var meta = [phase, number > 0 && total > 0 ? String(number) + ' / ' + String(total) : '', directorModelTestFormatElapsed(directorModelTestState.startedAt)].filter(Boolean).join(' · ');
+
+  host.classList.remove('hidden');
+  host.innerHTML =
+    '<article class="activity-monitor-card status-running director-model-test-activity-card">' +
+      '<span class="activity-monitor-dot active"></span>' +
+      '<div class="activity-monitor-copy">' +
+        '<strong>Director Model Test</strong>' +
+        '<span>' + escapeHtml(detail) + '</span>' +
+        '<small>' + escapeHtml(meta) + '</small>' +
+        '<div class="activity-monitor-progress"><span style="width:' + progress.toFixed(1) + '%"></span></div>' +
+      '</div>' +
+    '</article>';
+}
+
+function directorModelTestSetStatus(text, state, summaryText) {
   var summary = directorModelTestEl('director-model-test-summary-status');
   if (summary) {
     summary.textContent = summaryText || 'Ready';
     summary.dataset.state = state || 'ready';
   }
+  directorModelTestRenderActivity();
 }
 
 function directorModelTestRenderStatus() {
@@ -397,6 +440,7 @@ function directorModelTestRunOne(model, modelNumber) {
   directorModelTestState.currentModelLabel = String(model.label || model.modelId || model.modelRef || 'Model');
   directorModelTestState.currentModelNumber = modelNumber;
   directorModelTestState.currentPhase = 'queued';
+  directorModelTestState.currentRuntimeName = String(model.runtimeName || model.runtimeId || 'runtime');
   directorModelTestRenderStatus();
   return directorModelTestPost({
     action: 'enqueue',
@@ -422,9 +466,7 @@ function directorModelTestRunOne(model, modelNumber) {
     });
   }).finally(function () {
     directorModelTestState.currentJobId = '';
-    directorModelTestState.currentModelLabel = '';
-    directorModelTestState.currentModelNumber = 0;
-    directorModelTestState.currentPhase = '';
+    directorModelTestState.currentPhase = directorModelTestState.stopRequested ? 'stopped' : 'completed';
     directorModelTestRenderStatus();
   });
 }
@@ -445,6 +487,11 @@ function directorModelTestStart() {
 
   directorModelTestState.running = true;
   directorModelTestState.stopRequested = false;
+  directorModelTestState.startedAt = Date.now() / 1000;
+  if (directorModelTestState.activityTimer) window.clearInterval(directorModelTestState.activityTimer);
+  directorModelTestState.activityTimer = window.setInterval(function () {
+    if (directorModelTestState.running) directorModelTestRenderActivity();
+  }, 1000);
   directorModelTestState.session = null;
   directorModelTestState.currentModelLabel = '';
   directorModelTestState.currentModelNumber = 0;
@@ -518,6 +565,12 @@ function directorModelTestStart() {
     directorModelTestState.currentModelLabel = '';
     directorModelTestState.currentModelNumber = 0;
     directorModelTestState.currentPhase = '';
+    directorModelTestState.currentRuntimeName = '';
+    directorModelTestState.startedAt = 0;
+    if (directorModelTestState.activityTimer) {
+      window.clearInterval(directorModelTestState.activityTimer);
+      directorModelTestState.activityTimer = 0;
+    }
     directorModelTestSyncControls();
     directorModelTestRenderStatus();
     directorModelTestRefresh().catch(function () {});

@@ -368,6 +368,14 @@ def test_test_bench_activity_rail_and_live_session_contract():
 
 
 
+def test_selected_test_session_restores_its_saved_prompt():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    selection = script.split("function selectSessionStatus(status)", 1)[1].split("function renderStatus(status)", 1)[0]
+    assert "status.sourcePrompt || status.prompt" in selection
+    assert "el('test-generations-prompt').value = savedPrompt;" in selection
+
+
 def test_selected_test_session_rehydrates_across_navigation_and_queue_handoff():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 

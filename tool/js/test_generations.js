@@ -2761,6 +2761,8 @@
     currentSessionSource = currentSession
       ? String(status.source == null ? testSource || '' : status.source)
       : '';
+    var savedPrompt = currentSession ? String(status.sourcePrompt || status.prompt || '') : '';
+    if (savedPrompt.trim()) el('test-generations-prompt').value = savedPrompt;
     renderStatus(status);
   }
 

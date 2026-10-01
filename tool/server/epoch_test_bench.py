@@ -132,7 +132,7 @@ def _remove_empty_test_directory(directory):
 def _active_test_candidate(folder_path, model, source, candidate_name):
     folder_key = _normalized_folder_key(_relative_set_folder(folder_path))
     candidate_name = str(candidate_name or "").strip()
-    snapshot = execution_lane_snapshot(SHARED_EXECUTION_LANE, include_terminal=False)
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
     for job in snapshot.get("jobs") or []:
         if not isinstance(job, dict):
             continue
@@ -979,7 +979,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
 # Shared inference migration -------------------------------------------------
 
 
-SHARED_EXECUTION_LANE = "inference"
+"inference" = "inference"
 
 
 def _resolved_wildcard_values(source_prompt, resolved_prompt):
@@ -2126,7 +2126,7 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
 
 def activity_snapshot(folder_path=None):
     active = []
-    snapshot = execution_lane_snapshot(SHARED_EXECUTION_LANE, include_terminal=False)
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
     seen = set()
     for job in snapshot.get("jobs", []):
         metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}

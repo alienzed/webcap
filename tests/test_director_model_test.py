@@ -222,13 +222,19 @@ def test_model_test_surfaces_live_status_without_extra_polling():
 def test_calibration_protocol_is_progressive_and_versioned():
     protocol = model_test.calibration_protocol()
 
-    assert protocol["contextSteps"] == [8192, 16384, 24576, 32768]
-    assert protocol["outputSteps"] == [2048, 4096, 8192]
-    assert protocol["outputItemCounts"] == {"2048": 90, "4096": 180, "8192": 360}
+    assert protocol["contextSteps"] == [8192, 16384, 32768, 65536, 98304, 131072, 163840]
+    assert protocol["outputSteps"] == [2048, 4096, 8192, 12288, 16384, 24576, 32768]
+    assert protocol["outputItemCounts"]["32768"] == 1440
+    assert protocol["proseSectionCounts"]["32768"] == 160
     assert protocol["marker"] == model_test.CALIBRATION_MARKER
+    assert protocol["proseMarker"] == model_test.PROSE_MARKER
     prompt = model_test._calibration_output_prompt(4096)
+    prose_prompt = model_test._calibration_prose_prompt(4096)
     assert "exactly 180 numbered items" in prompt
     assert model_test.CALIBRATION_MARKER in prompt
+    assert "exactly 20 consecutively numbered sections" in prose_prompt
+    assert "100-140 words" in prose_prompt
+    assert model_test.PROSE_MARKER in prose_prompt
 
 
 def test_context_calibration_enqueues_local_runtime_override(monkeypatch):
@@ -307,6 +313,43 @@ def test_output_calibration_uses_proven_local_context(monkeypatch):
     assert model_test.CALIBRATION_MARKER in captured["contract"]["messages"][0]["content"]
 
 
+
+def test_prose_calibration_uses_same_output_and_context_limits(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        "tool.server.storyboard_llm_runtime.list_models",
+        lambda reload=False: [{
+            "id": "local::director.gguf",
+            "runtimeId": "local",
+            "runtimeName": "Local",
+            "modelId": "director.gguf",
+            "label": "director.gguf",
+        }],
+    )
+    monkeypatch.setattr(
+        "tool.server.llm_runner.enqueue",
+        lambda client, model_ref, contract, context=None, label="": captured.update({
+            "context": context,
+            "contract": contract,
+            "label": label,
+        }) or {"jobId": "prose-job"},
+    )
+
+    model_test.enqueue_calibration_run(
+        "local::director.gguf",
+        "prose",
+        12288,
+        context_size=65536,
+    )
+
+    assert captured["context"]["runtimeOverrides"] == {
+        "maxTokens": 12288,
+        "contextSize": 65536,
+    }
+    assert model_test.PROSE_MARKER in captured["contract"]["messages"][0]["content"]
+    assert captured["label"] == "Director Long-form Calibration"
+
 def test_remote_context_calibration_is_rejected(monkeypatch):
     monkeypatch.setattr(
         "tool.server.storyboard_llm_runtime.list_models",
@@ -335,5 +378,8 @@ def test_model_test_diagnostics_exposes_progressive_calibration_controls():
     assert "function directorModelTestStartCalibration()" in frontend
     assert "function directorModelTestCalibrationAttempt(" in frontend
     assert "outputItemCounts" in frontend
+    assert "proseSectionCounts" in frontend
+    assert "WEB_CAP_LONGFORM_COMPLETE" in frontend
+    assert "'prose'" in frontend
     assert "finish_reason=" in frontend
     assert "save_calibration_profile" in frontend

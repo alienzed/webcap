@@ -16,6 +16,7 @@ from . import config as app_config
 from .training_config_files import output_dir_from_config, training_config_path
 from .training_action import managed_actions_for_folder, read_action
 from .training_profiles import config_for_id, config_for_stage
+from .training_run_manifest import selected_epoch as selected_run_epoch
 
 
 HISTORY_VERSION = 4

@@ -607,6 +607,7 @@ function syncApplicationShellContext() {
   var workspaceTitle = document.getElementById('app-header-workspace-title');
   var workspaceContext = document.getElementById('app-header-workspace-context');
   var workspaceActions = document.getElementById('app-header-workspace-actions');
+  var setControl = document.getElementById('app-header-set-control');
   var modelControl = document.getElementById('app-header-model-control');
   var modelSelect = document.getElementById('app-header-model-profile-select');
   renderApplicationSetSelector();
@@ -623,6 +624,7 @@ function syncApplicationShellContext() {
   var testOpen = navigation.activity === 'test';
   var storyboardOpen = navigation.activity === 'storyboard';
   var storageOpen = navigation.activity === 'storage';
+  if (setControl) setControl.classList.toggle('hidden', generateOpen || storyboardOpen);
   if (typeof window.syncInferenceQueueSurface === 'function') {
     window.syncInferenceQueueSurface(navigation.activity);
   }

@@ -250,7 +250,8 @@ function directorModelTestRenderSession() {
       directorModelTestSeconds(run.totalSeconds),
       directorModelTestRate(run.tokensPerSecond) === '—' ? '' : directorModelTestRate(run.tokensPerSecond) + ' tok/s',
       directorModelTestTokenCount(run.promptTokens) + ' → ' + directorModelTestTokenCount(run.completionTokens) + ' tokens',
-      directorModelTestSize(run.sizeBytes)
+      directorModelTestSize(run.sizeBytes),
+      run.finishReason ? 'finish=' + run.finishReason : ''
     ].filter(Boolean).join(' · ');
     return '<details class="app-settings-advanced director-model-test-result"' + (index === 0 ? ' open' : '') + '>' +
       '<summary>' +
@@ -409,9 +410,15 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
     if (kind === 'context') {
       passed = passed && observedContext >= Number(target) && text.indexOf('CONTEXT_OK') !== -1;
     } else {
+      var calibrationProtocol = directorModelTestState.calibrationProtocol || {};
+      var expectedItems = Number((calibrationProtocol.outputItemCounts || {})[String(target)] || 0);
+      var finalItemPattern = expectedItems > 0
+        ? new RegExp('(^|\\n)\\s*' + String(expectedItems) + '[\\.\\)]\\s+', 'm')
+        : null;
       passed = passed &&
         ['length', 'max_tokens'].indexOf(finishReason) === -1 &&
-        text.indexOf(String((directorModelTestState.calibrationProtocol || {}).marker || 'WEB_CAP_CALIBRATION_COMPLETE')) !== -1;
+        text.indexOf(String(calibrationProtocol.marker || 'WEB_CAP_CALIBRATION_COMPLETE')) !== -1 &&
+        (!finalItemPattern || finalItemPattern.test(text));
     }
 
     return {
@@ -718,6 +725,12 @@ function directorModelTestRunOne(model, modelNumber) {
     }).then(function (payload) {
       directorModelTestState.session = payload.session;
       directorModelTestRenderSession();
+      reportConsoleInfo(
+        'Director Model Test',
+        'Completed ' + (model.label || model.modelId || model.modelRef) +
+          ' · finish_reason=' + (run.finishReason || 'unknown') +
+          ' · completion_tokens=' + String(Math.round(run.completionTokens || 0))
+      );
       return directorModelTestConsumeJob(directorModelTestState.currentJobId).then(function () { return run; });
     });
   }).finally(function () {

@@ -25,7 +25,7 @@ function trainingCandidatesNumber(value, fallback) {
 
 var TRAINING_CANDIDATES_DISPLAY_SESSION_KEY = 'webcap.trainingCandidates.display.v1';
 var trainingCandidatesCloseHook = null;
-var keepLoraState = { open: false, stage: '', source: '', candidateFile: '', destination: '', epoch: null, modelLabel: '' };
+var keepLoraState = { open: false, stage: '', destination: '', epoch: null, runFolder: '', jobId: '', modelLabel: '', onSaved: null };
 
 function trainingCandidatesDefaultDisplayState() {
   return { smoothing: .99, yMin: null, yMax: null, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };

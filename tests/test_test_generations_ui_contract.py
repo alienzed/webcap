@@ -201,16 +201,18 @@ def test_test_activity_is_permanent_and_recent_sets_are_not_in_the_test_pane():
     assert "activityButton.classList.remove('hidden');" in script
 
 
-def test_test_activity_primary_click_respects_current_set_before_global_activity():
+
+def test_test_activity_primary_click_uses_current_set_unless_target_is_explicit():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    block = script.split("function openTestBenchActivity()", 1)[1].split("function openTestBenchActivityMenu", 1)[0]
-    assert "var currentFolder = String(state && state.folder || '');" in block
-    assert "if (currentFolder)" in block
-    assert "openTestBenchFolder(currentFolder);" in block
-    assert block.index("openTestBenchFolder(currentFolder);") < block.index("testActivity.active")
-    assert "if (active && active.folder) openTestBenchFolder(String(active.folder));" in block
+    block = script.split("function openTestBenchActivity(target)", 1)[1].split("function openTestBenchActivityMenu", 1)[0]
+    assert "if (target.folder || target.modelId)" in block
+    assert "openTestBenchSet(String(target.folder || ''), String(target.modelId || ''));" in block
+    assert "if (isOpen())" in block
+    assert "openPane();" in block
 
+    pane = script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
+    assert "launchFolder = owningSetFolder((state && state.folder) || '');" in pane
 
 def test_test_generation_sessions_and_candidate_removal_contract():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -290,19 +292,19 @@ def test_active_session_row_uses_live_polled_progress():
     assert "syncVisibleSessionProgress(status || {});" in render_block
 
 
-def test_test_generations_closes_on_training_navigation_and_clears_session_state():
+
+def test_test_generations_persists_only_against_its_current_set():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert "currentSession = String(status.session || '')" in script
     assert "function owningSetFolder(folder)" in script
-    assert "launchFolder = owningSetFolder(state && state.folder || '')" in script
+    assert "launchFolder = owningSetFolder((state && state.folder) || '')" in script
     assert "folder: owningSetFolder(launchFolder || (state && state.folder) || '')" in script
     assert "window.closeTestBenchActivity = closePane" in script
     assert "String(state.folder || '') !== String(launchFolder || '')" in script
     assert "function stagedFileParts(fileName)" in script
     assert "function sessionLabel(sessionName)" in script
     assert "function syncSessionSelection()" in script
-
 
 def test_test_generations_compare_mode_reuses_current_session_results():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -334,6 +336,7 @@ def test_test_generations_compare_mode_reuses_current_session_results():
 
 
 
+
 def test_test_bench_activity_rail_and_live_session_contract():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
@@ -342,9 +345,9 @@ def test_test_bench_activity_rail_and_live_session_contract():
 
     assert 'id="activity-test-btn"' in html
     assert "function refreshActivityButton()" in script
-    assert "function openTestBenchActivity()" in script
+    assert "function openTestBenchActivity(target)" in script
     assert "window.testGenerationsFolderLoaded = testGenerationsFolderLoaded" in script
-    assert "window.openTestBenchForFolder = openTestBenchFolder" in script
+    assert "window.openTestBenchForFolder = openTestBenchForSetFolder" in script
     assert "window.refreshTestBenchActivity = refreshActivityButton" in script
     assert "activityButton.classList.toggle('test-running', !!active)" in script
     assert ".activity-rail-btn.test-running::after" in (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
@@ -365,8 +368,6 @@ def test_test_bench_activity_rail_and_live_session_contract():
     assert "savedPrompt.trim()" in script
     assert "saveTestBenchState(prompt);" in script
     assert "if (nextSeed) nextSeed.value = String(randomSeed());" in script
-
-
 
 def test_selected_test_session_restores_its_saved_prompt():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

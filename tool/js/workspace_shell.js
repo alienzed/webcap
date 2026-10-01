@@ -489,6 +489,25 @@ function renderApplicationSetSelector() {
   control.classList.toggle('hidden', !recent.length && !currentFolder);
 }
 
+function syncApplicationRecentSetsFromJobs(jobs) {
+  var seen = {};
+  shellRecentSets = [];
+  (Array.isArray(jobs) ? jobs : []).some(function (job) {
+    var status = String(job && job.status || '');
+    if (status !== 'completed' && status !== 'finished_early') return false;
+    var folder = String(job && job.folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
+    if (!folder || seen[folder] || job.sourceAvailable === false) return false;
+    seen[folder] = true;
+    shellRecentSets.push({
+      folder: folder,
+      label: shellSetLabel(folder)
+    });
+    return shellRecentSets.length >= 8;
+  });
+  renderApplicationSetSelector();
+  return shellRecentSets;
+}
+
 function refreshApplicationRecentSets(force) {
   if (!force && shellRecentSetsLoading) return shellRecentSetsLoading;
   shellRecentSetsLoading = fetch('/fs/training_history/all')
@@ -498,22 +517,7 @@ function refreshApplicationRecentSets(force) {
           throw new Error(payload && payload.error ? payload.error : 'Could not load recent Sets.');
         }
         var jobs = payload.history && Array.isArray(payload.history.jobs) ? payload.history.jobs : [];
-        var seen = {};
-        shellRecentSets = [];
-        jobs.some(function (job) {
-          var status = String(job && job.status || '');
-          if (status !== 'completed' && status !== 'finished_early') return false;
-          var folder = String(job && job.folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
-          if (!folder || seen[folder] || job.sourceAvailable === false) return false;
-          seen[folder] = true;
-          shellRecentSets.push({
-            folder: folder,
-            label: shellSetLabel(folder)
-          });
-          return shellRecentSets.length >= 8;
-        });
-        renderApplicationSetSelector();
-        return shellRecentSets;
+        return syncApplicationRecentSetsFromJobs(jobs);
       });
     })
     .catch(function (err) {
@@ -1070,6 +1074,7 @@ window.syncWorkspaceConfigEditorUi = syncWorkspaceConfigEditorUi;
 window.syncApplicationShellContext = syncApplicationShellContext;
 window.setApplicationSetContext = setApplicationSetContext;
 window.refreshApplicationRecentSets = refreshApplicationRecentSets;
+window.syncApplicationRecentSetsFromJobs = syncApplicationRecentSetsFromJobs;
 window.deriveShellNavigationState = deriveShellNavigationState;
 window.isApplicationOverlayOpen = isApplicationOverlayOpen;
 window.setShellImmersive = setShellImmersive;

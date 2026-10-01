@@ -181,10 +181,8 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   min-width: 0;
-  margin-left: 6px;
-  padding-left: 10px;
-  border-left: 1px solid var(--border);
 }
 
 .app-header-model-label {
@@ -216,10 +214,14 @@
 }
 
 .app-header-set-control {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   min-width: 0;
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
 }
 
 .app-header-set-label {
@@ -983,11 +985,12 @@ html[data-theme="dark"] .app.shell-revamp .sidebar-drawer-summary {
     gap: 4px;
   }
 
-  .app-header-model-control {
+  .app-header-set-control {
     margin-left: 4px;
     padding-left: 6px;
   }
 
+  .app-header-set-control select,
   .app-header-model-control select {
     max-width: 125px;
   }

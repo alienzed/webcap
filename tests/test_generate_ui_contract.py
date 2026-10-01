@@ -405,3 +405,37 @@ def test_generate_secondary_controls_are_collapsible_by_default():
     assert "assistant.open = true" in script
     assert ".generate-collapsible > summary" in css
 
+def test_generate_lora_sweep_uses_existing_generate_queue_without_set_semantics():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert 'id="generate-lora-selected-tab"' in html
+    assert 'id="generate-lora-sweep-tab"' in html
+    assert 'id="generate-sweep-folder"' in html
+    assert 'id="generate-sweep-strength"' in html
+    assert 'id="generate-sweep-base"' in html
+    assert "function sweepFolders(model)" in script
+    assert "return loraFolder(name) === String(folder || '');" in script
+    assert "function runGenerateSweep()" in script
+    assert "collectReferences()" in script
+    assert "postJson('/fs/generate'" in script
+    assert "loras: name ? [{ name: name, strength: strength }] : []" in script
+    assert "settings: Object.assign({}, settings)" in script
+    assert "function frozenSweepSettings()" in script
+    assert "window.crypto.getRandomValues(values);" in script
+    assert "sourceFolder" not in script
+    assert "sourceJobId" not in script
+    assert ".generate-lora-tabs" in css
+    assert ".generate-sweep-list" in css
+
+
+def test_generate_sweep_preserves_folder_prefixes_from_model_capabilities():
+    backend = (ROOT / "tool" / "server" / "generate_generation.py").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert 'selectable = [_portable_name(value) for value in selectable]' in backend
+    assert '"loras": selectable' in backend
+    assert "normalized.lastIndexOf('/')" in script
+    assert "savedSweepFolder(model && model.id, folders)" in script
+

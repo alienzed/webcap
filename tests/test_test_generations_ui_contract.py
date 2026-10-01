@@ -32,7 +32,7 @@ def test_test_seed_uses_shared_32_bit_range():
     assert "return values[0];" in script
 
 
-def test_test_results_header_promotes_view_tabs_and_keeps_rate_as_the_only_action():
+def test_test_results_header_promotes_view_tabs_without_legacy_rate_action():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
@@ -40,7 +40,7 @@ def test_test_results_header_promotes_view_tabs_and_keeps_rate_as_the_only_actio
     assert 'class="test-generations-view-tabs" role="tablist"' in html
     assert 'id="test-generations-view-grid-btn"' in html
     assert 'id="test-generations-view-compare-btn"' in html
-    assert 'id="test-generations-rate-items-btn"' in html
+    assert 'id="test-generations-rate-items-btn"' not in html
     assert 'id="test-generations-open-results-btn"' not in html
     assert 'class="test-generations-results-actions"' in html
     assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);" in css
@@ -187,11 +187,9 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert "row.dataset.queueJobId = String(job.id || '');" in script
     assert "openSession(row.dataset.sessionName);" in script
     assert "open.dataset.sessionFolderOpen = resultFolder;" in script
-    assert "rate.dataset.sessionRate = resultFolder;" in script
-    assert "var unrated = Number(session.unrated || 0);" in script
-    assert "rate.classList.toggle('hidden', !resultFolder || unrated <= 0);" in script
     assert "openResultsFolder(folderOpen.dataset.sessionFolderOpen);" in script
-    assert "openResultsFolder(rate.dataset.sessionRate, { rateItems: true });" in script
+    assert "data-session-rate" not in script
+    assert "rateItems" not in script
     assert "open.dataset.sessionOpen" not in script
     assert ".test-generations-session-row" in css
     assert ".test-generations-session-row:not([data-queue-job-id])" in css
@@ -725,20 +723,19 @@ def test_saved_test_history_is_central_and_source_scoped():
     assert '"source": str(request.get("source") or "")' in backend
 
 
-def test_test_generations_rate_items_returns_to_the_original_test_source():
+def test_test_generations_has_no_legacy_rate_review_workflow():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     item_details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
 
-    assert 'id="test-generations-rate-items-btn"' in html
-    assert "openResultsFolder(this.dataset.resultFolder, { rateItems: true });" in script
-    assert "pendingRatingReturn = {" in script
-    assert "source: String(testSource || '')" in script
-    assert "function initializeRatingReview(folder)" in script
-    assert "function completeRatingReviewIfFinished()" in script
-    assert "openTestBenchSource(" in script
-    assert "window.testGenerationsRatingChanged = completeRatingReviewIfFinished;" in script
-    assert "window.testGenerationsRatingChanged();" in item_details
+    assert 'id="test-generations-rate-items-btn"' not in html
+    assert "pendingRatingFolder" not in script
+    assert "pendingRatingReturn" not in script
+    assert "initializeRatingReview" not in script
+    assert "completeRatingReviewIfFinished" not in script
+    assert "data-session-rate" not in script
+    assert "testGenerationsRatingChanged" not in script
+    assert "testGenerationsRatingChanged" not in item_details
 
 def test_test_generations_reuses_normal_folder_review_for_assessment():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -993,14 +990,13 @@ def test_test_result_grid_identity_is_session_scoped_when_output_root_is_externa
     assert "host.dataset.resultScope = resultScope;" in block
 
 
-def test_external_output_test_sessions_keep_open_and_rate_actions():
+def test_external_output_test_sessions_keep_open_action():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert "open.dataset.sessionReveal = resultFolder ? '' : name;" in script
-    assert "rate.dataset.sessionRateOpen = resultFolder ? '' : name;" in script
     assert "function revealTestSession(sessionName)" in script
     assert "body: JSON.stringify({ area: 'tests', id: name, folder: '' })" in script
-    assert "openSession(rate.dataset.sessionRateOpen);" in script
+    assert "data-session-rate" not in script
 
 def test_test_generations_background_updates_never_choose_a_session():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

@@ -370,7 +370,7 @@ function directorModelTestRenderCalibrationProfiles() {
   }).join('');
 }
 
-function directorModelTestCalibrationAttempt(model, kind, target) {
+function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
   var tracker = { phase: '', phaseStartedAt: 0, phases: {}, observedContextSize: 0 };
   var localStartedAt = Date.now() / 1000;
   directorModelTestState.currentPhase = 'queued';
@@ -379,7 +379,8 @@ function directorModelTestCalibrationAttempt(model, kind, target) {
     action: 'enqueue_calibration',
     modelRef: model.modelRef,
     kind: kind,
-    target: target
+    target: target,
+    contextSize: contextSize || null
   }).then(function (payload) {
     directorModelTestState.currentJobId = String(payload.job && payload.job.jobId || '');
     if (!directorModelTestState.currentJobId) throw new Error('Director calibration did not receive a job ID.');
@@ -428,7 +429,7 @@ function directorModelTestCalibrationAttempt(model, kind, target) {
   }).finally(function () {
     var jobId = directorModelTestState.currentJobId;
     directorModelTestState.currentJobId = '';
-    if (jobId) directorModelTestConsumeJob(jobId);
+    return jobId ? directorModelTestConsumeJob(jobId) : null;
   });
 }
 
@@ -463,7 +464,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
       if (directorModelTestState.stopRequested) return;
       var previousOutput = attempts.filter(function (attempt) { return attempt.kind === 'output'; });
       if (previousOutput.length && previousOutput[previousOutput.length - 1].status === 'failed') return;
-      return directorModelTestCalibrationAttempt(model, 'output', target).then(function (attempt) {
+      return directorModelTestCalibrationAttempt(model, 'output', target, contextMode === 'calibrated' ? contextSize : null).then(function (attempt) {
         attempts.push(attempt);
         if (attempt.observedContextSize > contextSize && contextMode === 'runtime') {
           contextSize = attempt.observedContextSize;

@@ -3779,7 +3779,8 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-bt
 .training-candidates-pinned-popover {
   position: absolute;
   z-index: 3;
-  width: min(340px, calc(100% - 12px));
+  width: max-content;
+  max-width: min(340px, calc(100% - 12px));
   padding: 10px;
   border: 1px solid #62bc8c;
   border-radius: 7px;

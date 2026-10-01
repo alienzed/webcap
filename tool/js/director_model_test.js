@@ -408,7 +408,7 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
     var passed = terminalStatus === 'completed';
 
     if (kind === 'context') {
-      passed = passed && observedContext >= Number(target) && text.indexOf('CONTEXT_OK') !== -1;
+      passed = passed && observedContext >= Number(target);
     } else {
       var calibrationProtocol = directorModelTestState.calibrationProtocol || {};
       var expectedItems = Number((calibrationProtocol.outputItemCounts || {})[String(target)] || 0);

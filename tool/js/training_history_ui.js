@@ -171,6 +171,9 @@ function renderTrainingHistory() {
     var stageLabel = trainingStageLabel(job.stages || '');
     var profileLabel = modelLabel + (stageLabel && stageLabel.toLowerCase() !== modelLabel.toLowerCase() ? ' · ' + stageLabel : '');
     var runDisplayName = trainingHistoryRunDisplayName(job, profileLabel);
+    var selectedEpoch = job.selectedEpoch && typeof job.selectedEpoch === 'object' ? job.selectedEpoch : null;
+    var selectedEpochNumber = selectedEpoch ? Number(selectedEpoch.epoch) : NaN;
+    var selectedEpochLabel = isFinite(selectedEpochNumber) && selectedEpochNumber > 0 ? 'Selected Epoch ' + Math.round(selectedEpochNumber).toLocaleString() : '';
     var checkpointLabel = trainingHistoryCheckpointLabel(artifact);
     var checkpointStage = String(job.stage || job.stages || '').toLowerCase();
     var canOpenCheckpointRun = !!(checkpointLabel && job.folder && job.outputRunPath && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(checkpointStage) !== -1);

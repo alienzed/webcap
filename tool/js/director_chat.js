@@ -669,7 +669,7 @@
 
     if (state.open) {
       syncModeUi();
-      loadModels().then(function () {
+      (state.modelsLoaded ? Promise.resolve() : loadModels()).then(function () {
         var input = el('director-chat-input');
         if (input) input.focus();
       });

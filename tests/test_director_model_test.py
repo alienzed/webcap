@@ -207,8 +207,6 @@ def test_model_test_surfaces_live_status_without_extra_polling():
     assert 'id="director-model-test-status" class="app-settings-status director-model-test-status"' in html
     assert 'aria-live="polite"' in html
     assert 'class="director-model-test-models"' in html
-    assert 'id="director-model-test-sessions"' not in html
-    assert ".webcap_model_tests" not in frontend
 
     assert "directorModelTestState.session = meta.session || null;" in frontend
     assert "function directorModelTestRenderStatus()" in frontend

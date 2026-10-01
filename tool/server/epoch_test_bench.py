@@ -692,7 +692,7 @@ def _staged_candidate_metadata(lora_files, model):
         if run_key not in selected_by_run:
             try:
                 selected_by_run[run_key] = candidate_selected_epoch(folder, job_id)
-            except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
+            except (LookupError, FileNotFoundError, RuntimeError):
                 selected_by_run[run_key] = None
         selected = selected_by_run[run_key]
         result[lora_file.name] = {

@@ -983,6 +983,7 @@ def overview(folder=""):
             "training", "Training", groups["training"], complete="training" not in unavailable,
             note=("Training queue state is unavailable; inventory is hidden until it can be read." if "training" in unavailable else "")
         ),
+        _category("archive", "Training Archives", groups["archive"]),
         _category(
             "tests", "Tests", groups["tests"], complete=scan_complete,
             note=(

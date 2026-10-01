@@ -260,17 +260,18 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
         },
     )
 
+    _move_archive(context["runDir"], destination)
+
+    archived_epochs = _epoch_directories(destination)
+    for epoch, path in archived_epochs.items():
+        if epoch not in retained:
+            shutil.rmtree(path)
+    for path in _global_step_directories(destination):
+        shutil.rmtree(path)
+
     for candidate, sidecar, _payload in context["staged"]:
         candidate.unlink()
         sidecar.unlink()
-
-    for epoch, path in context["epochs"].items():
-        if epoch not in retained:
-            shutil.rmtree(path)
-    for path in context["globalSteps"]:
-        shutil.rmtree(path)
-
-    _move_archive(context["runDir"], destination)
 
     action_removed = False
     if not context["siblingOutputs"]:

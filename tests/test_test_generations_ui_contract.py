@@ -1,17 +1,20 @@
-def test_keep_lora_contract_uses_exact_test_candidate_and_existing_destination_browser():
-    script = (ROOT / "tool" / "js" / "training_candidates.js").read_text(encoding="utf-8")
+def test_epoch_save_modal_is_shared_by_candidates_and_test_generations():
+    candidates = (ROOT / "tool" / "js" / "training_candidates.js").read_text(encoding="utf-8")
+    tests = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
-    assert "training-candidates-keep-toggle" in script
-    assert "/fs/test_generations/keep_lora" in script
-    assert "candidateFile: keepLoraState.candidateFile" in script
-    assert "keepLoraState.destination" in script
+    assert "function openEpochSaveModal(context)" in candidates
+    assert "window.openEpochSaveModal = openEpochSaveModal" in candidates
+    assert "/fs/training_candidates/save" in candidates
+    assert "keepLoraState.destination" in candidates
+    assert "window.openEpochSaveModal({" in tests
+    assert "candidateMetadata" in tests
     assert "keep-lora-modal" in html
     assert "keep-lora-filename" in html
     assert "keep-lora-folders" in html
     assert ".keep-lora-dialog" in css
-    assert "Keep LoRA" in html
+    assert "Save &amp; Select" in html
 
 
 from pathlib import Path

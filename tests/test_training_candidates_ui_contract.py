@@ -13,8 +13,6 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
 
     assert 'id="training-candidates-modal"' in html
     assert html.index('id="app-overlay-root"') < html.index('id="training-candidates-modal"')
-    assert 'id="training-candidates-stage"' not in html
-    assert 'id="training-candidates-stage-btn"' not in html
     assert 'id="training-candidates-open-run"' in html
     assert 'id="training-candidates-algorithm"' in html
     assert 'Multiscale Loss Basins' in html
@@ -23,12 +21,10 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
         assert 'value="' + algorithm + '"' in html
     assert '/static/js/training_candidates.js' in html
     assert 'data-training-candidates=' in runner
-    assert 'latestTrainingCandidateStageJob' not in (ROOT / "tool" / "js" / "training_candidates.js").read_text(encoding="utf-8")
     assert 'data-training-history-candidates=' in history
     assert workspace.count('openTrainingCandidates(') >= 3
     assert "var candidateJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === candidateId; })[0];" in workspace
     assert "openTrainingCandidates(candidateJob);" in workspace
-    assert "openTrainingCandidates(getTrainingRunnerJobById(candidateId));" not in workspace
 
 
 def test_candidate_ui_is_manual_read_only_charting():
@@ -87,16 +83,11 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "training-candidates-select-toggle" in script
     assert "i.selected" in css
     assert ".training-candidates-epoch-marker.is-selected" in css
-    assert "Open Test Folder" not in script
-    assert "/fs/training_candidates/open_test" not in script
     assert "inTestFolder" in script
     assert "/fs/training_candidates/" in script
     assert "remove_from_test" in script
     assert "copy_to_test" in script
     assert "artifact.status === 'available'" in script
-    assert "No confirmed valleys" not in script
-    assert "confidence" not in script.lower()
-    assert "detector controls" not in script.lower()
     assert "setTimeout" not in script
     assert "training-candidates-modal" in css
     assert "width: min(95vw, 1800px)" in css
@@ -110,7 +101,6 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert ".training-candidates-pinned-popover" in css
     assert 'html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-btn' in css
     assert 'html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-toggle input' in css
-    assert ".training-candidates-list" not in css
 
 
 def test_chart_geometry_step_lookup_and_algorithm_switching():

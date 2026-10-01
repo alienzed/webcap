@@ -125,7 +125,7 @@ def save_reference(upload):
     return {
         "id": token,
         "name": filename,
-        "path": str(path.relative_to(Path(app_config.FS_ROOT))).replace("\\", "/"),
+        "path": str(path.resolve().relative_to(app_config.output_root().resolve())).replace("\\", "/"),
     }
 
 
@@ -137,7 +137,7 @@ def cleanup_references(references):
         value = str(relative_path or "").strip()
         if not value:
             continue
-        candidate = (Path(app_config.FS_ROOT) / value).resolve()
+        candidate = (app_config.output_root() / value).resolve()
         try:
             candidate.relative_to(root)
         except ValueError:
@@ -159,7 +159,7 @@ def resolve_reference_path(relative_path):
     value = str(relative_path or "").strip()
     if not value:
         raise ValueError("Generate reference path is empty.")
-    candidate = (Path(app_config.FS_ROOT) / value).resolve()
+    candidate = (app_config.output_root() / value).resolve()
     root = reference_root().resolve()
     try:
         candidate.relative_to(root)

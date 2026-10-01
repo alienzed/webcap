@@ -93,6 +93,18 @@ function renderTrainingHistory() {
   var els = getTrainingWorkspaceEls();
   if (!els.historySummary || !els.historyList || !els.checkpointSelect) return;
   var history = trainingWorkspaceState.history || {};
+  var archiveActive = trainingWorkspaceState.historyPrimaryTab === 'archive';
+  if (els.historyTabs) Array.prototype.forEach.call(els.historyTabs.querySelectorAll('[data-training-history-tab]'), function (button) {
+    var active = button.getAttribute('data-training-history-tab') === (archiveActive ? 'archive' : 'history');
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  if (els.historyList) els.historyList.classList.toggle('hidden', archiveActive);
+  if (els.historySummary) els.historySummary.classList.toggle('hidden', archiveActive);
+  if (els.archiveList) els.archiveList.classList.toggle('hidden', !archiveActive);
+  if (els.archiveSummary) els.archiveSummary.classList.toggle('hidden', !archiveActive || !!(trainingWorkspaceState.archives || []).length);
+  if (els.historyTools) els.historyTools.classList.toggle('hidden', archiveActive || trainingWorkspaceState.historyCollapsed);
+  if (archiveActive) renderTrainingArchives();
   var searchText = String((els.historySearch && els.historySearch.value) || '').trim().toLowerCase();
   var scope = trainingWorkspaceState.historyViewScope === 'set' ? 'set' : 'all';
   var currentFolder = trainingWorkspaceState.entryMode === 'set' ? String(state.folder || '').trim() : '';

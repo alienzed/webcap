@@ -2336,6 +2336,11 @@ iframe {
   font-size: 12px;
 }
 
+.workspace-surface-training .training-history-item.has-selected-epoch {
+  border-left-color: #d9a441;
+  background: color-mix(in srgb, #f7d56a 8%, var(--panel));
+}
+
 .workspace-surface-training .training-history-item strong {
   color: var(--text);
   font-size: 13px;

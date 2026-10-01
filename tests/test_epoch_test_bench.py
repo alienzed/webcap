@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -1594,6 +1595,36 @@ def test_recent_test_sources_are_derived_from_central_session_metadata(tmp_path,
     assert bench.recent_test_sets()[0]["ownerAvailable"] is False
 
 
+
+def test_recent_test_prompts_are_distinct_and_newest_first(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench, "_recent_prompts_cache", {"expires": 0.0, "items": [], "root": None})
+    root = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR
+    rows = (
+        ("older-session", "sets/first", "portrait prompt", 100),
+        ("newer-session", "sets/second", "portrait prompt", 300),
+        ("middle-session", "sets/third", "fashion prompt", 200),
+    )
+    for name, owner, prompt, modified in rows:
+        session = root / name
+        session.mkdir(parents=True)
+        manifest = session / "test.json"
+        bench._atomic_write_json(manifest, {
+            "status": "complete",
+            "modelId": "minimax_h3",
+            "source": owner.split("/")[-1],
+            "ownerFolder": owner,
+            "sourcePrompt": prompt,
+            "results": [],
+        })
+        os.utime(manifest, (modified, modified))
+
+    recent = bench.recent_test_prompts()
+
+    assert [item["prompt"] for item in recent] == ["portrait prompt", "fashion prompt"]
+    assert recent[0]["folder"] == "sets/second"
+    assert recent[0]["session"] == "newer-session"
+
 def test_direct_test_source_lora_is_read_only_without_webcap_provenance(tmp_path, monkeypatch):
     staged = tmp_path / "test-root" / "manual"
     staged.mkdir(parents=True)
@@ -1705,6 +1736,9 @@ def test_prepare_exposes_unique_training_run_provenance_for_staged_loras(tmp_pat
         "sourceFolder": "sets/demo",
         "sourceFileName": first.name,
         "sourceEpoch": 20,
+        "sourceRunName": "Character pass",
+        "sourceRunSequence": "03",
+        "runSummary": {"lr": 0.0001},
     }), encoding="utf-8")
 
     second = staged / "run-03__epoch25.safetensors"
@@ -1716,7 +1750,16 @@ def test_prepare_exposes_unique_training_run_provenance_for_staged_loras(tmp_pat
         "sourceFolder": "sets/demo",
         "sourceFileName": second.name,
         "sourceEpoch": 25,
+        "sourceRunName": "Character pass",
+        "sourceRunSequence": "03",
+        "runSummary": {"lr": 0.0001},
     }), encoding="utf-8")
 
     payload = bench.prepare(tmp_path)
-    assert payload["candidateRuns"] == [{"jobId": "job-03", "folder": "sets/demo"}]
+    assert payload["candidateRuns"] == [{
+        "jobId": "job-03",
+        "folder": "sets/demo",
+        "runName": "Character pass",
+        "runSequence": "03",
+        "runSummary": {"lr": 0.0001},
+    }]

@@ -137,7 +137,7 @@ function renderTrainingHistory() {
     els.historyCollapseBtn.textContent = 'Training History' + (jobs.length ? ' · ' + jobs.length : '');
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');
   }
-  els.historySummary.classList.toggle('hidden', !!latest);
+  els.historySummary.classList.toggle('hidden', archiveActive || !!latest);
   els.historySummary.textContent = latest ? '' : (scope === 'set'
     ? 'No completed or actionable training outcomes for this set yet.'
     : 'No completed or actionable training outcomes yet.');

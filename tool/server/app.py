@@ -1699,6 +1699,50 @@ def training_history_job_clear_route():
     return jsonify(payload), status
 
 
+@app.route("/fs/training_archive", methods=["GET"])
+def training_archive_list_route():
+    try:
+        return jsonify({"ok": True, "archives": training_archive_list()})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/training_archive/preview", methods=["GET"])
+def training_archive_preview_route():
+    folder = request.args.get("folder", "").strip()
+    job_id = request.args.get("jobId", "").strip()
+    if not folder or not job_id:
+        return jsonify({"ok": False, "error": "Folder and job ID are required."}), 400
+    try:
+        return jsonify({"ok": True, "preview": training_archive_preview(folder, job_id)})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (RuntimeError, ValueError, OSError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/training_archive/finalize", methods=["POST"])
+def training_archive_finalize_route():
+    data = request.get_json(silent=True) or {}
+    allowed = {"folder", "jobId", "archiveName", "retainEpochs"}
+    if not isinstance(data, dict) or set(data) - allowed:
+        return jsonify({"ok": False, "error": "Finalize & Archive received unsupported fields."}), 400
+    folder = str(data.get("folder") or "").strip()
+    job_id = str(data.get("jobId") or "").strip()
+    archive_name = str(data.get("archiveName") or "").strip()
+    retain_epochs = data.get("retainEpochs")
+    if not folder or not job_id or not archive_name or not isinstance(retain_epochs, list):
+        return jsonify({"ok": False, "error": "Folder, job ID, archive name, and retained epochs are required."}), 400
+    try:
+        return jsonify({"ok": True, "archive": training_archive_finalize(folder, job_id, archive_name, retain_epochs)})
+    except FileExistsError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 409
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (RuntimeError, ValueError, OSError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/training_history/job/metrics", methods=["GET"])
 def training_history_job_metrics_route():
     folder = request.args.get("folder", "").strip()

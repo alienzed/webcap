@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 from . import config as app_config
 from .folder_state_store import read_folder_state, set_media_rating
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
-from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path, test_source_root_for_stage
+from .training_test_paths import browse_test_source, test_copy_path
 from .training_runner import candidate_selected_epoch
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
@@ -49,17 +49,9 @@ def _owning_set_directory(folder_path):
     return path
 
 
-def _default_test_source(folder_path):
-    return _owning_set_directory(folder_path).name
-
-
-
 def _test_directory(folder_path, model, source=None):
     return test_copy_path(model.STAGING_KEY, _owning_set_directory(folder_path).name)
 
-
-def _resolved_test_directory(folder_path, model, source=None):
-    return _test_directory(folder_path, model)
 
 def _owner_folder_available(owner_folder):
     owner = str(owner_folder or "").strip().replace("\\", "/").strip("/")
@@ -95,39 +87,6 @@ def _lora_files(test_directory):
     )
 
 
-def _selected_lora_files(test_directory, selected_files=None):
-    if selected_files is None:
-        return _lora_files(test_directory)
-    if not isinstance(selected_files, (list, tuple)):
-        raise ValueError("Selected Test candidates must be a list of staged filenames.")
-
-    requested = []
-    seen = set()
-    for value in selected_files:
-        name = str(value or "").strip()
-        if (
-            not name
-            or name in (".", "..")
-            or "/" in name
-            or "\\" in name
-            or not name.lower().endswith(".safetensors")
-        ):
-            raise ValueError("Selected Test candidates must be staged .safetensors filenames.")
-        if name in seen:
-            continue
-        seen.add(name)
-        requested.append(name)
-
-    if not requested:
-        raise ValueError("Select at least one staged LoRA to test.")
-
-    return sorted(
-        [Path(test_directory) / name for name in requested],
-        key=lambda path: path.name.lower(),
-    )
-
-
-
 def _relative_set_folder(folder_path):
     value = _relative_to_fs_root(_owning_set_directory(folder_path))
     return "" if value == "." else value
@@ -139,12 +98,7 @@ def test_presence(folder_path):
     for profile_id in supported_profile_ids():
         model = get_test_model(profile_id)
         try:
-            test_directory = _test_directory(set_folder, model)
-            if test_directory.is_dir():
-                staged_count += len([
-                    path for path in test_directory.iterdir()
-                    if path.is_file() and path.suffix.lower() == ".safetensors"
-                ])
+            staged_count += len(_staged_loras_for_set(set_folder, model))
         except (OSError, ValueError):
             continue
     sessions = list_sessions(set_folder)
@@ -156,7 +110,7 @@ def test_presence(folder_path):
     }
 
 def recent_test_sets(limit=8):
-    """Return recent Test Sources from the bounded central session directory."""
+    """Return recent Test Sets from the bounded central session directory."""
     now = time.monotonic()
     cached_items = _recent_sets_cache.get("items") if isinstance(_recent_sets_cache.get("items"), list) else []
     if now < float(_recent_sets_cache.get("expires") or 0):
@@ -561,12 +515,6 @@ def _with_session_ratings(session_directory, payload):
         enriched.append(item)
     visible["results"] = enriched
     return visible
-
-
-def _session_source(payload, folder_path):
-    if isinstance(payload, dict) and "source" in payload:
-        return str(payload.get("source") or "").strip()
-    return _default_test_source(folder_path)
 
 
 def _candidate_rating_scores(folder_path, model_id=None):
@@ -1770,8 +1718,9 @@ def reconcile_startup():
                         continue
 
                 model = get_test_model(request.get("modelId") or request.get("model"))
-                selected = _selected_lora_files(
-                    _test_directory(folder_path, model),
+                selected = _selected_lora_files_for_set(
+                    folder_path,
+                    model,
                     selected_files=request.get("selectedFiles"),
                 )
                 _enqueue_frozen_test_request(

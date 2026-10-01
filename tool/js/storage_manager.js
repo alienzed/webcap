@@ -149,6 +149,7 @@
     var groups = storageState.payload && storageState.payload.items || {};
     var areaLabels = {
       training: 'Training',
+      archive: 'Training Archives',
       tests: 'Tests',
       staged: 'Staged Test LoRAs',
       generate: 'Generations',

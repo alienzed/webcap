@@ -210,10 +210,12 @@ function renderTrainingHistory() {
         checkpointFact +
         trainingHistoryFact('Continues', job.parentJobId ? 'run ' + job.parentJobId : '') +
       '</div></div>' : '';
-    return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
+    return '<div class="training-history-item' + (selectedEpochLabel ? ' has-selected-epoch' : '') + '" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span></div>' +
         '<span class="training-history-time" title="' + escapeHtml(timestampKind + ' time') + '">' + escapeHtml(formatTrainingHistoryTime(timestamp)) + '</span></div>' +
-      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(runDisplayName) + '</div>' +
+      '<div class="training-history-context"><div class="training-history-model">' +
+        (selectedEpochLabel ? '<span class="training-history-selected-mark" title="' + escapeHtml(selectedEpochLabel) + '" aria-label="' + escapeHtml(selectedEpochLabel) + '"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="3.5"></circle><path d="M5.5 9l-1 5 3.5-2 3.5 2-1-5"></path></svg></span>' : '') +
+        escapeHtml(runDisplayName) + '</div>' +
         '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
       '<div class="training-history-details">' +
         (runSummary ? '<div>' + escapeHtml(runSummary) + '</div>' : '') +

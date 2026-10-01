@@ -19,7 +19,7 @@ from .video_clip_ops import clip_video_response, get_clip_job_status
 from .video_frame_ops import extract_video_frame_response, inspect_video_frame_response
 from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
-from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_available as training_runner_candidate_run_available, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, select_candidate_epoch_response as training_runner_select_candidate_epoch_response, clear_candidate_epoch_selection_response as training_runner_clear_candidate_epoch_selection_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, clear_history_response as training_runner_clear_history_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, start_observer as start_training_runner_observer
+from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_available as training_runner_candidate_run_available, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, save_candidate_epoch_response as training_runner_save_candidate_epoch_response, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, select_candidate_epoch_response as training_runner_select_candidate_epoch_response, clear_candidate_epoch_selection_response as training_runner_clear_candidate_epoch_selection_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, clear_history_response as training_runner_clear_history_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, start_observer as start_training_runner_observer
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .prune_candidates import prune_candidates_response
@@ -33,7 +33,6 @@ from .epoch_test_bench import (
     resolve_result_media as test_generations_resolve_result_media,
     supported_models as test_generations_supported_models,
     browse_keep_lora_destination as test_generations_browse_keep_lora_destination,
-    keep_test_candidate as test_generations_keep_test_candidate,
 )
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
@@ -1721,29 +1720,6 @@ def test_generations_keep_lora_destinations_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
-@app.route("/fs/test_generations/keep_lora", methods=["POST"])
-def test_generations_keep_lora_route():
-    data = request.get_json(silent=True) or {}
-    allowed = {"folder", "stage", "source", "candidateFile", "destination", "filename"}
-    if not isinstance(data, dict) or set(data) - allowed:
-        return jsonify({"ok": False, "error": "Keep LoRA accepts only folder, stage, source, candidateFile, destination, and filename."}), 400
-    try:
-        return jsonify({"ok": True, **test_generations_keep_test_candidate(
-            data.get("folder", ""),
-            data.get("stage", ""),
-            data.get("source", ""),
-            data.get("candidateFile", ""),
-            data.get("destination", ""),
-            data.get("filename", ""),
-        )})
-    except FileExistsError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 409
-    except FileNotFoundError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 404
-    except (RuntimeError, ValueError, OSError) as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
-
-
 @app.route("/fs/training_candidates", methods=["GET"])
 def training_candidates_route():
     folder = request.args.get("folder", "").strip()
@@ -1781,6 +1757,22 @@ def training_candidates_open_epoch_route():
         return jsonify({"ok": False, "error": str(exc)}), 422
     except (TrainingStateError, ValueError, RuntimeError) as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/training_candidates/save", methods=["POST"])
+def training_candidates_save_route():
+    data = request.get_json(silent=True) or {}
+    allowed = {"folder", "jobId", "epoch", "destination", "filename"}
+    if not isinstance(data, dict) or set(data) - allowed:
+        return jsonify({"ok": False, "error": "Select accepts only folder, jobId, epoch, destination, and filename."}), 400
+    payload, status = training_runner_save_candidate_epoch_response(
+        data.get("folder", ""),
+        data.get("jobId", ""),
+        data.get("epoch", ""),
+        data.get("destination", ""),
+        data.get("filename", ""),
+    )
+    return jsonify(payload), status
 
 
 @app.route("/fs/training_candidates/copy_to_test", methods=["POST"])

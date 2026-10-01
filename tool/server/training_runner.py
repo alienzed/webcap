@@ -27,7 +27,7 @@ from .training_preflight import (
     preflight_payload as _preflight_payload,
     resolve_folder as _resolve_folder,
 )
-from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination, test_source_for_set
+from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination, test_source_for_set, test_source_path
 from .training_progress import (
     annotate_completed_job as _annotate_completed_job,
     annotate_finished_early_job as _annotate_finished_early_job,
@@ -737,6 +737,74 @@ def _annotate_candidate_test_folder_status(run, analysis):
             or (legacy_destination.is_file() and not legacy_destination.is_symlink())
         )
     analysis["testFolderStatus"] = {"state": "available"}
+
+
+
+def save_candidate_epoch(folder, job_id, epoch, destination, filename):
+    """Copy one recorded epoch to a chosen Test-model folder and mark it selected."""
+    _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    source = _candidate_safetensors_path(folder, job_id, epoch)
+    stage = str(run.get("stages") or "").strip().lower()
+    if stage not in TEST_COPY_STAGE_LABELS:
+        raise ValueError("Recorded training job has no supported Test model stage.")
+
+    destination_directory = test_source_path(stage, destination)
+    if not destination_directory.is_dir():
+        raise FileNotFoundError("Selected LoRA destination folder does not exist.")
+
+    requested_name = str(filename or "").strip()
+    if (
+        not requested_name
+        or requested_name in (".", "..")
+        or Path(requested_name).name != requested_name
+        or "/" in requested_name
+        or "\\" in requested_name
+    ):
+        raise ValueError("Selected LoRA filename must be a single filename.")
+    if Path(requested_name).suffix == "":
+        requested_name += ".safetensors"
+
+    destination_path = destination_directory / requested_name
+    if destination_path.exists() or destination_path.is_symlink():
+        raise FileExistsError("Selected LoRA destination already exists: " + requested_name)
+
+    created = False
+    try:
+        with source.open("rb") as source_handle, destination_path.open("xb") as destination_handle:
+            shutil.copyfileobj(source_handle, destination_handle)
+            created = True
+        selected = select_candidate_epoch(folder, job_id, epoch)["selected"]
+    except Exception:
+        if created:
+            try:
+                destination_path.unlink()
+            except OSError:
+                pass
+        raise
+
+    return {
+        "destination": str(destination_path),
+        "fileName": destination_path.name,
+        "sourceFileName": source.name,
+        "stage": stage,
+        "selected": selected,
+    }
+
+
+def save_candidate_epoch_response(folder, job_id, epoch, destination, filename):
+    try:
+        return {
+            "ok": True,
+            **save_candidate_epoch(folder, job_id, epoch, destination, filename),
+        }, 200
+    except FileExistsError as exc:
+        return {"ok": False, "error": str(exc)}, 409
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    except (RuntimeError, ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
 
 
 def copy_candidate_epoch_to_test(folder, job_id, epoch):

@@ -3777,11 +3777,18 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-bt
 }
 .training-candidates-pinned-actions {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   margin-top: 9px;
   padding-top: 8px;
   border-top: 1px solid rgba(163, 173, 186, .18);
+}
+.training-candidates-pinned-actions-secondary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
 }
 .training-candidates-copy-status {
   margin-top: 6px;
@@ -3829,19 +3836,93 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
   cursor: default;
 }
 .training-candidates-no-candidates { color: var(--muted-text, #a3adba); font-size: 12px; }
-.training-candidates-keep-toggle { width: auto; min-height: 28px; padding: 4px 8px; font-size: 12px; white-space: nowrap; border-color: #62bc8c; background: rgba(98, 188, 140, .14); color: #9ee0b8; font-weight: 650; }
-.training-candidates-keep-toggle:hover:not(:disabled) { border-color: #7bd7a3; background: rgba(98, 188, 140, .24); }
-.training-candidates-open-epoch, .training-candidates-test-toggle, .training-candidates-select-toggle { width: auto; min-height: 28px; padding: 4px 8px; font-size: 12px; white-space: nowrap; }
-.training-candidates-select-toggle { font-weight: 650; }
-.training-candidates-select-toggle.is-select { border-color: #d5b84f; background: rgba(213, 184, 79, .14); color: #f7d56a; }
-.training-candidates-select-toggle.is-select:hover:not(:disabled) { border-color: #f7d56a; background: rgba(213, 184, 79, .24); }
-.training-candidates-select-toggle.is-clear { border-color: #f7d56a; background: #f7d56a; color: #29250f; }
-.training-candidates-open-epoch { border-color: rgba(163, 173, 186, .45); background: transparent; color: var(--text, #e5e7eb); }
-.training-candidates-test-toggle { font-weight: 650; }
-.training-candidates-test-toggle.is-copy { border-color: #c58a16; background: #c58a16; color: #111827; }
-.training-candidates-test-toggle.is-copy:hover:not(:disabled) { border-color: #dda22c; background: #dda22c; }
-.training-candidates-test-toggle.is-remove { border-color: rgba(220, 94, 94, .75); background: rgba(137, 43, 43, .24); color: #ffb4b4; }
-.training-candidates-test-toggle.is-remove:hover:not(:disabled) { border-color: #dc5e5e; background: rgba(174, 49, 49, .42); color: #ffd0d0; }
+.training-candidates-open-epoch,
+.training-candidates-test-toggle,
+.training-candidates-select-toggle {
+  width: auto;
+  min-height: 28px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.training-candidates-select-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-weight: 700;
+}
+.training-candidates-action-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.training-candidates-select-toggle.is-select {
+  border-color: #d5b84f;
+  background: rgba(213, 184, 79, .16);
+  color: #f7d56a;
+}
+.training-candidates-select-toggle.is-select:hover:not(:disabled) {
+  border-color: #f7d56a;
+  background: rgba(213, 184, 79, .28);
+}
+.training-candidates-select-toggle.is-selected,
+.training-candidates-select-toggle.is-selected:disabled {
+  border-color: #f7d56a;
+  background: #f7d56a;
+  color: #29250f;
+  opacity: 1;
+}
+.training-candidates-icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 5px;
+}
+.training-candidates-open-epoch {
+  border-color: rgba(163, 173, 186, .38);
+  background: transparent;
+  color: var(--muted-text, #a3adba);
+}
+.training-candidates-open-epoch:hover:not(:disabled) {
+  border-color: rgba(163, 173, 186, .7);
+  color: var(--text, #e5e7eb);
+}
+.training-candidates-test-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  font-weight: 650;
+}
+.training-candidates-test-toggle.is-copy {
+  border-color: rgba(197, 138, 22, .72);
+  background: rgba(197, 138, 22, .12);
+  color: #e0ae4b;
+}
+.training-candidates-test-toggle.is-copy:hover:not(:disabled) {
+  border-color: #dda22c;
+  background: rgba(197, 138, 22, .22);
+  color: #efbd5b;
+}
+.training-candidates-test-toggle.is-remove {
+  border-color: rgba(220, 94, 94, .42);
+  background: transparent;
+  color: #e98d8d;
+}
+.training-candidates-test-toggle.is-remove:hover:not(:disabled) {
+  border-color: #dc5e5e;
+  background: rgba(174, 49, 49, .28);
+  color: #ffd0d0;
+}
 .training-candidates-empty { padding: 26px 16px; color: var(--muted-text, #a3adba); text-align: center; }
 .training-candidates-empty.is-error { color: #c75a5a; }
 @container (max-width: 1600px) {

@@ -807,6 +807,91 @@ def test_display_centering_spike_rejection_and_density():
     assert max(abs(lookup[p["step"]] - p["loss"]) for p in reduced) < .03
 
 
+
+def test_save_candidate_epoch_copies_source_marks_selected_and_leaves_test_copy_alone(tmp_path, monkeypatch):
+    source = tmp_path / "epoch41.safetensors"
+    source.write_bytes(b"chosen-weights")
+    destination = tmp_path / "models"
+    destination.mkdir()
+    staged = tmp_path / "test-copy.safetensors"
+    staged.write_bytes(b"chosen-weights")
+
+    monkeypatch.setattr(
+        training_runner,
+        "_candidate_run_snapshot",
+        lambda folder, job_id: ("run", {"stages": "h3"}),
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "_candidate_safetensors_path",
+        lambda folder, job_id, epoch: source,
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "test_source_path",
+        lambda stage, relative: destination,
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "select_candidate_epoch",
+        lambda folder, job_id, epoch: {"selected": {"epoch": int(epoch), "step": 8200}},
+    )
+
+    payload = training_runner.save_candidate_epoch(
+        "sets/subject",
+        "job-1",
+        41,
+        "selected",
+        "winner",
+    )
+
+    assert (destination / "winner.safetensors").read_bytes() == b"chosen-weights"
+    assert payload["selected"] == {"epoch": 41, "step": 8200}
+    assert payload["fileName"] == "winner.safetensors"
+    assert source.read_bytes() == b"chosen-weights"
+    assert staged.read_bytes() == b"chosen-weights"
+
+
+def test_save_candidate_epoch_rolls_back_copy_when_selection_fails(tmp_path, monkeypatch):
+    source = tmp_path / "epoch41.safetensors"
+    source.write_bytes(b"chosen-weights")
+    destination = tmp_path / "models"
+    destination.mkdir()
+
+    monkeypatch.setattr(
+        training_runner,
+        "_candidate_run_snapshot",
+        lambda folder, job_id: ("run", {"stages": "h3"}),
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "_candidate_safetensors_path",
+        lambda folder, job_id, epoch: source,
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "test_source_path",
+        lambda stage, relative: destination,
+    )
+
+    def fail_selection(folder, job_id, epoch):
+        raise RuntimeError("selection failed")
+
+    monkeypatch.setattr(training_runner, "select_candidate_epoch", fail_selection)
+
+    with pytest.raises(RuntimeError, match="selection failed"):
+        training_runner.save_candidate_epoch(
+            "sets/subject",
+            "job-1",
+            41,
+            "",
+            "winner.safetensors",
+        )
+
+    assert not (destination / "winner.safetensors").exists()
+    assert source.is_file()
+
+
 def test_candidate_selection_persists_with_trainer_timestamp_run_and_replaces_cleanly(tmp_path, monkeypatch):
     root = tmp_path / "root"
     folder = root / "sets" / "subject"

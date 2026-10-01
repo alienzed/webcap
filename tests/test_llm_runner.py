@@ -83,6 +83,13 @@ def test_llm_test_client_rejects_unowned_operations(llm_root, monkeypatch):
     assert "Unsupported Test Generations LLM operation" in finished["error"]
 
 
+def test_llm_snapshot_uses_ephemeral_queue_signature(llm_root):
+    snapshot = llm_runner.snapshot(include_terminal=False)
+
+    assert snapshot["jobs"] == []
+    assert snapshot["queueDepth"] == 0
+
+
 def test_llm_queue_payload_never_reaches_execution_state_file(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
 

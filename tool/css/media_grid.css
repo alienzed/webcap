@@ -242,7 +242,7 @@
 .media-grid-surface-filter-label,
 .media-grid-surface-filter-toggle {
   color: #475569;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -390,7 +390,7 @@ html[data-theme="dark"] .media-grid-surface-canvas {
   justify-content: center;
   border-radius: 999px;
   padding: 4px 7px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1;
   background: rgba(15, 23, 42, 0.78);
@@ -422,7 +422,7 @@ html[data-theme="dark"] .media-grid-surface-canvas {
   justify-content: center;
   border-radius: 999px;
   padding: 4px 7px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1;
   background: rgba(15, 23, 42, 0.78);

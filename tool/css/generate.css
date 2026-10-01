@@ -184,7 +184,7 @@
 .generate-prompt-library-use strong,
 .generate-prompt-library-use span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .generate-prompt-library-use strong { font-size: 12px; }
-.generate-prompt-library-use span { margin-top: 3px; color: var(--muted); font-size: 10.5px; }
+.generate-prompt-library-use span { margin-top: 3px; color: var(--muted); font-size: 12px; }
 .generate-prompt-library-delete { color: var(--danger, #f87171); }
 
 .generate-stage-panel {
@@ -231,7 +231,7 @@
   margin-top: 2px;
   overflow: hidden;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -276,7 +276,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -302,7 +302,7 @@
 
 .generate-stage-empty span,
 .generate-stage-pending span {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .generate-takes-panel {
@@ -325,7 +325,7 @@
   width: auto;
   min-height: 26px;
   padding: 3px 7px;
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -420,13 +420,13 @@
 }
 
 .generate-take-copy strong {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .generate-take-copy small {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 9.5px;
+  font-size: 12px;
 }
 
 .generate-library-view {
@@ -485,7 +485,7 @@
   border-radius: 999px;
   background: var(--panel-soft);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
   line-height: 1;
   white-space: nowrap;
@@ -543,7 +543,7 @@
   margin-left: auto;
   overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -986,7 +986,7 @@
 .generate-director-activity strong {
   grid-area: label;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
   letter-spacing: .07em;
   text-transform: uppercase;

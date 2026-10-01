@@ -84,7 +84,7 @@
 
 .annotate-strip-group-title {
   min-width: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.25px;
   color: #334155;
@@ -118,7 +118,7 @@
   border: 1px solid #eab308;
   background: #fef3c7;
   color: #92400e;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.1;
   font-weight: 700;
   letter-spacing: 0.15px;
@@ -228,7 +228,7 @@
   background: #f8fafc;
   color: #334155;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.1;
   padding: 3px 8px;
   position: relative;
@@ -555,7 +555,7 @@
 }
 
 #checklist-items .checklist-group-visibility-btn {
-  font-size: 11px;
+  font-size: 12px;
   opacity: 1;
   transition: opacity 120ms ease;
 }
@@ -1060,7 +1060,7 @@
 
 #item-tags-list .item-tags-suggested-header {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1093,7 +1093,7 @@
   flex: 0 0 auto;
   min-width: 28px;
   color: #94a3b8;
-  font-size: 11px;
+  font-size: 12px;
   text-align: right;
 }
 
@@ -1160,7 +1160,7 @@
 
 .item-panel-section-title {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1205,17 +1205,17 @@
 }
 
 .item-analysis-tag-suggestions-label {
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
 }
 
 .item-analysis-tag-suggestions-separator {
-  font-size: 11px;
+  font-size: 12px;
   color: #94a3b8;
 }
 
 .item-analysis-file-links-label {
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
 }
 
@@ -1251,7 +1251,7 @@
 
 .item-analysis-file-links-separator,
 .item-analysis-file-links-more {
-  font-size: 11px;
+  font-size: 12px;
   color: #94a3b8;
 }
 
@@ -1531,7 +1531,7 @@
 
 #caption-checklist-panel .annotate-strip-toggle-btn {
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid #b8c3d1;
   background: #f9fbfd;
   color: #334155;

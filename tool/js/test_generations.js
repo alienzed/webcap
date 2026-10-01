@@ -1170,6 +1170,7 @@
       var copy = document.createElement('div');
       copy.className = 'test-generations-staged-copy';
       var name = document.createElement('strong');
+      name.className = 'test-generations-staged-name';
       name.textContent = parts.label;
       if (metadata && metadata.selected) {
         var selectedMark = document.createElement('span');

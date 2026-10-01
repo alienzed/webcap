@@ -15,6 +15,7 @@ from . import config as app_config
 from .folder_state_store import read_folder_state, set_media_rating
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path, test_source_root_for_stage
+from .training_runner import candidate_selected_epoch
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,

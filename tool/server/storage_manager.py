@@ -969,6 +969,7 @@ def overview(folder=""):
 
     groups = {
         "training": collect("training", lambda: _training_items(cache)),
+        "archive": _archive_items(cache),
         "tests": _test_items(cache, folder),
         "staged": collect("staged", lambda: _staged_items(cache, folder)),
         "generate": collect("generate", lambda: _generate_items(cache)),

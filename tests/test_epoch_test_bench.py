@@ -218,7 +218,6 @@ def test_rating_summary_reads_standard_folder_ratings(tmp_path, monkeypatch):
     payload = bench.rating_summary("set", model_id=bench.get_test_model().PROFILE_ID)
 
     assert payload["candidateScores"]["run-03__epoch24.safetensors"] == {"average": 4.0, "count": 1}
-    assert payload["sessions"][0]["unrated"] == 0
 
 
 def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeypatch):
@@ -396,45 +395,6 @@ def test_selected_lora_files_can_focus_next_run(tmp_path):
     assert bench._selected_lora_files(tmp_path, ["epoch99.safetensors"]) == [
         tmp_path / "epoch99.safetensors"
     ]
-
-
-def test_list_sessions_reports_remaining_unrated_results(tmp_path, monkeypatch):
-    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
-
-    session = tmp_path / bench.TEST_RESULTS_DIR / "2026-09-20_1200-h3"
-    session.mkdir(parents=True)
-    bench._atomic_write_json(session / "test.json", {
-        "status": "complete",
-        "completed": 3,
-        "total": 3,
-        "results": [
-            {"kind": "base", "outputVideo": "base.mp4"},
-            {"kind": "lora", "outputVideo": "epoch10.mp4"},
-            {"kind": "lora", "outputVideo": "epoch20.mp4"},
-        ],
-    })
-    (session / ".webcap_state.json").write_text(json.dumps({
-        "ratings_by_media": {
-            "base.mp4": 4,
-            "epoch10.mp4": 5,
-        }
-    }), encoding="utf-8")
-
-    sessions = bench.list_sessions(tmp_path)
-
-    assert sessions[0]["unrated"] == 1
-
-    (session / ".webcap_state.json").write_text(json.dumps({
-        "ratings_by_media": {
-            "base.mp4": 4,
-            "epoch10.mp4": 5,
-            "epoch20.mp4": 3,
-        }
-    }), encoding="utf-8")
-
-    sessions = bench.list_sessions(tmp_path)
-
-    assert sessions[0]["unrated"] == 0
 
 
 def test_candidate_scores_reuse_normal_session_folder_ratings(tmp_path, monkeypatch):

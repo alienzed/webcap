@@ -120,6 +120,19 @@ def select_epoch(run_dir, run_id, epoch, step, saved_stage=None, saved_destinati
             "step": step_number,
             "selectedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
+        if saved_stage is not None or saved_destination is not None or saved_file_name is not None:
+            stage = str(saved_stage or "").strip().lower()
+            destination = str(saved_destination or "").strip().replace("\\", "/").strip("/")
+            file_name = str(saved_file_name or "").strip()
+            if not stage or not file_name:
+                raise ValueError("Saved LoRA evidence requires a stage and filename.")
+            if destination.startswith("/") or ".." in PurePosixPath(destination).parts:
+                raise ValueError("Saved LoRA destination evidence is invalid.")
+            if Path(file_name).name != file_name or "/" in file_name or "\\" in file_name:
+                raise ValueError("Saved LoRA filename evidence is invalid.")
+            payload["selected"]["savedStage"] = stage
+            payload["selected"]["savedDestination"] = destination
+            payload["selected"]["savedFileName"] = file_name
         _write_unlocked(run_dir, payload)
         return dict(payload["selected"])
 

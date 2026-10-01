@@ -14,6 +14,8 @@ def test_candidate_modal_is_loaded_and_available_from_running_and_recent_runs():
     assert 'id="training-candidates-modal"' in html
     assert html.index('id="app-overlay-root"') < html.index('id="training-candidates-modal"')
     assert 'id="training-candidates-open-run"' in html
+    assert '<h2 id="keep-lora-title">Select Epoch</h2>' in html
+    assert '>Save &amp; Select</button>' in html
     assert 'id="training-candidates-algorithm"' in html
     assert 'Multiscale Loss Basins' in html
     assert 'Score Scalars · legacy baseline' in html
@@ -73,14 +75,15 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "trainingCandidatesPinnedDetailsHtml" in script
     assert "training-candidates-chart-footer" in script
     assert "training-candidates-open-generations" in script
-    assert "Copy to Test" in script
     assert "Remove from Test" in script
-    assert "Select Epoch" in script
-    assert "Selected · Clear" in script
+    assert "selectionLabel = isSelected ? 'Selected' : 'Select'" in script
+    assert "/fs/test_generations/keep_lora" in script
     assert "/fs/training_candidates/select" in script
-    assert "/fs/training_candidates/clear_selection" in script
-    assert "data-training-candidate-select-action" in script
+    assert "openKeepLora(" in script
     assert "training-candidates-select-toggle" in script
+    assert "training-candidates-pinned-actions-secondary" in script
+    assert "training-candidates-icon-action" in script
+    assert "training-candidates-action-icon" in script
     assert "i.selected" in css
     assert ".training-candidates-epoch-marker.is-selected" in css
     assert "inTestFolder" in script
@@ -230,12 +233,23 @@ const tooltipData = {points:data.epochLossPoints,analysis:data.analysisPoints,sm
 assert(context.trainingCandidatesTooltipHtml({step:190,epoch:1,loss:.2},tooltipData).includes('Robust loss: 0.2000'));
   assert(!context.trainingCandidatesTooltipHtml({step:150,epoch:1,loss:.2},tooltipData).includes('Candidate region:'));
   const savedData = Object.assign({}, tooltipData, {savedArtifacts:[{epoch:1,status:'available',fileName:'adapter.safetensors',inTestFolder:true}], testFolderStatus:{state:'available'}});
-  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('Remove from Test'));
-  assert(context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('data-training-candidate-test-action="remove"'));
-  assert(!context.trainingCandidatesPinnedActionsHtml(1,savedData).includes('disabled'));
+  const testedActions = context.trainingCandidatesPinnedActionsHtml(1,savedData);
+  assert(testedActions.includes('Remove from Test'));
+  assert(testedActions.includes('data-training-candidate-test-action="remove"'));
+  assert(testedActions.includes('<span>Select</span>'));
+  assert(!testedActions.includes('training-candidates-select-toggle is-select" data-training-candidate-select-epoch="1" title="Save this tested LoRA and mark this epoch as the chosen result." disabled'));
+  assert(testedActions.includes('aria-label="Open Epoch Folder"'));
   const uncopiedData = Object.assign({}, savedData, {savedArtifacts:[{epoch:1,status:'available',fileName:'adapter.safetensors',inTestFolder:false}]});
-  assert(context.trainingCandidatesPinnedActionsHtml(1,uncopiedData).includes('Copy to Test'));
-  assert(context.trainingCandidatesPinnedActionsHtml(1,uncopiedData).includes('data-training-candidate-test-action="copy"'));
+  const uncopiedActions = context.trainingCandidatesPinnedActionsHtml(1,uncopiedData);
+  assert(uncopiedActions.includes('<span>Test</span>'));
+  assert(uncopiedActions.includes('data-training-candidate-test-action="copy"'));
+  assert(uncopiedActions.includes('Test this epoch before selecting it.'));
+  assert(uncopiedActions.includes('disabled'));
+  const selectedData = Object.assign({}, savedData, {selected:{epoch:1}});
+  const selectedActions = context.trainingCandidatesPinnedActionsHtml(1,selectedData);
+  assert(selectedActions.includes('<span>Selected</span>'));
+  assert(selectedActions.includes('is-selected'));
+  assert(selectedActions.includes('disabled'));
   const unavailableData = Object.assign({}, savedData, {testFolderStatus:{state:'unknown',error:'Test root is unavailable'}});
   assert(context.trainingCandidatesPinnedDetailsHtml({step:190,epoch:1,loss:.2},unavailableData).includes('Test folder unavailable: Test root is unavailable'));
   assert(context.trainingCandidatesPinnedDetailsHtml({step:190,epoch:1,loss:.2},savedData).includes('Epoch 1 · Step 190'));

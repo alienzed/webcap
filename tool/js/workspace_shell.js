@@ -20,6 +20,8 @@ var shellSystemStatusState = {
   error: ''
 };
 var SHELL_SYSTEM_STATUS_INTERVAL_MS = 30000;
+var shellRecentSets = [];
+var shellRecentSetsLoading = null;
 
 var initialShellLocationRoute = null;
 var initialShellLocationRestored = false;
@@ -466,6 +468,86 @@ function handleApplicationHeaderBreadcrumbClick(event) {
   navigateToDirStackIndex(index);
 }
 
+function shellSetLabel(folder) {
+  var parts = String(folder || '').split('/').filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : String(folder || '');
+}
+
+function renderApplicationSetSelector() {
+  var control = document.getElementById('app-header-set-control');
+  var select = document.getElementById('app-header-set-select');
+  if (!control || !select) return;
+  var currentFolder = String(state && state.folder || '');
+  var recent = Array.isArray(shellRecentSets) ? shellRecentSets.slice() : [];
+  if (currentFolder && !recent.some(function (item) { return item.folder === currentFolder; })) {
+    recent.unshift({ folder: currentFolder, label: shellSetLabel(currentFolder) });
+  }
+  select.innerHTML = '<option value="">Select set…</option>' + recent.map(function (item) {
+    return '<option value="' + escapeHtml(item.folder) + '">' + escapeHtml(item.label || shellSetLabel(item.folder)) + '</option>';
+  }).join('');
+  select.value = currentFolder;
+  control.classList.toggle('hidden', !recent.length && !currentFolder);
+}
+
+function refreshApplicationRecentSets(force) {
+  if (!force && shellRecentSetsLoading) return shellRecentSetsLoading;
+  shellRecentSetsLoading = fetch('/fs/training_history/all')
+    .then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Could not load recent Sets.');
+        }
+        var jobs = payload.history && Array.isArray(payload.history.jobs) ? payload.history.jobs : [];
+        var seen = {};
+        shellRecentSets = [];
+        jobs.some(function (job) {
+          var status = String(job && job.status || '');
+          if (status !== 'completed' && status !== 'finished_early') return false;
+          var folder = String(job && job.folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
+          if (!folder || seen[folder] || job.sourceAvailable === false) return false;
+          seen[folder] = true;
+          shellRecentSets.push({
+            folder: folder,
+            label: shellSetLabel(folder)
+          });
+          return shellRecentSets.length >= 8;
+        });
+        renderApplicationSetSelector();
+        return shellRecentSets;
+      });
+    })
+    .catch(function (err) {
+      console.error('[Workspace] Could not load recent Sets:', err);
+      throw err;
+    })
+    .then(function (value) {
+      shellRecentSetsLoading = null;
+      return value;
+    }, function (err) {
+      shellRecentSetsLoading = null;
+      throw err;
+    });
+  return shellRecentSetsLoading;
+}
+
+function setApplicationSetContext(folder) {
+  var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
+  if (!targetFolder) throw new Error('A Set folder is required.');
+  if (!state.dirStack || !state.dirStack.length) throw new Error('A library root must be selected before switching Sets.');
+  if (String(state.folder || '') === targetFolder) return;
+  if (typeof clearFocusSet === 'function' && state.focusSet && state.focusSet.keys && state.focusSet.keys.length) {
+    clearFocusSet();
+  }
+  state.dirStack = [state.dirStack[0]].concat(targetFolder.split('/').filter(Boolean).map(function (name) {
+    return { name: name };
+  }));
+  state.folder = targetFolder;
+  state.currentItem = null;
+  clearEditorAndPreview();
+  clearCaptionFilterInputs();
+  refreshCurrentDirectory();
+}
+
 function syncApplicationShellContext() {
   var navigation = deriveShellNavigationState();
   var surface = normalizeWorkspaceSurface(workspaceState.surface);
@@ -475,6 +557,7 @@ function syncApplicationShellContext() {
   var workspaceActions = document.getElementById('app-header-workspace-actions');
   var modelControl = document.getElementById('app-header-model-control');
   var modelSelect = document.getElementById('app-header-model-profile-select');
+  renderApplicationSetSelector();
   var workingModelProfileId = getWorkingModelProfileId();
   if (modelSelect && workingModelProfileId && Array.prototype.some.call(modelSelect.options, function (option) {
     return String(option.value || '') === workingModelProfileId;
@@ -806,6 +889,7 @@ function initializeWorkspaceShell() {
   syncWorkspaceSurfaceUi();
   renderShellSystemStatus();
   refreshShellSystemStatus();
+  refreshApplicationRecentSets(false).catch(function () {});
 }
 
 function isApplicationOverlayOpen() {
@@ -819,6 +903,15 @@ function isApplicationOverlayOpen() {
 }
 
 function wireWorkspaceHeaderUi() {
+  var setSelect = document.getElementById('app-header-set-select');
+  if (setSelect && !setSelect.__workspaceWired) {
+    setSelect.__workspaceWired = true;
+    setSelect.onchange = function () {
+      var folder = String(this.value || '');
+      if (!folder || folder === String(state && state.folder || '')) return;
+      setApplicationSetContext(folder);
+    };
+  }
   var breadcrumb = document.getElementById('app-header-breadcrumb');
   if (breadcrumb && !breadcrumb.__workspaceWired) {
     breadcrumb.__workspaceWired = true;
@@ -971,6 +1064,8 @@ window.setWorkspaceSurface = setWorkspaceSurface;
 window.exitWorkspaceSurface = exitWorkspaceSurface;
 window.syncWorkspaceConfigEditorUi = syncWorkspaceConfigEditorUi;
 window.syncApplicationShellContext = syncApplicationShellContext;
+window.setApplicationSetContext = setApplicationSetContext;
+window.refreshApplicationRecentSets = refreshApplicationRecentSets;
 window.deriveShellNavigationState = deriveShellNavigationState;
 window.isApplicationOverlayOpen = isApplicationOverlayOpen;
 window.setShellImmersive = setShellImmersive;

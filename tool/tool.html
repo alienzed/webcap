@@ -2071,12 +2071,12 @@
                             </div>
                             <div id="director-model-test-activity" class="director-model-test-activity" aria-live="polite"></div>
                             <details class="app-settings-advanced director-model-calibration">
-                                <summary>
-                                    <span>Calibration Profiles</span>
-                                    <button id="director-model-test-clear-calibration" type="button" class="review-captions-btn" disabled>Clear Profiles</button>
-                                </summary>
+                                <summary>Calibration Profiles</summary>
                                 <div class="app-settings-disclosure-body">
-                                    <p class="app-settings-help">Progressively verifies local llama.cpp context capacity and clean output ceilings per model. Remote context remains runtime-managed. Explicit Director settings still take priority.</p>
+                                    <p class="app-settings-help">Progressively verifies local llama.cpp context capacity and clean output ceilings per model. Saved limits become per-model defaults only when the corresponding Director setting is Auto; explicit settings still take priority.</p>
+                                    <div class="app-settings-actions app-settings-actions-inline">
+                                        <button id="director-model-test-clear-calibration" type="button" class="review-captions-btn" disabled>Clear Profiles</button>
+                                    </div>
                                     <div id="director-model-test-calibration-profiles"><p class="app-settings-help">No calibrated model profiles yet.</p></div>
                                 </div>
                             </details>

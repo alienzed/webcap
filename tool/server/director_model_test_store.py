@@ -8,14 +8,28 @@ from .director_model_calibration import clear_profiles, list_profiles, save_prof
 
 
 SESSION_VERSION = 1
-CONTEXT_STEPS = (8192, 16384, 24576, 32768)
-OUTPUT_STEPS = (2048, 4096, 8192)
+CONTEXT_STEPS = (8192, 16384, 32768, 65536, 98304, 131072, 163840)
+OUTPUT_STEPS = (2048, 4096, 8192, 12288, 16384, 24576, 32768)
 OUTPUT_ITEM_COUNTS = {
     2048: 90,
     4096: 180,
     8192: 360,
+    12288: 540,
+    16384: 720,
+    24576: 1080,
+    32768: 1440,
+}
+PROSE_SECTION_COUNTS = {
+    2048: 10,
+    4096: 20,
+    8192: 40,
+    12288: 60,
+    16384: 80,
+    24576: 120,
+    32768: 160,
 }
 CALIBRATION_MARKER = "WEB_CAP_CALIBRATION_COMPLETE"
+PROSE_MARKER = "WEB_CAP_LONGFORM_COMPLETE"
 DEFAULT_PROMPT = "Expand the source concept below into a polished, production-ready cinematic generation prompt suitable for a high-quality text-to-video model.\n\nDevelop the scene with useful visual specificity. Enrich the environment, composition, camera perspective and movement, lighting, weather, physical motion, textures, body language, spatial relationships, atmosphere, and small observable details that would help the generation model create a coherent and convincing scene.\n\nUse your judgment about which details are worth developing. Preserve the identity, setting, mood, and essential situation of the source concept while making it substantially richer and more visually complete.\n\nKeep the scene internally consistent from beginning to end. Details such as the subject's appearance and clothing, location, weather, lighting, time of day, and overall atmosphere should remain coherent throughout the prompt.\n\nWrite the result as one directly usable generation prompt rather than commentary, analysis, an outline, or an explanation of your choices.\n\nAim for approximately 350–500 words.\n\nSource concept:\n\nA woman in her early thirties stands alone at a nearly empty roadside bus stop late at night. She wears a dark green wool coat over office clothes and carries a small black shoulder bag. It has been raining for some time. The pavement is wet and reflective, but the rain is now light. She looks tired and slightly cold, occasionally checking the empty road for the bus. A glass shelter beside her is lit by a single cool fluorescent tube. Across the road are closed storefronts with their signs turned off. The mood is quiet, lonely, and realistic rather than frightening. Nothing dramatic happens; she simply waits."
 PROTOCOL = {
     "id": "expansion-v1",
@@ -194,15 +208,35 @@ def _calibration_output_prompt(target):
     )
 
 
+def _calibration_prose_prompt(target):
+    target = int(target)
+    section_count = PROSE_SECTION_COUNTS[target]
+    return (
+        "This is a long-form coherence and completion stress test. "
+        "Write one continuous realistic suspense story divided into exactly "
+        + str(section_count) + " consecutively numbered sections labelled 'Section 1:' through 'Section "
+        + str(section_count) + ":'. Each section must contain 100-140 words of actual story prose, "
+        "continue causally from the previous section, preserve character identities, locations, objects, "
+        "injuries, time progression, and established facts, and materially advance the plot. "
+        "Vary sentence structure and avoid recaps, filler, repeated paragraphs, outlines, commentary, or meta discussion. "
+        "The story begins with a night-shift maintenance worker discovering that an elevator in an occupied office tower "
+        "keeps stopping at a floor that does not appear on the building directory. Keep the events grounded and internally coherent. "
+        "After Section " + str(section_count) + ", write this exact marker on its own line: "
+        + PROSE_MARKER + "."
+    )
+
+
 def calibration_protocol():
     return {
         "contextSteps": list(CONTEXT_STEPS),
         "outputSteps": list(OUTPUT_STEPS),
         "outputItemCounts": {str(key): value for key, value in OUTPUT_ITEM_COUNTS.items()},
+        "proseSectionCounts": {str(key): value for key, value in PROSE_SECTION_COUNTS.items()},
         "marker": CALIBRATION_MARKER,
+        "proseMarker": PROSE_MARKER,
         "description": (
-            "Local llama.cpp context is tested progressively at fixed tiers. "
-            "Output capacity is tested progressively with bounded long-form completion tasks."
+            "Local llama.cpp context is stress-tested progressively until a tier fails or the test range is exhausted. "
+            "Each output tier must pass both a mechanical completion test and a coherent long-form prose test."
         ),
     }
 
@@ -231,10 +265,13 @@ def enqueue_calibration_run(model_ref, kind, target, context_size=None):
         messages = [{"role": "user", "content": "Reply with exactly: CONTEXT_OK"}]
         overrides = {"contextSize": target, "maxTokens": 64}
         label = "Director Context Calibration"
-    elif kind == "output":
+    elif kind in {"output", "prose"}:
         if target not in OUTPUT_STEPS:
             raise ValueError("Unsupported Director output calibration target.")
-        messages = [{"role": "user", "content": _calibration_output_prompt(target)}]
+        messages = [{
+            "role": "user",
+            "content": _calibration_output_prompt(target) if kind == "output" else _calibration_prose_prompt(target),
+        }]
         overrides = {"maxTokens": target}
         if str(model.get("runtimeId") or "") == "local" and context_size not in (None, ""):
             try:
@@ -244,9 +281,9 @@ def enqueue_calibration_run(model_ref, kind, target, context_size=None):
             if context_size not in CONTEXT_STEPS:
                 raise ValueError("Director output calibration contextSize must be a proven context tier.")
             overrides["contextSize"] = context_size
-        label = "Director Output Calibration"
+        label = "Director Output Calibration" if kind == "output" else "Director Long-form Calibration"
     else:
-        raise ValueError("Director calibration kind must be context or output.")
+        raise ValueError("Director calibration kind must be context, output, or prose.")
 
     return enqueue(
         "chat",

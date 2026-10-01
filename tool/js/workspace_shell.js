@@ -20,8 +20,33 @@ var shellSystemStatusState = {
   error: ''
 };
 var SHELL_SYSTEM_STATUS_INTERVAL_MS = 30000;
-var shellRecentSets = [];
+var shellTrainingHistorySets = [];
 var shellRecentSetsLoading = null;
+var SHELL_RECENT_SETS_SESSION_KEY = 'webcap.recentSets';
+var shellRecentSets = loadShellRecentSets();
+
+function loadShellRecentSets() {
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(SHELL_RECENT_SETS_SESSION_KEY) || '[]');
+    return Array.isArray(saved) ? saved.filter(Boolean).slice(0, 8) : [];
+  } catch (err) {
+    console.warn('[Workspace] Could not restore recent Sets:', err);
+    return [];
+  }
+}
+
+function rememberShellRecentSet(folder) {
+  var target = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
+  if (!target) return;
+  shellRecentSets = [{ folder: target, label: shellSetLabel(target) }].concat(
+    shellRecentSets.filter(function (item) { return item && item.folder !== target; })
+  ).slice(0, 8);
+  try {
+    sessionStorage.setItem(SHELL_RECENT_SETS_SESSION_KEY, JSON.stringify(shellRecentSets));
+  } catch (err) {
+    console.warn('[Workspace] Could not persist recent Sets:', err);
+  }
+}
 
 var initialShellLocationRoute = null;
 var initialShellLocationRestored = false;
@@ -478,34 +503,52 @@ function renderApplicationSetSelector() {
   var select = document.getElementById('app-header-set-select');
   if (!control || !select) return;
   var currentFolder = String(state && state.folder || '');
-  var recent = Array.isArray(shellRecentSets) ? shellRecentSets.slice() : [];
-  if (currentFolder && !recent.some(function (item) { return item.folder === currentFolder; })) {
+  var history = Array.isArray(shellTrainingHistorySets) ? shellTrainingHistorySets.slice() : [];
+  var historySeen = {};
+  history.forEach(function (item) {
+    if (item && item.folder) historySeen[item.folder] = true;
+  });
+
+  var recent = (Array.isArray(shellRecentSets) ? shellRecentSets : []).filter(function (item) {
+    return item && item.folder && !historySeen[item.folder];
+  });
+  if (currentFolder && !historySeen[currentFolder] && !recent.some(function (item) { return item.folder === currentFolder; })) {
     recent.unshift({ folder: currentFolder, label: shellSetLabel(currentFolder) });
   }
-  select.innerHTML = '<option value="">Select set…</option>' + recent.map(function (item) {
-    return '<option value="' + escapeHtml(item.folder) + '">' + escapeHtml(item.label || shellSetLabel(item.folder)) + '</option>';
-  }).join('');
+
+  var html = '<option value="">Select set…</option>';
+  if (recent.length) {
+    html += '<optgroup label="Recent Sets">' + recent.map(function (item) {
+      return '<option value="' + escapeHtml(item.folder) + '">' + escapeHtml(item.label || shellSetLabel(item.folder)) + '</option>';
+    }).join('') + '</optgroup>';
+  }
+  if (history.length) {
+    html += '<optgroup label="Training History">' + history.map(function (item) {
+      return '<option value="' + escapeHtml(item.folder) + '">' + escapeHtml(item.label || shellSetLabel(item.folder)) + '</option>';
+    }).join('') + '</optgroup>';
+  }
+  select.innerHTML = html;
   select.value = currentFolder;
-  control.classList.toggle('hidden', !recent.length && !currentFolder);
+  control.classList.toggle('hidden', !recent.length && !history.length && !currentFolder);
 }
 
 function syncApplicationRecentSetsFromJobs(jobs) {
   var seen = {};
-  shellRecentSets = [];
+  shellTrainingHistorySets = [];
   (Array.isArray(jobs) ? jobs : []).some(function (job) {
     var status = String(job && job.status || '');
     if (status !== 'completed' && status !== 'finished_early') return false;
     var folder = String(job && job.folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
     if (!folder || seen[folder] || job.sourceAvailable === false) return false;
     seen[folder] = true;
-    shellRecentSets.push({
+    shellTrainingHistorySets.push({
       folder: folder,
       label: shellSetLabel(folder)
     });
-    return shellRecentSets.length >= 8;
+    return shellTrainingHistorySets.length >= 12;
   });
   renderApplicationSetSelector();
-  return shellRecentSets;
+  return shellTrainingHistorySets;
 }
 
 function refreshApplicationRecentSets(force) {
@@ -539,6 +582,7 @@ function setApplicationSetContext(folder) {
   if (!targetFolder) throw new Error('A Set folder is required.');
   if (!state.dirStack || !state.dirStack.length) throw new Error('A library root must be selected before switching Sets.');
   if (String(state.folder || '') === targetFolder) return;
+  rememberShellRecentSet(targetFolder);
   if (deriveShellNavigationState().activity === 'test') {
     if (typeof window.prepareTestBenchSetSwitch !== 'function') throw new Error('Test Generations Set switching is unavailable.');
     window.prepareTestBenchSetSwitch(targetFolder);

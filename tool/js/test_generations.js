@@ -894,9 +894,7 @@
   function openRecentPromptsMenu(button) {
     var prompts = Array.isArray(testActivity.recentPrompts) ? testActivity.recentPrompts : [];
     if (!prompts.length) {
-      refreshActivityButton().then(function () {
-        openRecentPromptsMenu(button);
-      }).catch(showError);
+      setStatus('No recent Test prompts yet.');
       return;
     }
     var rect = button.getBoundingClientRect();

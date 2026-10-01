@@ -215,6 +215,36 @@
   justify-content: flex-end;
 }
 
+.app-header-set-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.app-header-set-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.app-header-set-control select {
+  width: auto;
+  max-width: 190px;
+  min-height: 26px;
+  padding: 2px 24px 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.app-header-set-control.hidden {
+  display: none;
+}
+
 .activity-rail {
   grid-area: rail;
   min-width: 0;

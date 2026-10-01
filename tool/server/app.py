@@ -29,7 +29,6 @@ from .training_setup import ensure_training_setup
 from .environment_check import build_environment_report
 from .epoch_test_bench import (
     activity_snapshot as test_generations_activity_snapshot,
-    browse_source as test_generations_browse_source,
     handle_request as handle_epoch_test_bench_request,
     resolve_result_media as test_generations_resolve_result_media,
     supported_models as test_generations_supported_models,
@@ -1324,22 +1323,6 @@ def test_generations_wildcard_route():
 def test_generations_models_route():
     try:
         return jsonify({"ok": True, **test_generations_supported_models()})
-    except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
-
-
-@app.route("/fs/test_generations/source", methods=["GET"])
-def test_generations_source_route():
-    try:
-        raw_source = request.args.get("source")
-        payload = test_generations_browse_source(
-            str(request.args.get("modelId") or "").strip(),
-            None if raw_source is None else str(raw_source).strip(),
-            str(request.args.get("setName") or "").strip(),
-        )
-        return jsonify({"ok": True, **payload})
-    except FileNotFoundError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
 

@@ -250,7 +250,7 @@ def test_keep_test_candidate_copies_exact_bytes_then_cleans_candidate(tmp_path, 
     assert payload["candidateRemoved"] is True
 
 
-def test_keep_test_candidate_refuses_active_candidate_without_copy(tmp_path, monkeypatch):
+def test_keep_test_candidate_copies_before_cleanup_even_when_test_is_active(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     destination = tmp_path / "destination"
     staged.mkdir()
@@ -261,13 +261,12 @@ def test_keep_test_candidate_refuses_active_candidate_without_copy(tmp_path, mon
     monkeypatch.setattr(bench, "_resolved_test_directory", lambda _folder, _model, source=None: staged)
     monkeypatch.setattr(bench, "test_source_path", lambda _stage, source="": destination)
     monkeypatch.setattr(bench, "test_source_root_for_stage", lambda _stage: tmp_path / "test-root")
-    monkeypatch.setattr(bench, "_active_test_candidate", lambda *_args: True)
 
-    with pytest.raises(RuntimeError, match="queued or running"):
-        bench.keep_test_candidate(tmp_path, "h3", "SetA", candidate.name, "", "My-Lora.safetensors")
+    payload = bench.keep_test_candidate(tmp_path, "h3", "SetA", candidate.name, "", "My-Lora.safetensors")
 
-    assert candidate.is_file()
-    assert not (destination / "My-Lora.safetensors").exists()
+    assert (destination / "My-Lora.safetensors").read_bytes() == b"exact candidate bytes"
+    assert not candidate.exists()
+    assert payload["candidateRemoved"] is True
 
 
 def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeypatch):

@@ -3209,6 +3209,34 @@
       syncActiveRunControls(currentStatus);
     });
     el('test-generations-files').onclick = function (event) {
+      var saveButton = event.target.closest('[data-save-candidate]');
+      if (saveButton) {
+        if (saveButton.disabled) return;
+        var fileName = String(saveButton.dataset.saveCandidate || '');
+        var metadata = prepared && prepared.candidateMetadata && prepared.candidateMetadata[fileName];
+        if (!metadata) throw new Error('Test candidate has no training-run provenance.');
+        if (typeof window.openEpochSaveModal !== 'function') throw new Error('Epoch Save modal is unavailable.');
+        window.openEpochSaveModal({
+          epoch: metadata.epoch,
+          stage: metadata.stage,
+          folder: metadata.folder,
+          jobId: metadata.jobId,
+          fileName: metadata.sourceFileName || fileName,
+          onSaved: function (payload) {
+            var selected = payload && payload.selected ? payload.selected : null;
+            Object.keys(prepared.candidateMetadata || {}).forEach(function (candidateFile) {
+              var item = prepared.candidateMetadata[candidateFile];
+              if (item && item.jobId === metadata.jobId && item.folder === metadata.folder) {
+                item.selected = !!(selected && Number(item.epoch) === Number(selected.epoch));
+                item.selectedEpoch = selected;
+              }
+            });
+            renderStagedFiles(prepared);
+            if (typeof refreshTrainingHistory === 'function') refreshTrainingHistory(true);
+          }
+        });
+        return;
+      }
       var button = event.target.closest('[data-file-name]');
       if (!button) return;
       button.disabled = true;

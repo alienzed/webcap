@@ -219,8 +219,8 @@ function renderTrainingHistory() {
         '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
       '<div class="training-history-details">' +
         (runSummary ? '<div>' + escapeHtml(runSummary) + '</div>' : '') +
-        (details.length ? '<div>' +
-          (details.length ? escapeHtml(details.join(' · ')) : '') +
+        (details.length || selectedEpochLabel ? '<div>' +
+          escapeHtml([selectedEpochLabel].concat(details).filter(Boolean).join(' · ')) +
           '</div>' : '') +
         (timingError ? '<div class="training-runner-detail is-error">' + escapeHtml(timingError) + '</div>' : '') +
         (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +

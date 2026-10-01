@@ -27,7 +27,7 @@ from .training_preflight import (
     preflight_payload as _preflight_payload,
     resolve_folder as _resolve_folder,
 )
-from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
+from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination, test_source_for_set
 from .training_progress import (
     annotate_completed_job as _annotate_completed_job,
     annotate_finished_early_job as _annotate_finished_early_job,
@@ -722,6 +722,14 @@ def _annotate_candidate_test_folder_status(run, analysis):
         except (TypeError, ValueError):
             continue
         artifact["testFileName"] = test_file_name
+        artifact["testStage"] = str(run.get("stages") or "").strip().lower()
+        try:
+            artifact["testSource"] = test_source_for_set(
+                artifact["testStage"],
+                PurePosixPath(str(run.get("folder") or "")).name,
+            )
+        except (ValueError, OSError):
+            artifact["testSource"] = ""
         destination = destination_directory / test_file_name
         legacy_destination = destination_directory / str(artifact.get("fileName") or "")
         artifact["inTestFolder"] = (

@@ -692,6 +692,38 @@
   margin-top: 2px;
 }
 
+.director-model-calibration > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#director-model-test-calibration-profiles {
+  display: grid;
+  gap: 8px;
+}
+
+.director-model-calibration-profile {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
+
+.director-model-calibration-profile > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.director-model-calibration-profile > div:first-child span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 #director-model-test-results {
   display: grid;
   gap: 8px;

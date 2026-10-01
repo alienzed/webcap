@@ -600,6 +600,10 @@ function wireTrainingWorkspace() {
   var historySearch = document.getElementById('training-history-search');
   var historyScope = document.getElementById('training-history-scope');
   var historyClearBtn = document.getElementById('training-history-clear-btn');
+  var historyTabs = document.getElementById('training-history-tabs');
+  var archiveModalClose = document.getElementById('training-archive-close');
+  var archiveModalCancel = document.getElementById('training-archive-cancel');
+  var archiveModalConfirm = document.getElementById('training-archive-confirm');
   itemOverviewToggleBtn.onclick = function () {
     trainingWorkspaceState.itemOverviewHidden = !trainingWorkspaceState.itemOverviewHidden;
     renderTrainingItemOverview(null);

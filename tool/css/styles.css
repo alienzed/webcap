@@ -3829,6 +3829,8 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
   cursor: default;
 }
 .training-candidates-no-candidates { color: var(--muted-text, #a3adba); font-size: 12px; }
+.training-candidates-keep-toggle { width: auto; min-height: 28px; padding: 4px 8px; font-size: 12px; white-space: nowrap; border-color: #62bc8c; background: rgba(98, 188, 140, .14); color: #9ee0b8; font-weight: 650; }
+.training-candidates-keep-toggle:hover:not(:disabled) { border-color: #7bd7a3; background: rgba(98, 188, 140, .24); }
 .training-candidates-open-epoch, .training-candidates-test-toggle, .training-candidates-select-toggle { width: auto; min-height: 28px; padding: 4px 8px; font-size: 12px; white-space: nowrap; }
 .training-candidates-select-toggle { font-weight: 650; }
 .training-candidates-select-toggle.is-select { border-color: #d5b84f; background: rgba(213, 184, 79, .14); color: #f7d56a; }

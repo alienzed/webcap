@@ -39,6 +39,19 @@ def test_training_history_offers_curve_analysis_for_an_available_resume_run():
     assert 'job.candidateRunAvailable' in script
 
 
+
+def test_training_history_surfaces_selected_epoch_as_completed_decision_state():
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'item["selectedEpoch"] = selected_run_epoch' in history
+    assert "var selectedEpoch = job.selectedEpoch" in script
+    assert "'Selected Epoch ' + Math.round(selectedEpochNumber).toLocaleString()" in script
+    assert "has-selected-epoch" in script
+    assert "training-history-selected-mark" in script
+    assert ".training-history-item.has-selected-epoch" in css
+
 def test_training_history_loads_timing_for_completed_and_finished_early_rows():
     script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
 

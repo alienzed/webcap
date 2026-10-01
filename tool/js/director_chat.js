@@ -16,7 +16,8 @@
     requestStartedAt: 0,
     generationStartedAt: 0,
     lastGeneratedTokens: 0,
-    jobId: ''
+    jobId: '',
+    requestDiagnostic: null
   };
   var contextualModes = {};
   var inputHistory = [];
@@ -271,13 +272,29 @@
     });
   }
 
+  function formatRequestDiagnostic(request) {
+    request = request && typeof request === 'object' ? request : null;
+    if (!request) return '';
+    var count = Number(request.messageCount) || 0;
+    var chars = Number(request.contentChars) || 0;
+    var messageLabel = count === 1 ? '1 msg' : String(count) + ' msgs';
+    return 'Prompt sent · ' + messageLabel + ' · ' + chars.toLocaleString() + ' chars · Copy';
+  }
+
+  function copyRequestDiagnostic(request) {
+    request = request && typeof request === 'object' ? request : null;
+    if (!request || !Array.isArray(request.messages)) throw new Error('LLM request diagnostic is missing its messages.');
+    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
+  }
+
   function renderProgress(activity) {
     var phaseEl = el('director-chat-progress-phase');
     var detailEl = el('director-chat-progress-detail');
     var elapsedEl = el('director-chat-progress-elapsed');
     var progress = el('director-chat-progress');
     var stop = el('director-chat-stop');
-    if (!phaseEl || !detailEl || !elapsedEl || !progress || !stop) return;
+    var copy = el('director-chat-prompt-copy');
+    if (!phaseEl || !detailEl || !elapsedEl || !progress || !stop || !copy) return;
 
     activity = activityForCurrentJob(activity);
     var phase = String(activity && activity.phase || 'preparing');
@@ -311,6 +328,11 @@
     stop.disabled = jobStatus === 'stopping';
     stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
 
+    var requestLabel = formatRequestDiagnostic(state.requestDiagnostic);
+    copy.classList.toggle('hidden', !requestLabel);
+    copy.textContent = requestLabel;
+    copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
+
     phaseEl.textContent = directorPhaseLabel(phase);
     detailEl.textContent = detail;
     elapsedEl.textContent = formatElapsed(performance.now() - state.requestStartedAt);
@@ -339,6 +361,7 @@
     state.requestStartedAt = performance.now();
     state.generationStartedAt = 0;
     state.lastGeneratedTokens = 0;
+    state.requestDiagnostic = null;
     setProgressVisible(true);
     renderProgress(null);
     pollProgress();
@@ -576,6 +599,7 @@
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Assistant did not return a queued job.');
         state.jobId = String(payload.job.jobId);
+        state.requestDiagnostic = payload.job.request || null;
         trackTransientLlmJob(payload.job);
         renderProgress({ phase: payload.job.status === 'queued' ? 'queued' : 'preparing', jobStatus: payload.job.status, model: payload.job.modelId });
         return waitForJob(payload.job);
@@ -660,12 +684,13 @@
     var clear = el('director-chat-clear');
     var send = el('director-chat-send');
     var stop = el('director-chat-stop');
+    var copy = el('director-chat-prompt-copy');
     var input = el('director-chat-input');
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
     var modeSwitch = el('director-chat-mode-switch');
     var presetsHost = el('director-chat-mode-presets');
-    if (!toggle || !drawer || !pin || !close || !clear || !send || !stop || !input || !model || !refresh || !modeSwitch || !presetsHost) return;
+    if (!toggle || !drawer || !pin || !close || !clear || !send || !stop || !copy || !input || !model || !refresh || !modeSwitch || !presetsHost) return;
 
     toggle.onclick = function () { setOpen(!state.open); };
     pin.onclick = function () { setPinned(!state.pinned); };
@@ -673,6 +698,18 @@
     clear.onclick = newChat;
     send.onclick = sendMessage;
     stop.onclick = stopJob;
+    copy.onclick = function () {
+      copyRequestDiagnostic(state.requestDiagnostic).then(function () {
+        var original = formatRequestDiagnostic(state.requestDiagnostic);
+        copy.textContent = 'Copied';
+        window.setTimeout(function () {
+          if (state.requestDiagnostic) copy.textContent = original;
+        }, 1200);
+      }).catch(function (err) {
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
+        throw err;
+      });
+    };
     modeSwitch.onclick = function (event) {
       var button = event.target.closest('[data-assistant-mode]');
       if (button) setMode(button.dataset.assistantMode);

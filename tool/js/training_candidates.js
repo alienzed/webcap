@@ -1083,6 +1083,20 @@ function wireTrainingCandidatesModal() {
   var keepEls = keepLoraElements();
   if (keepEls.close) keepEls.close.onclick = closeKeepLora;
   if (keepEls.cancel) keepEls.cancel.onclick = closeKeepLora;
+  if (keepEls.save) keepEls.save.onclick = saveKeepLora;
+  if (keepEls.up) keepEls.up.onclick = function () {
+    if (!keepEls.up.disabled) keepLoraBrowse(String(keepEls.up.dataset.keepLoraParent || '')).catch(function (err) { keepLoraSetStatus(String(err.message || err), true); });
+  };
+  if (keepEls.folders) keepEls.folders.onclick = function (event) {
+    var button = event.target.closest('[data-keep-lora-folder]');
+    if (!button) return;
+    var parent = String(keepLoraState.destination || '').replace(/^\/+|\/+$/g, '');
+    var child = String(button.dataset.keepLoraFolder || '');
+    keepLoraBrowse([parent, child].filter(Boolean).join('/')).catch(function (err) { keepLoraSetStatus(String(err.message || err), true); });
+  };
+  var keepEls = keepLoraElements();
+  if (keepEls.close) keepEls.close.onclick = closeKeepLora;
+  if (keepEls.cancel) keepEls.cancel.onclick = closeKeepLora;
   if (keepEls.save) keepEls.save.onclick = function () { saveKeepLora(); };
   if (keepEls.up) keepEls.up.onclick = function () {
     if (!keepEls.up.disabled) keepLoraBrowse(String(keepEls.up.dataset.keepLoraParent || '')).catch(function (err) { keepLoraSetStatus(String(err.message || err), true); });

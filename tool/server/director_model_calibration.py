@@ -151,6 +151,22 @@ def save_profile(profile):
     if not isinstance(attempts, list) or not attempts:
         raise ValueError("Director calibration profile requires calibration attempts.")
 
+    normalized_attempts = [_normalize_attempt(item) for item in attempts]
+    if not any(
+        attempt["kind"] == "output"
+        and attempt["status"] == "passed"
+        and attempt["target"] == max_tokens
+        for attempt in normalized_attempts
+    ):
+        raise ValueError("Director calibration maxTokens must match a passed output attempt.")
+    if context_mode == "calibrated" and not any(
+        attempt["kind"] == "context"
+        and attempt["status"] == "passed"
+        and attempt["target"] == context_size
+        for attempt in normalized_attempts
+    ):
+        raise ValueError("Director calibration contextSize must match a passed context attempt.")
+
     normalized = {
         "version": PROFILE_VERSION,
         "modelRef": model_ref,
@@ -162,7 +178,7 @@ def save_profile(profile):
         "contextSize": context_size,
         "maxTokens": max_tokens,
         "calibratedAt": _now_iso(),
-        "attempts": [_normalize_attempt(item) for item in attempts],
+        "attempts": normalized_attempts,
     }
 
     payload = _read_document()

@@ -1087,6 +1087,9 @@
     var scores = payload && payload.candidateScores && typeof payload.candidateScores === 'object'
       ? payload.candidateScores
       : {};
+    var candidateMetadata = payload && payload.candidateMetadata && typeof payload.candidateMetadata === 'object'
+      ? payload.candidateMetadata
+      : {};
     if (!(selectedCandidates instanceof Set)) {
       var savedSettings = savedTestModelState().settings;
       var savedSelection = state

@@ -137,6 +137,17 @@ def select_epoch(run_dir, run_id, epoch, step, saved_stage=None, saved_destinati
         return dict(payload["selected"])
 
 
+def record_archive_metadata(run_dir, run_id, metadata):
+    identity = _validate_run_id(run_id)
+    if not isinstance(metadata, dict):
+        raise ValueError("Archive metadata must be an object.")
+    with _manifest_lock:
+        payload = _read_unlocked(run_dir, identity)
+        payload["archive"] = dict(metadata)
+        _write_unlocked(run_dir, payload)
+        return dict(payload["archive"])
+
+
 def clear_selected_epoch(run_dir, run_id):
     identity = _validate_run_id(run_id)
     with _manifest_lock:

@@ -3173,14 +3173,10 @@
         prepared.files = Array.isArray(payload.files) ? payload.files.slice() : [];
         renderStagedFiles(prepared);
       }
-      if (payload.sessionStatus) {
-        if (currentSession === String(payload.sessionStatus.session || '')) renderStatus(payload.sessionStatus);
-        return null;
+      if (payload.sessionStatus && currentSession === String(payload.sessionStatus.session || '')) {
+        renderStatus(payload.sessionStatus);
+        syncVisibleSessionProgress(payload.sessionStatus);
       }
-      if (!currentSession) return null;
-      return request('test_open_session', { session: currentSession }).then(renderStatus);
-    }).then(function () {
-      return refreshSessions();
     });
   }
 

@@ -1187,6 +1187,19 @@
       detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
       copy.appendChild(name);
       if (detail.textContent) copy.appendChild(detail);
+      var actions = document.createElement('div');
+      actions.className = 'test-generations-staged-actions';
+      if (metadata && metadata.jobId && metadata.folder && Number(metadata.epoch) > 0) {
+        var save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'test-generations-save-candidate' + (metadata.selected ? ' is-selected' : '');
+        save.dataset.saveCandidate = String(fileName || '');
+        save.title = metadata.selected ? 'Selected epoch' : 'Save this epoch';
+        save.setAttribute('aria-label', metadata.selected ? 'Selected epoch ' + String(metadata.epoch) : 'Save epoch ' + String(metadata.epoch));
+        save.disabled = !!metadata.selected;
+        save.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5h9l2 2v9h-11z"></path><path d="M5 2.5v4h6v-4"></path><path d="M5 10h6v3.5H5z"></path></svg>';
+        actions.appendChild(save);
+      }
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'test-generations-remove-candidate';
@@ -1194,9 +1207,10 @@
       remove.title = 'Remove this Test candidate';
       remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
       remove.textContent = '×';
+      actions.appendChild(remove);
       row.appendChild(include);
       row.appendChild(copy);
-      row.appendChild(remove);
+      row.appendChild(actions);
       host.appendChild(row);
     });
     syncCandidateMasterSelect(files);

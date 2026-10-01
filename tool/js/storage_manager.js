@@ -134,6 +134,7 @@
       var label = 'Delete';
       if (item.area === 'storyboard') label = 'Delete Take';
       else if (item.area === 'staged') label = 'Delete Copy';
+      else if (item.area === 'archive') label = 'Delete Archive';
       else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) label = 'Delete Probe';
       else if (item.area === 'runtime' && String(item.id || '').indexOf('generate-reference/') === 0) label = 'Delete Reference';
       else if (item.area === 'comfy') label = 'Delete Scratch';

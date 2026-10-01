@@ -552,7 +552,12 @@ def _history_job_view(job):
         candidate_path = host_path_for_training_path(raw_candidate) if raw_candidate else None
         item["candidateRunAvailable"] = bool(candidate_path) and candidate_path.is_dir()
     except (OSError, ValueError):
+        candidate_path = None
         item["candidateRunAvailable"] = False
+    item["selectedEpoch"] = None
+    action_id = str(item.get("actionId") or "").strip()
+    if candidate_path and candidate_path.is_dir() and not candidate_path.is_symlink() and action_id:
+        item["selectedEpoch"] = selected_run_epoch(candidate_path.resolve(strict=True), action_id)
     summary = item.get("artifactSummary") if isinstance(item.get("artifactSummary"), dict) else {}
     if output_path and not str(summary.get("checkpointTag") or "").strip():
         try:

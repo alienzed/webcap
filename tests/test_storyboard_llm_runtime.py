@@ -1560,3 +1560,140 @@ def test_status_remains_available_when_one_runtime_is_down(monkeypatch):
     assert payload["available"] is True
     assert payload["models"][0]["id"] == "remote::qwen"
     assert payload["warnings"][0]["runtimeName"] == "Offline PC"
+
+
+
+def _calibration_runtime_base(tmp_path, context_size=None, max_tokens=None):
+    return {
+        "legacy_mode": "local",
+        "llama_server": "",
+        "models_dir": tmp_path,
+        "port": 8189,
+        "context_size": context_size,
+        "max_tokens": max_tokens,
+        "remote_endpoints": [],
+    }
+
+
+def test_chat_uses_calibrated_limits_when_director_settings_are_auto(monkeypatch, tmp_path):
+    observed = {}
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_base_config",
+        lambda: _calibration_runtime_base(tmp_path),
+    )
+    monkeypatch.setattr(
+        "tool.server.director_model_calibration.get_profile",
+        lambda model_ref: {
+            "modelRef": model_ref,
+            "contextMode": "calibrated",
+            "contextSize": 16384,
+            "maxTokens": 4096,
+        },
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_ensure_server",
+        lambda: observed.update({"context": storyboard_llm_runtime._director_config()["context_size"]}),
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_ref: {"id": model_ref})
+    monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_release_gpu", lambda: None)
+
+    def fake_http(path, method="GET", payload=None, timeout=30):
+        observed["payload"] = payload
+        return {
+            "choices": [{"message": {"content": "done"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 3},
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_http_json", fake_http)
+
+    result = storyboard_llm_runtime.chat(
+        "local::director.gguf",
+        [{"role": "user", "content": "Write."}],
+    )
+
+    assert observed["context"] == 16384
+    assert observed["payload"]["max_tokens"] == 4096
+    assert result["contextSize"] == 16384
+
+
+def test_explicit_director_settings_take_priority_over_calibration(monkeypatch, tmp_path):
+    observed = {}
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_base_config",
+        lambda: _calibration_runtime_base(tmp_path, context_size=8192, max_tokens=2048),
+    )
+    monkeypatch.setattr(
+        "tool.server.director_model_calibration.get_profile",
+        lambda _model_ref: pytest.fail("Explicit Director settings must not consult calibration."),
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_ensure_server",
+        lambda: observed.update({"context": storyboard_llm_runtime._director_config()["context_size"]}),
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_ref: {"id": model_ref})
+    monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_release_gpu", lambda: None)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda path, method="GET", payload=None, timeout=30: observed.update({"payload": payload}) or {
+            "choices": [{"message": {"content": "done"}, "finish_reason": "stop"}],
+        },
+    )
+
+    storyboard_llm_runtime.chat(
+        "local::director.gguf",
+        [{"role": "user", "content": "Write."}],
+    )
+
+    assert observed["context"] == 8192
+    assert observed["payload"]["max_tokens"] == 2048
+
+
+def test_per_request_calibration_override_takes_priority_over_saved_profile(monkeypatch, tmp_path):
+    observed = {}
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_base_config",
+        lambda: _calibration_runtime_base(tmp_path),
+    )
+    monkeypatch.setattr(
+        "tool.server.director_model_calibration.get_profile",
+        lambda _model_ref: pytest.fail("Per-request calibration overrides must be authoritative."),
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_ensure_server",
+        lambda: observed.update({"context": storyboard_llm_runtime._director_config()["context_size"]}),
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_ref: {"id": model_ref})
+    monkeypatch.setattr(storyboard_llm_runtime, "_reserve_gpu", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_release_gpu", lambda: None)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda path, method="GET", payload=None, timeout=30: observed.update({"payload": payload}) or {
+            "choices": [{"message": {"content": "done"}, "finish_reason": "stop"}],
+        },
+    )
+
+    storyboard_llm_runtime.chat(
+        "local::director.gguf",
+        [{"role": "user", "content": "Write."}],
+        context_size=24576,
+        max_tokens=8192,
+    )
+
+    assert observed["context"] == 24576
+    assert observed["payload"]["max_tokens"] == 8192

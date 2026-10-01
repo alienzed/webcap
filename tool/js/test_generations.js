@@ -957,7 +957,7 @@
     button.disabled = hasFolder && (!testModelsLoaded || !supported);
     button.textContent = !testModelsLoaded ? 'Loading Test Bench…' : (supported ? 'Open Test Bench' : 'Testing unavailable');
     button.title = supported
-      ? 'Compare staged LoRAs with frozen generation settings.'
+      ? 'Compare staged training candidates with frozen generation settings.'
       : 'Test Generations is not available for the selected Base Model.';
   }
 
@@ -990,7 +990,7 @@
     button.textContent = 'Candidates';
     button.title = runs.length > 1
       ? 'Choose which training run to open'
-      : 'Open the training candidates for this Test source';
+      : 'Open the training candidates for this Set';
   }
 
   function openCandidateRunMenu(button) {

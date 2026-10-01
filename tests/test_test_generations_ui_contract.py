@@ -164,6 +164,7 @@ def test_test_navigation_uses_global_set_context_and_local_run_choice():
     assert "label=\"Training History\"" in shell
     assert "!historySeen[item.folder]" in shell
     assert "rememberShellRecentSet(targetFolder);" in shell
+    assert "window.rememberApplicationSetContext = rememberShellRecentSet" in shell
     assert "window.prepareTestBenchSetSwitch(targetFolder);" in shell
     assert "window.setApplicationSetContext(targetFolder);" in script
     assert "openTrainingWorkspaceFolder(targetFolder);" not in script
@@ -183,6 +184,12 @@ def test_test_prompt_can_reuse_recent_session_prompt_without_switching_set():
     assert "saveTestPromptDraft(prompt);" in script
     assert "saveTestBenchState(prompt);" in script
     assert "No recent Test prompts yet." in script
+
+
+def test_recent_set_group_tracks_loaded_set_contexts():
+    ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+    assert "isSetFolderContext(path, state.items)" in ui
+    assert "window.rememberApplicationSetContext(path);" in ui
 
 
 def test_test_activity_is_permanent_and_recent_sets_are_not_in_the_test_pane():

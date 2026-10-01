@@ -954,7 +954,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
 # Shared inference migration -------------------------------------------------
 
 
-"inference" = "inference"
+SHARED_EXECUTION_LANE = "inference"
 
 
 def _resolved_wildcard_values(source_prompt, resolved_prompt):

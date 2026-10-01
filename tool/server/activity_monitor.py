@@ -14,6 +14,19 @@ _TERMINAL_STATUSES = {"completed", "finished_early", "failed", "stopped", "inter
 _logger = logging.getLogger(__name__)
 
 
+def _usage_token_count(usage, *keys):
+    if not isinstance(usage, dict):
+        return 0
+    for key in keys:
+        try:
+            value = int(usage.get(key) or 0)
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            return value
+    return 0
+
+
 def _finished_at(item):
     try:
         return float(item.get("finishedAt") or item.get("updatedAt") or 0)
@@ -30,6 +43,8 @@ def _execution_item(lane, job):
         kind = client if client in {"generate", "storyboard", "test"} else "generate"
     else:
         kind = "director"
+    result = job.get("result") if isinstance(job.get("result"), dict) else {}
+    usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
     return {
         "id": str(job.get("jobId") or job.get("id") or ""),
         "kind": kind,
@@ -44,6 +59,9 @@ def _execution_item(lane, job):
         "sessionId": str(job.get("sessionId") or metadata.get("sessionId") or ""),
         "source": str(job.get("source") or metadata.get("source") or ""),
         "operation": str(job.get("operation") or metadata.get("operation") or ""),
+        "finishReason": str(result.get("finishReason") or ""),
+        "promptTokens": _usage_token_count(usage, "prompt_tokens", "promptTokens", "input_tokens", "inputTokens"),
+        "outputTokens": _usage_token_count(usage, "completion_tokens", "completionTokens", "output_tokens", "outputTokens", "eval_count"),
         "queuePosition": int(job.get("queuePosition") or 0),
         "createdAt": job.get("createdAt"),
         "startedAt": job.get("startedAt"),

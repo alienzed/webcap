@@ -1383,7 +1383,11 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
                 _debug_llm_failure(model_ref, time.perf_counter() - request_started, exc)
                 raise
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
-            return _completion_result(response, model_ref, allow_truncated=allow_truncated)
+            result = _completion_result(response, model_ref, allow_truncated=allow_truncated)
+            if _remote_is_ollama():
+                remote_model = _ollama_running_model(model_id)
+                result["contextSize"] = int(remote_model.get("contextSize") or 0)
+            return result
 
         if not gpu_reserved:
             _reserve_gpu()
@@ -1415,6 +1419,7 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
             _relay_log_updates()
             result = _completion_result(response, model_ref, allow_truncated=allow_truncated)
+            result["contextSize"] = int(settings.get("context_size") or 0)
             completed = True
             return result
         finally:

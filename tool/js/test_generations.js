@@ -3117,7 +3117,6 @@
 
   function deleteSession(sessionName) {
     return request('test_delete_session', { session: String(sessionName || '') }).then(function (payload) {
-      renderSessions(payload && payload.sessions);
       if (currentSession === String(payload.deleted || '')) {
         currentSession = '';
         currentSessionFolder = '';
@@ -3127,6 +3126,10 @@
         if (payload.latest && payload.latest.session) selectSessionStatus(payload.latest);
         else renderStatus({ status: 'idle' });
       }
+      // The delete response is scoped to the deleted session's source/model.
+      // Re-render from the authoritative session + shared queue queries so
+      // unrelated queued/running Test sessions are not temporarily removed.
+      return refreshSessions();
     });
   }
 

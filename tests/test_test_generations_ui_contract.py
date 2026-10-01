@@ -634,31 +634,23 @@ def test_test_identity_is_owned_by_shell_header():
     assert "window.closeTestBenchActivity" in shell
 
 
-def test_test_generations_remembers_source_per_set_and_model():
+
+def test_test_generations_follows_current_set_without_source_state():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    assert "function testSourceStorageKey(modelId, folder)" in script
-    assert "function loadRememberedTestSource(modelId, folder)" in script
-    assert "function saveRememberedTestSource(modelId, folder, source)" in script
-    assert "'webcap.test.source.' + encodeURIComponent(String(modelId)) + '.' + encodeURIComponent(setFolder)" in script
-    assert "window.localStorage.getItem(legacyTestSourceStorageKey(modelId))" in script
-
-    choose_source = script.split("function chooseTestSource(source)", 1)[1].split("function request(", 1)[0]
-    assert "saveRememberedTestSource(currentTestModelId(), launchFolder, testSource);" in choose_source
-    assert "pendingTestSource = testSource;" in choose_source
+    assert "var testSource" not in script
+    assert "pendingTestSource" not in script
+    assert "function refreshTestSourceBrowser" not in script
+    assert "function chooseTestSource" not in script
+    assert "resolvedCriteria.source" not in script
+    assert 'id="test-generations-source-folders"' not in html
+    assert 'id="test-generations-source-path"' not in html
 
     open_pane = script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
-    assert "testSource = loadRememberedTestSource(requestedModelId, launchFolder);" in open_pane
-    assert "saveRememberedTestSource(requestedModelId, launchFolder, testSource);" in open_pane
-
-    assert "function openTestBenchForSetFolder(folder)" in script
-    assert "if (useSetSource) pendingTestSource = null;" in script
-    assert "'&setName=' + encodeURIComponent(setFolderName(launchFolder))" in script
-    assert "resolvedCriteria.source = String(testSource || '')" in script
-    assert 'id="test-generations-source-folders"' in html
-    assert 'id="test-generations-source-path"' in html
-    assert 'id="test-generations-source-up-btn"' in html
+    assert "launchFolder = owningSetFolder((state && state.folder) || '');" in open_pane
+    assert "Test Generations requires a current Set." in open_pane
+    assert "request('test_prepare', { modelId: getWorkingModelProfileId() })" in open_pane
 
 def test_test_generation_sessions_are_not_training_set_contexts():
     common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
@@ -708,41 +700,33 @@ def test_test_preview_controls_do_not_cover_video_frames():
 
 
 
-def test_test_activity_menu_uses_recent_source_history_not_set_identity():
+
+def test_test_activity_menu_uses_recent_set_history():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
 
     assert "def recent_test_sets(limit=8):" in backend
     assert "_central_session_root()" in backend
-    assert '"source": source' in backend
     assert '"modelId": model_id' in backend
+    assert '"source": source' not in backend
     assert "function buildTestActivityContextActions()" in script
-    assert "function openTestBenchSource(folder, source, modelId, ownerAvailable)" in script
-    assert "var key = modelId + '|' + source;" in script
-    assert "openTestBenchSource(folder, source, modelId, item.ownerAvailable)" in script
-    assert "Right-click for recent Test sources" in script
+    assert "function openTestBenchSet(folder, modelId)" in script
+    assert "var key = folder + '|' + modelId;" in script
+    assert "openTestBenchSet(folder, modelId)" in script
+    assert "Right-click for recent Test Sets" in script
 
 
-
-def test_detached_test_history_keeps_logical_owner_without_folder_navigation():
+def test_test_history_navigation_switches_the_global_set_explicitly():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    source_block = script.split("function openTestBenchSource(", 1)[1].split("function buildTestActivityContextActions", 1)[0]
-    assert "ownerAvailable !== false" in source_block
-    assert "pendingLaunchFolder = targetFolder;" in source_block
-    assert "openTrainingWorkspaceFolder" not in source_block
-
-    browser_block = script.split("function refreshTestSourceBrowser()", 1)[1].split("function chooseTestSource", 1)[0]
-    assert "payload.ownerAvailable === false" in browser_block
-    assert "launchFolder = ownerFolder;" in browser_block
-    assert "openTrainingWorkspaceFolder(ownerFolder);" in browser_block
+    set_block = script.split("function openTestBenchSet(", 1)[1].split("function buildTestActivityContextActions", 1)[0]
+    assert "setWorkingModelProfileId" in set_block
+    assert "openTestBenchFolder(targetFolder);" in set_block
+    assert "pendingLaunchFolder" not in set_block
+    assert "openTrainingWorkspaceFolder" not in set_block
 
     pane_block = script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
-    assert "pendingLaunchFolder || (isOpen() ? launchFolder : '') || (state && state.folder) || ''" in pane_block
-
-    recent_block = script.split("recent.some(function (item)", 1)[1].split("return recentActions.length >= 5;", 1)[0]
-    assert "openTestBenchSource(folder, source, modelId, item.ownerAvailable)" in recent_block
-
+    assert "launchFolder = owningSetFolder((state && state.folder) || '');" in pane_block
 
 def test_test_execution_uses_backend_model_capabilities_even_when_workspace_is_opened_indirectly():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -767,17 +751,17 @@ def test_recent_test_sets_are_cached_during_active_test_polling():
 
 
 
-def test_saved_test_history_is_central_and_source_scoped():
+
+def test_saved_test_history_is_central_and_set_scoped():
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
 
     assert 'Path(app_config.FS_ROOT) / ".webcap" / TEST_RESULTS_DIR' in backend
     assert "def _session_directories(folder_path):" in backend
-    assert "def _session_matches_source(payload, folder_path, source):" in backend
-    assert "def list_sessions(folder_path, source=None):" in backend
-    assert "def status(folder_path, model_id=None, source=None):" in backend
+    assert "def _session_belongs_to_folder(folder_path, session_directory, payload=None):" in backend
+    assert "def list_sessions(folder_path, model_id=None):" in backend
+    assert "def status(folder_path, model_id=None):" in backend
     assert '"ownerFolder": folder' in backend
-    assert '"source": str(request.get("source") or "")' in backend
-
+    assert '"source": str(request.get("source") or "")' not in backend
 
 def test_test_generations_has_no_legacy_rate_review_workflow():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
@@ -877,18 +861,18 @@ def test_test_generations_queue_contract():
 
 
 
-def test_test_generations_rail_exposes_a_shallow_test_source_browser():
+
+def test_test_generations_rail_is_candidate_focused_without_source_browser():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert 'class="test-generations-library-panel test-generations-staged-panel"' in html
-    assert '<strong>LoRAs</strong>' in html
-    assert 'id="test-generations-source-folders"' in html
-    assert "function refreshTestSourceBrowser()" in script
-    assert "function renderTestSourceBrowser(payload)" in script
-    assert ".test-generations-source-folders" in css
-    assert "grid-template-columns: minmax(400px, 430px) minmax(0, 1fr);" in css
+    assert 'id="test-generations-source-folders"' not in html
+    assert "function refreshTestSourceBrowser()" not in script
+    assert ".test-generations-source-folders" not in css
+    assert "No staged candidates for this Set." in script
+    assert "candidate' + (count === 1 ? '' : 's')" in script
 
 def test_historical_test_session_errors_do_not_claim_current_failure():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -952,34 +936,28 @@ def test_test_prompt_draft_survives_prepare_and_template_fallback():
 
 
 
-def test_test_source_selection_syncs_deterministic_owner_without_leaving_test_workspace():
+
+def test_test_generations_set_change_reloads_current_set_without_source_redirect():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    assert "var pendingSourceOwnerFolder = '';" in script
-    browser_block = script.split("function refreshTestSourceBrowser()", 1)[1].split("function chooseTestSource", 1)[0]
-    assert "var ownerFolder = String(payload.ownerFolder || '')" in browser_block
-    assert "if (ownerFolder && ownerFolder !== currentFolder)" in browser_block
-    assert "pendingTestSource = testSource;" in browser_block
-    assert "openTrainingWorkspaceFolder(ownerFolder);" in browser_block
-    assert "return { navigated: true };" in browser_block
-
     loaded_block = script.split("function testGenerationsFolderLoaded()", 1)[1].split("function isTestModelSupported", 1)[0]
-    assert "pendingSourceOwnerFolder" in loaded_block
+    assert "pendingActivityFolder" in loaded_block
     assert "openPane();" in loaded_block
+    assert "pendingSourceOwnerFolder" not in loaded_block
 
     open_block = script.split("function openPane()", 1)[1].split("function startRun", 1)[0]
-    assert "if (sourcePayload && sourcePayload.navigated) return null;" in open_block
-    assert "if (!payload) return;" in open_block
+    assert "state && state.folder" in open_block
+    assert "refreshTestSourceBrowser" not in open_block
+    assert "openTrainingWorkspaceFolder" not in script
 
 
-def test_test_source_candidates_keep_explicit_delete_control():
+def test_test_candidates_keep_explicit_delete_control():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     block = script.split("function renderStagedFiles(payload)", 1)[1].split("function sessionStatusText", 1)[0]
     assert "remove.dataset.fileName = String(fileName || '');" in block
     assert "remove.title = 'Remove this Test candidate';" in block
     assert "row.appendChild(remove);" in block
-
 
 def test_test_generations_can_generate_wildcard_prompt_from_set_captions():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
@@ -999,7 +977,8 @@ def test_test_generations_can_generate_wildcard_prompt_from_set_captions():
     assert "requestFolder" in script
 
 
-def test_test_wildcard_helper_is_optional_and_does_not_leave_cross_set_output():
+
+def test_test_wildcard_helper_is_optional_and_stays_with_current_set():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     open_block = script.split("function openPane()", 1)[1].split("function startRun", 1)[0]
@@ -1007,22 +986,16 @@ def test_test_wildcard_helper_is_optional_and_does_not_leave_cross_set_output():
     assert "renderWildcardAnalysis(null);" in open_block
     assert "Director unavailable." in open_block
     assert "reportConsoleError('Test Generations', err);" in open_block
-    assert "showError(err);" not in open_block.split("refreshWildcardDirector()", 1)[1].split("refreshTestSourceBrowser()", 1)[0]
+    assert "refreshTestSourceBrowser" not in open_block
 
 
-def test_test_wildcard_is_unavailable_when_original_set_is_missing():
+def test_test_wildcard_uses_current_set_without_source_owner_gate():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     render_block = script.split("function renderWildcardDirector()", 1)[1].split("function renderWildcardAnalysis", 1)[0]
-    assert "sourceBrowser.ownerAvailable !== false" in render_block
-    assert "button.disabled = wildcardDirector.busy || !wildcardDirector.modelId || !ownerAvailable;" in render_block
-    assert "Original Set is unavailable" in render_block
-
-    browser_block = script.split("function refreshTestSourceBrowser()", 1)[1].split("function chooseTestSource", 1)[0]
-    assert "renderTestSourceBrowser(payload);" in browser_block
-    assert "renderWildcardDirector();" in browser_block
-    assert browser_block.index("renderTestSourceBrowser(payload);") < browser_block.index("renderWildcardDirector();")
-
+    assert "sourceBrowser" not in render_block
+    assert "button.disabled = wildcardDirector.busy || !wildcardDirector.modelId;" in render_block
+    assert "Generate a wildcard prompt from this Set's captions" in render_block
 
 def test_generated_wildcard_variations_are_collapsed_by_default():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")

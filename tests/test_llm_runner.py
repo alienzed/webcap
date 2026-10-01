@@ -1494,3 +1494,61 @@ def test_llm_snapshot_retries_startup_reconciliation_when_needed(llm_root):
 
     assert llm_runner._startup_reconciled is True
     assert snapshot["jobs"] == []
+
+
+
+def test_chat_runtime_overrides_are_validated_and_forwarded(llm_root, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_freeform_chat",
+        lambda model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None: captured.update({
+            "model": model_id,
+            "maxTokens": max_tokens,
+            "contextSize": context_size,
+        }) or {
+            "text": "CONTEXT_OK",
+            "model": model_id,
+            "finishReason": "stop",
+            "contextSize": context_size,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "chat",
+        "local::director.gguf",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "probe"}]},
+        context={"runtimeOverrides": {"maxTokens": 64, "contextSize": 16384}},
+        label="Director Context Calibration",
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert captured == {
+        "model": "local::director.gguf",
+        "maxTokens": 64,
+        "contextSize": 16384,
+    }
+    assert finished["result"]["contextSize"] == 16384
+
+
+def test_runtime_overrides_are_rejected_outside_chat(llm_root):
+    with pytest.raises(ValueError, match="only for chat jobs"):
+        llm_runner.enqueue(
+            "storyboard",
+            "qwen",
+            {"operation": "write_prompt", "prompt": "Write."},
+            context={"runtimeOverrides": {"maxTokens": 2048}},
+        )
+
+
+def test_runtime_override_rejects_unknown_fields(llm_root):
+    with pytest.raises(ValueError, match="Unsupported LLM runtime override"):
+        llm_runner.enqueue(
+            "chat",
+            "qwen",
+            {"operation": "freeform_chat", "messages": [{"role": "user", "content": "probe"}]},
+            context={"runtimeOverrides": {"magic": 123}},
+        )

@@ -75,6 +75,17 @@ def _owner_folder_available(owner_folder):
     return path.is_dir() and not path.is_symlink()
 
 
+def browse_keep_lora_destination(stage, source=""):
+    model = get_test_model_for_staging_key(stage)
+    payload = browse_test_source(model.STAGING_KEY, str(source or ""))
+    payload.update({
+        "operation": "keep_lora_destination_browse",
+        "modelId": model.PROFILE_ID,
+        "modelLabel": str(model.profile["label"]),
+    })
+    return payload
+
+
 def browse_source(model_id=None, source=None, set_name=""):
     model = get_test_model(model_id)
     default_source = test_source_for_set(model.STAGING_KEY, set_name) if str(set_name or "").strip() else ""

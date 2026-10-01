@@ -41,3 +41,15 @@ def test_settings_keeps_persistent_advanced_controls_only():
     assert '<summary>Debug Logging</summary>' in settings_markup
     assert '<summary>Raw Configuration</summary>' in settings_markup
     assert '<summary>Danger Zone</summary>' in settings_markup
+
+
+def test_director_diagnostics_has_live_activity_card_and_compact_model_controls():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "modals.css").read_text(encoding="utf-8")
+
+    assert 'id="director-model-test-activity"' in html
+    assert "function directorModelTestRenderActivity" in script
+    assert "director-model-test-activity-card" in script
+    assert ".director-model-test-model-actions" in css
+    assert "flex-wrap: nowrap" in css

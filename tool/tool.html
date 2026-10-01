@@ -1618,6 +1618,36 @@
                         <div id="training-candidates-modal-content" class="training-candidates-modal-content"></div>
                     </section>
                 </div>
+        <div id="keep-lora-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="keep-lora-close">
+            <section class="keep-lora-dialog" role="dialog" aria-modal="true" aria-labelledby="keep-lora-title">
+                <header class="keep-lora-header">
+                    <div>
+                        <h2 id="keep-lora-title">Keep LoRA</h2>
+                        <p id="keep-lora-source" class="keep-lora-source"></p>
+                    </div>
+                    <button id="keep-lora-close" type="button" class="training-review-modal-close" aria-label="Close Keep LoRA">&times;</button>
+                </header>
+                <div class="keep-lora-content">
+                    <div class="keep-lora-field">
+                        <label>Destination folder</label>
+                        <div class="keep-lora-path-row">
+                            <button id="keep-lora-up" type="button" class="review-captions-btn">..</button>
+                            <div id="keep-lora-path" class="keep-lora-path"></div>
+                        </div>
+                        <div id="keep-lora-folders" class="keep-lora-folders"></div>
+                    </div>
+                    <div class="keep-lora-field">
+                        <label for="keep-lora-filename">Filename</label>
+                        <input id="keep-lora-filename" type="text" spellcheck="false" autocomplete="off">
+                    </div>
+                    <div id="keep-lora-status" class="keep-lora-status" aria-live="polite"></div>
+                </div>
+                <footer class="keep-lora-footer">
+                    <button id="keep-lora-cancel" type="button" class="review-captions-btn">Cancel</button>
+                    <button id="keep-lora-save" type="button" class="review-captions-btn keep-lora-save">Keep LoRA</button>
+                </footer>
+            </section>
+        </div>
         <div id="media-grid-viewer-modal" class="media-grid-viewer-modal hidden" aria-hidden="true" data-escape-close-id="media-grid-viewer-close-btn">
             <div class="media-grid-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="media-grid-viewer-title">
                 <div class="media-grid-viewer-header">

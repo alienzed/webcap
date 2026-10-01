@@ -460,8 +460,12 @@ function trainingCandidatesPinnedActionsHtml(epoch, data) {
   var selectionAction = isSelected ? 'clear' : 'select';
   var selectionLabel = isSelected ? 'Selected · Clear' : 'Select Epoch';
   var selectionTitle = isSelected ? 'Clear this run\'s selected epoch.' : 'Mark this saved epoch as the chosen result for this run.';
+  var keepAction = artifact.inTestFolder === true
+    ? '<button type="button" class="review-captions-btn training-candidates-keep-toggle" data-training-candidate-keep-epoch="' + escapedEpoch + '">Keep LoRA</button>'
+    : '';
   return '<div class="training-candidates-pinned-actions">' +
     '<button type="button" class="review-captions-btn training-candidates-select-toggle is-' + selectionAction + '" data-training-candidate-select-epoch="' + escapedEpoch + '" data-training-candidate-select-action="' + selectionAction + '" title="' + selectionTitle + '">' + selectionLabel + '</button>' +
+    keepAction +
     '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapedEpoch + '">Open Epoch Folder</button>' +
     '<button type="button" class="review-captions-btn training-candidates-test-toggle is-' + testAction + '" data-training-candidate-test-epoch="' + escapedEpoch + '" data-training-candidate-test-action="' + testAction + '" title="' + testTitle + '">' + testLabel + '</button>' +
     '</div><div class="training-candidates-copy-status" data-training-candidate-copy-status aria-live="polite"></div>';
@@ -593,6 +597,15 @@ function wireTrainingCandidatesChart() {
       });
       return;
     }
+    var keepButton = event.target.closest ? event.target.closest('.training-candidates-keep-toggle') : null;
+    if (keepButton) {
+      event.stopPropagation();
+      openKeepLora(
+        keepButton.getAttribute('data-training-candidate-keep-epoch'),
+        data
+      );
+      return;
+    }
     var testButton = event.target.closest ? event.target.closest('.training-candidates-test-toggle') : null;
     if (testButton) {
       event.stopPropagation();
@@ -681,6 +694,167 @@ function wireTrainingCandidatesChart() {
     if (observer) observer.disconnect();
   };
   if (trainingWorkspaceState.candidatePinnedEpoch !== null && trainingWorkspaceState.candidatePinnedEpoch !== undefined) showPinned(trainingWorkspaceState.candidatePinnedEpoch);
+}
+
+function keepLoraElements() {
+  return {
+    modal: document.getElementById('keep-lora-modal'),
+    source: document.getElementById('keep-lora-source'),
+    path: document.getElementById('keep-lora-path'),
+    folders: document.getElementById('keep-lora-folders'),
+    up: document.getElementById('keep-lora-up'),
+    filename: document.getElementById('keep-lora-filename'),
+    status: document.getElementById('keep-lora-status'),
+    save: document.getElementById('keep-lora-save'),
+    close: document.getElementById('keep-lora-close'),
+    cancel: document.getElementById('keep-lora-cancel')
+  };
+}
+
+function keepLoraSetStatus(message, error) {
+  var status = keepLoraElements().status;
+  if (!status) return;
+  status.textContent = String(message || '');
+  status.classList.toggle('is-error', !!error);
+}
+
+function keepLoraDefaultFilename(epoch, setName, modelLabel) {
+  var setPart = String(setName || 'set').trim() || 'set';
+  var modelPart = String(modelLabel || 'model').trim() || 'model';
+  return setPart + '-' + modelPart + '-e' + String(epoch) + '.safetensors';
+}
+
+function keepLoraRenderFolders(payload) {
+  var els = keepLoraElements();
+  if (!els.folders) return;
+  els.path.textContent = String(payload && payload.source || '') || 'Test staging root';
+  els.up.disabled = !String(payload && payload.source || '');
+  els.up.dataset.keepLoraParent = String(payload && payload.parent || '');
+  els.folders.innerHTML = '';
+  (Array.isArray(payload && payload.folders) ? payload.folders : []).forEach(function (name) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'keep-lora-folder';
+    button.dataset.keepLoraFolder = String(name || '');
+    button.textContent = String(name || '');
+    els.folders.appendChild(button);
+  });
+  if (!els.folders.children.length) {
+    var empty = document.createElement('div');
+    empty.className = 'keep-lora-status';
+    empty.textContent = 'No subfolders.';
+    els.folders.appendChild(empty);
+  }
+}
+
+function keepLoraBrowse(source) {
+  var query = '?stage=' + encodeURIComponent(keepLoraState.stage) + '&source=' + encodeURIComponent(String(source || ''));
+  return fetch('/fs/test_generations/keep_lora_destinations' + query)
+    .then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Could not browse LoRA destination.');
+        return payload;
+      });
+    })
+    .then(function (payload) {
+      if (!keepLoraState.open) return payload;
+      keepLoraState.destination = String(payload.source || '');
+      keepLoraRenderFolders(payload);
+      return payload;
+    });
+}
+
+function closeKeepLora() {
+  var els = keepLoraElements();
+  keepLoraState.open = false;
+  if (els.modal) {
+    els.modal.classList.add('hidden');
+    els.modal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function openKeepLora(epoch, data) {
+  var artifact = trainingCandidatesAvailableArtifact(epoch, data);
+  if (!artifact || artifact.inTestFolder !== true || !artifact.testFileName) {
+    throw new Error('This epoch is not currently staged in Test Generations.');
+  }
+  var run = trainingWorkspaceState.candidatePayload && trainingWorkspaceState.candidatePayload.run || {};
+  var stage = String(artifact.testStage || run.stages || '').trim().toLowerCase();
+  var source = String(artifact.testSource || '').trim();
+  if (!stage || !source) throw new Error('This Test candidate has no usable staging location.');
+
+  var els = keepLoraElements();
+  var setName = String(run.folder || '').replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'set';
+  var modelLabel = '';
+  keepLoraState = {
+    open: true,
+    stage: stage,
+    source: source,
+    candidateFile: String(artifact.testFileName || ''),
+    destination: '',
+    filename: '',
+    epoch: Number(epoch),
+    runFolder: String(run.folder || ''),
+    modelLabel: modelLabel
+  };
+  els.source.textContent = 'Epoch ' + String(epoch) + ' · ' + keepLoraState.candidateFile;
+  els.filename.value = '';
+  els.save.disabled = true;
+  keepLoraSetStatus('Loading destination folders…', false);
+  els.modal.classList.remove('hidden');
+  els.modal.setAttribute('aria-hidden', 'false');
+
+  keepLoraBrowse('').then(function (payload) {
+    modelLabel = String(payload.modelLabel || '').trim();
+    keepLoraState.modelLabel = modelLabel;
+    els.filename.value = keepLoraDefaultFilename(epoch, setName, modelLabel);
+    els.save.disabled = false;
+    keepLoraSetStatus('', false);
+  }).catch(function (err) {
+    els.save.disabled = true;
+    keepLoraSetStatus(String(err.message || err), true);
+  });
+}
+
+function saveKeepLora() {
+  var els = keepLoraElements();
+  if (!keepLoraState.open) return;
+  var filename = String(els.filename.value || '').trim();
+  if (!filename) {
+    keepLoraSetStatus('Enter a filename.', true);
+    return;
+  }
+  els.save.disabled = true;
+  keepLoraSetStatus('Saving…', false);
+  fetch('/fs/test_generations/keep_lora', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      folder: String(trainingWorkspaceState.candidateFolder || ''),
+      stage: keepLoraState.stage,
+      source: keepLoraState.source,
+      candidateFile: keepLoraState.candidateFile,
+      destination: keepLoraState.destination,
+      filename: filename
+    })
+  }).then(function (response) {
+    return response.json().then(function (payload) {
+      if (!response.ok || !payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Could not keep LoRA.');
+      return payload;
+    });
+  }).then(function (payload) {
+    var artifacts = (((trainingWorkspaceState.candidatePayload || {}).analysis || {}).savedArtifacts || []);
+    artifacts.forEach(function (artifact) {
+      if (Number(artifact.epoch) === Number(keepLoraState.epoch)) artifact.inTestFolder = false;
+    });
+    renderTrainingCandidates();
+    var cleanupNote = payload.cleanupError ? ' The Test copy could not be removed: ' + payload.cleanupError : '';
+    closeKeepLora();
+    setStatus('Kept ' + String(payload.fileName || filename) + '.' + cleanupNote);
+  }).catch(function (err) {
+    els.save.disabled = false;
+    keepLoraSetStatus(String(err.message || err), true);
+  });
 }
 
 function trainingCandidatesArtifactLabel(artifact) {
@@ -906,6 +1080,21 @@ function wireTrainingCandidatesModal() {
     renderTrainingCandidates();
   };
   els.openRun.onclick = function () { openTrainingCandidatesFolder().catch(function (err) { setStatus('Could not open training run folder: ' + String(err.message || err)); }); };
+  var keepEls = keepLoraElements();
+  if (keepEls.close) keepEls.close.onclick = closeKeepLora;
+  if (keepEls.cancel) keepEls.cancel.onclick = closeKeepLora;
+  if (keepEls.save) keepEls.save.onclick = function () { saveKeepLora(); };
+  if (keepEls.up) keepEls.up.onclick = function () {
+    if (!keepEls.up.disabled) keepLoraBrowse(String(keepEls.up.dataset.keepLoraParent || '')).catch(function (err) { keepLoraSetStatus(String(err.message || err), true); });
+  };
+  if (keepEls.folders) keepEls.folders.onclick = function (event) {
+    var button = event.target.closest('[data-keep-lora-folder]');
+    if (!button) return;
+    var parent = String(keepLoraState.destination || '').replace(/^\/+|\/+$/g, '');
+    var child = String(button.dataset.keepLoraFolder || '');
+    var next = [parent, child].filter(Boolean).join('/');
+    keepLoraBrowse(next).catch(function (err) { keepLoraSetStatus(String(err.message || err), true); });
+  };
   els.modal.onclick = function (event) { if (event.target === els.modal) closeTrainingCandidates(); };
 }
 

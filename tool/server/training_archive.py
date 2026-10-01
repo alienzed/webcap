@@ -22,7 +22,7 @@ ARCHIVABLE_STATUSES = {"completed", "finished_early", "failed", "stopped", "inte
 
 
 def archive_root():
-    return app_config.output_root() / "archive"
+    return Path(app_config.FS_ROOT) / "output" / "archive"
 
 
 def _safe_archive_name(value):

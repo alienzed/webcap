@@ -417,13 +417,20 @@ def test_generate_lora_sweep_uses_existing_generate_queue_without_set_semantics(
     assert 'id="generate-sweep-base"' in html
     assert "function sweepFolders(model)" in script
     assert "return loraFolder(name) === String(folder || '');" in script
+    assert "function captureSweepSubmission()" in script
     assert "function runGenerateSweep()" in script
-    assert "collectReferences()" in script
+    assert "referenceFiles: captureReferenceFiles(model)" in script
+    assert "uploadReferenceFiles(submission.referenceFiles)" in script
     assert "postJson('/fs/generate'" in script
-    assert "loras: name ? [{ name: name, strength: strength }] : []" in script
-    assert "settings: Object.assign({}, settings)" in script
+    assert "modelId: submission.modelId" in script
+    assert "prompt: submission.prompt" in script
+    assert "settings: Object.assign({}, submission.settings)" in script
+    assert "loras: name ? [{ name: name, strength: submission.strength }] : []" in script
     assert "function frozenSweepSettings()" in script
     assert "window.crypto.getRandomValues(values);" in script
+    sweep = script.split("function runGenerateSweep()", 1)[1].split("function setGenerateViewMode", 1)[0]
+    assert "generateSubmitBusy" not in sweep
+    assert "button.disabled" not in sweep
     assert "sourceFolder" not in script
     assert "sourceJobId" not in script
     assert ".generate-lora-tabs" in css

@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .folder_state_store import read_folder_state, set_media_rating
-from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
+from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
@@ -90,6 +90,117 @@ def browse_source(model_id=None, source=None, set_name=""):
         "ownerAvailable": _owner_folder_available(owner_folder),
     })
     return payload
+
+
+def _test_candidate_source_path(folder_path, model, source, candidate_name):
+    directory = _resolved_test_directory(folder_path, model, source=source)
+    name = str(candidate_name or "").strip()
+    if not name or Path(name).name != name or "/" in name or "\\" in name or not name.lower().endswith(".safetensors"):
+        raise ValueError("A staged .safetensors filename is required.")
+    candidate = directory / name
+    if candidate.is_symlink() or not candidate.is_file():
+        raise FileNotFoundError("Staged Test candidate is unavailable: " + name)
+    return candidate
+
+
+def _remove_empty_test_directory(directory):
+    directory = Path(directory)
+    if not directory.is_dir() or directory.is_symlink():
+        return False
+    try:
+        next(directory.iterdir())
+    except StopIteration:
+        try:
+            directory.rmdir()
+            return True
+        except OSError:
+            return False
+    return False
+
+
+def _active_test_candidate(folder_path, model, source, candidate_name):
+    folder_key = _normalized_folder_key(_relative_set_folder(folder_path))
+    candidate_name = str(candidate_name or "").strip()
+    snapshot = execution_lane_snapshot(SHARED_EXECUTION_LANE, include_terminal=False)
+    for job in snapshot.get("jobs") or []:
+        if not isinstance(job, dict):
+            continue
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if str(metadata.get("client") or "") != "test":
+            continue
+        if _normalized_folder_key(metadata.get("folder")) != folder_key:
+            continue
+        if str(metadata.get("candidateKind") or "") != "lora":
+            continue
+        if str(metadata.get("candidateFile") or "").strip() != candidate_name:
+            continue
+        if str(metadata.get("source") or "").strip() != str(source or "").strip():
+            continue
+        return True
+    return False
+
+
+def keep_test_candidate(
+    folder_path,
+    stage,
+    source,
+    candidate_name,
+    destination,
+    filename,
+):
+    model = get_test_model_for_staging_key(stage)
+    candidate = _test_candidate_source_path(folder_path, model, source, candidate_name)
+    if _active_test_candidate(folder_path, model, source, candidate_name):
+        raise RuntimeError("This Test candidate is still queued or running.")
+
+    destination_directory = test_source_path(model.STAGING_KEY, destination)
+    if destination_directory.is_symlink() or not destination_directory.is_dir():
+        raise FileNotFoundError("Keep LoRA destination folder does not exist.")
+    if candidate.resolve() == destination_directory.resolve():
+        raise ValueError("Keep LoRA destination must be outside the Test staging folder.")
+
+    requested_name = str(filename or "").strip()
+    if not requested_name or requested_name in (".", "..") or Path(requested_name).name != requested_name or "/" in requested_name or "\\" in requested_name:
+        raise ValueError("Keep LoRA filename must be a single filename.")
+    if Path(requested_name).suffix == "":
+        requested_name += ".safetensors"
+    destination_path = destination_directory / requested_name
+    if destination_path.exists() or destination_path.is_symlink():
+        raise FileExistsError("Keep LoRA destination already exists: " + requested_name)
+
+    sidecar = candidate.with_suffix(".webcap.json")
+    created = False
+    try:
+        with candidate.open("rb") as source_handle, destination_path.open("xb") as destination_handle:
+            shutil.copyfileobj(source_handle, destination_handle)
+            created = True
+        if not destination_path.is_file():
+            raise RuntimeError("Kept LoRA was not written successfully.")
+    except Exception:
+        if created:
+            try:
+                destination_path.unlink()
+            except OSError:
+                pass
+        raise
+
+    cleanup_error = ""
+    try:
+        candidate.unlink()
+        if sidecar.is_file() and not sidecar.is_symlink():
+            sidecar.unlink()
+        _remove_empty_test_directory(candidate.parent)
+    except OSError as exc:
+        cleanup_error = str(exc)
+
+    return {
+        "destination": str(destination_path),
+        "fileName": destination_path.name,
+        "sourceFileName": candidate.name,
+        "stage": model.STAGING_KEY,
+        "cleanupError": cleanup_error,
+        "candidateRemoved": not candidate.exists(),
+    }
 
 
 def _lora_files(test_directory):

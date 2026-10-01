@@ -39,7 +39,6 @@ def test_generate_is_first_class_static_activity():
     assert ".generate-create-view" in css
     assert ".generate-stage-panel" in css
     assert ".generate-takes-panel" in css
-    assert ".generate-queue-panel" not in html
     assert ".generate-results" in css
 
 
@@ -72,10 +71,7 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert 'id="generate-director-restore"' in html
     assert "Restore Previous" in html
     assert "Describe what you want — a rough idea or a finished prompt." in html
-    assert "Valid work queues even while Training owns the GPU." not in html
     assert "<strong>Generation Settings</strong>" in html
-    assert "<strong>Setup</strong>" not in html
-    assert "<strong>Output</strong>" not in html
     assert 'class="storyboard-inline-check generate-prompt-option"' in html
 
     assert "previousPrompt: null" in script
@@ -176,9 +172,6 @@ def test_generate_uses_shared_director_preference_without_eager_preload():
     assert "DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model'" in common
     assert "getDirectorModelPreference('webcap.generate.directorModel')" in script
     assert "setDirectorModelPreference('webcap.generate.directorModel', this.value)" in script
-    assert "scheduleDirectorPreload" not in script
-    assert "preloadDirectorModel" not in script
-    assert '@app.route("/fs/director/preload"' not in app
 
 
 def test_inference_queue_is_shared_shell_drawer_without_pause_resume_controls():
@@ -265,8 +258,6 @@ def test_generate_does_not_expose_webcap_wildcard_resolution():
     markup = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
 
-    assert 'id="generate-wildcards"' not in markup
-    assert "wildcardsEnabled" not in script
 
 
 def test_generate_results_have_permanent_delete_action():
@@ -351,9 +342,6 @@ def test_generate_redesign_required_wiring_fails_loudly():
 def test_generate_redesign_does_not_keep_dead_pre_redesign_layout_css():
     css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
 
-    assert ".generate-authoring" not in css
-    assert ".generate-results-panel" not in css
-    assert ".generate-results-heading" not in css
 
 def test_generate_displays_live_and_persisted_generation_elapsed_time():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")

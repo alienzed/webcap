@@ -156,6 +156,32 @@ def _training_items(cache):
     return rows
 
 
+def _archive_items(cache):
+    root = training_archive_root()
+    rows = []
+    for archive in list_training_archives():
+        name = str(archive.get("name") or "")
+        path = root / name
+        alternates = archive.get("retainedAlternateEpochs") if isinstance(archive.get("retainedAlternateEpochs"), list) else []
+        rows.append(_item(
+            "archive",
+            name,
+            archive.get("runName") or name,
+            path,
+            kind="Archived training run",
+            status=("selected epoch " + str(archive.get("selectedEpoch") or "") + (" · " + str(len(alternates)) + " backup epoch(s)" if alternates else "")),
+            purgeable=True,
+            meta={
+                "sourceFolder": archive.get("sourceFolder"),
+                "archivedAt": archive.get("archivedAt"),
+                "selectedEpoch": archive.get("selectedEpoch"),
+                "retainedAlternateEpochs": alternates,
+            },
+            cache=cache,
+        ))
+    return rows
+
+
 def _active_generate_job_ids():
     active = set()
     snapshot = execution_lane_snapshot("inference", include_terminal=False)

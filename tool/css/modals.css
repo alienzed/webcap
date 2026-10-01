@@ -631,6 +631,26 @@
   color: var(--muted);
 }
 
+.director-model-test-activity {
+  margin: 2px 0 4px;
+}
+.director-model-test-activity.hidden {
+  display: none;
+}
+.director-model-test-activity-card {
+  margin-top: 0;
+  padding: 14px 13px 14px 14px;
+  grid-template-columns: 12px minmax(0, 1fr);
+}
+.director-model-test-activity-card .activity-monitor-copy strong {
+  font-size: 15px;
+}
+.director-model-test-activity-card .activity-monitor-copy span {
+  font-size: 13px;
+}
+.director-model-test-activity-card .activity-monitor-copy small {
+  font-size: 12px;
+}
 .director-model-test-summary-status {
   margin-left: 8px;
   font-size: 12px;
@@ -643,14 +663,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .director-model-test-model-actions {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
 }
 
 .director-model-test-models {

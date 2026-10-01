@@ -37,6 +37,10 @@ def test_source_root(stage):
     return root
 
 
+def test_source_root_for_stage(stage):
+    return test_source_root(stage)
+
+
 def test_source_for_set(stage, set_name):
     """Return the Copy to Test destination for a Set, relative to the browsable Test root."""
     selected_set_name = str(set_name or "").strip()

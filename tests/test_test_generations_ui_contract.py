@@ -778,6 +778,14 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "grid-template-columns: auto minmax(0, 1fr) auto;" in staged_rule
 
 
+def test_test_candidate_removal_does_not_refresh_broader_session_list():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    block = script.split("function removeCandidate(fileName, sessionName)", 1)[1].split("function removeCurrentSessionCandidate", 1)[0]
+
+    assert "renderStatus(payload.sessionStatus);" in block
+    assert "refreshSessions();" not in block
+
+
 def test_test_generations_queue_contract():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")

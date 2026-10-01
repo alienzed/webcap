@@ -353,6 +353,9 @@
     } else if (item.area === 'staged') {
       label = 'staged Test LoRA copy';
       consequence = '\nThe source training epoch is not deleted.';
+    } else if (item.area === 'archive') {
+      label = 'Training Archive';
+      consequence = '\nThis removes the archived experiment record and any retained backup epochs. The production LoRA is not deleted.';
     } else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) {
       label = 'H3 probe';
       consequence = '\nThis removes the captured probe inputs, logs, and probe results.';

@@ -1171,6 +1171,14 @@
       copy.className = 'test-generations-staged-copy';
       var name = document.createElement('strong');
       name.textContent = parts.label;
+      if (metadata && metadata.selected) {
+        var selectedMark = document.createElement('span');
+        selectedMark.className = 'test-generations-selected-mark';
+        selectedMark.title = 'Selected epoch';
+        selectedMark.setAttribute('aria-label', 'Selected epoch');
+        selectedMark.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="3.5"></circle><path d="M5.5 9l-1 5 3.5-2 3.5 2-1-5"></path></svg>';
+        name.appendChild(selectedMark);
+      }
       var detail = document.createElement('span');
       var score = scores[String(fileName || '')];
       var scoreText = score && Number(score.count || 0)

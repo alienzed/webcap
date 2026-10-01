@@ -137,6 +137,16 @@ function getTrainingWorkspaceEls() {
     historyShowAllBtn: document.getElementById('training-history-show-all-btn'),
     historySearch: document.getElementById('training-history-search'),
     historyClearBtn: document.getElementById('training-history-clear-btn'),
+    historyTabs: document.getElementById('training-history-tabs'),
+    archiveList: document.getElementById('training-archive-list'),
+    archiveSummary: document.getElementById('training-archive-summary'),
+    archiveModal: document.getElementById('training-archive-modal'),
+    archiveModalClose: document.getElementById('training-archive-close'),
+    archiveModalCancel: document.getElementById('training-archive-cancel'),
+    archiveModalConfirm: document.getElementById('training-archive-confirm'),
+    archiveName: document.getElementById('training-archive-name'),
+    archiveRecap: document.getElementById('training-archive-recap'),
+    archiveAlternates: document.getElementById('training-archive-alternates'),
     checkpointSelect: document.getElementById('training-run-checkpoint-select')
   };
 }

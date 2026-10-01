@@ -1444,7 +1444,11 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
             _relay_log_updates()
             result = _completion_result(response, model_ref, allow_truncated=allow_truncated)
-            result["contextSize"] = int(settings.get("context_size") or 0)
+            effective_context = int(settings.get("context_size") or 0)
+            if context_size is not None:
+                slot = _slot_snapshot(model_id)
+                effective_context = int(slot.get("contextSize") or effective_context)
+            result["contextSize"] = effective_context
             completed = True
             return result
         finally:

@@ -196,6 +196,7 @@ def calibration_protocol():
     return {
         "contextSteps": list(CONTEXT_STEPS),
         "outputSteps": list(OUTPUT_STEPS),
+        "outputItemCounts": {str(key): value for key, value in OUTPUT_ITEM_COUNTS.items()},
         "marker": CALIBRATION_MARKER,
         "description": (
             "Local llama.cpp context is tested progressively at fixed tiers. "

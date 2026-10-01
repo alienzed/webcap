@@ -32,6 +32,8 @@ from .epoch_test_bench import (
     handle_request as handle_epoch_test_bench_request,
     resolve_result_media as test_generations_resolve_result_media,
     supported_models as test_generations_supported_models,
+    browse_keep_lora_destination as test_generations_browse_keep_lora_destination,
+    keep_test_candidate as test_generations_keep_test_candidate,
 )
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
@@ -1705,6 +1707,41 @@ def training_history_job_metrics_route():
         return jsonify({"ok": False, "error": "Folder and job ID are required."}), 400
     payload, status = training_runner_history_metrics_response(folder, job_id)
     return jsonify(payload), status
+
+
+@app.route("/fs/test_generations/keep_lora_destinations", methods=["GET"])
+def test_generations_keep_lora_destinations_route():
+    stage = request.args.get("stage", "").strip()
+    source = request.args.get("source", "").strip()
+    try:
+        return jsonify({"ok": True, **test_generations_browse_keep_lora_destination(stage, source)})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (RuntimeError, ValueError, OSError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/test_generations/keep_lora", methods=["POST"])
+def test_generations_keep_lora_route():
+    data = request.get_json(silent=True) or {}
+    allowed = {"folder", "stage", "source", "candidateFile", "destination", "filename"}
+    if not isinstance(data, dict) or set(data) - allowed:
+        return jsonify({"ok": False, "error": "Keep LoRA accepts only folder, stage, source, candidateFile, destination, and filename."}), 400
+    try:
+        return jsonify({"ok": True, **test_generations_keep_test_candidate(
+            data.get("folder", ""),
+            data.get("stage", ""),
+            data.get("source", ""),
+            data.get("candidateFile", ""),
+            data.get("destination", ""),
+            data.get("filename", ""),
+        )})
+    except FileExistsError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 409
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (RuntimeError, ValueError, OSError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 @app.route("/fs/training_candidates", methods=["GET"])

@@ -13,8 +13,8 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .folder_state_store import read_folder_state, set_media_rating
-from .test_models import get_test_model, supported_models as registered_test_models, supported_profile_ids
-from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path
+from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
+from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path, test_source_root_for_stage
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
@@ -75,6 +75,17 @@ def _owner_folder_available(owner_folder):
     return path.is_dir() and not path.is_symlink()
 
 
+def browse_keep_lora_destination(stage, source=""):
+    model = get_test_model_for_staging_key(stage)
+    payload = browse_test_source(model.STAGING_KEY, str(source or ""))
+    payload.update({
+        "operation": "keep_lora_destination_browse",
+        "modelId": model.PROFILE_ID,
+        "modelLabel": str(model.profile["label"]),
+    })
+    return payload
+
+
 def browse_source(model_id=None, source=None, set_name=""):
     model = get_test_model(model_id)
     default_source = test_source_for_set(model.STAGING_KEY, set_name) if str(set_name or "").strip() else ""
@@ -90,6 +101,99 @@ def browse_source(model_id=None, source=None, set_name=""):
         "ownerAvailable": _owner_folder_available(owner_folder),
     })
     return payload
+
+
+def _test_candidate_source_path(folder_path, model, source, candidate_name):
+    directory = _resolved_test_directory(folder_path, model, source=source)
+    name = str(candidate_name or "").strip()
+    if not name or Path(name).name != name or "/" in name or "\\" in name or not name.lower().endswith(".safetensors"):
+        raise ValueError("A staged .safetensors filename is required.")
+    candidate = directory / name
+    if candidate.is_symlink() or not candidate.is_file():
+        raise FileNotFoundError("Staged Test candidate is unavailable: " + name)
+    return candidate
+
+
+def _remove_empty_test_directory(directory):
+    directory = Path(directory)
+    if not directory.is_dir() or directory.is_symlink():
+        return False
+    try:
+        next(directory.iterdir())
+    except StopIteration:
+        try:
+            directory.rmdir()
+            return True
+        except OSError:
+            return False
+    return False
+
+
+def keep_test_candidate(
+    folder_path,
+    stage,
+    source,
+    candidate_name,
+    destination,
+    filename,
+):
+    model = get_test_model_for_staging_key(stage)
+    candidate = _test_candidate_source_path(folder_path, model, source, candidate_name)
+    destination_directory = test_source_path(model.STAGING_KEY, destination)
+    if destination_directory.is_symlink() or not destination_directory.is_dir():
+        raise FileNotFoundError("Keep LoRA destination folder does not exist.")
+    staging_root = test_source_root_for_stage(model.STAGING_KEY).resolve()
+    candidate_directory = candidate.parent.resolve()
+    destination_resolved = destination_directory.resolve()
+    if destination_resolved == candidate_directory:
+        raise ValueError("Keep LoRA destination must be outside the Test candidate folder.")
+    try:
+        destination_resolved.relative_to(staging_root)
+    except ValueError as exc:
+        raise ValueError("Keep LoRA destination must stay inside the configured Test staging root.") from exc
+
+    requested_name = str(filename or "").strip()
+    if not requested_name or requested_name in (".", "..") or Path(requested_name).name != requested_name or "/" in requested_name or "\\" in requested_name:
+        raise ValueError("Keep LoRA filename must be a single filename.")
+    if Path(requested_name).suffix == "":
+        requested_name += ".safetensors"
+    destination_path = destination_directory / requested_name
+    if destination_path.exists() or destination_path.is_symlink():
+        raise FileExistsError("Keep LoRA destination already exists: " + requested_name)
+
+    sidecar = candidate.with_suffix(".webcap.json")
+    created = False
+    try:
+        with candidate.open("rb") as source_handle, destination_path.open("xb") as destination_handle:
+            shutil.copyfileobj(source_handle, destination_handle)
+            created = True
+        if not destination_path.is_file():
+            raise RuntimeError("Kept LoRA was not written successfully.")
+    except Exception:
+        if created:
+            try:
+                destination_path.unlink()
+            except OSError:
+                pass
+        raise
+
+    cleanup_error = ""
+    try:
+        candidate.unlink()
+        if sidecar.is_file() and not sidecar.is_symlink():
+            sidecar.unlink()
+        _remove_empty_test_directory(candidate.parent)
+    except OSError as exc:
+        cleanup_error = str(exc)
+
+    return {
+        "destination": str(destination_path),
+        "fileName": destination_path.name,
+        "sourceFileName": candidate.name,
+        "stage": model.STAGING_KEY,
+        "cleanupError": cleanup_error,
+        "candidateRemoved": not candidate.exists(),
+    }
 
 
 def _lora_files(test_directory):
@@ -850,7 +954,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
 # Shared inference migration -------------------------------------------------
 
 
-SHARED_EXECUTION_LANE = "inference"
+"inference" = "inference"
 
 
 def _resolved_wildcard_values(source_prompt, resolved_prompt):
@@ -1997,7 +2101,7 @@ def _remove_candidate_from_session(folder_path, session_name, candidate_name):
 
 def activity_snapshot(folder_path=None):
     active = []
-    snapshot = execution_lane_snapshot(SHARED_EXECUTION_LANE, include_terminal=False)
+    snapshot = execution_lane_snapshot("inference", include_terminal=False)
     seen = set()
     for job in snapshot.get("jobs", []):
         metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}

@@ -220,6 +220,55 @@ def test_rating_summary_reads_standard_folder_ratings(tmp_path, monkeypatch):
     assert payload["candidateScores"]["run-03__epoch24.safetensors"] == {"average": 4.0, "count": 1}
 
 
+def test_keep_test_candidate_copies_exact_bytes_then_cleans_candidate(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    destination = tmp_path / "destination"
+    staged.mkdir()
+    destination.mkdir()
+    candidate = staged / "run-03__epoch44.safetensors"
+    candidate.write_bytes(b"exact candidate bytes")
+    candidate.with_suffix(".webcap.json").write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(bench, "_resolved_test_directory", lambda _folder, _model, source=None: staged)
+    monkeypatch.setattr(bench, "test_source_path", lambda _stage, source="": destination)
+    monkeypatch.setattr(bench, "test_source_root_for_stage", lambda _stage: tmp_path / "test-root")
+    monkeypatch.setattr(bench, "_active_test_candidate", lambda *_args: False)
+
+    payload = bench.keep_test_candidate(
+        tmp_path,
+        "h3",
+        "SetA",
+        candidate.name,
+        "",
+        "My-Lora.safetensors",
+    )
+
+    kept = destination / "My-Lora.safetensors"
+    assert kept.read_bytes() == b"exact candidate bytes"
+    assert not candidate.exists()
+    assert not candidate.with_suffix(".webcap.json").exists()
+    assert payload["candidateRemoved"] is True
+
+
+def test_keep_test_candidate_copies_before_cleanup_even_when_test_is_active(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    destination = tmp_path / "destination"
+    staged.mkdir()
+    destination.mkdir()
+    candidate = staged / "run-03__epoch44.safetensors"
+    candidate.write_bytes(b"exact candidate bytes")
+
+    monkeypatch.setattr(bench, "_resolved_test_directory", lambda _folder, _model, source=None: staged)
+    monkeypatch.setattr(bench, "test_source_path", lambda _stage, source="": destination)
+    monkeypatch.setattr(bench, "test_source_root_for_stage", lambda _stage: tmp_path / "test-root")
+
+    payload = bench.keep_test_candidate(tmp_path, "h3", "SetA", candidate.name, "", "My-Lora.safetensors")
+
+    assert (destination / "My-Lora.safetensors").read_bytes() == b"exact candidate bytes"
+    assert not candidate.exists()
+    assert payload["candidateRemoved"] is True
+
+
 def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()

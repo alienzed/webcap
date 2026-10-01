@@ -1,3 +1,19 @@
+def test_keep_lora_contract_uses_exact_test_candidate_and_existing_destination_browser():
+    script = (ROOT / "tool" / "js" / "training_candidates.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "training-candidates-keep-toggle" in script
+    assert "/fs/test_generations/keep_lora" in script
+    assert "candidateFile: keepLoraState.candidateFile" in script
+    assert "keepLoraState.destination" in script
+    assert "keep-lora-modal" in html
+    assert "keep-lora-filename" in html
+    assert "keep-lora-folders" in html
+    assert ".keep-lora-dialog" in css
+    assert "Keep LoRA" in html
+
+
 from pathlib import Path
 
 

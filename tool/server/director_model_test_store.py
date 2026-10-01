@@ -140,6 +140,7 @@ def save_run(session_id, run):
         "tokensPerSecond",
         "outputWords",
         "outputChars",
+        "contextSize",
     )
     normalized = {
         **frozen,
@@ -148,6 +149,7 @@ def save_run(session_id, run):
         "finishedAt": str(run.get("finishedAt") or ""),
         "usage": run.get("usage") if isinstance(run.get("usage"), dict) else {},
         "backendTimings": run.get("backendTimings") if isinstance(run.get("backendTimings"), dict) else {},
+        "finishReason": str(run.get("finishReason") or ""),
         "text": str(run.get("text") or ""),
         "error": str(run.get("error") or ""),
     }

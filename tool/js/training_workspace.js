@@ -837,6 +837,22 @@ function wireTrainingWorkspace() {
   };
   if (historySearch) historySearch.oninput = renderTrainingHistory;
   if (historyClearBtn) historyClearBtn.onclick = clearTrainingHistory;
+  if (historyTabs) historyTabs.onclick = function (event) {
+    var button = event.target.closest('[data-training-history-tab]');
+    if (!button) return;
+    trainingWorkspaceState.historyPrimaryTab = button.getAttribute('data-training-history-tab') === 'archive' ? 'archive' : 'history';
+    if (trainingWorkspaceState.historyPrimaryTab === 'archive') {
+      loadTrainingArchives(false).catch(function (err) {
+        setStatus('Could not load Training Archive: ' + String(err.message || err));
+        throw err;
+      });
+    } else {
+      renderTrainingHistory();
+    }
+  };
+  archiveModalClose.onclick = closeTrainingArchiveModal;
+  archiveModalCancel.onclick = closeTrainingArchiveModal;
+  archiveModalConfirm.onclick = finalizeTrainingArchive;
 }
 
 function syncTrainingConsoleUi() {

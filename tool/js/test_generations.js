@@ -873,6 +873,39 @@
     return actions.concat(recentActions);
   }
 
+  function recentPromptLabel(item) {
+    var folder = String(item && item.folder || '');
+    var source = String(item && item.source || '');
+    var context = folder ? recentSetLabel(folder) : testSourceLabel({ source: source });
+    var session = String(item && item.session || '');
+    return context + (session ? ' · ' + sessionLabel(session) : '');
+  }
+
+  function applyRecentPrompt(item) {
+    var prompt = String(item && item.prompt || '');
+    if (!prompt) throw new Error('Recent Test prompt is empty.');
+    var field = el('test-generations-prompt');
+    field.value = prompt;
+    saveTestPromptDraft(prompt);
+    saveTestBenchState(prompt);
+    field.focus();
+  }
+
+  function openRecentPromptsMenu(button) {
+    var prompts = Array.isArray(testActivity.recentPrompts) ? testActivity.recentPrompts : [];
+    if (!prompts.length) {
+      setStatus('No recent Test prompts yet.');
+      return;
+    }
+    var rect = button.getBoundingClientRect();
+    showContextMenu(rect.left, rect.bottom + 4, prompts.map(function (item) {
+      return {
+        label: recentPromptLabel(item),
+        run: function () { applyRecentPrompt(item); }
+      };
+    }));
+  }
+
   function syncActivityButton(payload) {
     testActivity = payload || {};
     var activityButton = el('activity-test-btn');
@@ -914,6 +947,13 @@
     return refreshActivityButton();
   }
 
+  function prepareTestBenchSetSwitch(folder) {
+    var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
+    if (!targetFolder) throw new Error('Test Generations Set switching requires a Set folder.');
+    pendingActivityFolder = targetFolder;
+    pendingTestSource = null;
+  }
+
   function openTestBenchFolder(folder, useSetSource) {
     var targetFolder = String(folder || '');
     if (!targetFolder) return;
@@ -923,7 +963,8 @@
       return;
     }
     pendingActivityFolder = targetFolder;
-    openTrainingWorkspaceFolder(targetFolder);
+    if (typeof window.setApplicationSetContext !== 'function') throw new Error('Application Set switching is unavailable.');
+    window.setApplicationSetContext(targetFolder);
   }
 
   function openTestBenchForSetFolder(folder) {
@@ -1018,19 +1059,54 @@
       : 'Test Generations is not available for the selected Base Model.';
   }
 
+  function candidateRunLabel(run, index) {
+    var name = String(run && run.runName || '').trim();
+    var sequence = String(run && run.runSequence || '').trim();
+    if (name && sequence) return name + ' · Run ' + sequence;
+    if (name) return name;
+    if (sequence) return 'Run ' + sequence;
+    return 'Run ' + String(index + 1);
+  }
+
+  function openCandidatesForRun(run) {
+    if (!run || !run.jobId || !run.folder) throw new Error('Training candidate run provenance is incomplete.');
+    if (typeof openTrainingCandidates !== 'function') throw new Error('Training Candidates is unavailable.');
+    openTrainingCandidates({ id: String(run.jobId), folder: String(run.folder) }, {
+      onClose: function () {
+        refreshStagedFilesAfterCandidates().catch(showError);
+      }
+    });
+  }
+
   function syncCandidatesButton(payload) {
     var button = el('test-generations-candidates-btn');
     if (!button) return;
-    var runs = payload && Array.isArray(payload.candidateRuns) ? payload.candidateRuns : [];
-    var connected = runs.length === 1 && runs[0] && runs[0].jobId && runs[0].folder;
-    button.classList.toggle('hidden', !connected);
-    if (connected) {
-      button.dataset.candidateJobId = String(runs[0].jobId);
-      button.dataset.candidateFolder = String(runs[0].folder);
-    } else {
-      delete button.dataset.candidateJobId;
-      delete button.dataset.candidateFolder;
+    var runs = payload && Array.isArray(payload.candidateRuns)
+      ? payload.candidateRuns.filter(function (run) { return run && run.jobId && run.folder; })
+      : [];
+    button.classList.toggle('hidden', !runs.length);
+    button.textContent = 'Candidates';
+    button.title = runs.length > 1
+      ? 'Choose which training run to open'
+      : 'Open the training candidates for this Test source';
+  }
+
+  function openCandidateRunMenu(button) {
+    var runs = prepared && Array.isArray(prepared.candidateRuns)
+      ? prepared.candidateRuns.filter(function (run) { return run && run.jobId && run.folder; })
+      : [];
+    if (!runs.length) throw new Error('This Test source has no linked training candidate runs.');
+    if (runs.length === 1) {
+      openCandidatesForRun(runs[0]);
+      return;
     }
+    var rect = button.getBoundingClientRect();
+    showContextMenu(rect.left, rect.bottom + 4, runs.map(function (run, index) {
+      return {
+        label: candidateRunLabel(run, index),
+        run: function () { openCandidatesForRun(run); }
+      };
+    }));
   }
 
   function refreshStagedFilesAfterCandidates() {
@@ -3178,16 +3254,10 @@
       setResultsView('compare');
     };
     el('test-generations-candidates-btn').onclick = function () {
-      var button = this;
-      var jobId = String(button.dataset.candidateJobId || '');
-      var folder = String(button.dataset.candidateFolder || '');
-      if (!jobId || !folder) return;
-      if (typeof openTrainingCandidates !== 'function') throw new Error('Training Candidates is unavailable.');
-      openTrainingCandidates({ id: jobId, folder: folder }, {
-        onClose: function () {
-          refreshStagedFilesAfterCandidates().catch(showError);
-        }
-      });
+      openCandidateRunMenu(this);
+    };
+    el('test-generations-recent-prompts-btn').onclick = function () {
+      openRecentPromptsMenu(this);
     };
     el('test-generations-files').addEventListener('change', function (event) {
       var checkbox = event.target.closest('[data-candidate-select]');
@@ -3354,6 +3424,7 @@
   }
 
   window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
+  window.prepareTestBenchSetSwitch = prepareTestBenchSetSwitch;
   window.openTestBenchActivity = openTestBenchActivity;
   window.openTestBenchActivityMenu = openTestBenchActivityMenu;
   window.openTestBenchForFolder = openTestBenchForSetFolder;

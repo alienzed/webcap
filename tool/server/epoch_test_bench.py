@@ -1843,13 +1843,6 @@ def list_sessions(folder_path, source=None, model_id=None):
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
         if selected_model_id and session_model_id != selected_model_id:
             continue
-        results = payload.get("results") if isinstance(payload.get("results"), list) else []
-        ratings = _session_rating_map(session)
-        unrated = sum(
-            1 for result in results
-            if isinstance(result, dict) and _result_media_file(result)
-            and _result_media_file(result) not in ratings
-        )
         sessions.append({
             "session": session.name,
             "name": str(payload.get("name") or ""),
@@ -1864,7 +1857,6 @@ def list_sessions(folder_path, source=None, model_id=None):
             "total": int(payload.get("total") or 0),
             "queued": int(payload.get("queued") or 0),
             "running": int(payload.get("running") or 0),
-            "unrated": unrated,
             "resultFolder": str(payload.get("resultFolder") or ""),
         })
     return sessions

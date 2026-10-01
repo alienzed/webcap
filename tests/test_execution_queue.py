@@ -10,6 +10,7 @@ from tool.server import execution_queue
 @pytest.fixture
 def queue_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
+    monkeypatch.setattr(app_config, "app_state_root", lambda: Path(tmp_path) / ".test-webcap-app-data" / "state")
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
     execution_queue.ephemeral_lane("llm").clear()
@@ -504,7 +505,7 @@ def test_execution_queue_lane_guard_is_durable_and_explicitly_clearable(queue_ro
 
 
 def test_execution_queue_unreadable_runtime_state_is_moved_aside_on_startup(queue_root):
-    state_path = queue_root / ".webcap" / "execution_queue.json"
+    state_path = app_config.execution_queue_state_path()
     state_path.parent.mkdir(parents=True)
     state_path.write_text("{not-json", encoding="utf-8")
 

@@ -235,15 +235,18 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
             or resolved_model_id
             or get_test_model().PROFILE_ID
         )
-    model = get_test_model(resolved_model_id or get_test_model().PROFILE_ID)
-    allowed = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
-    candidate = allowed.get(name)
-    if candidate is None:
-        raise ValueError("Staged Test candidate does not belong to the current Set: " + name)
-    sidecar = candidate.with_suffix(".webcap.json")
 
-    if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
-        raise RuntimeError("Staged Test candidate is not a regular file: " + name)
+    model = get_test_model(resolved_model_id or get_test_model().PROFILE_ID)
+    test_directory = _test_directory(folder_path, model)
+    candidate = test_directory / name
+    sidecar = candidate.with_suffix(".webcap.json")
+    owned = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
+
+    if candidate.exists() or candidate.is_symlink():
+        if name not in owned:
+            raise ValueError("Staged Test candidate does not belong to the current Set: " + name)
+        if candidate.is_symlink() or not candidate.is_file():
+            raise RuntimeError("Staged Test candidate is not a regular file: " + name)
     if sidecar.is_symlink() or (sidecar.exists() and not sidecar.is_file()):
         raise RuntimeError("Staged Test candidate sidecar is not a regular file: " + sidecar.name)
 

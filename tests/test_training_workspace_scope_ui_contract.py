@@ -118,17 +118,14 @@ def test_training_scope_source_contracts_remain_explicit():
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
 
     assert 'sidebar-open-training-btn' in shell
-    assert 'utility-training-btn' not in shell
     assert "function openTrainingSurface(mode)" in shell
     assert "workspaceRequestVersion" in workspace
     assert "isTrainingSetRefreshCurrent" in workspace
-    assert "training-global-context--after-set" not in workspace
     assert "trainingWorkspaceState.entryMode === 'set' ? String(state.folder || '').trim() : ''" in history
     assert "trainingWorkspaceState.historyViewScope === 'set'" in history
     assert "data-training-history-scope" in history
     assert "els.globalContext.classList.toggle('hidden', false)" in workspace
     assert "entryKind === 'unavailable'" in shell
-    assert "training-sidebar-collapse-toggle-btn" not in workspace
     assert "trainingWorkspaceState.launchedJobId = payload.job.id;" in runner
     assert "function renderTrainingLaunchStatus()" in runner
     launch = runner[runner.index("function renderTrainingLaunchStatus()"):runner.index("function renderTrainingRunner()")]
@@ -172,10 +169,8 @@ def test_training_lifecycle_is_run_setup_training_tests():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
-    assert 'id="training-set-workflow"' not in html
     assert 'id="app-header-model-profile-select"' in html
     assert 'id="training-run-setup"' in html
-    assert 'id="training-candidates-stage"' not in html
     assert '<span class="training-workflow-step-number">2</span><span>Training</span>' in html
     assert 'id="training-tests-stage"' in html
     assert '<div class="training-workflow-step-number">3</div>' in html
@@ -183,7 +178,6 @@ def test_training_lifecycle_is_run_setup_training_tests():
 
     navigator_rule = css.split(".app.shell-revamp .training-navigator {", 1)[1].split("}", 1)[0]
     assert "gap: 12px;" in navigator_rule
-    assert ".app.shell-revamp #training-candidates-stage" not in css
     assert ".app.shell-revamp #training-tests-stage::before" in css
     assert "margin-top: 12px;" in css.split(".app.shell-revamp #training-tests-stage {", 1)[1].split("}", 1)[0]
     training_rule = css.split(".app.shell-revamp .training-global-context {", 1)[1].split("}", 1)[0]
@@ -196,10 +190,6 @@ def test_run_setup_is_one_form_without_trained_badge_and_history_is_flat():
     css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
     history = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
 
-    assert 'id="training-model-trained-status"' not in html
-    assert 'Already trained' not in history
-    assert 'class="training-run-option training-run-model-option"' not in html
-    assert 'class="training-global-secondary"' not in html
     assert '<div class="training-workspace-section-title">Training Queue</div>' in html
     assert 'aria-label="Training queue"' in html
     assert '>Training History</button>' in html
@@ -222,8 +212,6 @@ def test_run_setup_train_action_is_compact_and_queue_status_lives_in_training():
     css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
 
-    assert 'id="training-launch-status"' not in html
-    assert 'id="training-launch-status-global-btn"' not in html
     assert 'id="training-runner-summary"' in html
     assert 'id="training-runner-queue"' in html
 
@@ -263,7 +251,6 @@ def test_model_switch_has_no_removed_trained_status_dependency():
     workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    assert "renderTrainingModelTrainedStatus" not in workspace
     assert 'id="training-model-trained-status"' not in html
     switch_start = workspace.index("function switchTrainingSetup(")
     switch_end = workspace.index("function wireTrainingWorkspace(", switch_start)

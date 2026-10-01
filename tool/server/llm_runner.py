@@ -177,6 +177,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         return {
             "text": llm_result["text"],
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -185,6 +186,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         return {
             "result": llm_result["text"],
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -197,6 +199,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         return {
             "analysis": normalize_result(llm_result.get("data")),
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -219,6 +222,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "storyId": story["id"],
             "result": story["concept"],
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -230,6 +234,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "storyId": story["id"],
             "addedCount": added_count,
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -253,6 +258,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "changedSceneCount": changed_scene_count,
             "changedFieldCount": changed_field_count,
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -277,6 +283,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "storyId": story["id"],
             "sceneCount": len(story.get("sceneOrder") or []),
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -300,6 +307,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "sceneId": scene["id"],
             "insertedAfterSceneId": scene_id,
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -345,6 +353,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "sceneId": scene["id"],
             "result": scene["prompt"],
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }

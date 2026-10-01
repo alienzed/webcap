@@ -58,6 +58,45 @@
     return parts.length ? parts[parts.length - 1] : '';
   }
 
+  function normalizeTestSource(source) {
+    return String(source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  }
+
+  function testSourceStorageKey(modelId, folder) {
+    var setFolder = String(owningSetFolder(folder) || '');
+    if (!modelId || !setFolder) return '';
+    return 'webcap.test.source.' + encodeURIComponent(String(modelId)) + '.' + encodeURIComponent(setFolder);
+  }
+
+  function legacyTestSourceStorageKey(modelId) {
+    return 'webcap.test.source.' + encodeURIComponent(String(modelId || ''));
+  }
+
+  function loadRememberedTestSource(modelId, folder) {
+    var key = testSourceStorageKey(modelId, folder);
+    if (!key) return null;
+    var saved = window.localStorage.getItem(key);
+    if (saved !== null) return normalizeTestSource(saved);
+
+    var legacy = window.localStorage.getItem(legacyTestSourceStorageKey(modelId));
+    if (legacy === null) return null;
+    legacy = normalizeTestSource(legacy);
+    if (!legacy || PurePathName(legacy) !== setFolderName(folder)) return null;
+    window.localStorage.setItem(key, legacy);
+    return legacy;
+  }
+
+  function saveRememberedTestSource(modelId, folder, source) {
+    var key = testSourceStorageKey(modelId, folder);
+    if (!key) return;
+    window.localStorage.setItem(key, normalizeTestSource(source));
+  }
+
+  function PurePathName(path) {
+    var parts = normalizeTestSource(path).split('/').filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
+  }
+
   function sourceChildPath(parent, child) {
     return [String(parent || '').replace(/^\/+|\/+$/g, ''), String(child || '').replace(/^\/+|\/+$/g, '')]
       .filter(Boolean)
@@ -106,7 +145,8 @@
         if (!response.ok || !payload || payload.ok === false) {
           throw new Error(payload && payload.error ? payload.error : 'Could not browse Test Sources.');
         }
-        testSource = String(payload.source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+        testSource = normalizeTestSource(payload.source || '');
+        saveRememberedTestSource(currentTestModelId(), launchFolder, testSource);
         renderTestSourceBrowser(payload);
         renderWildcardDirector();
         var ownerFolder = String(payload.ownerFolder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
@@ -129,7 +169,8 @@
   }
 
   function chooseTestSource(source) {
-    testSource = String(source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    testSource = normalizeTestSource(source);
+    saveRememberedTestSource(currentTestModelId(), launchFolder, testSource);
     pendingTestSource = testSource;
     currentSession = '';
     currentSessionFolder = '';
@@ -2947,10 +2988,11 @@
     pendingLaunchFolder = '';
     var requestedModelId = currentTestModelId();
     if (pendingTestSource !== null) {
-      testSource = String(pendingTestSource || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      testSource = normalizeTestSource(pendingTestSource);
       pendingTestSource = null;
+      saveRememberedTestSource(requestedModelId, launchFolder, testSource);
     } else {
-      testSource = null;
+      testSource = loadRememberedTestSource(requestedModelId, launchFolder);
     }
     var rememberedSession = (
       currentSession &&

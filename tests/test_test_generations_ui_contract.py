@@ -762,6 +762,21 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "grid-template-columns: auto minmax(0, 1fr) auto;" in staged_rule
 
 
+
+def test_test_generations_surfaces_save_and_selected_epoch_state():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert '"candidateMetadata": _staged_candidate_metadata(loras, model)' in backend
+    assert "candidate_selected_epoch(folder, job_id)" in backend
+    assert "data-save-candidate" in script
+    assert "Save this epoch" in script
+    assert "test-generations-selected-mark" in script
+    assert "test-generations-staged-row' + (metadata && metadata.selected ? ' is-selected' : '')" in script
+    assert ".test-generations-staged-row.is-selected" in css
+    assert ".test-generations-save-candidate.is-selected" in css
+
 def test_test_candidate_removal_does_not_refresh_broader_session_list():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     block = script.split("function removeCandidate(fileName, sessionName)", 1)[1].split("function removeCurrentSessionCandidate", 1)[0]

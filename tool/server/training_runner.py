@@ -2432,6 +2432,21 @@ def start_response(
         return {"ok": True, "job": _public_job(job), "jobs": [_public_job(job)], "queued": job.get("status") == "queued"}, 200
 
 
+def action_live_job_ids(action_id):
+    wanted = str(action_id or "").strip()
+    if not wanted:
+        raise ValueError("Training action identity is required.")
+    with _lock:
+        state = _read_state_readonly()
+        return [
+            str(job.get("id") or "")
+            for job in state.get("jobs") or []
+            if isinstance(job, dict)
+            and str(job.get("actionId") or job.get("resumeActionId") or "").strip() == wanted
+            and str(job.get("status") or "") not in TERMINAL_STATUSES
+        ]
+
+
 def passive_status_snapshot():
     """Read the last persisted Training scheduler state without advancing or persisting it."""
     with _lock:

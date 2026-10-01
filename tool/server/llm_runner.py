@@ -642,6 +642,7 @@ def enqueue(client, model_id, contract, context=None, label=""):
         raise ValueError("LLM contract must be an object.")
 
     context = copy.deepcopy(context) if isinstance(context, dict) else {}
+    request_diagnostic = _request_diagnostic(client, contract)
     with _enqueue_lock:
         job = execution_enqueue(
             EXECUTION_LANE,
@@ -658,7 +659,6 @@ def enqueue(client, model_id, contract, context=None, label=""):
                 "sceneId": str(context.get("sceneId") or ""),
             },
         )
-    request_diagnostic = _request_diagnostic(client, contract)
     _ensure_monitor_started()
     view = _job_view(execution_get_job(job["id"]))
     view["request"] = request_diagnostic

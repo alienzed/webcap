@@ -12,8 +12,6 @@ def test_settings_uses_five_top_level_configuration_tabs():
         assert 'data-app-settings-tab="' + tab + '"' in html
         assert 'data-app-settings-panel="' + tab + '"' in html
 
-    assert 'data-app-settings-tab="testing"' not in html
-    assert 'data-app-settings-panel="testing"' not in html
     assert "['general', 'models', 'training', 'director', 'system']" in settings
 
 

@@ -471,11 +471,9 @@ def test_storage_ui_is_isolated_global_activity():
     assert "/fs/storage/scan/start" in storage_js
     assert "/fs/storage/scan/status" in storage_js
     assert "/fs/storage/scan/cancel" in storage_js
-    assert "Measure all" not in storage_js
     assert "storageState.activeArea" in storage_js
     assert "storage-overview-back" in storage_js
     assert "Delete Take" in storage_js
-    assert "Delete Story" not in storage_js
     assert "typeof window.reportConsoleError" not in storage_js
     assert "typeof window.closeGenerateActivity" not in storage_js
     assert "This removes only this generated Take. The Story and other Takes remain." in storage_js

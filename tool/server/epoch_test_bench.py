@@ -129,28 +129,6 @@ def _remove_empty_test_directory(directory):
     return False
 
 
-def _active_test_candidate(folder_path, model, source, candidate_name):
-    folder_key = _normalized_folder_key(_relative_set_folder(folder_path))
-    candidate_name = str(candidate_name or "").strip()
-    snapshot = execution_lane_snapshot("inference", include_terminal=False)
-    for job in snapshot.get("jobs") or []:
-        if not isinstance(job, dict):
-            continue
-        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
-        if str(metadata.get("client") or "") != "test":
-            continue
-        if _normalized_folder_key(metadata.get("folder")) != folder_key:
-            continue
-        if str(metadata.get("candidateKind") or "") != "lora":
-            continue
-        if str(metadata.get("candidateFile") or "").strip() != candidate_name:
-            continue
-        if str(metadata.get("source") or "").strip() != str(source or "").strip():
-            continue
-        return True
-    return False
-
-
 def keep_test_candidate(
     folder_path,
     stage,

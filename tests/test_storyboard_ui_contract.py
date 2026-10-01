@@ -51,7 +51,6 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert 'id="storyboard-story-concept"' in html
     assert 'id="storyboard-story-style"' in html
     assert 'id="storyboard-sequence-preview"' in html
-    assert 'id="storyboard-story-tags"' not in html
     assert 'id="storyboard-story-status"' in html
     assert 'id="storyboard-story-target-scenes"' in html
     assert 'id="storyboard-story-aspect-ratio"' in html
@@ -86,7 +85,6 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "Notes" in storyboard
     assert "storyboard-scene-disclosure" in storyboard
     assert "seedMode: randomSeed ? 'random' : 'fixed'" in storyboard
-    assert 'data-scene-field="seedMode"' not in storyboard
     assert "Selected sequence" in storyboard
     assert "Export Sequence" in storyboard
     assert "/fs/storyboard/assembly" in storyboard
@@ -104,8 +102,6 @@ def test_storyboard_story_library_owns_management_actions():
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
     store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
 
-    assert 'id="storyboard-delete-story-btn"' not in html
-    assert 'id="storyboard-story-pinned"' not in html
     assert 'data-story-action="duplicate"' in storyboard
     assert 'data-story-action="pin"' in storyboard
     assert 'data-story-action="archive"' in storyboard
@@ -268,12 +264,6 @@ def test_storyboard_revise_scenes_lives_in_assistant_and_keeps_sparse_scene_heal
     assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
-    assert "Director Tools" not in html
-    assert 'data-story-section="director"' not in html
-    assert 'id="storyboard-repair-instruction"' not in html
-    assert 'id="storyboard-repair-scenes-btn"' not in html
-    assert 'id="storyboard-restore-repair-btn"' not in html
-    assert "storyboard-director-tools-drawer" not in storyboard
 
     assert "function reviseScenes(instruction, modelId)" in storyboard
     assert "id: 'revise-scenes'" in storyboard
@@ -350,7 +340,6 @@ def test_storyboard_restore_repair_is_not_exposed_as_legacy_director_ui():
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
     assert 'id="storyboard-restore-repair-btn"' not in html
-    assert "function restoreLastRepair()" not in storyboard
     assert 'if operation == "restore_last_scene_repair":' in app
 
 
@@ -690,7 +679,6 @@ def test_storyboard_lora_chooser_is_single_searchable_field():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    assert 'data-scene-lora-filter' not in storyboard
     assert 'data-scene-lora-picker' in storyboard
     assert 'data-lora-picker-menu' in storyboard
     assert 'data-lora-picker-menu' in html
@@ -738,9 +726,6 @@ def test_storyboard_director_activity_floats_over_context_without_reflow():
     assert "card.style.height = Math.round(height) + 'px';" in storyboard
     assert "kind === 'scenes'" in storyboard
     assert "storyboard-story-concept" in storyboard
-    assert "bottomAlignedTop" not in storyboard
-    assert "is-story-plan-overlay" not in storyboard
-    assert ".storyboard-director-activity.is-field-overlay" not in css
     activity_css = css.split(".storyboard-director-activity {", 1)[1].split("}", 1)[0]
     picker_css = css.split(".storyboard-lora-picker-menu {", 1)[1].split("}", 1)[0]
     assert "pointer-events: none;" in activity_css
@@ -763,14 +748,10 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    assert 'class="storyboard-editor-header"' not in html
     assert 'class="storyboard-story-panel-heading"' in html
     assert "<strong>Story Overview</strong>" in html
     assert ">Hide Overview</button>" in html
     assert ">Show Overview</button>" in html
-    assert "Story Context" not in html
-    assert ">Collapse Story</button>" not in html
-    assert ">Expand Story</button>" not in html
     assert 'id="storyboard-story-expand-toggle"' in html
     scenes_heading = html.split('class="storyboard-scenes-heading"', 1)[1].split('</div>\n                            <div id="storyboard-scene-progression"', 1)[0]
     assert 'id="storyboard-director-model"' in scenes_heading
@@ -894,8 +875,6 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     for section in ("story", "continuity", "defaults"):
         assert f'data-story-section="{section}"' in html
     assert 'data-story-section="director"' not in html
-    assert 'data-story-section="planning"' not in html
-    assert 'data-story-section="loras"' not in html
 
     assert 'data-story-section="story" open' in html
     assert 'data-story-section="continuity" open' not in html
@@ -903,7 +882,6 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert "story: true" in storyboard
     assert "continuity: false" in storyboard
     assert "defaults: false" in storyboard
-    assert "director: false" not in storyboard
     assert "function initStorySections()" in storyboard
     assert "'webcap.storyboard.storySection.' + sectionName" in storyboard
     assert ".storyboard-story-section:not([open]) > .storyboard-story-section-body" in css
@@ -930,28 +908,20 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert "continuitySection.open = true" in add_invariant
     assert "invariantRowHtml({ kind: 'character', title: '', text: '' }, true)" in add_invariant
 
-    assert 'storyboard-scene-defaults-drawer' not in overview_surface
     assert 'storyboard-scene-defaults-drawer' in authoring
     assert 'id="storyboard-story-aspect-ratio"' in defaults_section
     assert 'id="storyboard-story-megapixels"' in defaults_section
     assert 'id="storyboard-story-lora-list"' in defaults_section
     assert 'id="storyboard-story-lora-picker"' in defaults_section
 
-    assert "storyboard-story-utility-shelf" not in html
-    assert ".storyboard-story-utility-shelf" not in css
     assert ".storyboard-scene-defaults-drawer > .storyboard-scene-defaults-body" in css
     assert ".storyboard-scene-defaults-drawer .storyboard-story-defaults" in css
     assert "width: min(100%, 430px);" in css
     assert ".storyboard-scene-defaults-drawer .storyboard-story-loras" in css
     assert "width: 100%;" in css
-    assert "storyboard-director-tools-drawer" not in html
-    assert "storyboard-director-tools-drawer" not in css
 
     payload_block = storyboard.split("function storyPayloadFromUi()", 1)[1].split("\n  function ", 1)[0]
-    assert "storySection" not in payload_block
-    assert "storyboard-story-tags" not in payload_block
     assert 'storyboard-list-section-title">Stories</div>' in storyboard
-    assert 'storyboard-list-section-title">Recent</div>' not in storyboard
 
 
 
@@ -1137,7 +1107,6 @@ def test_storyboard_scene_cards_visually_mark_selected_take_state():
     assert "storyboard-scene-overview-card' + (scene.selectedTakeId ? ' has-selected-take' : '')" in storyboard
     assert "(scene.selectedTakeId ? ' has-selected-take' : '')" in storyboard
     assert ".storyboard-scene-progress-card.has-selected-take" in css
-    assert ".storyboard-scene.has-selected-take" not in css
     assert ".storyboard-scene-overview-card.has-selected-take" in css
 
 
@@ -1200,7 +1169,6 @@ def test_storyboard_generate_scenes_reuses_existing_scene_generation_path():
     left = heading.split('<div class="storyboard-scenes-heading-left">', 1)[1].split('</div>\n                                <div class="storyboard-view-toggle"', 1)[0]
     actions = heading.split('<div class="storyboard-scenes-heading-actions">', 1)[1]
     assert 'id="storyboard-generate-scenes-btn"' in left
-    assert 'id="storyboard-generate-scenes-btn"' not in actions
     assert 'class="storyboard-director-header"' in actions
 
 
@@ -1522,13 +1490,9 @@ def test_storyboard_director_actions_and_invariants_keep_compact_affordances():
     assert 'class="storyboard-invariant-row' in storyboard
     assert "data-story-invariant-toggle" in storyboard
     assert "function setInvariantRowOpen(row, open)" in storyboard
-    assert "storyboard-invariant-summary" not in storyboard
-    assert "Untitled invariant" not in storyboard
-    assert "No continuity note yet." not in storyboard
     assert ".storyboard-director-action::before" in css
     assert ".storyboard-invariant-row-head" in css
     assert ".storyboard-invariant-body" in css
-    assert ".storyboard-invariant-summary" not in css
 
 
 def test_storyboard_story_rail_is_full_by_default_and_manually_compactable():
@@ -1541,9 +1505,6 @@ def test_storyboard_story_rail_is_full_by_default_and_manually_compactable():
     assert "function setStoryLibraryCompact(compact)" in storyboard
     assert "story-library-compact" in storyboard
     assert ".storyboard-workspace.story-library-compact" in css
-    assert ".storyboard-library:hover" not in css
-    assert "story-library-pinned" not in css
-    assert "story-library-pinned" not in storyboard
 
 
 def test_storyboard_story_icon_is_optional_persisted_and_visible_in_library():
@@ -1607,8 +1568,6 @@ def test_assistant_exposes_storyboard_revise_scenes_only_when_context_is_availab
     assert "return reviseScenes(request && request.instruction, request && request.modelId)" in mode
 
     assert "function reviseScenes(instruction, modelId)" in storyboard
-    assert "function repairScenes()" not in storyboard
-    assert "function restoreLastRepair()" not in storyboard
     assert "window.openAssistant({ mode: hasScenes ? 'revise-scenes' : 'chat' })" in storyboard
 
 

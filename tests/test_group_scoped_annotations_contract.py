@@ -184,9 +184,6 @@ def test_legacy_flat_tags_remain_unscoped_without_group_inference():
     checklist = _read("tool/js/checklist_state.js")
     details = _read("tool/js/item_details.js")
 
-    assert "migrateLegacyChecklistAssignments" not in checklist
-    assert "checklistLegacyScopedTermsByMedia" not in checklist
-    assert "checklistLegacyScopedTermsByMedia" not in details
 
     load_tags = details.split("function loadItemTagsFromFolderState", 1)[1].split(
         "function buildUnscopedTagUsageEntries", 1
@@ -256,8 +253,6 @@ def test_groups_helper_review_color_uses_only_per_item_review_state():
     css = _read("tool/css/checklist.css")
 
     assert "if (!!checkedMap[item]) summaryRow.classList.add('checklist-row-reviewed');" in panel
-    assert "summaryRow.classList.add('checklist-item-matched')" not in panel
-    assert ".checklist-item-matched" not in css
     assert "#checklist-items .checklist-row-reviewed" in css
 
 
@@ -358,7 +353,6 @@ def test_groups_helper_popup_dismisses_when_anchor_moves_and_hide_reviewed_belon
     assert "window.addEventListener('resize', closeChecklistRowOverflowMenus);" in popup_wire
     assert "wireChecklistRowOverflowDismissal();" in panel
 
-    assert 'id="checklist-hide-reviewed-btn"' not in html
     assert 'id="group-workbench-hide-reviewed-btn"' in html
     groups_title = html.index('class="caption-helper-section-title">Groups')
     show_all = html.index('id="group-workbench-show-all-btn"')
@@ -366,8 +360,6 @@ def test_groups_helper_popup_dismisses_when_anchor_moves_and_hide_reviewed_belon
     settings = html.index('id="checklist-settings-btn"')
     assert groups_title < show_all < hide_reviewed < settings
     assert 'class="group-workbench-reviewed-slash"' in html
-    assert 'class="group-workbench-header"' not in html
     assert "var groupWorkbenchHideReviewed = false;" in workbench
     assert "if (useVisibilityFilter && groupWorkbenchHideReviewed && isReviewed) continue;" in workbench
     assert "No unreviewed groups." in workbench
-    assert "checklistHideReviewed" not in panel

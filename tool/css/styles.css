@@ -2383,11 +2383,28 @@ iframe {
 }
 
 .workspace-surface-training .training-history-model {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   color: var(--muted);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.workspace-surface-training .training-history-selected-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: #d9a441;
+}
+.workspace-surface-training .training-history-selected-mark svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .workspace-surface-training .training-history-heading input {

@@ -1062,7 +1062,7 @@
   function candidateRunLabel(run, index) {
     var name = String(run && run.runName || '').trim();
     var sequence = String(run && run.runSequence || '').trim();
-    if (name && sequence) return name + ' · ' + sequence;
+    if (name && sequence) return name + ' · Run ' + sequence;
     if (name) return name;
     if (sequence) return 'Run ' + sequence;
     return 'Run ' + String(index + 1);

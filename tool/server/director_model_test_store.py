@@ -204,7 +204,7 @@ def calibration_protocol():
     }
 
 
-def enqueue_calibration_run(model_ref, kind, target):
+def enqueue_calibration_run(model_ref, kind, target, context_size=None):
     from .llm_runner import enqueue
     from .storyboard_llm_runtime import list_models
 
@@ -233,6 +233,14 @@ def enqueue_calibration_run(model_ref, kind, target):
             raise ValueError("Unsupported Director output calibration target.")
         messages = [{"role": "user", "content": _calibration_output_prompt(target)}]
         overrides = {"maxTokens": target}
+        if str(model.get("runtimeId") or "") == "local" and context_size not in (None, ""):
+            try:
+                context_size = int(context_size)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Director output calibration contextSize must be an integer.") from exc
+            if context_size not in CONTEXT_STEPS:
+                raise ValueError("Director output calibration contextSize must be a proven context tier.")
+            overrides["contextSize"] = context_size
         label = "Director Output Calibration"
     else:
         raise ValueError("Director calibration kind must be context or output.")
@@ -305,7 +313,7 @@ def register_routes(app):
             if action == "enqueue_calibration":
                 return jsonify({
                     "ok": True,
-                    "job": enqueue_calibration_run(data.get("modelRef"), data.get("kind"), data.get("target")),
+                    "job": enqueue_calibration_run(data.get("modelRef"), data.get("kind"), data.get("target"), data.get("contextSize")),
                 }), 202
             if action == "save_calibration_profile":
                 return jsonify({

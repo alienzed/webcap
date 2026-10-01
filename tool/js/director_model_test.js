@@ -10,6 +10,10 @@ var directorModelTestState = {
   startedAt: 0,
   activityTimer: 0,
   protocol: null,
+  calibrationProtocol: null,
+  calibrationProfiles: [],
+  calibrationTotal: 0,
+  mode: '',
   models: [],
   session: null
 };
@@ -130,6 +134,11 @@ function directorModelTestStatusState(session) {
 }
 
 function directorModelTestStatusText(session) {
+  if (!session && directorModelTestState.running && directorModelTestState.mode === 'calibration') {
+    return directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued') +
+      (directorModelTestState.currentModelLabel ? ' · ' + directorModelTestState.currentModelLabel : '') +
+      (directorModelTestState.calibrationTotal > 0 ? ' · ' + String(directorModelTestState.currentModelNumber) + ' / ' + String(directorModelTestState.calibrationTotal) : '');
+  }
   if (!session) return directorModelTestState.running ? 'Starting test…' : 'Ready to run a Director model test.';
   var done = Array.isArray(session.runs) ? session.runs.length : 0;
   var total = Array.isArray(session.models) ? session.models.length : 0;
@@ -176,7 +185,9 @@ function directorModelTestRenderActivity() {
   }
 
   var session = directorModelTestState.session;
-  var total = Array.isArray(session && session.models) ? session.models.length : 0;
+  var total = directorModelTestState.mode === 'calibration'
+    ? Number(directorModelTestState.calibrationTotal || 0)
+    : (Array.isArray(session && session.models) ? session.models.length : 0);
   var number = Number(directorModelTestState.currentModelNumber || 0);
   var model = directorModelTestState.currentModelLabel || 'Preparing next model…';
   var runtime = directorModelTestState.currentRuntimeName || '';
@@ -190,7 +201,7 @@ function directorModelTestRenderActivity() {
     '<article class="activity-monitor-card status-running director-model-test-activity-card">' +
       '<span class="activity-monitor-dot active"></span>' +
       '<div class="activity-monitor-copy">' +
-        '<strong>Director Model Test</strong>' +
+        '<strong>' + (directorModelTestState.mode === 'calibration' ? 'Director Model Calibration' : 'Director Model Test') + '</strong>' +
         '<span>' + escapeHtml(detail) + '</span>' +
         '<small>' + escapeHtml(meta) + '</small>' +
         '<div class="activity-monitor-progress"><span style="width:' + progress.toFixed(1) + '%"></span></div>' +
@@ -259,9 +270,13 @@ function directorModelTestRenderSession() {
 }
 function directorModelTestSyncControls() {
   var run = directorModelTestEl('director-model-test-run');
+  var calibrate = directorModelTestEl('director-model-test-calibrate');
+  var clearCalibration = directorModelTestEl('director-model-test-clear-calibration');
   var stop = directorModelTestEl('director-model-test-stop');
   var refresh = directorModelTestEl('director-model-test-refresh');
   if (run) run.disabled = directorModelTestState.running || !directorModelTestState.models.length;
+  if (calibrate) calibrate.disabled = directorModelTestState.running || !directorModelTestState.models.length;
+  if (clearCalibration) clearCalibration.disabled = directorModelTestState.running || !directorModelTestState.calibrationProfiles.length;
   if (refresh) refresh.disabled = directorModelTestState.running;
   if (stop) {
     stop.classList.toggle('hidden', !directorModelTestState.running);
@@ -277,6 +292,8 @@ function directorModelTestRefresh() {
     var meta = responses[0];
     var models = responses[1];
     directorModelTestState.protocol = meta.protocol || null;
+    directorModelTestState.calibrationProtocol = meta.calibrationProtocol || null;
+    directorModelTestState.calibrationProfiles = Array.isArray(meta.calibrationProfiles) ? meta.calibrationProfiles : [];
     directorModelTestState.session = meta.session || null;
     directorModelTestState.models = Array.isArray(models.models) ? models.models : [];
     directorModelTestState.loaded = true;
@@ -292,6 +309,7 @@ function directorModelTestRefresh() {
       prompt.value = String(directorModelTestState.protocol.defaultPrompt || '');
     }
     directorModelTestRenderModels();
+    directorModelTestRenderCalibrationProfiles();
     directorModelTestRenderSession();
     directorModelTestSyncControls();
   }).catch(function (error) {
@@ -323,6 +341,10 @@ function directorModelTestSelectedModels() {
 
 function directorModelTestObservePhase(tracker, activity, jobId) {
   if (!activity || !activity.queue || String(activity.queue.activeJobId || '') !== String(jobId || '')) return;
+  var observedContext = Number(activity.contextSize || (activity.slot && activity.slot.contextSize) || 0);
+  if (isFinite(observedContext) && observedContext > 0) {
+    tracker.observedContextSize = Math.max(Number(tracker.observedContextSize || 0), observedContext);
+  }
   var phase = String(activity.phase || '');
   if (!phase || phase === 'queued' || phase === 'complete' || phase === 'error' || phase === 'stopped') return;
   var now = Date.now() / 1000;
@@ -402,6 +424,8 @@ function directorModelTestBuildRun(model, job, tracker, localStartedAt) {
     outputChars: text.length,
     usage: usage,
     backendTimings: timings,
+    finishReason: String(result.finishReason || ''),
+    contextSize: Number(result.contextSize || tracker.observedContextSize || 0),
     text: text,
     error: String(job.error || '')
   };

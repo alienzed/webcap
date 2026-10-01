@@ -595,7 +595,14 @@ def _session_source(payload, folder_path):
 def _session_matches_source(payload, folder_path, source):
     if source is None:
         return True
-    return _session_source(payload, folder_path) == str(source or "").strip()
+    selected_source = str(source or "").strip()
+    if isinstance(payload, dict) and "source" in payload:
+        return _session_source(payload, folder_path) == selected_source
+
+    legacy_source = _default_test_source(folder_path)
+    if selected_source == legacy_source:
+        return True
+    return bool(selected_source) and PurePosixPath(selected_source).name == legacy_source
 
 
 def _candidate_rating_scores(folder_path, model_id=None, source=None):

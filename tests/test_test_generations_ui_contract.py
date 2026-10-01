@@ -151,6 +151,47 @@ def test_test_generations_uses_explicit_workspace_root():
     assert "grid-area: workspace;" in shell_css
 
 
+def test_test_navigation_uses_global_set_context_and_local_run_choice():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert 'id="app-header-set-select"' in html
+    assert "function setApplicationSetContext(folder)" in shell
+    assert "fetch('/fs/training_history/all')" in shell
+    assert "status !== 'completed' && status !== 'finished_early'" in shell
+    assert "label=\"Recent Sets\"" in shell
+    assert "label=\"Training History\"" in shell
+    assert "!historySeen[item.folder]" in shell
+    assert "rememberShellRecentSet(targetFolder);" in shell
+    assert "window.rememberApplicationSetContext = rememberShellRecentSet" in shell
+    assert "window.prepareTestBenchSetSwitch(targetFolder);" in shell
+    assert "window.setApplicationSetContext(targetFolder);" in script
+    assert "openTrainingWorkspaceFolder(targetFolder);" not in script
+    assert "function openCandidateRunMenu(button)" in script
+    assert "if (runs.length === 1)" in script
+    assert "showContextMenu(rect.left, rect.bottom + 4, runs.map" in script
+
+
+def test_test_prompt_can_reuse_recent_session_prompt_without_switching_set():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-recent-prompts-btn"' in html
+    assert "function openRecentPromptsMenu(button)" in script
+    assert "Array.isArray(testActivity.recentPrompts)" in script
+    assert "function applyRecentPrompt(item)" in script
+    assert "saveTestPromptDraft(prompt);" in script
+    assert "saveTestBenchState(prompt);" in script
+    assert "No recent Test prompts yet." in script
+
+
+def test_recent_set_group_tracks_loaded_set_contexts():
+    ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+    assert "isSetFolderContext(path, state.items)" in ui
+    assert "window.rememberApplicationSetContext(path);" in ui
+
+
 def test_test_activity_is_permanent_and_recent_sets_are_not_in_the_test_pane():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

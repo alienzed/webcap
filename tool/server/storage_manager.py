@@ -1318,6 +1318,18 @@ def resolve_item(area, item_id, folder=""):
     area = str(area or "").strip()
     if area == "training":
         return read_action(item_id)[0]
+    if area == "archive":
+        name = str(item_id or "").strip()
+        if not name or Path(name).name != name:
+            raise ValueError("Training Archive storage ID is invalid.")
+        root = training_archive_root()
+        raw = root / name
+        if root.is_symlink() or raw.is_symlink():
+            raise ValueError("Training Archive storage path is symlinked.")
+        path = raw.resolve()
+        if path.parent != root.resolve() or not path.is_dir():
+            raise FileNotFoundError("Training Archive is unavailable.")
+        return path
     if area == "tests":
         return _resolve_test(folder, item_id)
     if area == "staged":

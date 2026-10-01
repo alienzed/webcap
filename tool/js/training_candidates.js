@@ -837,7 +837,9 @@ function saveKeepLora() {
     var analysisPayload = ((trainingWorkspaceState.candidatePayload || {}).analysis || {});
     analysisPayload.selected = payload && payload.selected ? payload.selected : null;
     renderTrainingCandidates();
+    var onSaved = keepLoraState.onSaved;
     closeKeepLora();
+    if (onSaved) onSaved(payload);
     setStatus('Saved ' + String(payload && payload.fileName || filename) + ' and selected epoch ' + String(selectedEpoch) + '.');
   }).catch(function (err) {
     els.save.disabled = false;

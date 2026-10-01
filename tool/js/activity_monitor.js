@@ -126,6 +126,9 @@
     } else {
       if (item.modelId) parts.push(item.modelId);
       if (item.operation) parts.push(String(item.operation).replace(/_/g, ' '));
+      if (item.kind === 'director' && item.finishReason) parts.push('finish=' + String(item.finishReason));
+      if (item.kind === 'director' && Number(item.promptTokens) > 0) parts.push('prompt=' + String(item.promptTokens));
+      if (item.kind === 'director' && Number(item.outputTokens) > 0) parts.push('output=' + String(item.outputTokens));
       if (item.folder) parts.push(item.folder);
       if (item.sceneId && !item.label) parts.push('Scene ' + item.sceneId);
     }

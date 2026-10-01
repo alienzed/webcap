@@ -79,7 +79,7 @@
 
   function allItems() {
     var groups = storageState.payload && storageState.payload.items || {};
-    return ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].reduce(function (rows, area) {
+    return ['training', 'archive', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].reduce(function (rows, area) {
       return rows.concat((groups[area] || []).map(function (item) {
         return item;
       }));

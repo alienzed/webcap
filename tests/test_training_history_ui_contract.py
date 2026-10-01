@@ -52,6 +52,25 @@ def test_training_history_surfaces_selected_epoch_as_completed_decision_state():
     assert "training-history-selected-mark" in script
     assert ".training-history-item.has-selected-epoch" in css
 
+def test_training_history_exposes_finalize_and_archive_lifecycle():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "training_archive.py").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert 'data-training-history-tab="history"' in html
+    assert 'data-training-history-tab="archive"' in html
+    assert 'id="training-archive-modal"' in html
+    assert "Finalize &amp; Archive" in script
+    assert "openTrainingArchiveModal(" in workspace
+    assert "/fs/training_archive/preview" in app
+    assert "/fs/training_archive/finalize" in app
+    assert "Selected epoch has no recorded production LoRA" in backend
+    assert "retainedAlternateEpochs" in backend
+    assert "removedStagedCandidates" in backend
+
+
 def test_training_history_loads_timing_for_completed_and_finished_early_rows():
     script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
 

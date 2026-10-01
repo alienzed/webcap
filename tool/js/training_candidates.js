@@ -25,6 +25,7 @@ function trainingCandidatesNumber(value, fallback) {
 
 var TRAINING_CANDIDATES_DISPLAY_SESSION_KEY = 'webcap.trainingCandidates.display.v1';
 var trainingCandidatesCloseHook = null;
+var keepLoraState = { open: false, stage: '', source: '', candidateFile: '', destination: '', epoch: null, modelLabel: '' };
 
 function trainingCandidatesDefaultDisplayState() {
   return { smoothing: .99, yMin: null, yMax: null, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
@@ -1080,20 +1081,6 @@ function wireTrainingCandidatesModal() {
     renderTrainingCandidates();
   };
   els.openRun.onclick = function () { openTrainingCandidatesFolder().catch(function (err) { setStatus('Could not open training run folder: ' + String(err.message || err)); }); };
-  var keepEls = keepLoraElements();
-  if (keepEls.close) keepEls.close.onclick = closeKeepLora;
-  if (keepEls.cancel) keepEls.cancel.onclick = closeKeepLora;
-  if (keepEls.save) keepEls.save.onclick = saveKeepLora;
-  if (keepEls.up) keepEls.up.onclick = function () {
-    if (!keepEls.up.disabled) keepLoraBrowse(String(keepEls.up.dataset.keepLoraParent || '')).catch(function (err) { keepLoraSetStatus(String(err.message || err), true); });
-  };
-  if (keepEls.folders) keepEls.folders.onclick = function (event) {
-    var button = event.target.closest('[data-keep-lora-folder]');
-    if (!button) return;
-    var parent = String(keepLoraState.destination || '').replace(/^\/+|\/+$/g, '');
-    var child = String(button.dataset.keepLoraFolder || '');
-    keepLoraBrowse([parent, child].filter(Boolean).join('/')).catch(function (err) { keepLoraSetStatus(String(err.message || err), true); });
-  };
   var keepEls = keepLoraElements();
   if (keepEls.close) keepEls.close.onclick = closeKeepLora;
   if (keepEls.cancel) keepEls.cancel.onclick = closeKeepLora;

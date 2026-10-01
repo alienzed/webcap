@@ -231,6 +231,7 @@ def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeyp
     other = staged / "run-02__epoch20.safetensors"
     other.write_bytes(b"keep")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_staged_loras_for_set", lambda _folder, _model: sorted(staged.glob("*.safetensors")))
 
     payload = bench.remove_candidate(tmp_path, candidate.name)
 
@@ -248,6 +249,7 @@ def test_remove_candidate_deletes_only_current_session_result(tmp_path, monkeypa
     candidate.write_bytes(b"copy")
     candidate.with_suffix(".webcap.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_staged_loras_for_set", lambda _folder, _model: sorted(staged.glob("*.safetensors")))
 
     current = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
     older = tmp_path / bench.TEST_RESULTS_DIR / "session-b"
@@ -291,6 +293,7 @@ def test_remove_candidate_removes_session_result_when_staged_file_is_already_gon
     staged = tmp_path / "staged"
     staged.mkdir()
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_staged_loras_for_set", lambda _folder, _model: sorted(staged.glob("*.safetensors")))
 
     session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
     session.mkdir(parents=True)
@@ -323,6 +326,7 @@ def test_remove_candidate_cleans_historical_session_when_result_files_are_alread
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_staged_loras_for_set", lambda _folder, _model: sorted(staged.glob("*.safetensors")))
 
     session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
     session.mkdir(parents=True)
@@ -402,6 +406,7 @@ def test_remove_candidate_is_idempotent_when_staged_file_is_already_gone(tmp_pat
     other = staged / "epoch20.safetensors"
     other.write_bytes(b"weights")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_staged_loras_for_set", lambda _folder, _model: sorted(staged.glob("*.safetensors")))
 
     payload = bench.remove_candidate(tmp_path, "epoch10.safetensors")
 
@@ -549,6 +554,7 @@ def test_remove_candidate_allows_completed_result_while_another_candidate_is_act
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_staged_loras_for_set", lambda _folder, _model: sorted(staged.glob("*.safetensors")))
 
     session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
     session.mkdir(parents=True)
@@ -599,6 +605,7 @@ def test_remove_candidate_refuses_shared_active_session_result_mutation(tmp_path
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_staged_loras_for_set", lambda _folder, _model: sorted(staged.glob("*.safetensors")))
 
     session = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
     session.mkdir(parents=True)
@@ -688,6 +695,7 @@ def test_remove_staged_candidate_is_independent_of_other_active_inference(tmp_pa
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
+    monkeypatch.setattr(bench, "_staged_loras_for_set", lambda _folder, _model: sorted(staged.glob("*.safetensors")))
 
     other = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,

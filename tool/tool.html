@@ -46,6 +46,12 @@
                     <button id="storyboard-story-toggle" type="button" class="review-captions-btn hidden" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Overview</button>
                 </div>
                 <div id="app-header-global" class="app-header-global">
+                    <label id="app-header-set-control" class="app-header-set-control">
+                        <span class="app-header-set-label">Set</span>
+                        <select id="app-header-set-select" aria-label="Working Set">
+                            <option value="">Select set…</option>
+                        </select>
+                    </label>
                     <div id="shell-gpu-status" class="shell-gpu-status hidden" aria-live="polite"></div>
                 </div>
             </header>
@@ -1024,10 +1030,13 @@
                                         </div>
                                         <span id="test-generations-summary" class="test-generations-summary">Loading Test folder...</span>
                                     </div>
-                                    <label class="training-run-option test-generations-prompt">
-                                        <span>Prompt</span>
+                                    <div class="training-run-option test-generations-prompt">
+                                        <div class="test-generations-prompt-heading">
+                                            <span>Prompt</span>
+                                            <button id="test-generations-recent-prompts-btn" type="button" class="review-captions-btn" title="Reuse a recent prompt">Recent</button>
+                                        </div>
                                         <textarea id="test-generations-prompt" rows="5"></textarea>
-                                    </label>
+                                    </div>
                                     <div class="test-generations-wildcard-tools">
                                         <select id="test-generations-wildcard-model" aria-label="Wildcard Director model"></select>
                                         <button id="test-generations-wildcard-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>

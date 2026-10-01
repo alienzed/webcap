@@ -134,7 +134,7 @@ function renderTrainingHistory() {
   if (els.historyContent) els.historyContent.classList.toggle('hidden', trainingWorkspaceState.historyCollapsed);
   if (els.historyTools) els.historyTools.classList.toggle('hidden', archiveActive || trainingWorkspaceState.historyCollapsed);
   if (els.historyCollapseBtn) {
-    els.historyCollapseBtn.textContent = 'Training History' + (jobs.length ? ' · ' + jobs.length : '');
+    els.historyCollapseBtn.textContent = 'Training' + (archiveActive ? ' · Archive' : (jobs.length ? ' · ' + jobs.length : ''));
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');
   }
   els.historySummary.classList.toggle('hidden', archiveActive || !!latest);

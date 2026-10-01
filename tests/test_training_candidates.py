@@ -293,7 +293,7 @@ def test_candidate_analysis_marks_artifacts_already_in_the_configured_test_folde
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, stage=stage)
     run = {"folder": "sets/subject", "stages": stage, "runName": "baseline", "sequence": "3", "id": "job-1"}
     analysis = {"savedArtifacts": [{"epoch": 12, "fileName": source.name, "status": "available"}]}
-    expected_folder = destination_root / "az" / "subject"
+    expected_folder = destination_root / "az" / "sets" / "subject"
 
     training_runner._annotate_candidate_test_folder_status(run, analysis)
     assert analysis["testFolderStatus"] == {"state": "absent"}
@@ -342,7 +342,7 @@ def test_candidate_analysis_reports_unavailable_test_folder_without_blocking_ana
 def test_copy_candidate_to_configured_stage_root_uses_recorded_stages(tmp_path, monkeypatch, stage):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, stage=stage)
     result = training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
-    destination = destination_root / "az" / "subject" / "baseline-03__epoch12.safetensors"
+    destination = destination_root / "az" / "sets" / "subject" / "baseline-03__epoch12.safetensors"
     assert Path(result["destination"]) == destination
     assert destination.read_bytes() == b"test weights"
     assert source.read_bytes() == b"test weights"
@@ -381,7 +381,7 @@ def test_remove_candidate_from_test_deletes_copy_and_sidecar_but_preserves_saved
 
 def test_copy_candidate_reuses_set_directory_and_refuses_filename_collision(tmp_path, monkeypatch):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
-    destination = destination_root / "az" / "subject" / "baseline-03__epoch12.safetensors"
+    destination = destination_root / "az" / "sets" / "subject" / "baseline-03__epoch12.safetensors"
     destination.parent.mkdir(parents=True)
     second_epoch = source.parent.parent / "epoch13"
     second_epoch.mkdir()
@@ -400,7 +400,7 @@ def test_copy_candidate_reuses_set_directory_and_refuses_filename_collision(tmp_
 
 def test_open_test_folder_requires_existing_destination_and_never_creates_it(tmp_path, monkeypatch):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
-    expected = destination_root / "az" / "subject"
+    expected = destination_root / "az" / "sets" / "subject"
     client = app_module.app.test_client()
     opened = []
     monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))
@@ -434,7 +434,7 @@ def test_copy_candidate_concurrent_requests_create_one_file(tmp_path, monkeypatc
             outcomes.append("conflict")
     assert outcomes.count("conflict") == 1
     assert len([item for item in outcomes if item != "conflict"]) == 1
-    assert (destination_root / "subject" / "baseline-03__epoch12.safetensors").read_bytes() == b"test weights"
+    assert (destination_root / "sets" / "subject" / "baseline-03__epoch12.safetensors").read_bytes() == b"test weights"
 
 
 def test_copy_candidate_revalidates_source_and_removes_only_its_partial_destination(tmp_path, monkeypatch):
@@ -451,7 +451,7 @@ def test_copy_candidate_revalidates_source_and_removes_only_its_partial_destinat
     monkeypatch.setattr(training_runner.shutil, "copyfileobj", interrupted_copy)
     with pytest.raises(OSError, match="interrupted"):
         training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
-    assert not (destination_root / "az" / "subject" / "baseline-03__epoch12.safetensors").exists()
+    assert not (destination_root / "az" / "sets" / "subject" / "baseline-03__epoch12.safetensors").exists()
 
 
 def test_copy_candidate_requires_saved_root_and_rejects_extra_request_fields(tmp_path, monkeypatch):

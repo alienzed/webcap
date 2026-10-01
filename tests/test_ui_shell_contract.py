@@ -989,3 +989,19 @@ def test_director_stop_buttons_are_card_level_actions_not_graph_children():
         trend = card.split(f'id="{trend_id}"', 1)[1].split("</div>", 1)[0]
         assert f'id="{stop_id}"' in card
         assert f'id="{stop_id}"' not in trend
+
+def test_shell_separates_set_aware_and_global_creative_activities():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+
+    prep = html.index('id="activity-prep-btn"')
+    training = html.index('id="activity-training-btn"')
+    test = html.index('id="activity-test-btn"')
+    context_separator = html.index('class="activity-rail-separator activity-rail-context-separator"')
+    generate = html.index('id="activity-generate-btn"')
+    storyboard = html.index('id="activity-storyboard-btn"')
+
+    assert prep < training < test < context_separator < generate < storyboard
+    assert "var setControl = document.getElementById('app-header-set-control');" in shell
+    assert "setControl.classList.toggle('hidden', generateOpen || storyboardOpen);" in shell
+

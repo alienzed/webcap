@@ -817,6 +817,7 @@ def prepare(folder_path, model_id=None, source=None):
             if _is_webcap_staged_lora(path, model)
         ],
         "candidateRuns": _staged_candidate_runs(loras, model),
+        "candidateMetadata": _staged_candidate_metadata(loras, model),
         "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, source=selected_source),
         "sessions": list_sessions(folder_path, source=selected_source, model_id=model.PROFILE_ID),
         "latest": status(folder_path, model_id=model.PROFILE_ID, source=selected_source),

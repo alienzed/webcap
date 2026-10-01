@@ -1088,4 +1088,6 @@ function wireTrainingCandidatesModal() {
   els.modal.onclick = function (event) { if (event.target === els.modal) closeTrainingCandidates(); };
 }
 
+window.openEpochSaveModal = openEpochSaveModal;
+
 wireTrainingCandidatesModal();

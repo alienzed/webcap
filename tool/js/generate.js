@@ -256,9 +256,10 @@
     var select = el('generate-sweep-folder');
     var summary = el('generate-sweep-summary');
     var host = el('generate-sweep-list');
+    var filter = el('generate-sweep-filter');
     var allButton = el('generate-sweep-all');
     var noneButton = el('generate-sweep-none');
-    if (!select || !summary || !host || !allButton || !noneButton) {
+    if (!select || !summary || !host || !filter || !allButton || !noneButton) {
       throw new Error('Generate Sweep controls are missing.');
     }
 
@@ -277,15 +278,24 @@
       values[name] = true;
       return values;
     }, {});
+    var query = String(filter.value || '').trim().toLowerCase();
+    var visibleNames = query
+      ? names.filter(function (name) { return String(name || '').toLowerCase().indexOf(query) !== -1; })
+      : names;
 
-    host.innerHTML = names.map(function (name) {
-      var leaf = String(name || '').split('/').pop();
-      return '<label class="generate-sweep-row" title="' + escapeHtml(name) + '">' +
-        '<input type="checkbox" data-generate-sweep-lora="' + escapeHtml(name) + '"' +
-          (selectedLookup[name] ? ' checked' : '') + '>' +
-        '<span>' + escapeHtml(leaf) + '</span>' +
-      '</label>';
-    }).join('');
+    host.innerHTML = visibleNames.length
+      ? visibleNames.map(function (name) {
+          var leaf = String(name || '').split('/').pop();
+          var parent = loraFolder(name);
+          return '<label class="generate-sweep-row" title="' + escapeHtml(name) + '">' +
+            '<input type="checkbox" data-generate-sweep-lora="' + escapeHtml(name) + '"' +
+              (selectedLookup[name] ? ' checked' : '') + '>' +
+            '<span class="generate-sweep-row-copy"><strong>' + escapeHtml(leaf) + '</strong>' +
+              (parent ? '<small>' + escapeHtml(parent) + '</small>' : '') +
+            '</span>' +
+          '</label>';
+        }).join('')
+      : '<div class="generate-sweep-empty">No matching LoRAs</div>';
     syncSweepSelectionState();
   }
 
@@ -2035,8 +2045,10 @@
     el('generate-sweep-folder').addEventListener('change', function () {
       generateState.sweepFolderByModel[generateState.modelId] = this.value;
       window.localStorage.setItem('webcap.generate.sweepFolder.' + generateState.modelId, this.value);
+      el('generate-sweep-filter').value = '';
       renderSweep();
     });
+    el('generate-sweep-filter').addEventListener('input', renderSweep);
     el('generate-sweep-all').onclick = function () { setAllSweepSelections(true); };
     el('generate-sweep-none').onclick = function () { setAllSweepSelections(false); };
     el('generate-sweep-list').addEventListener('change', function (event) {

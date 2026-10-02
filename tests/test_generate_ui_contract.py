@@ -452,6 +452,24 @@ def test_generate_lora_sweep_uses_existing_generate_queue_without_set_semantics(
     assert ".generate-sweep-list" in css
     assert ".generate-sweep-selection-actions" in css
 
+def test_generate_sweep_matches_storyboard_lora_picker_language_without_losing_multiselect():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert 'id="generate-sweep-filter"' in html
+    assert 'placeholder="Filter / choose LoRAs…"' in html
+    assert "el('generate-sweep-filter').addEventListener('input', renderSweep);" in script
+    assert "var visibleNames = query" in script
+    assert "No matching LoRAs" in script
+    assert "data-generate-sweep-lora" in script
+    assert "generate-sweep-row-copy" in script
+    assert ".generate-sweep-row {" in css
+    assert "min-height: 38px;" in css
+    assert ".generate-sweep-row:hover" in css
+    assert ".generate-sweep-row:has(input:checked)" in css
+
+
 def test_generate_sweep_preserves_folder_prefixes_from_model_capabilities():
     backend = (ROOT / "tool" / "server" / "generate_generation.py").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")

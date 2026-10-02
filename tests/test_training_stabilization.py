@@ -1489,3 +1489,83 @@ def test_checkpoint_resume_forces_selected_learning_rate(tmp_path, monkeypatch):
     assert captured["optimizer"]["lr"] == pytest.approx(9e-5)
     assert captured["force_constant_lr"] == pytest.approx(9e-5)
     assert job["trainingSettings"]["forceConstantLr"] == "9e-5"
+
+
+def test_queued_resume_can_finish_into_history_without_restarting(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    resumed_run = tmp_path / "output" / "resume-run"
+    checkpoint = resumed_run / "global_step700"
+    checkpoint.mkdir(parents=True)
+    (resumed_run / "latest").write_text("global_step700\n", encoding="utf-8")
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [{
+            "id": "resume-job",
+            "folder": "sets/subject",
+            "status": "queued",
+            "stage": "queued",
+            "stages": "h3",
+            "resumeFromCheckpoint": str(resumed_run),
+            "resumeStage": "h3",
+            "resumePoint": {
+                "checkpointAvailable": True,
+                "checkpointTag": "global_step700",
+                "epoch": 7,
+                "step": 700,
+                "expectedEpochs": 80,
+            },
+            "createdAt": 1.0,
+            "updatedAt": 1.0,
+            "outputRoot": str(tmp_path / "output"),
+        }],
+    })
+
+    payload, status = training_runner.stop_response("resume-job", finish=True)
+
+    assert status == 200 and payload["ok"] is True
+    assert payload["job"]["status"] == "finished_early"
+    assert payload["job"]["outputRunPath"] == str(resumed_run)
+    assert training_runner._read_state()["jobs"] == []
+    history_jobs = training_history.read_history(tmp_path / "sets" / "subject")["jobs"]
+    assert len(history_jobs) == 1
+    assert history_jobs[0]["id"] == "resume-job"
+    assert history_jobs[0]["status"] == "finished_early"
+    assert history_jobs[0]["outputRunPath"] == str(resumed_run)
+    assert "epoch 7 / 80" in history_jobs[0]["completionNote"]
+    assert checkpoint.is_dir()
+    assert (resumed_run / "latest").read_text(encoding="utf-8").strip() == "global_step700"
+
+
+def test_fresh_queued_job_cannot_finish_without_starting(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [{
+            "id": "fresh-job",
+            "folder": "sets/subject",
+            "status": "queued",
+            "stage": "queued",
+            "stages": "h3",
+            "resumeFromCheckpoint": "",
+            "createdAt": 1.0,
+            "updatedAt": 1.0,
+        }],
+    })
+
+    payload, status = training_runner.stop_response("fresh-job", finish=True)
+
+    assert status == 409 and payload["ok"] is False
+    assert "Only queued resume jobs" in payload["error"]
+    state = training_runner._read_state()
+    assert len(state["jobs"]) == 1
+    assert state["jobs"][0]["id"] == "fresh-job"
+    assert state["jobs"][0]["status"] == "queued"
+    assert training_history.read_history(tmp_path / "sets" / "subject")["jobs"] == []

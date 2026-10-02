@@ -467,6 +467,14 @@ Provider **unavailability before an execution attempt** is a wait state, not a f
 request remains intact and unclaimed until the provider is available. From the user's perspective,
 nothing has failed because nothing was attempted.
 
+**Persisted provider uncertainty is never GPU ownership.** A provider job ID recovered from disk, a
+failed cancellation confirmation, or legacy cleanup metadata may inform best-effort reconciliation,
+but it must not reserve the shared GPU or block Training/LLM. On restart, WebCap may try once to
+cancel/reconcile provider work associated with a previously active request, then returns the frozen
+request to inert Backlog. If that provider state cannot be confirmed, the failure is logged; stale
+uncertainty does not become an immortal runtime lock. Only live work in the current server session
+that has actually acquired the shared resource may own it.
+
 If execution genuinely starts and then fails, the Inference rule is simple: preserve the frozen
 request in the queue and pause Inference. The failed attempt is the signal. The user resolves the
 problem and resumes the queue; WebCap does not need a separate "Retry" semantic that rebuilds or

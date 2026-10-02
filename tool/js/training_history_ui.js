@@ -161,7 +161,8 @@ function renderTrainingHistory() {
     var hasFinished = Number(job.finishedAt || 0) > 0;
     var details = [];
     var activeTime = trainingHistoryActiveTimeLabel(job);
-    var timingError = hasFinished && !hasStarted ? 'Timing invariant error: terminal job has no start time.' : '';
+    var finalizedWithoutStart = job.finalizedWithoutStart === true;
+    var timingError = hasFinished && !hasStarted && !finalizedWithoutStart ? 'Timing invariant error: terminal job has no start time.' : '';
     var timestamp = job.finishedAt || job.startedAt || job.createdAt;
     var timestampKind = trainingHistoryTimestampKind(job);
     if (isFinite(epoch) && epoch >= 0) details.push('Epoch ' + Math.round(epoch).toLocaleString() + (isFinite(epochs) && epochs > 0 ? ' / ' + Math.round(epochs).toLocaleString() : ''));

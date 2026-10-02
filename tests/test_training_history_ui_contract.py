@@ -98,6 +98,17 @@ def test_training_history_loads_timing_for_completed_and_finished_early_rows():
     assert "trainingHistoryFact('Finished', formatTrainingHistoryTime(job.finishedAt))" in script
 
 
+def test_training_history_allows_explicit_startless_queued_resume_finalization():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+
+    assert 'job["finalizedWithoutStart"] = True' in runner
+    assert '"finalizedWithoutStart"' in history
+    assert "job.finalizedWithoutStart === true" in script
+    assert "hasFinished && !hasStarted && !finalizedWithoutStart" in script
+
+
 def test_queued_resumes_show_checkpoint_progress_and_remaining_work():
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")

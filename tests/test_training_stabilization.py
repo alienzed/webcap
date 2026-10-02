@@ -1555,12 +1555,14 @@ def test_queued_resume_can_finish_into_history_without_restarting(tmp_path, monk
 
     assert status == 200 and payload["ok"] is True
     assert payload["job"]["status"] == "finished_early"
+    assert payload["job"]["finalizedWithoutStart"] is True
     assert payload["job"]["outputRunPath"] == str(resumed_run)
     assert training_runner._read_state()["jobs"] == []
     history_jobs = training_history.read_history(tmp_path / "sets" / "subject")["jobs"]
     assert len(history_jobs) == 1
     assert history_jobs[0]["id"] == "resume-job"
     assert history_jobs[0]["status"] == "finished_early"
+    assert history_jobs[0]["finalizedWithoutStart"] is True
     assert history_jobs[0]["outputRunPath"] == str(resumed_run)
     assert "epoch 7 / 80" in history_jobs[0]["completionNote"]
     assert checkpoint.is_dir()

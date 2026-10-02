@@ -31,6 +31,16 @@
     return [String(item.lane || item.kind || ''), id].join(':');
   }
 
+  function rememberRecentCompletion(item) {
+    if (!item || !item.id) return;
+    captureRecent([Object.assign({}, item, {
+      finishedAt: finishedAt(item) || Date.now() / 1000,
+      updatedAt: finishedAt(item) || Date.now() / 1000
+    })]);
+    notifyRecent(sessionRecent());
+    render();
+  }
+
   function captureRecent(items) {
     var byKey = Object.create(null);
     state.recentCompletions.forEach(function (item) {
@@ -692,6 +702,7 @@
     window.addEventListener('webcap:inference-queue-changed', wake);
   }
 
+  window.recordActivityCompletion = rememberRecentCompletion;
   window.setActivityDrawerOpen = setOpen;
   window.refreshActivityMonitor = wake;
   bind();

@@ -4918,6 +4918,17 @@
       }
 
       if (job.status === 'completed') {
+        var scene = storyState.story && storyState.story.scenes && storyState.story.scenes[job.sceneId];
+        window.recordActivityCompletion({
+          id: job.jobId,
+          kind: 'storyboard',
+          lane: 'inference',
+          status: 'completed',
+          label: scene && scene.title ? String(scene.title) : 'Storyboard Take',
+          storyId: storyId,
+          sceneId: job.sceneId,
+          finishedAt: job.completedAt
+        });
         if (!storyState.story || storyState.story.id !== storyId) {
           return refreshLibrary();
         }

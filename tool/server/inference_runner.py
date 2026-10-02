@@ -40,6 +40,8 @@ _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _monitor_lock = threading.Lock()
 _monitor_thread = None
+_provider_runtime_hold_lock = threading.Lock()
+_provider_runtime_holds = set()
 _backlog_lock = threading.Lock()
 _backlog_wait_reason = ""
 _backlog_drain_enabled = threading.Event()
@@ -86,6 +88,60 @@ def _set_backlog_wait_reason(reason):
         _backlog_wait_reason = str(reason or "")
 
 
+def _hold_live_provider_runtime(provider_job_id):
+    """Retain current-session GPU ownership only for provider work confirmed live."""
+    provider_job_id = str(provider_job_id or "").strip()
+    if not provider_job_id:
+        return
+    with _provider_runtime_hold_lock:
+        _provider_runtime_holds.add(provider_job_id)
+
+
+def _reconcile_live_provider_runtime_holds():
+    with _provider_runtime_hold_lock:
+        pending = list(_provider_runtime_holds)
+    if not pending:
+        return True
+
+    from . import inference_runtime
+    confirmed_live = []
+    for provider_job_id in pending:
+        try:
+            job = inference_runtime.read_job(provider_job_id)
+        except Exception:
+            _logger.warning(
+                "Could not verify current-session inference provider job %s; "
+                "releasing its runtime GPU hold rather than blocking on uncertainty.",
+                provider_job_id,
+                exc_info=True,
+            )
+            continue
+        status = str(job.get("status") or "").strip().lower() if isinstance(job, dict) else ""
+        if job is not None and status not in {"completed", "failed", "cancelled"}:
+            confirmed_live.append(provider_job_id)
+
+    with _provider_runtime_hold_lock:
+        _provider_runtime_holds.intersection_update(confirmed_live)
+        remaining = bool(_provider_runtime_holds)
+
+    owner = execution_resource_owner()
+    if remaining:
+        if owner == GPU_RESERVATION_OWNER:
+            return False
+        _logger.error(
+            "Confirmed live ComfyUI work lost its inference GPU reservation to %s; "
+            "dropping the runtime hold rather than blocking another lane.",
+            owner or "no owner",
+        )
+        with _provider_runtime_hold_lock:
+            _provider_runtime_holds.clear()
+        return True
+
+    if owner == GPU_RESERVATION_OWNER:
+        _release_gpu()
+    return True
+
+
 def _clear_obsolete_persisted_provider_cleanup_guard():
     """Discard legacy provider-cleanup state that must never own runtime scheduling."""
     execution_set_lane_guard(EXECUTION_LANE, PROVIDER_CLEANUP_GUARD, None)
@@ -95,6 +151,8 @@ def prepare_startup_backlog():
     """Return all persisted unfinished inference work to Backlog."""
     _backlog_drain_enabled.clear()
     _set_backlog_wait_reason("")
+    with _provider_runtime_hold_lock:
+        _provider_runtime_holds.clear()
     _clear_obsolete_persisted_provider_cleanup_guard()
     _ensure_execution_reconciled()
     return execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("jobs", [])
@@ -320,30 +378,58 @@ def _cancel_failed_provider(job):
     provider_status = str(details.get("providerStatus") or "").strip().lower()
     job_id = str(job.get("id") or "").strip() if isinstance(job, dict) else ""
     if not provider_job_id or provider_status in {"completed", "failed", "cancelled", "missing"}:
-        return
+        return True
+
+    from . import inference_runtime
     try:
-        from .inference_runtime import cancel_job_and_wait_status
-        terminal_status = cancel_job_and_wait_status(provider_job_id)
+        terminal_status = inference_runtime.cancel_job_and_wait_status(provider_job_id)
         if terminal_status:
             if job_id:
                 execution_update_job(job_id, details={"providerStatus": terminal_status})
-            return
-        _logger.error(
-            "Inference provider job %s did not confirm cancellation; "
-            "the inference lane will remain paused, but no shared GPU reservation is retained.",
-            provider_job_id,
-        )
+            return True
     except Exception:
         _logger.exception(
-            "Could not confirm cancellation of failed inference provider job %s; "
-            "the inference lane will remain paused, but no shared GPU reservation is retained.",
+            "Could not confirm cancellation of failed inference provider job %s.",
             provider_job_id,
         )
+
+    try:
+        provider_job = inference_runtime.read_job(provider_job_id)
+    except Exception:
+        _logger.warning(
+            "Could not verify failed inference provider job %s after cancellation failed; "
+            "releasing the GPU reservation rather than blocking on uncertainty.",
+            provider_job_id,
+            exc_info=True,
+        )
+        return True
+
+    status = (
+        str(provider_job.get("status") or "").strip().lower()
+        if isinstance(provider_job, dict)
+        else ""
+    )
+    if provider_job is None or status in {"completed", "failed", "cancelled"}:
+        return True
+
+    _hold_live_provider_runtime(provider_job_id)
+    _logger.error(
+        "Inference provider job %s is still confirmed %s after cancellation failed; "
+        "retaining the current-session GPU reservation until that live provider work ends.",
+        provider_job_id,
+        status or "active",
+    )
+    return False
 
 def _advance_queue():
     _ensure_execution_reconciled()
     with _dispatch_lock:
         snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+
+        with _provider_runtime_hold_lock:
+            provider_runtime_pending = bool(_provider_runtime_holds)
+        if provider_runtime_pending and not _reconcile_live_provider_runtime_holds():
+            return None
 
         if snapshot.get("paused") or snapshot.get("activeJobId"):
             return None
@@ -447,7 +533,7 @@ def _advance_queue():
                     _cleanup_generate_job_references(job_id)
                     execution_finish_job_transient(job_id, status=exc.status, error=str(exc))
             else:
-                _cancel_failed_provider(current)
+                release_gpu = _cancel_failed_provider(current)
                 if status == "stopping":
                     _cleanup_generate_job_references(job_id)
                     execution_finish_job_transient(
@@ -485,6 +571,9 @@ def _monitor_has_work():
     snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
     if snapshot.get("activeJobId"):
         return True
+    with _provider_runtime_hold_lock:
+        if _provider_runtime_holds:
+            return True
     if snapshot.get("paused"):
         return False
     drain_backlog = _backlog_drain_enabled.is_set()
@@ -631,6 +720,9 @@ def snapshot(include_terminal=False):
     current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=include_terminal)
     with _backlog_lock:
         wait_reason = str(_backlog_wait_reason or "")
+    with _provider_runtime_hold_lock:
+        if _provider_runtime_holds:
+            wait_reason = "Waiting for confirmed active ComfyUI provider work to finish."
     jobs = current.get("jobs", [])
     return {
         "paused": bool(current.get("paused")),

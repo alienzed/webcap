@@ -71,6 +71,24 @@ def test_training_history_exposes_finalize_and_archive_lifecycle():
     assert "removedStagedCandidates" in backend
 
 
+def test_finalize_archive_uses_staged_candidate_folder_as_retention_truth_and_surfaces_legacy_archive_errors():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "training_archive.py").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert '"availableAlternateCandidates": alternates' in backend
+    assert 'payload.get("sourceEpoch")' in backend
+    assert "Requested retained epoch is not present in the staged candidate folder" in backend
+    assert '"invalid": True' in backend
+    assert '"Archive is missing webcap-run.json."' in backend
+    assert "Archive issue" in script
+    assert "preview.availableAlternateCandidates" in script
+    assert "candidate.fileName" in script
+    assert "No staged candidate LoRAs available to retain." in script
+    assert "Finalized and archived, but Archive refresh failed:" in script
+    assert ".training-archive-alternate small" in css
+
+
 def test_training_history_loads_timing_for_completed_and_finished_early_rows():
     script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
 

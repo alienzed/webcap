@@ -129,6 +129,16 @@ def test_activity_drawer_marks_owning_workspace_links_while_work_is_active():
     assert ".activity-rail-btn.has-active-work::after" in css
 
 
+def test_activity_recent_completions_are_kept_in_browser_memory():
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+
+    assert "recentCompletions: []" in activity
+    assert "function captureRecent(items)" in activity
+    assert "state.recentCompletions = Object.keys(byKey)" in activity
+    assert "captureRecent(payload.recent);" in activity
+    assert "return state.recentCompletions.slice();" in activity
+
+
 def test_activity_navigation_passes_stable_target_identity_to_workspaces():
     activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

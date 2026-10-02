@@ -213,9 +213,11 @@
 
   function syncGenerateRunLabel() {
     var button = el('generate-run-btn');
-    if (!button || button.dataset.generateSubmitBusy === '1') return;
+    if (!button) return;
+    var submitBusy = button.dataset.generateSubmitBusy === '1';
     if (generateState.loraMode !== 'sweep') {
       button.textContent = 'Generate';
+      button.disabled = generateState.director.busy || submitBusy;
       return;
     }
     var model = currentModel();
@@ -224,6 +226,7 @@
     var count = selectedSweepLoras(model, folder).length +
       (el('generate-sweep-base') && el('generate-sweep-base').checked ? 1 : 0);
     button.textContent = count ? 'Generate Sweep (' + count + ')' : 'Generate Sweep';
+    button.disabled = generateState.director.busy || submitBusy || count === 0;
   }
 
   function renderSweep() {
@@ -1765,7 +1768,7 @@
     var runButton = el('generate-run-btn');
     if (!runButton) throw new Error('Generate action markup is missing.');
     var assistantBusy = generateState.director.busy;
-    runButton.disabled = assistantBusy || runButton.dataset.generateSubmitBusy === '1';
+    syncGenerateRunLabel();
 
     [
       'generate-model',

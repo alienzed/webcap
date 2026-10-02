@@ -494,13 +494,6 @@ def _advance_queue():
         try:
             _execute_claimed(job_id, gpu_reserved=local_gpu)
         except Exception as exc:
-            from .storyboard_llm_runtime import DirectorGpuHoldRequired
-            if isinstance(exc, DirectorGpuHoldRequired):
-                release_gpu = False
-                execution_pause_lane(
-                    EXECUTION_LANE,
-                    reason="Queue paused: llama.cpp GPU state could not be confirmed safe after a failed LLM request.",
-                )
             current = execution_get_job(job_id)
             current_status = str(current.get("status") or "")
             if current_status == "stopping":

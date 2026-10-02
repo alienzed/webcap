@@ -199,6 +199,25 @@
     generateState.sweepSelections[key][name] = !!selected;
   }
 
+  function syncSweepSelectionState() {
+    var model = currentModel();
+    var folders = sweepFolders(model);
+    var folder = savedSweepFolder(model && model.id, folders);
+    var names = sweepLoras(model, folder);
+    var selectedNames = selectedSweepLoras(model, folder);
+    var summary = el('generate-sweep-summary');
+    var allButton = el('generate-sweep-all');
+    var noneButton = el('generate-sweep-none');
+    if (!summary || !allButton || !noneButton) throw new Error('Generate Sweep selection controls are missing.');
+
+    summary.textContent = names.length
+      ? selectedNames.length + ' of ' + names.length + ' selected · ' + (folder || 'root')
+      : 'No LoRAs available for Sweep.';
+    allButton.disabled = !names.length || selectedNames.length === names.length;
+    noneButton.disabled = !selectedNames.length;
+    syncGenerateRunLabel();
+  }
+
   function setAllSweepSelections(selected) {
     var model = currentModel();
     var folders = sweepFolders(model);
@@ -208,7 +227,10 @@
       values[name] = !!selected;
       return values;
     }, {});
-    renderSweep();
+    el('generate-sweep-list').querySelectorAll('[data-generate-sweep-lora]').forEach(function (checkbox) {
+      checkbox.checked = !!selected;
+    });
+    syncSweepSelectionState();
   }
 
   function syncGenerateRunLabel() {
@@ -256,11 +278,6 @@
       return values;
     }, {});
 
-    summary.textContent = names.length
-      ? selectedNames.length + ' of ' + names.length + ' selected · ' + (folder || 'root')
-      : 'No LoRAs available for Sweep.';
-    allButton.disabled = !names.length || selectedNames.length === names.length;
-    noneButton.disabled = !selectedNames.length;
     host.innerHTML = names.map(function (name) {
       var leaf = String(name || '').split('/').pop();
       return '<label class="generate-sweep-row" title="' + escapeHtml(name) + '">' +
@@ -269,7 +286,7 @@
         '<span>' + escapeHtml(leaf) + '</span>' +
       '</label>';
     }).join('');
-    syncGenerateRunLabel();
+    syncSweepSelectionState();
   }
 
   function setLoraMode(mode) {
@@ -2029,7 +2046,7 @@
       var folders = sweepFolders(model);
       var folder = savedSweepFolder(model && model.id, folders);
       setSweepSelection(model, folder, String(checkbox.dataset.generateSweepLora || ''), checkbox.checked);
-      renderSweep();
+      syncSweepSelectionState();
     });
     el('generate-sweep-base').addEventListener('change', syncGenerateRunLabel);
     el('generate-run-btn').onclick = function () {

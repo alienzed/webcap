@@ -23,6 +23,8 @@ def inference_root(tmp_path, monkeypatch):
     inference_runner._startup_reconciled = True
     from tool.server import llm_runner
     llm_runner._local_gpu_drain_until = 0.0
+    with inference_runner._provider_runtime_hold_lock:
+        inference_runner._provider_runtime_holds.clear()
     with inference_runner._backlog_lock:
         inference_runner._backlog_wait_reason = ""
     inference_runner._backlog_drain_enabled.clear()
@@ -1018,7 +1020,8 @@ def test_inference_runner_preserves_job_when_provider_already_terminal(inference
     assert cancelled == []
 
 
-def test_inference_runner_pauses_and_releases_gpu_when_provider_cleanup_is_unconfirmed(inference_root, monkeypatch):
+
+def test_inference_runner_retains_gpu_only_when_failed_provider_is_confirmed_live(inference_root, monkeypatch):
     queued = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,
         {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
@@ -1040,6 +1043,11 @@ def test_inference_runner_pauses_and_releases_gpu_when_provider_cleanup_is_uncon
 
     monkeypatch.setattr(inference_runner, "_execute_claimed", fail_after_launch)
     monkeypatch.setattr(inference_runtime, "cancel_job_and_wait_status", lambda _provider_id: "")
+    monkeypatch.setattr(
+        inference_runtime,
+        "read_job",
+        lambda _provider_id: {"status": "in_progress"},
+    )
     monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
 
     inference_runner._advance_queue()
@@ -1048,15 +1056,48 @@ def test_inference_runner_pauses_and_releases_gpu_when_provider_cleanup_is_uncon
     assert inference_runner.job_status(queued["id"])["status"] == "queued"
     assert snapshot["paused"] is True
     assert "provider polling exploded" in snapshot["pauseReason"]
-    assert snapshot["waitReason"] == ""
-    assert execution_queue.resource_owner() == ""
+    assert "confirmed active ComfyUI provider work" in snapshot["waitReason"]
+    assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
+    with inference_runner._provider_runtime_hold_lock:
+        assert inference_runner._provider_runtime_holds == {"provider-123"}
 
     result = inference_runner.action("resume_queue")
 
     assert result["resumed"] is True
     assert execution_queue.get_job(queued["id"])["status"] == "queued"
     assert execution_queue.get_job(waiting["id"])["status"] == "queued"
+    assert execution_queue.resource_owner() == inference_runner.GPU_RESERVATION_OWNER
+
+
+def test_inference_runner_releases_gpu_when_failed_provider_cannot_be_verified(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "minimax_h3", "mediaKind": "video", "prompt": "Prompt"}},
+        metadata={"client": "generate", "modelId": "minimax_h3", "mediaKind": "video"},
+    )
+    execution_queue._resource_owner = inference_runner.GPU_RESERVATION_OWNER
+
+    def fail_after_launch(job_id):
+        execution_queue.mark_running(
+            job_id,
+            details={"providerJobId": "provider-123", "providerStatus": "in_progress"},
+        )
+        raise RuntimeError("provider polling exploded")
+
+    monkeypatch.setattr(inference_runner, "_execute_claimed", fail_after_launch)
+    monkeypatch.setattr(inference_runtime, "cancel_job_and_wait_status", lambda _provider_id: "")
+    monkeypatch.setattr(
+        inference_runtime,
+        "read_job",
+        lambda _provider_id: (_ for _ in ()).throw(ConnectionError("offline")),
+    )
+
+    inference_runner._advance_queue()
+
+    assert inference_runner.snapshot()["paused"] is True
     assert execution_queue.resource_owner() == ""
+    with inference_runner._provider_runtime_hold_lock:
+        assert inference_runner._provider_runtime_holds == set()
 
 def test_cancel_job_and_wait_requires_terminal_provider_state(monkeypatch):
     states = iter([
@@ -1263,6 +1304,22 @@ def test_persisted_cleanup_suspicion_never_reserves_shared_gpu(inference_root):
     assert execution_queue.resource_owner() == ""
     assert training_runner.reserve_gpu_for_external_work("training") is True
     training_runner.release_gpu_for_external_work("training")
+
+
+def test_confirmed_live_provider_hold_releases_when_provider_becomes_unverifiable(inference_root, monkeypatch):
+    execution_queue._resource_owner = inference_runner.GPU_RESERVATION_OWNER
+    inference_runner._hold_live_provider_runtime("provider-live")
+    monkeypatch.setattr(
+        inference_runtime,
+        "read_job",
+        lambda _provider_id: (_ for _ in ()).throw(ConnectionError("offline")),
+    )
+
+    assert inference_runner._reconcile_live_provider_runtime_holds() is True
+    assert execution_queue.resource_owner() == ""
+    with inference_runner._provider_runtime_hold_lock:
+        assert inference_runner._provider_runtime_holds == set()
+
 
 def test_inference_enqueue_stays_queued_while_shared_gpu_is_busy(inference_root, monkeypatch):
     execution_queue._resource_owner = "training"

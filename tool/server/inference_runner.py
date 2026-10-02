@@ -191,9 +191,19 @@ def _reconcile_provider_cleanup_holds():
 
     from . import inference_runtime
     unresolved = []
+    provider_unavailable = False
     for provider_job_id in pending:
         try:
             job = inference_runtime.read_job(provider_job_id)
+        except ConnectionError:
+            unresolved.append(provider_job_id)
+            provider_unavailable = True
+            _logger.debug(
+                "ComfyUI is unavailable while verifying held inference provider job %s; "
+                "retaining the cleanup guard without retaining the GPU reservation.",
+                provider_job_id,
+            )
+            continue
         except Exception:
             unresolved.append(provider_job_id)
             _logger.warning(
@@ -215,6 +225,11 @@ def _reconcile_provider_cleanup_holds():
         _persist_provider_cleanup_guard_locked()
     if remaining:
         owner = execution_resource_owner()
+        if provider_unavailable:
+            _set_backlog_wait_reason("ComfyUI unavailable.")
+            if owner == GPU_RESERVATION_OWNER:
+                _release_gpu()
+            return False
         if not owner:
             execution_reserve_resource(GPU_RESERVATION_OWNER)
         elif owner != GPU_RESERVATION_OWNER:

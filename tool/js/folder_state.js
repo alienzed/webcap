@@ -200,7 +200,6 @@ function sanitizeFolderState(data) {
     caption_helper_panel_collapsed: !!src.caption_helper_panel_collapsed,
     media_filters: {
       text: String(mediaFilters.text || ''),
-      panel_expanded: !!mediaFilters.panel_expanded,
       missing_captions_only: !!mediaFilters.missing_captions_only,
       reviewed_only: !!mediaFilters.reviewed_only,
       unreviewed_only: !!mediaFilters.unreviewed_only,
@@ -381,7 +380,6 @@ function snapshotFolderStateFromDom() {
     .sort();
   var mediaFilters = {
     text: String((ui.filterEl && ui.filterEl.value) || ''),
-    panel_expanded: !!(ui.advancedFilterPanel && !ui.advancedFilterPanel.classList.contains('hidden')),
     missing_captions_only: !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked),
     reviewed_only: !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked),
     unreviewed_only: !!(ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked),
@@ -523,14 +521,6 @@ function applyFolderStateToDom(folderState) {
     Array.prototype.forEach.call(ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]'), function (input) {
       input.checked = flagSelections.has(String(input.value || '').trim().toLowerCase());
     });
-  }
-  if (ui.advancedFilterPanel) {
-    var panelExpanded = !!(clean.media_filters && clean.media_filters.panel_expanded);
-    ui.advancedFilterPanel.classList.toggle('hidden', !panelExpanded);
-    if (ui.advancedFilterToggleBtn) {
-      ui.advancedFilterToggleBtn.classList.toggle('expanded', panelExpanded);
-      ui.advancedFilterToggleBtn.setAttribute('aria-expanded', panelExpanded ? 'true' : 'false');
-    }
   }
   updateSuperSetControls();
   // Add new field restoration logic here as needed

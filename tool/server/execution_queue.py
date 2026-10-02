@@ -620,6 +620,14 @@ def enqueue(lane_name, payload, metadata=None, job_id=None, initial_status="queu
         if _find_job(state, job["id"])[1] is not None:
             raise ValueError("Execution queue job ID already exists.")
         lane["jobs"].append(job)
+        if (
+            str(lane_name) == "inference"
+            and initial_status == "queued"
+            and not lane.get("activeJobId")
+            and lane.get("paused")
+        ):
+            lane["paused"] = False
+            lane["pauseReason"] = ""
         _prune_terminal(lane)
         _refresh_positions(lane)
         _write_state(state)

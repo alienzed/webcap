@@ -2097,7 +2097,6 @@
       var card = document.createElement('article');
       card.className = 'test-generations-result-card';
       card.dataset.resultKey = resultKey;
-      card.dataset.compareIndex = String(index);
 
       if (sessionName && mediaFile) {
         appendTestPreview(card, sessionName, result);
@@ -3249,11 +3248,6 @@
         removeCurrentSessionCandidate(remove);
         return;
       }
-      if (event.target.closest('.test-generations-video-transport, video, button')) return;
-      var card = event.target.closest('[data-compare-index]');
-      if (!card) return;
-      compareIndex = Number(card.dataset.compareIndex || 0);
-      setResultsView('compare');
     };
     el('test-generations-compare').onclick = function (event) {
       var rating = event.target.closest('[data-test-rating]');

@@ -1518,7 +1518,7 @@
                                             <strong id="storyboard-workspace-mode-title">Scenes</strong>
                                             <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn" title="Queue one new Take for every Scene in this Story.">Generate</button>
                                             <button id="storyboard-cancel-takes-btn" type="button" class="review-captions-btn hidden" title="Cancel this Story's queued and running Take generation.">Cancel Takes</button>
-                                            <button id="storyboard-assistant-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Assistant">Assistant</button>
+                                            <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Director Tools">Director Tools</button>
                                         </div>
                                         <span id="storyboard-progress-summary" class="storyboard-progress-summary"></span>
                                     </div>
@@ -1687,6 +1687,36 @@
                         <div id="training-candidates-modal-content" class="training-candidates-modal-content"></div>
                     </section>
                 </div>
+        <div id="storyboard-director-tools-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-director-tools-close">
+            <section class="keep-lora-dialog storyboard-director-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-director-tools-title">
+                <header class="keep-lora-header">
+                    <div>
+                        <h2 id="storyboard-director-tools-title">Director Tools</h2>
+                        <p class="keep-lora-source">Apply a targeted revision across the current Story's Scenes.</p>
+                    </div>
+                    <button id="storyboard-director-tools-close" type="button" class="training-review-modal-close" aria-label="Close Director Tools">&times;</button>
+                </header>
+                <div class="keep-lora-content">
+                    <div class="keep-lora-field">
+                        <label for="storyboard-director-tools-preset">Preset</label>
+                        <select id="storyboard-director-tools-preset">
+                            <option value="">Custom revision</option>
+                            <option value="continuity">Continuity pass</option>
+                        </select>
+                    </div>
+                    <div class="keep-lora-field">
+                        <label for="storyboard-director-tools-instruction">Revise Scenes</label>
+                        <textarea id="storyboard-director-tools-instruction" rows="7" placeholder="Describe what should be revised across these Scenes."></textarea>
+                        <small>Presets prime this instruction; edit it freely before running.</small>
+                    </div>
+                    <div id="storyboard-director-tools-status" class="training-history-summary" aria-live="polite"></div>
+                </div>
+                <footer class="keep-lora-footer">
+                    <button id="storyboard-director-tools-cancel" type="button" class="review-captions-btn">Cancel</button>
+                    <button id="storyboard-director-tools-run" type="button" class="training-btn">Revise Scenes</button>
+                </footer>
+            </section>
+        </div>
         <div id="training-archive-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="training-archive-close">
             <section class="keep-lora-dialog training-archive-dialog" role="dialog" aria-modal="true" aria-labelledby="training-archive-title">
                 <header class="keep-lora-header">

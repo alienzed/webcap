@@ -620,7 +620,7 @@
     if (state.timer) clearTimeout(state.timer);
     state.timer = setTimeout(function () {
       refresh().then(schedule);
-    }, state.open ? 2500 : ((activeCount() || hasQueuedOrPausedWork()) ? 4000 : 30000));
+    }, state.open ? 3000 : ((activeCount() || hasQueuedOrPausedWork()) ? 8000 : 30000));
   }
 
   function wake() {

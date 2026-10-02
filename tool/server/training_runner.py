@@ -50,7 +50,6 @@ from .training_run_manifest import clear_selected_epoch as _clear_selected_epoch
 from .execution_queue import reserve_resource as reserve_execution_resource, release_resource as release_execution_resource, resource_owner as execution_resource_owner
 
 
-STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
 ACTIVE_STATUSES = {"starting", "running", "stopping"}
 QUEUE_STATUSES = {"queued"}
@@ -89,10 +88,6 @@ def _state_path():
 
 def _jobs_root():
     return _runtime_root() / JOB_DIR_NAME
-
-
-def _ensure_runtime_dirs():
-    _runtime_root().mkdir(parents=True, exist_ok=True)
 
 
 def external_gpu_work_block_reason(owner):

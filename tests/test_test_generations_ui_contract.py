@@ -400,9 +400,9 @@ def test_test_polling_keeps_active_worker_status_separate_from_selected_preview(
     assert "renderStatus(selectedStatus);" in poll
     assert "selectedPreviewLive" in poll
 
-    assert "refreshActivityButtonIfDue(5000);" in poll
-    assert "refreshSessionsIfDue(5000).catch(showError);" in poll
-    assert "pollTimer = setTimeout(pollStatus, 2000);" in poll
+    assert "refreshActivityButtonIfDue(15000);" in poll
+    assert "refreshSessionsIfDue(10000).catch(showError);" in poll
+    assert "pollTimer = setTimeout(pollStatus, 4000);" in poll
     assert "function refreshActivityButtonIfDue(intervalMs)" in script
     assert "function refreshSessionsIfDue(intervalMs)" in script
 

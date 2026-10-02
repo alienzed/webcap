@@ -147,6 +147,20 @@ def test_activity_recent_completions_are_kept_in_browser_memory():
     assert "kind: 'generate'" in generate
 
 
+def test_test_generations_records_session_completion_destination():
+    test_bench = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "trackedTestInferenceSessions = Object.create(null)" in test_bench
+    assert "function syncTestInferenceSnapshot(queue)" in test_bench
+    assert "String(job && job.client || '') !== 'test'" in test_bench
+    assert "requestForFolder(tracked.folder, 'test_open_session', { session: tracked.sessionId })" in test_bench
+    assert "window.recordActivityCompletion({" in test_bench
+    assert "kind: 'test'" in test_bench
+    assert "folder: tracked.folder" in test_bench
+    assert "sessionId: tracked.sessionId" in test_bench
+    assert "window.addEventListener('webcap:inference-queue-snapshot'" in test_bench
+
+
 def test_activity_navigation_passes_stable_target_identity_to_workspaces():
     activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

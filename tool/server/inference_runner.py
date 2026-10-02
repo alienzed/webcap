@@ -26,7 +26,6 @@ from .execution_queue import (
     transient_receipt as execution_transient_receipt,
     set_lane_guard as execution_set_lane_guard,
     update_job as execution_update_job,
-    reserve_resource as execution_reserve_resource,
     resource_owner as execution_resource_owner,
     resume_lane as execution_resume_lane,
 )

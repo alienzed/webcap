@@ -3738,7 +3738,10 @@
                       '<select data-reference-source title="Choose an existing Take to use as a reference.">' + activeTakeOptions(story, '') + '</select>' +
                       '<select data-reference-frame title="Choose which frame from the source Take to use."><option value="last">Last frame</option><option value="first">First frame</option></select>' +
                       '<button type="button" class="review-captions-btn" data-reference-apply title="Assign the selected Take frame to this reference slot.">Assign Take</button>' +
-                      '<label class="review-captions-btn storyboard-reference-upload-btn" title="Upload an image directly into the selected first/last-frame reference slot.">Upload image<input type="file" accept="image/*" data-reference-upload hidden></label>' +
+                      '<label class="storyboard-reference-upload-btn reference-dropzone" data-reference-dropzone title="Drop an image directly into the selected first/last-frame reference slot, or click to browse.">' +
+                        '<input type="file" accept="image/*" data-reference-upload>' +
+                        '<span class="reference-dropzone-copy"><strong>Drop image here or browse</strong><small>Uploads to the selected reference slot</small></span>' +
+                      '</label>' +
                     '</div>' +
                   '</div>' +
                 '</details>' +
@@ -5441,6 +5444,36 @@
         return;
       }
       handleSceneInput(event);
+    });
+    el('storyboard-scenes-list').addEventListener('dragover', function (event) {
+      var dropzone = event.target.closest('[data-reference-dropzone]');
+      if (!dropzone) return;
+      event.preventDefault();
+      dropzone.classList.add('is-dragover');
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    });
+    el('storyboard-scenes-list').addEventListener('dragleave', function (event) {
+      var dropzone = event.target.closest('[data-reference-dropzone]');
+      if (!dropzone) return;
+      if (!event.relatedTarget || !dropzone.contains(event.relatedTarget)) dropzone.classList.remove('is-dragover');
+    });
+    el('storyboard-scenes-list').addEventListener('drop', function (event) {
+      var dropzone = event.target.closest('[data-reference-dropzone]');
+      if (!dropzone) return;
+      event.preventDefault();
+      dropzone.classList.remove('is-dragover');
+      var input = dropzone.querySelector('[data-reference-upload]');
+      if (!input) throw new Error('Reference dropzone file input is missing.');
+      var file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+      if (!file) return;
+      if (file.type && file.type.indexOf('image/') !== 0) {
+        window.alert('Reference files must be images.');
+        return;
+      }
+      var transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
     });
     el('storyboard-scenes-list').addEventListener('change', function (event) {
       var loraRow = event.target.closest('[data-scene-lora-row], [data-story-lora-inherited-row]');

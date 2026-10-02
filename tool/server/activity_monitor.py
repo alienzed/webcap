@@ -1,7 +1,7 @@
 import logging
 import time
 
-from .execution_queue import ExecutionQueueStateError, recent_snapshot as execution_recent_snapshot
+from .execution_queue import ExecutionQueueStateError, recent_snapshot as execution_recent_snapshot, resource_owner as execution_resource_owner
 from .inference_runner import snapshot as inference_snapshot
 from .llm_runner import snapshot as llm_snapshot
 from .storage_manager import scan_status as storage_scan_status
@@ -251,6 +251,7 @@ def activity_snapshot(limit=20, since=0):
 
     return {
         "ok": True,
+        "gpuOwner": execution_resource_owner(),
         "active": active,
         "recent": recent,
         "errors": errors,

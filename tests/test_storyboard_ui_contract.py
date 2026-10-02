@@ -261,23 +261,21 @@ def test_storyboard_director_configuration_is_first_class_app_setting():
 
 
 
-def test_storyboard_revise_scenes_lives_in_assistant_and_keeps_sparse_scene_healing():
+def test_storyboard_revise_scenes_lives_in_director_tools_and_keeps_sparse_scene_healing():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
 
     assert "function reviseScenes(instruction, modelId)" in storyboard
-    assert "id: 'revise-scenes'" in storyboard
-    assert "return reviseScenes(request && request.instruction, request && request.modelId)" in storyboard
+    assert 'id="storyboard-director-tools-btn"' in html
+    assert 'id="storyboard-director-tools-modal"' in html
+    assert 'id="storyboard-director-tools-instruction"' in html
+    assert '<option value="continuity">Continuity pass</option>' in html
     assert "DIRECTOR_PASS_PRESETS.continuity.instruction" in storyboard
-    assert "label: 'Continuity pass'" in storyboard
-
-    assert 'id="director-chat-mode-tools"' in html
-    assert 'id="director-chat-mode-presets"' in html
-    assert "active.presets" in assistant
-    assert "data-assistant-preset" in assistant
+    assert "function runDirectorToolsRevision()" in storyboard
+    assert "reviseScenes(instruction, storyState.director.modelId)" in storyboard
+    assert "id: 'revise-scenes'" not in storyboard
 
     assert "kind: 'repair'" in storyboard
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
@@ -1233,8 +1231,8 @@ def test_storyboard_cancel_takes_is_contextual_and_story_scoped():
     assert 'id="storyboard-cancel-takes-btn"' in html
     generate_index = html.index('id="storyboard-generate-scenes-btn"')
     cancel_index = html.index('id="storyboard-cancel-takes-btn"')
-    assistant_index = html.index('id="storyboard-assistant-btn"')
-    assert generate_index < cancel_index < assistant_index
+    director_tools_index = html.index('id="storyboard-director-tools-btn"')
+    assert generate_index < cancel_index < director_tools_index
     assert "function cancelStoryTakes()" in storyboard
     assert "operation: 'cancel_story'" in storyboard
     assert "storyId: storyId" in storyboard

@@ -1180,6 +1180,15 @@
 
         untrackGenerateJob(jobId);
         if (status === 'completed') {
+          window.recordActivityCompletion({
+            id: jobId,
+            kind: 'generate',
+            lane: 'inference',
+            status: 'completed',
+            label: 'Generation',
+            modelId: String(job.modelId || ''),
+            finishedAt: job.finishedAt
+          });
           refreshResultsNeeded = true;
           if (generateState.open) setStatus('Generation complete.');
           return;

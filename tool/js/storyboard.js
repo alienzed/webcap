@@ -5273,9 +5273,7 @@
     el('storyboard-director-tools-preset').onchange = function () {
       var input = el('storyboard-director-tools-instruction');
       if (!input) return;
-      input.value = this.value === 'continuity'
-        ? DIRECTOR_PASS_PRESETS.continuity.instruction
-        : '';
+      if (this.value === 'continuity') input.value = DIRECTOR_PASS_PRESETS.continuity.instruction;
       input.focus();
     };
     el('storyboard-director-tools-run').onclick = runDirectorToolsRevision;

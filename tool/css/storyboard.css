@@ -3388,6 +3388,7 @@
 }
 
 .storyboard-scenes-title-row #storyboard-generate-scenes-btn,
+.storyboard-scenes-title-row #storyboard-cancel-takes-btn,
 .storyboard-scenes-title-row #storyboard-assistant-btn {
   width: auto;
   min-height: 30px;

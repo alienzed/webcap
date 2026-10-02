@@ -6,7 +6,6 @@ import time
 
 from . import inference_runtime
 from .generate_store import cleanup_references, persist_result, resolve_reference_path
-from .execution_queue import update_job as execution_update_job
 from .inference_models import get_inference_model, public_models
 
 _logger = logging.getLogger(__name__)
@@ -210,8 +209,7 @@ def execute(job_id, request):
             inference_runtime.available_names,
             inference_runtime.resolve_name,
         )
-        provider_job_id = inference_runtime.queue_workflow(workflow)
-        execution_update_job(job_id, details={"providerJobId": provider_job_id, "providerStatus": "pending"})
+        provider_job_id = inference_runtime.queue_managed_workflow(job_id, workflow)
         output_ref = inference_runtime.wait_for_output(provider_job_id, job_id, model.find_output_ref)
         media = inference_runtime.download_output(output_ref)
         elapsed_ms = int((time.monotonic() - started) * 1000)

@@ -1646,6 +1646,7 @@
       setDirectorTargetProtected(storyState.director.pendingTargets[key], true);
     });
     syncPlanReplacementControls();
+    syncDirectorToolsUi();
   }
 
   function setDirectorPending(target, pending) {
@@ -2555,6 +2556,7 @@
   }
 
   function renderStoryReadiness() {
+    syncDirectorToolsUi();
     var node = el('storyboard-progress-summary');
     if (!node || !storyState.story) return;
     var story = storyState.story;
@@ -3769,6 +3771,7 @@
   }
 
   function renderStory() {
+    syncDirectorToolsUi();
     var empty = el('storyboard-editor-empty');
     var editor = el('storyboard-editor-content');
     var overviewToggle = el('storyboard-story-toggle');

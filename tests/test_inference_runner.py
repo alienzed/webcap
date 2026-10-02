@@ -29,6 +29,7 @@ def inference_root(tmp_path, monkeypatch):
         inference_runner._backlog_wait_reason = ""
     inference_runner._backlog_drain_enabled.clear()
     monkeypatch.setattr(inference_runtime, "system_stats", lambda: {"ok": True})
+    monkeypatch.setattr(inference_runtime, "webcap_queue_job_ids", lambda: [])
     return tmp_path
 
 
@@ -1649,3 +1650,19 @@ def test_read_job_treats_only_http_404_as_missing(monkeypatch):
     monkeypatch.setattr(inference_runtime, "_read_json_response", failed)
     with pytest.raises(inference_runtime.ComfyHttpError):
         inference_runtime.read_job("00000000-0000-0000-0000-000000000000")
+
+
+def test_inference_startup_cancels_webcap_provider_discovered_from_comfyui_queue(inference_root, monkeypatch):
+    inference_runner._startup_reconciled = False
+    cancelled = []
+    monkeypatch.setattr(inference_runtime, "webcap_queue_job_ids", lambda: ["provider-orphan"])
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait_status",
+        lambda provider_id: cancelled.append(provider_id) or "cancelled",
+    )
+
+    inference_runner.prepare_startup_backlog()
+
+    assert cancelled == ["provider-orphan"]
+    assert execution_queue.resource_owner() == ""

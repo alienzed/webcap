@@ -403,7 +403,7 @@ def test_training_purge_blocks_nonterminal_queue_reference(monkeypatch, tmp_path
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     action_id = "001-set--abc/001-h3--demo"
     action = _training_action(tmp_path, action_id)
-    _write_json(tmp_path / ".webcap_training" / "queue.json", {
+    _write_json(storage_manager.app_config.training_queue_state_path(), {
         "version": 3,
         "jobs": [{"id": "job-live", "actionId": action_id, "status": "queued"}],
     })
@@ -418,7 +418,7 @@ def test_training_overview_marks_nonterminal_reference_protected(monkeypatch, tm
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     action_id = "001-set--abc/001-h3--demo"
     _training_action(tmp_path, action_id)
-    _write_json(tmp_path / ".webcap_training" / "queue.json", {
+    _write_json(storage_manager.app_config.training_queue_state_path(), {
         "version": 3,
         "jobs": [{"id": "job-live", "actionId": action_id, "status": "running"}],
     })

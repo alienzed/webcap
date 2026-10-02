@@ -742,6 +742,8 @@ function wireTrainingWorkspace() {
       event.stopPropagation();
       if (action === 'cancel') {
         cancelQueuedTrainingJob(jobId);
+      } else if (action === 'finish') {
+        finishQueuedTrainingResume(jobId);
       } else {
         reorderManagedTraining(jobId, action);
       }

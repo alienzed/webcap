@@ -1276,20 +1276,29 @@
                                 <div id="generate-lora-list" class="generate-lora-list"></div>
                             </div>
                             <div id="generate-lora-sweep-panel" class="generate-lora-mode-panel hidden" role="tabpanel">
-                                <label class="generate-field"><span>Folder</span><select id="generate-sweep-folder" aria-label="Sweep LoRA folder"></select></label>
-                                <input id="generate-sweep-filter" class="generate-lora-picker" type="search" placeholder="Filter / choose LoRAs…" autocomplete="off" aria-label="Filter Sweep LoRAs">
-                                <div class="generate-sweep-options">
-                                    <label class="generate-field"><span>Strength</span><input id="generate-sweep-strength" type="number" min="-2" max="2" step="0.05" value="0.9"></label>
-                                    <label class="generate-sweep-base"><input id="generate-sweep-base" type="checkbox"> Include Base</label>
+                                <div class="generate-sweep-group">
+                                    <div class="generate-sweep-group-label">Source</div>
+                                    <label class="generate-field"><span>Folder</span><select id="generate-sweep-folder" aria-label="Sweep LoRA folder"></select></label>
+                                    <input id="generate-sweep-filter" class="generate-lora-picker" type="search" placeholder="Filter / choose LoRAs…" autocomplete="off" aria-label="Filter Sweep LoRAs">
                                 </div>
-                                <div class="generate-sweep-selection-bar">
-                                    <div id="generate-sweep-summary" class="generate-empty-inline"></div>
-                                    <div class="generate-sweep-selection-actions">
-                                        <button id="generate-sweep-all" type="button" class="review-captions-btn">All</button>
-                                        <button id="generate-sweep-none" type="button" class="review-captions-btn">None</button>
+                                <div class="generate-sweep-group">
+                                    <div class="generate-sweep-group-label">Modifiers</div>
+                                    <div class="generate-sweep-options">
+                                        <label class="generate-field"><span>Strength</span><input id="generate-sweep-strength" type="number" min="-2" max="2" step="0.05" value="0.9"></label>
+                                        <label class="generate-sweep-base"><input id="generate-sweep-base" type="checkbox"> Include Base</label>
                                     </div>
                                 </div>
-                                <div id="generate-sweep-list" class="generate-sweep-list"></div>
+                                <div class="generate-sweep-group generate-sweep-selection-group">
+                                    <div class="generate-sweep-group-label">Sweep selection</div>
+                                    <div class="generate-sweep-selection-bar">
+                                        <div id="generate-sweep-summary" class="generate-empty-inline"></div>
+                                        <div class="generate-sweep-selection-actions">
+                                            <button id="generate-sweep-all" type="button" class="review-captions-btn">All</button>
+                                            <button id="generate-sweep-none" type="button" class="review-captions-btn">None</button>
+                                        </div>
+                                    </div>
+                                    <div id="generate-sweep-list" class="generate-sweep-list"></div>
+                                </div>
                             </div>
                             </section>
                             <details id="generate-references" class="generate-references generate-collapsible hidden">

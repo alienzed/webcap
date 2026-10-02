@@ -332,8 +332,8 @@ def _read_state_readonly():
 
 def _write_state(state, retired_job_ids=()):
     global _state_file_seen, _persisted_managed_job_ids
-    _ensure_runtime_dirs()
     path = _state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     job_ids = _state_job_ids(state, path)
     allowed_retirements = {str(job_id) for job_id in retired_job_ids}
     missing_job_ids = _persisted_managed_job_ids - job_ids - allowed_retirements if _state_file_seen == path else set()

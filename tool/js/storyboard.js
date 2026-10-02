@@ -1855,7 +1855,7 @@
     }).finally(function () {
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
-      if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();
+      syncDirectorToolsUi();
     });
   }
 
@@ -5183,6 +5183,71 @@
     }).catch(reportError);
   }
 
+  function directorToolsAvailable() {
+    return !!(
+      storyState.story &&
+      Array.isArray(storyState.story.sceneOrder) &&
+      storyState.story.sceneOrder.length > 0 &&
+      !directorTargetBlocked({ kind: 'repair', storyId: storyState.story.id })
+    );
+  }
+
+  function syncDirectorToolsUi() {
+    var button = el('storyboard-director-tools-btn');
+    if (button) button.disabled = !directorToolsAvailable();
+
+    var run = el('storyboard-director-tools-run');
+    if (run) run.disabled = !directorToolsAvailable();
+  }
+
+  function openDirectorTools() {
+    if (!directorToolsAvailable()) {
+      reportError(new Error('Director Tools requires an available Story with Scenes.'));
+      return;
+    }
+    var modal = el('storyboard-director-tools-modal');
+    var input = el('storyboard-director-tools-instruction');
+    var preset = el('storyboard-director-tools-preset');
+    var status = el('storyboard-director-tools-status');
+    if (!modal || !input || !preset || !status) throw new Error('Director Tools modal markup is missing.');
+    preset.value = '';
+    input.value = '';
+    status.textContent = '';
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    input.focus();
+  }
+
+  function closeDirectorTools() {
+    var modal = el('storyboard-director-tools-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  function runDirectorToolsRevision() {
+    var input = el('storyboard-director-tools-instruction');
+    var run = el('storyboard-director-tools-run');
+    var status = el('storyboard-director-tools-status');
+    if (!input || !run || !status) throw new Error('Director Tools modal markup is missing.');
+    var instruction = String(input.value || '').trim();
+    if (!instruction) {
+      status.textContent = 'Enter a revision instruction or choose a preset.';
+      input.focus();
+      return;
+    }
+    run.disabled = true;
+    status.textContent = 'Starting revision…';
+    reviseScenes(instruction, storyState.director.modelId).then(function () {
+      closeDirectorTools();
+    }).catch(function (err) {
+      status.textContent = String(err && err.message ? err.message : err);
+      reportError(err);
+    }).finally(function () {
+      syncDirectorToolsUi();
+    });
+  }
+
   function bindUi() {
     var workspace = el('storyboard-workspace');
     if (!workspace) throw new Error('Storyboard workspace markup is missing.');
@@ -5201,12 +5266,18 @@
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
     el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
-    el('storyboard-assistant-btn').onclick = function () {
-      var hasScenes = !!(storyState.story && Array.isArray(storyState.story.sceneOrder) && storyState.story.sceneOrder.length);
-      if (typeof window.openAssistant === 'function') {
-        window.openAssistant({ mode: hasScenes ? 'revise-scenes' : 'chat' });
-      }
+    el('storyboard-director-tools-btn').onclick = openDirectorTools;
+    el('storyboard-director-tools-close').onclick = closeDirectorTools;
+    el('storyboard-director-tools-cancel').onclick = closeDirectorTools;
+    el('storyboard-director-tools-preset').onchange = function () {
+      var input = el('storyboard-director-tools-instruction');
+      if (!input) return;
+      input.value = this.value === 'continuity'
+        ? DIRECTOR_PASS_PRESETS.continuity.instruction
+        : '';
+      input.focus();
     };
+    el('storyboard-director-tools-run').onclick = runDirectorToolsRevision;
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;
@@ -5695,37 +5766,6 @@
   window.openStoryboardActivity = openStoryboardActivity;
   window.closeStoryboardActivity = closeStoryboardActivity;
 
-  if (typeof window.registerAssistantMode === 'function') {
-    window.registerAssistantMode({
-      id: 'revise-scenes',
-      label: 'Revise Scenes',
-      description: 'Apply a targeted revision across the current Story\'s Scene plan.',
-      placeholder: 'What should be revised across these Scenes?',
-      successMessage: 'Scene revisions completed.',
-      presets: [{
-        label: 'Continuity pass',
-        title: 'Review every Scene for continuity and prompt completeness',
-        instruction: DIRECTOR_PASS_PRESETS.continuity.instruction
-      }],
-      available: function () {
-        var workspace = el('storyboard-workspace');
-        return !!(
-          workspace &&
-          !workspace.classList.contains('hidden') &&
-          storyState.story &&
-          Array.isArray(storyState.story.sceneOrder) &&
-          storyState.story.sceneOrder.length > 0 &&
-          !directorTargetBlocked({ kind: 'repair', storyId: storyState.story.id })
-        );
-      },
-      execute: function (request) {
-        return reviseScenes(request && request.instruction, request && request.modelId);
-      },
-      cancel: function () {
-        stopDirectorJob();
-      }
-    });
-  }
-
   bindUi();
+  syncDirectorToolsUi();
 })();

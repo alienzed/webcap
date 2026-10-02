@@ -27,6 +27,7 @@ def _set(root):
 
 def _configure_root(monkeypatch, root):
     monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: Path(root) / ".test-webcap-app-data" / "state")
     training_runner._state_file_seen = None
     training_runner._persisted_managed_job_ids = set()
     training_runner._startup_reconciled = False
@@ -592,7 +593,7 @@ def test_pre_layout_queue_state_uses_recorded_paths_without_action_resolution(tm
 def test_recent_runs_v1_remains_readable_without_layout_migration(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
-    recent = tmp_path / ".webcap_training" / "recent_runs.json"
+    recent = app_config.training_history_state_path()
     recent.parent.mkdir()
     recent.write_text(json.dumps({"version": 1, "jobs": [{"id": "old", "folder": "sets/subject"}]}), encoding="utf-8")
 
@@ -616,7 +617,7 @@ def test_training_history_record_persists_without_output_artifacts(tmp_path, mon
         "finishedAt": 3,
     })
 
-    recent = json.loads((tmp_path / ".webcap_training" / "recent_runs.json").read_text(encoding="utf-8"))
+    recent = json.loads((app_config.training_history_state_path()).read_text(encoding="utf-8"))
     assert [item["id"] for item in recent["jobs"]] == ["job-one"]
     history = training_history.all_history_payload()["jobs"]
     assert [item["id"] for item in history] == ["job-one"]
@@ -1259,7 +1260,7 @@ def test_missing_history_is_empty_and_invalid_history_is_loud(tmp_path, monkeypa
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
     assert training_history.read_history(folder)["jobs"] == []
-    recent = tmp_path / ".webcap_training" / "recent_runs.json"
+    recent = app_config.training_history_state_path()
     recent.parent.mkdir()
     recent.write_text("{bad", encoding="utf-8")
 

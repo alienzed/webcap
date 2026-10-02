@@ -24,7 +24,6 @@ from .execution_queue import (
     request_stop as execution_request_stop,
     resolve_job_transient as execution_resolve_job_transient,
     transient_receipt as execution_transient_receipt,
-    set_lane_guard as execution_set_lane_guard,
     update_job as execution_update_job,
     resource_owner as execution_resource_owner,
     resume_lane as execution_resume_lane,
@@ -33,7 +32,6 @@ from .execution_queue import (
 
 EXECUTION_LANE = "inference"
 GPU_RESERVATION_OWNER = EXECUTION_LANE
-PROVIDER_CLEANUP_GUARD = "providerCleanup"
 PROVIDER_ACTIVE_STATUSES = {"pending", "in_progress"}
 
 _dispatch_lock = threading.Lock()
@@ -150,36 +148,15 @@ def _reconcile_live_provider_runtime_holds():
     return True
 
 
-def _clear_obsolete_persisted_provider_cleanup_guard():
-    """Discard legacy provider-cleanup state that must never own runtime scheduling."""
-    execution_set_lane_guard(EXECUTION_LANE, PROVIDER_CLEANUP_GUARD, None)
-
-
 def prepare_startup_backlog():
     """Return all persisted unfinished inference work to Backlog."""
     _backlog_drain_enabled.clear()
     _set_backlog_wait_reason("")
     with _provider_runtime_hold_lock:
         _provider_runtime_holds.clear()
-    _clear_obsolete_persisted_provider_cleanup_guard()
     _ensure_execution_reconciled()
     return execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("jobs", [])
 
-
-def _clear_obsolete_persisted_provider_pause():
-    """Migrate runtime-only provider pauses written by older versions."""
-    current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-    reason = str(current.get("pauseReason") or "")
-    lowered = reason.lower()
-    if (
-        current.get("paused")
-        and not lowered.startswith("inference paused after an execution error:")
-        and (
-            "comfyui provider" in lowered
-            or "provider cleanup" in lowered
-        )
-    ):
-        execution_resume_lane(EXECUTION_LANE)
 
 def _job_view(job):
     if not isinstance(job, dict):
@@ -270,7 +247,6 @@ def _ensure_execution_reconciled():
         if _startup_reconciled:
             return
 
-        _clear_obsolete_persisted_provider_pause()
         prior = execution_lane_snapshot(EXECUTION_LANE, include_terminal=True)
         prior_unfinished = [
             job for job in prior.get("jobs", [])
@@ -732,7 +708,6 @@ def enqueue_test(request, context, label="", deferred=False):
 
 
 def snapshot(include_terminal=False):
-    _clear_obsolete_persisted_provider_pause()
     current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=include_terminal)
     with _backlog_lock:
         wait_reason = str(_backlog_wait_reason or "")

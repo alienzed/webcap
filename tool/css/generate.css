@@ -690,6 +690,23 @@
   font-size: 12px;
 }
 
+.generate-sweep-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.generate-sweep-selection-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.generate-sweep-selection-actions .review-captions-btn {
+  min-height: 28px;
+  padding: 3px 8px;
+}
+
 .generate-sweep-list {
   display: grid;
   gap: 4px;
@@ -698,6 +715,10 @@
 }
 
 .generate-sweep-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
   min-width: 0;
   padding: 5px 7px;
   overflow: hidden;
@@ -705,6 +726,11 @@
   border-radius: 5px;
   background: var(--panel-soft);
   font-size: 12px;
+  cursor: pointer;
+}
+
+.generate-sweep-row span {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

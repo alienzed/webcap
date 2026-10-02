@@ -306,7 +306,7 @@
   function scheduleScanPoll() {
     stopScanPolling();
     if (!storageState.open || !scanIsActive()) return;
-    storageState.scanPollTimer = window.setTimeout(refreshScanStatus, 750);
+    storageState.scanPollTimer = window.setTimeout(refreshScanStatus, 1000);
   }
 
   function refreshScanStatus() {

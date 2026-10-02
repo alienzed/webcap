@@ -2016,12 +2016,29 @@ def _all_owned_session_directories(folder_path):
     return sessions
 
 
+def session_cleanup_status(folder_path):
+    sessions = _all_owned_session_directories(folder_path)
+    active = sorted(
+        session.name
+        for session in sessions
+        if _session_has_nonterminal_jobs(session)
+    )
+    return {
+        "count": len(sessions),
+        "active": active,
+    }
+
+
 def clear_sessions(folder_path):
     sessions = _all_owned_session_directories(folder_path)
-    active = [session.name for session in sessions if _session_has_nonterminal_jobs(session)]
+    active = sorted(
+        session.name
+        for session in sessions
+        if _session_has_nonterminal_jobs(session)
+    )
     if active:
         raise RuntimeError(
-            "Cannot clear Test Generations sessions while active work remains: " + ", ".join(sorted(active))
+            "Cannot clear Test Generations sessions while active work remains: " + ", ".join(active)
         )
     for session in sessions:
         shutil.rmtree(session)

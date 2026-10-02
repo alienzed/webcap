@@ -374,6 +374,56 @@ def test_sessions_list_open_and_delete_are_scoped_to_current_set(tmp_path):
 
 
 
+def test_session_cleanup_status_is_passive_and_clear_sessions_removes_completed_history(tmp_path):
+    first = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
+    second = tmp_path / bench.TEST_RESULTS_DIR / "session-b"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+    bench._atomic_write_json(first / "test.json", {"status": "complete", "results": []})
+    bench._atomic_write_json(second / "test.json", {"status": "stopped", "results": []})
+
+    status = bench.session_cleanup_status(tmp_path)
+
+    assert status == {"count": 2, "active": []}
+    assert first.exists()
+    assert second.exists()
+    assert bench.clear_sessions(tmp_path) == 2
+    assert not first.exists()
+    assert not second.exists()
+
+
+def test_clear_sessions_refuses_nonterminal_test_work_before_deleting_history(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    complete = tmp_path / bench.TEST_RESULTS_DIR / "complete-session"
+    active = tmp_path / bench.TEST_RESULTS_DIR / "active-session"
+    complete.mkdir(parents=True)
+    active.mkdir(parents=True)
+    child = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": bench.get_test_model().PROFILE_ID}},
+        metadata={"client": "test", "folder": ".", "sessionId": active.name, "candidateKind": "base"},
+    )
+    bench._atomic_write_json(complete / "test.json", {"status": "complete", "results": []})
+    bench._atomic_write_json(active / "test.json", {
+        "status": "queued",
+        "modelId": bench.get_test_model().PROFILE_ID,
+        "inferenceJobs": [child["id"]],
+        "results": [],
+        "failures": [],
+        "total": 1,
+    })
+
+    status = bench.session_cleanup_status(tmp_path)
+    assert status["count"] == 2
+    assert status["active"] == [active.name]
+
+    with pytest.raises(RuntimeError, match="active work remains"):
+        bench.clear_sessions(tmp_path)
+
+    assert complete.exists()
+    assert active.exists()
+
+
 def test_legacy_set_sessions_remain_readable_without_global_recent_scan(tmp_path, monkeypatch):
     set_folder = tmp_path / "HH4013"
     session = set_folder / bench.TEST_RESULTS_DIR / "2026-09-18_1300-h3"

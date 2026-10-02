@@ -142,8 +142,10 @@
         if (['stopped', 'failed', 'interrupted'].indexOf(state) !== -1) {
           delete trackedTestInferenceSessions[key];
         }
-      }).catch(function (err) {
-        reportConsoleError('Test Generations', err);
+      }).catch(function () {
+        // Completion breadcrumbs are best-effort browser state. A Session may
+        // legitimately disappear because the user cleared it or archived the Set.
+        delete trackedTestInferenceSessions[key];
       }).then(function () {
         delete pendingTestCompletionChecks[key];
       });
@@ -1359,13 +1361,13 @@
     if (clearBtn) clearBtn.classList.toggle('hidden', !queued.length);
     var clearSessionsBtn = el('test-generations-clear-sessions-btn');
     if (clearSessionsBtn) {
-      var hasActiveSession = items.some(function (session) {
+      var hasActiveSession = queued.length > 0 || items.some(function (session) {
         return session && (session.status === 'running' || session.status === 'stopping' || session.status === 'starting');
       });
       clearSessionsBtn.classList.toggle('hidden', !items.length);
       clearSessionsBtn.disabled = hasActiveSession;
       clearSessionsBtn.title = hasActiveSession
-        ? 'Stop active Test sessions before clearing history'
+        ? 'Stop or clear queued Test work before clearing history'
         : 'Delete all Test session history for this Set';
     }
     if (!host) return;
@@ -1668,11 +1670,23 @@
     return request('test_queue_clear', { modelId: currentTestModelId() }).then(function () { return refreshSessions(); });
   }
 
+  function forgetTrackedTestSessions(folder, sessionName) {
+    var owner = String(owningSetFolder(folder) || '');
+    var prefix = owner + '|';
+    Object.keys(trackedTestInferenceSessions).forEach(function (key) {
+      if (key.indexOf(prefix) !== 0) return;
+      if (sessionName && key !== testInferenceSessionKey(owner, sessionName)) return;
+      delete trackedTestInferenceSessions[key];
+      delete pendingTestCompletionChecks[key];
+    });
+  }
+
   function clearTestSessions() {
     if (!window.confirm('Clear all Test session history for this Set? Generated session results will be deleted.')) {
       return Promise.resolve();
     }
     return request('test_clear_sessions', {}).then(function () {
+      forgetTrackedTestSessions(launchFolder);
       currentSession = '';
       currentSessionFolder = '';
       currentSessionModel = '';
@@ -3154,6 +3168,7 @@
 
   function deleteSession(sessionName) {
     return request('test_delete_session', { session: String(sessionName || '') }).then(function (payload) {
+      forgetTrackedTestSessions(launchFolder, String(payload && payload.deleted || ''));
       removeDeletedSessionRow(payload && payload.deleted);
       if (currentSession === String(payload.deleted || '')) {
         currentSession = '';
@@ -3426,6 +3441,21 @@
     };
     window.addEventListener('webcap:inference-queue-snapshot', function (event) {
       syncTestInferenceSnapshot(event && event.detail && event.detail.queue);
+    });
+    window.addEventListener('webcap:test-sessions-cleared', function (event) {
+      var folder = String(event && event.detail && event.detail.folder || '');
+      if (!folder) return;
+      forgetTrackedTestSessions(folder);
+      if (String(currentSessionFolder || '') === String(owningSetFolder(folder) || '')) {
+        currentSession = '';
+        currentSessionFolder = '';
+        currentSessionModel = '';
+        showSessionError = false;
+        if (isOpen() && String(launchFolder || '') === String(owningSetFolder(folder) || '')) {
+          renderStatus({ status: 'idle' });
+          refreshSessions().catch(showError);
+        }
+      }
     });
     if (typeof window.getInferenceQueueSnapshot === 'function') {
       syncTestInferenceSnapshot(window.getInferenceQueueSnapshot());

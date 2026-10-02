@@ -224,6 +224,9 @@ def test_test_generation_archive_lifecycle_is_visible_and_clearable():
     assert 'id="test-generations-clear-sessions-btn"' in html
     assert "function clearTestSessions()" in script
     assert "request('test_clear_sessions', {})" in script
+    assert "function forgetTrackedTestSessions(folder, sessionName)" in script
+    assert "delete trackedTestInferenceSessions[key];" in script
+    assert "webcap:test-sessions-cleared" in script
     assert "function lastTrainingArchiveText()" in script
     assert "state.lastTrainingArchive" in script
     assert "last_training_archive" in folder_state

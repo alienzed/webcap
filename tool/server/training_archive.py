@@ -9,8 +9,7 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .execution_queue import lane_snapshot as execution_lane_snapshot
-from .epoch_test_bench import clear_sessions as clear_test_sessions, list_sessions as list_test_sessions
-from .folder_state_store import read_folder_state, write_folder_state_atomic
+from .epoch_test_bench import clear_sessions as clear_test_sessions, session_cleanup_status as test_session_cleanup_status
 from .training_action import read_action
 from .training_history import all_history_payload, clear_history_job
 from .training_run_manifest import read_run_manifest, record_archive_metadata
@@ -35,13 +34,6 @@ def _sibling_output_directories(output_root, run_dir):
         and not path.is_symlink()
         and path.resolve() != Path(run_dir).resolve()
     ]
-
-
-def _record_last_training_archive(folder_path, archive_fact):
-    state_path = Path(folder_path) / ".webcap_state.json"
-    state = read_folder_state(state_path)
-    state["last_training_archive"] = dict(archive_fact)
-    write_folder_state_atomic(state_path, state)
 
 
 def _safe_archive_name(value):
@@ -156,6 +148,13 @@ def _context(folder, job_id):
     if live_jobs:
         raise RuntimeError("Training action still has live or queued work: " + ", ".join(live_jobs))
     staged = _staged_candidates(folder, job_id, str(run.get("stages") or "").strip().lower())
+    set_folder = app_config.safe_join_fs_root(folder)
+    test_cleanup = test_session_cleanup_status(set_folder)
+    if test_cleanup["active"]:
+        raise RuntimeError(
+            "Stop active or queued Test Generations work before archiving this Set: "
+            + ", ".join(test_cleanup["active"])
+        )
     active_test = _active_test_candidate_names(folder)
     targeted_active = [candidate.name for candidate, _sidecar, _payload in staged if candidate.name in active_test]
     if targeted_active:
@@ -179,6 +178,7 @@ def _context(folder, job_id):
         "globalSteps": _global_step_directories(run_dir),
         "production": production,
         "staged": staged,
+        "testCleanup": test_cleanup,
         "siblingOutputs": sibling_outputs,
         "relatedRuns": related,
     }
@@ -220,7 +220,7 @@ def preview(folder, job_id):
         "epochCount": len(context["epochs"]),
         "globalStepCount": len(context["globalSteps"]),
         "stagedCandidateCount": len(context["staged"]),
-        "testSessionCount": len(list_test_sessions(app_config.safe_join_fs_root(folder))),
+        "testSessionCount": int(context["testCleanup"].get("count") or 0),
         "relatedRunCount": len(context["relatedRuns"]),
         "siblingOutputCount": len(context["siblingOutputs"]),
         "willRemoveActionRoot": not context["siblingOutputs"],
@@ -338,8 +338,12 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
         "selectedEpoch": context["selectedEpoch"],
         "productionFileName": context["production"].name,
     }
-    _record_last_training_archive(set_folder, last_training_archive)
-    removed_test_sessions = clear_test_sessions(set_folder)
+    test_cleanup_warning = ""
+    removed_test_sessions = 0
+    try:
+        removed_test_sessions = clear_test_sessions(set_folder)
+    except (OSError, RuntimeError, ValueError) as exc:
+        test_cleanup_warning = str(exc)
     return {
         "archiveName": destination_name,
         "archivePath": str(destination),
@@ -347,6 +351,7 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
         "retainedAlternateEpochs": retained,
         "removedStagedCandidates": len(context["staged"]),
         "removedTestSessions": removed_test_sessions,
+        "testCleanupWarning": test_cleanup_warning,
         "lastTrainingArchive": last_training_archive,
         "actionRemoved": action_removed,
     }

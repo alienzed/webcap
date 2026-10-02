@@ -1,7 +1,15 @@
+import pytest
+
 from tool.server import activity_monitor
 
 
+@pytest.fixture(autouse=True)
+def _idle_gpu_owner(monkeypatch):
+    monkeypatch.setattr(activity_monitor, "execution_resource_owner", lambda: "")
+
+
 def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
+    monkeypatch.setattr(activity_monitor, "execution_resource_owner", lambda: "inference")
     monkeypatch.setattr(activity_monitor, "inference_snapshot", lambda include_terminal=False: {
         "paused": False,
         "pauseReason": "",
@@ -82,6 +90,7 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
     payload = activity_monitor.activity_snapshot(limit=10)
 
     assert payload["ok"] is True
+    assert payload["gpuOwner"] == "inference"
     assert {item["kind"] for item in payload["active"]} == {"storyboard", "training", "storage"}
     assert [item["id"] for item in payload["recent"]] == ["train-done"]
     assert payload["queues"]["inference"]["running"] == 1

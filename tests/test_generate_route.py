@@ -529,14 +529,13 @@ def test_generate_execute_cleans_transient_refs_and_captured_provider_output(tmp
     )
     monkeypatch.setattr(generate_generation.inference_runtime, "available_names", lambda *_args: [])
     monkeypatch.setattr(generate_generation.inference_runtime, "resolve_name", lambda value, *_args: value)
-    monkeypatch.setattr(generate_generation.inference_runtime, "queue_workflow", lambda _workflow: "provider-1")
+    monkeypatch.setattr(generate_generation.inference_runtime, "queue_managed_workflow", lambda _job_id, _workflow: "provider-1")
     monkeypatch.setattr(
         generate_generation.inference_runtime,
         "wait_for_output",
         lambda *_args: output_ref,
     )
     monkeypatch.setattr(generate_generation.inference_runtime, "download_output", lambda _ref: b"video")
-    monkeypatch.setattr(generate_generation, "execution_update_job", lambda *_args, **_kwargs: None)
     cleaned_refs = []
     monkeypatch.setattr(
         generate_generation,

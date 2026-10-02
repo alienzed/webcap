@@ -4659,6 +4659,67 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
 
 /* Utility classes for inline style removal */
 .hidden { display: none !important; }
+
+.reference-dropzone {
+  position: relative;
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.reference-dropzone:hover,
+.reference-dropzone.is-dragover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--panel-soft) 82%, var(--accent) 18%);
+}
+
+.reference-dropzone.is-dragover {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.reference-dropzone.has-file {
+  border-style: solid;
+}
+
+.reference-dropzone input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reference-dropzone-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.reference-dropzone-copy strong,
+.reference-dropzone-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference-dropzone-copy strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reference-dropzone-copy small {
+  color: var(--muted);
+  font-size: 12px;
+}
 html[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0d1117;

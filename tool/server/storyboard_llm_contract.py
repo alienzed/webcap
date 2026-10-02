@@ -306,7 +306,7 @@ def build_request(story, scene_id, operation, instruction=""):
             "[CURRENT TASK]\nDevelop the complete concept into MiniMax H3 Scenes. "
             + scene_count_guidance
             + "Consider the complete concept before writing individual Scenes. First decide what relationship, if any, the Scenes should have: progression, variations, repeated format, montage, parallel moments, independent alternatives, or another structure suggested by the concept. "
-            "Choose the relationship that best serves the concept, decide what each Scene contributes to the whole, then author the individual Scenes. "
+            "Choose the relationship that best serves the concept, decide what each Scene contributes to the whole, then author each Scene distinctly; preserve intentional repeated structure without mechanically repeating wording, actions, or example language. "
             "Keep the relationship between Scenes appropriate to the concept, preserving relevant Story facts, invariants, and evolving state when continuity matters. "
             "Use entry and exit state only when a specific handoff or visible state is genuinely useful. "
             "Write each Scene's complete H3 generation prompt exactly as it should be used, following the supplied Director and H3 guidance. "

@@ -8,7 +8,7 @@ from PIL import Image
 
 from tool.server import config as app_config
 from tool.server import app as app_module
-from tool.server import execution_queue, run_ops, storyboard_llm_runtime, training_bundle, training_history, training_runner, training_review
+from tool.server import execution_queue, run_ops, storyboard_llm_runtime, training_archive, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
 from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_for_mode
@@ -40,6 +40,32 @@ def _fake_runtime(monkeypatch):
     as_wsl = lambda path, distribution="": Path(path).as_posix()
     monkeypatch.setattr(training_runner, "_to_wsl_path", as_wsl)
     monkeypatch.setattr(training_bundle, "to_wsl_path", as_wsl)
+
+
+def test_archive_staged_candidates_preserve_full_set_relative_path(tmp_path, monkeypatch):
+    test_root = tmp_path / "test-root"
+    staged = test_root / "az" / "sets" / "subject"
+    staged.mkdir(parents=True)
+    candidate = staged / "baseline-03__epoch12.safetensors"
+    candidate.write_bytes(b"weights")
+    candidate.with_suffix(".webcap.json").write_text(json.dumps({
+        "version": 1,
+        "sourceJobId": "job-1",
+        "sourceEpoch": 12,
+    }), encoding="utf-8")
+
+    monkeypatch.setattr(training_archive.app_config, "load_config_from_disk", lambda: {
+        "training": {
+            "test_copy_roots": {"h3": str(test_root)},
+            "test_copy_subfolder": "az",
+        }
+    })
+
+    matches = training_archive._staged_candidates("sets/subject", "job-1", "h3")
+
+    assert [item[0] for item in matches] == [candidate]
+    assert not (test_root / "az" / "subject").exists()
+
 
 
 def test_relaunch_archives_existing_training_log(tmp_path):

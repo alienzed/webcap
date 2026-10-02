@@ -532,6 +532,64 @@
     });
   }
 
+  function syncReferenceDropzone(role) {
+    var input = el('generate-reference-' + role);
+    var zone = document.querySelector('[data-generate-reference-dropzone="' + role + '"]');
+    var name = document.querySelector('[data-generate-reference-name="' + role + '"]');
+    var clear = document.querySelector('[data-generate-reference-clear="' + role + '"]');
+    if (!input || !zone || !name || !clear) throw new Error('Generate reference dropzone markup is missing for ' + role + '.');
+    var file = input.files && input.files[0];
+    zone.classList.toggle('has-file', !!file);
+    name.textContent = file ? file.name : 'No file selected';
+    clear.classList.toggle('hidden', !file);
+    clear.disabled = input.disabled;
+  }
+
+  function setReferenceInputFile(input, file) {
+    if (!file) return;
+    if (file.type && file.type.indexOf('image/') !== 0) {
+      window.alert('Reference files must be images.');
+      return;
+    }
+    var transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function bindReferenceDropzones() {
+    ['first_frame', 'last_frame'].forEach(function (role) {
+      var input = el('generate-reference-' + role);
+      var zone = document.querySelector('[data-generate-reference-dropzone="' + role + '"]');
+      var clear = document.querySelector('[data-generate-reference-clear="' + role + '"]');
+      if (!input || !zone || !clear) throw new Error('Generate reference dropzone markup is missing for ' + role + '.');
+
+      input.addEventListener('change', function () { syncReferenceDropzone(role); });
+      ['dragenter', 'dragover'].forEach(function (eventName) {
+        zone.addEventListener(eventName, function (event) {
+          event.preventDefault();
+          if (input.disabled) return;
+          zone.classList.add('is-dragover');
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+        });
+      });
+      zone.addEventListener('dragleave', function (event) {
+        if (!event.relatedTarget || !zone.contains(event.relatedTarget)) zone.classList.remove('is-dragover');
+      });
+      zone.addEventListener('drop', function (event) {
+        event.preventDefault();
+        zone.classList.remove('is-dragover');
+        if (input.disabled) return;
+        setReferenceInputFile(input, event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
+      });
+      clear.addEventListener('click', function () {
+        input.value = '';
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      syncReferenceDropzone(role);
+    });
+  }
+
   function captureReferenceFiles(model) {
     var files = {};
     (model && Array.isArray(model.references) ? model.references : []).forEach(function (role) {
@@ -1812,6 +1870,7 @@
       var control = el(id);
       if (control) control.disabled = assistantBusy;
     });
+    ['first_frame', 'last_frame'].forEach(syncReferenceDropzone);
 
     document.querySelectorAll('[data-generate-prompt-use], [data-generate-open-result-key]').forEach(function (button) {
       button.disabled = assistantBusy;
@@ -1990,6 +2049,7 @@
   function bindUi() {
     var workspace = el('generate-workspace');
     if (!workspace) throw new Error('Generate workspace markup is missing.');
+    bindReferenceDropzones();
 
     el('generate-create-mode-btn').onclick = function () {
       setGenerateViewMode('create');

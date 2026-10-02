@@ -489,7 +489,7 @@ def test_chat_stops_owned_router_if_model_cannot_be_confirmed_unloaded(monkeypat
     assert calls == ["stop", "release"]
 
 
-def test_chat_keeps_gpu_reserved_if_external_router_cannot_unload(monkeypatch):
+def test_chat_releases_gpu_if_external_router_cannot_confirm_unload(monkeypatch):
     calls = []
 
     monkeypatch.setattr(storyboard_llm_runtime, "_process", None)
@@ -522,13 +522,13 @@ def test_chat_keeps_gpu_reserved_if_external_router_cannot_unload(monkeypatch):
         lambda _model_id: (_ for _ in ()).throw(RuntimeError("still loaded")),
     )
 
-    with pytest.raises(RuntimeError, match="GPU reservation is being kept"):
+    with pytest.raises(RuntimeError, match="completion failed"):
         storyboard_llm_runtime.chat(
             "qwen-large",
             [{"role": "user", "content": "Write."}],
         )
 
-    assert calls == ["reserve"]
+    assert calls == ["reserve", "release"]
 
 
 def test_release_loaded_model_for_gpu_work_unloads_local_model(monkeypatch):

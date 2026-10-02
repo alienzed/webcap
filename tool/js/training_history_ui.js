@@ -385,12 +385,12 @@ function finalizeTrainingArchive() {
     trainingWorkspaceState.archivesLoaded = false;
     setStatus('Finalized and archived ' + String(payload.archive && payload.archive.archiveName || '') + '.');
     return refreshTrainingHistory(true).then(function () {
-      return loadTrainingArchives(true).catch(function (err) {
-        setStatus('Finalized and archived, but Archive refresh failed: ' + String(err.message || err));
-        throw err;
-      });
+      return loadTrainingArchives(true);
+    }).catch(function (err) {
+      setStatus('Finalized and archived, but Archive refresh failed: ' + String(err.message || err));
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Training Archive', String(err.message || err));
     });
-  }).catch(function (err) {
+  }, function (err) {
     els.archiveModalConfirm.disabled = false;
     setStatus('Finalize & Archive failed: ' + String(err.message || err));
     throw err;

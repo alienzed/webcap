@@ -487,9 +487,8 @@ def _test_items_for_folder(cache, folder, qualify_label=False):
 def _central_test_items(cache):
     rows = []
     seen_names = set()
-    for root in _central_test_roots():
-        if not root.is_dir() or root.is_symlink():
-            continue
+    root = _central_test_root()
+    if root.is_dir() and not root.is_symlink():
         for path in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower(), reverse=True):
             if path.name in seen_names or not path.is_dir() or path.is_symlink():
                 continue
@@ -1113,28 +1112,11 @@ def _resolve_generate(item_id, *, require_manifest=False):
     return directory
 
 
-def _legacy_central_test_root():
-    return Path(app_config.FS_ROOT) / ".webcap" / "test-generations"
-
-
 def _central_test_root():
     root = app_config.output_root() / "test-generations"
     if root.is_symlink():
         raise ValueError("Central Test Session storage path is symlinked.")
     return root
-
-
-def _central_test_roots():
-    roots = [_central_test_root(), _legacy_central_test_root()]
-    unique = []
-    seen = set()
-    for root in roots:
-        key = str(Path(root).absolute())
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(Path(root))
-    return unique
 
 
 def _resolve_test(folder, session_id):
@@ -1157,12 +1139,11 @@ def _resolve_test(folder, session_id):
             raise FileNotFoundError("Test Session is unavailable.")
         return session
 
-    for central_root in _central_test_roots():
-        central_session = central_root / name
-        if central_session.is_symlink():
-            raise ValueError("Test Session storage path is symlinked.")
-        if central_session.is_dir() and (central_session / "test.json").is_file():
-            return central_session.resolve()
+    central_session = _central_test_root() / name
+    if central_session.is_symlink():
+        raise ValueError("Test Session storage path is symlinked.")
+    if central_session.is_dir() and (central_session / "test.json").is_file():
+        return central_session.resolve()
 
     raise FileNotFoundError("Test Session is unavailable.")
 

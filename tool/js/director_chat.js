@@ -445,7 +445,7 @@
     }).catch(function () {
       if (state.pending) renderProgress(null, null);
     }).then(function () {
-      if (state.pending) state.progressTimer = setTimeout(pollProgress, 500);
+      if (state.pending) state.progressTimer = setTimeout(pollProgress, 1000);
     });
   }
 

@@ -615,12 +615,12 @@
 .generate-inspector {
   padding: 16px;
   display: grid;
-  gap: 18px;
+  gap: 22px;
 }
 
 .generate-output-settings {
   display: grid;
-  gap: 10px;
+  gap: 9px;
 }
 
 .generate-field {
@@ -636,7 +636,7 @@
 .generate-settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 9px 10px;
 }
 
 .generate-run-row {
@@ -651,28 +651,58 @@
 
 .generate-conditioning {
   display: grid;
-  gap: 10px;
-  padding-top: 15px;
+  gap: 12px;
+  padding-top: 20px;
   border-top: 1px solid var(--border-soft);
 }
 
 .generate-lora-tabs {
-  display: flex;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
+}
+
+.generate-lora-tabs .review-captions-btn {
+  min-height: 30px;
+  border-color: transparent;
+  background: transparent;
 }
 
 .generate-lora-tabs .review-captions-btn.active {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--panel-soft) 82%, var(--accent) 18%);
+  border-color: color-mix(in srgb, var(--border) 72%, var(--accent) 28%);
+  background: var(--panel-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .generate-lora-mode-panel {
   display: grid;
-  gap: 8px;
+  gap: 14px;
 }
 
 .generate-lora-mode-panel.hidden {
   display: none;
+}
+
+.generate-sweep-group {
+  display: grid;
+  gap: 8px;
+}
+
+.generate-sweep-group + .generate-sweep-group {
+  padding-top: 13px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.generate-sweep-group-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
 }
 
 .generate-sweep-options {
@@ -703,8 +733,10 @@
 }
 
 .generate-sweep-selection-actions .review-captions-btn {
-  min-height: 28px;
-  padding: 3px 8px;
+  min-height: 26px;
+  padding: 2px 8px;
+  border-color: var(--border-soft);
+  background: transparent;
 }
 
 .generate-sweep-list {
@@ -724,9 +756,9 @@
   min-height: 38px;
   padding: 8px 9px;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
-  background: var(--panel-soft);
+  background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
   font-size: 13px;
   cursor: pointer;
 }
@@ -737,7 +769,9 @@
 }
 
 .generate-sweep-row:has(input:checked) {
-  border-color: color-mix(in srgb, var(--border) 48%, var(--accent) 52%);
+  border-color: color-mix(in srgb, var(--border) 72%, var(--accent) 28%);
+  background: color-mix(in srgb, var(--panel-soft) 92%, var(--accent) 8%);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .generate-sweep-row input {
@@ -798,7 +832,24 @@
 }
 
 .generate-references {
-  padding-top: 0;
+  padding-top: 4px;
+}
+
+.generate-conditioning-heading strong,
+.generate-inspector-heading strong {
+  letter-spacing: .01em;
+}
+
+.generate-inspector-heading {
+  padding-bottom: 12px;
+}
+
+.generate-output-settings .generate-field > span {
+  color: color-mix(in srgb, var(--text) 82%, var(--muted) 18%);
+}
+
+.generate-sweep-selection-group .generate-empty-inline {
+  font-size: 12px;
 }
 
 .generate-results {

@@ -105,6 +105,7 @@ def test_test_generations_uses_training_pane_and_core_controls():
     assert ".test-generations-setup-options" in css
     assert 'id="test-generations-files-count"' in html
     assert 'id="test-generations-sessions-count"' in html
+    assert 'id="test-generations-clear-sessions-btn"' in html
     assert "countEl.textContent = String(count)" in script
     assert "countEl.textContent = String(items.length + queued.length)" in script
     assert 'class="test-generations-library"' in html
@@ -213,6 +214,22 @@ def test_test_activity_primary_click_uses_current_set_unless_target_is_explicit(
 
     pane = script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
     assert "launchFolder = owningSetFolder((state && state.folder) || '');" in pane
+
+def test_test_generation_archive_lifecycle_is_visible_and_clearable():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    folder_state = (ROOT / "tool" / "js" / "folder_state.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-clear-sessions-btn"' in html
+    assert "function clearTestSessions()" in script
+    assert "request('test_clear_sessions', {})" in script
+    assert "function lastTrainingArchiveText()" in script
+    assert "state.lastTrainingArchive" in script
+    assert "last_training_archive" in folder_state
+    assert 'operation == "test_clear_sessions"' in backend
+    assert "def clear_sessions(folder_path):" in backend
+
 
 def test_test_generation_sessions_and_candidate_removal_contract():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

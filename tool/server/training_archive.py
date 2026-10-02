@@ -9,6 +9,8 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .execution_queue import lane_snapshot as execution_lane_snapshot
+from .epoch_test_bench import clear_sessions as clear_test_sessions, list_sessions as list_test_sessions
+from .folder_state_store import read_folder_state, write_folder_state_atomic
 from .training_action import read_action
 from .training_history import all_history_payload, clear_history_job
 from .training_run_manifest import read_run_manifest, record_archive_metadata
@@ -23,6 +25,23 @@ ARCHIVABLE_STATUSES = {"completed", "finished_early", "failed", "stopped", "inte
 
 def archive_root():
     return Path(app_config.FS_ROOT) / "output" / "archive"
+
+
+def _sibling_output_directories(output_root, run_dir):
+    return [
+        path for path in Path(output_root).iterdir()
+        if path.name != ".webcap"
+        and path.is_dir()
+        and not path.is_symlink()
+        and path.resolve() != Path(run_dir).resolve()
+    ]
+
+
+def _record_last_training_archive(folder_path, archive_fact):
+    state_path = Path(folder_path) / ".webcap_state.json"
+    state = read_folder_state(state_path)
+    state["last_training_archive"] = dict(archive_fact)
+    write_folder_state_atomic(state_path, state)
 
 
 def _safe_archive_name(value):
@@ -141,10 +160,7 @@ def _context(folder, job_id):
     targeted_active = [candidate.name for candidate, _sidecar, _payload in staged if candidate.name in active_test]
     if targeted_active:
         raise RuntimeError("Staged Test candidates are still referenced by active Test work: " + ", ".join(targeted_active))
-    sibling_outputs = [
-        path for path in output_root.iterdir()
-        if path.is_dir() and not path.is_symlink() and path.resolve() != run_dir
-    ]
+    sibling_outputs = _sibling_output_directories(output_root, run_dir)
     related = [
         job for job in all_history_payload(folder=folder).get("jobs") or []
         if str(job.get("id") or "") != str(job_id)
@@ -204,6 +220,7 @@ def preview(folder, job_id):
         "epochCount": len(context["epochs"]),
         "globalStepCount": len(context["globalSteps"]),
         "stagedCandidateCount": len(context["staged"]),
+        "testSessionCount": len(list_test_sessions(app_config.safe_join_fs_root(folder))),
         "relatedRunCount": len(context["relatedRuns"]),
         "siblingOutputCount": len(context["siblingOutputs"]),
         "willRemoveActionRoot": not context["siblingOutputs"],
@@ -264,11 +281,12 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
     if destination.exists() or destination.is_symlink():
         raise FileExistsError("Archive destination already exists: " + destination_name)
 
+    archived_at = time.time()
     record_archive_metadata(
         context["runDir"],
         context["actionId"],
         {
-            "archivedAt": time.time(),
+            "archivedAt": archived_at,
             "archiveName": destination_name,
             "sourceJobId": str(job_id),
             "sourceFolder": str(folder),
@@ -297,8 +315,12 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
     action_removed = False
     if not context["siblingOutputs"]:
         output_root = context["outputRoot"]
-        if any(output_root.iterdir()):
-            raise RuntimeError("Managed action output contains unexpected residual artifacts after archival.")
+        unexpected = [path for path in output_root.iterdir() if path.name != ".webcap"]
+        if unexpected:
+            raise RuntimeError(
+                "Managed action output contains unexpected residual artifacts after archival: "
+                + ", ".join(sorted(path.name for path in unexpected))
+            )
         shutil.rmtree(context["actionRoot"])
         action_removed = True
         try:
@@ -306,13 +328,26 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
         except OSError:
             pass
 
-    clear_history_job(app_config.safe_join_fs_root(folder), job_id)
+    set_folder = app_config.safe_join_fs_root(folder)
+    clear_history_job(set_folder, job_id)
+    last_training_archive = {
+        "archivedAt": archived_at,
+        "archiveName": destination_name,
+        "runName": str(context["run"].get("runName") or ""),
+        "stage": str(context["run"].get("stages") or ""),
+        "selectedEpoch": context["selectedEpoch"],
+        "productionFileName": context["production"].name,
+    }
+    _record_last_training_archive(set_folder, last_training_archive)
+    removed_test_sessions = clear_test_sessions(set_folder)
     return {
         "archiveName": destination_name,
         "archivePath": str(destination),
         "selectedEpoch": context["selectedEpoch"],
         "retainedAlternateEpochs": retained,
         "removedStagedCandidates": len(context["staged"]),
+        "removedTestSessions": removed_test_sessions,
+        "lastTrainingArchive": last_training_archive,
         "actionRemoved": action_removed,
     }
 

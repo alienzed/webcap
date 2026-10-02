@@ -838,6 +838,14 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_delete_session":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return delete_session(folder_path, criteria.get("session"))
+    if operation == "test_clear_sessions":
+        deleted = clear_sessions(folder_path)
+        return {
+            "operation": "test_clear_sessions",
+            "deleted": deleted,
+            "sessions": [],
+            "latest": _latest_status(folder_path),
+        }
     if operation == "test_rating_summary":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return rating_summary(folder_path, model_id=criteria.get("modelId"))
@@ -1980,6 +1988,48 @@ def stop(folder_path, session_name=None):
     return _sync_inference_session(session_directory)
 
 
+def _invalidate_recent_session_caches():
+    _recent_sets_cache["items"] = []
+    _recent_sets_cache["expires"] = 0.0
+    _recent_prompts_cache["items"] = []
+    _recent_prompts_cache["root"] = None
+    _recent_prompts_cache["expires"] = 0.0
+
+
+def _all_owned_session_directories(folder_path):
+    sessions = []
+    seen_paths = set()
+    for root in _session_roots(folder_path):
+        if not root.is_dir() or root.is_symlink():
+            continue
+        for session in root.iterdir():
+            if session.is_symlink() or not session.is_dir() or not (session / "test.json").is_file():
+                continue
+            key = str(session.resolve())
+            if key in seen_paths:
+                continue
+            payload = _read_status(session) or {}
+            if not _session_belongs_to_folder(folder_path, session, payload):
+                continue
+            seen_paths.add(key)
+            sessions.append(session)
+    return sessions
+
+
+def clear_sessions(folder_path):
+    sessions = _all_owned_session_directories(folder_path)
+    active = [session.name for session in sessions if _session_has_nonterminal_jobs(session)]
+    if active:
+        raise RuntimeError(
+            "Cannot clear Test Generations sessions while active work remains: " + ", ".join(sorted(active))
+        )
+    for session in sessions:
+        shutil.rmtree(session)
+    if sessions:
+        _invalidate_recent_session_caches()
+    return len(sessions)
+
+
 def delete_session(folder_path, session_name):
     session = _session_directory(folder_path, session_name)
     session_payload = _read_status(session) or {}
@@ -1987,6 +2037,7 @@ def delete_session(folder_path, session_name):
     if isinstance(session_payload.get("inferenceJobs"), list) and _session_has_nonterminal_jobs(session):
         raise RuntimeError("Cannot delete an active Test Generations session. Stop it first.")
     shutil.rmtree(session)
+    _invalidate_recent_session_caches()
     return {
         "operation": "test_delete_session",
         "deleted": Path(session_name).name,

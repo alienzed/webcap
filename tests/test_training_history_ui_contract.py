@@ -62,13 +62,17 @@ def test_training_history_exposes_finalize_and_archive_lifecycle():
     assert 'data-training-history-tab="history"' in html
     assert 'data-training-history-tab="archive"' in html
     assert 'id="training-archive-modal"' in html
-    assert "Finalize &amp; Archive" in script
+    assert 'data-training-history-finalize="' in script
+    assert '">Archive</button>' in script
     assert "openTrainingArchiveModal(" in workspace
     assert "/fs/training_archive/preview" in app
     assert "/fs/training_archive/finalize" in app
     assert "Selected epoch has no recorded production LoRA" in backend
     assert "retainedAlternateEpochs" in backend
     assert "removedStagedCandidates" in backend
+    assert "removedTestSessions" in backend
+    assert '"last_training_archive"' in backend
+    assert 'path.name != ".webcap"' in backend
 
 
 def test_finalize_archive_uses_staged_candidate_folder_as_retention_truth_and_surfaces_legacy_archive_errors():
@@ -85,6 +89,7 @@ def test_finalize_archive_uses_staged_candidate_folder_as_retention_truth_and_su
     assert "preview.availableAlternateCandidates" in script
     assert "candidate.fileName" in script
     assert "No staged candidate LoRAs available to retain." in script
+    assert "preview.testSessionCount" in script
     assert "Finalized and archived, but Archive refresh failed:" in script
     assert ".training-archive-alternate small" in css
 

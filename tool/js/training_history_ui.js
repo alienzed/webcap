@@ -243,7 +243,7 @@ function renderTrainingHistory() {
         '<button type="button" class="training-history-details-toggle" data-training-history-details="' + escapeHtml(job.id || '') + '" title="' + (detailsOpen ? 'Hide run details' : 'Show run details') + '" aria-label="' + (detailsOpen ? 'Hide run details' : 'Show run details') + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '">' + (detailsOpen ? '&#9652;' : '&#9662;') + '</button>' +
       '</div>' +
       '<div class="training-history-actions">' +
-       (selectedEpochLabel ? '<button type="button" class="training-btn training-history-finalize" data-training-history-finalize="' + escapeHtml(job.id || '') + '">Finalize &amp; Archive</button>' : '') +
+       (selectedEpochLabel ? '<button type="button" class="training-btn training-history-finalize" data-training-history-finalize="' + escapeHtml(job.id || '') + '">Archive</button>' : '') +
        (job.logAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show run log" aria-label="Show run log">&#128196;</button>' : '') +
        (job.candidateRunAvailable ? '<button type="button" class="training-history-action" data-training-history-candidates="' + escapeHtml(job.id || '') + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
        (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Continue captured run" aria-label="Continue captured run">&#8635;</button>' : '') +
@@ -344,7 +344,7 @@ function openTrainingArchiveModal(jobId) {
       els.archiveRecap.innerHTML =
         '<div><strong>Production keeper:</strong> Epoch ' + escapeHtml(String(preview.selectedEpoch && preview.selectedEpoch.epoch || '')) + ' · ' + escapeHtml(preview.productionFileName || '') + '</div>' +
         '<div><strong>Training cleanup:</strong> ' + escapeHtml(String(preview.epochCount || 0)) + ' epoch folders · ' + escapeHtml(String(preview.globalStepCount || 0)) + ' global-step folders</div>' +
-        '<div><strong>Staged Test candidates:</strong> ' + escapeHtml(String(preview.stagedCandidateCount || 0)) + ' will be removed; completed Test sessions are kept.</div>' +
+        '<div><strong>Test cleanup:</strong> ' + escapeHtml(String(preview.stagedCandidateCount || 0)) + ' staged candidate(s) · ' + escapeHtml(String(preview.testSessionCount || 0)) + ' session(s) will be cleared.</div>' +
         '<div><strong>Related runs:</strong> ' + escapeHtml(String(preview.relatedRunCount || 0)) + (preview.siblingOutputCount ? ' · ' + escapeHtml(String(preview.siblingOutputCount)) + ' sibling output(s) remain' : ' · this is the last managed output') + '</div>';
       var alternateCandidates = Array.isArray(preview.availableAlternateCandidates) ? preview.availableAlternateCandidates : [];
       els.archiveAlternates.innerHTML = alternateCandidates.length
@@ -383,6 +383,9 @@ function finalizeTrainingArchive() {
   }).then(function (payload) {
     closeTrainingArchiveModal();
     trainingWorkspaceState.archivesLoaded = false;
+    if (payload.archive && payload.archive.lastTrainingArchive && typeof state === 'object' && state) {
+      state.lastTrainingArchive = JSON.parse(JSON.stringify(payload.archive.lastTrainingArchive));
+    }
     setStatus('Finalized and archived ' + String(payload.archive && payload.archive.archiveName || '') + '.');
     return refreshTrainingHistory(true).then(function () {
       return loadTrainingArchives(true);

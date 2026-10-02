@@ -1097,6 +1097,19 @@
     });
   }
 
+  function lastTrainingArchiveText() {
+    var archive = state && state.lastTrainingArchive && typeof state.lastTrainingArchive === 'object'
+      ? state.lastTrainingArchive
+      : null;
+    if (!archive) return '';
+    var parts = ['Last archived'];
+    var epoch = Number(archive.selectedEpoch || 0);
+    if (epoch > 0) parts.push('Epoch ' + Math.round(epoch));
+    var archivedAt = Number(archive.archivedAt || 0);
+    if (archivedAt > 0) parts.push(new Date(archivedAt * 1000).toLocaleString());
+    return parts.join(' · ');
+  }
+
   function stagedFileParts(fileName) {
     var name = String(fileName || '');
     var match = name.match(/^(.*)__epoch(\d+)\.safetensors$/i);
@@ -1169,6 +1182,18 @@
     if (countEl) countEl.textContent = String(count);
     if (!host) return;
     host.innerHTML = '';
+
+    var archiveText = lastTrainingArchiveText();
+    if (archiveText) {
+      var archiveFact = document.createElement('div');
+      archiveFact.className = 'test-generations-library-empty test-generations-archive-fact';
+      archiveFact.textContent = archiveText;
+      var archive = state && state.lastTrainingArchive && typeof state.lastTrainingArchive === 'object'
+        ? state.lastTrainingArchive
+        : {};
+      if (archive.productionFileName) archiveFact.title = 'Production LoRA: ' + String(archive.productionFileName);
+      host.appendChild(archiveFact);
+    }
 
     var baseRow = document.createElement('div');
     baseRow.className = 'test-generations-staged-row test-generations-base-row';
@@ -1332,6 +1357,17 @@
     if (countEl) countEl.textContent = String(items.length + queued.length);
     var clearBtn = el('test-generations-clear-queue-btn');
     if (clearBtn) clearBtn.classList.toggle('hidden', !queued.length);
+    var clearSessionsBtn = el('test-generations-clear-sessions-btn');
+    if (clearSessionsBtn) {
+      var hasActiveSession = items.some(function (session) {
+        return session && (session.status === 'running' || session.status === 'stopping' || session.status === 'starting');
+      });
+      clearSessionsBtn.classList.toggle('hidden', !items.length);
+      clearSessionsBtn.disabled = hasActiveSession;
+      clearSessionsBtn.title = hasActiveSession
+        ? 'Stop active Test sessions before clearing history'
+        : 'Delete all Test session history for this Set';
+    }
     if (!host) return;
 
     var activeItems = items.filter(function (session) {
@@ -1630,6 +1666,20 @@
 
   function clearQueuedTests() {
     return request('test_queue_clear', { modelId: currentTestModelId() }).then(function () { return refreshSessions(); });
+  }
+
+  function clearTestSessions() {
+    if (!window.confirm('Clear all Test session history for this Set? Generated session results will be deleted.')) {
+      return Promise.resolve();
+    }
+    return request('test_clear_sessions', {}).then(function () {
+      currentSession = '';
+      currentSessionFolder = '';
+      currentSessionModel = '';
+      showSessionError = false;
+      renderStatus({ status: 'idle' });
+      return refreshSessions();
+    });
   }
 
   function formatElapsedMs(milliseconds) {
@@ -3209,6 +3259,11 @@
     });
     el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
+    el('test-generations-clear-sessions-btn').onclick = function () {
+      var button = this;
+      button.disabled = true;
+      clearTestSessions().catch(showError).then(function () { button.disabled = false; });
+    };
     el('test-generations-view-grid-btn').onclick = function () {
       setResultsView('grid');
     };

@@ -16,6 +16,9 @@ function sanitizeFolderState(data) {
   var testGenerationByModel = (src.test_generation_by_model && typeof src.test_generation_by_model === 'object')
     ? JSON.parse(JSON.stringify(src.test_generation_by_model))
     : {};
+  var lastTrainingArchive = (src.last_training_archive && typeof src.last_training_archive === 'object' && !Array.isArray(src.last_training_archive))
+    ? JSON.parse(JSON.stringify(src.last_training_archive))
+    : {};
   var testGenerationMegapixels = Number(testGenerationSettings.megapixels);
   var testGenerationDuration = Number(testGenerationSettings.duration);
   var testGenerationSelectedFiles = Array.isArray(testGenerationSettings.selectedFiles)
@@ -196,6 +199,7 @@ function sanitizeFolderState(data) {
       selectedFiles: testGenerationSelectedFiles
     },
     test_generation_by_model: testGenerationByModel,
+    last_training_archive: lastTrainingArchive,
     annotate_strip_visible: !!src.annotate_strip_visible,
     caption_helper_panel_collapsed: !!src.caption_helper_panel_collapsed,
     media_filters: {
@@ -415,6 +419,9 @@ function snapshotFolderStateFromDom() {
     test_generation_by_model: (state.testGenerationByModel && typeof state.testGenerationByModel === 'object')
       ? JSON.parse(JSON.stringify(state.testGenerationByModel))
       : {},
+    last_training_archive: (state.lastTrainingArchive && typeof state.lastTrainingArchive === 'object')
+      ? JSON.parse(JSON.stringify(state.lastTrainingArchive))
+      : {},
     annotate_strip_visible: !!window.annotateStripVisible,
     caption_helper_panel_collapsed: !!window.captionHelperPanelCollapsed,
     media_filters: mediaFilters,
@@ -458,6 +465,9 @@ function applyFolderStateToDom(folderState) {
     : {};
   state.testGenerationByModel = (clean.test_generation_by_model && typeof clean.test_generation_by_model === 'object')
     ? JSON.parse(JSON.stringify(clean.test_generation_by_model))
+    : {};
+  state.lastTrainingArchive = (clean.last_training_archive && typeof clean.last_training_archive === 'object')
+    ? JSON.parse(JSON.stringify(clean.last_training_archive))
     : {};
   state.mutatedSet = new Set(Array.isArray(clean.mutated_media_keys) ? clean.mutated_media_keys : []);
   state.mutatedByMediaSource = {};

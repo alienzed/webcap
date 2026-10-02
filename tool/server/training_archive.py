@@ -51,8 +51,7 @@ def _global_step_directories(run_dir):
 
 
 def _staged_candidates(folder, job_id, stage):
-    set_name = PurePosixPath(str(folder or "").replace("\\", "/")).name
-    root, parts = test_copy_destination(stage, set_name)
+    root, parts = test_copy_destination(stage, folder)
     directory = root.joinpath(*parts)
     if not directory.exists():
         return []

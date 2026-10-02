@@ -495,14 +495,10 @@ def _advance_queue():
                 _release_gpu()
             return None
         except Exception:
-            _set_backlog_wait_reason("Waiting for Prompt Assistant / Director to release the shared GPU.")
-            if execution_resource_owner() == GPU_RESERVATION_OWNER:
-                _release_gpu()
-            _logger.debug(
-                "Inference is waiting for the retained Prompt Assistant / Director model to yield the GPU.",
-                exc_info=True,
+            _logger.exception(
+                "Could not confirm Prompt Assistant / Director model cleanup before Inference; "
+                "proceeding rather than blocking on runtime uncertainty."
             )
-            return None
 
         _set_backlog_wait_reason("")
         backlog_ids = {

@@ -12,7 +12,7 @@
     sceneSavePromises: {},
     sceneSaveErrors: {},
     generationJobs: {},
-    generationPolls: {},
+    generationReceipts: {},
     newTakeCounts: {},
     sequenceExport: null,
     sequenceEncodingWarnings: [],
@@ -3891,7 +3891,7 @@
       storyState.sequenceWarningsVisible = false;
       storyState.newTakeCounts = {};
       storyState.generationJobs = {};
-      Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
+      Object.keys(storyState.generationReceipts).forEach(clearGenerationReceipt);
       syncStoryboardGenerationActivity();
       return refreshLibrary().then(function () {
         renderStory();
@@ -3924,7 +3924,7 @@
         storyState.newTakeCounts = {};
         storyState.activeSceneId = '';
         storyState.generationJobs = {};
-        Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);
+        Object.keys(storyState.generationReceipts).forEach(clearGenerationReceipt);
         syncStoryboardGenerationActivity();
       }
       return refreshLibrary();
@@ -4697,20 +4697,14 @@
       storyState.generationJobs[job.jobId] = job;
       reportGenerationStatus(job.sceneId, job, previousJob);
       if (changed) syncSceneTakeDom(job.sceneId);
-      if (generationJobIsExecuting(job)) {
-        if (!generationJobIsExecuting(previousJob)) clearGenerationPoll(job.jobId);
-        pollGeneration(storyId, job.jobId);
-      }
     });
 
     Object.keys(storyState.generationJobs).forEach(function (jobId) {
       var cachedJob = storyState.generationJobs[jobId];
       if (!cachedJob || String(cachedJob.storyId || '') !== storyId || !generationJobIsActive(cachedJob) || seenJobIds[jobId]) return;
       // The shared snapshot contains active queue work only. Missing means the job
-      // may have just become terminal, so replace any stale timer with one immediate
-      // receipt check instead of waiting for the cached status cadence.
-      clearGenerationPoll(jobId);
-      pollGeneration(storyId, jobId, 0);
+      // may have just become terminal, so reconcile its one-shot receipt.
+      reconcileGenerationReceipt(storyId, jobId);
     });
 
     syncStoryboardGenerationActivity();
@@ -4885,64 +4879,60 @@
     }
   }
 
-  function clearGenerationPoll(jobId) {
-    var timer = storyState.generationPolls[jobId];
-    if (timer) window.clearTimeout(timer);
-    delete storyState.generationPolls[jobId];
+  function clearGenerationReceipt(jobId) {
+    delete storyState.generationReceipts[jobId];
   }
 
-  function pollGeneration(storyId, jobId, delayOverride) {
-    if (storyState.generationPolls[jobId]) return;
-    var current = storyState.generationJobs[jobId];
-    var delay = delayOverride == null
-      ? (generationJobIsExecuting(current) ? 2000 : 8000)
-      : Math.max(0, Number(delayOverride) || 0);
-    storyState.generationPolls[jobId] = window.setTimeout(function () {
-      delete storyState.generationPolls[jobId];
-      generationRequest(null, 'job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
-        var job = payload.job;
-        var previousJob = storyState.generationJobs[jobId] || null;
-        storyState.generationJobs[jobId] = job;
-        reportGenerationStatus(job.sceneId, job, previousJob);
-        syncStoryboardGenerationActivity();
+  function reconcileGenerationReceipt(storyId, jobId) {
+    if (storyState.generationReceipts[jobId]) return storyState.generationReceipts[jobId];
 
-        if (generationJobIsActive(job)) {
-          if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(job.sceneId);
-          pollGeneration(storyId, jobId);
-          return;
+    var pending = generationRequest(null, 'job=' + encodeURIComponent(jobId) + '&consume=1').then(function (payload) {
+      var job = payload.job;
+      var previousJob = storyState.generationJobs[jobId] || null;
+      storyState.generationJobs[jobId] = job;
+      reportGenerationStatus(job.sceneId, job, previousJob);
+      syncStoryboardGenerationActivity();
+
+      if (generationJobIsActive(job)) {
+        if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(job.sceneId);
+        return job;
+      }
+
+      delete storyState.generationJobs[jobId];
+      syncStoryboardGenerationActivity();
+
+      if (job.status === 'failed') {
+        if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(job.sceneId);
+        throw new Error(job.error || 'Storyboard generation failed.');
+      }
+
+      if (job.status === 'stopped' || job.status === 'cancelled') {
+        if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(job.sceneId);
+        return job;
+      }
+
+      if (job.status === 'completed') {
+        if (!storyState.story || storyState.story.id !== storyId) {
+          return refreshLibrary();
         }
+        return request(null, 'story=' + encodeURIComponent(storyId)).then(function (storyPayload) {
+          mergeFetchedSceneTakeState(storyId, job.sceneId, storyPayload.story);
+          markSceneNewTake(job.sceneId);
+          setSaveState('Saved');
+          return job;
+        });
+      }
 
-        delete storyState.generationJobs[jobId];
-        clearGenerationPoll(jobId);
-        syncStoryboardGenerationActivity();
+      throw new Error('Storyboard generation returned unknown status: ' + String(job.status || 'empty'));
+    }).catch(function (err) {
+      reportError(err);
+    }).then(function (result) {
+      clearGenerationReceipt(jobId);
+      return result;
+    });
 
-        if (job.status === 'failed') {
-          if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(job.sceneId);
-          throw new Error(job.error || 'Storyboard generation failed.');
-        }
-
-        if (job.status === 'stopped' || job.status === 'cancelled') {
-          if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(job.sceneId);
-          return;
-        }
-
-        if (job.status === 'completed') {
-          if (!storyState.story || storyState.story.id !== storyId) {
-            return refreshLibrary();
-          }
-          return request(null, 'story=' + encodeURIComponent(storyId)).then(function (storyPayload) {
-            mergeFetchedSceneTakeState(storyId, job.sceneId, storyPayload.story);
-            markSceneNewTake(job.sceneId);
-            setSaveState('Saved');
-          });
-        }
-
-        throw new Error('Storyboard generation returned unknown status: ' + String(job.status || 'empty'));
-      }).catch(function (err) {
-        clearGenerationPoll(jobId);
-        reportError(err);
-      });
-    }, delay);
+    storyState.generationReceipts[jobId] = pending;
+    return pending;
   }
 
   function refreshGenerationQueue(storyId) {
@@ -4950,7 +4940,7 @@
     Object.keys(storyState.generationJobs).forEach(function (jobId) {
       var cachedJob = storyState.generationJobs[jobId];
       if (cachedJob && String(cachedJob.storyId || '') === storyId) return;
-      clearGenerationPoll(jobId);
+      clearGenerationReceipt(jobId);
       delete storyState.generationJobs[jobId];
     });
     if (!storyId) {
@@ -4970,14 +4960,10 @@
       Object.keys(storyState.generationJobs).forEach(function (jobId) {
         var cachedJob = storyState.generationJobs[jobId];
         if (!cachedJob || String(cachedJob.storyId || '') !== storyId || !generationJobIsActive(cachedJob) || seenJobIds[jobId]) return;
-        clearGenerationPoll(jobId);
-        pollGeneration(storyId, jobId, 0);
+        reconcileGenerationReceipt(storyId, jobId);
       });
       syncStoryboardGenerationActivity();
       syncPlanReplacementControls();
-      jobs.forEach(function (job) {
-        if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);
-      });
       return payload.queue;
     });
   }
@@ -5008,7 +4994,6 @@
       syncStoryboardGenerationActivity();
       syncPlanReplacementControls();
       if (storyState.story && storyState.story.id === storyId) syncSceneTakeDom(sceneId);
-      if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);
       return window.refreshInferenceQueue().then(function () {
         return job;
       });

@@ -1321,6 +1321,21 @@ def test_confirmed_live_provider_hold_releases_when_provider_becomes_unverifiabl
         assert inference_runner._provider_runtime_holds == set()
 
 
+def test_unknown_provider_status_never_becomes_gpu_blocker(inference_root, monkeypatch):
+    execution_queue._resource_owner = inference_runner.GPU_RESERVATION_OWNER
+    inference_runner._hold_live_provider_runtime("provider-unknown")
+    monkeypatch.setattr(
+        inference_runtime,
+        "read_job",
+        lambda _provider_id: {"status": "mystery"},
+    )
+
+    assert inference_runner._reconcile_live_provider_runtime_holds() is True
+    assert execution_queue.resource_owner() == ""
+    with inference_runner._provider_runtime_hold_lock:
+        assert inference_runner._provider_runtime_holds == set()
+
+
 def test_inference_enqueue_stays_queued_while_shared_gpu_is_busy(inference_root, monkeypatch):
     execution_queue._resource_owner = "training"
     started = []

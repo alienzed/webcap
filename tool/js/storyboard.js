@@ -5031,10 +5031,7 @@
       return window.refreshInferenceQueue().then(function () {
         return payload;
       });
-    }).catch(function (err) {
-      reportError(err);
-      throw err;
-    }).finally(function () {
+    }).catch(reportError).finally(function () {
       button.disabled = false;
       button.textContent = 'Cancel Takes';
       syncPlanReplacementControls();

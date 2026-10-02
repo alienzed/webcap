@@ -82,6 +82,33 @@ def test_execution_queue_preserves_fifo_and_snapshots_payload(queue_root):
     assert stored["payload"] == {"prompt": "one", "nested": {"value": 1}}
 
 
+def test_fresh_inference_enqueue_resumes_idle_paused_lane(queue_root):
+    execution_queue.pause_lane("inference")
+    job = execution_queue.enqueue("inference", {"request": {"prompt": "run now"}})
+
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+
+    assert snapshot["paused"] is False
+    assert snapshot["pauseReason"] == ""
+    claimed = execution_queue.claim_next("inference")
+    assert claimed["id"] == job["id"]
+
+
+def test_inference_backlog_enqueue_does_not_resume_idle_paused_lane(queue_root):
+    execution_queue.pause_lane("inference")
+    job = execution_queue.enqueue(
+        "inference",
+        {"request": {"prompt": "later"}},
+        initial_status="backlog",
+    )
+
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+
+    assert snapshot["paused"] is True
+    assert snapshot["pauseReason"] == "Queue paused by the user."
+    assert execution_queue.claim_next("inference", runnable_backlog_ids={job["id"]}) is None
+
+
 def test_execution_queue_pause_resume_claim_and_reorder(queue_root):
     first = execution_queue.enqueue("takes", {"n": 1})
     second = execution_queue.enqueue("takes", {"n": 2})

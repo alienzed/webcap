@@ -373,7 +373,7 @@
   }
 
   function directorJobPollDelay(job) {
-    return String(job && job.status || '') === 'queued' ? 2000 : 1000;
+    return String(job && job.status || '') === 'queued' ? 3000 : 1500;
   }
 
   function directorQueueSnapshot(includeTerminal) {
@@ -1249,7 +1249,7 @@
     }).then(function () {
       if (!directorActivityActive()) return;
       if (storyState.director.activityTimer) clearTimeout(storyState.director.activityTimer);
-      storyState.director.activityTimer = setTimeout(refreshDirectorActivity, 1500);
+      storyState.director.activityTimer = setTimeout(refreshDirectorActivity, 2500);
     });
   }
 

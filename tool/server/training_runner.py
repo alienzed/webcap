@@ -1970,12 +1970,10 @@ def _launch_next_queued_job(state):
         release_execution_resource(TRAINING_RESOURCE_OWNER)
         return
     except Exception:
-        release_execution_resource(TRAINING_RESOURCE_OWNER)
-        _logger.debug(
-            "Training is waiting for the retained Prompt Assistant / Director model to yield the GPU.",
-            exc_info=True,
+        _logger.exception(
+            "Could not confirm Prompt Assistant / Director model cleanup before Training; "
+            "proceeding rather than blocking on runtime uncertainty."
         )
-        return
 
     if not _prepare_comfyui_for_training():
         release_execution_resource(TRAINING_RESOURCE_OWNER)

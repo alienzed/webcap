@@ -3860,6 +3860,7 @@
     }).then(function () {
       if (requestId !== storyState.openStoryRequestId) return null;
       renderStory();
+      syncDirectorToolsUi();
       if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();
       setSaveState('Saved');
       return refreshSequenceExport(storyId);

@@ -18,6 +18,8 @@
   var selectedCandidates = null;
   var pendingActivitySession = '';
   var queuedTestJobs = [];
+  var trackedTestInferenceSessions = Object.create(null);
+  var pendingTestCompletionChecks = Object.create(null);
   var showSessionError = false;
   var reportedFailureKeys = new Set();
   var debouncedPromptSave = debounceCreate(500);
@@ -69,6 +71,82 @@
           throw new Error(payload && payload.error ? payload.error : 'Test Generations request failed.');
         }
         return payload;
+      });
+    });
+  }
+
+  function requestForFolder(folder, operation, criteria) {
+    var body = {
+      folder: owningSetFolder(folder),
+      operation: operation
+    };
+    var resolvedCriteria = criteria ? Object.assign({}, criteria) : {};
+    if (Object.keys(resolvedCriteria).length) body.criteria = resolvedCriteria;
+    return fetch('/fs/test_generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Test Generations request failed.');
+        }
+        return payload;
+      });
+    });
+  }
+
+  function testInferenceSessionKey(folder, sessionId) {
+    return String(owningSetFolder(folder) || '') + '|' + String(sessionId || '');
+  }
+
+  function syncTestInferenceSnapshot(queue) {
+    if (!queue || !Array.isArray(queue.jobs)) return;
+    var current = Object.create(null);
+
+    queue.jobs.forEach(function (job) {
+      if (String(job && job.client || '') !== 'test') return;
+      var folder = String(job.folder || '').trim();
+      var sessionId = String(job.sessionId || '').trim();
+      if (!folder || !sessionId) return;
+      var key = testInferenceSessionKey(folder, sessionId);
+      current[key] = true;
+      trackedTestInferenceSessions[key] = {
+        folder: folder,
+        sessionId: sessionId,
+        modelId: String(job.modelId || ''),
+        label: String(job.label || '')
+      };
+    });
+
+    Object.keys(trackedTestInferenceSessions).forEach(function (key) {
+      if (current[key] || pendingTestCompletionChecks[key]) return;
+      var tracked = trackedTestInferenceSessions[key];
+      pendingTestCompletionChecks[key] = true;
+      requestForFolder(tracked.folder, 'test_open_session', { session: tracked.sessionId }).then(function (status) {
+        var state = String(status && status.status || '');
+        if (state === 'complete') {
+          window.recordActivityCompletion({
+            id: 'test-session:' + key,
+            kind: 'test',
+            lane: 'inference',
+            status: 'completed',
+            label: String(status.name || '').trim() || sessionLabel(tracked.sessionId),
+            folder: tracked.folder,
+            sessionId: tracked.sessionId,
+            modelId: String(status.modelId || status.model || tracked.modelId || ''),
+            finishedAt: Number(status.updatedAt || status.finishedAt || 0)
+          });
+          delete trackedTestInferenceSessions[key];
+          return;
+        }
+        if (['stopped', 'failed', 'interrupted'].indexOf(state) !== -1) {
+          delete trackedTestInferenceSessions[key];
+        }
+      }).catch(function (err) {
+        reportConsoleError('Test Generations', err);
+      }).then(function () {
+        delete pendingTestCompletionChecks[key];
       });
     });
   }
@@ -3292,6 +3370,12 @@
       button.title = expanded ? 'Close session details' : 'View frozen session settings and resolved prompt';
       button.setAttribute('aria-label', button.title);
     };
+    window.addEventListener('webcap:inference-queue-snapshot', function (event) {
+      syncTestInferenceSnapshot(event && event.detail && event.detail.queue);
+    });
+    if (typeof window.getInferenceQueueSnapshot === 'function') {
+      syncTestInferenceSnapshot(window.getInferenceQueueSnapshot());
+    }
     window.addEventListener('webcap:working-model-changed', function () {
       syncLaunchVisibility();
       syncActiveRunControls(currentStatus);

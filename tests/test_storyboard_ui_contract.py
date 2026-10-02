@@ -457,7 +457,7 @@ def test_storyboard_director_requests_use_shared_llm_queue():
 
     assert "function waitForDirectorJob(job)" in storyboard
     assert "function directorJobPollDelay(job)" in storyboard
-    assert "return String(job && job.status || '') === 'queued' ? 2000 : 1000;" in storyboard
+    assert "return String(job && job.status || '') === 'queued' ? 3000 : 1500;" in storyboard
     assert "setTimeout(resolve, directorJobPollDelay(current))" in storyboard
     assert "'/fs/director/job?job='" in storyboard
     assert "queued: 'Queued…'" in storyboard

@@ -178,7 +178,7 @@ The queue contracts remain domain-specific:
 - LLM/Director work is server-session-bound and should not become restart-recovery state.
 - GPU ownership is runtime truth and is never persisted.
 
-The current split between `.webcap/execution_queue.json` and `.webcap_training/queue.json` is transitional. The north star is one durable queue-state document for the queue intent that genuinely survives restart, while Training keeps its specialized lifecycle implementation.
+Durable Inference and Training queue intent now lives under host-local app-data `state/`. The queue implementations remain domain-specific even though their persisted state shares one lifecycle home.
 
 Do not merge unrelated lifecycle data into that file:
 
@@ -191,7 +191,7 @@ Do not merge unrelated lifecycle data into that file:
 
 Migration is incremental and must preserve working behavior.
 
-1. **Do not move live queue state merely for cleanliness.** A long/running Training queue is a hard no-touch condition for `.webcap_training/queue.json`.
+1. **Do not move live queue state merely for cleanliness.** A long/running Training queue is a hard no-touch condition for any queue-state path transition.
 2. Start with data whose deletion is already harmless, especially advisory caches.
 3. Next move small persistent bookkeeping that has one clear owner and no active-process identity.
 4. Move media-bearing temporary work only when its producer and cleanup lifecycle are explicit.
@@ -202,11 +202,13 @@ Migration is incremental and must preserve working behavior.
 
 ## 9. Current legacy roots
 
-Current code still uses several transitional locations beneath `FS_ROOT`, including:
+Current code still uses transitional locations beneath `FS_ROOT` for runtime/artifact concerns, including:
 
 - `.webcap/`;
 - `.webcap_training/`;
 - `.webcap_runtime/`.
+
+Training queue state and Recent Runs metadata no longer belong under `.webcap_training/`; they live in app-data `state/training_queue.json` and `state/recent_runs.json`.
 
 Do not add new uses of these roots. Existing uses should be classified and migrated only when their lifecycle permits it.
 

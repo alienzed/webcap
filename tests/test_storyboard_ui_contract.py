@@ -73,6 +73,9 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "set_scene_reference_from_take" in storyboard
     assert "data-reference-previous" in storyboard
     assert "data-reference-apply" in storyboard
+    assert "data-reference-dropzone" in storyboard
+    assert "Reference dropzone file input is missing." in storyboard
+    assert "input.dispatchEvent(new Event('change', { bubbles: true }))" in storyboard
     assert "data-scene-generate" in storyboard
     assert "data-scene-lora-add" in storyboard
     assert "data-scene-lora-name" in storyboard

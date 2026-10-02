@@ -91,7 +91,11 @@ def test_relaunch_archives_existing_training_log(tmp_path):
 
 
 def test_training_handoff_waits_for_positive_comfyui_work(monkeypatch):
-    monkeypatch.setattr(inference_runtime, "queue_snapshot", lambda: {"running": [["provider-1"]], "pending": []})
+    monkeypatch.setattr(
+        inference_runtime,
+        "queue_snapshot",
+        lambda: {"running": [[0, "provider-1", {}, {"client_id": "webcap-provider-1"}, []]], "pending": []},
+    )
     monkeypatch.setattr(
         inference_runtime,
         "free_cached_models",
@@ -99,6 +103,21 @@ def test_training_handoff_waits_for_positive_comfyui_work(monkeypatch):
     )
 
     assert training_runner._prepare_comfyui_for_training() is False
+
+
+def test_training_handoff_does_not_block_or_free_non_webcap_comfyui_work(monkeypatch):
+    monkeypatch.setattr(
+        inference_runtime,
+        "queue_snapshot",
+        lambda: {"running": [[0, "foreign", {}, {"client_id": "manual-client"}, []]], "pending": []},
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "free_cached_models",
+        lambda: pytest.fail("WebCap must not free non-WebCap ComfyUI work."),
+    )
+
+    assert training_runner._prepare_comfyui_for_training() is True
 
 
 def test_training_handoff_fails_open_when_comfyui_is_unavailable(monkeypatch):

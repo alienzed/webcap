@@ -262,18 +262,27 @@ def _ensure_execution_reconciled():
             if outcome is not None:
                 committed_outcomes[str(job.get("id") or "")] = outcome
 
-        # A WebCap restart does not recover provider execution. Stop any old
-        # ComfyUI work for GPU safety. Requests with no committed domain result
-        # return to inert Backlog; requests whose real product already landed
-        # are completed transiently so restart cannot duplicate that product.
+        # A WebCap restart does not recover provider execution. Stop old WebCap
+        # ComfyUI work using both our persisted IDs and ComfyUI's own queue.
+        # Provider uncertainty never becomes a durable GPU reservation.
+        provider_job_ids = set()
         for job in prior_active:
             details = job.get("details") if isinstance(job.get("details"), dict) else {}
             prompt_id = str(details.get("providerJobId") or "").strip()
-            if not prompt_id:
-                continue
+            if prompt_id:
+                provider_job_ids.add(prompt_id)
+
+        from . import inference_runtime
+        try:
+            provider_job_ids.update(inference_runtime.webcap_queue_job_ids())
+        except (ConnectionError, TimeoutError):
+            _logger.info("ComfyUI is unavailable during inference startup reconciliation; using persisted provider IDs only.")
+        except Exception:
+            _logger.exception("Could not inspect ComfyUI queue during inference startup reconciliation; using persisted provider IDs only.")
+
+        for prompt_id in sorted(provider_job_ids):
             try:
-                from .inference_runtime import cancel_job_and_wait_status
-                terminal_status = cancel_job_and_wait_status(prompt_id)
+                terminal_status = inference_runtime.cancel_job_and_wait_status(prompt_id)
                 if not terminal_status:
                     _logger.error(
                         "Old inference provider job %s did not confirm cancellation; "

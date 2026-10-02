@@ -1176,7 +1176,7 @@ def test_completed_test_session_tolerates_pruned_execution_records(tmp_path, mon
     assert payload["results"][0]["jobId"] == "pruned-job"
 
 
-def test_nonterminal_test_session_fails_loudly_for_missing_execution_record(tmp_path, monkeypatch):
+def test_nonterminal_test_session_drops_missing_execution_record(tmp_path, monkeypatch):
     configure_execution_queue(monkeypatch, tmp_path)
     session = tmp_path / bench.TEST_RESULTS_DIR / "queued-session"
     session.mkdir(parents=True)
@@ -1191,8 +1191,13 @@ def test_nonterminal_test_session_fails_loudly_for_missing_execution_record(tmp_
         "total": 1,
     })
 
-    with pytest.raises(RuntimeError, match="missing active inference job"):
-        bench.open_session(tmp_path, session.name)
+    visible = bench.open_session(tmp_path, session.name)
+
+    assert visible["status"] == "complete"
+    assert visible["queued"] == 0
+    manifest = bench._read_status(session)
+    assert manifest["inferenceJobs"] == []
+    assert manifest["total"] == 0
 
 def test_enqueue_registers_all_children_before_any_test_work_can_start(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=2)

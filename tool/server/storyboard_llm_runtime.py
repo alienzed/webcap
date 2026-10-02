@@ -29,10 +29,6 @@ class DirectorRuntimeBusy(RuntimeError):
     pass
 
 
-class DirectorGpuHoldRequired(RuntimeError):
-    pass
-
-
 _process = None
 _log_handle = None
 _server_settings_signature = None
@@ -1417,7 +1413,6 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
         if not gpu_reserved:
             _reserve_gpu()
         completed = False
-        cleanup_safe = True
         try:
             _set_activity("freeing_comfy", model_id=model_ref)
             _free_comfy_models()
@@ -1452,27 +1447,20 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             completed = True
             return result
         finally:
-            cleanup_error = None
             if not completed and not _stop_requested.is_set():
                 try:
                     if _model_status(model_id) != "unloaded":
                         _unload_model(model_id)
-                except Exception as exc:
+                except Exception:
                     if _process is not None:
                         stop_server()
                     else:
-                        cleanup_safe = False
-                        cleanup_error = DirectorGpuHoldRequired(
-                            "Director runtime could not confirm that the selected model was unloaded "
-                            "from an external llama.cpp router after a failed request. The GPU reservation is being kept "
-                            "to avoid colliding with Training or generation work. Stop/unload that router model, then "
-                            "restart WebCap before using GPU work again."
+                        _logger.exception(
+                            "Director runtime could not confirm model unload from an external llama.cpp router; "
+                            "releasing WebCap's GPU reservation rather than blocking on external runtime uncertainty."
                         )
-                        cleanup_error.__cause__ = exc
-            if cleanup_safe and not gpu_reserved:
+            if not gpu_reserved:
                 _release_gpu()
-            if cleanup_error is not None:
-                raise cleanup_error
 
 
 def _completion_result(response, model_id, allow_truncated=False):

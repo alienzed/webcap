@@ -169,9 +169,29 @@ def _context(folder, job_id):
     }
 
 
+def _staged_alternate_candidates(context):
+    rows = []
+    seen = set()
+    for candidate, _sidecar, payload in context["staged"]:
+        try:
+            epoch = int(payload.get("sourceEpoch"))
+        except (TypeError, ValueError):
+            raise RuntimeError("Staged Test provenance has no usable source epoch: " + candidate.name)
+        if epoch == context["selectedEpoch"]:
+            continue
+        if epoch not in context["epochs"]:
+            raise RuntimeError("Staged Test candidate points to an unavailable epoch: " + candidate.name)
+        if epoch in seen:
+            continue
+        seen.add(epoch)
+        rows.append({"epoch": epoch, "fileName": candidate.name})
+    rows.sort(key=lambda row: row["epoch"])
+    return rows
+
+
 def preview(folder, job_id):
     context = _context(folder, job_id)
-    alternates = sorted(epoch for epoch in context["epochs"] if epoch != context["selectedEpoch"])
+    alternates = _staged_alternate_candidates(context)
     return {
         "jobId": str(job_id),
         "folder": str(folder),
@@ -180,7 +200,8 @@ def preview(folder, job_id):
         "archiveName": context["runDir"].name,
         "selectedEpoch": context["selected"],
         "productionFileName": context["production"].name,
-        "availableAlternateEpochs": alternates,
+        "availableAlternateCandidates": alternates,
+        "availableAlternateEpochs": [row["epoch"] for row in alternates],
         "epochCount": len(context["epochs"]),
         "globalStepCount": len(context["globalSteps"]),
         "stagedCandidateCount": len(context["staged"]),
@@ -224,9 +245,10 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
     retained = sorted({int(value) for value in (retain_epochs or [])})
     if context["selectedEpoch"] in retained:
         raise ValueError("The production Selected epoch is not an archive alternate.")
-    unknown = [epoch for epoch in retained if epoch not in context["epochs"]]
+    staged_alternates = {row["epoch"] for row in _staged_alternate_candidates(context)}
+    unknown = [epoch for epoch in retained if epoch not in staged_alternates]
     if unknown:
-        raise ValueError("Requested retained epoch is unavailable: " + ", ".join(map(str, unknown)))
+        raise ValueError("Requested retained epoch is not present in the staged candidate folder: " + ", ".join(map(str, unknown)))
     for epoch in retained:
         artifacts = [
             path for path in context["epochs"][epoch].iterdir()
@@ -308,16 +330,39 @@ def list_archives():
             continue
         manifest_path = directory / "webcap-run.json"
         if not manifest_path.is_file() or manifest_path.is_symlink():
-            raise RuntimeError("Archive is missing webcap-run.json: " + directory.name)
+            rows.append({
+                "name": directory.name,
+                "invalid": True,
+                "error": "Archive is missing webcap-run.json.",
+            })
+            continue
         try:
             raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise RuntimeError("Archive manifest is unreadable: " + directory.name) from exc
+        except (OSError, json.JSONDecodeError):
+            rows.append({
+                "name": directory.name,
+                "invalid": True,
+                "error": "Archive manifest is unreadable.",
+            })
+            continue
         run_id = str(raw.get("runId") or "").strip()
-        manifest = read_run_manifest(directory, run_id)
+        try:
+            manifest = read_run_manifest(directory, run_id)
+        except (OSError, RuntimeError, ValueError) as exc:
+            rows.append({
+                "name": directory.name,
+                "invalid": True,
+                "error": "Archive manifest is invalid: " + str(exc),
+            })
+            continue
         archive = manifest.get("archive")
         if not isinstance(archive, dict):
-            raise RuntimeError("Archive manifest has no archive metadata: " + directory.name)
+            rows.append({
+                "name": directory.name,
+                "invalid": True,
+                "error": "Archive manifest has no archive metadata.",
+            })
+            continue
         rows.append({
             "name": directory.name,
             "runId": run_id,
@@ -330,5 +375,5 @@ def list_archives():
             "productionFileName": archive.get("productionFileName"),
             "retainedAlternateEpochs": archive.get("retainedAlternateEpochs") if isinstance(archive.get("retainedAlternateEpochs"), list) else [],
         })
-    rows.sort(key=lambda row: float(row.get("archivedAt") or 0), reverse=True)
+    rows.sort(key=lambda row: (bool(row.get("invalid")), -float(row.get("archivedAt") or 0), str(row.get("name") or "").lower()))
     return rows

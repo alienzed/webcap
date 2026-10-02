@@ -484,7 +484,7 @@
     }).then(function () {
       if (!wildcardDirector.busy) return;
       if (wildcardDirector.activityTimer) clearTimeout(wildcardDirector.activityTimer);
-      wildcardDirector.activityTimer = setTimeout(refreshWildcardDirectorActivity, 1500);
+      wildcardDirector.activityTimer = setTimeout(refreshWildcardDirectorActivity, 2500);
     });
   }
 
@@ -542,7 +542,7 @@
         err.jobStatus = status;
         throw err;
       }
-      return new Promise(function (resolve) { setTimeout(resolve, status === 'queued' ? 2000 : 1000); }).then(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, status === 'queued' ? 3000 : 1500); }).then(function () {
         return wildcardRequestJson('/fs/director/job?job=' + encodeURIComponent(current.jobId) + '&consume=1');
       }).then(function (payload) {
         if (!payload.job) throw new Error('Wildcard analysis job response is missing its job.');
@@ -2668,7 +2668,7 @@
     if (!isOpen()) return;
     request('test_status', { modelId: currentTestModelId() }).then(function (status) {
       syncActiveRunControls(status);
-      refreshActivityButtonIfDue(5000);
+      refreshActivityButtonIfDue(15000);
       if (status && (status.status === 'running' || status.status === 'stopping')) showSessionError = true;
       var activeSession = String(status && status.session || '');
       var selectedPreviewLive = !!(
@@ -2690,12 +2690,12 @@
 
       return previewRefresh.then(function () {
         if (status && (status.status === 'running' || status.status === 'stopping')) {
-          if (queuedTestJobs.length) refreshSessionsIfDue(5000).catch(showError);
-          pollTimer = setTimeout(pollStatus, 2000);
+          if (queuedTestJobs.length) refreshSessionsIfDue(10000).catch(showError);
+          pollTimer = setTimeout(pollStatus, 4000);
           return null;
         }
         return refreshSessions().then(function () {
-          if (queuedTestJobs.length && isOpen()) pollTimer = setTimeout(pollStatus, 5000);
+          if (queuedTestJobs.length && isOpen()) pollTimer = setTimeout(pollStatus, 8000);
         });
       });
     }).catch(showError);

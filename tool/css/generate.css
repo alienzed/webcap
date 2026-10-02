@@ -709,30 +709,68 @@
 
 .generate-sweep-list {
   display: grid;
-  gap: 4px;
-  max-height: 180px;
+  gap: 6px;
+  max-height: 240px;
   overflow: auto;
+  padding: 1px;
 }
 
 .generate-sweep-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 7px;
+  gap: 9px;
   min-width: 0;
-  padding: 5px 7px;
+  min-height: 38px;
+  padding: 8px 9px;
   overflow: hidden;
-  border: 1px solid var(--border-soft);
-  border-radius: 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   background: var(--panel-soft);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
-.generate-sweep-row span {
+.generate-sweep-row:hover {
+  border-color: color-mix(in srgb, var(--border) 55%, var(--accent) 45%);
+  background: color-mix(in srgb, var(--panel-soft) 92%, var(--accent) 8%);
+}
+
+.generate-sweep-row:has(input:checked) {
+  border-color: color-mix(in srgb, var(--border) 48%, var(--accent) 52%);
+}
+
+.generate-sweep-row input {
+  width: auto;
+}
+
+.generate-sweep-row-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.generate-sweep-row-copy strong,
+.generate-sweep-row-copy small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.generate-sweep-row-copy strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.generate-sweep-row-copy small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.generate-sweep-empty {
+  padding: 12px 9px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .generate-lora-picker-row {

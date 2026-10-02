@@ -1245,7 +1245,7 @@
   }
 
   function directorJobPollDelay(job) {
-    return String(job && job.status || '') === 'queued' ? 2000 : 1000;
+    return String(job && job.status || '') === 'queued' ? 3000 : 1500;
   }
 
   function waitForDirectorJob(job) {
@@ -1667,7 +1667,7 @@
     }).then(function () {
       if (!directorActivityActive()) return;
       if (generateState.director.activityTimer) clearTimeout(generateState.director.activityTimer);
-      generateState.director.activityTimer = setTimeout(refreshDirectorActivity, 1500);
+      generateState.director.activityTimer = setTimeout(refreshDirectorActivity, 2500);
     });
   }
 

@@ -566,6 +566,30 @@ function scheduleManagedTrainingFinish(jobId) {
 }
 
 
+function finishQueuedTrainingResume(jobId) {
+  var job = getTrainingRunnerJobById(jobId);
+  if (!job || job.status !== 'queued' || !String(job.resumeFromCheckpoint || '').trim()) {
+    setStatus('Only a queued resume can be finished without starting.');
+    return;
+  }
+  var point = job.resumePoint && typeof job.resumePoint === 'object' ? job.resumePoint : {};
+  var detail = Number(point.epoch) > 0
+    ? ' The existing checkpoint at epoch ' + Math.round(Number(point.epoch)) + ' will be kept as the final run state.'
+    : ' The existing saved checkpoint will be kept as the final run state.';
+  if (!window.confirm('Finish this queued resume now?' + detail + ' It will move to Training History without starting training again.')) return;
+  trainingRunnerRequest('/fs/training_runner/stop', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: job.id, finish: true })
+  }).then(function () {
+    setStatus('Queued resume finished and moved to Training History.');
+    refreshTrainingRunnerStatus();
+    refreshTrainingHistory(true);
+  }).catch(function (err) {
+    setStatus('Could not finish queued resume: ' + String(err && err.message ? err.message : err));
+  });
+}
+
 function cancelQueuedTrainingJob(jobId) {
   if (!window.confirm('Remove this job from the queue?')) return;
   trainingRunnerRequest('/fs/training_runner/stop', {
@@ -776,6 +800,7 @@ function buildTrainingQueueHtml(queuedJobs) {
               (queuedJob.actionPath ? '<button type="button" data-training-job-action="' + escapeHtml(queuedJob.id) + '">Open action folder</button>' : '') +
               '<button type="button" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
               '<button type="button" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>Move later</button>' +
+              (String(queuedJob.resumeFromCheckpoint || '').trim() ? '<button type="button" data-training-queue-action="finish" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Finish</button>' : '') +
               '<button type="button" class="training-runner-queue-cancel" data-training-queue-action="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Remove from queue</button>' +
             '</div>' +
           '</details>' +

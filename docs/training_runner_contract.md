@@ -37,10 +37,10 @@ Removing queue state means forgetting WebCap's queue. It does not kill external 
 
 ## State Ownership
 
-- `queue.json` owns ordered live dispatch state.
+- app-data `state/training_queue.json` owns ordered live dispatch state.
 - Each logical run under `output/runs/<set-root>/<logical-run>/` owns its captures, jobs, and output. A capture owns media, captions, inspected TOMLs, manifest, plan, and cache; its job directory owns launcher/PID/action/log/result evidence.
-- Queue and Recent Runs remain disposable state under `.webcap_training`; old state is reset rather than migrated if it cannot naturally continue from recorded paths.
-- `recent_runs.json` owns presentation history and never participates in scheduling.
+- Queue and Recent Runs are host-local persistent state under app-data `state/`; old state is reset rather than migrated if it cannot naturally continue from recorded paths.
+- app-data `state/recent_runs.json` owns presentation history and never participates in scheduling.
 - Set-local training metadata remembers optional conveniences such as the set's output group.
 
 Helpful metadata may fail independently. Only the explicit information needed to launch the next command may influence dispatch.

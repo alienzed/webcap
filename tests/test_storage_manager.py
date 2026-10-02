@@ -1026,10 +1026,11 @@ def test_generate_reference_bundle_refuses_unknown_or_symlinked_tokens(monkeypat
     assert outside.is_dir()
 
 
+
 def test_test_resolution_honors_explicit_set_folder_before_central_id_collision(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
 
-    central = tmp_path / ".webcap" / "test-generations" / "same-id"
+    central = tmp_path / "output" / "test-generations" / "same-id"
     central.mkdir(parents=True)
     _write_json(central / "test.json", {
         "status": "completed",
@@ -1037,17 +1038,16 @@ def test_test_resolution_honors_explicit_set_folder_before_central_id_collision(
         "ownerFolder": "sets/central",
     })
 
-    legacy = tmp_path / "sets" / "demo" / "test-generations" / "same-id"
-    legacy.mkdir(parents=True)
-    _write_json(legacy / "test.json", {
+    owned = tmp_path / "sets" / "demo" / "test-generations" / "same-id"
+    owned.mkdir(parents=True)
+    _write_json(owned / "test.json", {
         "status": "completed",
         "modelId": "minimax_h3",
     })
 
     resolved = storage_manager._resolve_test("sets/demo", "same-id")
 
-    assert resolved == legacy.resolve()
-
+    assert resolved == owned.resolve()
 
 def test_storage_manager_lists_and_purges_output_test_sessions(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
@@ -1078,7 +1078,8 @@ def test_storage_manager_lists_and_purges_output_test_sessions(monkeypatch, tmp_
     assert not session.exists()
 
 
-def test_storage_manager_keeps_legacy_central_test_sessions_readable(monkeypatch, tmp_path):
+
+def test_storage_manager_ignores_legacy_global_test_sessions(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     session = tmp_path / ".webcap" / "test-generations" / "legacy-central"
     session.mkdir(parents=True)
@@ -1087,19 +1088,17 @@ def test_storage_manager_keeps_legacy_central_test_sessions_readable(monkeypatch
         "modelId": "minimax_h3",
         "source": "archive/demo",
         "ownerFolder": "sets/demo",
-        "completed": 1,
-        "failed": 0,
-        "total": 1,
         "results": [],
     })
 
     items = storage_manager.overview("")["items"]["tests"]
 
-    assert any(item["id"] == "legacy-central" for item in items)
-    assert storage_manager._resolve_test("", "legacy-central") == session.resolve()
+    assert all(item["id"] != "legacy-central" for item in items)
+    with pytest.raises(FileNotFoundError):
+        storage_manager._resolve_test("", "legacy-central")
 
 
-def test_storage_manager_prefers_output_test_session_on_legacy_name_collision(monkeypatch, tmp_path):
+def test_storage_manager_uses_output_test_session_when_legacy_name_collides(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     current = tmp_path / "output" / "test-generations" / "same-id"
     legacy = tmp_path / ".webcap" / "test-generations" / "same-id"
@@ -1118,8 +1117,6 @@ def test_storage_manager_prefers_output_test_session_on_legacy_name_collision(mo
     assert len(items) == 1
     assert items[0]["meta"]["source"] == "current"
     assert storage_manager._resolve_test("", "same-id") == current.resolve()
-
-
 
 def test_storage_overview_keeps_unrelated_inventory_when_execution_queue_is_unavailable(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)

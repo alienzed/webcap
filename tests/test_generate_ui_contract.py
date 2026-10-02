@@ -34,6 +34,10 @@ def test_generate_is_first_class_static_activity():
     assert "window.refreshInferenceQueue" in script
     assert "postJson('/fs/generate'" in script
     assert "uploadReference(file)" in script
+    assert 'data-generate-reference-dropzone="first_frame"' in html
+    assert 'data-generate-reference-dropzone="last_frame"' in html
+    assert "function bindReferenceDropzones()" in script
+    assert "input.dispatchEvent(new Event('change', { bubbles: true }))" in script
 
     assert ".app-frame.workspace-generate-open > .app" in css
     assert ".generate-create-view" in css

@@ -1737,6 +1737,23 @@ def _record_unverified_runner(job, detail):
     return {"holdReason": ""}
 
 
+def _recover_queued_live_runner(job):
+    """Reattach a runner that launched before its queued state could be persisted as active."""
+    if str(job.get("status") or "") != "queued":
+        return False
+    if _job_runner_pid(job) <= 0:
+        return False
+    process_state, _detail = _inspect_job_runner(job)
+    if process_state != "running":
+        return False
+    job["runnerVerified"] = True
+    job["status"] = "starting"
+    job["stage"] = str(job.get("stage") or "starting")
+    job["updatedAt"] = time.time()
+    _logger.warning("Recovered live Training runner %s from queued restart state.", job.get("id"))
+    return True
+
+
 def _recover_dead_runner(job, detail):
     """Return a positively absent runner to an explicit paused resume state."""
     _queue_paused_job(job)
@@ -1890,6 +1907,37 @@ def _refresh_job(job):
 
 
 
+def _prepare_comfyui_for_training():
+    """Use positive ComfyUI queue state for handoff; provider uncertainty never blocks Training."""
+    from . import inference_runtime
+    try:
+        provider_queue = inference_runtime.queue_snapshot()
+    except (ConnectionError, TimeoutError):
+        _logger.info("ComfyUI is unavailable during Training handoff; proceeding without a provider hold.")
+        return True
+    except Exception:
+        _logger.exception("Could not inspect ComfyUI queue during Training handoff; proceeding rather than blocking on uncertainty.")
+        return True
+
+    running = provider_queue.get("running") or []
+    pending = provider_queue.get("pending") or []
+    if running or pending:
+        _logger.info(
+            "Training is waiting for positive ComfyUI queue activity (%d running, %d pending).",
+            len(running),
+            len(pending),
+        )
+        return False
+
+    try:
+        inference_runtime.free_cached_models()
+    except (ConnectionError, TimeoutError):
+        _logger.warning("ComfyUI became unavailable while releasing cached models before Training; proceeding.")
+    except Exception:
+        _logger.exception("ComfyUI cache release failed before Training; proceeding so the real launch failure remains visible.")
+    return True
+
+
 def _launch_next_queued_job(state):
     if state.get("queuePaused"):
         return
@@ -1920,6 +1968,10 @@ def _launch_next_queued_job(state):
         )
         return
 
+    if not _prepare_comfyui_for_training():
+        release_execution_resource(TRAINING_RESOURCE_OWNER)
+        return
+
     state["activeJobId"] = ""
     for job in queued_jobs:
         folder_path = app_config.safe_join_fs_root(job["folder"])
@@ -1932,6 +1984,9 @@ def _launch_next_queued_job(state):
 
 def _refresh_state(state):
     global _startup_reconciled
+    if not _startup_reconciled:
+        for job in state.get("jobs", []):
+            _recover_queued_live_runner(job)
     hold_reason = ""
     pause_requested = False
     recovered_jobs = []
@@ -2443,42 +2498,27 @@ def action_live_job_ids(action_id):
 
 
 def passive_status_snapshot():
-    """Read the last persisted Training scheduler state without advancing or persisting it."""
-    with _lock:
-        try:
-            state = _read_state_readonly()
-        except TrainingStateError as exc:
-            return {"ok": False, "stateError": True, "error": str(exc)}, 409
-        jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
-        active_jobs = [job for job in jobs if job.get("status") in ACTIVE_STATUSES]
-        active_job_id = str(active_jobs[0].get("id") or "") if active_jobs else ""
-        return {
-            "ok": True,
-            "activeJobId": active_job_id,
-            "queuePaused": bool(state.get("queuePaused")),
-            "queuePauseReason": str(state.get("queuePauseReason") or ""),
-            "runnerNotice": str(state.get("runnerNotice") or ""),
-            "jobs": [_public_job(job) for job in jobs],
-        }, 200
+    """Read atomically persisted Training state without waiting on live runner inspection."""
+    try:
+        state = _read_state_readonly()
+    except TrainingStateError as exc:
+        return {"ok": False, "stateError": True, "error": str(exc)}, 409
+    jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
+    active_jobs = [job for job in jobs if job.get("status") in ACTIVE_STATUSES]
+    active_job_id = str(active_jobs[0].get("id") or "") if active_jobs else ""
+    return {
+        "ok": True,
+        "activeJobId": active_job_id,
+        "queuePaused": bool(state.get("queuePaused")),
+        "queuePauseReason": str(state.get("queuePauseReason") or ""),
+        "runnerNotice": str(state.get("runnerNotice") or ""),
+        "jobs": [_public_job(job) for job in jobs],
+    }, 200
 
 
 def status_response():
-    with _lock:
-        _ensure_monitor_started()
-        try:
-            state = _read_state()
-        except TrainingStateError as exc:
-            return {"ok": False, "stateError": True, "error": str(exc)}, 409
-        _refresh_state(state)
-        _persist_reconciled_state(state)
-        return {
-            "ok": True,
-            "activeJobId": state.get("activeJobId") or "",
-            "queuePaused": bool(state.get("queuePaused")),
-            "queuePauseReason": str(state.get("queuePauseReason") or ""),
-            "runnerNotice": str(state.get("runnerNotice") or ""),
-            "jobs": [_public_job(job) for job in state.get("jobs", [])],
-        }, 200
+    _ensure_monitor_started()
+    return passive_status_snapshot()
 
 
 def clear_history_response(folder, job_id):
@@ -2499,7 +2539,9 @@ def clear_history_response(folder, job_id):
 
 
 def gpu_status_response():
-    return {"ok": True, "gpu": _gpu_snapshot()}, 200
+    gpu = _gpu_snapshot()
+    gpu["reservationOwner"] = execution_resource_owner()
+    return {"ok": True, "gpu": gpu}, 200
 
 
 def log_response(job_id, offset=0, tail=False, folder=""):

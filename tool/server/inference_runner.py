@@ -34,6 +34,7 @@ from .execution_queue import (
 EXECUTION_LANE = "inference"
 GPU_RESERVATION_OWNER = EXECUTION_LANE
 PROVIDER_CLEANUP_GUARD = "providerCleanup"
+PROVIDER_ACTIVE_STATUSES = {"pending", "in_progress"}
 
 _dispatch_lock = threading.Lock()
 _reconcile_lock = threading.Lock()
@@ -117,8 +118,15 @@ def _reconcile_live_provider_runtime_holds():
             )
             continue
         status = str(job.get("status") or "").strip().lower() if isinstance(job, dict) else ""
-        if job is not None and status not in {"completed", "failed", "cancelled"}:
+        if status in PROVIDER_ACTIVE_STATUSES:
             confirmed_live.append(provider_job_id)
+        elif job is not None and status not in {"completed", "failed", "cancelled"}:
+            _logger.error(
+                "ComfyUI returned unknown status %r for current-session provider job %s; "
+                "releasing its runtime GPU hold rather than treating unknown state as active.",
+                status,
+                provider_job_id,
+            )
 
     with _provider_runtime_hold_lock:
         _provider_runtime_holds.intersection_update(confirmed_live)
@@ -410,6 +418,14 @@ def _cancel_failed_provider(job):
         else ""
     )
     if provider_job is None or status in {"completed", "failed", "cancelled"}:
+        return True
+    if status not in PROVIDER_ACTIVE_STATUSES:
+        _logger.error(
+            "ComfyUI returned unknown status %r for failed provider job %s; "
+            "releasing the GPU reservation rather than treating unknown state as active.",
+            status,
+            provider_job_id,
+        )
         return True
 
     _hold_live_provider_runtime(provider_job_id)

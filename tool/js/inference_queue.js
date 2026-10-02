@@ -436,7 +436,7 @@
     state.timer = 0;
     state.timer = setTimeout(function () {
       refresh().then(schedule);
-    }, state.open ? 1500 : (hasActiveQueueWork() ? 2500 : 8000));
+    }, state.open ? 2000 : (hasActiveQueueWork() ? 4000 : 15000));
   }
 
   function setOpen(open) {

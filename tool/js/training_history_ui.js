@@ -298,6 +298,13 @@ function renderTrainingArchives() {
     els.archiveSummary.classList.toggle('hidden', !!rows.length || trainingWorkspaceState.historyPrimaryTab !== 'archive');
   }
   els.archiveList.innerHTML = rows.map(function (archive) {
+    if (archive.invalid) {
+      return '<div class="training-history-item is-error">' +
+        '<div class="training-history-primary"><strong>Archive issue</strong></div>' +
+        '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(archive.name || 'Unknown archive') + '</div></div>' +
+        '<div class="training-history-details"><div>' + escapeHtml(archive.error || 'Archive metadata is invalid.') + '</div></div>' +
+      '</div>';
+    }
     var summary = archive.runSummary && typeof archive.runSummary === 'object' ? archive.runSummary : {};
     var settings = [];
     if (summary.lr !== undefined) settings.push('LR ' + summary.lr);
@@ -339,11 +346,14 @@ function openTrainingArchiveModal(jobId) {
         '<div><strong>Training cleanup:</strong> ' + escapeHtml(String(preview.epochCount || 0)) + ' epoch folders · ' + escapeHtml(String(preview.globalStepCount || 0)) + ' global-step folders</div>' +
         '<div><strong>Staged Test candidates:</strong> ' + escapeHtml(String(preview.stagedCandidateCount || 0)) + ' will be removed; completed Test sessions are kept.</div>' +
         '<div><strong>Related runs:</strong> ' + escapeHtml(String(preview.relatedRunCount || 0)) + (preview.siblingOutputCount ? ' · ' + escapeHtml(String(preview.siblingOutputCount)) + ' sibling output(s) remain' : ' · this is the last managed output') + '</div>';
-      els.archiveAlternates.innerHTML = (preview.availableAlternateEpochs || []).length
-        ? preview.availableAlternateEpochs.map(function (epoch) {
-            return '<label class="training-archive-alternate"><input type="checkbox" value="' + escapeHtml(String(epoch)) + '"> Epoch ' + escapeHtml(String(epoch)) + '</label>';
+      var alternateCandidates = Array.isArray(preview.availableAlternateCandidates) ? preview.availableAlternateCandidates : [];
+      els.archiveAlternates.innerHTML = alternateCandidates.length
+        ? alternateCandidates.map(function (candidate) {
+            return '<label class="training-archive-alternate"><input type="checkbox" value="' + escapeHtml(String(candidate.epoch)) + '">' +
+              '<span>Epoch ' + escapeHtml(String(candidate.epoch)) + '</span>' +
+              '<small>' + escapeHtml(candidate.fileName || '') + '</small></label>';
           }).join('')
-        : '<div class="training-history-summary">No alternate epochs available.</div>';
+        : '<div class="training-history-summary">No staged candidate LoRAs available to retain.</div>';
       els.archiveModal.classList.remove('hidden');
       els.archiveModal.setAttribute('aria-hidden', 'false');
     })
@@ -374,7 +384,12 @@ function finalizeTrainingArchive() {
     closeTrainingArchiveModal();
     trainingWorkspaceState.archivesLoaded = false;
     setStatus('Finalized and archived ' + String(payload.archive && payload.archive.archiveName || '') + '.');
-    return refreshTrainingHistory(true).then(function () { return loadTrainingArchives(true); });
+    return refreshTrainingHistory(true).then(function () {
+      return loadTrainingArchives(true).catch(function (err) {
+        setStatus('Finalized and archived, but Archive refresh failed: ' + String(err.message || err));
+        throw err;
+      });
+    });
   }).catch(function (err) {
     els.archiveModalConfirm.disabled = false;
     setStatus('Finalize & Archive failed: ' + String(err.message || err));

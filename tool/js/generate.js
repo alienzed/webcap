@@ -33,8 +33,7 @@
     activeResultKey: '',
     activePendingJobId: '',
     takesCollapsed: window.localStorage.getItem('webcap.generate.takesCollapsed') === '1',
-    open: false,
-    timer: 0
+    open: false
   };
 
   function el(id) { return document.getElementById(id); }
@@ -1861,13 +1860,6 @@
     });
   }
 
-  function schedulePoll() {
-    if (generateState.timer) clearTimeout(generateState.timer);
-    generateState.timer = setTimeout(function () {
-      (generateState.open ? refreshResults() : Promise.resolve()).then(schedulePoll);
-    }, generateState.open ? 5000 : 12000);
-  }
-
   function openGenerateActivity(target) {
     target = target && typeof target === 'object' ? target : {};
     var targetJobId = String(target.jobId || '');
@@ -1895,7 +1887,6 @@
       refreshTrackedGenerateJobs(),
       refreshResults()
     ]).catch(reportError);
-    schedulePoll();
   }
 
   function closeGenerateActivity() {
@@ -1906,7 +1897,6 @@
     if (frame) frame.classList.remove('workspace-generate-open');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
-    schedulePoll();
   }
 
   function bindUi() {
@@ -2110,7 +2100,6 @@
         reportError(err, 'Configuration restore blocked');
       }
     });
-    schedulePoll();
   }
 
   window.openGenerateActivity = openGenerateActivity;

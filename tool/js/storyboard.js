@@ -4614,6 +4614,9 @@
     var storyId = String(storyState.story.id || '');
     var generationBlocked = storyHasPendingGeneration(storyId);
     var queuedFirstCut = !!queuedFirstCutForStory(storyId);
+    var cancelTakesButton = el('storyboard-cancel-takes-btn');
+    if (!cancelTakesButton) throw new Error('Storyboard Cancel Takes control is missing.');
+    cancelTakesButton.classList.toggle('hidden', !generationBlocked);
     var developBlocked = generationBlocked || directorTargetBlocked({ kind: 'scenes', storyId: storyId });
     var firstCutBlocked = generationBlocked || directorTargetBlocked({ kind: 'story-action', storyId: storyId });
     var developButton = el('storyboard-develop-btn');
@@ -5003,6 +5006,41 @@
     });
   }
 
+  function cancelStoryTakes() {
+    if (!storyState.story) return;
+    var storyId = String(storyState.story.id || '');
+    var button = el('storyboard-cancel-takes-btn');
+    if (!button) throw new Error('Storyboard Cancel Takes control is missing.');
+    button.disabled = true;
+    button.textContent = 'Cancelling...';
+    return generationRequest({
+      operation: 'cancel_story',
+      storyId: storyId
+    }).then(function (payload) {
+      if (!storyState.story || String(storyState.story.id || '') !== storyId) return payload;
+      var jobs = payload.queue && Array.isArray(payload.queue.jobs) ? payload.queue.jobs : [];
+      Object.keys(storyState.generationJobs).forEach(function (jobId) {
+        var cachedJob = storyState.generationJobs[jobId];
+        if (cachedJob && String(cachedJob.storyId || '') === storyId) delete storyState.generationJobs[jobId];
+      });
+      jobs.forEach(function (job) {
+        storyState.generationJobs[job.jobId] = job;
+      });
+      syncStoryboardGenerationActivity();
+      syncPlanReplacementControls();
+      return window.refreshInferenceQueue().then(function () {
+        return payload;
+      });
+    }).catch(function (err) {
+      reportError(err);
+      throw err;
+    }).finally(function () {
+      button.disabled = false;
+      button.textContent = 'Cancel Takes';
+      syncPlanReplacementControls();
+    });
+  }
+
   function generateScene(sceneId) {
     if (!storyState.story) return;
     setSaveState('Saving...');
@@ -5154,6 +5192,7 @@
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
+    el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
     el('storyboard-assistant-btn').onclick = function () {
       var hasScenes = !!(storyState.story && Array.isArray(storyState.story.sceneOrder) && storyState.story.sceneOrder.length);
       if (typeof window.openAssistant === 'function') {

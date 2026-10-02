@@ -218,7 +218,7 @@ def test_training_defers_without_pausing_if_director_runtime_is_busy(tmp_path, m
     assert execution_queue.resource_owner() == ""
 
 
-def test_training_retries_if_retained_director_cannot_yield_yet(tmp_path, monkeypatch):
+def test_training_proceeds_if_retained_director_cleanup_is_uncertain(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
     execution_queue._resource_owner = ""
@@ -229,33 +229,22 @@ def test_training_retries_if_retained_director_cannot_yield_yet(tmp_path, monkey
         "queuePaused": False,
         "queuePauseReason": "",
     }
-    attempts = []
 
-    def yield_director():
-        attempts.append(True)
-        if len(attempts) == 1:
-            raise RuntimeError("unload failed")
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: (_ for _ in ()).throw(RuntimeError("unload failed")),
+    )
 
     def launch(job, folder_path):
         assert folder_path == folder
         job["status"] = "starting"
 
-    monkeypatch.setattr(
-        storyboard_llm_runtime,
-        "release_loaded_model_for_gpu_work",
-        yield_director,
-    )
     monkeypatch.setattr(training_runner, "_launch_job", launch)
 
     training_runner._launch_next_queued_job(state)
 
     assert state["queuePaused"] is False
-    assert state["jobs"][0]["status"] == "queued"
-    assert execution_queue.resource_owner() == ""
-
-    training_runner._launch_next_queued_job(state)
-
-    assert attempts == [True, True]
     assert state["activeJobId"] == "job-one"
     assert state["jobs"][0]["status"] == "starting"
     assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER

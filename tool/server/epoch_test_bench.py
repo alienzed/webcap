@@ -1405,12 +1405,10 @@ def execute_inference(job_id, request, context):
             settings=settings,
             filename_prefix=output_prefix,
         )
-        provider_job_id = inference_runtime.queue_workflow(workflow)
+        provider_job_id = inference_runtime.queue_managed_workflow(str(job_id), workflow)
         execution_update_job(
             str(job_id),
             details={
-                "providerJobId": provider_job_id,
-                "providerStatus": "pending",
                 "session": session_id,
                 "resultFolder": _session_result_folder(session_directory),
             },

@@ -838,6 +838,13 @@ def storyboard_generation_route():
 
         data = request.get_json(silent=True) or {}
         operation = str(data.get("operation") or "").strip()
+        if operation == "cancel_story":
+            story_id = str(data.get("storyId") or "").strip()
+            stop_storyboard_jobs(story_id)
+            return jsonify({
+                "ok": True,
+                "queue": storyboard_generation_queue(story_id),
+            })
         if operation:
             return jsonify({
                 "ok": True,

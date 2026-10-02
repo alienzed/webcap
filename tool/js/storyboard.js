@@ -1620,7 +1620,11 @@
       setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState);
       return;
     }
-    if (target.kind === 'scene-prompt' || target.kind === 'repair') {
+    if (target.kind === 'scene-prompt') {
+      setDirectorRegionProtected(sceneElement(target.sceneId), protectedState);
+      return;
+    }
+    if (target.kind === 'repair') {
       setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState);
     }
   }

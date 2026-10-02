@@ -134,8 +134,7 @@
             label: String(status.name || '').trim() || sessionLabel(tracked.sessionId),
             folder: tracked.folder,
             sessionId: tracked.sessionId,
-            modelId: String(status.modelId || status.model || tracked.modelId || ''),
-            finishedAt: Number(status.updatedAt || status.finishedAt || 0)
+            modelId: String(status.modelId || status.model || tracked.modelId || '')
           });
           delete trackedTestInferenceSessions[key];
           return;

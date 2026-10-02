@@ -1069,7 +1069,7 @@ def _cancel_shared_pending_job(job_id, session_directory=None, reduce_total=Fals
         raise
 
 
-def _session_job_records(status):
+def _session_job_records(status, missing_job_ids=None):
     job_ids = status.get("inferenceJobs") if isinstance(status.get("inferenceJobs"), list) else []
     results = status.get("results") if isinstance(status.get("results"), list) else []
     failures = status.get("failures") if isinstance(status.get("failures"), list) else []
@@ -1084,9 +1084,6 @@ def _session_job_records(status):
         for value in (status.get(key) or [])
         if str(value or "").strip()
     )
-    session_terminal = str(status.get("status") or "") in {
-        "complete", "stopped", "interrupted", "failed"
-    }
 
     jobs = []
     for raw_job_id in job_ids:
@@ -1095,17 +1092,14 @@ def _session_job_records(status):
             continue
         try:
             jobs.append(execution_get_job(job_id))
-        except FileNotFoundError as exc:
+        except FileNotFoundError:
             try:
                 jobs.append(execution_transient_receipt(job_id))
                 continue
             except FileNotFoundError:
                 pass
-            if job_id in terminal_job_ids or session_terminal:
-                continue
-            raise RuntimeError(
-                "Test Session references a missing active inference job: " + job_id
-            ) from exc
+            if job_id not in terminal_job_ids and missing_job_ids is not None:
+                missing_job_ids.append(job_id)
     return jobs
 
 
@@ -1144,7 +1138,8 @@ def _sync_inference_session(session_directory):
         if not isinstance(status.get("inferenceJobs"), list):
             return _session_status(session_directory)
 
-        jobs = _session_job_records(status)
+        missing_job_ids = []
+        jobs = _session_job_records(status, missing_job_ids=missing_job_ids)
         results = status.get("results") if isinstance(status.get("results"), list) else []
         failures = status.get("failures") if isinstance(status.get("failures"), list) else []
         result_job_ids = {
@@ -1156,6 +1151,25 @@ def _sync_inference_session(session_directory):
         skipped_job_ids = set(str(value) for value in (status.get("skippedJobIds") or []))
         cancelled_job_ids = set(str(value) for value in (status.get("cancelledJobIds") or []))
         changed = False
+
+        if missing_job_ids:
+            missing = set(missing_job_ids)
+            status["inferenceJobs"] = [
+                str(job_id)
+                for job_id in (status.get("inferenceJobs") or [])
+                if str(job_id or "").strip() and str(job_id or "").strip() not in missing
+            ]
+            status["total"] = max(
+                len(results) + len(failures),
+                int(status.get("total") or 0) - len(missing),
+            )
+            changed = True
+            _logger.warning(
+                "Dropped %d stale Test inference job reference(s) from Session %s: %s",
+                len(missing),
+                Path(session_directory).name,
+                ", ".join(sorted(missing)),
+            )
 
         stopping_session = str(status.get("status") or "") in {"stopping", "stopped"}
         for job in jobs:

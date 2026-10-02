@@ -1139,7 +1139,7 @@ def test_shared_test_rendition_executes_with_existing_test_model_semantics(tmp_p
         "resolve_name",
         lambda configured, _available, _label: Path(str(configured)).name,
     )
-    monkeypatch.setattr(inference_runtime, "queue_workflow", lambda _workflow: "provider-1")
+    monkeypatch.setattr(inference_runtime, "queue_managed_workflow", lambda _job_id, _workflow: "provider-1")
     monkeypatch.setattr(
         inference_runtime,
         "wait_for_output",

@@ -204,6 +204,35 @@ def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
 
 
 
+def test_local_llm_failure_terminalizes_without_uncertainty_pause(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
+    monkeypatch.setattr(
+        llm_runner,
+        "_execute_claimed",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("model exploded")),
+    )
+
+    job = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+    )
+
+    llm_runner._advance_queue()
+
+    failed = llm_runner.job_status(job["jobId"])
+    assert failed["status"] == "failed"
+    assert "model exploded" in failed["error"]
+    assert llm_runner.snapshot()["paused"] is False
+    assert execution_queue.resource_owner() == "llm"
+    assert llm_runner.local_gpu_drain_pending() is True
+
+    llm_runner._local_gpu_drain_until = 0.0
+    llm_runner._advance_queue()
+
+    assert execution_queue.resource_owner() == ""
+
+
 def test_local_llm_completion_opens_short_gpu_drain_window(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(

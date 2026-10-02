@@ -3389,12 +3389,31 @@
 
 .storyboard-scenes-title-row #storyboard-generate-scenes-btn,
 .storyboard-scenes-title-row #storyboard-cancel-takes-btn,
-.storyboard-scenes-title-row #storyboard-assistant-btn {
+.storyboard-scenes-title-row #storyboard-director-tools-btn {
   width: auto;
   min-height: 30px;
   flex: 0 0 auto;
   padding: 4px 10px;
   white-space: nowrap;
+}
+
+.storyboard-director-tools-dialog {
+  width: min(620px, calc(100vw - 48px));
+}
+
+.storyboard-director-tools-dialog textarea {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+}
+
+.storyboard-director-tools-dialog select {
+  width: 100%;
+}
+
+.storyboard-director-tools-dialog small {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .storyboard-scenes-heading-actions {

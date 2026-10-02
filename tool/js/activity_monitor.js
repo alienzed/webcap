@@ -10,6 +10,7 @@
     pendingPromise: null,
     lastSeen: sessionStartedAt,
     openedAt: 0,
+    recentCompletions: [],
     notified: Object.create(null),
     reportedErrors: Object.create(null)
   };
@@ -21,9 +22,29 @@
   }
 
   function sessionRecent() {
-    return (Array.isArray(state.payload.recent) ? state.payload.recent : []).filter(function (item) {
-      return finishedAt(item) >= sessionStartedAt;
+    return state.recentCompletions.slice();
+  }
+
+  function recentIdentity(item) {
+    var id = String(item && item.id || '').trim();
+    if (!id) return recentKey(item);
+    return [String(item.lane || item.kind || ''), id].join(':');
+  }
+
+  function captureRecent(items) {
+    var byKey = Object.create(null);
+    state.recentCompletions.forEach(function (item) {
+      byKey[recentIdentity(item)] = item;
     });
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      if (finishedAt(item) < sessionStartedAt) return;
+      byKey[recentIdentity(item)] = Object.assign({}, item);
+    });
+    state.recentCompletions = Object.keys(byKey).map(function (key) {
+      return byKey[key];
+    }).sort(function (a, b) {
+      return finishedAt(b) - finishedAt(a);
+    }).slice(0, 24);
   }
 
   function requestJson(url) {
@@ -579,6 +600,7 @@
     state.pending = true;
     state.pendingPromise = requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
       state.payload = payload;
+      captureRecent(payload.recent);
       window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);
       var activeErrorKeys = Object.create(null);
       (Array.isArray(payload.errors) ? payload.errors : []).forEach(function (item) {

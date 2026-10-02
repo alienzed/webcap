@@ -8,11 +8,17 @@ from PIL import Image
 
 from tool.server import config as app_config
 from tool.server import app as app_module
-from tool.server import execution_queue, run_ops, storyboard_llm_runtime, training_archive, training_bundle, training_history, training_runner, training_review
+from tool.server import execution_queue, inference_runtime, run_ops, storyboard_llm_runtime, training_archive, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
 from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_for_mode
 from tool.server.training_setup import ensure_training_setup
+
+
+@pytest.fixture(autouse=True)
+def _idle_comfyui_handoff(monkeypatch):
+    monkeypatch.setattr(inference_runtime, "queue_snapshot", lambda: {"running": [], "pending": []})
+    monkeypatch.setattr(inference_runtime, "free_cached_models", lambda: None)
 
 
 def _set(root):
@@ -80,6 +86,43 @@ def test_relaunch_archives_existing_training_log(tmp_path):
     assert len(archived) == 1
     assert archived[0].read_text(encoding="utf-8") == "first attempt\n"
     assert not log_path.exists()
+
+
+
+
+def test_training_handoff_waits_for_positive_comfyui_work(monkeypatch):
+    monkeypatch.setattr(inference_runtime, "queue_snapshot", lambda: {"running": [["provider-1"]], "pending": []})
+    monkeypatch.setattr(
+        inference_runtime,
+        "free_cached_models",
+        lambda: pytest.fail("Active ComfyUI work must not be freed."),
+    )
+
+    assert training_runner._prepare_comfyui_for_training() is False
+
+
+def test_training_handoff_fails_open_when_comfyui_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        inference_runtime,
+        "queue_snapshot",
+        lambda: (_ for _ in ()).throw(ConnectionError("offline")),
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "free_cached_models",
+        lambda: pytest.fail("Unavailable ComfyUI cannot be freed."),
+    )
+
+    assert training_runner._prepare_comfyui_for_training() is True
+
+
+def test_training_handoff_frees_idle_comfyui_before_launch(monkeypatch):
+    freed = []
+    monkeypatch.setattr(inference_runtime, "queue_snapshot", lambda: {"running": [], "pending": []})
+    monkeypatch.setattr(inference_runtime, "free_cached_models", lambda: freed.append(True))
+
+    assert training_runner._prepare_comfyui_for_training() is True
+    assert freed == [True]
 
 
 def test_training_yields_retained_director_after_reserving_gpu(tmp_path, monkeypatch):
@@ -875,6 +918,33 @@ def test_initializer_picker_lists_only_current_set_managed_epoch_exports(tmp_pat
     assert exports[0]["sourcePath"] == str(epoch)
 
 
+
+
+def test_restart_recovers_live_runner_even_if_queue_still_says_queued(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "queued-live", "folder": "sets/subject", "status": "queued"}],
+    }
+    monkeypatch.setattr(training_runner, "_job_runner_pid", lambda _job: 4242)
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda _job: ("running", ""))
+    monkeypatch.setattr(training_runner, "_refresh_job", lambda job: {"holdReason": ""})
+    monkeypatch.setattr(training_runner, "_apply_training_disk_protection", lambda *_args: "safe")
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args: pytest.fail("Recovered live runner must not be launched twice."))
+
+    training_runner._refresh_state(state)
+
+    assert state["activeJobId"] == "queued-live"
+    assert state["jobs"][0]["status"] == "starting"
+    assert state["jobs"][0]["runnerVerified"] is True
+    assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER
+    execution_queue._resource_owner = ""
+
+
 def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     monitor_starts = []
@@ -1031,6 +1101,27 @@ def test_passive_training_status_does_not_advance_or_persist_queue(tmp_path, mon
     assert payload["jobs"][0]["id"] == "queued"
     assert payload["jobs"][0]["status"] == "queued"
     assert training_runner._state_path().read_bytes() == before
+
+
+
+
+def test_training_status_response_is_passive_even_if_live_reconciliation_is_blocked(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "queued", "folder": "sets/subject", "status": "queued"}],
+    })
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda *_args: pytest.fail("HTTP status must not inspect WSL runners."))
+    monkeypatch.setattr(training_runner, "_persist_reconciled_state", lambda *_args: pytest.fail("HTTP status must not persist scheduler state."))
+
+    payload, status = training_runner.status_response()
+
+    assert status == 200
+    assert payload["jobs"][0]["status"] == "queued"
 
 
 def test_invalid_queue_state_is_loud_and_not_offered_recovery(tmp_path, monkeypatch):

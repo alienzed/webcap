@@ -202,15 +202,13 @@ Migration is incremental and must preserve working behavior.
 
 ## 9. Current legacy roots
 
-Current code still uses transitional locations beneath `FS_ROOT` for runtime/artifact concerns, including:
+The only remaining active global transitional root beneath `FS_ROOT` is `.webcap_training/`, retained temporarily for Training-specific fallback/diagnostic behavior that may still intersect historical Training evidence.
 
-- `.webcap/`;
-- `.webcap_training/`;
-- `.webcap_runtime/`.
+Global `.webcap/` and `.webcap_runtime/` are no longer active state homes. Storage discovery may still ignore those names so stale leftovers are not mistaken for user Sets, but WebCap does not read them as compatibility sources. In particular, legacy global `.webcap/test-generations/` sessions are no longer discovered.
 
 Training queue state and Recent Runs metadata no longer belong under `.webcap_training/`; they live in app-data `state/training_queue.json` and `state/recent_runs.json`.
 
-Do not add new uses of these roots. Existing uses should be classified and migrated only when their lifecycle permits it.
+Do not add new uses of these roots. The remaining `.webcap_training/` dependency should be removed only when its Training-history-sensitive fallback surface can be retired safely.
 
 ## 10. Review rule for future work
 

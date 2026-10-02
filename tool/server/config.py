@@ -538,11 +538,11 @@ def training_runtime_root():
 
 
 def training_queue_state_path():
-    return training_runtime_root() / "queue.json"
+    return app_state_root() / "training_queue.json"
 
 
 def training_history_state_path():
-    return training_runtime_root() / "recent_runs.json"
+    return app_state_root() / "training_history.json"
 
 
 def generate_reference_root():

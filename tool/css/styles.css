@@ -5373,13 +5373,22 @@ html[data-theme="dark"] iframe {
   gap: 6px;
 }
 .training-archive-alternate {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
   gap: 6px;
-  min-height: 30px;
-  padding: 5px 7px;
+  min-height: 34px;
+  padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 5px;
   color: var(--text);
   font-size: 12px;
+}
+.training-archive-alternate small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

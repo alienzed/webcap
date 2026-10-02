@@ -165,14 +165,14 @@ Only one execution owner may hold the shared local GPU resource at a time.
 - inference and local LLM cannot execute concurrently;
 - when local LLM work is already queued or active and the GPU becomes free, inference yields rather than racing that existing Director / Prompt Assistant demand for the next reservation;
 - remote LLM work does not reserve the local GPU;
-- retained or unsafe provider/model state keeps its resource reservation rather than guessing that the GPU is free;
+- a live current-session runtime that actually acquired the GPU may retain its reservation while its safety state is unresolved; persisted provider IDs, restart-recovery metadata, and cleanup suspicion never acquire or retain the shared GPU by themselves;
 - if a retained idle Director model cannot yield on a launch attempt, Training or inference leaves the job queued and retries later instead of converting a transient handoff failure into a manual queue pause.
 
 ## Startup and observers
 
 Training keeps its always-on observer because it is a long-running scheduler.
 
-Inference and LLM execution are demand-driven. WebCap startup does not contact ComfyUI or llama.cpp merely because the server is running. Persisted unfinished inference is reconciled into Backlog on restart without starting provider work. Enqueueing new inference or explicitly resuming inference starts its worker; once active, the worker drains Queue first and then Backlog. Workers go dormant when their lane is empty or deliberately paused.
+Inference and LLM execution are demand-driven. WebCap startup does not start new ComfyUI or llama.cpp work merely because the server is running. Persisted unfinished inference is reconciled into Backlog on restart; previously active provider work may receive a best-effort cancellation check, but restart uncertainty never reserves the shared GPU. Enqueueing new inference or explicitly resuming inference starts its worker; once active, the worker drains Queue first and then Backlog. Workers go dormant when their lane is empty or deliberately paused.
 
 Queue reads are passive and must not become a dispatch mechanism. Navigating to Media, captioning, Training, Storyboard, Test, Generate, or another activity does not itself start provider work.
 

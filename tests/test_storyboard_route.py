@@ -629,3 +629,32 @@ def test_storyboard_route_can_upload_scene_reference(tmp_path, monkeypatch):
     media = root / "output" / "storyboards" / story["id"] / reference["mediaPath"]
     assert media.read_bytes() == b"image"
 
+
+
+
+def test_storyboard_generation_route_cancels_only_requested_story(monkeypatch):
+    stopped = []
+    monkeypatch.setattr(app_module, "stop_storyboard_jobs", lambda story_id: stopped.append(story_id))
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_generation_queue",
+        lambda story_id: {
+            "jobs": [
+                {
+                    "jobId": "remaining",
+                    "storyId": story_id,
+                    "sceneId": "scene-2",
+                    "status": "stopping",
+                }
+            ]
+        },
+    )
+
+    response = app_module.app.test_client().post("/fs/storyboard/generation", json={
+        "operation": "cancel_story",
+        "storyId": "story-1",
+    })
+
+    assert response.status_code == 200
+    assert stopped == ["story-1"]
+    assert response.get_json()["queue"]["jobs"][0]["storyId"] == "story-1"

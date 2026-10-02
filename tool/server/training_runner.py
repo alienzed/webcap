@@ -2589,6 +2589,56 @@ def action_path_for_job(job_id, folder=""):
         return path
 
 
+def _finish_queued_resume(job):
+    if str(job.get("status") or "") not in QUEUE_STATUSES:
+        raise ValueError("Only a queued Training job can be finalized without starting.")
+    resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
+    if not resume_path:
+        raise ValueError("Only queued resume jobs can be finished without starting.")
+    run_path = host_path_for_training_path(resume_path)
+    if not run_path.is_dir() or run_path.is_symlink():
+        raise FileNotFoundError("Recorded resume run directory is unavailable: " + resume_path)
+    latest = run_path / "latest"
+    if not latest.is_file() or latest.is_symlink():
+        raise FileNotFoundError("Recorded resume run has no valid latest checkpoint: " + resume_path)
+    try:
+        checkpoint_tag = latest.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+    except (OSError, IndexError) as exc:
+        raise RuntimeError("Could not read the recorded resume checkpoint: " + resume_path) from exc
+    checkpoint_path = run_path / checkpoint_tag
+    if not checkpoint_tag or not checkpoint_path.is_dir() or checkpoint_path.is_symlink():
+        raise FileNotFoundError("Recorded resume checkpoint is unavailable: " + str(checkpoint_path))
+
+    now = time.time()
+    resume_point = job.get("resumePoint") if isinstance(job.get("resumePoint"), dict) else {}
+    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+    if not progress:
+        progress = {}
+    if resume_point.get("epoch") is not None:
+        progress["epoch"] = resume_point.get("epoch")
+    if resume_point.get("expectedEpochs") is not None:
+        progress["epochs"] = resume_point.get("expectedEpochs")
+    if resume_point.get("step") is not None:
+        progress["step"] = resume_point.get("step")
+    if progress:
+        progress.setdefault("stage", str(job.get("resumeStage") or job.get("stages") or ""))
+        job["progress"] = progress
+
+    job["outputRunPath"] = str(run_path)
+    job["status"] = "finished_early"
+    job["stage"] = "finished_early"
+    job["finishedAt"] = now
+    job["updatedAt"] = now
+    job.pop("error", None)
+    job.pop("confirmationNote", None)
+    job.pop("actionRequested", None)
+    job.pop("actionRequestedAt", None)
+    job.pop("finishAfterEpoch", None)
+    job.pop("finishScheduledAt", None)
+    job.pop("finishTriggeredEpoch", None)
+    _annotate_finished_early_job(job)
+
+
 def stop_response(job_id, cancel=False, pause=False, finish=False):
     with _lock:
         state = _read_state()
@@ -2596,12 +2646,19 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
         job = _find_job(state, job_id)
         if not job:
             return {"ok": False, "error": "Training job not found"}, 404
+        if job.get("status") in QUEUE_STATUSES and finish:
+            try:
+                _finish_queued_resume(job)
+            except (FileNotFoundError, RuntimeError, ValueError, OSError) as exc:
+                return {"ok": False, "error": str(exc), "job": _public_job(job)}, 409
+            _persist_reconciled_state(state)
+            return {"ok": True, "job": _public_job(job)}, 200
         if job.get("status") in QUEUE_STATUSES and cancel:
             job["status"] = "cancelled"
             job["stage"] = "cancelled"
             job["finishedAt"] = time.time()
             job["updatedAt"] = time.time()
-            _write_state(state)
+            _persist_reconciled_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
         if cancel:
             return {"ok": False, "error": "Only queued Training jobs can be cancelled. Use Pause or Finish for the active job."}, 400

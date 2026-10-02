@@ -555,39 +555,27 @@ def test_inference_releases_existing_idle_reservation_if_director_runtime_is_bus
 
 
 
-def test_inference_retries_if_retained_director_cannot_yield_yet(inference_root, monkeypatch):
+def test_inference_proceeds_if_retained_director_cleanup_is_uncertain(inference_root, monkeypatch):
     monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
     queued = inference_runner.enqueue_generate(
         {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
     )
-    attempts = []
-
-    def yield_director():
-        attempts.append(True)
-        if len(attempts) == 1:
-            raise RuntimeError("unload failed")
-
-    def execute(job_id):
-        execution_queue.finish_job_transient(job_id, status="completed")
 
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "release_loaded_model_for_gpu_work",
-        yield_director,
+        lambda: (_ for _ in ()).throw(RuntimeError("unload failed")),
     )
+
+    def execute(job_id):
+        execution_queue.finish_job_transient(job_id, status="completed")
+
     monkeypatch.setattr(inference_runner, "_execute_claimed", execute)
-
-    assert inference_runner._advance_queue() is None
-
-    lane = execution_queue.lane_snapshot(inference_runner.EXECUTION_LANE, include_terminal=False)
-    assert lane["paused"] is False
-    assert execution_queue.get_job(queued["jobId"])["status"] == "queued"
-    assert execution_queue.resource_owner() == ""
 
     finished = inference_runner._advance_queue()
 
     assert finished["status"] == "completed"
-    assert attempts == [True, True]
+    assert inference_runner.job_status(queued["jobId"])["status"] == "completed"
     assert execution_queue.resource_owner() == ""
 
 

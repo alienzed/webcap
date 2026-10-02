@@ -601,7 +601,7 @@
         terminalError.jobStatus = status;
         throw terminalError;
       }
-      var delay = status === 'queued' ? 2000 : 1000;
+      var delay = status === 'queued' ? 3000 : 1500;
       return new Promise(function (resolve) { setTimeout(resolve, delay); })
         .then(function () { return jobRequest(current.jobId); })
         .then(poll);

@@ -227,13 +227,14 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     root, folder, run = tmp_path / "root", tmp_path / "root" / "sets" / "subject", tmp_path / "root" / "runs" / "one"
     folder.mkdir(parents=True)
     run.mkdir(parents=True)
-    state_path = root / ".webcap_training" / "queue.json"
+    state_path = root / ".test-webcap-app-data" / "state" / "training_queue.json"
     state_path.parent.mkdir()
     state_path.write_text(json.dumps({"version": 3, "activeJobId": "job-1", "jobs": [
         {"id": "job-1", "folder": "sets/subject", "outputRunPath": str(run), "status": "running", "progress": {"epoch": 12, "epochs": 70}},
         {"id": "job-2", "folder": "sets/subject", "resumeFromCheckpoint": str(run), "outputRunPath": "", "status": "queued"},
     ]}), encoding="utf-8")
     monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: root / ".test-webcap-app-data" / "state")
     epoch_directory = run / "epoch12"
     epoch_directory.mkdir()
     monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 11, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
@@ -272,7 +273,7 @@ def _copy_to_test_fixture(tmp_path, monkeypatch, stage="h3", subfolder="az"):
     destination_root.mkdir()
     source = epoch / "adapter_model_epoch12.safetensors"
     source.write_bytes(b"test weights")
-    state_path = root / ".webcap_training" / "queue.json"
+    state_path = root / ".test-webcap-app-data" / "state" / "training_queue.json"
     state_path.parent.mkdir()
     state_path.write_text(json.dumps({"version": 3, "jobs": [{
         "id": "job-1", "folder": "sets/subject", "outputRunPath": str(run),
@@ -280,6 +281,7 @@ def _copy_to_test_fixture(tmp_path, monkeypatch, stage="h3", subfolder="az"):
         "runName": "baseline", "sequence": "3", "actionId": "003-h3",
     }]}), encoding="utf-8")
     monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: root / ".test-webcap-app-data" / "state")
     roots = {key: "" for key in ("h3", "krea2", "wan21", "hi", "lo")}
     roots[stage] = str(destination_root)
     monkeypatch.setattr(training_runner.app_config, "load_config_from_disk", lambda: {
@@ -904,7 +906,7 @@ def test_candidate_selection_persists_with_trainer_timestamp_run_and_replaces_cl
     (epoch12 / "epoch12.safetensors").write_bytes(b"twelve")
     (epoch18 / "epoch18.safetensors").write_bytes(b"eighteen")
 
-    state_path = root / ".webcap_training" / "queue.json"
+    state_path = root / ".test-webcap-app-data" / "state" / "training_queue.json"
     state_path.parent.mkdir()
     state_path.write_text(json.dumps({"version": 3, "jobs": [{
         "id": "job-1",
@@ -916,6 +918,7 @@ def test_candidate_selection_persists_with_trainer_timestamp_run_and_replaces_cl
     }]}), encoding="utf-8")
 
     monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: root / ".test-webcap-app-data" / "state")
     monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm="v5": {
         "analysisVersion": 13,
         "algorithm": algorithm,

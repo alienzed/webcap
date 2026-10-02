@@ -8,6 +8,7 @@
     lorasByModel: {},
     loraMode: window.localStorage.getItem('webcap.generate.loraMode') === 'sweep' ? 'sweep' : 'selected',
     sweepFolderByModel: {},
+    sweepSelections: {},
     sweepSubmissionSerial: 0,
     promptLibrary: { items: [], open: false, activeId: '', query: '' },
     director: {
@@ -170,6 +171,46 @@
     });
   }
 
+  function sweepSelectionKey(modelId, folder) {
+    return String(modelId || '') + '|' + String(folder || '');
+  }
+
+  function selectedSweepLoras(model, folder) {
+    var available = sweepLoras(model, folder);
+    var key = sweepSelectionKey(model && model.id, folder);
+    if (!Object.prototype.hasOwnProperty.call(generateState.sweepSelections, key)) {
+      generateState.sweepSelections[key] = available.reduce(function (selected, name) {
+        selected[name] = true;
+        return selected;
+      }, {});
+    }
+    var selected = generateState.sweepSelections[key];
+    Object.keys(selected).forEach(function (name) {
+      if (available.indexOf(name) === -1) delete selected[name];
+    });
+    return available.filter(function (name) { return selected[name] === true; });
+  }
+
+  function setSweepSelection(model, folder, name, selected) {
+    var available = sweepLoras(model, folder);
+    if (available.indexOf(name) === -1) throw new Error('Sweep LoRA is not available in the selected folder.');
+    var key = sweepSelectionKey(model && model.id, folder);
+    selectedSweepLoras(model, folder);
+    generateState.sweepSelections[key][name] = !!selected;
+  }
+
+  function setAllSweepSelections(selected) {
+    var model = currentModel();
+    var folders = sweepFolders(model);
+    var folder = savedSweepFolder(model && model.id, folders);
+    var key = sweepSelectionKey(model && model.id, folder);
+    generateState.sweepSelections[key] = sweepLoras(model, folder).reduce(function (values, name) {
+      values[name] = !!selected;
+      return values;
+    }, {});
+    renderSweep();
+  }
+
   function syncGenerateRunLabel() {
     var button = el('generate-run-btn');
     if (!button || button.dataset.generateSubmitBusy === '1') return;
@@ -180,7 +221,8 @@
     var model = currentModel();
     var folders = sweepFolders(model);
     var folder = savedSweepFolder(model && model.id, folders);
-    var count = sweepLoras(model, folder).length + (el('generate-sweep-base') && el('generate-sweep-base').checked ? 1 : 0);
+    var count = selectedSweepLoras(model, folder).length +
+      (el('generate-sweep-base') && el('generate-sweep-base').checked ? 1 : 0);
     button.textContent = count ? 'Generate Sweep (' + count + ')' : 'Generate Sweep';
   }
 
@@ -189,24 +231,40 @@
     var select = el('generate-sweep-folder');
     var summary = el('generate-sweep-summary');
     var host = el('generate-sweep-list');
-    if (!select || !summary || !host) throw new Error('Generate Sweep controls are missing.');
+    var allButton = el('generate-sweep-all');
+    var noneButton = el('generate-sweep-none');
+    if (!select || !summary || !host || !allButton || !noneButton) {
+      throw new Error('Generate Sweep controls are missing.');
+    }
 
     var folders = sweepFolders(model);
-    var selected = savedSweepFolder(model && model.id, folders);
-    select.innerHTML = folders.map(function (folder) {
-      var label = folder || '(Root)';
-      return '<option value="' + escapeHtml(folder) + '">' + escapeHtml(label) + '</option>';
+    var folder = savedSweepFolder(model && model.id, folders);
+    select.innerHTML = folders.map(function (value) {
+      var label = value || '(Root)';
+      return '<option value="' + escapeHtml(value) + '">' + escapeHtml(label) + '</option>';
     }).join('');
     select.disabled = !folders.length;
-    if (folders.length) select.value = selected;
+    if (folders.length) select.value = folder;
 
-    var names = sweepLoras(model, selected);
+    var names = sweepLoras(model, folder);
+    var selectedNames = selectedSweepLoras(model, folder);
+    var selectedLookup = selectedNames.reduce(function (values, name) {
+      values[name] = true;
+      return values;
+    }, {});
+
     summary.textContent = names.length
-      ? names.length + ' LoRA' + (names.length === 1 ? '' : 's') + ' in ' + (selected || 'root')
+      ? selectedNames.length + ' of ' + names.length + ' selected · ' + (folder || 'root')
       : 'No LoRAs available for Sweep.';
+    allButton.disabled = !names.length || selectedNames.length === names.length;
+    noneButton.disabled = !selectedNames.length;
     host.innerHTML = names.map(function (name) {
       var leaf = String(name || '').split('/').pop();
-      return '<div class="generate-sweep-row" title="' + escapeHtml(name) + '">' + escapeHtml(leaf) + '</div>';
+      return '<label class="generate-sweep-row" title="' + escapeHtml(name) + '">' +
+        '<input type="checkbox" data-generate-sweep-lora="' + escapeHtml(name) + '"' +
+          (selectedLookup[name] ? ' checked' : '') + '>' +
+        '<span>' + escapeHtml(leaf) + '</span>' +
+      '</label>';
     }).join('');
     syncGenerateRunLabel();
   }
@@ -654,11 +712,11 @@
 
     var folders = sweepFolders(model);
     var folder = savedSweepFolder(model.id, folders);
-    var names = sweepLoras(model, folder).slice();
+    var names = selectedSweepLoras(model, folder).slice();
     var includeBase = !!(el('generate-sweep-base') && el('generate-sweep-base').checked);
     var strength = Number(el('generate-sweep-strength').value);
     if (!Number.isFinite(strength)) throw new Error('Sweep LoRA strength must be numeric.');
-    if (!names.length && !includeBase) throw new Error('The selected Sweep folder contains no LoRAs.');
+    if (!names.length && !includeBase) throw new Error('Select at least one Sweep LoRA or include Base.');
 
     generateState.sweepSubmissionSerial += 1;
     return {
@@ -1957,6 +2015,17 @@
     el('generate-sweep-folder').addEventListener('change', function () {
       generateState.sweepFolderByModel[generateState.modelId] = this.value;
       window.localStorage.setItem('webcap.generate.sweepFolder.' + generateState.modelId, this.value);
+      renderSweep();
+    });
+    el('generate-sweep-all').onclick = function () { setAllSweepSelections(true); };
+    el('generate-sweep-none').onclick = function () { setAllSweepSelections(false); };
+    el('generate-sweep-list').addEventListener('change', function (event) {
+      var checkbox = event.target.closest('[data-generate-sweep-lora]');
+      if (!checkbox) return;
+      var model = currentModel();
+      var folders = sweepFolders(model);
+      var folder = savedSweepFolder(model && model.id, folders);
+      setSweepSelection(model, folder, String(checkbox.dataset.generateSweepLora || ''), checkbox.checked);
       renderSweep();
     });
     el('generate-sweep-base').addEventListener('change', syncGenerateRunLabel);

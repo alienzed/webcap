@@ -1223,3 +1223,20 @@ def test_storyboard_generation_uses_shared_heartbeat_and_one_shot_terminal_recon
     assert "mergeFetchedSceneTakeState(storyId, job.sceneId, storyPayload.story);" in completed_block
     assert "renderScenes();" not in completed_block
 
+
+
+
+def test_storyboard_cancel_takes_is_contextual_and_story_scoped():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-cancel-takes-btn"' in html
+    generate_index = html.index('id="storyboard-generate-scenes-btn"')
+    cancel_index = html.index('id="storyboard-cancel-takes-btn"')
+    assistant_index = html.index('id="storyboard-assistant-btn"')
+    assert generate_index < cancel_index < assistant_index
+    assert "function cancelStoryTakes()" in storyboard
+    assert "operation: 'cancel_story'" in storyboard
+    assert "storyId: storyId" in storyboard
+    assert "cancelTakesButton.classList.toggle('hidden', !generationBlocked)" in storyboard
+    assert "el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;" in storyboard

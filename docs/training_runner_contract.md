@@ -18,7 +18,7 @@ The queue is globally running or paused. Only its first item is actionable.
 
 - `Pause` interrupts the active run, keeps that work first, and holds the queue.
 - `Resume` runs the first item again, using its recorded checkpoint when one exists.
-- `Finish` intentionally ends the active run and lets the next item start.
+- `Finish` intentionally ends the active run and lets the next item start. For a queued resume with an already-validated saved checkpoint, `Finish` may finalize that existing checkpoint directly into Training History without restarting training.
 - `Cancel` removes queued intent only. It does not delete trainer output.
 
 There is no independently paused item elsewhere in the queue and no user-facing action that merely disables a later handoff while the current run continues.

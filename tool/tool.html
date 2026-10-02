@@ -1295,8 +1295,22 @@
                             <details id="generate-references" class="generate-references generate-collapsible hidden">
                             <summary><strong>References</strong><span>Optional exact frame anchors</span></summary>
                             <div class="generate-collapsible-body">
-                            <label id="generate-reference-first_frame-field" class="generate-field hidden"><span>First frame</span><input id="generate-reference-first_frame" type="file" accept="image/*"></label>
-                            <label id="generate-reference-last_frame-field" class="generate-field hidden"><span>Last frame</span><input id="generate-reference-last_frame" type="file" accept="image/*"></label>
+                            <div id="generate-reference-first_frame-field" class="generate-field hidden">
+                                <span>First frame</span>
+                                <label class="reference-dropzone" data-generate-reference-dropzone="first_frame" title="Drop a first-frame reference image here or click to browse.">
+                                    <input id="generate-reference-first_frame" type="file" accept="image/*">
+                                    <span class="reference-dropzone-copy"><strong>Drop image here or browse</strong><small data-generate-reference-name="first_frame">No file selected</small></span>
+                                </label>
+                                <button type="button" class="review-captions-btn generate-reference-clear hidden" data-generate-reference-clear="first_frame">Clear</button>
+                            </div>
+                            <div id="generate-reference-last_frame-field" class="generate-field hidden">
+                                <span>Last frame</span>
+                                <label class="reference-dropzone" data-generate-reference-dropzone="last_frame" title="Drop a last-frame reference image here or click to browse.">
+                                    <input id="generate-reference-last_frame" type="file" accept="image/*">
+                                    <span class="reference-dropzone-copy"><strong>Drop image here or browse</strong><small data-generate-reference-name="last_frame">No file selected</small></span>
+                                </label>
+                                <button type="button" class="review-captions-btn generate-reference-clear hidden" data-generate-reference-clear="last_frame">Clear</button>
+                            </div>
                             </div>
                             </details>
                             <div class="generate-run-row">

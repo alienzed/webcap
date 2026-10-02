@@ -575,6 +575,7 @@ def reserve_resource(owner):
         if _resource_owner:
             return False
         _resource_owner = owner
+        _logger.info("GPU resource owner: none -> %s", owner)
         return True
 
 
@@ -583,6 +584,7 @@ def release_resource(owner):
     global _resource_owner
     with _lock:
         if _resource_owner == owner:
+            _logger.info("GPU resource owner: %s -> none", owner)
             _resource_owner = ""
 
 

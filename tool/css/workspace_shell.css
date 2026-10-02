@@ -379,6 +379,69 @@
   flex: 1 1 auto;
 }
 
+
+.shell-more-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.shell-more-menu {
+  position: absolute;
+  left: calc(100% + 6px);
+  bottom: 0;
+  z-index: 1600;
+  min-width: 176px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+.shell-more-menu.hidden {
+  display: none;
+}
+
+.shell-more-menu-item {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-more-menu-item:hover,
+.shell-more-menu-item:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+
+.shell-more-menu-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--muted);
+}
+
+#shell-more-btn[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+
 .activity-rail-btn.training-running,
 .activity-rail-btn.has-active-work {
   position: relative;

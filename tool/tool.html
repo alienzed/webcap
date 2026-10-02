@@ -172,44 +172,64 @@
                         <path d="M11 17h8"></path>
                     </svg>
                 </button>
-                <button
-                    id="shell-diagnostics-btn"
-                    type="button"
-                    class="activity-rail-btn"
-                    title="Diagnostics"
-                    aria-label="Diagnostics"
-                    aria-haspopup="dialog"
-                    aria-controls="diagnostics-modal"
-                >
-                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M14.7 6.3a4 4 0 0 0-5 5L4 17l3 3 5.7-5.7a4 4 0 0 0 5-5l-2.2 2.2-3-3z"></path>
-                    </svg>
-                </button>
-                <button
-                    id="shell-settings-btn"
-                    type="button"
-                    class="activity-rail-btn"
-                    title="App settings"
-                    aria-label="App settings"
-                >
-                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.01A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09c0 .66.39 1.26 1 1.51.57.24 1.23.11 1.68-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.01c.24.61.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.26.39-1.51 1z"></path>
-                    </svg>
-                </button>
-                <button
-                    id="shell-help-btn"
-                    type="button"
-                    class="activity-rail-btn"
-                    title="Open help"
-                    aria-label="Open help"
-                >
-                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9"></circle>
-                        <path d="M9.75 9.75a2.25 2.25 0 0 1 4.02 1.37c0 1.5-1.77 1.88-1.77 3.13"></path>
-                        <path d="M12 16.75h.01"></path>
-                    </svg>
-                </button>
+                <div id="shell-more-wrap" class="shell-more-wrap">
+                    <button
+                        id="shell-more-btn"
+                        type="button"
+                        class="activity-rail-btn"
+                        title="More"
+                        aria-label="More"
+                        aria-haspopup="menu"
+                        aria-expanded="false"
+                        aria-controls="shell-more-menu"
+                    >
+                        <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="5" cy="12" r="1.4"></circle>
+                            <circle cx="12" cy="12" r="1.4"></circle>
+                            <circle cx="19" cy="12" r="1.4"></circle>
+                        </svg>
+                    </button>
+                    <div id="shell-more-menu" class="shell-more-menu hidden" role="menu" aria-label="More">
+                        <button
+                            id="shell-diagnostics-btn"
+                            type="button"
+                            class="shell-more-menu-item"
+                            role="menuitem"
+                            aria-haspopup="dialog"
+                            aria-controls="diagnostics-modal"
+                        >
+                            <svg class="shell-more-menu-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M14.7 6.3a4 4 0 0 0-5 5L4 17l3 3 5.7-5.7a4 4 0 0 0 5-5l-2.2 2.2-3-3z"></path>
+                            </svg>
+                            <span>Diagnostics</span>
+                        </button>
+                        <button
+                            id="shell-settings-btn"
+                            type="button"
+                            class="shell-more-menu-item"
+                            role="menuitem"
+                        >
+                            <svg class="shell-more-menu-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.01A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09c0 .66.39 1.26 1 1.51.57.24 1.23.11 1.68-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.01c.24.61.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.26.39-1.51 1z"></path>
+                            </svg>
+                            <span>Settings</span>
+                        </button>
+                        <button
+                            id="shell-help-btn"
+                            type="button"
+                            class="shell-more-menu-item"
+                            role="menuitem"
+                        >
+                            <svg class="shell-more-menu-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9"></circle>
+                                <path d="M9.75 9.75a2.25 2.25 0 0 1 4.02 1.37c0 1.5-1.77 1.88-1.77 3.13"></path>
+                                <path d="M12 16.75h.01"></path>
+                            </svg>
+                            <span>Help</span>
+                        </button>
+                    </div>
+                </div>
             </nav>
             <div id="status" class="status shell-status-bar" role="status" aria-live="polite">
                 <span id="status-text"></span>

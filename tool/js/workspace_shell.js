@@ -956,7 +956,49 @@ function isApplicationOverlayOpen() {
   return false;
 }
 
+function setShellMoreMenuOpen(open) {
+  var button = document.getElementById('shell-more-btn');
+  var menu = document.getElementById('shell-more-menu');
+  if (!button || !menu) throw new Error('Shell More menu markup is incomplete.');
+  var nextOpen = !!open;
+  button.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+  menu.classList.toggle('hidden', !nextOpen);
+}
+
+function wireShellMoreMenuUi() {
+  var button = document.getElementById('shell-more-btn');
+  var menu = document.getElementById('shell-more-menu');
+  var wrap = document.getElementById('shell-more-wrap');
+  if (!button || !menu || !wrap) throw new Error('Shell More menu markup is incomplete.');
+  if (button.__workspaceWired) return;
+
+  button.__workspaceWired = true;
+  button.onclick = function (event) {
+    event.stopPropagation();
+    setShellMoreMenuOpen(button.getAttribute('aria-expanded') !== 'true');
+  };
+
+  menu.addEventListener('click', function (event) {
+    if (event.target.closest('button')) setShellMoreMenuOpen(false);
+  });
+
+  document.addEventListener('click', function (event) {
+    if (button.getAttribute('aria-expanded') !== 'true') return;
+    if (wrap.contains(event.target)) return;
+    setShellMoreMenuOpen(false);
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (!event || event.key !== 'Escape' || event.defaultPrevented) return;
+    if (button.getAttribute('aria-expanded') !== 'true') return;
+    event.preventDefault();
+    setShellMoreMenuOpen(false);
+    button.focus();
+  });
+}
+
 function wireWorkspaceHeaderUi() {
+  wireShellMoreMenuUi();
   var setSelect = document.getElementById('app-header-set-select');
   if (setSelect && !setSelect.__workspaceWired) {
     setSelect.__workspaceWired = true;

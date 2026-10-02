@@ -1921,13 +1921,22 @@ def _prepare_comfyui_for_training():
 
     running = provider_queue.get("running") or []
     pending = provider_queue.get("pending") or []
-    if running or pending:
+    try:
+        managed_job_ids = inference_runtime.webcap_queue_job_ids(provider_queue)
+    except Exception:
+        _logger.exception("Could not classify ComfyUI queue ownership during Training handoff; proceeding rather than blocking on uncertainty.")
+        return True
+    if managed_job_ids:
         _logger.info(
-            "Training is waiting for positive ComfyUI queue activity (%d running, %d pending).",
-            len(running),
-            len(pending),
+            "Training is waiting for %d positively identified WebCap ComfyUI job(s).",
+            len(managed_job_ids),
         )
         return False
+    if running or pending:
+        _logger.warning(
+            "ComfyUI has non-WebCap queue activity during Training handoff; leaving it untouched and proceeding."
+        )
+        return True
 
     try:
         inference_runtime.free_cached_models()

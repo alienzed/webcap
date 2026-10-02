@@ -47,7 +47,7 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
             },
         ],
     })
-    monkeypatch.setattr(activity_monitor, "training_status_response", lambda: ({
+    monkeypatch.setattr(activity_monitor, "training_status_snapshot", lambda: ({
         "ok": True,
         "queuePaused": False,
         "queuePauseReason": "",
@@ -104,7 +104,7 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
 def test_activity_recent_is_limited_to_client_session(monkeypatch):
     monkeypatch.setattr(activity_monitor, "inference_snapshot", lambda include_terminal=False: {"paused": False, "pauseReason": "", "jobs": []})
     monkeypatch.setattr(activity_monitor, "llm_snapshot", lambda include_terminal=False: {"paused": False, "pauseReason": "", "jobs": []})
-    monkeypatch.setattr(activity_monitor, "training_status_response", lambda: ({"ok": True, "queuePaused": False, "queuePauseReason": "", "jobs": []}, 200))
+    monkeypatch.setattr(activity_monitor, "training_status_snapshot", lambda: ({"ok": True, "queuePaused": False, "queuePauseReason": "", "jobs": []}, 200))
     monkeypatch.setattr(activity_monitor, "storage_scan_status", lambda: {"ok": True, "scan": {}})
     monkeypatch.setattr(activity_monitor, "execution_recent_snapshot", lambda lane, limit=30: [
         {"id": lane + "-old", "status": "completed", "finishedAt": 90.0, "metadata": {"client": "generate" if lane == "inference" else "storyboard"}},
@@ -126,7 +126,7 @@ def test_activity_snapshot_keeps_other_domains_when_execution_state_is_unavailab
 
     monkeypatch.setattr(activity_monitor, "inference_snapshot", unavailable)
     monkeypatch.setattr(activity_monitor, "llm_snapshot", unavailable)
-    monkeypatch.setattr(activity_monitor, "training_status_response", lambda: ({
+    monkeypatch.setattr(activity_monitor, "training_status_snapshot", lambda: ({
         "ok": True,
         "queuePaused": False,
         "queuePauseReason": "",

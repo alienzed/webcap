@@ -542,7 +542,7 @@ def training_queue_state_path():
 
 
 def training_history_state_path():
-    return app_state_root() / "training_history.json"
+    return app_state_root() / "recent_runs.json"
 
 
 def generate_reference_root():

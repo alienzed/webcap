@@ -550,13 +550,19 @@ function openTrainingArchiveModal(jobContext) {
     ? jobContext
     : jobs.filter(function (item) { return String(item.id || '') === String(jobContext || ''); })[0];
   var jobId = String(job && (job.id || job.jobId) || '');
-  if (!job || !job.folder || !jobId) throw new Error('Training run does not identify its archive source.');
-  trainingRunnerRequest('/fs/training_archive/preview?folder=' + encodeURIComponent(job.folder) + '&jobId=' + encodeURIComponent(jobId))
+  var stagedFileName = String(job && job.stagedFileName || '');
+  var stage = String(job && job.stage || '');
+  if (!job || !job.folder || (!jobId && !(stagedFileName && stage))) throw new Error('Training run does not identify its archive source.');
+  var archiveQuery = '/fs/training_archive/preview?folder=' + encodeURIComponent(job.folder);
+  archiveQuery += stagedFileName
+    ? '&stage=' + encodeURIComponent(stage) + '&stagedFileName=' + encodeURIComponent(stagedFileName)
+    : '&jobId=' + encodeURIComponent(jobId);
+  trainingRunnerRequest(archiveQuery)
     .then(function (payload) {
       var preview = payload.preview;
       var els = getTrainingWorkspaceEls();
       trainingWorkspaceState.archivePreview = preview;
-      trainingWorkspaceState.archiveJobId = jobId;
+      trainingWorkspaceState.archiveJobId = String(preview.jobId || jobId || '');
       els.archiveName.value = String(preview.archiveName || '');
       els.archiveRecap.innerHTML =
         '<div><strong>Production keeper:</strong> Epoch ' + escapeHtml(String(preview.selectedEpoch && preview.selectedEpoch.epoch || '')) + ' · ' + escapeHtml(preview.productionFileName || '') + '</div>' +
@@ -591,12 +597,16 @@ function finalizeTrainingArchive() {
   trainingRunnerRequest('/fs/training_archive/finalize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    body: JSON.stringify(Object.assign({
       folder: preview.folder,
-      jobId: preview.jobId,
       archiveName: String(els.archiveName.value || '').trim(),
       retainEpochs: retainEpochs
-    })
+    }, preview.stagedFileName ? {
+      stage: preview.stage,
+      stagedFileName: preview.stagedFileName
+    } : {
+      jobId: preview.jobId
+    }))
   }).then(function (payload) {
     closeTrainingArchiveModal();
     trainingWorkspaceState.archivesLoaded = false;

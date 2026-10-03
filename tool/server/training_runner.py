@@ -566,9 +566,13 @@ def _candidate_run_snapshot(folder, job_id):
             recorded_highest_step = int(resume_point.get("step") or 0)
             if checkpoint_match and int(checkpoint_match.group(1)) < recorded_highest_step:
                 checkpoint_path = host_path_for_training_path(raw_run_path) / checkpoint_tag
-                if checkpoint_path.is_dir() and not checkpoint_path.is_symlink():
-                    checkpoint_wall_time = checkpoint_path.stat().st_mtime
-                    branch_started_at = job.get("startedAt")
+                try:
+                    if checkpoint_path.is_dir() and not checkpoint_path.is_symlink():
+                        checkpoint_wall_time = checkpoint_path.stat().st_mtime
+                        branch_started_at = job.get("startedAt")
+                except OSError:
+                    checkpoint_wall_time = None
+                    branch_started_at = None
         run_summary = job.get("runSummary") if isinstance(job.get("runSummary"), dict) else {}
         if not run_summary:
             run_summary = run_summary_from_capture(

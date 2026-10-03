@@ -1648,3 +1648,18 @@ def test_inference_startup_cancels_webcap_provider_discovered_from_comfyui_queue
 
     assert cancelled == ["provider-orphan"]
     assert execution_queue.resource_owner() == ""
+
+
+def test_inference_dispatch_failure_before_claim_releases_gpu(inference_root, monkeypatch):
+    queued = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE,
+        {"request": {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    monkeypatch.setattr(gpu_prep, "prepare_gpu_for", lambda _owner: (_ for _ in ()).throw(RuntimeError("prep failed")))
+
+    with pytest.raises(RuntimeError, match="prep failed"):
+        inference_runner._advance_queue()
+
+    assert execution_queue.resource_owner() == ""
+    assert execution_queue.get_job(queued["id"])["status"] == "queued"

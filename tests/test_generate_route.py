@@ -674,3 +674,35 @@ def test_generate_prompt_library_routes(monkeypatch):
     deleted = client.post("/fs/generate/prompt/delete", json={"id": "prompt-1"})
     assert deleted.status_code == 200
     assert seen["delete"] == "prompt-1"
+
+
+def test_generate_failed_attempt_preserves_reference_for_retry(tmp_path, monkeypatch):
+    reference = tmp_path / "reference.png"
+    reference.write_bytes(b"reference")
+    request = {
+        "modelId": "fake",
+        "prompt": "prompt",
+        "settings": {},
+        "loras": [],
+        "references": {"first_frame": "stored/reference.png"},
+    }
+
+    class FakeModel:
+        TEMPLATE_PATH = Path("workflow.json")
+        def load_template(self):
+            return {}
+        def build_workflow(self, *_args, **_kwargs):
+            raise RuntimeError("workflow failed")
+
+    monkeypatch.setattr(generate_generation, "get_inference_model", lambda _model_id: FakeModel())
+    monkeypatch.setattr(generate_generation, "resolve_reference_path", lambda _path: reference)
+    monkeypatch.setattr(
+        generate_generation.inference_runtime,
+        "upload_image",
+        lambda *_args, **_kwargs: {"name": "reference.png"},
+    )
+
+    with pytest.raises(RuntimeError, match="workflow failed"):
+        generate_generation.execute("job-1", request)
+
+    assert reference.is_file()

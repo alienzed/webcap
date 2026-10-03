@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 
 from flask import jsonify, request
 
-from .director_model_calibration import clear_profiles, list_profiles, save_profile
+from .director_model_calibration import clear_calibration, list_profiles, list_reports, save_profile, save_report
+from .director_model_capabilities import capability_for_model
 
 
 SESSION_VERSION = 1
@@ -334,6 +335,16 @@ def register_routes(app):
                     "protocol": PROTOCOL,
                     "calibrationProtocol": calibration_protocol(),
                     "calibrationProfiles": list_profiles(),
+                    "calibrationReports": list_reports(),
+                    "advertisedCapabilities": [
+                        {
+                            "modelRef": str(model.get("id") or ""),
+                            "capability": capability_for_model(
+                                model.get("id"), model.get("modelId"), model.get("label")
+                            ),
+                        }
+                        for model in __import__("tool.server.storyboard_llm_runtime", fromlist=["list_models"]).list_models(reload=False)
+                    ],
                     "session": current_session(),
                 })
 
@@ -355,16 +366,25 @@ def register_routes(app):
                     "ok": True,
                     "job": enqueue_calibration_run(data.get("modelRef"), data.get("kind"), data.get("target"), data.get("contextSize")),
                 }), 202
+            if action == "save_calibration_report":
+                return jsonify({
+                    "ok": True,
+                    "report": save_report(data.get("report")),
+                    "calibrationReports": list_reports(),
+                })
             if action == "save_calibration_profile":
                 return jsonify({
                     "ok": True,
                     "profile": save_profile(data.get("profile")),
                     "calibrationProfiles": list_profiles(),
+                    "calibrationReports": list_reports(),
                 })
             if action == "clear_calibration_profiles":
+                cleared = clear_calibration()
                 return jsonify({
                     "ok": True,
-                    "calibrationProfiles": clear_profiles(),
+                    "calibrationProfiles": cleared["profiles"],
+                    "calibrationReports": cleared["reports"],
                 })
             if action == "save_run":
                 return jsonify({

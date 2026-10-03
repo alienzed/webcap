@@ -620,7 +620,14 @@ function directorModelTestCalibrateOne(model, modelNumber) {
     });
   }
 
-  var chain = Promise.resolve();
+  var chain = directorModelTestPost({
+    action: 'begin_calibration',
+    modelRef: model.modelRef
+  }).then(function (payload) {
+    directorModelTestState.calibrationProfiles = Array.isArray(payload.calibrationProfiles) ? payload.calibrationProfiles : [];
+    directorModelTestState.calibrationReports = Array.isArray(payload.calibrationReports) ? payload.calibrationReports : [];
+    directorModelTestRenderCalibrationProfiles();
+  });
   if (model.runtimeId === 'local') {
     contextSteps.forEach(function (target) {
       chain = chain.then(function () {

@@ -147,6 +147,48 @@ def test_launch_rewrites_latest_only_to_existing_managed_global_step(tmp_path):
         training_runner._rewrite_resume_latest(job)
 
 
+def test_finish_queued_rewind_applies_selected_checkpoint_before_finalizing(tmp_path, monkeypatch):
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "global_step10").mkdir()
+    (run / "global_step20").mkdir()
+    (run / "latest").write_text("global_step20\n", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "host_path_for_training_path", lambda path: Path(path))
+    monkeypatch.setattr(training_runner, "_annotate_finished_early_job", lambda _job: None)
+    job = {
+        "status": "queued",
+        "stages": "h3",
+        "resumeStage": "h3",
+        "resumeFromCheckpoint": str(run),
+        "resumeOutputId": "output/run",
+        "resumeCheckpointTag": "global_step10",
+        "resumeCheckpointRewritePending": True,
+        "resumePoint": {"step": 10},
+    }
+    training_runner._finish_queued_resume(job)
+    assert (run / "latest").read_text(encoding="utf-8") == "global_step10\n"
+    assert job["status"] == "finished_early"
+    assert job["resumeCheckpointRewritePending"] is False
+
+
+def test_manual_rewind_candidate_detection_fails_loudly_when_checkpoint_is_missing(tmp_path, monkeypatch):
+    root = tmp_path
+    run = root / "run"
+    run.mkdir()
+    monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "host_path_for_training_path", lambda path: Path(path))
+    monkeypatch.setattr(training_runner, "_read_state_readonly", lambda: {"jobs": [{
+        "id": "job-1",
+        "folder": "sets/subject",
+        "resumeFromCheckpoint": str(run),
+        "status": "running",
+        "startedAt": 300,
+        "resumePoint": {"checkpointTag": "global_step10", "step": 20},
+    }]})
+    with pytest.raises(RuntimeError, match="Could not inspect rewound resume checkpoint global_step10"):
+        training_runner._candidate_run_snapshot("sets/subject", "job-1")
+
+
 def test_epoch_median_aggregation_rejects_isolated_step_spikes():
     mapped = [{"sample": index, "step": 900 + index, "epoch": 7, "loss": value} for index, value in enumerate([.2, .2, .2, 8.0, -.5])]
     complete = [{"axis": 7, "loss": .2, "wallTime": 10, "order": 0}]

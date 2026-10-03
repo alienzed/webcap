@@ -373,6 +373,18 @@ def test_remote_context_calibration_is_rejected(monkeypatch):
 
 
 
+def test_assessment_orders_remote_models_first_only_while_training():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
+
+    assert "function directorModelAssessmentOrderModels(models)" in frontend
+    assert "if (!shellWorkloadState.trainingActive) return models;" in frontend
+    assert "model.runtimeId !== 'local'" in frontend
+    assert "model.runtimeId === 'local'" in frontend
+    assert "return remote.concat(local);" in frontend
+    assert "directorModelAssessmentOrderModels(directorModelAssessmentSelectedModels())" in frontend
+
+
 def test_model_test_diagnostics_exposes_progressive_calibration_controls():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     html = (root / "tool" / "tool.html").read_text(encoding="utf-8")

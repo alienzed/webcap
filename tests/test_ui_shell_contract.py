@@ -1037,3 +1037,21 @@ def test_shell_separates_set_aware_and_global_creative_activities():
     assert "var setControl = document.getElementById('app-header-set-control');" in shell
     assert "setControl.classList.toggle('hidden', generateOpen || storyboardOpen);" in shell
 
+
+def test_pending_media_reselection_waits_for_metadata_hydration():
+    ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+
+    start = ui.index("function refreshCurrentDirectory()")
+    end = ui.index("// Ensure live filtering as you type", start)
+    refresh = ui[start:end]
+
+    capture = "var pendingSelectFileName = window.state && state.pendingSelectFileName ? state.pendingSelectFileName : '';"
+    metadata_refresh = "refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {"
+    metadata_apply = "completeFolderLoadPipeline(path, loadSequence, metadataResult);"
+    reselect = "setTimeout(function() { selectByFileName(pendingSelectFileName); }, 0);"
+
+    assert capture in refresh
+    assert "state.pendingSelectFileName = undefined;" in refresh
+    assert reselect in refresh
+    assert refresh.index(capture) < refresh.index(metadata_refresh)
+    assert refresh.index(metadata_refresh) < refresh.index(metadata_apply) < refresh.index(reselect)

@@ -88,19 +88,6 @@ def local_gpu_drain_pending():
     return time.monotonic() < _local_gpu_drain_until
 
 
-def local_gpu_work_runnable():
-    """Return whether the LLM FIFO head is runnable local-GPU work."""
-    _ensure_execution_reconciled()
-    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-    if snapshot.get("paused") or snapshot.get("activeJobId"):
-        return False
-    queued = [job for job in snapshot.get("jobs", []) if str(job.get("status") or "") == "queued"]
-    if not queued:
-        return False
-    from .storyboard_llm_runtime import uses_local_gpu
-    return uses_local_gpu(_job_model_id(queued[0]))
-
-
 def _job_model_id(job):
     if not isinstance(job, dict):
         return ""

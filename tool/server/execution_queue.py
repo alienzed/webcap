@@ -595,29 +595,6 @@ def resource_owner():
         return _resource_owner
 
 
-def dispatch_if_idle():
-    """Select the next local-GPU owner from lane-local runnable facts."""
-    owner = resource_owner()
-    if owner:
-        return owner
-
-    from . import training_runner
-    if training_runner.gpu_work_runnable():
-        reserve_resource("training")
-        return resource_owner()
-
-    from . import llm_runner
-    if llm_runner.local_gpu_work_runnable():
-        reserve_resource("llm")
-        return resource_owner()
-
-    from . import inference_runner
-    inference_kind = inference_runner.next_gpu_work_kind()
-    if inference_kind in {"foreground", "backlog"}:
-        reserve_resource("inference")
-    return resource_owner()
-
-
 def enqueue(lane_name, payload, metadata=None, job_id=None, initial_status="queued"):
     initial_status = str(initial_status or "queued").strip()
     if initial_status not in PENDING_STATUSES:

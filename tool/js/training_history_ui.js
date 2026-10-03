@@ -264,7 +264,7 @@ function renderTrainingHistory() {
   var checkpointPrompt = trainingWorkspaceState.historyRunsLoading
     ? 'Loading current-set checkpoints…'
     : (runs.length ? 'Choose a managed checkpoint…' : 'No managed checkpoints for this set');
-  els.checkpointSelect.innerHTML = '<option value="">' + checkpointPrompt + '</option>' + runs.map(function (run) {
+  var currentOptions = runs.map(function (run) {
     var details = [];
     if (run.epoch && run.expectedEpochs) details.push('epoch ' + run.epoch + ' / ' + run.expectedEpochs);
     var matchLabel = run.matchType === 'exact' ? 'exact' : 'compatible';
@@ -273,7 +273,20 @@ function renderTrainingHistory() {
       escapeHtml(String(run.runName || run.logicalRun || run.name || 'run') + ' - ' + trainingStageLabel(run.stage) +
         (details.length ? ' - ' + details.join(' / ') : '') + ' - ' + matchLabel) + '</option>';
   }).join('');
-  if (selectedCheckpoint && runs.some(function (run) { return String(run.resumeOutputId || run.runPath || '') === selectedCheckpoint; })) {
+  var previousOptions = [];
+  runs.forEach(function (run) {
+    (Array.isArray(run.resumePoints) ? run.resumePoints : []).forEach(function (point) {
+      var optionValue = String(run.resumeOutputId || run.runPath || '') + '::' + String(point.tag || '');
+      previousOptions.push(
+        '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '" data-checkpoint-tag="' + escapeHtml(point.tag || '') + '">' +
+        escapeHtml(String(run.runName || run.logicalRun || run.name || 'run') + ' - ' + String(point.tag || '')) + '</option>'
+      );
+    });
+  });
+  els.checkpointSelect.innerHTML = '<option value="">' + checkpointPrompt + '</option>' +
+    currentOptions +
+    (previousOptions.length ? '<optgroup label="Previous saved resumable points">' + previousOptions.join('') + '</optgroup>' : '');
+  if (selectedCheckpoint && Array.prototype.some.call(els.checkpointSelect.options, function (option) { return option.value === selectedCheckpoint; })) {
     els.checkpointSelect.value = selectedCheckpoint;
   }
   syncManagedTrainingResumeUi();

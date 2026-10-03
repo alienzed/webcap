@@ -245,10 +245,12 @@ Storyboard Director supports two execution modes while keeping one provider-neut
 
 The selected Director model is a runtime preference stored by the browser, not Story data. Remote inference never reserves WebCap's local GPU or asks local ComfyUI to free models. Local llama.cpp keeps the conservative GPU handoff: WebCap reserves the GPU, asks idle ComfyUI to unload cached models/free memory, and loads the selected Director model. The shared reservation is released after the request, while a successfully loaded model may remain resident; Training or shared Inference explicitly evicts that retained model after winning the GPU reservation and before launching competing GPU work.
 
-LLM context stays deliberately small:
+LLM context stays deliberately bounded and task-specific:
 
-- Story `style` is the durable atmosphere/cinematic block and should normally be included.
-- Story concept and current Scene context are included only when useful to the requested operation.
+- Story `style`, concept/overview, and invariants are included when they are relevant to the requested operation.
+- Normal whole-Story development may author the complete Scene plan in one structured response.
+- **One at a time** development is an explicit alternate strategy: Director first returns a concise complete Story outline, then WebCap authors each full H3 Scene in a separate request using the Story overview/style/invariants, the complete outline, and the immediately previous authored Scene when available.
+- The staged outline/Scene responses are session work only. They do not mutate `story.json`; WebCap assembles the normal Scene-plan shape and calls the existing atomic plan application once after every Scene succeeds and the Story revision still matches the frozen source revision.
 - Full chat transcripts and ChatGPT-like long-term memory are not part of the design.
 - ComfyUI inference calls are treated as stateless; WebCap owns any continuity worth preserving.
 
@@ -263,7 +265,7 @@ Early authoring operations should be explicit functions rather than a general ag
 Manual prompt fields remain fully usable without an LLM. Storyboard generation always consumes those stored manual fields; future LLM assistance may propose edits to them but must never become a prerequisite for generation.
 
 
-Storyboard exposes a **Director model** selector populated from the active runtime's model list. The selection is runtime preference, not Story meaning. Initially one selected model handles planning, audit, prompt writing, and revision; cross-model audit can remain an explicit later option.
+Storyboard exposes a **Director model** selector populated from the active runtime's model list. The selection is runtime preference, not Story meaning. Compact assessment findings may add only a serious-warning or reduced-capability marker; unassessed models remain neutral. A clean proven coherent-output tier of at least 8K is the simple current full-story signal. Below that, WebCap may default **One at a time** on while leaving the choice editable. Assessment never hard-blocks Storyboard solely because a model is small.
 
 ### ComfyUI
 
@@ -428,6 +430,8 @@ Current runtime slice:
 - every queued Storyboard Director job freezes its Story/Scene destination; the backend applies completed output directly to that durable target, so browser navigation is never responsible for persistence;
 - the durable LLM queue is the authority for target occupancy: only the Story/Scene fields a Director job will replace are protected, unrelated Stories/Scenes remain usable, and conflicting requests fail visibly rather than silently doing nothing;
 - Director activity overlays the field being authored rather than blocking unrelated Story/Scene controls;
+- Develop Scenes supports both whole-plan and staged **One at a time** strategies; staged development preserves the same final canonical Scene schema and applies it atomically only after every Scene succeeds;
+- Director assessment hints may recommend staged development for models with less than 8K proven coherent output, but the user can override that recommendation;
 - thinking disabled for these bounded authoring calls;
 - sampling is app-owned rather than left to changing runtime defaults: concept expansion is mildly creative, Develop Scenes is conservative, and Scene write/refine calls are tighter; local llama.cpp also receives explicit top-k/min-p settings with repetition/presence/frequency penalties disabled so necessary continuity wording is not discouraged;
 - Storyboard and Generate Director requests share the app-owned `llm` execution lane and may queue without inventing a separate Storyboard scheduler;

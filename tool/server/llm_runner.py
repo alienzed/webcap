@@ -766,16 +766,8 @@ def _queue_wait_state(current):
             "waitReason": label + " currently holds the shared GPU.",
         }
 
-    try:
-        from .training_runner import gpu_reservation_block_reason
-        reason = str(gpu_reservation_block_reason(GPU_RESERVATION_OWNER) or "")
-    except Exception:
-        _logger.exception("Could not inspect the shared GPU blocker for queued LLM work.")
-        return {
-            "queueDepth": len(queued),
-            "waitOwner": "unknown",
-            "waitReason": "Shared GPU availability could not be determined.",
-        }
+    from .training_runner import gpu_reservation_block_reason
+    reason = str(gpu_reservation_block_reason(GPU_RESERVATION_OWNER) or "")
 
     if reason.startswith("Training "):
         return {

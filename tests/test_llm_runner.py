@@ -1407,6 +1407,26 @@ def test_llm_snapshot_explains_training_queue_priority(llm_root, monkeypatch):
     assert snapshot["waitReason"].startswith("2 Training job(s) are queued")
 
 
+def test_llm_snapshot_surfaces_gpu_blocker_inspection_failure(llm_root, monkeypatch):
+    from tool.server import training_runner
+
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
+    monkeypatch.setattr(
+        training_runner,
+        "gpu_reservation_block_reason",
+        lambda _owner: (_ for _ in ()).throw(RuntimeError("training blocker inspection failed")),
+    )
+    llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+        label="Prompt Assistant",
+    )
+
+    with pytest.raises(RuntimeError, match="training blocker inspection failed"):
+        llm_runner.snapshot()
+
+
 def test_llm_stop_or_cancel_cancels_queued_job_without_touching_runtime(llm_root, monkeypatch):
     monkeypatch.setattr(
         storyboard_llm_runtime,

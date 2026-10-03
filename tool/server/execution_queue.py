@@ -27,6 +27,7 @@ TERMINAL_STATUSES = {"completed", "failed", "cancelled", "stopped", "interrupted
 
 _lock = threading.RLock()
 _resource_owner = ""
+_gpu_free = True
 _transient_receipts = {}
 _TRANSIENT_RECEIPT_LIMIT = 200
 
@@ -564,6 +565,40 @@ def ephemeral_lane(lane_name):
             queue = EphemeralExecutionQueue(lane_name)
             _ephemeral_queues[lane_name] = queue
         return queue
+
+
+def initialize_gpu_state(training_process_exists):
+    """Initialize process-local GPU availability from restart ground truth."""
+    global _gpu_free
+    with _lock:
+        _gpu_free = not bool(training_process_exists)
+        _logger.info(
+            "GPU availability initialized: %s",
+            "free" if _gpu_free else "busy (training)",
+        )
+        return _gpu_free
+
+
+def gpu_is_free():
+    """Return the single process-local GPU availability flag."""
+    with _lock:
+        return _gpu_free
+
+
+def mark_gpu_busy():
+    """Mark the local GPU unavailable for new WebCap work."""
+    global _gpu_free
+    with _lock:
+        _gpu_free = False
+        return _gpu_free
+
+
+def mark_gpu_free():
+    """Mark the local GPU available for new WebCap work."""
+    global _gpu_free
+    with _lock:
+        _gpu_free = True
+        return _gpu_free
 
 
 def reserve_resource(owner):

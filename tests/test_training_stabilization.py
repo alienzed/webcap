@@ -1040,6 +1040,46 @@ def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
     assert active["runnerVerified"] is True
 
 
+def test_checkpointed_pause_uses_existing_resume_run_when_output_path_is_unbound(tmp_path, monkeypatch):
+    resumed_run = tmp_path / "resume-run"
+    resumed_run.mkdir()
+
+    job = {
+        "id": "active",
+        "status": "running",
+        "stage": "h3",
+        "stages": "h3",
+        "resumeFromCheckpoint": str(resumed_run),
+        "outputRunPath": "",
+    }
+
+    monkeypatch.setattr(training_runner, "host_path_for_training_path", lambda value: Path(value))
+
+    resolved = training_runner._checkpointed_stop_run_directory(job)
+
+    assert resolved == resumed_run
+    assert job["outputRunPath"] == str(resumed_run)
+
+
+def test_queue_paused_job_preserves_existing_resume_path_when_output_path_is_unbound(monkeypatch):
+    job = {
+        "id": "active",
+        "status": "running",
+        "stages": "h3",
+        "resumeFromCheckpoint": "/runs/resume",
+        "outputRunPath": "",
+    }
+
+    monkeypatch.setattr(training_runner, "_populate_queued_resume_point", lambda item: item.setdefault("resumePoint", {"checkpointAvailable": True}))
+
+    training_runner._queue_paused_job(job)
+
+    assert job["resumeFromCheckpoint"] == "/runs/resume"
+    assert job["resumeStage"] == "h3"
+    assert job["status"] == "queued"
+    assert job["outputRunPath"] == ""
+
+
 def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (3, "", ""))

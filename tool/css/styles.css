@@ -5943,3 +5943,91 @@ html[data-theme="dark"] iframe {
     border-top: 0;
   }
 }
+
+/* Training history compact metric rail */
+.workspace-surface-training .training-history-item.training-history-run {
+  gap: 9px;
+  padding: 12px 14px;
+}
+
+.workspace-surface-training .training-history-identity {
+  gap: 3px;
+}
+
+.workspace-surface-training .training-history-meta {
+  gap: 4px 8px;
+  font-size: 12px;
+}
+
+.workspace-surface-training .training-history-timing,
+.workspace-surface-training .training-history-active-time,
+.workspace-surface-training .training-history-items {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.workspace-surface-training .training-history-active-time::before,
+.workspace-surface-training .training-history-items::before,
+.workspace-surface-training .training-history-folder::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.workspace-surface-training .training-history-metrics {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.workspace-surface-training .training-history-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.workspace-surface-training .training-history-metric > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workspace-surface-training .training-history-metric > strong,
+.workspace-surface-training .training-history-metric-link {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace-surface-training .training-history-metric-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.workspace-surface-training .training-history-metric-link:hover {
+  color: var(--text);
+}
+
+@container (max-width: 720px) {
+  .workspace-surface-training .training-history-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-surface-training .training-history-metric {
+    white-space: normal;
+  }
+}

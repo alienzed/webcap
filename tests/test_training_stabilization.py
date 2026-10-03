@@ -953,6 +953,58 @@ def test_restart_recovers_live_runner_even_if_queue_still_says_queued(tmp_path, 
     execution_queue._resource_owner = ""
 
 
+def test_training_startup_reconciliation_establishes_live_owner_synchronously(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (0, "/bin/bash\n/runs/runner.sh\n", ""))
+    monkeypatch.setattr(training_runner, "_log_has_progress", lambda _text: True)
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "active",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{
+            "id": "active",
+            "status": "running",
+            "stages": "h3",
+            "pid": 4242,
+            "runnerScriptWsl": "/runs/runner.sh",
+            "outputRunPath": "/runs/original",
+        }],
+    })
+
+    training_runner.reconcile_startup()
+
+    assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER
+    assert training_runner._read_state()["activeJobId"] == "active"
+    execution_queue._resource_owner = ""
+
+
+def test_training_startup_reconciliation_failure_does_not_create_owner(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "active",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{
+            "id": "active",
+            "status": "running",
+            "stages": "h3",
+            "pid": 4242,
+            "runnerScriptWsl": "/runs/runner.sh",
+            "outputRunPath": "/runs/original",
+        }],
+    })
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (1, "", "WSL is unavailable"))
+
+    with pytest.raises(RuntimeError, match="Could not inspect the runner process: WSL is unavailable"):
+        training_runner.reconcile_startup()
+
+    assert execution_queue.resource_owner() == ""
+
+
 def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     monitor_starts = []

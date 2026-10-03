@@ -2059,6 +2059,14 @@ def _ensure_monitor_started():
         _monitor_thread.start()
 
 
+def reconcile_startup():
+    """Synchronously establish Training runtime truth before normal dispatch starts."""
+    with _lock:
+        state = _read_state()
+        _refresh_state(state)
+        _persist_reconciled_state(state)
+
+
 def start_observer():
     """Start queue observation independently of whether Training is open."""
     _ensure_monitor_started()

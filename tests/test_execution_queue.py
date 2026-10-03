@@ -309,6 +309,8 @@ def test_server_startup_shelves_inference_without_starting_it():
     assert "start_training_runner_observer()" in startup
     assert "start_inference_observer()" not in startup
     assert "reconcile_llm_startup()" in startup
+    assert "reconcile_training_startup()" in startup
+    assert startup.index("reconcile_training_startup()") < startup.index("start_training_runner_observer()")
     assert "INFERENCE STARTUP RECONCILIATION FAILED" in startup
     assert "DIRECTOR STARTUP RECONCILIATION FAILED" in startup
     assert "TRAINING OBSERVER STARTUP FAILED" not in startup

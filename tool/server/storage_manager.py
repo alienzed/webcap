@@ -167,14 +167,16 @@ def _director_assessment_items(cache):
             continue
         path = root / (assessment_id + ".json")
         model = assessment.get("model") if isinstance(assessment.get("model"), dict) else {}
+        active = bool(assessment.get("active"))
         row = _item(
             "director_assessment",
             assessment_id,
             model.get("label") or model.get("modelId") or assessment_id,
             path,
             kind="Director assessment evidence",
-            status=str(assessment.get("status") or ""),
-            purgeable=True,
+            status=("active" if active else str(assessment.get("status") or "")),
+            purgeable=not active,
+            protected_reason=("Active Director assessment; stop or finish it before deletion." if active else ""),
             meta={
                 "startedAt": assessment.get("startedAt"),
                 "finishedAt": assessment.get("finishedAt"),

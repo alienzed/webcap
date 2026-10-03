@@ -64,6 +64,7 @@ _state_file_seen = None
 _persisted_managed_job_ids = set()
 _logger = logging.getLogger(__name__)
 _CHECKPOINT_SAVE_PATH_PATTERN = re.compile(r"Saving model checkpoint:\s+(.+?)[/\\]global_step\d+[/\\]")
+_GLOBAL_STEP_TAG_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _TRAINING_LOG_TIMESTAMP_PATTERN = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\]", re.MULTILINE)
 _DISTRIBUTED_SOCKET_HOLD_REASON = (
     "Queue held: PyTorch distributed could not open its server socket because the address is already in use. "
@@ -1169,6 +1170,35 @@ def _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage):
     return value
 
 
+def _validated_resume_checkpoint(run_path, checkpoint_tag):
+    tag = str(checkpoint_tag or "").strip()
+    if not tag:
+        return None
+    match = _GLOBAL_STEP_TAG_PATTERN.fullmatch(tag)
+    if not match:
+        raise ValueError("Resume checkpoint must be an existing global_step checkpoint.")
+    run_dir = host_path_for_training_path(run_path)
+    checkpoint = run_dir / tag
+    if not run_dir.is_dir() or run_dir.is_symlink() or not checkpoint.is_dir() or checkpoint.is_symlink():
+        raise FileNotFoundError("Selected resume checkpoint is unavailable: " + tag)
+    return {"tag": tag, "step": int(match.group(1)), "path": checkpoint, "wallTime": checkpoint.stat().st_mtime}
+
+
+def _rewrite_resume_latest(job):
+    tag = str(job.get("resumeCheckpointTag") or "").strip()
+    if not tag:
+        return
+    if not str(job.get("resumeOutputId") or "").strip():
+        raise ValueError("A previous saved resume point requires a managed checkpoint.")
+    selected = _validated_resume_checkpoint(job.get("resumeFromCheckpoint"), tag)
+    latest = host_path_for_training_path(job.get("resumeFromCheckpoint")) / "latest"
+    temporary = latest.with_name("latest.webcap.tmp")
+    temporary.write_text(selected["tag"] + "\n", encoding="utf-8")
+    temporary.replace(latest)
+    job["resumeCheckpointWallTime"] = selected["wallTime"]
+    job["resumeBranchStartedAt"] = time.time()
+
+
 def _build_runner_script(job, settings, artifacts, job_dir):
     stages = _normalize_training_stages(job.get("stages"))
     if stages in ("krea2", "wan21", "h3"):
@@ -1349,6 +1379,14 @@ def _launch_job(job, folder_path):
         job["finishedAt"] = time.time()
         return False
     log_wsl = _to_wsl_path(log_path, settings["wslDistribution"])
+    try:
+        _rewrite_resume_latest(job)
+    except Exception as exc:
+        job["status"] = "failed"
+        job["stage"] = "launch"
+        job["error"] = "Could not select the requested resume checkpoint: " + str(exc)
+        job["finishedAt"] = time.time()
+        return False
     launch = "setsid bash " + shlex.quote(script_wsl) + " > " + shlex.quote(log_wsl) + " 2>&1 < /dev/null & echo $!"
     code, stdout, stderr = _run_wsl(launch, timeout=15, distribution=settings["wslDistribution"])
     pid = (stdout or "").strip().splitlines()[-1] if (stdout or "").strip() else ""
@@ -2073,7 +2111,7 @@ def start_observer():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
+    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "resumeCheckpointTag", "resumeCheckpointWallTime", "resumeBranchStartedAt", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -2085,7 +2123,7 @@ def _public_job(job):
             payload["sourceUnavailable"] = "Set folder is currently unavailable; this job remains queued."
     return payload
 
-def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None):
+def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", resume_checkpoint_tag="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None):
     try:
         _, selected_run = profile_run(profile_id, run_id)
         stages = selected_run["stages"][0]
@@ -2102,6 +2140,10 @@ def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage
         resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage) if requested_resume else (
             validate_resumable_run_for_path(folder_path, resume_stage, resume_path) if resume_path else None
         )
+        if resume_checkpoint_tag:
+            if not requested_resume or resume is None:
+                raise ValueError("A previous saved resume point requires a managed checkpoint.")
+            _validated_resume_checkpoint(resume["runPath"], resume_checkpoint_tag)
         payload = _preflight_payload(folder, stages, profile_id=profile_id, mode=selected_mode)
         settings = payload.pop("settings")
         artifacts = {key: Path(value) for key, value in payload.pop("artifacts").items()}
@@ -2164,6 +2206,7 @@ def _new_job(
     run_name="",
     resume_action_id="",
     resume_output_id="",
+    resume_checkpoint_tag="",
     parent_active_seconds=None,
 ):
     job_id = uuid.uuid4().hex[:12]
@@ -2229,6 +2272,7 @@ def _new_job(
         "sequence": sequence_match.group(1) if sequence_match else "",
         "resumeActionId": str(resume_action_id or ""),
         "resumeOutputId": str(resume_output_id or ""),
+        "resumeCheckpointTag": str(resume_checkpoint_tag or ""),
         "parentJobId": str(parent_job_id or ""),
         "activeTrainingSeconds": float(parent_active_seconds or 0),
         "activeTrainingTimingComplete": parent_active_seconds is not None,
@@ -2328,6 +2372,7 @@ def start_response(
     run_name="",
     resume_action_id="",
     resume_output_id="",
+    resume_checkpoint_tag="",
     profile_id="",
     run_id="",
     mode="normal",
@@ -2403,7 +2448,18 @@ def start_response(
                 key: resume["point"].get(key)
                 for key in ("checkpointAvailable", "checkpointTag", "epoch", "step", "expectedEpochs", "completed")
             }
+            if resume_checkpoint_tag:
+                selected_checkpoint = _validated_resume_checkpoint(resume_path, resume_checkpoint_tag)
+                resume_point.update({
+                    "checkpointAvailable": True,
+                    "checkpointTag": selected_checkpoint["tag"],
+                    "epoch": None,
+                    "step": selected_checkpoint["step"],
+                    "completed": False,
+                })
         elif resume_path:
+            if resume_checkpoint_tag:
+                raise ValueError("A previous saved resume point requires a managed checkpoint.")
             validated_resume = validate_resumable_run_for_path(folder_path, resume_stage, resume_path)
             resume_point = {
                 key: validated_resume.get(key)
@@ -2450,7 +2506,7 @@ def start_response(
         job = _new_job(
             str(folder).strip(), preflight, stages, bundle, output_root, output_dir,
             resume_path, resume_stage, "", selected_profile["id"], selected_run["id"], selected_mode,
-            action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, 0,
+            action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, resume_checkpoint_tag, 0,
         )
         job["resumePoint"] = resume_point
         job["trainingSettings"] = dict(effective_config_settings)

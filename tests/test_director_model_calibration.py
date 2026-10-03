@@ -180,7 +180,7 @@ def test_calibration_report_persists_partial_findings_without_profile(calibratio
     assert calibration.get_report("local::director.gguf")["attempts"][-1]["failureKind"] == "capacity"
 
 
-def test_calibration_report_classifies_low_tier_runtime_failure_as_likely_unusable(calibration_root):
+def test_calibration_report_keeps_runtime_failure_operational_not_model_pathology(calibration_root):
     saved = calibration.save_report(_report(
         contextSize=0,
         maxTokens=0,
@@ -194,8 +194,63 @@ def test_calibration_report_classifies_low_tier_runtime_failure_as_likely_unusab
         }],
     ))
 
-    assert saved["health"] == "likely-unusable"
+    assert saved["health"] == "assessment-failed"
+    assert saved["pathologies"] == []
     assert saved["abilities"]["responds"] is False
+
+
+def test_existing_runtime_warning_is_corrected_when_report_is_read(calibration_root):
+    saved = calibration.save_report(_report(
+        modelRef="remote::qwen",
+        runtimeId="remote",
+        contextMode="runtime",
+        contextSize=0,
+        maxTokens=0,
+        status="error",
+        attempts=[{
+            "kind": "output",
+            "target": 512,
+            "status": "failed",
+            "failureKind": "runtime",
+            "error": "remote endpoint failed",
+        }],
+    ))
+
+    path = calibration_root / calibration.FILENAME
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["reports"]["remote::qwen"]["health"] = "likely-unusable"
+    payload["reports"]["remote::qwen"]["pathologies"] = ["runtime"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    reread = calibration.get_report("remote::qwen")
+
+    assert saved["health"] == "assessment-failed"
+    assert reread["health"] == "assessment-failed"
+    assert reread["pathologies"] == []
+
+
+def test_runtime_failure_after_proven_range_keeps_proven_range_without_warning(calibration_root):
+    saved = calibration.save_report(_report(
+        contextMode="runtime",
+        contextSize=0,
+        maxTokens=4096,
+        status="error",
+        attempts=[
+            {"kind": "output", "target": 4096, "status": "passed"},
+            {"kind": "prose", "target": 4096, "status": "passed"},
+            {
+                "kind": "output",
+                "target": 8192,
+                "status": "failed",
+                "failureKind": "runtime",
+                "error": "remote endpoint disconnected",
+            },
+        ],
+    ))
+
+    assert saved["health"] == "assessment-incomplete"
+    assert saved["pathologies"] == []
+    assert saved["abilities"]["coherentOutputTokens"] == 4096
 
 
 def test_calibration_report_classifies_early_looping_as_likely_unusable(calibration_root):

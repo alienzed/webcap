@@ -29,7 +29,7 @@ The filesystem remains the durable source of truth. `.webcap_training` queue/his
 
 ---
 
-> **Implementation note (2026-10-03):** The Resume source/output separation described later in this planning document was based on an incorrect assumption about Diffusion-Pipe run-directory behavior. WebCap passes an absolute `--resume_from_checkpoint` path, and the current trainer therefore continues in that same trainer-run directory. The live contract is documented in `docs/training_runner_contract.md`: resumed queue jobs keep `outputRunPath == resumeFromCheckpoint`. Treat later statements requiring a distinct newly produced trainer run on Resume as superseded historical planning context.
+> **Implementation note (2026-10-03):** The Resume source/output separation described later in this planning document was based on an incorrect assumption about Diffusion-Pipe run-directory behavior. WebCap passes an absolute `--resume_from_checkpoint` path, and the current trainer therefore continues in that same trainer-run directory. The live contract is documented in `docs/training_runner_contract.md`: resumed queue jobs keep `outputRunPath == resumeFromCheckpoint`. Treat later statements requiring a distinct newly produced trainer run, or describing a custom Resume source as read-only while training writes elsewhere, as superseded historical planning context.
 
 ## 2. Current code facts this plan is replacing
 

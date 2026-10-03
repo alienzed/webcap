@@ -119,6 +119,28 @@ def _normalize_attempt(attempt):
 
 
 
+def _report_abilities(attempts, context_mode, context_size, max_tokens):
+    passed = [attempt for attempt in attempts if attempt["status"] == "passed"]
+    structured_output = max(
+        [attempt["target"] for attempt in passed if attempt["kind"] == "output"],
+        default=0,
+    )
+    coherent_output = max(
+        [attempt["target"] for attempt in passed if attempt["kind"] == "prose"],
+        default=0,
+    )
+    proven_context = context_size if context_mode == "calibrated" else max(
+        [attempt.get("observedContextSize", 0) for attempt in passed],
+        default=0,
+    )
+    return {
+        "responds": bool(passed),
+        "contextTokens": max(0, int(proven_context or 0)),
+        "structuredOutputTokens": max(0, int(structured_output or 0)),
+        "coherentOutputTokens": max(0, int(coherent_output or max_tokens or 0)),
+    }
+
+
 def _report_health(attempts, context_mode, context_size, max_tokens, status):
     if status == "stopped":
         return "stopped"
@@ -198,6 +220,7 @@ def save_report(report):
         "status": status,
         "error": str(report.get("error") or ""),
         "health": _report_health(normalized_attempts, context_mode, context_size, max_tokens, status),
+        "abilities": _report_abilities(normalized_attempts, context_mode, context_size, max_tokens),
         "updatedAt": _now_iso(),
         "attempts": normalized_attempts,
     }

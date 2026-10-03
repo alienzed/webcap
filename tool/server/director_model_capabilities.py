@@ -146,3 +146,8 @@ def capability_for_model(model_ref="", model_id="", label=""):
             value = {key: item for key, item in capability.items() if key != "match"}
             return json.loads(json.dumps(value))
     return None
+
+
+
+def list_capability_hints():
+    return json.loads(json.dumps(ADVERTISED_CAPABILITIES))

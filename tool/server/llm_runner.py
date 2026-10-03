@@ -149,6 +149,8 @@ def reconcile_startup():
 
 
 def _assert_storyboard_contract_current(context, frozen_contract):
+    if context.get("deferredApply") is True:
+        return
     if "sourceInstruction" not in context:
         return
 
@@ -258,6 +260,32 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "storyId": story["id"],
             "changedSceneCount": changed_scene_count,
             "changedFieldCount": changed_field_count,
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
+    if operation == "develop_story_outline":
+        data = copy.deepcopy(llm_result.get("data"))
+        if not isinstance(data, dict) or not isinstance(data.get("scenes"), list) or not data["scenes"]:
+            raise ValueError("Storyboard Director returned an invalid Scene outline.")
+        return {
+            "storyId": story_id,
+            "outline": data,
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
+    if operation == "develop_story_scene":
+        data = copy.deepcopy(llm_result.get("data"))
+        if not isinstance(data, dict) or not isinstance(data.get("scene"), dict):
+            raise ValueError("Storyboard Director returned an invalid individual Scene.")
+        return {
+            "storyId": story_id,
+            "scene": data["scene"],
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
@@ -575,7 +603,7 @@ def _storyboard_target(context, operation):
         return None
     if operation in {"expand_concept", "define_invariants"}:
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
-    if operation in {"develop_story", "insert_scene"}:
+    if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene"}:
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
     if operation == "repair_scenes":
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}

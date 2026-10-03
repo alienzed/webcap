@@ -238,6 +238,28 @@ def _calibration_prose_prompt(target):
     )
 
 
+
+def calibration_prompt(kind, target):
+    kind = str(kind or "").strip()
+    try:
+        target = int(target)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Director calibration target must be an integer.") from exc
+    if kind == "context":
+        if target not in CONTEXT_STEPS:
+            raise ValueError("Unsupported Director context calibration target.")
+        return "Reply with exactly: CONTEXT_OK"
+    if kind == "output":
+        if target not in OUTPUT_STEPS:
+            raise ValueError("Unsupported Director output calibration target.")
+        return _calibration_output_prompt(target)
+    if kind == "prose":
+        if target not in OUTPUT_STEPS:
+            raise ValueError("Unsupported Director output calibration target.")
+        return _calibration_prose_prompt(target)
+    raise ValueError("Director calibration kind must be context, output, or prose.")
+
+
 def calibration_protocol():
     return {
         "contextSteps": list(CONTEXT_STEPS),
@@ -275,7 +297,7 @@ def enqueue_calibration_run(model_ref, kind, target, context_size=None):
             raise ValueError("Context calibration is available only for the local llama.cpp runtime.")
         if target not in CONTEXT_STEPS:
             raise ValueError("Unsupported Director context calibration target.")
-        messages = [{"role": "user", "content": "Reply with exactly: CONTEXT_OK"}]
+        messages = [{"role": "user", "content": calibration_prompt(kind, target)}]
         overrides = {"contextSize": target, "maxTokens": 64}
         label = "Director Context Calibration"
     elif kind in {"output", "prose"}:
@@ -283,7 +305,7 @@ def enqueue_calibration_run(model_ref, kind, target, context_size=None):
             raise ValueError("Unsupported Director output calibration target.")
         messages = [{
             "role": "user",
-            "content": _calibration_output_prompt(target) if kind == "output" else _calibration_prose_prompt(target),
+            "content": calibration_prompt(kind, target),
         }]
         overrides = {"maxTokens": target}
         if str(model.get("runtimeId") or "") == "local" and context_size not in (None, ""):
@@ -410,9 +432,12 @@ def register_routes(app):
                     "calibrationReports": begun["reports"],
                 })
             if action == "enqueue_calibration":
+                kind = data.get("kind")
+                target = data.get("target")
                 return jsonify({
                     "ok": True,
-                    "job": enqueue_calibration_run(data.get("modelRef"), data.get("kind"), data.get("target"), data.get("contextSize")),
+                    "job": enqueue_calibration_run(data.get("modelRef"), kind, target, data.get("contextSize")),
+                    "prompt": calibration_prompt(kind, target),
                 }), 202
             if action == "save_calibration_report":
                 return jsonify({

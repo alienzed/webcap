@@ -3348,11 +3348,13 @@
     el('test-generations-view-compare-btn').onclick = function () {
       setResultsView('compare');
     };
-    el('test-generations-candidates-btn').onclick = function () {
-      openCandidateRunMenu(this);
+    el('test-generations-candidates-btn').onclick = function (event) {
+      event.stopPropagation();
+      try { openCandidateRunMenu(this); } catch (err) { showError(err); }
     };
-    el('test-generations-recent-prompts-btn').onclick = function () {
-      openRecentPromptsMenu(this);
+    el('test-generations-recent-prompts-btn').onclick = function (event) {
+      event.stopPropagation();
+      try { openRecentPromptsMenu(this); } catch (err) { showError(err); }
     };
     el('test-generations-files').addEventListener('change', function (event) {
       var checkbox = event.target.closest('[data-candidate-select]');

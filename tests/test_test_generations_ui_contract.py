@@ -174,6 +174,11 @@ def test_test_navigation_uses_global_set_context_and_local_run_choice():
     assert "function openCandidateRunMenu(button)" in script
     assert "if (runs.length === 1)" in script
     assert "showContextMenu(rect.left, rect.bottom + 4, runs.map" in script
+    candidate_click = script.split("el('test-generations-candidates-btn').onclick", 1)[1].split("};", 1)[0]
+    assert "event.stopPropagation();" in candidate_click
+    assert "catch (err) { showError(err); }" in candidate_click
+    prompts_click = script.split("el('test-generations-recent-prompts-btn').onclick", 1)[1].split("};", 1)[0]
+    assert "event.stopPropagation();" in prompts_click
 
 
 def test_test_prompt_can_reuse_recent_session_prompt_without_switching_set():

@@ -1417,11 +1417,11 @@ def _job_runner_script_wsl(job):
 def _inspect_job_runner(job):
     pid = _job_runner_pid(job)
     if pid <= 0:
-        return "unknown", "Runner PID is not available."
+        return "absent", "Runner PID is not available."
     try:
         script_wsl = _job_runner_script_wsl(job)
     except Exception as exc:
-        return "unknown", "Could not resolve the runner script in WSL: " + str(exc)
+        raise RuntimeError("Could not resolve the runner script in WSL: " + str(exc)) from exc
     proc_dir = "/proc/" + str(pid)
     command = (
         "if [ ! -d " + shlex.quote(proc_dir) + " ]; then exit 3; fi; "
@@ -1433,7 +1433,7 @@ def _inspect_job_runner(job):
         return "absent", ""
     if code != 0:
         detail = (stderr or stdout).strip() or "process inspection exited with code " + str(code)
-        return "unknown", "Could not inspect the runner process: " + detail
+        raise RuntimeError("Could not inspect the runner process: " + detail)
     arguments = [line.strip() for line in (stdout or "").splitlines() if line.strip()]
     if script_wsl in arguments:
         job["pid"] = pid
@@ -1724,19 +1724,6 @@ def _queue_paused_job(job):
     job["updatedAt"] = time.time()
 
 
-def _record_unverified_runner(job, detail):
-    """Expose missing runner evidence without inventing a new queue state."""
-    message = (
-        "WebCap could not verify the recorded training runner and left this job unchanged. "
-        + str(detail or "No runner evidence is available.").strip()
-    )
-    job.pop("runnerVerified", None)
-    if job.get("error") != message:
-        job["error"] = message
-        job["updatedAt"] = time.time()
-    return {"holdReason": ""}
-
-
 def _recover_queued_live_runner(job):
     """Reattach a runner that launched before its queued state could be persisted as active."""
     if str(job.get("status") or "") != "queued":
@@ -1807,7 +1794,7 @@ def _refresh_job(job):
     )
     if result_state == "absent" and not has_runner_evidence:
         if prior_status in ACTIVE_STATUSES:
-            return _record_unverified_runner(job, "Runner PID and script evidence are unavailable.")
+            return _recover_dead_runner(job, "Runner PID and script evidence are unavailable.")
         return {"holdReason": ""}
     if not job.get("progressPlan"):
         job["progressPlan"] = _default_progress_plan()
@@ -1866,10 +1853,6 @@ def _refresh_job(job):
         job.pop("confirmationNote", None)
         job["updatedAt"] = now
         _trigger_scheduled_finish(job)
-        return {"holdReason": ""}
-    if process_state == "unknown":
-        if prior_status in ACTIVE_STATUSES:
-            return _record_unverified_runner(job, result_error or process_detail)
         return {"holdReason": ""}
     if prior_status in ACTIVE_STATUSES and not job.get("actionRequested"):
         return _recover_dead_runner(

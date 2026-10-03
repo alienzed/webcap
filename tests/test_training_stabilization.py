@@ -1021,8 +1021,9 @@ def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, m
     assert restored["queuePauseReason"] == "Previous runner ended without a result. Resume or restart the first item."
 
 
-def test_restart_preserves_unverifiable_runner_until_exact_process_verifies(tmp_path, monkeypatch):
+def test_runner_inspection_failure_is_an_error_not_a_coordination_state(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
     state = {
         "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
         "jobs": [
@@ -1035,23 +1036,10 @@ def test_restart_preserves_unverifiable_runner_until_exact_process_verifies(tmp_
     }
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (1, "", "WSL is unavailable"))
 
-    training_runner._refresh_state(state)
-    active = state["jobs"][0]
+    with pytest.raises(RuntimeError, match="Could not inspect the runner process: WSL is unavailable"):
+        training_runner._refresh_state(state)
 
-    assert state["queuePaused"] is False
-    assert state["activeJobId"] == "active"
-    assert [job["id"] for job in state["jobs"]] == ["active", "later"]
-    assert active["status"] == "running"
-    assert active["pid"] == 4242
-    assert "runnerVerified" not in active
-    assert "WSL is unavailable" in active["error"]
-
-    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (0, "/bin/bash\n/runs/runner.sh\n", ""))
-    monkeypatch.setattr(training_runner, "_log_has_progress", lambda _text: True)
-    training_runner._refresh_state(state)
-
-    assert active["runnerVerified"] is True
-    assert "error" not in active
+    assert execution_queue.resource_owner() == ""
 
 
 def test_first_monitor_pass_pauses_pending_queue_without_active_job(tmp_path, monkeypatch):

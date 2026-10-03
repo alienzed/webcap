@@ -451,7 +451,6 @@ def _advance_queue():
                 _release_gpu()
             return None
 
-        reserved_here = False
         if not owner:
             if not _reserve_gpu():
                 from .training_runner import external_gpu_work_block_reason
@@ -463,7 +462,6 @@ def _advance_queue():
                 else:
                     _set_backlog_wait_reason("Waiting for " + blocker + " to release the shared GPU.")
                 return None
-            reserved_here = True
 
         from .gpu_prep import prepare_gpu_for
         if not prepare_gpu_for(GPU_RESERVATION_OWNER):

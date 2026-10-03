@@ -1581,3 +1581,62 @@ def test_runtime_override_rejects_unknown_fields(llm_root):
             {"operation": "freeform_chat", "messages": [{"role": "user", "content": "probe"}]},
             context={"runtimeOverrides": {"magic": 123}},
         )
+
+
+
+def test_individual_story_development_jobs_do_not_mutate_story_before_final_apply(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "A woman crosses an empty station.",
+        "targetSceneCount": 2,
+    })
+    original_updated_at = story["updatedAt"]
+    from tool.server.storyboard_llm_contract import build_request
+
+    outline_contract = build_request(story, "", "develop_story_outline")
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "data": {
+                "scenes": [
+                    {
+                        "title": "Arrival",
+                        "summary": "She enters the station.",
+                        "suggestedDurationSeconds": 10,
+                    },
+                    {
+                        "title": "Platform",
+                        "summary": "She reaches the platform.",
+                        "suggestedDurationSeconds": 10,
+                    },
+                ]
+            },
+            "text": "{}",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        outline_contract,
+        context={
+            "storyId": story["id"],
+            "sceneId": "",
+            "operation": "develop_story_outline",
+            "deferredApply": True,
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    stored = storyboard_store.load_story(story["id"])
+
+    assert finished["status"] == "completed"
+    assert len(finished["result"]["outline"]["scenes"]) == 2
+    assert stored["sceneOrder"] == []
+    assert stored["updatedAt"] == original_updated_at

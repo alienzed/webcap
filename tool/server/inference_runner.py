@@ -81,6 +81,33 @@ def _local_llm_work_pending():
     )
 
 
+def next_gpu_work_kind():
+    """Return foreground/backlog for the next runnable Inference GPU turn, else empty."""
+    _ensure_execution_reconciled()
+    snapshot = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    if snapshot.get("paused") or snapshot.get("activeJobId"):
+        return ""
+
+    jobs = snapshot.get("jobs", [])
+    has_foreground = any(str(job.get("status") or "") == "queued" for job in jobs)
+    has_backlog = (
+        not has_foreground
+        and _backlog_drain_enabled.is_set()
+        and any(str(job.get("status") or "") == "backlog" for job in jobs)
+    )
+    if not has_foreground and not has_backlog:
+        return ""
+
+    from . import inference_runtime
+    try:
+        inference_runtime.system_stats()
+    except (ConnectionError, TimeoutError):
+        _set_backlog_wait_reason("ComfyUI unavailable.")
+        return ""
+
+    return "foreground" if has_foreground else "backlog"
+
+
 def _set_backlog_wait_reason(reason):
     global _backlog_wait_reason
     with _backlog_lock:

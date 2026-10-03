@@ -332,6 +332,55 @@ def test_execution_queue_resource_owner_is_closed_to_gpu_lanes(queue_root):
         execution_queue.release_resource("tests")
 
 
+def test_gpu_dispatch_selects_training_before_other_runnable_lanes(queue_root, monkeypatch):
+    from tool.server import inference_runner, llm_runner, training_runner
+
+    seen = []
+    monkeypatch.setattr(training_runner, "gpu_work_runnable", lambda: seen.append("training") or True)
+    monkeypatch.setattr(llm_runner, "local_gpu_work_runnable", lambda: seen.append("llm") or True)
+    monkeypatch.setattr(inference_runner, "next_gpu_work_kind", lambda: seen.append("inference") or "foreground")
+
+    assert execution_queue.dispatch_if_idle() == "training"
+    assert seen == ["training"]
+
+
+def test_gpu_dispatch_selects_llm_before_inference(queue_root, monkeypatch):
+    from tool.server import inference_runner, llm_runner, training_runner
+
+    seen = []
+    monkeypatch.setattr(training_runner, "gpu_work_runnable", lambda: seen.append("training") or False)
+    monkeypatch.setattr(llm_runner, "local_gpu_work_runnable", lambda: seen.append("llm") or True)
+    monkeypatch.setattr(inference_runner, "next_gpu_work_kind", lambda: seen.append("inference") or "foreground")
+
+    assert execution_queue.dispatch_if_idle() == "llm"
+    assert seen == ["training", "llm"]
+
+
+def test_gpu_dispatch_selects_inference_only_after_higher_lanes(queue_root, monkeypatch):
+    from tool.server import inference_runner, llm_runner, training_runner
+
+    seen = []
+    monkeypatch.setattr(training_runner, "gpu_work_runnable", lambda: seen.append("training") or False)
+    monkeypatch.setattr(llm_runner, "local_gpu_work_runnable", lambda: seen.append("llm") or False)
+    monkeypatch.setattr(inference_runner, "next_gpu_work_kind", lambda: seen.append("inference") or "foreground")
+
+    assert execution_queue.dispatch_if_idle() == "inference"
+    assert seen == ["training", "llm", "inference"]
+
+
+def test_gpu_dispatch_never_replaces_an_existing_owner(queue_root, monkeypatch):
+    from tool.server import training_runner
+
+    execution_queue.reserve_resource("inference")
+    monkeypatch.setattr(
+        training_runner,
+        "gpu_work_runnable",
+        lambda: pytest.fail("Owned GPU must not run idle selection."),
+    )
+
+    assert execution_queue.dispatch_if_idle() == "inference"
+
+
 def test_execution_queue_orders_mixed_inference_client_metadata_in_one_lane(queue_root):
     first = execution_queue.enqueue(
         "inference",

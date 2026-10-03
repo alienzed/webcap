@@ -56,7 +56,7 @@ QUEUE_STATUSES = {"queued"}
 HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped", "interrupted"}
 TERMINAL_STATUSES = HISTORY_STATUSES | {"cancelled"}
 TRAINING_RESOURCE_OWNER = "training"
-_lock = threading.Lock()
+_lock = threading.RLock()
 _monitor_lock = threading.Lock()
 _monitor_thread = None
 _startup_reconciled = False
@@ -171,6 +171,18 @@ def _default_state():
 
 class TrainingStateError(RuntimeError):
     pass
+
+
+def gpu_work_runnable():
+    """Return whether Training currently has new local-GPU work eligible to start."""
+    with _lock:
+        state = _read_state()
+        jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
+        if state.get("queuePaused"):
+            return False
+        if any(job.get("status") in ACTIVE_STATUSES for job in jobs):
+            return False
+        return any(job.get("status") in QUEUE_STATUSES for job in jobs)
 
 
 def _format_gib(value):

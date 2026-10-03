@@ -12,7 +12,6 @@ def queue_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
     monkeypatch.setattr(app_config, "app_state_root", lambda: Path(tmp_path) / ".test-webcap-app-data" / "state")
     execution_queue._resource_owner = ""
-    execution_queue._gpu_free = True
     execution_queue.clear_transient_receipts()
     execution_queue.ephemeral_lane("llm").clear()
     return tmp_path
@@ -302,35 +301,6 @@ def test_server_startup_shelves_inference_without_starting_it():
     assert "DIRECTOR STARTUP RECONCILIATION FAILED" in startup
     assert "TRAINING OBSERVER STARTUP FAILED" not in startup
     assert startup.count("except ExecutionQueueStateError:") == 2
-
-
-def test_gpu_state_initializes_free_when_training_is_not_running(queue_root):
-    execution_queue._gpu_free = False
-
-    result = execution_queue.initialize_gpu_state(training_process_exists=False)
-
-    assert result is True
-    assert execution_queue.gpu_is_free() is True
-
-
-def test_gpu_state_initializes_busy_when_training_is_running(queue_root):
-    execution_queue._gpu_free = True
-
-    result = execution_queue.initialize_gpu_state(training_process_exists=True)
-
-    assert result is False
-    assert execution_queue.gpu_is_free() is False
-
-
-def test_gpu_state_transitions_are_explicit_and_process_local(queue_root):
-    execution_queue.initialize_gpu_state(training_process_exists=False)
-
-    assert execution_queue.mark_gpu_busy() is False
-    assert execution_queue.gpu_is_free() is False
-    assert execution_queue.mark_gpu_free() is True
-    assert execution_queue.gpu_is_free() is True
-
-    assert not app_config.execution_queue_state_path().exists()
 
 
 def test_execution_queue_resource_claim_is_exclusive(queue_root):

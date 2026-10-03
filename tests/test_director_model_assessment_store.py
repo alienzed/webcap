@@ -74,3 +74,20 @@ def test_assessment_rejects_invalid_evidence_shape(assessment_root):
             started["id"],
             [{"kind": "mystery", "target": 512, "status": "failed"}],
         )
+
+
+
+def test_active_assessment_evidence_cannot_be_deleted_until_finalized(assessment_root):
+    started = assessment.start_assessment(_model())
+
+    with pytest.raises(RuntimeError, match="Active Director assessment"):
+        assessment.delete_assessment(started["id"])
+
+    assessment.update_assessment(
+        started["id"],
+        [],
+        summary={},
+        final=True,
+        status="stopped",
+    )
+    assert assessment.delete_assessment(started["id"]) is True

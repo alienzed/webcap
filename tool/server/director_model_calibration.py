@@ -150,7 +150,7 @@ def _report_health(attempts, context_mode, context_size, max_tokens, status):
     first_output = next((attempt for attempt in attempts if attempt["kind"] == "output"), None)
     first_prose = next((attempt for attempt in attempts if attempt["kind"] == "prose"), None)
 
-    severe_kinds = {"runtime", "empty", "malformed", "looping"}
+    severe_kinds = {"runtime", "empty", "malformed", "looping", "leakage", "garbled"}
     if context_mode == "calibrated" and first_context and first_context["status"] == "failed":
         return "likely-unusable"
     if first_output and first_output["status"] == "failed" and first_output.get("failureKind") in severe_kinds:

@@ -1,5 +1,6 @@
 import pytest
 
+from tool.server import training_archive
 from tool.server.training_archive import _archive_metrics_from_events
 
 
@@ -45,3 +46,120 @@ def test_archive_metrics_describe_selected_epoch_without_scoring_quality():
     assert metrics["selectedEpochSeconds"] == pytest.approx(60.0)
     assert metrics["savedEpochs"] == [3, 5, 6]
     assert len(metrics["epochLossPoints"]) == 6
+
+
+
+def test_archive_metrics_reuses_persisted_resume_branch_boundary(tmp_path, monkeypatch):
+    root = tmp_path / "archive"
+    directory = root / "resumed"
+    directory.mkdir(parents=True)
+    (directory / "webcap-run.json").write_text('{"runId":"action/run"}', encoding="utf-8")
+    manifest = {
+        "archive": {
+            "selectedEpoch": 6,
+            "retainedAlternateEpochs": [5],
+            "resumeCheckpointWallTime": 150.0,
+            "resumeBranchStartedAt": 250.0,
+        }
+    }
+    observed = {}
+
+    monkeypatch.setattr(training_archive, "archive_root", lambda: root)
+    monkeypatch.setattr(training_archive, "read_run_manifest", lambda _directory, _run_id: manifest)
+
+    def fake_read_loss_events(run_dir, checkpoint_wall_time=None, branch_started_at=None):
+        observed["runDir"] = run_dir
+        observed["checkpointWallTime"] = checkpoint_wall_time
+        observed["branchStartedAt"] = branch_started_at
+        return ["detailed"], ["epoch"]
+
+    monkeypatch.setattr(training_archive, "read_loss_events", fake_read_loss_events)
+    monkeypatch.setattr(
+        training_archive,
+        "_archive_metrics_from_events",
+        lambda detailed, epoch, selected, retained: {
+            "detailed": detailed,
+            "epoch": epoch,
+            "selected": selected,
+            "retained": retained,
+        },
+    )
+
+    metrics = training_archive.archive_metrics("resumed")
+
+    assert observed["runDir"] == directory
+    assert observed["checkpointWallTime"] == 150.0
+    assert observed["branchStartedAt"] == 250.0
+    assert metrics["selected"] == 6
+    assert metrics["retained"] == [5]
+
+
+def test_archive_metrics_rejects_incomplete_resume_branch_metadata(tmp_path, monkeypatch):
+    root = tmp_path / "archive"
+    directory = root / "broken"
+    directory.mkdir(parents=True)
+    (directory / "webcap-run.json").write_text('{"runId":"action/run"}', encoding="utf-8")
+
+    monkeypatch.setattr(training_archive, "archive_root", lambda: root)
+    monkeypatch.setattr(
+        training_archive,
+        "read_run_manifest",
+        lambda _directory, _run_id: {
+            "archive": {
+                "selectedEpoch": 6,
+                "retainedAlternateEpochs": [],
+                "resumeCheckpointWallTime": 150.0,
+            }
+        },
+    )
+
+    with pytest.raises(ValueError, match="incomplete resume-branch metadata"):
+        training_archive.archive_metrics("broken")
+
+
+def test_finalize_persists_resume_branch_boundary(tmp_path, monkeypatch):
+    run_dir = tmp_path / "run"
+    epoch_dir = run_dir / "epoch6"
+    epoch_dir.mkdir(parents=True)
+    (epoch_dir / "adapter.safetensors").write_bytes(b"x")
+    archive_dir = tmp_path / "archive"
+    captured = {}
+
+    context = {
+        "runDir": run_dir,
+        "run": {
+            "runName": "Resumed run",
+            "stages": "h3",
+            "runSummary": {},
+            "resumeCheckpointWallTime": 150.0,
+            "resumeBranchStartedAt": 250.0,
+        },
+        "actionId": "action/run",
+        "epochs": {6: epoch_dir},
+        "selectedEpoch": 6,
+        "production": tmp_path / "selected.safetensors",
+        "staged": [],
+        "siblingOutputs": [tmp_path / "another-output"],
+        "outputRoot": tmp_path / "output",
+        "actionRoot": tmp_path / "action",
+    }
+
+    monkeypatch.setattr(training_archive, "_context", lambda _folder, _job_id: context)
+    monkeypatch.setattr(training_archive, "archive_root", lambda: archive_dir)
+    monkeypatch.setattr(training_archive, "_staged_alternate_candidates", lambda _context: [])
+    monkeypatch.setattr(
+        training_archive,
+        "record_archive_metadata",
+        lambda _run_dir, _action_id, metadata: captured.update(metadata),
+    )
+    monkeypatch.setattr(training_archive, "clear_history_job", lambda _folder, _job_id: None)
+    monkeypatch.setattr(training_archive, "clear_test_sessions", lambda _folder: 0)
+    monkeypatch.setattr(training_archive.app_config, "safe_join_fs_root", lambda _folder: tmp_path / "set")
+    monkeypatch.setattr(training_archive, "_move_archive", lambda _source, _destination: None)
+    monkeypatch.setattr(training_archive, "_epoch_directories", lambda _directory: {})
+    monkeypatch.setattr(training_archive, "_global_step_directories", lambda _directory: [])
+
+    training_archive.finalize("set", "job", "resumed-archive", [])
+
+    assert captured["resumeCheckpointWallTime"] == 150.0
+    assert captured["resumeBranchStartedAt"] == 250.0

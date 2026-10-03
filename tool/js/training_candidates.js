@@ -414,6 +414,7 @@ function trainingCandidatesToggleComparison(key, checked) {
     return;
   }
   if (comparison.selected.indexOf(source.key) === -1) comparison.selected.push(source.key);
+  trainingCandidatesClearPinnedDetails();
   if (!Object.prototype.hasOwnProperty.call(comparison.colors, source.key)) {
     comparison.colors[source.key] = comparison.nextColor++;
   }
@@ -423,8 +424,9 @@ function trainingCandidatesToggleComparison(key, checked) {
 }
 
 function trainingCandidatesWireCompareControl(root) {
+  if (!root) throw new Error('Candidate comparison requires a chart root.');
   var details = root.querySelector('.training-candidates-compare-control');
-  if (!details) return;
+  if (!details) throw new Error('Candidate comparison control is missing from the chart footer.');
   details.addEventListener('toggle', function () {
     var comparison = trainingCandidatesComparisonState();
     comparison.open = details.open;
@@ -557,7 +559,8 @@ function trainingCandidatesComparisonHtml(payload) {
 
 function wireTrainingCandidatesComparison() {
   var wrap = document.querySelector('.training-candidates-comparison-wrap');
-  if (!wrap || wrap.__trainingCandidatesComparisonWired) return;
+  if (!wrap) throw new Error('Candidate comparison chart is missing.');
+  if (wrap.__trainingCandidatesComparisonWired) return;
   wrap.__trainingCandidatesComparisonWired = true;
   trainingCandidatesWireCompareControl(wrap);
   wrap.addEventListener('click', function (event) {

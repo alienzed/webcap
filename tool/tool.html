@@ -2095,7 +2095,8 @@
                 <div class="app-settings-tabs diagnostics-tabs" role="tablist" aria-label="Diagnostics sections">
                     <button id="diagnostics-tab-health" type="button" class="app-settings-tab diagnostics-tab active" data-diagnostics-tab="health" role="tab" aria-selected="true" aria-controls="diagnostics-panel-health">Health</button>
                     <button id="diagnostics-tab-h3" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="h3" role="tab" aria-selected="false" aria-controls="diagnostics-panel-h3" tabindex="-1">H3 Calibration</button>
-                    <button id="diagnostics-tab-director" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="director" role="tab" aria-selected="false" aria-controls="diagnostics-panel-director" tabindex="-1">Director Model Test</button>
+                    <button id="diagnostics-tab-models" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="models" role="tab" aria-selected="false" aria-controls="diagnostics-panel-models" tabindex="-1">Director Models</button>
+                    <button id="diagnostics-tab-benchmark" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="benchmark" role="tab" aria-selected="false" aria-controls="diagnostics-panel-benchmark" tabindex="-1">Benchmark</button>
                 </div>
                 <div class="app-settings-tab-panels diagnostics-panels">
                     <div id="diagnostics-panel-health" class="app-settings-panel diagnostics-panel" data-diagnostics-panel="health" role="tabpanel" aria-labelledby="diagnostics-tab-health">
@@ -2132,20 +2133,55 @@
                             </details>
                         </section>
                     </div>
-                    <div id="diagnostics-panel-director" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="director" role="tabpanel" aria-labelledby="diagnostics-tab-director" hidden>
+                    <div id="diagnostics-panel-models" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="models" role="tabpanel" aria-labelledby="diagnostics-tab-models" hidden>
+                        <section class="app-settings-section" id="director-model-assessment-settings">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Director Models <span id="director-model-assessment-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
+                                <div class="app-settings-section-copy">Assess usable context and output capacity, preserve diagnostic evidence, and surface only meaningful model warnings or limitations to the rest of WebCap.</div>
+                            </div>
+                            <div class="director-model-test-model-header">
+                                <span class="app-settings-field-label">Models to assess</span>
+                                <div class="director-model-test-model-actions">
+                                    <button id="director-model-assessment-refresh" type="button" class="review-captions-btn">Refresh Models</button>
+                                    <button id="director-model-assessment-select-all" type="button" class="review-captions-btn">All</button>
+                                    <button id="director-model-assessment-select-none" type="button" class="review-captions-btn">None</button>
+                                </div>
+                            </div>
+                            <div id="director-model-assessment-models" class="director-model-test-models"></div>
+                            <div class="app-settings-actions app-settings-actions-inline director-model-test-actions">
+                                <button id="director-model-assessment-run" type="button">Assess Selected</button>
+                                <button id="director-model-assessment-stop" type="button" class="hidden">Stop</button>
+                                <button id="director-model-test-clear-calibration" type="button" class="review-captions-btn" disabled>Clear Learned Results</button>
+                            </div>
+                            <div id="director-model-assessment-activity" class="director-model-test-activity" aria-live="polite"></div>
+                            <div class="app-settings-section-header director-model-assessment-results-heading">
+                                <div class="app-settings-section-title">Current Findings</div>
+                                <div class="app-settings-section-copy">High-level interpretation only. Expand raw assessment runs when you need the actual evidence.</div>
+                            </div>
+                            <div id="director-model-test-calibration-profiles"><p class="app-settings-help">No calibration findings yet.</p></div>
+                            <details class="app-settings-advanced director-model-assessment-history">
+                                <summary>Assessment History</summary>
+                                <div class="app-settings-disclosure-body">
+                                    <p class="app-settings-help">Full prompts and model outputs are temporary diagnostic evidence. Learned model results remain when raw history is deleted.</p>
+                                    <div id="director-model-assessment-history"><p class="app-settings-help">No assessment runs yet.</p></div>
+                                </div>
+                            </details>
+                        </section>
+                    </div>
+                    <div id="diagnostics-panel-benchmark" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="benchmark" role="tabpanel" aria-labelledby="diagnostics-tab-benchmark" hidden>
                         <section class="app-settings-section" id="director-model-test-settings">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Director Model Test <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
-                                <div class="app-settings-section-copy">Run one fixed expansion protocol sequentially across selected Director models. Results remain available for this WebCap session; export JSON to keep them.</div>
+                                <div class="app-settings-section-title">Director Benchmark <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
+                                <div class="app-settings-section-copy">Run one editable prompt sequentially across selected Director models for side-by-side qualitative comparison. Benchmark results remain session-only unless exported.</div>
                             </div>
                             <div id="director-model-test-protocol" class="app-settings-help">Open this tab to load the protocol and available models.</div>
                             <label class="app-settings-field app-settings-field-wide">
                                 <span class="app-settings-field-label">Benchmark Prompt</span>
                                 <textarea id="director-model-test-prompt" rows="14" spellcheck="true"></textarea>
-                                <span class="app-settings-note">The exact text is frozen into the current test session when the test starts.</span>
+                                <span class="app-settings-note">The exact text is frozen into the current benchmark session when the test starts.</span>
                             </label>
                             <div class="director-model-test-model-header">
-                                <span class="app-settings-field-label">Models</span>
+                                <span class="app-settings-field-label">Models to benchmark</span>
                                 <div class="director-model-test-model-actions">
                                     <button id="director-model-test-refresh" type="button" class="review-captions-btn">Refresh Models</button>
                                     <button id="director-model-test-select-all" type="button" class="review-captions-btn">All</button>
@@ -2155,21 +2191,10 @@
                             <div id="director-model-test-models" class="director-model-test-models"></div>
                             <div class="app-settings-actions app-settings-actions-inline director-model-test-actions">
                                 <button id="director-model-test-run" type="button">Run Selected</button>
-                                <button id="director-model-test-calibrate" type="button">Calibrate Selected</button>
                                 <button id="director-model-test-stop" type="button" class="hidden">Stop</button>
                                 <button id="director-model-test-export" type="button" class="review-captions-btn" disabled>Export JSON</button>
                             </div>
                             <div id="director-model-test-activity" class="director-model-test-activity" aria-live="polite"></div>
-                            <details class="app-settings-advanced director-model-calibration">
-                                <summary>Calibration Profiles</summary>
-                                <div class="app-settings-disclosure-body">
-                                    <p class="app-settings-help">Progressively verifies local llama.cpp context capacity and clean output ceilings per model. Saved limits become per-model defaults only when the corresponding Director setting is Auto; explicit settings still take priority.</p>
-                                    <div class="app-settings-actions app-settings-actions-inline">
-                                        <button id="director-model-test-clear-calibration" type="button" class="review-captions-btn" disabled>Clear Profiles</button>
-                                    </div>
-                                    <div id="director-model-test-calibration-profiles"><p class="app-settings-help">No calibrated model profiles yet.</p></div>
-                                </div>
-                            </details>
                             <div id="director-model-test-results"><p class="app-settings-help">No results yet.</p></div>
                         </section>
                     </div>

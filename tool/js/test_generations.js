@@ -2383,10 +2383,13 @@
     var runBtn = el('test-generations-run-btn');
     if (runBtn) {
       var supported = isTestModelSupported();
-      runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;
-      runBtn.title = supported
-        ? 'Queue this frozen Test batch.'
-        : 'Test Generations is not available for the selected Base Model.';
+      var selectedCount = selectedCandidateFiles().length;
+      runBtn.disabled = !prepared || !prepared.count || !selectedCount || !supported;
+      runBtn.title = !supported
+        ? 'Test Generations is not available for the selected Base Model.'
+        : !selectedCount
+          ? 'Select at least one LoRA to run tests.'
+          : 'Queue this frozen Test batch.';
     }
   }
 

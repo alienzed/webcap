@@ -53,7 +53,9 @@
       sceneCompletions: {},
       activityErrorReported: false,
       activitySlotSample: null,
-      requestByJobId: {}
+      requestByJobId: {},
+      developIndividuallyOverride: null,
+      developStrategyModelId: ''
     }
   };
 
@@ -578,6 +580,7 @@
           trackTransientLlmJob(body.job);
           return waitForDirectorJob(body.job).then(function (result) {
             result.jobId = body.job.jobId;
+            if (body.sourceUpdatedAt) result.sourceUpdatedAt = String(body.sourceUpdatedAt);
             if (payload.operation !== 'expand_concept' && payload.operation !== 'develop_story') return result;
             return request(null, 'story=' + encodeURIComponent(payload.storyId)).then(function (storyPayload) {
               result.story = storyPayload.story;
@@ -590,6 +593,42 @@
         return body;
       });
     });
+  }
+
+  function selectedDirectorModel() {
+    return (storyState.director.models || []).find(function (model) {
+      return String(model.id || '') === String(storyState.director.modelId || '');
+    }) || null;
+  }
+
+  function syncIndividualDevelopStrategy(resetOverride) {
+    var checkbox = el('storyboard-develop-individual');
+    if (!checkbox) throw new Error('Storyboard individual development control is missing.');
+    var model = selectedDirectorModel();
+    var modelId = model ? String(model.id || '') : '';
+    if (resetOverride || storyState.director.developStrategyModelId !== modelId) {
+      storyState.director.developStrategyModelId = modelId;
+      storyState.director.developIndividuallyOverride = null;
+    }
+
+    var assessment = model && model.assessment && typeof model.assessment === 'object'
+      ? model.assessment
+      : null;
+    var recommended = !!(assessment && assessment.individualScenesRecommended);
+    if (storyState.director.developIndividuallyOverride === null) {
+      checkbox.checked = recommended;
+    } else {
+      checkbox.checked = !!storyState.director.developIndividuallyOverride;
+    }
+    checkbox.closest('.storyboard-develop-individual').classList.toggle('recommended', recommended);
+
+    if (assessment && assessment.seriousWarning) {
+      checkbox.title = 'Assessment found serious generation issues with this model. Individual Scene generation may reduce output pressure but does not remove the warning.';
+    } else if (recommended) {
+      checkbox.title = 'Recommended for this model because its proven coherent output is below the full-story threshold.';
+    } else {
+      checkbox.title = 'Plan the Story once, then author each full Scene in a separate Director request.';
+    }
   }
 
   function renderDirectorSelector() {
@@ -612,12 +651,22 @@
     }
 
     select.disabled = false;
+    var previousModelId = storyState.director.modelId;
     var selected = renderDirectorModelOptions(select, models, storyState.director.modelId);
     if (storyState.director.modelId !== selected) {
       storyState.director.modelId = selected;
       setDirectorModelPreference('webcap.storyboard.directorModel', selected);
     }
-    select.title = '';
+    var selectedModel = selectedDirectorModel();
+    var selectedAssessment = selectedModel && selectedModel.assessment;
+    if (selectedAssessment && selectedAssessment.seriousWarning) {
+      select.title = 'Assessment warning: ' + (selectedAssessment.pathologies || []).join(', ');
+    } else if (selectedAssessment && selectedAssessment.limited) {
+      select.title = 'Assessment found reduced long-form output capacity.';
+    } else {
+      select.title = '';
+    }
+    syncIndividualDevelopStrategy(previousModelId !== selected);
   }
 
   function refreshDirector() {
@@ -1865,6 +1914,70 @@
   }
 
 
+  function developStoryIndividually(storyId, modelId, hasScenes) {
+    var sourceUpdatedAt = '';
+    var outline = null;
+    var authoredScenes = [];
+
+    setDevelopStatus('Director is planning the Story…');
+    return directorRequest({
+      storyId: storyId,
+      operation: 'develop_story_outline',
+      model: modelId,
+      replaceExisting: hasScenes
+    }).then(function (outlineResult) {
+      sourceUpdatedAt = String(outlineResult.sourceUpdatedAt || '');
+      outline = outlineResult.outline;
+      if (!sourceUpdatedAt) throw new Error('Individual Story development is missing its source revision.');
+      if (!outline || !Array.isArray(outline.scenes) || !outline.scenes.length) {
+        throw new Error('Director returned an empty Story outline.');
+      }
+      return consumeDirectorJob(outlineResult.jobId);
+    }).then(function () {
+      return outline.scenes.reduce(function (promise, _plannedScene, index) {
+        return promise.then(function () {
+          setDevelopStatus('Developing Scene ' + String(index + 1) + ' / ' + String(outline.scenes.length) + '…');
+          return directorRequest({
+            storyId: storyId,
+            operation: 'develop_story_scene',
+            model: modelId,
+            development: {
+              outline: outline,
+              sceneIndex: index,
+              previousScene: authoredScenes.length ? authoredScenes[authoredScenes.length - 1] : null
+            }
+          }).then(function (sceneResult) {
+            if (!sceneResult.scene || typeof sceneResult.scene !== 'object') {
+              throw new Error('Director returned an invalid individual Scene.');
+            }
+            authoredScenes.push(sceneResult.scene);
+            return consumeDirectorJob(sceneResult.jobId);
+          });
+        });
+      }, Promise.resolve());
+    }).then(function () {
+      setDevelopStatus('Applying ' + String(authoredScenes.length) + ' developed Scenes…');
+      return directorRequest({
+        storyId: storyId,
+        operation: 'apply_individual_development',
+        model: modelId,
+        replaceExisting: hasScenes,
+        expectedUpdatedAt: sourceUpdatedAt,
+        plan: { scenes: authoredScenes }
+      });
+    }).then(function (payload) {
+      return applyDirectorResultToVisibleStory({
+        storyId: storyId,
+        operation: 'develop_story'
+      }).then(function () {
+        return {
+          sceneCount: Number(payload.sceneCount || authoredScenes.length),
+          model: modelId
+        };
+      });
+    });
+  }
+
   function developStory() {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
@@ -1889,30 +2002,39 @@
       'Developing this Story again will replace the active Scene plan. Existing Scenes and Takes will remain recoverable in Removed Scenes. Continue?'
     )) return;
 
+    var individual = !!el('storyboard-develop-individual').checked;
     var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
-    setDevelopStatus('Director is developing the Story…');
+    setDevelopStatus(individual ? 'Preparing individual Scene development…' : 'Director is developing the Story…');
     startDirectorActivity();
+
     saveBarrier.then(function () {
+      if (individual) return developStoryIndividually(storyId, modelId, hasScenes);
       return directorRequest({
         storyId: storyId,
         operation: 'develop_story',
         model: modelId,
         replaceExisting: hasScenes
+      }).then(function (payload) {
+        return applyDirectorResultToVisibleStory({
+          storyId: storyId,
+          operation: 'develop_story',
+          jobId: payload.jobId
+        }).then(function () {
+          return consumeDirectorJob(payload.jobId).then(function () {
+            return payload;
+          });
+        });
       });
     }).then(function (payload) {
-      return applyDirectorResultToVisibleStory({
-        storyId: storyId,
-        operation: 'develop_story',
-        jobId: payload.jobId
-      }).then(function () {
-        setDevelopStatus('Developed ' + String(payload.sceneCount || 0) + ' Scenes with ' + String(payload.model || modelId) + '.');
-        return consumeDirectorJob(payload.jobId);
-      });
+      setDevelopStatus(
+        'Developed ' + String(payload.sceneCount || 0) + ' Scenes with ' + String(payload.model || modelId) +
+        (individual ? ' · one at a time.' : '.')
+      );
     }).catch(function (err) {
-      if (directorWasStopped(err)) setDevelopStatus('Story development stopped.');
+      if (directorWasStopped(err)) setDevelopStatus('Story development stopped. Existing Scenes were left unchanged.');
       else {
-        setDevelopStatus('Story development failed.');
+        setDevelopStatus('Story development failed. Existing Scenes were left unchanged.');
         reportError(err);
       }
     }).finally(function () {
@@ -5359,16 +5481,26 @@
 
     el('storyboard-director-model').addEventListener('change', function () {
       storyState.director.modelId = this.value;
+      storyState.director.developIndividuallyOverride = null;
+      storyState.director.developStrategyModelId = this.value;
+      syncIndividualDevelopStrategy(true);
       setDirectorModelPreference('webcap.storyboard.directorModel', this.value);
+    });
+    el('storyboard-develop-individual').addEventListener('change', function () {
+      storyState.director.developIndividuallyOverride = !!this.checked;
+      storyState.director.developStrategyModelId = storyState.director.modelId;
     });
     window.addEventListener('webcap:director-model-changed', function (event) {
       var selected = String(event && event.detail && event.detail.modelId || '');
       if (!selected || selected === storyState.director.modelId) return;
       storyState.director.modelId = selected;
+      storyState.director.developIndividuallyOverride = null;
+      storyState.director.developStrategyModelId = selected;
       var modelSelect = el('storyboard-director-model');
       if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) {
         modelSelect.value = selected;
       }
+      syncIndividualDevelopStrategy(true);
     });
     el('storyboard-director-refresh').onclick = function () {
       var button = this;

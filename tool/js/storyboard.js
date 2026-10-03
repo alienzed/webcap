@@ -1568,6 +1568,8 @@
     target = target || {};
     if (!storyState.story || String(target.storyId || '') !== String(storyState.story.id || '')) return;
     if (target.kind === 'story-action') {
+      var storyAction = storyState.storyAction;
+      var sceneDefaultsLocked = !!(storyAction && storyAction.defaultsLocked);
       document.querySelectorAll(
         '#storyboard-story-authoring button, #storyboard-story-authoring input, #storyboard-story-authoring select, #storyboard-story-authoring textarea, ' +
         '#storyboard-scenes-list button, #storyboard-scenes-list input, #storyboard-scenes-list select, #storyboard-scenes-list textarea, ' +
@@ -1575,6 +1577,7 @@
         '#storyboard-sequence-preview button, #storyboard-generate-scenes-btn, #storyboard-director-model'
       ).forEach(function (control) {
         if (control.matches('[data-story-action-cancel]')) return;
+        if (!sceneDefaultsLocked && control.closest('.storyboard-scene-defaults-drawer')) return;
         if (protectedState) {
           if (!control.disabled) {
             control.disabled = true;
@@ -2016,6 +2019,7 @@
     if (storyState.storyAction !== action) return;
     action.phase = phase;
     action.detail = detail || '';
+    syncDirectorPendingControls();
     renderStoryAction();
   }
 
@@ -2104,17 +2108,25 @@
     }).then(function (sceneIds) {
       requireStoryAction(action);
       updateStoryAction(action, 'Queuing First Takes', '0 / ' + String(sceneIds.length));
-      return sceneIds.reduce(function (promise, sceneId, index) {
-        return promise.then(function () {
+      return flushPendingSaves().then(function () {
+        requireStoryAction(action);
+        action.defaultsLocked = true;
+        updateStoryAction(action, 'Queuing First Takes', '0 / ' + String(sceneIds.length));
+        return flushPendingSaves().then(function () {
           requireStoryAction(action);
-          updateStoryAction(
-            action,
-            'Queuing First Takes',
-            String(index + 1) + ' / ' + String(sceneIds.length)
-          );
-          return enqueueSceneGeneration(storyId, sceneId);
+          return sceneIds.reduce(function (promise, sceneId, index) {
+            return promise.then(function () {
+              requireStoryAction(action);
+              updateStoryAction(
+                action,
+                'Queuing First Takes',
+                String(index + 1) + ' / ' + String(sceneIds.length)
+              );
+              return enqueueSceneGeneration(storyId, sceneId);
+            });
+          }, Promise.resolve());
         });
-      }, Promise.resolve());
+      });
     }).then(function () {
       requireStoryAction(action);
       action.active = false;

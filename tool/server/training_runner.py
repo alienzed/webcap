@@ -567,12 +567,12 @@ def _candidate_run_snapshot(folder, job_id):
             if checkpoint_match and int(checkpoint_match.group(1)) < recorded_highest_step:
                 checkpoint_path = host_path_for_training_path(raw_run_path) / checkpoint_tag
                 try:
-                    if checkpoint_path.is_dir() and not checkpoint_path.is_symlink():
-                        checkpoint_wall_time = checkpoint_path.stat().st_mtime
-                        branch_started_at = job.get("startedAt")
-                except OSError:
-                    checkpoint_wall_time = None
-                    branch_started_at = None
+                    if not checkpoint_path.is_dir() or checkpoint_path.is_symlink():
+                        raise FileNotFoundError("Rewound resume checkpoint is unavailable: " + checkpoint_tag)
+                    checkpoint_wall_time = checkpoint_path.stat().st_mtime
+                    branch_started_at = job.get("startedAt")
+                except OSError as exc:
+                    raise RuntimeError("Could not inspect rewound resume checkpoint " + checkpoint_tag + ": " + str(exc)) from exc
         run_summary = job.get("runSummary") if isinstance(job.get("runSummary"), dict) else {}
         if not run_summary:
             run_summary = run_summary_from_capture(
@@ -2730,6 +2730,7 @@ def _finish_queued_resume(job):
     run_path = host_path_for_training_path(resume_path)
     if not run_path.is_dir() or run_path.is_symlink():
         raise FileNotFoundError("Recorded resume run directory is unavailable: " + resume_path)
+    _rewrite_resume_latest(job)
     latest = run_path / "latest"
     if not latest.is_file() or latest.is_symlink():
         raise FileNotFoundError("Recorded resume run has no valid latest checkpoint: " + resume_path)

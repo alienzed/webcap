@@ -1740,6 +1740,43 @@ def test_status_exposes_compact_assessment_signal_for_storyboard_choices(monkeyp
     assert assessment["abilities"]["coherentOutputTokens"] == 4096
 
 
+def test_status_keeps_inconclusive_unproven_assessment_neutral(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "list_models",
+        lambda reload=False: [{
+            "id": "remote::qwen",
+            "modelId": "qwen",
+            "label": "Qwen",
+            "runtimeId": "remote",
+            "runtimeName": "Remote",
+            "status": "remote",
+            "sizeBytes": 0,
+        }],
+    )
+    monkeypatch.setattr(
+        "tool.server.director_model_calibration.get_report",
+        lambda model_ref: {
+            "modelRef": model_ref,
+            "status": "error",
+            "health": "assessment-failed",
+            "pathologies": [],
+            "abilities": {
+                "contextTokens": 0,
+                "structuredOutputTokens": 0,
+                "coherentOutputTokens": 0,
+            },
+        },
+    )
+
+    assessment = storyboard_llm_runtime.status()["models"][0]["assessment"]
+
+    assert assessment["seriousWarning"] is False
+    assert assessment["limited"] is False
+    assert assessment["fullStoryCapable"] is False
+    assert assessment["individualScenesRecommended"] is False
+
+
 def test_status_keeps_pathology_warning_independent_from_output_capacity(monkeypatch):
     monkeypatch.setattr(
         storyboard_llm_runtime,

@@ -999,7 +999,7 @@ function renderTrainingRunner() {
     ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + (activeCount ? ' — waiting for the current run to stop' : ' — Resume will start the first item') + '</span>'
     : '';
   var selectedQueuePosition = queued ? queuedJobs.indexOf(job) + 1 : 0;
-  var runOutputPath = String(job.outputRunPath || '').trim();
+  var runOutputPath = String(job.outputRunPath || job.resumeFromCheckpoint || '').trim();
   var finishScheduleTitle = isFinite(finishAfterEpoch) && finishAfterEpoch > 0
     ? 'Finish after epoch ' + Math.round(finishAfterEpoch) + ' saves. Click to change or cancel.'
     : 'Schedule Finish after a saved epoch';

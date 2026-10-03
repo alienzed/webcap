@@ -486,10 +486,32 @@ function directorModelTestLooksRepetitive(text) {
   return false;
 }
 
+function directorModelTestLooksLeaky(text) {
+  var value = String(text || '');
+  return /<\/?(?:think|analysis|reasoning)>/i.test(value) ||
+    /<\|(?:system|user|assistant|im_start|im_end|endoftext)[^>]*\|>/i.test(value) ||
+    /\[\/?(?:INST|SYSTEM)\]/.test(value);
+}
+
+function directorModelTestLooksGarbled(text) {
+  var value = String(text || '');
+  if (!value) return false;
+  var replacements = (value.match(/\uFFFD/g) || []).length;
+  if (replacements >= 3) return true;
+  var controls = 0;
+  for (var index = 0; index < value.length; index += 1) {
+    var code = value.charCodeAt(index);
+    if (code < 32 && code !== 9 && code !== 10 && code !== 13) controls += 1;
+  }
+  return controls >= 3;
+}
+
 function directorModelTestCalibrationFailureKind(kind, terminalStatus, text, finishReason, passed) {
   if (passed) return '';
   if (terminalStatus && terminalStatus !== 'completed') return 'runtime';
   if (!String(text || '').trim()) return 'empty';
+  if (directorModelTestLooksLeaky(text)) return 'leakage';
+  if (directorModelTestLooksGarbled(text)) return 'garbled';
   if (directorModelTestLooksRepetitive(text)) return 'looping';
   if (finishReason === 'length' || finishReason === 'max_tokens') return 'capacity';
   if (kind === 'context') return 'malformed';
@@ -669,6 +691,11 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
           (!finalItemPattern || finalItemPattern.test(text));
       }
     }
+
+    var obviousPathology = directorModelTestLooksLeaky(text) ||
+      directorModelTestLooksGarbled(text) ||
+      directorModelTestLooksRepetitive(text);
+    if (obviousPathology) passed = false;
 
     return {
       kind: kind,

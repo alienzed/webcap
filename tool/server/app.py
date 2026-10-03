@@ -39,7 +39,7 @@ from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
 from .storage_manager import cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, scan_status as storage_scan_status, start_scan as storage_start_scan
-from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, resolve_story_media as storyboard_resolve_media, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_scene_repairs as storyboard_restore_scene_repairs, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
+from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, resolve_story_media as storyboard_resolve_media, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_scene_repairs as storyboard_restore_scene_repairs, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
@@ -982,21 +982,45 @@ def storyboard_director_route():
         operation = str(data.get("operation") or "").strip()
         model_id = str(data.get("model") or "").strip()
         instruction = str(data.get("instruction") or "").strip()
+        development = data.get("development") if isinstance(data.get("development"), dict) else None
 
         story = storyboard_load_story(story_id)
         replace_existing = bool(data.get("replaceExisting"))
-        if operation == "develop_story":
+        if operation in {"develop_story", "develop_story_outline"}:
             if story.get("sceneOrder") and not replace_existing:
                 raise ValueError("Story already has Scenes. Confirm replacement before developing it again.")
             active_generation = storyboard_generation_queue(story_id)
             if active_generation.get("jobs"):
                 raise ValueError("Story has pending Take generation. Stop or finish it before developing Scenes.")
 
+        if operation == "apply_individual_development":
+            expected_updated_at = str(data.get("expectedUpdatedAt") or "").strip()
+            if not expected_updated_at or expected_updated_at != str(story.get("updatedAt") or ""):
+                raise RuntimeError(
+                    "Story inputs changed during individual Scene development. "
+                    "The staged result was not applied; run Develop Scenes again."
+                )
+            if story.get("sceneOrder") and not replace_existing:
+                raise ValueError("Story already has Scenes. Confirm replacement before developing it again.")
+            active_generation = storyboard_generation_queue(story_id)
+            if active_generation.get("jobs"):
+                raise ValueError("Story has pending Take generation. Stop or finish it before developing Scenes.")
+            plan = data.get("plan")
+            if not isinstance(plan, dict):
+                raise ValueError("Individual Scene development is missing its final Scene plan.")
+            applied_story = storyboard_apply_developed_plan(story_id, plan, model_id=model_id)
+            return jsonify({
+                "ok": True,
+                "story": applied_story,
+                "sceneCount": len(applied_story.get("sceneOrder") or []),
+            })
+
         contract = storyboard_build_llm_request(
             story,
             scene_id,
             operation,
             instruction=instruction,
+            development=development,
         )
         repair_base = None
         if operation == "repair_scenes":
@@ -1048,11 +1072,15 @@ def storyboard_director_route():
                 "operation": operation,
                 "replaceExisting": replace_existing,
                 "sourceInstruction": instruction,
+                **({"deferredApply": True} if operation in {"develop_story_outline", "develop_story_scene"} else {}),
                 **({"repairBase": repair_base} if repair_base is not None else {}),
             },
             label=("Story: " + operation.replace("_", " ")).strip(),
         )
-        return jsonify({"ok": True, "job": job}), 202
+        response = {"ok": True, "job": job}
+        if operation == "develop_story_outline":
+            response["sourceUpdatedAt"] = str(story.get("updatedAt") or "")
+        return jsonify(response), 202
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:

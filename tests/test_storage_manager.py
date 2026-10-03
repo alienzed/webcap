@@ -1145,6 +1145,7 @@ def test_storage_overview_keeps_unrelated_inventory_when_execution_queue_is_unav
 
 
 def test_storage_manager_lists_and_purges_director_assessment_evidence(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     assessment_root = tmp_path / "app-data" / "cache" / "director-model-assessments"
     assessment_root.mkdir(parents=True)
     assessment_id = "20261003T120000Z-deadbeef"

@@ -1006,8 +1006,47 @@ def list_models(reload=False):
 list_models.last_warnings = []
 
 
+
+def _assessment_signal(model_ref):
+    from .director_model_calibration import get_report
+
+    report = get_report(model_ref)
+    if not isinstance(report, dict):
+        return None
+    abilities = report.get("abilities") if isinstance(report.get("abilities"), dict) else {}
+    try:
+        coherent_output = max(0, int(abilities.get("coherentOutputTokens") or 0))
+    except (TypeError, ValueError):
+        coherent_output = 0
+    health = str(report.get("health") or "").strip()
+    serious = health == "likely-unusable"
+    limited = not serious and coherent_output < 8192
+    return {
+        "status": str(report.get("status") or ""),
+        "health": health,
+        "seriousWarning": serious,
+        "limited": limited,
+        "fullStoryCapable": coherent_output >= 8192 and not serious,
+        "individualScenesRecommended": 0 < coherent_output < 8192 and not serious,
+        "abilities": {
+            "contextTokens": max(0, int(abilities.get("contextTokens") or 0)),
+            "structuredOutputTokens": max(0, int(abilities.get("structuredOutputTokens") or 0)),
+            "coherentOutputTokens": coherent_output,
+        },
+        "updatedAt": str(report.get("updatedAt") or ""),
+    }
+
+
+def _attach_assessment_signals(models):
+    for model in models:
+        model_ref = str(model.get("id") or "").strip()
+        signal = _assessment_signal(model_ref)
+        if signal is not None:
+            model["assessment"] = signal
+    return models
+
 def status():
-    models = list_models(reload=True)
+    models = _attach_assessment_signals(list_models(reload=True))
     warnings = list(getattr(list_models, "last_warnings", []) or [])
     return {
         "available": bool(models),

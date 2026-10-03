@@ -1,5 +1,6 @@
 import json
 import math
+import os
 import sys
 import time
 import types
@@ -82,6 +83,61 @@ def test_tensorboard_reader_requires_both_streams(tmp_path, monkeypatch):
     _fake_tensorboard(monkeypatch, {"train/epoch_loss": []})
     with pytest.raises(ValueError, match="train/loss is unavailable"):
         training_candidates.read_loss_events(run)
+
+
+def test_tensorboard_reader_drops_abandoned_future_after_rewind(tmp_path, monkeypatch):
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "events.out.tfevents.fake").write_bytes(b"fixture")
+    streams = {
+        "train/loss": [
+            SimpleNamespace(step=10, value=.5, wall_time=100),
+            SimpleNamespace(step=20, value=.4, wall_time=200),
+            SimpleNamespace(step=20, value=.3, wall_time=300),
+        ],
+        "train/epoch_loss": [
+            SimpleNamespace(step=1, value=.5, wall_time=110),
+            SimpleNamespace(step=2, value=.4, wall_time=210),
+            SimpleNamespace(step=2, value=.3, wall_time=310),
+        ],
+    }
+    _fake_tensorboard(monkeypatch, streams)
+    detailed, epochs = training_candidates.read_loss_events(run, 150, 250)
+    assert [(point["axis"], point["loss"]) for point in detailed] == [(10, .5), (20, .3)]
+    assert [(point["axis"], point["loss"]) for point in epochs] == [(1, .5), (2, .3)]
+
+
+def test_saved_artifacts_hide_abandoned_future_after_rewind(tmp_path):
+    run = tmp_path / "run"
+    run.mkdir()
+    for epoch, modified in ((1, 100), (2, 200), (3, 300)):
+        directory = run / ("epoch" + str(epoch))
+        directory.mkdir()
+        (directory / "adapter.safetensors").write_bytes(b"x")
+        os.utime(directory, (modified, modified))
+    artifacts = training_candidates.saved_artifacts_for_run(run, 150, 250)
+    assert [item["epoch"] for item in artifacts] == [1, 3]
+
+
+def test_launch_rewrites_latest_only_to_existing_managed_global_step(tmp_path):
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "global_step10").mkdir()
+    (run / "global_step20").mkdir()
+    (run / "latest").write_text("global_step20\n", encoding="utf-8")
+    job = {
+        "resumeFromCheckpoint": str(run),
+        "resumeOutputId": "output/run",
+        "resumeCheckpointTag": "global_step10",
+    }
+    training_runner._rewrite_resume_latest(job)
+    assert (run / "latest").read_text(encoding="utf-8") == "global_step10\n"
+    assert job["resumeCheckpointWallTime"] == (run / "global_step10").stat().st_mtime
+    assert job["resumeBranchStartedAt"] > 0
+
+    job["resumeCheckpointTag"] = "global_step99"
+    with pytest.raises(FileNotFoundError):
+        training_runner._rewrite_resume_latest(job)
 
 
 def test_epoch_median_aggregation_rejects_isolated_step_spikes():

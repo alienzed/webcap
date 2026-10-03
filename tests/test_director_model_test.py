@@ -173,8 +173,11 @@ def test_model_test_is_isolated_to_diagnostics_and_feature_modules():
     runtime = (root / "tool" / "server" / "storyboard_llm_runtime.py").read_text(encoding="utf-8")
 
     assert 'id="diagnostics-modal"' in html
-    assert 'data-diagnostics-tab="director"' in html
+    assert 'data-diagnostics-tab="models"' in html
+    assert 'data-diagnostics-tab="benchmark"' in html
+    assert 'id="director-model-assessment-settings"' in html
     assert 'id="director-model-test-settings"' in html
+    assert 'id="director-model-assessment-history"' in html
     assert '/static/js/diagnostics.js' in html
     assert '/static/js/director_model_test.js' in html
     assert "directorModelTestRefresh()" in diagnostics
@@ -204,9 +207,10 @@ def test_model_test_surfaces_live_status_without_extra_polling():
     styles = (root / "tool" / "css" / "modals.css").read_text(encoding="utf-8")
 
     assert 'id="director-model-test-summary-status"' in html
-    assert 'id="director-model-test-status" class="app-settings-status director-model-test-status"' in html
+    assert 'id="director-model-assessment-summary-status"' in html
     assert 'aria-live="polite"' in html
-    assert 'class="director-model-test-models"' in html
+    assert 'id="director-model-assessment-models" class="director-model-test-models"' in html
+    assert 'id="director-model-test-models" class="director-model-test-models"' in html
 
     assert "directorModelTestState.session = meta.session || null;" in frontend
     assert "function directorModelTestRenderStatus()" in frontend
@@ -374,7 +378,7 @@ def test_model_test_diagnostics_exposes_progressive_calibration_controls():
     html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
     frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
 
-    assert 'id="director-model-test-calibrate"' in html
+    assert 'id="director-model-assessment-run"' in html
     assert 'id="director-model-test-clear-calibration"' in html
     assert 'id="director-model-test-calibration-profiles"' in html
     assert "function directorModelTestStartCalibration()" in frontend
@@ -387,7 +391,11 @@ def test_model_test_diagnostics_exposes_progressive_calibration_controls():
     assert "save_calibration_profile" in frontend
     assert "save_calibration_report" in frontend
     assert "directorModelTestCalibrationFailureKind" in frontend
+    assert "directorModelTestLooksLeaky" in frontend
+    assert "directorModelTestLooksGarbled" in frontend
     assert "CONTEXT_OK" in frontend
+    assert "start_assessment" in frontend
+    assert "update_assessment" in frontend
 
 
 
@@ -409,3 +417,19 @@ def test_lowest_output_probe_is_small_but_structured():
 
     assert "exactly 12 numbered items" in prompt
     assert "exactly 2 consecutively numbered sections" in prose
+
+
+
+def test_diagnostics_separates_assessment_from_benchmark():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
+    frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
+
+    assert 'data-diagnostics-panel="models"' in html
+    assert 'data-diagnostics-panel="benchmark"' in html
+    assert 'data-director-model-assessment-model' in frontend
+    assert 'data-director-model-test-model' in frontend
+    assert "directorModelAssessmentSelectedModels" in frontend
+    assert "directorModelTestSelectedModels" in frontend
+    assert "Delete Raw Evidence" in frontend
+    assert "learned model results were preserved" in frontend

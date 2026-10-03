@@ -575,6 +575,9 @@ def _candidate_run_snapshot(folder, job_id):
             "status": str(job.get("status") or "unknown"),
             "currentEpoch": progress.get("epoch"),
             "plannedEpochs": progress.get("epochs"),
+            "resumeCheckpointTag": str(job.get("resumeCheckpointTag") or ""),
+            "resumeCheckpointWallTime": job.get("resumeCheckpointWallTime"),
+            "resumeBranchStartedAt": job.get("resumeBranchStartedAt"),
             "runSummary": run_summary,
         }
 
@@ -1022,7 +1025,12 @@ def candidate_analysis_response(folder, job_id, algorithm="v5"):
         run_dir = host_path_for_training_path(raw_run_path)
         if not run_dir.is_dir():
             raise FileNotFoundError("Recorded training run directory is unavailable.")
-        analysis = _analyze_run_directory(run_dir, algorithm=algorithm)
+        analysis = _analyze_run_directory(
+            run_dir,
+            algorithm=algorithm,
+            resume_checkpoint_wall_time=run.get("resumeCheckpointWallTime"),
+            resume_branch_started_at=run.get("resumeBranchStartedAt"),
+        )
         _annotate_candidate_test_folder_status(run, analysis)
         analysis["selected"] = _candidate_selected_epoch(run_dir, run)
     except (OSError, RuntimeError, ValueError) as exc:

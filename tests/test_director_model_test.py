@@ -239,7 +239,8 @@ def test_calibration_protocol_is_progressive_and_versioned():
     assert "exactly 180 numbered items" in prompt
     assert model_test.CALIBRATION_MARKER in prompt
     assert "exactly 20 consecutively numbered sections" in prose_prompt
-    assert "100-140 words" in prose_prompt
+    assert "80-110 words" in prose_prompt
+    assert "requested generation budget" in protocol["description"]
     assert model_test.PROSE_MARKER in prose_prompt
 
 
@@ -444,7 +445,12 @@ def test_diagnostics_separates_assessment_from_benchmark():
     assert "directorModelAssessmentSelectedModels" in frontend
     assert "directorModelTestSelectedModels" in frontend
     assert "Delete Raw Evidence" in frontend
+    assert "Load Full Evidence" not in frontend
+    assert "directorModelAssessmentRenderEvidence" in frontend
+    assert "directorModelAssessmentWireEvidenceToggles" in frontend
+    assert "data-director-assessment-evidence-id" in frontend
     assert "learned model results were preserved" in frontend
+    assert "Raw Assessment Runs" in html
 
 
 

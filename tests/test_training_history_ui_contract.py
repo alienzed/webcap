@@ -169,3 +169,12 @@ def test_training_archive_lazily_surfaces_selected_epoch_loss_context():
     assert 'data-training-archive-details="' in script
     assert "archiveList.onclick" in workspace
     assert ".training-archive-analysis" in css
+
+
+def test_checkpoint_picker_groups_previous_saved_resume_points():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+
+    assert 'Previous saved resumable points' in script
+    assert 'data-checkpoint-tag=' in script
+    assert "resumeCheckpointTag" in runner

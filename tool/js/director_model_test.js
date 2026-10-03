@@ -727,8 +727,17 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
 
 function directorModelTestCalibrateOne(model, modelNumber) {
   var protocol = directorModelTestState.calibrationProtocol || {};
-  var contextSteps = Array.isArray(protocol.contextSteps) ? protocol.contextSteps : [];
-  var outputSteps = Array.isArray(protocol.outputSteps) ? protocol.outputSteps : [];
+  var contextSteps = Array.isArray(protocol.contextSteps) ? protocol.contextSteps.slice() : [];
+  var outputSteps = Array.isArray(protocol.outputSteps) ? protocol.outputSteps.slice() : [];
+  var advertised = directorModelTestAdvertisedCapability(model.modelRef);
+  var recommendedContextMax = Number(advertised && advertised.recommendedContextMax || 0);
+  var recommendedOutputTokens = Number(advertised && advertised.recommendedOutputTokens || 0);
+  if (isFinite(recommendedContextMax) && recommendedContextMax > 0) {
+    contextSteps = contextSteps.filter(function (target) { return Number(target) <= recommendedContextMax; });
+  }
+  if (isFinite(recommendedOutputTokens) && recommendedOutputTokens > 0) {
+    outputSteps = outputSteps.filter(function (target) { return Number(target) <= recommendedOutputTokens; });
+  }
   var attempts = [];
   var contextMode = model.runtimeId === 'local' ? 'calibrated' : 'runtime';
   var contextSize = 0;
@@ -738,6 +747,22 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   directorModelTestState.currentModelLabel = String(model.label || model.modelId || model.modelRef || 'Model');
   directorModelTestState.currentModelNumber = modelNumber;
   directorModelTestState.currentRuntimeName = String(model.runtimeName || model.runtimeId || 'runtime');
+
+  if (isFinite(recommendedContextMax) && recommendedContextMax > 0) {
+    reportConsoleInfo(
+      'Director Model Assessment',
+      model.label + ' · respecting published recommended context ceiling ' +
+        directorModelTestFormatCapacity(recommendedContextMax) + '.'
+    );
+  }
+  if (isFinite(recommendedOutputTokens) && recommendedOutputTokens > 0 &&
+      outputSteps.length && Number(outputSteps[outputSteps.length - 1]) < Number((protocol.outputSteps || [])[protocol.outputSteps.length - 1] || 0)) {
+    reportConsoleInfo(
+      'Director Model Assessment',
+      model.label + ' · respecting published recommended output ceiling ' +
+        directorModelTestFormatCapacity(recommendedOutputTokens) + '.'
+    );
+  }
 
   function record(status, error, final) {
     return directorModelTestSaveCalibrationReport(

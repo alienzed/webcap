@@ -55,18 +55,8 @@ def execution_lane_snapshot(lane_name, include_terminal=True):
 execution_mark_running = _execution_queue.mark_running
 
 
-def execution_pause_lane(lane_name, reason="Queue paused by the user."):
-    _require_llm_lane(lane_name)
-    return _execution_queue.pause_lane(reason=reason)
-
-
-execution_reorder_job = _execution_queue.reorder_job
 execution_request_stop = _execution_queue.request_stop
 
-
-def execution_resume_lane(lane_name):
-    _require_llm_lane(lane_name)
-    return _execution_queue.resume_lane()
 
 _dispatch_lock = threading.Lock()
 _enqueue_lock = threading.Lock()
@@ -812,29 +802,4 @@ def action(operation, job_id="", direction="", position=None):
         # captured before that race instead of re-reading a job that may already
         # be an in-memory terminal receipt.
         return {"job": _job_view(stopping)}
-    if operation == "pause_queue":
-        execution_pause_lane(EXECUTION_LANE)
-        return {"queue": snapshot()}
-    if operation == "resume_queue":
-        execution_resume_lane(EXECUTION_LANE)
-        _ensure_monitor_started()
-        return {"queue": snapshot()}
-    if operation == "reorder":
-        lane = execution_reorder_job(
-            job_id,
-            direction=str(direction or "").strip() or None,
-            position=position,
-        )
-        return {
-            "queue": {
-                "paused": bool(lane.get("paused")),
-                "pauseReason": str(lane.get("pauseReason") or ""),
-                "activeJobId": str(lane.get("activeJobId") or ""),
-                "jobs": [
-                    _job_view(job)
-                    for job in lane.get("jobs", [])
-                    if str(job.get("status") or "") not in {"completed", "failed", "cancelled", "stopped", "interrupted"}
-                ],
-            }
-        }
     raise ValueError("Unsupported LLM queue action: " + operation)

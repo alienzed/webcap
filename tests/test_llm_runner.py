@@ -344,31 +344,6 @@ def test_local_llm_job_arriving_during_grace_reuses_retained_gpu(llm_root, monke
 
 
 
-def test_pausing_idle_llm_grace_releases_retained_gpu(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
-    monkeypatch.setattr(
-        storyboard_llm_runtime,
-        "run_contract",
-        lambda model_id, contract, gpu_reserved=False: {"text": "Done", "model": model_id},
-    )
-
-    job = llm_runner.enqueue(
-        "generate",
-        "qwen",
-        {"operation": "write_prompt", "prompt": "Prompt.", "output": "text"},
-    )
-    llm_runner._advance_queue()
-
-    assert llm_runner.job_status(job["jobId"])["status"] == "completed"
-    assert execution_queue.resource_owner() == "llm"
-
-    llm_runner.action("pause_queue")
-    llm_runner._advance_queue()
-
-    assert execution_queue.resource_owner() == ""
-    assert llm_runner._monitor_has_work() is False
-
-
 def test_local_llm_queue_reuses_gpu_ownership_until_queued_work_is_drained(llm_root, monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
@@ -1425,6 +1400,12 @@ def test_llm_snapshot_surfaces_gpu_blocker_inspection_failure(llm_root, monkeypa
 
     with pytest.raises(RuntimeError, match="training blocker inspection failed"):
         llm_runner.snapshot()
+
+
+def test_llm_queue_rejects_pause_resume_and_reorder_actions(llm_root):
+    for operation in ("pause_queue", "resume_queue", "reorder"):
+        with pytest.raises(ValueError, match="Unsupported LLM queue action"):
+            llm_runner.action(operation)
 
 
 def test_llm_stop_or_cancel_cancels_queued_job_without_touching_runtime(llm_root, monkeypatch):

@@ -141,6 +141,9 @@ def _report_abilities(attempts, context_mode, context_size, max_tokens):
     }
 
 
+SEVERE_FAILURE_KINDS = {"runtime", "empty", "malformed", "looping", "leakage", "garbled"}
+
+
 def _report_health(attempts, context_mode, context_size, max_tokens, status):
     if status == "stopped":
         return "stopped"
@@ -150,18 +153,28 @@ def _report_health(attempts, context_mode, context_size, max_tokens, status):
     first_output = next((attempt for attempt in attempts if attempt["kind"] == "output"), None)
     first_prose = next((attempt for attempt in attempts if attempt["kind"] == "prose"), None)
 
-    severe_kinds = {"runtime", "empty", "malformed", "looping", "leakage", "garbled"}
     if context_mode == "calibrated" and first_context and first_context["status"] == "failed":
         return "likely-unusable"
-    if first_output and first_output["status"] == "failed" and first_output.get("failureKind") in severe_kinds:
+    if first_output and first_output["status"] == "failed" and first_output.get("failureKind") in SEVERE_FAILURE_KINDS:
         return "likely-unusable"
-    if first_prose and first_prose["status"] == "failed" and first_prose.get("failureKind") in severe_kinds:
+    if first_prose and first_prose["status"] == "failed" and first_prose.get("failureKind") in SEVERE_FAILURE_KINDS:
         return "likely-unusable"
     if max_tokens > 0:
+        if any(attempt.get("failureKind") in SEVERE_FAILURE_KINDS for attempt in failed):
+            return "warning"
         return "limited" if failed else "healthy"
     if attempts:
         return "calibration-failed"
     return "unknown"
+
+
+def _report_pathologies(attempts):
+    return sorted({
+        str(attempt.get("failureKind") or "").strip()
+        for attempt in attempts
+        if attempt.get("status") == "failed"
+        and str(attempt.get("failureKind") or "").strip() in SEVERE_FAILURE_KINDS
+    })
 
 
 def list_reports():
@@ -220,6 +233,7 @@ def save_report(report):
         "status": status,
         "error": str(report.get("error") or ""),
         "health": _report_health(normalized_attempts, context_mode, context_size, max_tokens, status),
+        "pathologies": _report_pathologies(normalized_attempts),
         "abilities": _report_abilities(normalized_attempts, context_mode, context_size, max_tokens),
         "updatedAt": _now_iso(),
         "attempts": normalized_attempts,

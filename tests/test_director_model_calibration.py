@@ -249,3 +249,37 @@ def test_begin_calibration_supersedes_stale_profile_and_report(calibration_root)
     assert begun == {"profiles": [], "reports": []}
     assert calibration.get_profile("local::director.gguf") is None
     assert calibration.get_report("local::director.gguf") is None
+
+
+
+def test_late_pathology_warns_without_discarding_proven_usable_range(calibration_root):
+    saved = calibration.save_report(_report(
+        contextMode="runtime",
+        contextSize=8192,
+        maxTokens=8192,
+        status="complete",
+        attempts=[
+            {
+                "kind": "output",
+                "target": 8192,
+                "status": "passed",
+                "completionTokens": 7600,
+            },
+            {
+                "kind": "prose",
+                "target": 8192,
+                "status": "passed",
+                "completionTokens": 7400,
+            },
+            {
+                "kind": "output",
+                "target": 12288,
+                "status": "failed",
+                "failureKind": "looping",
+            },
+        ],
+    ))
+
+    assert saved["health"] == "warning"
+    assert saved["pathologies"] == ["looping"]
+    assert saved["abilities"]["coherentOutputTokens"] == 8192

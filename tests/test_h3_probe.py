@@ -10,6 +10,7 @@ import pytest
 import tool.server.app as app_module
 import tool.server.config as config_module
 import tool.server.h3_probe as h3_probe_module
+import tool.server.training_runner as training_runner_module
 
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
@@ -566,6 +567,12 @@ def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatc
         "cwd": "/pipe", "activate": "", "wslDistribution": "", "condaExecutable": "", "condaEnvironment": "",
     })
     monkeypatch.setattr(h3_probe_module, "to_wsl_path", lambda value, _distribution: str(value))
+    launch_wrappers = []
+    monkeypatch.setattr(
+        training_runner_module,
+        "launch_h3_probe_runtime",
+        lambda callback: launch_wrappers.append(True) or callback(),
+    )
     launches = []
 
     def fake_run_wsl(command, timeout, distribution):
@@ -574,6 +581,7 @@ def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatc
 
     monkeypatch.setattr(h3_probe_module, "run_wsl", fake_run_wsl)
     payload = h3_probe_module.start_h3_probe("set", "clip.mp4")
+    assert launch_wrappers == [True]
     assert payload["status"] == "running"
     assert "--publish-config" in launches[0]
     runtime_path = probe_root / "runtime.json"
@@ -656,3 +664,13 @@ def test_h3_status_keeps_completed_runtime_after_probe_cleanup(monkeypatch):
     assert status["probeId"] == "h3-complete"
     assert status["status"] == "completed"
     assert status["calibrated"] is True
+
+
+def test_h3_runtime_pid_recovers_from_runner_written_pid_file(tmp_path):
+    probe_root = tmp_path / "h3-probe"
+    probe_root.mkdir()
+    seed_path = probe_root / "seed.json"
+    seed_path.write_text("{}", encoding="utf-8")
+    (probe_root / h3_probe_module.PID_FILE_NAME).write_text("4242\n", encoding="utf-8")
+
+    assert h3_probe_module._runtime_pid({"pid": 0, "seedPath": str(seed_path)}) == 4242

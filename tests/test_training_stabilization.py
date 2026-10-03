@@ -8,7 +8,7 @@ from PIL import Image
 
 from tool.server import config as app_config
 from tool.server import app as app_module
-from tool.server import execution_queue, gpu_prep, inference_runtime, run_ops, storyboard_llm_runtime, training_archive, training_bundle, training_history, training_runner, training_review
+from tool.server import execution_queue, gpu_prep, h3_probe, inference_runtime, run_ops, storyboard_llm_runtime, training_archive, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
 from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_for_mode
@@ -1856,3 +1856,80 @@ def test_cancel_queued_training_job_cannot_launch_target(tmp_path, monkeypatch):
 
     assert status == 200 and payload["ok"] is True
     assert training_runner._read_state()["jobs"] == []
+
+
+def test_h3_launch_claims_existing_training_owner_atomically(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [],
+    })
+    monkeypatch.setattr(training_runner, "_active_h3_training_runtime", lambda: None)
+    monkeypatch.setattr(gpu_prep, "prepare_gpu_for", lambda owner: owner == "training")
+    observed = []
+
+    result = training_runner.launch_h3_probe_runtime(
+        lambda: observed.append(execution_queue.resource_owner()) or {"ok": True}
+    )
+
+    assert result == {"ok": True}
+    assert observed == ["training"]
+    assert execution_queue.resource_owner() == "training"
+    execution_queue.release_resource("training")
+
+
+def test_live_h3_runtime_blocks_normal_training_launch(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = "training"
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "queued", "status": "queued", "folder": "sets/subject"}],
+    }
+    monkeypatch.setattr(training_runner, "_active_h3_training_runtime", lambda: {"pid": 4242})
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("normal Training must wait for H3"))
+
+    training_runner._launch_next_queued_job(state)
+
+    assert state["jobs"][0]["status"] == "queued"
+    assert execution_queue.resource_owner() == "training"
+
+
+def test_training_startup_restores_owner_from_exact_h3_runtime(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [],
+    }
+    monkeypatch.setattr(training_runner, "_active_h3_training_runtime", lambda: {"pid": 4242})
+
+    training_runner._refresh_state(state)
+
+    assert execution_queue.resource_owner() == "training"
+
+
+def test_training_releases_owner_after_h3_runtime_ends(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = "training"
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [],
+    }
+    monkeypatch.setattr(training_runner, "_active_h3_training_runtime", lambda: None)
+
+    training_runner._refresh_state(state)
+
+    assert execution_queue.resource_owner() == ""

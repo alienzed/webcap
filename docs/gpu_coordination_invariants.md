@@ -60,7 +60,8 @@ If exact current-session provider work is positively still executing, the Infere
 
 ## 6. Idle selection is deterministic
 
-When `owner == none`, the next runnable local-GPU work is selected in this order:
+Training is the explicit local-GPU arbitration backbone. When `owner == none`, it applies this order
+when granting a new local-GPU turn:
 
 ```text
 Training
@@ -69,17 +70,23 @@ Training
 > eligible Inference Backlog
 ```
 
-Already-running work is non-preemptive.
+Already-running work is non-preemptive. LLM and Inference request a turn through the Training
+arbiter; they do not reproduce this priority rule themselves.
 
-This order is a shared scheduling rule, not something lanes reproduce by inspecting one another.
+## 7. Client lanes stay local; handoff prep is shared
 
-## 7. A lane knows only itself
+LLM and Inference know their own queue/runtime state only. They do not inspect each other, infer each
+other's intent, or independently decide shared priority.
 
-A lane may answer whether its own next work is runnable and may perform its own runtime preparation.
+Training is intentionally asymmetric: as the durable arbitration backbone, it may inspect the narrow
+lane-local readiness facts required to apply the ordering above. That authority does not create a
+second ownership fact; `owner` remains canonical.
 
-A lane does not inspect another lane's queue, ask another lane for permission, infer another lane's intent, or maintain an opinion about shared GPU availability.
-
-Shared scheduling reads the one owner fact and lane-local runnable facts.
+Cross-runtime GPU handoff preparation is a shared operation independent of client-lane health. It may
+invoke concrete runtime cleanup primitives directly (for example unloading a retained local LLM model
+or freeing ComfyUI caches). Client lanes do not own or veto that cleanup. A concrete runtime-busy
+result may defer the handoff; an operational failure is surfaced according to the existing fail-loudly
+policy rather than becoming new scheduler state.
 
 ## 8. Restart reconstructs reality, not ownership history
 

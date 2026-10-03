@@ -453,7 +453,50 @@ def test_copy_candidate_to_configured_stage_root_uses_recorded_stages(tmp_path, 
     assert Path(result["destination"]) == destination
     assert destination.read_bytes() == b"test weights"
     assert source.read_bytes() == b"test weights"
+    sidecar = json.loads(destination.with_suffix(".webcap.json").read_text(encoding="utf-8"))
+    assert sidecar["sourceRunPath"].endswith("runs/one")
+    assert sidecar["sourceActionId"] == "003-h3"
 
+
+
+def test_legacy_staged_provenance_reconnects_to_resumed_job_for_same_timestamp_run(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    folder = root / "sets" / "subject"
+    run = root / "trainer" / "output" / "20261003_120000"
+    folder.mkdir(parents=True)
+    run.mkdir(parents=True)
+    state_path = root / ".test-webcap-app-data" / "state" / "training_queue.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text(json.dumps({"version": 3, "jobs": [{
+        "id": "resumed-job",
+        "folder": "sets/subject",
+        "outputRunPath": str(run),
+        "resumeFromCheckpoint": str(run),
+        "stages": "h3",
+        "stage": "h3",
+        "status": "completed",
+        "runName": "baseline",
+        "sequence": "3",
+        "actionId": "003-h3",
+        "updatedAt": 20,
+    }]}), encoding="utf-8")
+    monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: root / ".test-webcap-app-data" / "state")
+
+    resolved_dir, resolved_run = training_runner.candidate_run_snapshot_from_provenance({
+        "version": 1,
+        "sourceJobId": "old-job",
+        "sourceRunName": "baseline",
+        "sourceRunSequence": "03",
+        "sourceEpoch": 12,
+        "sourceFileName": "adapter.safetensors",
+        "sourceFolder": "sets/subject",
+        "stage": "h3",
+    })
+
+    assert resolved_dir == run.resolve()
+    assert resolved_run["id"] == "resumed-job"
+    assert resolved_run["actionId"] == "003-h3"
 
 
 def test_remove_candidate_from_test_deletes_copy_and_sidecar_but_preserves_saved_epoch(tmp_path, monkeypatch):
@@ -983,8 +1026,8 @@ def test_save_staged_candidate_succeeds_when_old_training_job_is_no_longer_index
     )
     monkeypatch.setattr(
         training_runner,
-        "_candidate_run_snapshot",
-        lambda folder, job_id: (_ for _ in ()).throw(LookupError("Training job not found.")),
+        "candidate_run_snapshot_from_provenance",
+        lambda provenance: (_ for _ in ()).throw(LookupError("Training run not found.")),
     )
 
     payload = training_runner.save_candidate_epoch(

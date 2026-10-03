@@ -5,7 +5,14 @@ from datetime import datetime, timezone
 from flask import jsonify, request
 
 from .director_model_calibration import begin_calibration, clear_calibration, list_profiles, list_reports, save_profile, save_report
-from .director_model_capabilities import list_capability_hints
+from .director_model_capabilities import capability_for_model, list_capability_hints
+from .director_model_assessment_store import (
+    delete_assessment,
+    get_assessment,
+    list_assessments,
+    start_assessment,
+    update_assessment,
+)
 
 
 SESSION_VERSION = 1
@@ -342,6 +349,7 @@ def register_routes(app):
                     "calibrationProfiles": list_profiles(),
                     "calibrationReports": list_reports(),
                     "advertisedCapabilities": list_capability_hints(),
+                    "assessmentRuns": list_assessments(),
                     "session": current_session(),
                 })
 
@@ -358,6 +366,42 @@ def register_routes(app):
                     "ok": True,
                     "job": enqueue_protocol_run(data.get("sessionId"), data.get("modelRef")),
                 }), 202
+            if action == "start_assessment":
+                model = data.get("model") if isinstance(data.get("model"), dict) else {}
+                advertised = capability_for_model(
+                    model.get("modelRef") or model.get("id"),
+                    model.get("modelId"),
+                    model.get("label"),
+                )
+                return jsonify({
+                    "ok": True,
+                    "assessment": start_assessment(model, advertised=advertised),
+                    "assessmentRuns": list_assessments(),
+                }), 201
+            if action == "update_assessment":
+                return jsonify({
+                    "ok": True,
+                    "assessment": update_assessment(
+                        data.get("assessmentId"),
+                        data.get("attempts"),
+                        data.get("summary"),
+                        final=bool(data.get("final")),
+                        status=data.get("status"),
+                        error=data.get("error"),
+                    ),
+                    "assessmentRuns": list_assessments(),
+                })
+            if action == "get_assessment":
+                return jsonify({
+                    "ok": True,
+                    "assessment": get_assessment(data.get("assessmentId")),
+                })
+            if action == "delete_assessment":
+                delete_assessment(data.get("assessmentId"))
+                return jsonify({
+                    "ok": True,
+                    "assessmentRuns": list_assessments(),
+                })
             if action == "begin_calibration":
                 begun = begin_calibration(data.get("modelRef"))
                 return jsonify({

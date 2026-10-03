@@ -1746,10 +1746,12 @@ def training_archive_metrics_route():
 def training_archive_preview_route():
     folder = request.args.get("folder", "").strip()
     job_id = request.args.get("jobId", "").strip()
-    if not folder or not job_id:
-        return jsonify({"ok": False, "error": "Folder and job ID are required."}), 400
+    stage = request.args.get("stage", "").strip()
+    staged_file_name = request.args.get("stagedFileName", "").strip()
+    if not folder or (not job_id and not (stage and staged_file_name)):
+        return jsonify({"ok": False, "error": "Folder plus a Training job or staged candidate source are required."}), 400
     try:
-        return jsonify({"ok": True, "preview": training_archive_preview(folder, job_id)})
+        return jsonify({"ok": True, "preview": training_archive_preview(folder, job_id, stage=stage, staged_file_name=staged_file_name)})
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404
     except (RuntimeError, ValueError, OSError) as exc:
@@ -1759,17 +1761,19 @@ def training_archive_preview_route():
 @app.route("/fs/training_archive/finalize", methods=["POST"])
 def training_archive_finalize_route():
     data = request.get_json(silent=True) or {}
-    allowed = {"folder", "jobId", "archiveName", "retainEpochs"}
+    allowed = {"folder", "jobId", "stage", "stagedFileName", "archiveName", "retainEpochs"}
     if not isinstance(data, dict) or set(data) - allowed:
         return jsonify({"ok": False, "error": "Finalize & Archive received unsupported fields."}), 400
     folder = str(data.get("folder") or "").strip()
     job_id = str(data.get("jobId") or "").strip()
+    stage = str(data.get("stage") or "").strip()
+    staged_file_name = str(data.get("stagedFileName") or "").strip()
     archive_name = str(data.get("archiveName") or "").strip()
     retain_epochs = data.get("retainEpochs")
-    if not folder or not job_id or not archive_name or not isinstance(retain_epochs, list):
-        return jsonify({"ok": False, "error": "Folder, job ID, archive name, and retained epochs are required."}), 400
+    if not folder or (not job_id and not (stage and staged_file_name)) or not archive_name or not isinstance(retain_epochs, list):
+        return jsonify({"ok": False, "error": "Folder, archive source, archive name, and retained epochs are required."}), 400
     try:
-        return jsonify({"ok": True, "archive": training_archive_finalize(folder, job_id, archive_name, retain_epochs)})
+        return jsonify({"ok": True, "archive": training_archive_finalize(folder, job_id, archive_name, retain_epochs, stage=stage, staged_file_name=staged_file_name)})
     except FileExistsError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 409
     except FileNotFoundError as exc:

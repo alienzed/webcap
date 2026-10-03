@@ -165,10 +165,14 @@ ALGORITHMS = {
 }
 
 
-def artifact_for_epoch(run_dir, epoch):
+def artifact_for_epoch(run_dir, epoch, resume_checkpoint_wall_time=None, resume_branch_started_at=None):
     directory = Path(run_dir) / ("epoch" + str(int(epoch)))
     if not directory.is_dir() or directory.is_symlink():
         return {"available": False, "status": "not_saved"}
+    if resume_checkpoint_wall_time is not None and resume_branch_started_at is not None:
+        modified = directory.stat().st_mtime
+        if modified > float(resume_checkpoint_wall_time) and modified < float(resume_branch_started_at):
+            return {"available": False, "status": "not_saved"}
     files = sorted(path for path in directory.iterdir() if path.is_file() and path.suffix.lower() == ".safetensors")
     if len(files) == 1:
         return {"available": True, "status": "available", "fileName": files[0].name}
@@ -252,7 +256,9 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
         "label": region["label"],
         "savedEpochs": region["savedEpochs"],
         "reason": region["label"] + ".",
-        "artifact": artifact_for_epoch(run_dir, region["representativeEpoch"]) if run_dir is not None else {"available": False, "status": "not_checked"},
+        "artifact": artifact_for_epoch(
+            run_dir, region["representativeEpoch"], resume_checkpoint_wall_time, resume_branch_started_at
+        ) if run_dir is not None else {"available": False, "status": "not_checked"},
     } for region in regions]
     return {
         "analysisVersion": ANALYSIS_VERSION,

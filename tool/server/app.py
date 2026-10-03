@@ -1015,12 +1015,14 @@ def storyboard_director_route():
                 "sceneCount": len(applied_story.get("sceneOrder") or []),
             })
 
+        contract_kwargs = {"instruction": instruction}
+        if development is not None:
+            contract_kwargs["development"] = development
         contract = storyboard_build_llm_request(
             story,
             scene_id,
             operation,
-            instruction=instruction,
-            development=development,
+            **contract_kwargs,
         )
         repair_base = None
         if operation == "repair_scenes":

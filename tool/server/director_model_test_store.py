@@ -9,9 +9,11 @@ from .director_model_capabilities import capability_for_model
 
 
 SESSION_VERSION = 1
-CONTEXT_STEPS = (8192, 16384, 32768, 65536, 98304, 131072, 163840)
-OUTPUT_STEPS = (2048, 4096, 8192, 12288, 16384, 24576, 32768)
+CONTEXT_STEPS = (4096, 8192, 16384, 32768, 65536, 98304, 131072, 163840)
+OUTPUT_STEPS = (512, 1024, 2048, 4096, 8192, 12288, 16384, 24576, 32768)
 OUTPUT_ITEM_COUNTS = {
+    512: 12,
+    1024: 30,
     2048: 90,
     4096: 180,
     8192: 360,
@@ -21,6 +23,8 @@ OUTPUT_ITEM_COUNTS = {
     32768: 1440,
 }
 PROSE_SECTION_COUNTS = {
+    512: 2,
+    1024: 5,
     2048: 10,
     4096: 20,
     8192: 40,
@@ -236,7 +240,8 @@ def calibration_protocol():
         "marker": CALIBRATION_MARKER,
         "proseMarker": PROSE_MARKER,
         "description": (
-            "Local llama.cpp context is stress-tested progressively until a tier fails or the test range is exhausted. "
+            "Calibration starts with small probes so limited models can establish useful capability before stress testing. "
+            "Local llama.cpp context is tested progressively until a tier fails or the test range is exhausted. "
             "Each output tier must pass both a mechanical completion test and a coherent long-form prose test."
         ),
     }

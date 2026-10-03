@@ -893,9 +893,17 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   });
 }
 
+function directorModelAssessmentOrderModels(models) {
+  if (!shellWorkloadState.trainingActive) return models;
+
+  var remote = models.filter(function (model) { return model.runtimeId !== 'local'; });
+  var local = models.filter(function (model) { return model.runtimeId === 'local'; });
+  return remote.concat(local);
+}
+
 function directorModelTestStartCalibration() {
   if (directorModelTestState.running) return;
-  var models = directorModelAssessmentSelectedModels();
+  var models = directorModelAssessmentOrderModels(directorModelAssessmentSelectedModels());
   if (!models.length) {
     directorModelTestSetStatus('Choose at least one model.', 'ready', 'Ready');
     return;

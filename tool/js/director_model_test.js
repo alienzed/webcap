@@ -13,6 +13,7 @@ var directorModelTestState = {
   calibrationProtocol: null,
   calibrationProfiles: [],
   calibrationReports: [],
+  assessmentRuns: [],
   advertisedCapabilities: [],
   calibrationTotal: 0,
   mode: '',
@@ -298,6 +299,7 @@ function directorModelTestRefresh() {
     directorModelTestState.calibrationProtocol = meta.calibrationProtocol || null;
     directorModelTestState.calibrationProfiles = Array.isArray(meta.calibrationProfiles) ? meta.calibrationProfiles : [];
     directorModelTestState.calibrationReports = Array.isArray(meta.calibrationReports) ? meta.calibrationReports : [];
+    directorModelTestState.assessmentRuns = Array.isArray(meta.assessmentRuns) ? meta.assessmentRuns : [];
     directorModelTestState.advertisedCapabilities = Array.isArray(meta.advertisedCapabilities) ? meta.advertisedCapabilities : [];
     directorModelTestState.session = meta.session || null;
     directorModelTestState.models = Array.isArray(models.models) ? models.models : [];
@@ -466,6 +468,32 @@ function directorModelTestCalibrationFailureKind(kind, terminalStatus, text, fin
   return 'contract';
 }
 
+function directorModelTestStartAssessment(model) {
+  return directorModelTestPost({
+    action: 'start_assessment',
+    model: model
+  }).then(function (payload) {
+    directorModelTestState.assessmentRuns = Array.isArray(payload.assessmentRuns) ? payload.assessmentRuns : [];
+    return payload.assessment || null;
+  });
+}
+
+function directorModelTestUpdateAssessment(assessmentId, attempts, summary, status, error, final) {
+  if (!assessmentId) throw new Error('Director assessment ID is required.');
+  return directorModelTestPost({
+    action: 'update_assessment',
+    assessmentId: assessmentId,
+    attempts: attempts.slice(),
+    summary: summary || {},
+    status: status || '',
+    error: error || '',
+    final: !!final
+  }).then(function (payload) {
+    directorModelTestState.assessmentRuns = Array.isArray(payload.assessmentRuns) ? payload.assessmentRuns : [];
+    return payload.assessment || null;
+  });
+}
+
 function directorModelTestSaveCalibrationReport(model, contextMode, contextSize, maxTokens, attempts, status, error) {
   return directorModelTestPost({
     action: 'save_calibration_report',
@@ -491,6 +519,7 @@ function directorModelTestSaveCalibrationReport(model, contextMode, contextSize,
 
 function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
   var tracker = { phase: '', phaseStartedAt: 0, phases: {}, observedContextSize: 0 };
+  var prompt = '';
   var localStartedAt = Date.now() / 1000;
   directorModelTestState.currentPhase = 'queued';
   directorModelTestRenderStatus();
@@ -501,6 +530,7 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
     target: target,
     contextSize: contextSize || null
   }).then(function (payload) {
+    prompt = String(payload.prompt || '');
     directorModelTestState.currentJobId = String(payload.job && payload.job.jobId || '');
     if (!directorModelTestState.currentJobId) throw new Error('Director calibration did not receive a job ID.');
     reportConsoleInfo(
@@ -556,6 +586,8 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
       finishReason: finishReason,
       error: String(job.error || (passed ? '' : 'Calibration target did not complete cleanly.')),
       failureKind: directorModelTestCalibrationFailureKind(kind, terminalStatus, text, finishReason, passed),
+      prompt: prompt,
+      text: text,
       promptTokens: promptTokens,
       completionTokens: completionTokens,
       observedContextSize: isFinite(observedContext) && observedContext > 0 ? observedContext : 0,
@@ -577,15 +609,25 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   var contextMode = model.runtimeId === 'local' ? 'calibrated' : 'runtime';
   var contextSize = 0;
   var maxTokens = 0;
+  var assessmentId = '';
 
   directorModelTestState.currentModelLabel = String(model.label || model.modelId || model.modelRef || 'Model');
   directorModelTestState.currentModelNumber = modelNumber;
   directorModelTestState.currentRuntimeName = String(model.runtimeName || model.runtimeId || 'runtime');
 
-  function record(status, error) {
+  function record(status, error, final) {
     return directorModelTestSaveCalibrationReport(
       model, contextMode, contextSize, maxTokens, attempts, status || 'incomplete', error || ''
-    );
+    ).then(function (report) {
+      return directorModelTestUpdateAssessment(
+        assessmentId,
+        attempts,
+        report || {},
+        status || 'incomplete',
+        error || '',
+        !!final
+      ).then(function () { return report; });
+    });
   }
 
   function runAttempt(kind, target) {
@@ -601,7 +643,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
         contextSize = attempt.observedContextSize;
       }
       if (kind === 'prose' && attempt.status === 'passed') maxTokens = Number(target);
-      return record('incomplete').then(function () { return attempt; });
+      return record('incomplete', '', false).then(function () { return attempt; });
     }).catch(function (error) {
       attempts.push({
         kind: kind,
@@ -616,13 +658,17 @@ function directorModelTestCalibrateOne(model, modelNumber) {
         totalSeconds: 0,
         tokensPerSecond: 0
       });
-      return record('error', error.message || String(error)).then(function () { return attempts[attempts.length - 1]; });
+      return record('error', error.message || String(error), false).then(function () { return attempts[attempts.length - 1]; });
     });
   }
 
-  var chain = directorModelTestPost({
-    action: 'begin_calibration',
-    modelRef: model.modelRef
+  var chain = directorModelTestStartAssessment(model).then(function (assessment) {
+    assessmentId = String(assessment && assessment.id || '');
+    if (!assessmentId) throw new Error('Director assessment did not receive an assessment ID.');
+    return directorModelTestPost({
+      action: 'begin_calibration',
+      modelRef: model.modelRef
+    });
   }).then(function (payload) {
     directorModelTestState.calibrationProfiles = Array.isArray(payload.calibrationProfiles) ? payload.calibrationProfiles : [];
     directorModelTestState.calibrationReports = Array.isArray(payload.calibrationReports) ? payload.calibrationReports : [];
@@ -656,11 +702,11 @@ function directorModelTestCalibrateOne(model, modelNumber) {
 
   return chain.then(function () {
     if (directorModelTestState.stopRequested) {
-      return record('stopped').then(function () { return null; });
+      return record('stopped', '', true).then(function () { return null; });
     }
 
     var reportStatus = maxTokens > 0 ? 'complete' : 'incomplete';
-    return record(reportStatus).then(function () {
+    return record(reportStatus, '', true).then(function () {
       if (contextMode === 'calibrated' && !contextSize) {
         reportConsoleWarning('Director Model Calibration', 'No local context tier passed for ' + model.label + '; findings were saved but no Auto profile was created.');
         return null;

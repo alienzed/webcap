@@ -300,6 +300,10 @@ def _read_state():
     parsed.setdefault("jobs", [])
     parsed.setdefault("queuePaused", False)
     parsed.setdefault("queuePauseReason", "")
+    for job in parsed["jobs"]:
+        resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
+        if resume_path and not str(job.get("outputRunPath") or "").strip():
+            job["outputRunPath"] = resume_path
     _state_job_ids(parsed, path)
     _persisted_managed_job_ids = _managed_job_ids(parsed)
     _state_file_seen = path
@@ -322,6 +326,10 @@ def _read_state_readonly():
     if not isinstance(parsed, dict) or parsed.get("version") not in (3, 4):
         raise TrainingStateError("Existing training queue state is invalid: " + str(path))
     parsed.setdefault("jobs", [])
+    for job in parsed["jobs"]:
+        resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
+        if resume_path and not str(job.get("outputRunPath") or "").strip():
+            job["outputRunPath"] = resume_path
     _state_job_ids(parsed, path)
     return parsed
 
@@ -1541,13 +1549,11 @@ def _request_job_action(job, action, confirmation_note=""):
 
 def _checkpointed_stop_run_directory(job):
     """Find the one Diffusion-Pipe run belonging to this managed job."""
-    raw_run_path = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "").strip()
+    raw_run_path = str(job.get("outputRunPath") or "").strip()
     if raw_run_path:
         run_dir = host_path_for_training_path(raw_run_path)
         if not run_dir.is_dir():
             raise ValueError("Recorded training run directory is unavailable: " + raw_run_path)
-        if not str(job.get("outputRunPath") or "").strip():
-            job["outputRunPath"] = raw_run_path
         return run_dir
     root = Path(str(job.get("outputRoot") or "").strip())
     if not root.is_dir():
@@ -1779,7 +1785,7 @@ def _queue_paused_job(job):
     if resume_path:
         job["resumeFromCheckpoint"] = resume_path
         job["resumeStage"] = str(job.get("stages") or "")
-        job["outputRunPath"] = ""
+        job["outputRunPath"] = resume_path
         _populate_queued_resume_point(job)
     else:
         job.pop("resumeFromCheckpoint", None)
@@ -2280,7 +2286,7 @@ def _new_job(
         "input": input_evidence,
         "resumeFromCheckpoint": resume_path,
         "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
-        "outputRunPath": "",
+        "outputRunPath": resume_path,
         "resumePoint": {},
         "status": "queued",
         "stage": "queued",

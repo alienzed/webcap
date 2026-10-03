@@ -786,6 +786,35 @@ def test_capture_failure_never_appends_a_queue_item(tmp_path, monkeypatch):
     assert training_runner._read_state()["jobs"] == []
 
 
+def test_managed_resume_records_resume_run_as_current_output(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    action, action_data = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    resumed_run = action / "output" / "managed-run"
+    (resumed_run / "global_step1").mkdir(parents=True)
+    (resumed_run / "latest").write_text("global_step1\n", encoding="utf-8")
+    (resumed_run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    training_runner._write_state({"version": 3, "activeJobId": "", "jobs": [], "queuePaused": True, "queuePauseReason": "test"})
+
+    payload, status = training_runner.start_response(
+        "sets/subject",
+        queue=True,
+        stages="h3",
+        profile_id=MINIMAX_H3_PROFILE_ID,
+        run_id="train",
+        selected_media=["one.png"],
+        resume_action_id=action_data["actionId"],
+        resume_output_id="output/managed-run",
+    )
+
+    assert status == 200 and payload["ok"] is True
+    assert payload["job"]["resumeFromCheckpoint"] == str(resumed_run)
+    assert payload["job"]["outputRunPath"] == str(resumed_run)
+
+
 def test_custom_resume_creates_a_new_logical_run_without_writing_beside_source(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     _fake_runtime(monkeypatch)

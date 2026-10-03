@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from tool.server import training_archive
@@ -163,3 +165,35 @@ def test_finalize_persists_resume_branch_boundary(tmp_path, monkeypatch):
 
     assert captured["resumeCheckpointWallTime"] == 150.0
     assert captured["resumeBranchStartedAt"] == 250.0
+
+
+def test_staged_archive_cleanup_groups_candidates_by_timestamp_run_not_job_id(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    for name, job_id in (("old.safetensors", "old-job"), ("resumed.safetensors", "new-job")):
+        candidate = staged / name
+        candidate.write_bytes(b"x")
+        candidate.with_suffix(".webcap.json").write_text(json.dumps({
+            "version": 1,
+            "sourceJobId": job_id,
+            "sourceFolder": "sets/subject",
+            "sourceEpoch": 12,
+            "sourceFileName": name,
+            "stage": "h3",
+        }), encoding="utf-8")
+
+    monkeypatch.setattr(training_archive, "test_copy_destination", lambda stage, folder: (tmp_path, ["staged"]))
+    monkeypatch.setattr(
+        training_archive,
+        "candidate_run_snapshot_from_provenance",
+        lambda payload: (run_dir.resolve(), {"actionId": "003-h3"}),
+    )
+
+    matches = training_archive._staged_candidates("sets/subject", run_dir, "003-h3", "h3")
+
+    assert {candidate.name for candidate, _sidecar, _payload in matches} == {
+        "old.safetensors",
+        "resumed.safetensors",
+    }

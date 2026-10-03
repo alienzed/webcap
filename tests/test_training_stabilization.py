@@ -1801,3 +1801,58 @@ def test_fresh_queued_job_cannot_finish_without_starting(tmp_path, monkeypatch):
     assert state["jobs"][0]["id"] == "fresh-job"
     assert state["jobs"][0]["status"] == "queued"
     assert training_history.read_history(tmp_path / "sets" / "subject")["jobs"] == []
+
+
+def test_training_arbiter_releases_stale_training_owner_when_exact_runner_is_absent(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = "training"
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "stale",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [{"id": "stale", "status": "running"}],
+    })
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda _job: ("absent", ""))
+
+    assert training_runner.reserve_gpu_for_external_work("inference") is True
+    assert execution_queue.resource_owner() == "inference"
+    training_runner.release_gpu_for_external_work("inference")
+
+
+def test_training_arbiter_surfaces_runner_inspection_failure(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = "training"
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "uncertain",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [{"id": "uncertain", "status": "running"}],
+    })
+    monkeypatch.setattr(
+        training_runner,
+        "_inspect_job_runner",
+        lambda _job: (_ for _ in ()).throw(RuntimeError("inspection failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="inspection failed"):
+        training_runner.reserve_gpu_for_external_work("inference")
+
+
+def test_cancel_queued_training_job_cannot_launch_target(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "queued", "folder": "sets/subject", "status": "queued", "stage": "queued"}],
+    })
+    monkeypatch.setattr(training_runner, "_recover_queued_live_runner", lambda _job: False)
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("cancel must not launch queued work"))
+
+    payload, status = training_runner.stop_response("queued", cancel=True)
+
+    assert status == 200 and payload["ok"] is True
+    assert training_runner._read_state()["jobs"] == []

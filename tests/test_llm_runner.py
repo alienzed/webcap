@@ -1693,3 +1693,29 @@ def test_individual_story_development_jobs_do_not_mutate_story_before_final_appl
     assert len(finished["result"]["outline"]["scenes"]) == 2
     assert stored["sceneOrder"] == []
     assert stored["updatedAt"] == original_updated_at
+
+
+def test_llm_stop_does_not_stop_runtime_after_target_is_no_longer_active(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    target = llm_runner.enqueue(
+        "chat",
+        "remote",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "one"}]},
+    )
+    llm_runner.execution_claim_next("llm", expected_job_id=target["jobId"])
+    stopped = []
+    real_request_stop = llm_runner.execution_request_stop
+
+    def finish_during_stop(job_id):
+        current = real_request_stop(job_id)
+        llm_runner.execution_finish_job_transient(job_id, status="stopped")
+        return current
+
+    monkeypatch.setattr(llm_runner, "execution_request_stop", finish_during_stop)
+    monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: stopped.append(True))
+
+    result = llm_runner.action("stop", target["jobId"])
+
+    assert result["job"]["jobId"] == target["jobId"]
+    assert stopped == []

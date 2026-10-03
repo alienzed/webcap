@@ -231,6 +231,27 @@ def save_report(report):
     return json.loads(json.dumps(normalized))
 
 
+
+def begin_calibration(model_ref):
+    model_ref = str(model_ref or "").strip()
+    if not model_ref:
+        raise ValueError("Director calibration modelRef is required.")
+    payload = _read_document()
+    payload["profiles"].pop(model_ref, None)
+    payload["reports"].pop(model_ref, None)
+    if payload["profiles"] or payload["reports"]:
+        _write_document(payload)
+    else:
+        path = _path()
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+    return {
+        "profiles": list_profiles(),
+        "reports": list_reports(),
+    }
+
 def clear_calibration():
     path = _path()
     try:

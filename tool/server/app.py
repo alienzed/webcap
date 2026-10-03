@@ -1548,7 +1548,6 @@ def training_runner_validate_route():
         data.get("resumeStage") or "",
         data.get("resumeActionId") or "",
         data.get("resumeOutputId") or "",
-        data.get("resumeCheckpointTag") or "",
         data.get("profileId") or "",
         data.get("runId") or "",
         data.get("mode") or "normal",
@@ -1556,6 +1555,7 @@ def training_runner_validate_route():
         data.get("fallback_captions"),
         data.get("selection_criteria"),
         data.get("total_media_count"),
+        resume_checkpoint_tag=data.get("resumeCheckpointTag") or "",
     )
     return jsonify(payload), status
 

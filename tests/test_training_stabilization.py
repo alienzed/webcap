@@ -627,6 +627,8 @@ def test_train_captures_before_it_writes_the_queue_and_skips_preflight(tmp_path,
     state = training_runner._read_state()
     assert len(state["jobs"]) == 1
     assert Path(state["jobs"][0]["inputPath"]).is_dir()
+    assert state["jobs"][0]["resumeFromCheckpoint"] == ""
+    assert state["jobs"][0]["outputRunPath"] == ""
 
 
 def test_pre_layout_queue_state_uses_recorded_paths_without_action_resolution(tmp_path, monkeypatch):
@@ -766,6 +768,7 @@ def test_recent_run_resume_reuses_its_recorded_capture(tmp_path, monkeypatch):
     assert status == 200 and payload["ok"] is True
     assert list((action / "captures").iterdir()) == captures_before
     assert payload["job"]["inputPath"] == str(bundle["path"])
+    assert payload["job"]["outputRunPath"] == str(resume_output)
 
 
 def test_capture_failure_never_appends_a_queue_item(tmp_path, monkeypatch):
@@ -806,7 +809,8 @@ def test_custom_resume_creates_a_new_logical_run_without_writing_beside_source(t
     capture = Path(job["inputPath"])
     assert capture.parent == action_root / "captures"
     assert Path(job["outputRoot"]) == action_root / "output"
-    assert job["resumeFromCheckpoint"] == str(resumed_run) and job["outputRunPath"] == ""
+    assert job["resumeFromCheckpoint"] == str(resumed_run)
+    assert job["outputRunPath"] == str(resumed_run)
     assert not (resumed_run.parent / ".webcap-captures").exists()
 
 
@@ -1040,25 +1044,26 @@ def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
     assert active["runnerVerified"] is True
 
 
-def test_checkpointed_pause_uses_existing_resume_run_when_output_path_is_unbound(tmp_path, monkeypatch):
-    resumed_run = tmp_path / "resume-run"
-    resumed_run.mkdir()
+def test_persisted_resume_job_restores_output_run_path_on_read(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    state_path = training_runner._state_path()
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text(json.dumps({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [{
+            "id": "resume-job",
+            "status": "queued",
+            "resumeFromCheckpoint": "/runs/resume",
+            "outputRunPath": "",
+        }],
+    }), encoding="utf-8")
 
-    job = {
-        "id": "active",
-        "status": "running",
-        "stage": "h3",
-        "stages": "h3",
-        "resumeFromCheckpoint": str(resumed_run),
-        "outputRunPath": "",
-    }
+    state = training_runner._read_state()
 
-    monkeypatch.setattr(training_runner, "host_path_for_training_path", lambda value: Path(value))
-
-    resolved = training_runner._checkpointed_stop_run_directory(job)
-
-    assert resolved == resumed_run
-    assert job["outputRunPath"] == str(resumed_run)
+    assert state["jobs"][0]["outputRunPath"] == "/runs/resume"
 
 
 def test_queue_paused_job_preserves_existing_resume_path_when_output_path_is_unbound(monkeypatch):
@@ -1077,7 +1082,7 @@ def test_queue_paused_job_preserves_existing_resume_path_when_output_path_is_unb
     assert job["resumeFromCheckpoint"] == "/runs/resume"
     assert job["resumeStage"] == "h3"
     assert job["status"] == "queued"
-    assert job["outputRunPath"] == ""
+    assert job["outputRunPath"] == "/runs/resume"
 
 
 def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, monkeypatch):

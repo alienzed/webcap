@@ -557,6 +557,18 @@ def _candidate_run_snapshot(folder, job_id):
         if not raw_run_path:
             raise RuntimeError("This training job has no recorded or resume run directory yet.")
         progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+        resume_point = job.get("resumePoint") if isinstance(job.get("resumePoint"), dict) else {}
+        checkpoint_wall_time = job.get("resumeCheckpointWallTime")
+        branch_started_at = job.get("resumeBranchStartedAt")
+        if checkpoint_wall_time is None and branch_started_at is None and job.get("startedAt"):
+            checkpoint_tag = str(resume_point.get("checkpointTag") or "").strip()
+            checkpoint_match = _GLOBAL_STEP_TAG_PATTERN.fullmatch(checkpoint_tag)
+            recorded_highest_step = int(resume_point.get("step") or 0)
+            if checkpoint_match and int(checkpoint_match.group(1)) < recorded_highest_step:
+                checkpoint_path = host_path_for_training_path(raw_run_path) / checkpoint_tag
+                if checkpoint_path.is_dir() and not checkpoint_path.is_symlink():
+                    checkpoint_wall_time = checkpoint_path.stat().st_mtime
+                    branch_started_at = job.get("startedAt")
         run_summary = job.get("runSummary") if isinstance(job.get("runSummary"), dict) else {}
         if not run_summary:
             run_summary = run_summary_from_capture(
@@ -576,8 +588,8 @@ def _candidate_run_snapshot(folder, job_id):
             "currentEpoch": progress.get("epoch"),
             "plannedEpochs": progress.get("epochs"),
             "resumeCheckpointTag": str(job.get("resumeCheckpointTag") or ""),
-            "resumeCheckpointWallTime": job.get("resumeCheckpointWallTime"),
-            "resumeBranchStartedAt": job.get("resumeBranchStartedAt"),
+            "resumeCheckpointWallTime": checkpoint_wall_time,
+            "resumeBranchStartedAt": branch_started_at,
             "runSummary": run_summary,
         }
 

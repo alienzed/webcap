@@ -11,6 +11,7 @@ from . import config as app_config
 from .execution_queue import lane_snapshot as execution_lane_snapshot
 from .epoch_test_bench import clear_sessions as clear_test_sessions, session_cleanup_status as test_session_cleanup_status
 from .training_action import read_action
+from .training_candidates import aggregate_detailed_loss_by_epoch, map_detailed_loss_to_epochs, read_loss_events, smooth_step_loss
 from .training_history import all_history_payload, clear_history_job
 from .training_run_manifest import read_run_manifest, record_archive_metadata
 from .training_runner import action_live_job_ids, candidate_run_snapshot
@@ -41,6 +42,106 @@ def _safe_archive_name(value):
     if not name or name in {".", ".."} or Path(name).name != name or "/" in name or "\\" in name:
         raise ValueError("Archive name must be a single folder name.")
     return name
+
+
+def _archive_metrics_from_events(detailed_events, epoch_events, selected_epoch, retained_epochs):
+    selected_epoch = int(selected_epoch)
+    completed = sorted(epoch_events, key=lambda point: int(point["axis"]))
+    epoch_by_number = {int(point["axis"]): point for point in completed}
+    selected_event = epoch_by_number.get(selected_epoch)
+    if selected_event is None:
+        raise ValueError("Selected epoch has no completed TensorBoard epoch-loss point.")
+
+    mapped = map_detailed_loss_to_epochs(detailed_events, epoch_events)
+    robust_points = aggregate_detailed_loss_by_epoch(mapped, epoch_events)
+    robust_by_epoch = {int(point["epoch"]): point for point in robust_points}
+    selected_robust = robust_by_epoch.get(selected_epoch)
+    if selected_robust is None:
+        raise ValueError("Selected epoch has no detailed TensorBoard loss samples.")
+
+    completed_epochs = set(robust_by_epoch)
+    step_points = sorted([
+        {"step": int(point["step"]), "epoch": int(point["epoch"]), "loss": float(point["loss"])}
+        for point in mapped
+        if int(point["epoch"]) in completed_epochs
+    ], key=lambda point: point["step"])
+    smoothed = [
+        point for point in smooth_step_loss(step_points)
+        if int(point["epoch"]) == selected_epoch
+    ]
+    smoothed_loss = float(smoothed[-1]["loss"]) if smoothed else None
+
+    selected_index = next(index for index, point in enumerate(completed) if int(point["axis"]) == selected_epoch)
+    starting = completed[0]
+    comparison_index = max(0, selected_index - 5)
+    comparison = completed[comparison_index]
+    selected_loss = float(selected_event["loss"])
+    starting_loss = float(starting["loss"])
+    comparison_loss = float(comparison["loss"])
+
+    first_wall_time = min(
+        [float(point["wallTime"]) for point in detailed_events] +
+        [float(point["wallTime"]) for point in epoch_events]
+    )
+    selected_wall_time = float(selected_event["wallTime"])
+    previous_wall_time = (
+        float(completed[selected_index - 1]["wallTime"])
+        if selected_index > 0 else first_wall_time
+    )
+
+    return {
+        "selectedEpoch": selected_epoch,
+        "step": int(selected_robust["endStep"]),
+        "stepStart": int(selected_robust["startStep"]),
+        "stepEnd": int(selected_robust["endStep"]),
+        "epochLoss": selected_loss,
+        "smoothedLoss": smoothed_loss,
+        "startingEpoch": int(starting["axis"]),
+        "startingLoss": starting_loss,
+        "lossReductionPercent": (
+            ((starting_loss - selected_loss) / starting_loss) * 100.0
+            if starting_loss else None
+        ),
+        "recentComparisonEpoch": int(comparison["axis"]),
+        "recentComparisonLoss": comparison_loss,
+        "recentWindowEpochs": max(0, selected_epoch - int(comparison["axis"])),
+        "recentLossChangePercent": (
+            ((selected_loss - comparison_loss) / comparison_loss) * 100.0
+            if comparison_loss else None
+        ),
+        "trainingSecondsToSelected": max(0.0, selected_wall_time - first_wall_time),
+        "selectedEpochSeconds": max(0.0, selected_wall_time - previous_wall_time),
+        "epochLossPoints": [
+            {"epoch": int(point["axis"]), "loss": float(point["loss"])}
+            for point in completed
+        ],
+        "savedEpochs": sorted({selected_epoch} | {int(value) for value in retained_epochs}),
+    }
+
+
+def archive_metrics(archive_name):
+    name = _safe_archive_name(archive_name)
+    directory = archive_root() / name
+    if not directory.is_dir() or directory.is_symlink():
+        raise FileNotFoundError("Archived training run is unavailable: " + name)
+    manifest_path = directory / "webcap-run.json"
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        raise FileNotFoundError("Archive is missing webcap-run.json: " + name)
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("Archive manifest is unreadable: " + name) from exc
+    run_id = str(raw.get("runId") or "").strip()
+    manifest = read_run_manifest(directory, run_id)
+    archive = manifest.get("archive")
+    if not isinstance(archive, dict):
+        raise ValueError("Archive manifest has no archive metadata: " + name)
+    selected_epoch = archive.get("selectedEpoch")
+    if selected_epoch is None:
+        raise ValueError("Archive manifest has no selected epoch: " + name)
+    retained = archive.get("retainedAlternateEpochs") if isinstance(archive.get("retainedAlternateEpochs"), list) else []
+    detailed_events, epoch_events = read_loss_events(directory)
+    return _archive_metrics_from_events(detailed_events, epoch_events, selected_epoch, retained)
 
 
 def _epoch_directories(run_dir):

@@ -145,3 +145,27 @@ def test_metadata_backed_training_history_contract():
     assert "record_job(folder_path, job)" in runner
     assert "clear_history_job" in runner
     assert "historyHidden" in runner
+
+
+
+def test_training_archive_lazily_surfaces_selected_epoch_loss_context():
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "training_archive.py").read_text(encoding="utf-8")
+    state = (ROOT / "tool" / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "/fs/training_archive/metrics" in app
+    assert "def archive_metrics(" in backend
+    assert "read_loss_events" in backend
+    assert '"lossReductionPercent"' in backend
+    assert '"recentLossChangePercent"' in backend
+    assert '"trainingSecondsToSelected"' in backend
+    assert '"selectedEpochSeconds"' in backend
+    assert "archiveMetrics: {}" in state
+    assert "loadTrainingArchiveMetrics" in script
+    assert "trainingArchiveLossChart" in script
+    assert 'data-training-archive-details="' in script
+    assert "archiveList.onclick" in workspace
+    assert ".training-archive-analysis" in css

@@ -279,6 +279,159 @@ function renderTrainingHistory() {
   syncManagedTrainingResumeUi();
 }
 
+function trainingArchiveLossValue(value) {
+  var number = Number(value);
+  if (!isFinite(number)) return '';
+  if (number !== 0 && Math.abs(number) < .0001) return number.toExponential(2);
+  return number.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function trainingArchivePercent(value, signed) {
+  var number = Number(value);
+  if (!isFinite(number)) return '';
+  if (Math.abs(number) < .05) number = 0;
+  return (signed && number > 0 ? '+' : '') + number.toFixed(1) + '%';
+}
+
+function trainingArchiveDuration(value) {
+  var seconds = Number(value);
+  return isFinite(seconds) && seconds >= 0 ? formatTrainingRunnerDuration(Math.round(seconds)) : '';
+}
+
+function trainingArchiveMetricFact(label, value, title) {
+  if (value === '' || value === null || value === undefined) return '';
+  return '<div class="training-archive-metric"><span>' + escapeHtml(label) + '</span><strong' +
+    (title ? ' title="' + escapeHtml(title) + '"' : '') + '>' + escapeHtml(String(value)) + '</strong></div>';
+}
+
+function trainingArchiveLossChart(metrics) {
+  var points = (Array.isArray(metrics && metrics.epochLossPoints) ? metrics.epochLossPoints : []).map(function (point) {
+    return { epoch: Number(point.epoch), loss: Number(point.loss) };
+  }).filter(function (point) {
+    return isFinite(point.epoch) && isFinite(point.loss);
+  }).sort(function (a, b) {
+    return a.epoch - b.epoch;
+  });
+  if (!points.length) return '';
+
+  var width = 520;
+  var top = 9;
+  var bottom = 63;
+  var left = 12;
+  var right = width - 12;
+  var minEpoch = points[0].epoch;
+  var maxEpoch = points[points.length - 1].epoch;
+  var losses = points.map(function (point) { return point.loss; });
+  var minLoss = Math.min.apply(Math, losses);
+  var maxLoss = Math.max.apply(Math, losses);
+  var xFor = function (epoch) {
+    return minEpoch === maxEpoch ? width / 2 : left + ((epoch - minEpoch) / (maxEpoch - minEpoch)) * (right - left);
+  };
+  var yFor = function (loss) {
+    return minLoss === maxLoss ? (top + bottom) / 2 : top + ((maxLoss - loss) / (maxLoss - minLoss)) * (bottom - top);
+  };
+  var path = points.map(function (point, index) {
+    return (index ? 'L' : 'M') + xFor(point.epoch).toFixed(2) + ' ' + yFor(point.loss).toFixed(2);
+  }).join(' ');
+
+  var selectedEpoch = Number(metrics.selectedEpoch);
+  var saved = {};
+  (Array.isArray(metrics.savedEpochs) ? metrics.savedEpochs : []).forEach(function (epoch) {
+    var number = Number(epoch);
+    if (isFinite(number)) saved[number] = true;
+  });
+  var markers = points.filter(function (point) {
+    return saved[point.epoch];
+  }).map(function (point) {
+    var selected = point.epoch === selectedEpoch;
+    var title = (selected ? 'Selected epoch ' : 'Retained epoch ') + point.epoch + ' · loss ' + trainingArchiveLossValue(point.loss);
+    return '<circle class="training-archive-loss-marker' + (selected ? ' is-selected' : '') + '" cx="' +
+      xFor(point.epoch).toFixed(2) + '" cy="' + yFor(point.loss).toFixed(2) + '" r="' + (selected ? '4' : '2.8') + '">' +
+      '<title>' + escapeHtml(title) + '</title></circle>';
+  }).join('');
+
+  return '<div class="training-archive-loss-chart">' +
+    '<div class="training-archive-loss-chart-title">Epoch loss curve</div>' +
+    '<svg viewBox="0 0 ' + width + ' 72" role="img" aria-label="' +
+      escapeHtml('Epoch loss curve with selected epoch ' + selectedEpoch + ' highlighted') + '">' +
+      '<line class="training-archive-loss-guide" x1="' + left + '" y1="' + bottom + '" x2="' + right + '" y2="' + bottom + '"></line>' +
+      '<path class="training-archive-loss-line" d="' + path + '"></path>' +
+      markers +
+    '</svg>' +
+    '<div class="training-archive-loss-axis"><span>Epoch ' + escapeHtml(String(minEpoch)) + '</span>' +
+      '<span>Selected ' + escapeHtml(String(selectedEpoch)) + '</span>' +
+      '<span>Epoch ' + escapeHtml(String(maxEpoch)) + '</span></div>' +
+  '</div>';
+}
+
+function trainingArchiveAnalysisHtml(metrics, pending) {
+  if (pending && !metrics) {
+    return '<div class="training-archive-analysis"><div class="training-history-summary">Loading TensorBoard metrics…</div></div>';
+  }
+  if (!metrics) return '';
+  if (metrics.error) {
+    return '<div class="training-archive-analysis"><div class="training-runner-detail is-error">' +
+      escapeHtml(metrics.error) + '</div></div>';
+  }
+
+  var selectedEpoch = Number(metrics.selectedEpoch);
+  var startingEpoch = Number(metrics.startingEpoch);
+  var comparisonEpoch = Number(metrics.recentComparisonEpoch);
+  var recentWindow = Number(metrics.recentWindowEpochs);
+  var reductionTitle = isFinite(startingEpoch)
+    ? 'Epoch ' + startingEpoch + ' loss ' + trainingArchiveLossValue(metrics.startingLoss) +
+      ' → epoch ' + selectedEpoch + ' loss ' + trainingArchiveLossValue(metrics.epochLoss)
+    : '';
+  var recentTitle = isFinite(comparisonEpoch)
+    ? 'Compared with epoch ' + comparisonEpoch + ' loss ' + trainingArchiveLossValue(metrics.recentComparisonLoss)
+    : '';
+  var facts =
+    trainingArchiveMetricFact('Selected step', isFinite(Number(metrics.step)) ? Math.round(Number(metrics.step)).toLocaleString() : '') +
+    trainingArchiveMetricFact('Epoch steps',
+      isFinite(Number(metrics.stepStart)) && isFinite(Number(metrics.stepEnd))
+        ? Math.round(Number(metrics.stepStart)).toLocaleString() + '–' + Math.round(Number(metrics.stepEnd)).toLocaleString()
+        : '') +
+    trainingArchiveMetricFact('Elapsed to selected', trainingArchiveDuration(metrics.trainingSecondsToSelected), 'TensorBoard wall time from the first recorded scalar to the selected epoch.') +
+    trainingArchiveMetricFact('Epoch elapsed', trainingArchiveDuration(metrics.selectedEpochSeconds), 'TensorBoard wall time since the previous completed epoch.') +
+    trainingArchiveMetricFact('Epoch loss', trainingArchiveLossValue(metrics.epochLoss)) +
+    trainingArchiveMetricFact('Smoothed loss', trainingArchiveLossValue(metrics.smoothedLoss), 'Existing display smoothing over detailed train/loss samples near the selected epoch.') +
+    trainingArchiveMetricFact('Loss reduction', trainingArchivePercent(metrics.lossReductionPercent, false), reductionTitle) +
+    (isFinite(recentWindow) && recentWindow > 0
+      ? trainingArchiveMetricFact(Math.round(recentWindow) + '-epoch change', trainingArchivePercent(metrics.recentLossChangePercent, true), recentTitle)
+      : '');
+
+  return '<div class="training-archive-analysis">' +
+    '<div class="training-archive-metrics">' + facts + '</div>' +
+    trainingArchiveLossChart(metrics) +
+  '</div>';
+}
+
+function loadTrainingArchiveMetrics(archive) {
+  var name = String(archive && archive.name || '').trim();
+  if (!name) throw new Error('Archived training run has no archive name.');
+  if (Object.prototype.hasOwnProperty.call(trainingWorkspaceState.archiveMetrics, name)) {
+    return Promise.resolve(trainingWorkspaceState.archiveMetrics[name]);
+  }
+  if (trainingWorkspaceState.archiveMetricRequests[name]) return Promise.resolve(null);
+  trainingWorkspaceState.archiveMetricRequests[name] = true;
+  return trainingRunnerRequest('/fs/training_archive/metrics?name=' + encodeURIComponent(name))
+    .then(function (payload) {
+      trainingWorkspaceState.archiveMetrics[name] = payload.metrics || {};
+      return trainingWorkspaceState.archiveMetrics[name];
+    })
+    .catch(function (err) {
+      var message = String(err && err.message ? err.message : err);
+      trainingWorkspaceState.archiveMetrics[name] = { error: message };
+      reportConsoleError('Training Archive', message);
+      return trainingWorkspaceState.archiveMetrics[name];
+    })
+    .then(function (metrics) {
+      delete trainingWorkspaceState.archiveMetricRequests[name];
+      renderTrainingArchives();
+      return metrics;
+    });
+}
+
 function loadTrainingArchives(force) {
   if (!force && trainingWorkspaceState.archivesLoaded) return Promise.resolve(trainingWorkspaceState.archives || []);
   return trainingRunnerRequest('/fs/training_archive').then(function (payload) {
@@ -311,13 +464,32 @@ function renderTrainingArchives() {
     if (summary.dropout !== undefined) settings.push('dropout ' + summary.dropout);
     if (summary.shift !== undefined) settings.push('shift ' + summary.shift);
     var alternates = Array.isArray(archive.retainedAlternateEpochs) ? archive.retainedAlternateEpochs : [];
+    var archiveName = String(archive.name || '');
+    var detailsOpen = !!trainingWorkspaceState.archiveDetailOpen[archiveName];
+    if (
+      detailsOpen &&
+      !Object.prototype.hasOwnProperty.call(trainingWorkspaceState.archiveMetrics, archiveName) &&
+      !trainingWorkspaceState.archiveMetricRequests[archiveName]
+    ) {
+      loadTrainingArchiveMetrics(archive);
+    }
+    var metrics = Object.prototype.hasOwnProperty.call(trainingWorkspaceState.archiveMetrics, archiveName)
+      ? trainingWorkspaceState.archiveMetrics[archiveName]
+      : null;
+    var metricPending = !!trainingWorkspaceState.archiveMetricRequests[archiveName];
     return '<div class="training-history-item has-selected-epoch">' +
       '<div class="training-history-primary"><strong>Archived</strong><span class="training-history-time">' + escapeHtml(formatTrainingHistoryTime(archive.archivedAt)) + '</span></div>' +
       '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(archive.runName || archive.name) + '</div><div class="training-history-set">' + escapeHtml(archive.sourceFolder || '') + '</div></div>' +
       '<div class="training-history-details"><div>Selected Epoch ' + escapeHtml(String(archive.selectedEpoch || '')) +
         (alternates.length ? ' · backups ' + escapeHtml(alternates.join(', ')) : '') + '</div>' +
         (settings.length ? '<div>' + escapeHtml(settings.join(' · ')) + '</div>' : '') +
-        '<div>' + escapeHtml(archive.productionFileName || '') + '</div></div>' +
+        '<div>' + escapeHtml(archive.productionFileName || '') + '</div>' +
+        '<button type="button" class="training-history-details-toggle" data-training-archive-details="' + escapeHtml(archiveName) + '" title="' +
+          (detailsOpen ? 'Hide selected epoch metrics' : 'Show selected epoch metrics') + '" aria-label="' +
+          (detailsOpen ? 'Hide selected epoch metrics' : 'Show selected epoch metrics') + '" aria-expanded="' +
+          (detailsOpen ? 'true' : 'false') + '">' + (detailsOpen ? '&#9652;' : '&#9662;') + '</button>' +
+      '</div>' +
+      (detailsOpen ? trainingArchiveAnalysisHtml(metrics, metricPending) : '') +
       '</div>';
   }).join('');
 }

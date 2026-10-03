@@ -605,6 +605,7 @@ function wireTrainingWorkspace() {
   });
   var runnerQueue = document.getElementById('training-runner-queue');
   var historyList = document.getElementById('training-history-list');
+  var archiveList = document.getElementById('training-archive-list');
   var historyCollapseBtn = document.getElementById('training-history-collapse-btn');
   var historyShowAllBtn = document.getElementById('training-history-show-all-btn');
   var historySearch = document.getElementById('training-history-search');
@@ -830,6 +831,13 @@ function wireTrainingWorkspace() {
     if (resumeId) {
       resumeTrainingHistoryJob(resumeId);
     }
+  };
+  archiveList.onclick = function (event) {
+    var detailsButton = event.target.closest('[data-training-archive-details]');
+    if (!detailsButton) return;
+    var archiveName = detailsButton.getAttribute('data-training-archive-details');
+    trainingWorkspaceState.archiveDetailOpen[archiveName] = !trainingWorkspaceState.archiveDetailOpen[archiveName];
+    renderTrainingArchives();
   };
   historyCollapseBtn.onclick = function () {
     trainingWorkspaceState.historyCollapsed = !trainingWorkspaceState.historyCollapsed;

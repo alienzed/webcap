@@ -227,7 +227,7 @@ def _calibration_prose_prompt(target):
         "This is a long-form coherence and completion stress test. "
         "Write one continuous realistic suspense story divided into exactly "
         + str(section_count) + " consecutively numbered sections labelled 'Section 1:' through 'Section "
-        + str(section_count) + ":'. Each section must contain 100-140 words of actual story prose, "
+        + str(section_count) + ":'. Each section must contain 80-110 words of actual story prose, "
         "continue causally from the previous section, preserve character identities, locations, objects, "
         "injuries, time progression, and established facts, and materially advance the plot. "
         "Vary sentence structure and avoid recaps, filler, repeated paragraphs, outlines, commentary, or meta discussion. "
@@ -271,7 +271,8 @@ def calibration_protocol():
         "description": (
             "Calibration starts with small probes so limited models can establish useful capability before stress testing. "
             "Local llama.cpp context is tested progressively until a tier fails or the test range is exhausted. "
-            "Each output tier must pass both a mechanical completion test and a coherent long-form prose test."
+            "Each output tier is a requested generation budget, not a claim about the provider or model hard maximum. "
+            "Each tier must pass both a mechanical completion test and a coherent long-form prose test."
         ),
     }
 

@@ -142,7 +142,7 @@ function directorModelTestStatusState(session) {
 }
 
 function directorModelTestStatusText(session) {
-  if (!session && directorModelTestState.running && directorModelTestState.mode === 'calibration') {
+  if (directorModelTestState.running && directorModelTestState.mode === 'calibration') {
     return directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued') +
       (directorModelTestState.currentModelLabel ? ' · ' + directorModelTestState.currentModelLabel : '') +
       (directorModelTestState.calibrationTotal > 0 ? ' · ' + String(directorModelTestState.currentModelNumber) + ' / ' + String(directorModelTestState.calibrationTotal) : '');
@@ -336,6 +336,7 @@ function directorModelTestRefresh() {
     }
     directorModelTestRenderModels();
     directorModelTestRenderCalibrationProfiles();
+    directorModelAssessmentRenderHistory();
     directorModelTestRenderSession();
     directorModelTestSyncControls();
   }).catch(function (error) {
@@ -541,6 +542,69 @@ function directorModelTestSaveCalibrationReport(model, contextMode, contextSize,
     directorModelTestState.calibrationReports = Array.isArray(payload.calibrationReports) ? payload.calibrationReports : [];
     directorModelTestRenderCalibrationProfiles();
     return payload.report || null;
+  });
+}
+
+function directorModelAssessmentSize(bytes) {
+  var value = Number(bytes);
+  if (!isFinite(value) || value <= 0) return '0 B';
+  if (value < 1024) return Math.round(value) + ' B';
+  if (value < 1024 * 1024) return (value / 1024).toFixed(value < 10240 ? 1 : 0) + ' KiB';
+  return (value / (1024 * 1024)).toFixed(value < 10 * 1024 * 1024 ? 1 : 0) + ' MiB';
+}
+
+function directorModelAssessmentRenderHistory() {
+  var host = directorModelTestEl('director-model-assessment-history');
+  if (!host) throw new Error('Director assessment history markup is missing.');
+  var runs = Array.isArray(directorModelTestState.assessmentRuns) ? directorModelTestState.assessmentRuns : [];
+  if (!runs.length) {
+    host.innerHTML = '<p class="app-settings-help">No assessment runs yet.</p>';
+    return;
+  }
+  host.innerHTML = runs.map(function (run) {
+    var model = run.model && typeof run.model === 'object' ? run.model : {};
+    var date = run.startedAt ? new Date(run.startedAt).toLocaleString() : '';
+    var meta = [
+      run.status || 'unknown',
+      String(Number(run.attemptCount || 0)) + ' probes',
+      directorModelAssessmentSize(run.bytes),
+      date
+    ].filter(Boolean).join(' · ');
+    return '<details class="app-settings-advanced director-model-assessment-run" data-assessment-id="' + escapeHtml(run.id || '') + '">' +
+      '<summary><span><strong>' + escapeHtml(model.label || model.modelId || run.id || '') + '</strong></span>' +
+      '<span class="app-settings-help">' + escapeHtml(meta) + '</span></summary>' +
+      '<div class="app-settings-disclosure-body">' +
+        '<div class="app-settings-actions app-settings-actions-inline">' +
+          '<button type="button" class="review-captions-btn" data-director-assessment-view="' + escapeHtml(run.id || '') + '">Load Full Evidence</button>' +
+          '<button type="button" class="review-captions-btn" data-director-assessment-delete="' + escapeHtml(run.id || '') + '">Delete Raw Evidence</button>' +
+        '</div>' +
+        '<div class="director-model-assessment-evidence" data-director-assessment-evidence="' + escapeHtml(run.id || '') + '"></div>' +
+      '</div>' +
+    '</details>';
+  }).join('');
+}
+
+function directorModelAssessmentLoadEvidence(assessmentId) {
+  return directorModelTestPost({
+    action: 'get_assessment',
+    assessmentId: assessmentId
+  }).then(function (payload) {
+    var host = document.querySelector('[data-director-assessment-evidence="' + CSS.escape(String(assessmentId)) + '"]');
+    if (!host) throw new Error('Director assessment evidence host is missing.');
+    host.innerHTML = '<pre class="app-settings-json director-model-test-output">' +
+      escapeHtml(JSON.stringify(payload.assessment || {}, null, 2)) +
+      '</pre>';
+  });
+}
+
+function directorModelAssessmentDeleteEvidence(assessmentId) {
+  return directorModelTestPost({
+    action: 'delete_assessment',
+    assessmentId: assessmentId
+  }).then(function (payload) {
+    directorModelTestState.assessmentRuns = Array.isArray(payload.assessmentRuns) ? payload.assessmentRuns : [];
+    directorModelAssessmentRenderHistory();
+    reportConsoleInfo('Director Model Assessment', 'Deleted raw assessment evidence; learned model results were preserved.');
   });
 }
 
@@ -787,7 +851,6 @@ function directorModelTestStartCalibration() {
   directorModelTestState.stopRequested = false;
   directorModelTestState.calibrationTotal = models.length;
   directorModelTestState.startedAt = Date.now() / 1000;
-  directorModelTestState.session = null;
   directorModelTestSyncControls();
   directorModelTestRenderStatus();
   reportConsoleInfo('Director Model Calibration', 'Starting progressive calibration for ' + String(models.length) + ' model' + (models.length === 1 ? '' : 's') + '.');
@@ -803,6 +866,11 @@ function directorModelTestStartCalibration() {
   chain.catch(function (error) {
     reportConsoleError('Director Model Calibration', error);
   }).finally(function () {
+    var assessmentSummary = directorModelTestEl('director-model-assessment-summary-status');
+    if (assessmentSummary) {
+      assessmentSummary.textContent = directorModelTestState.stopRequested ? 'Stopped' : 'Complete';
+      assessmentSummary.dataset.state = directorModelTestState.stopRequested ? 'stopped' : 'complete';
+    }
     directorModelTestState.running = false;
     directorModelTestState.currentJobId = '';
     directorModelTestState.currentModelLabel = '';
@@ -1161,8 +1229,24 @@ function initializeDirectorModelTest() {
   directorModelTestEl('director-model-test-stop').addEventListener('click', directorModelTestStop);
   directorModelTestEl('director-model-assessment-stop').addEventListener('click', directorModelTestStop);
   directorModelTestEl('director-model-test-export').addEventListener('click', directorModelTestExport);
+  directorModelTestEl('director-model-assessment-history').addEventListener('click', function (event) {
+    var view = event.target.closest('[data-director-assessment-view]');
+    if (view) {
+      directorModelAssessmentLoadEvidence(view.getAttribute('data-director-assessment-view')).catch(function (error) {
+        reportConsoleError('Director Model Assessment', error);
+      });
+      return;
+    }
+    var remove = event.target.closest('[data-director-assessment-delete]');
+    if (remove) {
+      directorModelAssessmentDeleteEvidence(remove.getAttribute('data-director-assessment-delete')).catch(function (error) {
+        reportConsoleError('Director Model Assessment', error);
+      });
+    }
+  });
 
   directorModelTestRenderSession();
+  directorModelAssessmentRenderHistory();
   directorModelTestSyncControls();
 }
 

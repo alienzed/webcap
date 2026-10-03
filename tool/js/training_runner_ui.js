@@ -327,6 +327,7 @@ function validateTrainingRunner(options) {
       resumeStage: options && options.resumeStage ? options.resumeStage : '',
       resumeActionId: options && options.resumeActionId ? options.resumeActionId : '',
       resumeOutputId: options && options.resumeOutputId ? options.resumeOutputId : '',
+      resumeCheckpointTag: options && options.resumeCheckpointTag ? options.resumeCheckpointTag : '',
       selected_media: getVisibleMediaSelectionForTraining(),
       fallback_captions: buildTrainingFallbackCaptions(getVisibleMediaSelectionForTraining()).fallbackCaptions,
       selection_criteria: buildTrainingSelectionCriteria(),
@@ -361,6 +362,7 @@ function getManagedTrainingOptions() {
   var customResumePath = manualResumeEl ? String(manualResumeEl.value || '').trim() : '';
   var resumeActionId = usingResume && !customResumePath && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-action-id') || '') : '';
   var resumeOutputId = usingResume && !customResumePath && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-output-id') || '') : '';
+  var resumeCheckpointTag = usingResume && !customResumePath && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-checkpoint-tag') || '') : '';
   return {
     stages: stages,
     profileId: selectedProfile ? selectedProfile.id : '',
@@ -370,6 +372,7 @@ function getManagedTrainingOptions() {
     runName: runNameEl ? String(runNameEl.value || '').trim() : '',
     resumeOutputId: resumeOutputId,
     resumeActionId: resumeActionId,
+    resumeCheckpointTag: resumeCheckpointTag,
     resumeStage: stages,
     parentJobId: '',
     initializerActionId: initializer ? String(initializer.actionId || '') : '',
@@ -473,6 +476,7 @@ function startManagedTraining() {
            resumeStage: options.resumeStage,
            resumeActionId: options.resumeActionId,
            resumeOutputId: options.resumeOutputId,
+           resumeCheckpointTag: options.resumeCheckpointTag,
            runName: options.runName,
           selected_media: selectedMedia,
           total_media_count: Array.isArray(state.items) ? state.items.length : 0,

@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .epoch_test_bench import delete_session
+from .director_model_assessment_store import assessment_root as director_assessment_root, delete_assessment as delete_director_assessment, list_assessments as list_director_assessments
 from .generate_store import MANIFEST_NAME
 from .execution_queue import ExecutionQueueStateError, get_job as execution_get_job, lane_snapshot as execution_lane_snapshot
 from . import inference_runtime
@@ -21,8 +22,8 @@ from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
-MEASURABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy"}
-PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}
+MEASURABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy", "director_assessment"}
+PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy", "director_assessment"}
 ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
 ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
 GENERATE_REFERENCE_TOKEN_RE = re.compile(r"^[0-9]+-[0-9a-f]{12}$")
@@ -153,6 +154,46 @@ def _training_items(cache):
             },
             cache=cache,
         ))
+    return rows
+
+
+
+def _director_assessment_items(cache):
+    rows = []
+    root = director_assessment_root()
+    for assessment in list_director_assessments():
+        assessment_id = str(assessment.get("id") or "").strip()
+        if not assessment_id:
+            continue
+        path = root / (assessment_id + ".json")
+        model = assessment.get("model") if isinstance(assessment.get("model"), dict) else {}
+        row = _item(
+            "director_assessment",
+            assessment_id,
+            model.get("label") or model.get("modelId") or assessment_id,
+            path,
+            kind="Director assessment evidence",
+            status=str(assessment.get("status") or ""),
+            purgeable=True,
+            meta={
+                "startedAt": assessment.get("startedAt"),
+                "finishedAt": assessment.get("finishedAt"),
+                "attemptCount": assessment.get("attemptCount"),
+                "modelRef": model.get("modelRef"),
+            },
+            cache=cache,
+        )
+        try:
+            stat = path.stat()
+        except OSError:
+            rows.append(row)
+            continue
+        row["measured"] = True
+        row["bytes"] = int(stat.st_size)
+        row["measuredAt"] = float(stat.st_mtime)
+        row["fileCount"] = 1
+        row["measurementSource"] = "producer"
+        rows.append(row)
     return rows
 
 
@@ -969,6 +1010,7 @@ def overview(folder=""):
     groups = {
         "training": collect("training", lambda: _training_items(cache)),
         "archive": _archive_items(cache),
+        "director_assessment": _director_assessment_items(cache),
         "tests": _test_items(cache, folder),
         "staged": collect("staged", lambda: _staged_items(cache, folder)),
         "generate": collect("generate", lambda: _generate_items(cache)),
@@ -983,6 +1025,7 @@ def overview(folder=""):
             note=("Training queue state is unavailable; inventory is hidden until it can be read." if "training" in unavailable else "")
         ),
         _category("archive", "Training Archives", groups["archive"]),
+        _category("director_assessment", "Director Assessments", groups["director_assessment"], note="Raw diagnostic evidence only; learned Director model results are preserved when this is deleted."),
         _category(
             "tests", "Tests", groups["tests"], complete=scan_complete,
             note=(
@@ -1310,6 +1353,18 @@ def resolve_item(area, item_id, folder=""):
         path = raw.resolve()
         if path.parent != root.resolve() or not path.is_dir():
             raise FileNotFoundError("Training Archive is unavailable.")
+        return path
+    if area == "director_assessment":
+        assessment_id = str(item_id or "").strip()
+        if not assessment_id or Path(assessment_id).name != assessment_id:
+            raise ValueError("Director assessment storage ID is invalid.")
+        root = director_assessment_root()
+        raw = root / (assessment_id + ".json")
+        if root.is_symlink() or raw.is_symlink():
+            raise ValueError("Director assessment storage path is symlinked.")
+        path = raw.resolve()
+        if path.parent != root.resolve() or not path.is_file():
+            raise FileNotFoundError("Director assessment evidence is unavailable.")
         return path
     if area == "tests":
         return _resolve_test(folder, item_id)
@@ -1727,6 +1782,8 @@ def purge(area, item_id, folder=""):
             path.parent.rmdir()
         except OSError:
             pass
+    elif area == "director_assessment":
+        delete_director_assessment(item_id)
     elif area == "archive":
         path = resolve_item("archive", item_id)
         shutil.rmtree(path)

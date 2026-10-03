@@ -21,7 +21,6 @@ LLAMA_HOST = "127.0.0.1"
 DEFAULT_PORT = 8189
 DEFAULT_CONTEXT_SIZE = None
 DEFAULT_MAX_TOKENS = None
-GPU_RESERVATION_OWNER = "llm"
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 
 
@@ -1105,18 +1104,6 @@ def _unload_model(model_id):
     _wait_for_model(model_id, "unloaded", timeout=30)
 
 
-def _reserve_gpu():
-    from .training_runner import gpu_reservation_block_reason, reserve_gpu_for_external_work
-    if not reserve_gpu_for_external_work(GPU_RESERVATION_OWNER):
-        reason = gpu_reservation_block_reason(GPU_RESERVATION_OWNER)
-        raise RuntimeError("Director runtime could not reserve the shared GPU resource: " + reason)
-
-
-def _release_gpu():
-    from .training_runner import release_gpu_for_external_work
-    release_gpu_for_external_work(GPU_RESERVATION_OWNER)
-
-
 def _windows_curl_path():
     is_wsl = bool(os.environ.get("WSL_INTEROP") or os.environ.get("WSL_DISTRO_NAME"))
     if not is_wsl:
@@ -1368,6 +1355,8 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
 
     with _use_runtime(runtime_id):
         base_settings = _director_config()
+    if base_settings.get("mode", "local") == "local" and not gpu_reserved:
+        raise RuntimeError("Local Director runtime requires existing LLM GPU ownership.")
     profile = None
     needs_profile_context = (
         runtime_id == "local"
@@ -1451,8 +1440,6 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
                 result["contextSize"] = int(remote_model.get("contextSize") or 0)
             return result
 
-        if not gpu_reserved:
-            _reserve_gpu()
         completed = False
         try:
             _set_activity("freeing_comfy", model_id=model_ref)
@@ -1498,10 +1485,8 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
                     else:
                         _logger.exception(
                             "Director runtime could not confirm model unload from an external llama.cpp router; "
-                            "releasing WebCap's GPU reservation rather than blocking on external runtime uncertainty."
+                            "GPU ownership remains with the LLM runner while this request fails."
                         )
-            if not gpu_reserved:
-                _release_gpu()
 
 
 def _completion_result(response, model_id, allow_truncated=False):

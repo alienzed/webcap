@@ -67,11 +67,25 @@ def _prepare_comfyui_for_training():
     return True
 
 
+def _prepare_comfyui_for_llm():
+    """Release retained ComfyUI models before local LLM execution."""
+    from . import inference_runtime
+
+    try:
+        inference_runtime.free_cached_models()
+    except (ConnectionError, TimeoutError):
+        _logger.info("ComfyUI is unavailable during LLM handoff; proceeding.")
+    return True
+
+
 def prepare_gpu_for(owner):
     """Perform shared runtime handoff preparation for the next local-GPU owner."""
     owner = str(owner or "").strip()
-    if owner not in {"training", "inference"}:
-        raise ValueError("GPU preparation owner must be training or inference.")
+    if owner not in {"training", "llm", "inference"}:
+        raise ValueError("GPU preparation owner must be training, llm, or inference.")
+
+    if owner == "llm":
+        return _prepare_comfyui_for_llm()
 
     if not _release_retained_llm(owner):
         return False

@@ -362,29 +362,15 @@ def reconcile_startup():
             if prompt_id:
                 try:
                     if not inference_runtime.cancel_job_and_wait(prompt_id):
-                        from .inference_runner import hold_provider_cleanup
-                        hold_provider_cleanup(
-                            prompt_id,
-                            (
-                                "Queue paused: interrupted legacy Storyboard provider work "
-                                "could not be confirmed stopped after restart."
-                            ),
-                        )
                         _logger.error(
-                            "Interrupted legacy Storyboard provider job %s did not confirm cancellation.",
+                            "Interrupted legacy Storyboard provider job %s did not confirm cancellation; "
+                            "restart recovery will not recreate GPU ownership.",
                             prompt_id,
                         )
                 except Exception:
-                    from .inference_runner import hold_provider_cleanup
-                    hold_provider_cleanup(
-                        prompt_id,
-                        (
-                            "Queue paused: interrupted legacy Storyboard provider work "
-                            "could not be confirmed stopped after restart."
-                        ),
-                    )
                     _logger.exception(
-                        "Could not cancel interrupted legacy Storyboard provider job %s.",
+                        "Could not cancel interrupted legacy Storyboard provider job %s; "
+                        "restart recovery will not recreate GPU ownership.",
                         prompt_id,
                     )
 

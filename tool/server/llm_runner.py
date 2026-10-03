@@ -501,7 +501,6 @@ def _advance_queue():
         next_job = queued[0]
         next_model_id = _job_model_id(next_job)
         local_gpu = uses_local_gpu(next_model_id)
-        reserved_here = False
         owner = execution_resource_owner()
         if local_gpu:
             if owner and owner != GPU_RESERVATION_OWNER:
@@ -509,7 +508,6 @@ def _advance_queue():
             if not owner:
                 if not _reserve_gpu():
                     return None
-                reserved_here = True
         elif owner == GPU_RESERVATION_OWNER:
             # Runtime mode may have changed while this lane retained ownership
             # for another queued local job. Remote work does not need the GPU.
@@ -526,6 +524,9 @@ def _advance_queue():
         job_id = str(claimed.get("id") or "")
         release_gpu = local_gpu
         try:
+            if local_gpu:
+                from .gpu_prep import prepare_gpu_for
+                prepare_gpu_for(GPU_RESERVATION_OWNER)
             _execute_claimed(job_id, gpu_reserved=local_gpu)
         except Exception as exc:
             current = execution_get_job(job_id)

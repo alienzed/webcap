@@ -1521,7 +1521,7 @@ def test_external_gpu_reservation_blocks_training_queue_launch(monkeypatch):
         "queuePauseReason": "",
         "jobs": [{"id": "queued", "status": "queued", "folder": "sets/subject"}],
     }
-    execution_queue._resource_owner = "test-generations"
+    execution_queue._resource_owner = "inference"
     monkeypatch.setattr(training_runner, "_launch_job", lambda *_args, **_kwargs: pytest.fail("reserved GPU must not launch training"))
 
     training_runner._launch_next_queued_job(state)
@@ -1585,16 +1585,16 @@ def test_external_gpu_reservation_respects_training_queue_policy(tmp_path, monke
         "jobs": [{"id": "queued", "status": "queued"}],
     })
 
-    assert training_runner.reserve_gpu_for_external_work("test-generations") is False
+    assert training_runner.reserve_gpu_for_external_work("inference") is False
 
     state = training_runner._read_state()
     state["queuePaused"] = True
     training_runner._write_state(state)
-    assert training_runner.reserve_gpu_for_external_work("test-generations") is True
-    assert training_runner.reserve_gpu_for_external_work("another-owner") is False
-    training_runner.release_gpu_for_external_work("test-generations")
-    assert training_runner.reserve_gpu_for_external_work("another-owner") is True
-    training_runner.release_gpu_for_external_work("another-owner")
+    assert training_runner.reserve_gpu_for_external_work("inference") is True
+    assert training_runner.reserve_gpu_for_external_work("llm") is False
+    training_runner.release_gpu_for_external_work("inference")
+    assert training_runner.reserve_gpu_for_external_work("llm") is True
+    training_runner.release_gpu_for_external_work("llm")
 
 
 def test_terminal_training_job_retires_even_if_history_write_fails(tmp_path, monkeypatch):

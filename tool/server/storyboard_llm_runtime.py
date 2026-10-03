@@ -1116,56 +1116,6 @@ def _windows_curl_path():
     return str(candidate) if is_wsl and candidate.is_file() else None
 
 
-def _free_comfy_models():
-    payload = json.dumps({"unload_models": True, "free_memory": True}).encode("utf-8")
-    curl_path = _windows_curl_path()
-    if curl_path:
-        command = [
-            curl_path,
-            "--silent",
-            "--show-error",
-            "--fail-with-body",
-            "--max-time", "5",
-            "--request", "POST",
-            "--header", "Content-Type: application/json",
-            "--data-binary", "@-",
-            COMFY_BASE_URL + "/free",
-        ]
-        result = subprocess.run(
-            command,
-            input=payload,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=8,
-            check=False,
-        )
-        if result.returncode in (5, 6, 7, 28):
-            return False
-        if result.returncode != 0:
-            detail = (
-                result.stdout.decode("utf-8", errors="replace").strip()
-                or result.stderr.decode("utf-8", errors="replace").strip()
-            )
-            raise RuntimeError("ComfyUI could not release cached models before Director inference: " + detail)
-        return True
-
-    request = urllib.request.Request(
-        COMFY_BASE_URL + "/free",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=5):
-            return True
-    except urllib.error.HTTPError as exc:
-        raise RuntimeError(
-            "ComfyUI could not release cached models before Director inference: " + _decode_error_body(exc)
-        ) from exc
-    except (urllib.error.URLError, TimeoutError, OSError):
-        return False
-
-
 def _model_status(model_id):
     for model in _list_models_for_current_runtime(reload=False):
         if model["id"] == model_id:
@@ -1445,8 +1395,6 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
 
         completed = False
         try:
-            _set_activity("freeing_comfy", model_id=model_ref)
-            _free_comfy_models()
             _ensure_local_model_loaded(model_id)
             _relay_log_updates()
             _set_activity("generating", model_id=model_ref)

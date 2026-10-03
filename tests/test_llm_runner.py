@@ -5,6 +5,7 @@ import pytest
 
 from tool.server import config as app_config
 from tool.server import execution_queue
+from tool.server import gpu_prep
 from tool.server import llm_runner
 from tool.server import storyboard_llm_runtime
 from tool.server import storyboard_store
@@ -22,6 +23,7 @@ def llm_root(tmp_path, monkeypatch):
     llm_runner._local_gpu_drain_until = 0.0
     storyboard_llm_runtime.clear_stop_request()
     monkeypatch.setattr(llm_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(gpu_prep, "prepare_gpu_for", lambda _owner: True)
     return tmp_path
 
 
@@ -252,6 +254,34 @@ def test_local_llm_failure_terminalizes_without_uncertainty_pause(llm_root, monk
     assert execution_queue.resource_owner() == ""
 
 
+def test_local_llm_uses_shared_gpu_prep_before_execution(llm_root, monkeypatch):
+    calls = []
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
+    monkeypatch.setattr(
+        gpu_prep,
+        "prepare_gpu_for",
+        lambda owner: calls.append(("prep", owner)) or True,
+    )
+    monkeypatch.setattr(
+        llm_runner,
+        "_execute_claimed",
+        lambda job_id, gpu_reserved=False: (
+            calls.append(("execute", gpu_reserved)),
+            llm_runner.execution_finish_job_transient(job_id, status="completed"),
+        ),
+    )
+
+    job = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Prompt.", "output": "text"},
+    )
+    llm_runner._advance_queue()
+
+    assert llm_runner.job_status(job["jobId"])["status"] == "completed"
+    assert calls == [("prep", "llm"), ("execute", True)]
+
+
 def test_local_llm_completion_opens_short_gpu_drain_window(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
@@ -311,7 +341,7 @@ def test_training_cannot_claim_gpu_during_retained_llm_grace(llm_root, monkeypat
         "jobs": [{"id": "train-next", "status": "queued"}],
     })
 
-    assert training_runner.reserve_gpu_for_external_work("training-probe") is False
+    assert execution_queue.reserve_resource("training") is False
     assert execution_queue.resource_owner() == "llm"
 
     llm_runner._local_gpu_drain_until = 0.0

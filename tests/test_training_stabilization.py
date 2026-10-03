@@ -695,6 +695,22 @@ def test_training_history_record_persists_without_output_artifacts(tmp_path, mon
     assert history[0]["outputAvailable"] is False
 
 
+def test_training_history_view_prefers_managed_action_run_name(tmp_path, monkeypatch):
+    monkeypatch.setattr(training_history, "read_action", lambda _action_id: (tmp_path, {"runName": "Named run"}))
+    monkeypatch.setattr(training_history.app_config, "safe_join_fs_root", lambda _folder: tmp_path)
+
+    item = training_history._history_job_view({
+        "id": "job-one",
+        "folder": "sets/subject",
+        "status": "completed",
+        "stages": "h3",
+        "actionId": "subject/003-h3",
+        "runName": "subject",
+    })
+
+    assert item["runName"] == "Named run"
+
+
 def test_training_history_clear_removes_metadata_only(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)

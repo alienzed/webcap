@@ -575,6 +575,15 @@ def _history_job_view(job):
         item["candidateRunAvailable"] = False
     item["selectedEpoch"] = None
     action_id = str(item.get("actionId") or "").strip()
+    if action_id:
+        try:
+            _action_root, action = read_action(action_id)
+        except (OSError, ValueError):
+            pass
+        else:
+            run_name = str(action.get("runName") or "").strip()
+            if run_name:
+                item["runName"] = run_name
     if candidate_path and candidate_path.is_dir() and not candidate_path.is_symlink() and action_id:
         item["selectedEpoch"] = selected_run_epoch(candidate_path.resolve(strict=True), action_id)
     summary = item.get("artifactSummary") if isinstance(item.get("artifactSummary"), dict) else {}

@@ -5,7 +5,7 @@ import secrets
 import time
 
 from . import inference_runtime
-from .generate_store import cleanup_references, persist_result, resolve_reference_path
+from .generate_store import persist_result, resolve_reference_path
 from .inference_models import get_inference_model, public_models
 
 _logger = logging.getLogger(__name__)
@@ -222,10 +222,6 @@ def execute(job_id, request):
             elapsed_ms,
         )
     finally:
-        try:
-            cleanup_references(request.get("references") or {})
-        except Exception:
-            _logger.exception("Could not clean transient Generate reference uploads.")
         if output_ref is not None:
             try:
                 inference_runtime.cleanup_saved_output(output_ref)

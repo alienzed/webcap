@@ -463,24 +463,29 @@ def _advance_queue():
                     _set_backlog_wait_reason("Waiting for " + blocker + " to release the shared GPU.")
                 return None
 
-        from .gpu_prep import prepare_gpu_for
-        if not prepare_gpu_for(GPU_RESERVATION_OWNER):
-            _set_backlog_wait_reason("Waiting for Prompt Assistant / Director.")
+        try:
+            from .gpu_prep import prepare_gpu_for
+            if not prepare_gpu_for(GPU_RESERVATION_OWNER):
+                _set_backlog_wait_reason("Waiting for Prompt Assistant / Director.")
+                if execution_resource_owner() == GPU_RESERVATION_OWNER:
+                    _release_gpu()
+                return None
+
+            _set_backlog_wait_reason("")
+            backlog_ids = {
+                str(job.get("id") or "")
+                for job in jobs
+                if str(job.get("status") or "") == "backlog"
+            }
+            claimed = execution_claim_next(
+                EXECUTION_LANE,
+                runnable_backlog_ids=backlog_ids,
+                expected_job_id=str(next_runnable.get("id") or ""),
+            )
+        except Exception:
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
-            return None
-
-        _set_backlog_wait_reason("")
-        backlog_ids = {
-            str(job.get("id") or "")
-            for job in jobs
-            if str(job.get("status") or "") == "backlog"
-        }
-        claimed = execution_claim_next(
-            EXECUTION_LANE,
-            runnable_backlog_ids=backlog_ids,
-            expected_job_id=str(next_runnable.get("id") or ""),
-        )
+            raise
         if claimed is None:
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()

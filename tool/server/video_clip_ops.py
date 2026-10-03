@@ -530,6 +530,22 @@ def clip_video_response(data):
         now_ts = time.time()
         with _video_clip_lock:
             _prune_tracking(now_ts)
+            if not overwrite and not overwrite_source:
+                pending_output = next(
+                    (
+                        job for job in _video_clip_jobs.values()
+                        if str(job.get("status") or "") in {"queued", "running"}
+                        and str(job.get("outputPath") or "").casefold() == str(out_path).casefold()
+                    ),
+                    None,
+                )
+                if pending_output is not None:
+                    return jsonify({
+                        "error": "Output file is already queued for creation",
+                        "requiresOverwrite": True,
+                        "outputName": output_name,
+                    }), 409
+
             existing = _video_clip_signatures.get(signature)
             if existing:
                 existing_status = str(existing.get("status") or "")

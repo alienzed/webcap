@@ -358,14 +358,7 @@ def start_h3_probe(folder, file_name):
     runtime_path = _runtime_path(probe_root)
     settings = configured_training_settings()
 
-    from .training_runner import release_gpu_for_h3_probe, reserve_gpu_for_h3_probe
-    if not reserve_gpu_for_h3_probe():
-        raise RuntimeError("H3 calibration is waiting for the Training GPU.")
-    try:
-        from .gpu_prep import prepare_gpu_for
-        if not prepare_gpu_for("training"):
-            raise RuntimeError("H3 calibration could not prepare the GPU for Training.")
-
+    def launch_runtime():
         runtime = {
             "version": 1,
             "probeId": prepared["probeId"],
@@ -404,10 +397,9 @@ def start_h3_probe(folder, file_name):
         _remember_runtime(runtime)
         threading.Thread(target=_monitor_runtime, args=(runtime_path,), daemon=True).start()
         return {"ok": True, **_public_runtime(runtime)}
-    except Exception:
-        if training_gpu_runtime() is None:
-            release_gpu_for_h3_probe()
-        raise
+
+    from .training_runner import launch_h3_probe_runtime
+    return launch_h3_probe_runtime(launch_runtime)
 
 
 def h3_probe_status():

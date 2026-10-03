@@ -127,28 +127,29 @@ def _reconcile_training_gpu_owner_from_runtime(jobs):
     return None
 
 
-def reserve_gpu_for_h3_probe():
-    """Atomically claim the existing Training owner for an H3 calibration."""
+def launch_h3_probe_runtime(launch_callback):
+    """Atomically admit, prepare, launch, and identify H3 as Training work."""
     with _lock:
         state = _read_state()
         jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
         if _reconcile_training_gpu_owner_from_runtime(jobs) is not None:
-            return False
+            raise RuntimeError("H3 calibration is waiting for the Training GPU.")
         if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
-            return False
+            raise RuntimeError("H3 calibration is waiting for queued Training work.")
         if execution_resource_owner():
-            return False
-        return reserve_execution_resource(TRAINING_RESOURCE_OWNER)
+            raise RuntimeError("H3 calibration is waiting for the shared GPU.")
+        if not reserve_execution_resource(TRAINING_RESOURCE_OWNER):
+            raise RuntimeError("H3 calibration could not claim the Training GPU.")
 
-
-def release_gpu_for_h3_probe():
-    """Release a failed/unstarted H3 claim only when no Training runtime is live."""
-    with _lock:
-        state = _read_state()
-        jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
-        if _reconcile_training_gpu_owner_from_runtime(jobs) is None:
-            return execution_resource_owner() == ""
-        return False
+        try:
+            from .gpu_prep import prepare_gpu_for
+            if not prepare_gpu_for(TRAINING_RESOURCE_OWNER):
+                raise RuntimeError("H3 calibration could not prepare the GPU for Training.")
+            return launch_callback()
+        except Exception:
+            if _active_h3_training_runtime() is None:
+                release_execution_resource(TRAINING_RESOURCE_OWNER)
+            raise
 
 
 def reconcile_after_h3_probe():

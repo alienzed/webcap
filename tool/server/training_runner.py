@@ -2123,7 +2123,7 @@ def _public_job(job):
             payload["sourceUnavailable"] = "Set folder is currently unavailable; this job remains queued."
     return payload
 
-def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", resume_checkpoint_tag="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None):
+def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None, resume_checkpoint_tag=""):
     try:
         _, selected_run = profile_run(profile_id, run_id)
         stages = selected_run["stages"][0]
@@ -2206,8 +2206,8 @@ def _new_job(
     run_name="",
     resume_action_id="",
     resume_output_id="",
-    resume_checkpoint_tag="",
     parent_active_seconds=None,
+    resume_checkpoint_tag="",
 ):
     job_id = uuid.uuid4().hex[:12]
     _, folder_path = _resolve_folder(folder)
@@ -2372,7 +2372,6 @@ def start_response(
     run_name="",
     resume_action_id="",
     resume_output_id="",
-    resume_checkpoint_tag="",
     profile_id="",
     run_id="",
     mode="normal",
@@ -2388,6 +2387,7 @@ def start_response(
     reuse_capture_action_id="",
     reuse_capture_path="",
     config_settings=None,
+    resume_checkpoint_tag="",
 ):
     try:
         selected_profile, selected_run = profile_run(profile_id, run_id)
@@ -2506,7 +2506,8 @@ def start_response(
         job = _new_job(
             str(folder).strip(), preflight, stages, bundle, output_root, output_dir,
             resume_path, resume_stage, "", selected_profile["id"], selected_run["id"], selected_mode,
-            action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, resume_checkpoint_tag, 0,
+            action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, 0,
+            resume_checkpoint_tag=resume_checkpoint_tag,
         )
         job["resumePoint"] = resume_point
         job["trainingSettings"] = dict(effective_config_settings)

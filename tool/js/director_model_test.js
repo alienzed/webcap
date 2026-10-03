@@ -353,8 +353,20 @@ function directorModelTestFormatCapacity(value) {
 
 function directorModelTestAdvertisedCapability(modelRef) {
   var items = Array.isArray(directorModelTestState.advertisedCapabilities) ? directorModelTestState.advertisedCapabilities : [];
-  var item = items.find(function (entry) { return String(entry.modelRef || '') === String(modelRef || ''); });
-  return item && item.capability && typeof item.capability === 'object' ? item.capability : null;
+  var model = directorModelTestState.models.find(function (item) {
+    return String(item.id || '') === String(modelRef || '');
+  }) || {};
+  var haystack = [
+    modelRef,
+    model.modelId,
+    model.label
+  ].map(function (value) { return String(value || '').toLowerCase(); }).join(' ');
+  return items.find(function (entry) {
+    var matches = Array.isArray(entry.match) ? entry.match : [];
+    return matches.some(function (token) {
+      return haystack.indexOf(String(token || '').toLowerCase()) !== -1;
+    });
+  }) || null;
 }
 
 function directorModelTestHealthLabel(value) {

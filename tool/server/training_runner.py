@@ -1032,7 +1032,9 @@ def candidate_analysis_response(folder, job_id, algorithm="v5"):
             resume_branch_started_at=run.get("resumeBranchStartedAt"),
         )
         _annotate_candidate_test_folder_status(run, analysis)
-        analysis["selected"] = _candidate_selected_epoch(run_dir, run)
+        selected = _candidate_selected_epoch(run_dir, run)
+        visible_epochs = {int(point.get("epoch") or 0) for point in analysis.get("epochLossPoints") or []}
+        analysis["selected"] = selected if selected and int(selected.get("epoch") or 0) in visible_epochs else None
     except (OSError, RuntimeError, ValueError) as exc:
         return {"ok": False, "error": str(exc)}, 422
     return {"ok": True, "run": run, "analysis": analysis}, 200

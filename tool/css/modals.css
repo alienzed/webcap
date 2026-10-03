@@ -712,16 +712,89 @@
   border-radius: 8px;
 }
 
-.director-model-calibration-profile > div:first-child {
+details.director-model-calibration-finding {
+  padding: 0;
+}
+
+.director-model-finding-summary {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+details.director-model-calibration-finding > .director-model-finding-summary {
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.director-model-finding-title {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
-.director-model-calibration-profile > div:first-child span {
+.director-model-finding-title > span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.director-model-finding-error {
+  overflow-wrap: anywhere;
+}
+
+#director-model-assessment-history {
+  display: grid;
+  gap: 8px;
+}
+
+.director-model-assessment-history-heading {
+  margin-top: 12px;
+}
+
+.director-model-assessment-run > summary,
+.director-model-assessment-probe > summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.director-model-assessment-evidence {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.director-model-assessment-evidence-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.director-model-assessment-probe {
+  margin-top: 0;
+}
+
+.director-model-assessment-probe-meta {
+  margin-bottom: 4px;
+}
+
+.director-model-assessment-evidence-block {
+  margin-top: 8px;
+}
+
+.director-model-assessment-evidence-block > strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.director-model-assessment-evidence .director-model-test-output {
+  max-height: 320px;
 }
 
 #director-model-test-results {

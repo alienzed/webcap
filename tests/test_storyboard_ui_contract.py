@@ -1238,3 +1238,31 @@ def test_storyboard_cancel_takes_is_contextual_and_story_scoped():
     assert "storyId: storyId" in storyboard
     assert "cancelTakesButton.classList.toggle('hidden', !generationBlocked)" in storyboard
     assert "el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;" in storyboard
+
+
+
+def test_develop_scenes_supports_assessment_guided_individual_strategy():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-develop-individual"' in html
+    assert "function syncIndividualDevelopStrategy(" in storyboard
+    assert "assessment.individualScenesRecommended" in storyboard
+    assert "developIndividuallyOverride" in storyboard
+    assert "function developStoryIndividually(" in storyboard
+    assert "operation: 'develop_story_outline'" in storyboard
+    assert "operation: 'develop_story_scene'" in storyboard
+    assert "previousScene: authoredScenes.length ? authoredScenes[authoredScenes.length - 1] : null" in storyboard
+    assert "operation: 'apply_individual_development'" in storyboard
+    assert "expectedUpdatedAt: sourceUpdatedAt" in storyboard
+    assert "Existing Scenes were left unchanged." in storyboard
+
+
+def test_director_selector_surfaces_only_compact_assessment_markers():
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
+
+    assert "assessment.seriousWarning" in common
+    assert "assessment.limited" in common
+    assert "'⚠ ' + label" in common
+    assert "'△ ' + label" in common
+    assert "coherentOutputTokens" not in common

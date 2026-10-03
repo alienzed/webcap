@@ -423,13 +423,13 @@ Its responsibilities are:
 - stop active work,
 - expose Inference-local failures and wait reasons.
 
-It does **not** arbitrate the shared GPU against LLM or Training. When Inference has work that is
-currently eligible for local-GPU execution, Inference submits that eligibility to the shared GPU
-dispatcher. The dispatcher decides when Inference receives the one local-GPU execution slot.
+It does **not** arbitrate the shared GPU against LLM or Training. Inference exposes only its own
+runnable Queue/Backlog state. When the shared GPU owner is empty, shared scheduling may select
+Inference according to the ordering in `docs/gpu_coordination_invariants.md`.
 
 **Pause affects execution, not admission.** While the Inference Queue is paused, valid Generate,
 Storyboard Take, and Test requests may still be queued normally. They simply do not become runnable
-GPU submissions until Inference is resumed.
+local-GPU work until Inference is resumed.
 
 **Reordering changes priority inside Inference, not meaning.** Moving frozen work earlier or later
 changes only which Inference request would run first when Inference is dispatched. It must not
@@ -441,7 +441,7 @@ Inference work is **durable across normal WebCap server restarts**:
 - unfinished Inference work survives a WebCap server restart as durable frozen requests,
 - on restart, unfinished work returns to **Backlog** rather than automatically resuming execution,
 - the frozen request remains unchanged,
-- restart creates **no Inference GPU-dispatch submission**,
+- restart creates **no Inference GPU ownership**,
 - the user decides when preserved Backlog work becomes executable again.
 
 **Queue and Backlog have distinct execution meaning:**
@@ -450,9 +450,9 @@ Inference work is **durable across normal WebCap server restarts**:
 - **Backlog** contains parked durable low-priority work behind the normal Queue,
 - fresh/manual Inference requests enter Queue, so they run ahead of existing Backlog work,
 - Backlog is consumed only when Queue has no runnable work and Backlog draining is explicitly active,
-- foreground Queue work may retain the Inference GPU lease while consecutive Queue jobs drain,
-- at the Queue-to-Backlog boundary, Inference releases the lease,
-- eligible Backlog work re-enters shared dispatch as lower-priority Inference work,
+- foreground Queue work may retain Inference ownership while consecutive Queue jobs drain,
+- at the Queue-to-Backlog boundary, Inference ends ownership,
+- eligible Backlog work re-enters shared idle selection as lower-priority Inference work,
 - while Inference is paused, neither Queue nor Backlog advances,
 - moving work between Queue and Backlog changes Inference execution order/intent only; the frozen request itself remains unchanged.
 
@@ -465,15 +465,15 @@ action should be enabled. The Inference Queue preserves and orders the resulting
 ComfyUI/provider state belongs entirely to Inference.
 
 Provider **unavailability before an execution attempt** is an Inference-local wait state, not a
-failed job. The request remains intact and unclaimed. Inference may report itself temporarily
-not-ready to the GPU dispatcher so another submitted client can run instead.
+failed job. The request remains intact and unclaimed. Inference is simply not runnable for that
+selection attempt, so shared scheduling may consider another lane.
 
 If Inference has positively identified current-session ComfyUI work that WebCap itself started and
-that work is still active, Inference may retain its current GPU lease while it reconciles that exact
+that work is still active, Inference remains the current GPU owner while it reconciles that exact
 runtime. Provider IDs, stale persisted metadata, failed status probes, or uncertainty alone must
 never create or retain a shared GPU claim.
 
-Before Inference voluntarily releases its GPU lease at a natural handoff boundary, Inference is
+Before Inference ends GPU ownership at a natural handoff boundary, Inference is
 responsible for quiescing its own managed ComfyUI runtime sufficiently for another client to use the
 GPU. Training and LLM must not independently inspect or clean up ComfyUI as a prerequisite to their
 own execution.
@@ -511,11 +511,11 @@ North Star semantics:
 
 Local and remote LLM jobs share FIFO ordering, but only local jobs use the shared local GPU.
 
-If the FIFO head is remote, LLM executes it without entering the GPU dispatcher.
+If the FIFO head is remote, LLM executes it without owning the local GPU.
 
-If the FIFO head is local, LLM submits itself to the GPU dispatcher. A later remote LLM job does not
-bypass an earlier local job that is waiting for the GPU, and a later local job does not bypass an
-earlier remote job.
+If the FIFO head is local, LLM exposes that head as its runnable local work for shared idle selection.
+A later remote LLM job does not bypass an earlier local job that is waiting for the GPU, and a later
+local job does not bypass an earlier remote job.
 
 Cancellation is **job-local**. Cancelling one queued LLM job removes only that job; later queued
 work remains queued and preserves its relative FIFO order. Cancellation does not cascade merely
@@ -532,18 +532,19 @@ LLM work is **server-session-bound** and held in backend memory rather than dura
 - a WebCap server restart ends the LLM session,
 - all unfinished LLM work is discarded across server restart regardless of whether it was queued,
   starting, running, or stopping,
-- restart creates **no LLM GPU-dispatch submission**,
+- restart creates **no LLM GPU ownership**,
 - successfully applied Story/prompt state remains because the authoritative result already lives in
   its feature store,
 - orphaned external/remote model responses from the old server session must not later mutate WebCap.
 
 For local LLM work, the LLM client owns llama.cpp lifecycle and GPU handoff.
 
-LLM may retain its GPU lease across consecutive local FIFO jobs and may keep the existing short
-continuation grace window after local work drains. A new local request arriving during that grace may
-reuse the same lease. When the lease is actually released, LLM is responsible for unloading/stopping
-its own local runtime to the required handoff boundary. Inference and Training must not independently
-inspect or clean up llama.cpp before they start.
+LLM may retain ownership across consecutive local FIFO jobs so real queued LLM work can drain without
+needless model churn. The current implementation also has a short post-empty continuation grace; that
+specific behavior is intentionally left for separate semantic review and is not defined by this
+document. When LLM actually ends ownership, it is responsible for unloading/stopping its own local
+runtime to the required handoff boundary. Inference and Training must not independently inspect or
+clean up llama.cpp before they start.
 
 A local model/runtime failure is a real LLM execution failure and should fail visibly. The scheduler
 should not add speculative "runtime usable" gates in front of the request.
@@ -576,161 +577,53 @@ Training remains the authority for:
 - resume/checkpoint behavior,
 - Training History.
 
-Training participates in shared GPU scheduling only through a thin dispatcher client boundary.
+Training participates in shared GPU scheduling only through the shared owner/idle-selection boundary.
 
 North Star semantics:
 
-- when Training has runnable work, Training submits itself to the shared GPU dispatcher,
-- when dispatched, Training re-checks only its own authoritative state before launching,
-- a running Training job retains the local GPU lease until its normal/checkpoint-safe lifecycle releases it,
-- resuming or queueing Training does not preempt a client that already owns the GPU,
-- valid Inference and LLM work may remain queued/submitted while Training runs,
+- when the owner is empty and Training has runnable work, Training is the first shared selection,
+- before launching, Training re-checks only its own authoritative state,
+- a running Training job retains local GPU ownership until its normal/checkpoint-safe lifecycle ends,
+- resuming or queueing Training does not preempt a lane that already owns the GPU,
+- valid Inference and LLM work may remain queued while Training runs,
 - Training state does not create semantic locks in Storyboard, Generate, Test Generations, or Chat,
 - remote LLM work does not consume the local GPU.
 
 Training restart recovery remains special:
 
 - queued Training alone does not auto-start after WebCap restart,
-- if no exact surviving runner is established, queued Training is paused and submits nothing,
-- if Training positively re-establishes the exact prior managed runner, Training itself re-establishes
-  its active dispatcher claim,
-- the dispatcher does not inspect Training JSON, WSL, PIDs, logs, or checkpoints.
+- if no exact surviving runner is established, queued Training is paused and owns nothing,
+- if Training positively re-establishes the exact prior managed runner, owner becomes `training`,
+- shared scheduling does not inspect Training JSON, WSL, PIDs, logs, or checkpoints; Training does.
 
-Training-specific uncertainty must remain inside Training. Persisted Training status by itself must
+Training-specific runtime errors remain inside Training. Persisted Training status by itself must
 not become shared GPU truth.
 
-## 13. Shared GPU dispatcher semantics
+## 13. Shared GPU coordination semantics
 
-WebCap has one process-local shared GPU dispatcher for local-GPU execution.
+The authoritative contract is `docs/gpu_coordination_invariants.md`.
 
-The dispatcher is **not another durable domain queue**. It stores only ephemeral client submissions
-representing work that a domain subsystem currently considers eligible for local-GPU execution.
+Shared coordination is intentionally small:
 
-The dispatcher knows:
+- one process-local owner: `none | training | llm | inference`,
+- no durable dispatcher queue, submission registry, lease table, or second GPU-availability truth,
+- when owner is `none`, selection is deterministic: Training, then local LLM FIFO head, then
+  foreground Inference Queue, then eligible Inference Backlog,
+- each lane exposes only its own runnable state and performs only its own runtime preparation,
+- lanes do not inspect one another or ask one another for permission,
+- remote LLM work never owns the local GPU,
+- running work is non-preemptive,
+- consecutive real same-lane work may continue according to that lane's queue semantics,
+- restart reconstructs ownership from runtime reality, never from persisted ownership history.
 
-- registered client identity,
-- ordered pending client submissions,
-- scheduling priority/order,
-- at most one active client.
-
-It does **not** know:
-
-- ComfyUI or provider state,
-- llama.cpp or model state,
-- WSL/process identity,
-- Training queue contents,
-- Inference payloads,
-- LLM contracts,
-- checkpoints,
-- disk state,
-- feature/UI dependencies.
-
-A WebCap restart starts with an empty dispatcher.
-
-Each client is responsible for reconstructing only the dispatcher state justified by its own runtime
-reality:
-
-- Inference restart -> durable work is Backlog; submit nothing,
-- LLM restart -> unfinished session work is discarded; submit nothing,
-- Training restart -> only a positively re-established surviving runner may restore active Training
-  participation; queued-only Training remains paused and submits nothing.
-
-### Dispatcher contract
-
-A client submission means:
-
-> **This client currently has local-GPU work worth considering.**
-
-It does not mean that the dispatcher owns or understands the underlying job.
-
-When the dispatcher offers the GPU to a submitted client, the client re-checks its own state and
-returns one of three effective outcomes:
-
-- **started** — the client started or reattached managed GPU work and now owns the lease,
-- **not ready** — the submission is still meaningful but a client-local condition prevents start
-  right now; the dispatcher immediately considers another submitted client,
-- **empty/stale** — the submission no longer represents runnable work and is removed.
-
-A "not ready" answer has no authority beyond that dispatch attempt. It must not become a persisted
-global blocker or an indefinite shared wait state. The owning client may re-arm/re-submit itself when
-its local condition changes.
-
-Only the dispatcher owns local-GPU scheduling authority.
-
-Lanes do not reserve, retain, release, yield, or transfer GPU ownership. They own domain work and the
-implementation of that work only.
-
-The dispatcher runs one exact submitted execution in its own active worker/future. While that future
-is running, no other local-GPU work starts. When the future returns or raises, active scheduling state
-ends automatically in the dispatcher.
-
-A stale worker/future completion must never clear a newer active record, so the dispatcher may use an
-internal generation/token for fencing. That token is not a client lease or permission right.
-
-Submitted work must have exact immutable submission identity so cancellation, reorder, retry, and
-stale callback results cannot affect unrelated or newer work.
-
-### Ordering
-
-WebCap does **not** promise one global FIFO order across Training, LLM, and Inference.
-
-Ordering inside each domain remains lane-local.
-
-When no client currently owns the GPU, preserve the effective next-turn policy:
-
-1. runnable Training,
-2. local LLM,
-3. foreground Inference Queue,
-4. opportunistic Inference Backlog.
-
-This may be represented by simple dispatcher submission priority. It must not be implemented by one
-lane reading another lane's state.
-
-Equal-priority submissions should be stable FIFO.
-
-### Non-preemption and active execution
-
-Once the dispatcher has started one execution future, it is not preempted merely because another
-submission arrives.
-
-Lane-specific drain behavior is expressed through what exact execution the dispatcher was asked to
-run and when the lane submits the next opportunity:
-
-- Training's active long-running run remains one non-preemptive execution,
-- LLM preserves its short continuation grace before exposing the next cross-client opportunity,
-- Inference may keep foreground Queue work ahead of Backlog,
-- Backlog competes again only after the foreground boundary is reached.
-
-No lane retains a shared GPU lease after its dispatcher-owned execution future has ended.
-
-### Runtime cleanup between clients
-
-After an execution future ends, the previous lane has no scheduling authority.
-
-The dispatcher may remember the previous client only so it can avoid needless cache cleanup when the
-next selected submission belongs to the same client.
-
-Before starting a different client, the dispatcher may command the previous client's runtime cleanup
-callback:
-
-- Inference cleanup may free ComfyUI caches/models,
-- LLM cleanup may unload its local llama model,
-- Training cleanup follows Training's existing lifecycle where applicable.
-
-This cleanup is maintenance, not a permission handshake.
-
-The previous lane does not decide whether the dispatcher may continue. Cleanup failure is surfaced as
-a concrete runtime error, but it must not recreate an old-client ownership hold or indefinite shared
-GPU blocker.
-
-If the next workload then genuinely fails because runtime residue remains, that is a real execution
-failure and should be exposed as such.
+Runtime cleanup is lane-local maintenance, not a permission handshake. If cleanup itself fails, expose
+the concrete failure; do not create another ownership state or speculative blocker.
 
 ## 14. Runtime and failure semantics
 
 A domain queue should preserve user intent even when execution dependencies are unavailable.
 
-The dispatcher should preserve **serialization**, not invent domain state.
+Shared GPU coordination should preserve **serialization**, not invent domain state.
 
 ### Eventual terminalization
 
@@ -750,12 +643,12 @@ been established.
 Examples:
 
 - ComfyUI unavailable before claim/start: valid Inference work remains queued unchanged; Inference
-  reports not-ready and another dispatcher client may run,
+  remains unclaimed for that selection attempt and another lane may run,
 - an Inference attempt starts and then errors: preserve the frozen job in Queue and pause Inference,
-- local LLM is waiting for the GPU: its FIFO job remains queued while its dispatcher submission waits,
-- remote LLM work: executes without the local GPU dispatcher,
-- Training queue paused or not runnable: Training has no runnable dispatcher claim,
-- model/runtime execution fails after dispatch: the owning job fails visibly with useful detail.
+- local LLM is waiting for the GPU: its FIFO job remains queued while another lane owns the GPU,
+- remote LLM work: executes without local GPU ownership,
+- Training queue paused or not runnable: Training is not eligible for shared selection,
+- model/runtime execution fails after start: the owning job fails visibly with useful detail.
 
 WebCap should prefer truthful execution failure over speculative pre-emptive refusal.
 

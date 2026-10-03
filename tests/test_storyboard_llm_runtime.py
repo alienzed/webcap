@@ -1697,3 +1697,83 @@ def test_per_request_calibration_override_takes_priority_over_saved_profile(monk
 
     assert observed["context"] == 24576
     assert observed["payload"]["max_tokens"] == 8192
+
+
+
+def test_status_exposes_compact_assessment_signal_for_storyboard_choices(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "list_models",
+        lambda reload=False: [{
+            "id": "local::director.gguf",
+            "modelId": "director.gguf",
+            "label": "Director",
+            "runtimeId": "local",
+            "runtimeName": "Local",
+            "status": "unloaded",
+            "sizeBytes": 0,
+        }],
+    )
+    storyboard_llm_runtime.list_models.last_warnings = []
+    monkeypatch.setattr(
+        "tool.server.director_model_calibration.get_report",
+        lambda model_ref: {
+            "modelRef": model_ref,
+            "status": "complete",
+            "health": "limited",
+            "pathologies": [],
+            "updatedAt": "2026-10-03T12:00:00+00:00",
+            "abilities": {
+                "contextTokens": 16384,
+                "structuredOutputTokens": 4096,
+                "coherentOutputTokens": 4096,
+            },
+        },
+    )
+
+    payload = storyboard_llm_runtime.status()
+    assessment = payload["models"][0]["assessment"]
+
+    assert assessment["seriousWarning"] is False
+    assert assessment["limited"] is True
+    assert assessment["fullStoryCapable"] is False
+    assert assessment["individualScenesRecommended"] is True
+    assert assessment["abilities"]["coherentOutputTokens"] == 4096
+
+
+def test_status_keeps_pathology_warning_independent_from_output_capacity(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "list_models",
+        lambda reload=False: [{
+            "id": "local::director.gguf",
+            "modelId": "director.gguf",
+            "label": "Director",
+            "runtimeId": "local",
+            "runtimeName": "Local",
+            "status": "unloaded",
+            "sizeBytes": 0,
+        }],
+    )
+    storyboard_llm_runtime.list_models.last_warnings = []
+    monkeypatch.setattr(
+        "tool.server.director_model_calibration.get_report",
+        lambda model_ref: {
+            "modelRef": model_ref,
+            "status": "complete",
+            "health": "warning",
+            "pathologies": ["looping"],
+            "updatedAt": "2026-10-03T12:00:00+00:00",
+            "abilities": {
+                "contextTokens": 32768,
+                "structuredOutputTokens": 16384,
+                "coherentOutputTokens": 8192,
+            },
+        },
+    )
+
+    assessment = storyboard_llm_runtime.status()["models"][0]["assessment"]
+
+    assert assessment["seriousWarning"] is True
+    assert assessment["pathologies"] == ["looping"]
+    assert assessment["fullStoryCapable"] is False

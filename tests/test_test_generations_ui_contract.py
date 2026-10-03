@@ -835,9 +835,10 @@ def test_test_generations_surfaces_save_and_selected_epoch_state():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
     assert '"candidateMetadata": _staged_candidate_metadata(loras, model)' in backend
-    assert "candidate_selected_epoch(folder, job_id)" in backend
+    assert "candidate_selected_epoch_from_provenance(provenance)" in backend
     assert "data-save-candidate" in script
     assert "Save this epoch" in script
+    assert "stagedFileName: archiveFileName" in script
     assert "test-generations-selected-mark" in script
     assert "test-generations-staged-row' + (metadata && metadata.selected ? ' is-selected' : '')" in script
     assert ".test-generations-staged-row.is-selected" in css

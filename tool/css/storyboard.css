@@ -3060,6 +3060,30 @@
   color: var(--text);
 }
 
+.storyboard-develop-individual {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.storyboard-develop-individual input {
+  margin: 0;
+}
+
+.storyboard-develop-individual.recommended {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
 .storyboard-develop-controls .storyboard-primary-btn {
   flex: 1 1 auto;
   min-height: 42px;

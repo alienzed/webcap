@@ -3845,6 +3845,143 @@ html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-to
 .training-candidates-legend i.selected { width: 9px; height: 9px; margin: 0 3px; background: #f7d56a; border: 2px solid #fff0a3; border-radius: 50%; }
 .training-candidates-legend i.in-test-folder { width: 9px; height: 9px; margin: 0 3px; background: var(--accent); border-radius: 50%; }
 .training-candidates-legend i.basin { height: 10px; background: rgba(94, 177, 137, .3); }
+
+.training-candidates-footer-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.training-candidates-compare-control {
+  position: relative;
+  flex: 0 0 auto;
+}
+.training-candidates-compare-summary {
+  display: inline-flex;
+  box-sizing: border-box;
+  min-height: 28px;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--border-color, #3d4452);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text, #e5e7eb);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+.training-candidates-compare-summary::-webkit-details-marker { display: none; }
+.training-candidates-compare-control[open] > .training-candidates-compare-summary { border-color: #62bc8c; }
+.training-candidates-compare-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  width: min(360px, 72vw);
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--border-color, #3d4452);
+  border-radius: 7px;
+  background: var(--panel-bg, #20242c);
+  color: var(--text, #e5e7eb);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .38);
+}
+.training-candidates-compare-popover section + section {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(163, 173, 186, .16);
+}
+.training-candidates-compare-popover section > strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted-text, #a3adba);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.training-candidates-compare-option {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: start;
+  gap: 7px;
+  padding: 5px 3px;
+  cursor: pointer;
+}
+.training-candidates-compare-option input {
+  width: 14px;
+  height: 14px;
+  margin: 2px 0 0;
+  accent-color: #62bc8c;
+}
+.training-candidates-compare-option > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.training-candidates-compare-option strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.training-candidates-compare-option small,
+.training-candidates-compare-empty {
+  color: var(--muted-text, #a3adba);
+  font-size: 11px;
+}
+.training-candidates-compare-option small.is-error,
+.training-candidates-compare-empty.is-error { color: #ffb4b4; }
+.training-candidates-compare-swatch {
+  width: 10px;
+  height: 10px;
+  margin-top: 3px;
+  border: 1px solid rgba(163, 173, 186, .4);
+  border-radius: 50%;
+  background: transparent;
+}
+.training-candidates-compare-swatch.is-active {
+  border-color: var(--curve-color);
+  background: var(--curve-color);
+}
+.training-candidates-compare-line {
+  fill: none;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.training-candidates-compare-line.is-primary { stroke-width: 3; }
+.training-candidates-compare-selected {
+  fill: #f7d56a;
+  stroke: #fff0a3;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.training-candidates-compare-gridline { stroke: rgba(174, 189, 202, .07); }
+.training-candidates-compare-axis-title { font-weight: 650; }
+.training-candidates-compare-legend {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
+  color: var(--muted-text, #a3adba);
+  font-size: 13px;
+}
+.training-candidates-compare-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.training-candidates-compare-legend .training-candidates-compare-swatch { margin-top: 0; }
+
 .training-candidates-open-generations {
   flex: 0 0 auto;
   width: auto;

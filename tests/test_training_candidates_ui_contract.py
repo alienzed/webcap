@@ -103,6 +103,13 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert ".training-candidates-pinned-popover" in css
     assert 'html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-btn' in css
     assert 'html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-toggle input' in css
+    assert "trainingCandidatesComparisonSources" in script
+    assert "trainingCandidatesComparisonHtml" in script
+    assert "data-training-candidate-compare-key" in script
+    assert "loadTrainingArchives()" in script
+    assert "/fs/training_archive/metrics?name=" in script
+    assert ".training-candidates-compare-popover" in css
+    assert ".training-candidates-compare-line" in css
 
 
 def test_chart_geometry_step_lookup_and_algorithm_switching():
@@ -129,7 +136,17 @@ const context = {
   escapeHtml(s) { return String(s).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;'); },
   trainingWorkspaceState: {
     candidateFolder:'set',candidateJobId:'job',candidateAlgorithm:'v5',candidateRequestVersion:0,
-    runnerJobs:[{id:'job',folder:'set',stages:'h3',profileId:'minimax_h3'}],history:{jobs:[]},
+    runnerJobs:[{id:'job',folder:'set',stages:'h3',profileId:'minimax_h3'}],
+    history:{jobs:[
+      {id:'older',folder:'set',runName:'Older run',candidateRunAvailable:true,status:'completed',finishedAt:2},
+      {id:'other-set',folder:'other',runName:'Wrong set',candidateRunAvailable:true,status:'completed',finishedAt:3}
+    ]},
+    archivesLoaded:true,
+    archives:[
+      {name:'archive-a',runName:'Archived run',sourceFolder:'set',selectedEpoch:2},
+      {name:'broken',invalid:true,error:'bad archive'}
+    ],
+    archiveMetrics:{},
     profiles:[{id:'minimax_h3',test:{enabled:true,stagingKey:'h3'}}]
   },
   state: {folder:'set'},
@@ -205,7 +222,31 @@ assert(!svg.includes('data-training-candidate-line="showRawStep" checked'));
 assert(svg.includes('training-candidates-marker training-candidates-epoch-marker in-test-folder'));
 assert(svg.includes('Test Generations · 1'));
 assert(svg.includes('data-training-candidates-open-generations'));
+assert(svg.includes('Compare curves'));
+assert(svg.indexOf('Compare curves') < svg.indexOf('Test Generations'));
 assert(svg.includes('Remove from Test'));
+const sources = context.trainingCandidatesComparisonSources();
+assert.equal(sources.runs.length,1);
+assert.equal(sources.runs[0].key,'run:older');
+assert.equal(sources.archives.length,1);
+assert.equal(sources.archives[0].key,'archive:archive-a');
+const comparison = context.trainingCandidatesComparisonState();
+comparison.selected=['run:older','archive:archive-a'];
+comparison.colors={'run:older':1,'archive:archive-a':2};
+comparison.curves={
+  'run:older':{label:'Older run',points:[{epoch:1,loss:.6},{epoch:2,loss:.35}]},
+  'archive:archive-a':{label:'Archived run · archive',points:[{epoch:1,loss:.7},{epoch:2,loss:.32}]}
+};
+const comparisonHtml=context.trainingCandidatesComparisonHtml({run:{runName:'Current run'},analysis:Object.assign({},data,{selected:{epoch:1}})});
+assert(comparisonHtml.includes('Training epoch loss comparison'));
+assert(comparisonHtml.includes('Older run'));
+assert(comparisonHtml.includes('Archived run · archive'));
+assert(!comparisonHtml.includes('data-training-candidate-epoch='));
+assert(comparisonHtml.indexOf('Compare curves · 2') < comparisonHtml.indexOf('Test Generations'));
+const curveColors=Array.from(comparisonHtml.matchAll(/class="training-candidates-compare-line[^"]*" style="stroke:([^"]+)"/g)).map(match=>match[1]);
+assert.equal(curveColors.length,3);
+assert.equal(new Set(curveColors).size,3);
+context.trainingCandidatesResetComparison();
 context.trainingCandidatesDisplayState().showRawStep=false;
 context.trainingCandidatesDisplayState().showEpochLoss=false;
 const filteredSvg=context.trainingCandidatesSvg(data);

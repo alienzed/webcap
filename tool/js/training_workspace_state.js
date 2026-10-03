@@ -73,6 +73,7 @@ var trainingWorkspaceState = {
   candidateJobId: '',
   candidateFolder: '',
   candidatePayload: null,
+  candidateComparison: null,
   candidatePending: false,
   candidateRequestVersion: 0,
   candidateAlgorithm: 'v5',

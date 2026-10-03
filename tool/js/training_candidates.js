@@ -25,7 +25,7 @@ function trainingCandidatesNumber(value, fallback) {
 
 var TRAINING_CANDIDATES_DISPLAY_SESSION_KEY = 'webcap.trainingCandidates.display.v1';
 var trainingCandidatesCloseHook = null;
-var keepLoraState = { open: false, stage: '', destination: '', epoch: null, runFolder: '', jobId: '', modelLabel: '', onSaved: null };
+var keepLoraState = { open: false, stage: '', destination: '', epoch: null, runFolder: '', jobId: '', stagedFileName: '', modelLabel: '', onSaved: null };
 
 function trainingCandidatesDefaultDisplayState() {
   return { smoothing: .99, yMin: null, yMax: null, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
@@ -1148,6 +1148,7 @@ function openEpochSaveModal(context) {
   var stage = String(input.stage || '').trim().toLowerCase();
   var runFolder = String(input.folder || '').trim();
   var jobId = String(input.jobId || '').trim();
+  var stagedFileName = String(input.stagedFileName || '').trim();
   if (!isFinite(epoch) || epoch <= 0 || !stage || !runFolder || !jobId) {
     throw new Error('Epoch save requires training-run provenance.');
   }
@@ -1162,6 +1163,7 @@ function openEpochSaveModal(context) {
     epoch: epoch,
     runFolder: runFolder,
     jobId: jobId,
+    stagedFileName: stagedFileName,
     modelLabel: modelLabel,
     onSaved: typeof input.onSaved === 'function' ? input.onSaved : null
   };
@@ -1217,13 +1219,16 @@ function saveKeepLora() {
   trainingRunnerRequest('/fs/training_candidates/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    body: JSON.stringify(Object.assign({
       folder: selectionFolder,
       jobId: selectionJobId,
       epoch: selectedEpoch,
       destination: keepLoraState.destination,
       filename: filename
-    })
+    }, keepLoraState.stagedFileName ? {
+      stage: keepLoraState.stage,
+      stagedFileName: keepLoraState.stagedFileName
+    } : {}))
   }).then(function (payload) {
     var analysisPayload = ((trainingWorkspaceState.candidatePayload || {}).analysis || {});
     analysisPayload.selected = payload && payload.selected ? payload.selected : null;
@@ -1231,7 +1236,11 @@ function saveKeepLora() {
     var onSaved = keepLoraState.onSaved;
     closeKeepLora();
     if (onSaved) onSaved(payload);
-    setStatus('Saved ' + String(payload && payload.fileName || filename) + ' and selected epoch ' + String(selectedEpoch) + '.');
+    if (payload && payload.selectionUnavailable) {
+      setStatus('Saved ' + String(payload.fileName || filename) + '. The original training job is no longer indexed, so selection metadata was not updated.');
+    } else {
+      setStatus('Saved ' + String(payload && payload.fileName || filename) + ' and selected epoch ' + String(selectedEpoch) + '.');
+    }
   }).catch(function (err) {
     els.save.disabled = false;
     keepLoraSetStatus(String(err.message || err), true);

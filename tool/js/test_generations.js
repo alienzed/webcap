@@ -1285,7 +1285,7 @@
           archive.setAttribute('aria-label', 'Archive training run for selected epoch ' + String(metadata.epoch));
           archive.textContent = 'Archive';
           actions.appendChild(archive);
-        } else {
+        } else if (!metadata.saved) {
           var save = document.createElement('button');
           save.type = 'button';
           save.className = 'test-generations-save-candidate';
@@ -3398,6 +3398,7 @@
           folder: metadata.folder,
           jobId: metadata.jobId,
           fileName: metadata.sourceFileName || fileName,
+          stagedFileName: fileName,
           onSaved: function (payload) {
             var selected = payload && payload.selected ? payload.selected : null;
             Object.keys(prepared.candidateMetadata || {}).forEach(function (candidateFile) {
@@ -3405,6 +3406,7 @@
               if (item && item.jobId === metadata.jobId && item.folder === metadata.folder) {
                 item.selected = !!(selected && Number(item.epoch) === Number(selected.epoch));
                 item.selectedEpoch = selected;
+                if (candidateFile === fileName) item.saved = true;
               }
             });
             renderStagedFiles(prepared);

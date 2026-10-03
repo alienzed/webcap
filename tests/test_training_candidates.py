@@ -959,6 +959,50 @@ def test_save_candidate_epoch_copies_source_marks_selected_and_leaves_test_copy_
     assert staged.read_bytes() == b"chosen-weights"
 
 
+def test_save_staged_candidate_succeeds_when_old_training_job_is_no_longer_indexed(tmp_path, monkeypatch):
+    staged_directory = tmp_path / "staged"
+    staged_directory.mkdir()
+    staged = staged_directory / "baseline-03__epoch41.safetensors"
+    staged.write_bytes(b"tested-weights")
+    staged.with_suffix(".webcap.json").write_text(json.dumps({
+        "version": 1,
+        "sourceJobId": "old-job",
+        "sourceEpoch": 41,
+        "sourceFileName": "adapter_epoch41.safetensors",
+        "sourceFolder": "sets/subject",
+        "stage": "h3",
+    }), encoding="utf-8")
+    destination = tmp_path / "models"
+    destination.mkdir()
+
+    monkeypatch.setattr(training_runner, "test_source_for_set", lambda stage, folder: "sets/subject")
+    monkeypatch.setattr(
+        training_runner,
+        "test_source_path",
+        lambda stage, relative: staged_directory if relative == "sets/subject" else destination,
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "_candidate_run_snapshot",
+        lambda folder, job_id: (_ for _ in ()).throw(LookupError("Training job not found.")),
+    )
+
+    payload = training_runner.save_candidate_epoch(
+        "sets/subject",
+        "old-job",
+        41,
+        "selected",
+        "winner.safetensors",
+        stage="h3",
+        staged_file_name=staged.name,
+    )
+
+    assert (destination / "winner.safetensors").read_bytes() == b"tested-weights"
+    assert staged.read_bytes() == b"tested-weights"
+    assert payload["selected"] is None
+    assert payload["selectionUnavailable"] is True
+
+
 def test_save_candidate_epoch_rolls_back_copy_when_selection_fails(tmp_path, monkeypatch):
     source = tmp_path / "epoch41.safetensors"
     source.write_bytes(b"chosen-weights")

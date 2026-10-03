@@ -780,11 +780,85 @@ def _annotate_candidate_test_folder_status(run, analysis):
 
 
 
-def save_candidate_epoch(folder, job_id, epoch, destination, filename):
-    """Copy one recorded epoch to a chosen Test-model folder and mark it selected."""
-    _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
-    source = _candidate_safetensors_path(folder, job_id, epoch)
-    stage = str(run.get("stages") or "").strip().lower()
+def _staged_candidate_save_source(folder, job_id, epoch, stage, staged_file_name):
+    """Resolve one Test-staged LoRA from its sidecar provenance, never from a caller path."""
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    wanted_job_id = str(job_id or "").strip()
+    selected_stage = str(stage or "").strip().lower()
+    name = str(staged_file_name or "").strip()
+    try:
+        epoch_number = int(epoch)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Epoch must be a positive whole number.") from exc
+    if not folder_text or not wanted_job_id:
+        raise ValueError("Folder and job ID are required.")
+    if epoch_number <= 0:
+        raise ValueError("Epoch must be a positive whole number.")
+    if selected_stage not in TEST_COPY_STAGE_LABELS:
+        raise ValueError("Staged Test candidate has no supported model stage.")
+    if (
+        not name
+        or name in (".", "..")
+        or Path(name).name != name
+        or "/" in name
+        or "\\" in name
+        or Path(name).suffix.lower() != ".safetensors"
+    ):
+        raise ValueError("A staged Test .safetensors filename is required.")
+
+    staged_directory = test_source_path(selected_stage, test_source_for_set(selected_stage, folder_text))
+    source = staged_directory / name
+    sidecar = _candidate_test_sidecar_path(source)
+    if source.is_symlink() or not source.is_file():
+        raise FileNotFoundError("Staged Test candidate is unavailable: " + name)
+    if sidecar.is_symlink() or not sidecar.is_file():
+        raise FileNotFoundError("Staged Test candidate provenance is unavailable: " + sidecar.name)
+    try:
+        provenance = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Could not read staged Test candidate provenance: " + sidecar.name) from exc
+    if not isinstance(provenance, dict) or provenance.get("version") != 1:
+        raise ValueError("Staged Test candidate provenance is invalid: " + sidecar.name)
+
+    source_folder = str(provenance.get("sourceFolder") or "").strip().replace("\\", "/").strip("/")
+    source_job_id = str(provenance.get("sourceJobId") or "").strip()
+    source_stage = str(provenance.get("stage") or "").strip().lower()
+    try:
+        source_epoch = int(provenance.get("sourceEpoch"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Staged Test candidate provenance has an invalid source epoch.") from exc
+    if (
+        source_folder != folder_text
+        or source_job_id != wanted_job_id
+        or source_stage != selected_stage
+        or source_epoch != epoch_number
+    ):
+        raise ValueError("Staged Test candidate provenance does not match the requested training epoch.")
+    return source
+
+
+def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="", staged_file_name=""):
+    """Save one tested epoch and preserve durable selection when its run is still indexed."""
+    raw_run_path = ""
+    run = None
+    selection_unavailable = False
+    if str(staged_file_name or "").strip():
+        selected_stage = str(stage or "").strip().lower()
+        source = _staged_candidate_save_source(folder, job_id, epoch, selected_stage, staged_file_name)
+        try:
+            raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+        except LookupError:
+            selection_unavailable = True
+        if run is not None:
+            recorded_stage = str(run.get("stages") or "").strip().lower()
+            if recorded_stage != selected_stage:
+                raise ValueError("Staged Test candidate stage does not match its recorded training run.")
+        stage = selected_stage
+    else:
+        raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+        source = _candidate_safetensors_path(folder, job_id, epoch)
+        stage = str(run.get("stages") or "").strip().lower()
+
     if stage not in TEST_COPY_STAGE_LABELS:
         raise ValueError("Recorded training job has no supported Test model stage.")
 
@@ -813,24 +887,25 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename):
         with source.open("rb") as source_handle, destination_path.open("xb") as destination_handle:
             shutil.copyfileobj(source_handle, destination_handle)
             created = True
-        raw_run_path, selected_run = _candidate_run_snapshot(folder, job_id)
-        run_dir = host_path_for_training_path(raw_run_path)
-        if not run_dir.is_dir() or run_dir.is_symlink():
-            raise FileNotFoundError("Recorded training run directory is unavailable.")
-        analysis = _analyze_run_directory(run_dir, algorithm="v5")
-        step = _candidate_epoch_step(analysis, epoch)
-        identity = _candidate_manifest_id(selected_run)
-        if not identity:
-            raise RuntimeError("Recorded training job has no managed action identity for durable selection.")
-        selected = _select_epoch(
-            run_dir.resolve(strict=True),
-            identity,
-            int(epoch),
-            step,
-            saved_stage=stage,
-            saved_destination=str(destination or ""),
-            saved_file_name=destination_path.name,
-        )
+        selected = None
+        if run is not None:
+            run_dir = host_path_for_training_path(raw_run_path)
+            if not run_dir.is_dir() or run_dir.is_symlink():
+                raise FileNotFoundError("Recorded training run directory is unavailable.")
+            analysis = _analyze_run_directory(run_dir, algorithm="v5")
+            step = _candidate_epoch_step(analysis, epoch)
+            identity = _candidate_manifest_id(run)
+            if not identity:
+                raise RuntimeError("Recorded training job has no managed action identity for durable selection.")
+            selected = _select_epoch(
+                run_dir.resolve(strict=True),
+                identity,
+                int(epoch),
+                step,
+                saved_stage=stage,
+                saved_destination=str(destination or ""),
+                saved_file_name=destination_path.name,
+            )
     except Exception:
         if created:
             try:
@@ -845,14 +920,23 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename):
         "sourceFileName": source.name,
         "stage": stage,
         "selected": selected,
+        "selectionUnavailable": selection_unavailable,
     }
 
 
-def save_candidate_epoch_response(folder, job_id, epoch, destination, filename):
+def save_candidate_epoch_response(folder, job_id, epoch, destination, filename, stage="", staged_file_name=""):
     try:
         return {
             "ok": True,
-            **save_candidate_epoch(folder, job_id, epoch, destination, filename),
+            **save_candidate_epoch(
+                folder,
+                job_id,
+                epoch,
+                destination,
+                filename,
+                stage=stage,
+                staged_file_name=staged_file_name,
+            ),
         }, 200
     except FileExistsError as exc:
         return {"ok": False, "error": str(exc)}, 409

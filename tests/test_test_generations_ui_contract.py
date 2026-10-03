@@ -10,6 +10,8 @@ def test_epoch_save_modal_is_shared_by_candidates_and_test_generations():
     assert "keepLoraState.destination" in candidates
     assert "window.openEpochSaveModal({" in tests
     assert "candidateMetadata" in tests
+    assert "stagedFileName: fileName" in tests
+    assert "keepLoraState.stagedFileName" in candidates
     assert "keep-lora-modal" in html
     assert "keep-lora-filename" in html
     assert "keep-lora-folders" in html

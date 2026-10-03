@@ -277,6 +277,47 @@ def test_h3_role_ceilings_stay_inside_the_conservative_cell_limit():
             assert mfp(width, height, frames_by_role[role]) <= H3_VIDEO_MFP_LIMIT
 
 
+def test_h3_stale_calibration_hardware_falls_back_to_baseline(monkeypatch):
+    monkeypatch.setattr(h3_probe_module, "current_h3_hardware", lambda: {
+        "total_ram_mib": H3_TEST_HARDWARE["total_ram_mib"],
+        "gpu_model": "Different GPU",
+        "total_vram_mib": H3_TEST_HARDWARE["total_vram_mib"],
+    })
+    monkeypatch.setattr(dataset_config_module.app_config, "config", {
+        "training": {
+            "h3_calibration": {
+                "hardware": H3_TEST_HARDWARE,
+                "results": {},
+                "safe_shapes": {"34": {"square": [704, 704]}},
+            },
+        },
+    })
+
+    ladder = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "square", "balanced", 34)
+    assert ladder["source"] == "baseline"
+    assert ladder["ceiling"] == H3_VIDEO_BASELINE_CEILINGS["square"]["balanced"]
+
+
+def test_h3_unavailable_hardware_identity_falls_back_to_baseline(monkeypatch):
+    def unavailable():
+        raise RuntimeError("hardware unavailable")
+
+    monkeypatch.setattr(h3_probe_module, "current_h3_hardware", unavailable)
+    monkeypatch.setattr(dataset_config_module.app_config, "config", {
+        "training": {
+            "h3_calibration": {
+                "hardware": H3_TEST_HARDWARE,
+                "results": {},
+                "safe_shapes": {"34": {"square": [704, 704]}},
+            },
+        },
+    })
+
+    ladder = video_bucket_ladder(MINIMAX_H3_PROFILE_ID, "square", "balanced", 34)
+    assert ladder["source"] == "baseline"
+    assert ladder["ceiling"] == H3_VIDEO_BASELINE_CEILINGS["square"]["balanced"]
+
+
 def test_h3_balanced_role_uses_conservative_ladder_without_calibration(monkeypatch):
     monkeypatch.setattr(dataset_config_module.app_config, "config", {"training": {}})
 

@@ -5982,7 +5982,6 @@ html[data-theme="dark"] iframe {
   gap: 6px 14px;
   min-width: 0;
   padding-top: 8px;
-  border-top: 1px solid var(--border);
 }
 
 .workspace-surface-training .training-history-metric {

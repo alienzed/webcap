@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from flask import jsonify, request
 
 from .director_model_calibration import clear_calibration, list_profiles, list_reports, save_profile, save_report
-from .director_model_capabilities import capability_for_model
+from .director_model_capabilities import list_capability_hints
 
 
 SESSION_VERSION = 1
@@ -341,15 +341,7 @@ def register_routes(app):
                     "calibrationProtocol": calibration_protocol(),
                     "calibrationProfiles": list_profiles(),
                     "calibrationReports": list_reports(),
-                    "advertisedCapabilities": [
-                        {
-                            "modelRef": str(model.get("id") or ""),
-                            "capability": capability_for_model(
-                                model.get("id"), model.get("modelId"), model.get("label")
-                            ),
-                        }
-                        for model in __import__("tool.server.storyboard_llm_runtime", fromlist=["list_models"]).list_models(reload=False)
-                    ],
+                    "advertisedCapabilities": list_capability_hints(),
                     "session": current_session(),
                 })
 

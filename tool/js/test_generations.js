@@ -1275,7 +1275,7 @@
       if (detail.textContent) copy.appendChild(detail);
       var actions = document.createElement('div');
       actions.className = 'test-generations-staged-actions';
-      if (metadata && metadata.jobId && metadata.folder && Number(metadata.epoch) > 0) {
+      if (metadata && metadata.folder && metadata.stage && Number(metadata.epoch) > 0) {
         if (metadata.selected) {
           var archive = document.createElement('button');
           archive.type = 'button';
@@ -1285,7 +1285,7 @@
           archive.setAttribute('aria-label', 'Archive training run for selected epoch ' + String(metadata.epoch));
           archive.textContent = 'Archive';
           actions.appendChild(archive);
-        } else if (!metadata.saved) {
+        } else if (!metadata.saved && metadata.jobId) {
           var save = document.createElement('button');
           save.type = 'button';
           save.className = 'test-generations-save-candidate';
@@ -3376,12 +3376,13 @@
       if (archiveButton) {
         var archiveFileName = String(archiveButton.dataset.archiveCandidate || '');
         var archiveMetadata = prepared && prepared.candidateMetadata && prepared.candidateMetadata[archiveFileName];
-        if (!archiveMetadata || !archiveMetadata.selected || !archiveMetadata.jobId || !archiveMetadata.folder) {
+        if (!archiveMetadata || !archiveMetadata.selected || !archiveMetadata.folder || !archiveMetadata.stage) {
           throw new Error('Selected Test candidate has no archiveable training-run provenance.');
         }
         openTrainingArchiveModal({
-          id: archiveMetadata.jobId,
-          folder: archiveMetadata.folder
+          folder: archiveMetadata.folder,
+          stage: archiveMetadata.stage,
+          stagedFileName: archiveFileName
         });
         return;
       }
@@ -3399,17 +3400,8 @@
           jobId: metadata.jobId,
           fileName: metadata.sourceFileName || fileName,
           stagedFileName: fileName,
-          onSaved: function (payload) {
-            var selected = payload && payload.selected ? payload.selected : null;
-            Object.keys(prepared.candidateMetadata || {}).forEach(function (candidateFile) {
-              var item = prepared.candidateMetadata[candidateFile];
-              if (item && item.jobId === metadata.jobId && item.folder === metadata.folder) {
-                item.selected = !!(selected && Number(item.epoch) === Number(selected.epoch));
-                item.selectedEpoch = selected;
-                if (candidateFile === fileName) item.saved = true;
-              }
-            });
-            renderStagedFiles(prepared);
+          onSaved: function () {
+            refreshStagedFilesAfterCandidates().catch(showError);
             if (typeof refreshTrainingHistory === 'function') refreshTrainingHistory(true);
           }
         });

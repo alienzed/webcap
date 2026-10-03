@@ -10,7 +10,7 @@ H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
 SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"
-VALID_OPERATIONS = {"expand_concept", "define_invariants", "develop_story", "insert_scene", "repair_scenes", "write_prompt", "refine_prompt"}
+VALID_OPERATIONS = {"expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "repair_scenes", "write_prompt", "refine_prompt"}
 
 
 def _read_text(path, label):
@@ -81,6 +81,43 @@ def _single_scene_response_schema():
         "additionalProperties": False,
         "required": ["scene"],
         "properties": {"scene": scene_schema},
+    }
+
+
+def _story_outline_response_schema(target_scene_count=None):
+    scene = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["title", "summary", "suggestedDurationSeconds"],
+        "properties": {
+            "title": {"type": "string", "minLength": 1},
+            "summary": {"type": "string", "minLength": 1},
+            "entryState": {"type": "string"},
+            "exitState": {"type": "string"},
+            "suggestedDurationSeconds": {
+                "type": "number",
+                "minimum": 6,
+                "maximum": 15,
+            },
+        },
+    }
+    scenes = {
+        "type": "array",
+        "minItems": 1,
+        "items": scene,
+    }
+    try:
+        wanted = int(target_scene_count) if target_scene_count is not None else 0
+    except (TypeError, ValueError):
+        wanted = 0
+    if wanted > 0:
+        scenes["minItems"] = wanted
+        scenes["maxItems"] = wanted
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["scenes"],
+        "properties": {"scenes": scenes},
     }
 
 
@@ -195,7 +232,7 @@ def _previous_scene_context(story, scene_id):
     )
 
 
-def build_request(story, scene_id, operation, instruction=""):
+def build_request(story, scene_id, operation, instruction="", development=None):
     if not isinstance(story, dict):
         raise ValueError("Story data must be an object.")
     operation = _clean(operation).lower()
@@ -317,6 +354,101 @@ def build_request(story, scene_id, operation, instruction=""):
             "output": "json",
             "prompt": "\n\n".join(blocks).strip() + "\n",
             "response_schema": _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema"),
+        }
+
+    if operation == "develop_story_outline":
+        concept = _clean(story.get("concept"))
+        if not concept:
+            raise ValueError("Story concept / overview is required to develop a Story.")
+        blocks = ["[DIRECTOR CONTEXT]\n" + director_context]
+        title = _clean(story.get("title"))
+        if title:
+            blocks.append("[STORY TITLE]\n" + title)
+        blocks.append("[STORY CONCEPT]\n" + concept)
+        style = _clean(story.get("style"))
+        if style:
+            blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
+        target_scene_count = story.get("targetSceneCount")
+        scene_count_guidance = (
+            "Create exactly " + str(int(target_scene_count)) + " planned Scenes. "
+            if target_scene_count is not None
+            else "Choose the Scene count that best serves the concept and useful coverage. "
+        )
+        blocks.append(
+            "[CURRENT TASK]\nPlan the complete Story as a concise Scene sequence without writing generation prompts yet. "
+            + scene_count_guidance
+            + "Consider the complete concept before planning individual Scenes. Decide the relationship between Scenes that best serves the concept: progression, variations, repeated format, montage, parallel moments, independent alternatives, or another appropriate structure. "
+            "For each Scene return only a short title, a useful summary / intent, optional entry and exit state when a real handoff matters, and a suggested duration. "
+            "Keep each planned Scene meaningfully distinct while preserving relevant Story facts, invariants, and evolving state. "
+            "This outline will be used to author each full H3 Scene separately. Return only JSON matching the supplied schema."
+        )
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+            "response_schema": _story_outline_response_schema(target_scene_count),
+        }
+
+    if operation == "develop_story_scene":
+        development = development if isinstance(development, dict) else {}
+        outline = development.get("outline")
+        scene_index = development.get("sceneIndex")
+        previous_scene = development.get("previousScene")
+        if not isinstance(outline, dict) or not isinstance(outline.get("scenes"), list) or not outline["scenes"]:
+            raise ValueError("Individual Story development requires a Scene outline.")
+        try:
+            scene_index = int(scene_index)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Individual Story development sceneIndex must be an integer.") from exc
+        if scene_index < 0 or scene_index >= len(outline["scenes"]):
+            raise ValueError("Individual Story development sceneIndex is out of range.")
+        planned_scene = outline["scenes"][scene_index]
+        if not isinstance(planned_scene, dict):
+            raise ValueError("Individual Story development planned Scene is invalid.")
+
+        blocks = ["[DIRECTOR CONTEXT]\n" + director_context]
+        title = _clean(story.get("title"))
+        if title:
+            blocks.append("[STORY TITLE]\n" + title)
+        concept = _clean(story.get("concept"))
+        if concept:
+            blocks.append("[STORY CONCEPT / OVERVIEW]\n" + concept)
+        style = _clean(story.get("style"))
+        if style:
+            blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
+        blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        blocks.append("[COMPLETE SCENE OUTLINE]\n" + json.dumps(outline, indent=2, ensure_ascii=False))
+        blocks.append(
+            "[CURRENT PLANNED SCENE]\nScene "
+            + str(scene_index + 1)
+            + " of "
+            + str(len(outline["scenes"]))
+            + "\n"
+            + json.dumps(planned_scene, indent=2, ensure_ascii=False)
+        )
+        if isinstance(previous_scene, dict):
+            blocks.append(
+                "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]\n"
+                + json.dumps(previous_scene, indent=2, ensure_ascii=False)
+                + "\n\nUse the previous authored Scene to preserve continuity when appropriate and keep this Scene meaningfully distinct."
+            )
+        blocks.append(
+            "[CURRENT TASK]\nAuthor exactly this one planned Scene as a complete MiniMax H3 Scene. "
+            "Preserve the planned Scene's purpose and its place in the complete outline. "
+            "Return the complete title, summary, optional entryState / exitState, suggestedDurationSeconds, and the full H3 generation prompt exactly as it should be stored. "
+            "Follow the supplied Director and H3 guidance. Return only JSON matching the supplied schema."
+        )
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+            "response_schema": _single_scene_response_schema(),
         }
 
     if operation == "insert_scene":

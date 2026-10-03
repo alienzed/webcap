@@ -399,7 +399,7 @@
   function directorTargetFromJob(job) {
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
     if (job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
-    if (job.operation === 'develop_story' || job.operation === 'insert_scene') return { kind: 'scenes', storyId: job.storyId };
+    if (job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene') return { kind: 'scenes', storyId: job.storyId };
     if (job.operation === 'repair_scenes') return { kind: 'repair', storyId: job.storyId };
     if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId, operation: job.operation };

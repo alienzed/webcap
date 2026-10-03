@@ -237,3 +237,15 @@ def test_clear_calibration_removes_profiles_and_reports(calibration_root):
     assert calibration.list_profiles() == []
     assert calibration.list_reports() == []
     assert not (calibration_root / calibration.FILENAME).exists()
+
+
+
+def test_begin_calibration_supersedes_stale_profile_and_report(calibration_root):
+    calibration.save_profile(_profile())
+    calibration.save_report(_report())
+
+    begun = calibration.begin_calibration("local::director.gguf")
+
+    assert begun == {"profiles": [], "reports": []}
+    assert calibration.get_profile("local::director.gguf") is None
+    assert calibration.get_report("local::director.gguf") is None

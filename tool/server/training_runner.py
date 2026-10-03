@@ -623,6 +623,155 @@ def candidate_run_snapshot(folder, job_id):
     return run_dir.resolve(strict=True), run
 
 
+def _candidate_indexed_jobs(folder):
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    if not folder_text:
+        raise ValueError("Folder is required.")
+    folder_path = app_config.safe_join_fs_root(folder_text)
+    history_jobs = read_history(folder_path).get("jobs", [])
+    with _lock:
+        state_jobs = _read_state_readonly().get("jobs", [])
+    by_id = {}
+    for job in history_jobs:
+        if isinstance(job, dict) and str(job.get("id") or "").strip():
+            by_id[str(job.get("id"))] = dict(job)
+    for job in state_jobs:
+        if isinstance(job, dict) and str(job.get("id") or "").strip():
+            by_id[str(job.get("id"))] = dict(job)
+    return [job for job in by_id.values() if str(job.get("folder") or "").strip().replace("\\", "/").strip("/") == folder_text]
+
+
+def _candidate_resolved_run_path(raw_run_path):
+    raw = str(raw_run_path or "").strip()
+    if not raw:
+        raise ValueError("Training run path is required.")
+    path = host_path_for_training_path(raw)
+    if not path.is_dir() or path.is_symlink():
+        raise FileNotFoundError("Recorded training run directory is unavailable.")
+    return path.resolve(strict=True)
+
+
+def _candidate_job_for_run_identity(folder, raw_run_path, action_id=""):
+    target = _candidate_resolved_run_path(raw_run_path)
+    wanted_action = str(action_id or "").strip()
+    matches = []
+    for job in _candidate_indexed_jobs(folder):
+        job_action = str(job.get("actionId") or job.get("resumeActionId") or "").strip()
+        if wanted_action and job_action != wanted_action:
+            continue
+        job_run_path = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "").strip()
+        if not job_run_path:
+            continue
+        try:
+            if _candidate_resolved_run_path(job_run_path) != target:
+                continue
+        except (FileNotFoundError, OSError, RuntimeError, ValueError):
+            continue
+        matches.append(job)
+    return max(matches, key=lambda job: float(job.get("updatedAt") or job.get("finishedAt") or job.get("startedAt") or job.get("createdAt") or 0)) if matches else None
+
+
+def _candidate_job_for_legacy_provenance(provenance):
+    folder = str(provenance.get("sourceFolder") or "").strip().replace("\\", "/").strip("/")
+    stage = str(provenance.get("stage") or "").strip().lower()
+    run_name = str(provenance.get("sourceRunName") or "").strip()
+    sequence = str(provenance.get("sourceRunSequence") or "").strip()
+    if not folder or not stage or not sequence:
+        return None
+
+    def normalized_sequence(value, action_id=""):
+        text = str(value or "").strip()
+        if not text:
+            match = re.match(r"^(\d+)-", PurePosixPath(str(action_id or "")).name)
+            text = match.group(1) if match else ""
+        return str(int(text)) if text.isdigit() else text
+
+    wanted_sequence = normalized_sequence(sequence)
+    by_run = {}
+    for job in _candidate_indexed_jobs(folder):
+        if str(job.get("stages") or "").strip().lower() != stage:
+            continue
+        if run_name and str(job.get("runName") or "").strip() != run_name:
+            continue
+        if normalized_sequence(job.get("sequence"), job.get("actionId")) != wanted_sequence:
+            continue
+        raw_run_path = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "").strip()
+        if not raw_run_path:
+            continue
+        try:
+            key = str(_candidate_resolved_run_path(raw_run_path))
+        except (FileNotFoundError, OSError, RuntimeError, ValueError):
+            continue
+        previous = by_run.get(key)
+        if previous is None or float(job.get("updatedAt") or 0) > float(previous.get("updatedAt") or 0):
+            by_run[key] = job
+    return next(iter(by_run.values())) if len(by_run) == 1 else None
+
+
+def _candidate_validate_managed_run(folder, raw_run_path, action_id):
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    wanted_action = str(action_id or "").strip()
+    if not folder_text or not wanted_action:
+        raise ValueError("Staged Test run provenance requires a Set folder and managed action identity.")
+    run_dir = _candidate_resolved_run_path(raw_run_path)
+    action_root, action = read_action(wanted_action)
+    if str(action.get("folder") or "").strip().replace("\\", "/").strip("/") != folder_text:
+        raise RuntimeError("Staged Test run provenance belongs to another Set.")
+    output_root = (action_root / "output").resolve(strict=True)
+    if run_dir.parent != output_root:
+        raise RuntimeError("Staged Test run is not owned by its recorded managed action.")
+    return run_dir
+
+
+def candidate_run_snapshot_from_provenance(provenance):
+    if not isinstance(provenance, dict) or provenance.get("version") != 1:
+        raise ValueError("Staged Test candidate provenance is invalid.")
+    folder = str(provenance.get("sourceFolder") or "").strip().replace("\\", "/").strip("/")
+    stage = str(provenance.get("stage") or "").strip().lower()
+    if not folder or stage not in TEST_COPY_STAGE_LABELS:
+        raise ValueError("Staged Test candidate provenance has no usable Set/model identity.")
+    raw_run_path = str(provenance.get("sourceRunPath") or "").strip()
+    action_id = str(provenance.get("sourceActionId") or "").strip()
+    source_job_id = str(provenance.get("sourceJobId") or "").strip()
+
+    if raw_run_path:
+        indexed = _candidate_job_for_run_identity(folder, raw_run_path, action_id)
+        if indexed is not None:
+            indexed_raw, run = _candidate_run_snapshot(folder, indexed.get("id"))
+            run_dir = _candidate_resolved_run_path(indexed_raw)
+            if run_dir != _candidate_resolved_run_path(raw_run_path):
+                raise RuntimeError("Indexed Training job does not point at the staged candidate run.")
+            if action_id and str(run.get("actionId") or "").strip() != action_id:
+                raise RuntimeError("Indexed Training job does not belong to the staged candidate action.")
+            if str(run.get("stages") or "").strip().lower() != stage:
+                raise RuntimeError("Indexed Training job model stage does not match staged candidate provenance.")
+            return run_dir, run
+        if not action_id:
+            raise LookupError("Staged Test candidate has no resolvable managed training run.")
+        run_dir = _candidate_validate_managed_run(folder, raw_run_path, action_id)
+        return run_dir, {"id": source_job_id, "folder": folder, "runName": str(provenance.get("sourceRunName") or "").strip(), "sequence": str(provenance.get("sourceRunSequence") or "").strip(), "actionId": action_id, "stage": stage, "stages": stage, "status": "unknown", "runSummary": provenance.get("runSummary") if isinstance(provenance.get("runSummary"), dict) else {}}
+
+    if source_job_id:
+        try:
+            indexed_raw, run = _candidate_run_snapshot(folder, source_job_id)
+            if str(run.get("stages") or "").strip().lower() != stage:
+                raise RuntimeError("Recorded Training job model stage does not match staged candidate provenance.")
+            return _candidate_resolved_run_path(indexed_raw), run
+        except LookupError:
+            pass
+
+    indexed = _candidate_job_for_legacy_provenance(provenance)
+    if indexed is None:
+        raise LookupError("Staged Test candidate training run was not found.")
+    indexed_raw, run = _candidate_run_snapshot(folder, indexed.get("id"))
+    return _candidate_resolved_run_path(indexed_raw), run
+
+
+def candidate_selected_epoch_from_provenance(provenance):
+    run_dir, run = candidate_run_snapshot_from_provenance(provenance)
+    return _candidate_selected_epoch(run_dir, run)
+
+
 def candidate_run_available(folder, job_id):
     try:
         candidate_run_folder_path(folder, job_id)
@@ -734,6 +883,37 @@ def _candidate_test_sidecar_path(destination):
     return Path(destination).with_suffix(".webcap.json")
 
 
+def _staged_candidate_payload(folder, stage, staged_file_name):
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    selected_stage = str(stage or "").strip().lower()
+    name = str(staged_file_name or "").strip()
+    if not folder_text or selected_stage not in TEST_COPY_STAGE_LABELS:
+        raise ValueError("Staged Test candidate has no usable Set/model identity.")
+    if not name or name in (".", "..") or Path(name).name != name or "/" in name or "\\" in name or Path(name).suffix.lower() != ".safetensors":
+        raise ValueError("A staged Test .safetensors filename is required.")
+    source = test_source_path(selected_stage, test_source_for_set(selected_stage, folder_text)) / name
+    sidecar = _candidate_test_sidecar_path(source)
+    if source.is_symlink() or not source.is_file():
+        raise FileNotFoundError("Staged Test candidate is unavailable: " + name)
+    if sidecar.is_symlink() or not sidecar.is_file():
+        raise FileNotFoundError("Staged Test candidate provenance is unavailable: " + sidecar.name)
+    try:
+        provenance = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Could not read staged Test candidate provenance: " + sidecar.name) from exc
+    if not isinstance(provenance, dict) or provenance.get("version") != 1:
+        raise ValueError("Staged Test candidate provenance is invalid: " + sidecar.name)
+    if str(provenance.get("sourceFolder") or "").strip().replace("\\", "/").strip("/") != folder_text or str(provenance.get("stage") or "").strip().lower() != selected_stage:
+        raise ValueError("Staged Test candidate provenance does not match the requested Set/model.")
+    return source, provenance
+
+
+def candidate_staged_run_snapshot(folder, stage, staged_file_name):
+    source, provenance = _staged_candidate_payload(folder, stage, staged_file_name)
+    run_dir, run = candidate_run_snapshot_from_provenance(provenance)
+    return source, provenance, run_dir, run
+
+
 def _annotate_candidate_test_folder_status(run, analysis):
     """Add non-mutating Copy to Test availability to saved candidate artifacts."""
     artifacts = analysis.get("savedArtifacts") if isinstance(analysis, dict) else None
@@ -780,83 +960,36 @@ def _annotate_candidate_test_folder_status(run, analysis):
 
 
 
-def _staged_candidate_save_source(folder, job_id, epoch, stage, staged_file_name):
-    """Resolve one Test-staged LoRA from its sidecar provenance, never from a caller path."""
-    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
-    wanted_job_id = str(job_id or "").strip()
-    selected_stage = str(stage or "").strip().lower()
-    name = str(staged_file_name or "").strip()
-    try:
-        epoch_number = int(epoch)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Epoch must be a positive whole number.") from exc
-    if not folder_text or not wanted_job_id:
-        raise ValueError("Folder and job ID are required.")
-    if epoch_number <= 0:
-        raise ValueError("Epoch must be a positive whole number.")
-    if selected_stage not in TEST_COPY_STAGE_LABELS:
-        raise ValueError("Staged Test candidate has no supported model stage.")
-    if (
-        not name
-        or name in (".", "..")
-        or Path(name).name != name
-        or "/" in name
-        or "\\" in name
-        or Path(name).suffix.lower() != ".safetensors"
-    ):
-        raise ValueError("A staged Test .safetensors filename is required.")
-
-    staged_directory = test_source_path(selected_stage, test_source_for_set(selected_stage, folder_text))
-    source = staged_directory / name
-    sidecar = _candidate_test_sidecar_path(source)
-    if source.is_symlink() or not source.is_file():
-        raise FileNotFoundError("Staged Test candidate is unavailable: " + name)
-    if sidecar.is_symlink() or not sidecar.is_file():
-        raise FileNotFoundError("Staged Test candidate provenance is unavailable: " + sidecar.name)
-    try:
-        provenance = json.loads(sidecar.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Could not read staged Test candidate provenance: " + sidecar.name) from exc
-    if not isinstance(provenance, dict) or provenance.get("version") != 1:
-        raise ValueError("Staged Test candidate provenance is invalid: " + sidecar.name)
-
-    source_folder = str(provenance.get("sourceFolder") or "").strip().replace("\\", "/").strip("/")
-    source_job_id = str(provenance.get("sourceJobId") or "").strip()
-    source_stage = str(provenance.get("stage") or "").strip().lower()
+def _staged_candidate_save_source(folder, epoch, stage, staged_file_name):
+    source, provenance = _staged_candidate_payload(folder, stage, staged_file_name)
     try:
         source_epoch = int(provenance.get("sourceEpoch"))
+        epoch_number = int(epoch)
     except (TypeError, ValueError) as exc:
         raise ValueError("Staged Test candidate provenance has an invalid source epoch.") from exc
-    if (
-        source_folder != folder_text
-        or source_job_id != wanted_job_id
-        or source_stage != selected_stage
-        or source_epoch != epoch_number
-    ):
+    if epoch_number <= 0 or source_epoch != epoch_number:
         raise ValueError("Staged Test candidate provenance does not match the requested training epoch.")
-    return source
+    return source, provenance
 
 
 def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="", staged_file_name=""):
     """Save one tested epoch and preserve durable selection when its run is still indexed."""
     raw_run_path = ""
+    run_dir = None
     run = None
     selection_unavailable = False
     if str(staged_file_name or "").strip():
         selected_stage = str(stage or "").strip().lower()
-        source = _staged_candidate_save_source(folder, job_id, epoch, selected_stage, staged_file_name)
+        source, provenance = _staged_candidate_save_source(folder, epoch, selected_stage, staged_file_name)
         try:
-            raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+            run_dir, run = candidate_run_snapshot_from_provenance(provenance)
         except LookupError:
             selection_unavailable = True
-        if run is not None:
-            recorded_stage = str(run.get("stages") or "").strip().lower()
-            if recorded_stage != selected_stage:
-                raise ValueError("Staged Test candidate stage does not match its recorded training run.")
         stage = selected_stage
     else:
         raw_run_path, run = _candidate_run_snapshot(folder, job_id)
         source = _candidate_safetensors_path(folder, job_id, epoch)
+        run_dir = _candidate_resolved_run_path(raw_run_path)
         stage = str(run.get("stages") or "").strip().lower()
 
     if stage not in TEST_COPY_STAGE_LABELS:
@@ -888,10 +1021,7 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
             shutil.copyfileobj(source_handle, destination_handle)
             created = True
         selected = None
-        if run is not None:
-            run_dir = host_path_for_training_path(raw_run_path)
-            if not run_dir.is_dir() or run_dir.is_symlink():
-                raise FileNotFoundError("Recorded training run directory is unavailable.")
+        if run is not None and run_dir is not None:
             analysis = _analyze_run_directory(run_dir, algorithm="v5")
             step = _candidate_epoch_step(analysis, epoch)
             identity = _candidate_manifest_id(run)
@@ -962,6 +1092,8 @@ def copy_candidate_epoch_to_test(folder, job_id, epoch):
         "sourceJobId": str(run.get("id") or ""),
         "sourceRunName": str(run.get("runName") or ""),
         "sourceRunSequence": _candidate_short_run_id(run),
+        "sourceRunPath": str(_raw_run_path or ""),
+        "sourceActionId": str(run.get("actionId") or ""),
         "sourceEpoch": int(epoch),
         "sourceFileName": source.name,
         "sourceFolder": str(run.get("folder") or ""),

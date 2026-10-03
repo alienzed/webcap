@@ -562,7 +562,17 @@ function switchTrainingSetup(profileId, mode) {
     if (profileId) setSelectedTrainingModelProfile(profileId);
     if (mode) trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(mode);
     try { localStorage.setItem(trainingModeStorageKey(state.folder), trainingWorkspaceState.selectedMode); } catch (err) {}
+
+    // Model-specific workspace state must never survive a model switch. The
+    // next refresh may fail, and stale files/review from the previous model
+    // would otherwise remain visible under the newly selected model.
+    trainingWorkspaceState.configFiles = [];
+    trainingWorkspaceState.review = null;
+    trainingWorkspaceState.reviewError = '';
+    trainingWorkspaceState.reviewPending = false;
     if (priorConfig && state.currentConfigFile === priorConfig) clearEditorAndPreview();
+    renderTrainingWorkspaceConfigList([]);
+    renderTrainingReview();
     refreshTrainingWorkspace();
   }).catch(function (err) {
     setStatus('Could not save the open TOML before switching setup: ' + String(err && err.message ? err.message : err));

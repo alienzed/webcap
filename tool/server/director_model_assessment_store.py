@@ -11,6 +11,7 @@ from .permissions import normalize_path_permissions
 
 ASSESSMENT_VERSION = 1
 ROOT_NAME = "director-model-assessments"
+_active_assessment_ids = set()
 
 
 def _now_iso():
@@ -111,6 +112,7 @@ def start_assessment(model, advertised=None):
         "attempts": [],
     }
     _write(_assessment_path(assessment_id), payload)
+    _active_assessment_ids.add(assessment_id)
     return _copy(payload)
 
 
@@ -165,6 +167,7 @@ def update_assessment(assessment_id, attempts, summary=None, *, final=False, sta
             raise ValueError("Director assessment final status is invalid.")
         payload["status"] = final_status
         payload["finishedAt"] = _now_iso()
+        _active_assessment_ids.discard(str(assessment_id))
     else:
         payload["status"] = "running"
         payload["finishedAt"] = ""
@@ -198,6 +201,7 @@ def list_assessments():
             "summary": _copy(payload.get("summary")) if isinstance(payload.get("summary"), dict) else {},
             "error": str(payload.get("error") or ""),
             "attemptCount": len(attempts),
+            "active": str(payload.get("id") or path.stem) in _active_assessment_ids,
             "bytes": path.stat().st_size,
         })
     rows.sort(key=lambda item: item.get("startedAt") or "", reverse=True)
@@ -205,6 +209,9 @@ def list_assessments():
 
 
 def delete_assessment(assessment_id):
+    assessment_id = str(assessment_id or "").strip()
+    if assessment_id in _active_assessment_ids:
+        raise RuntimeError("Active Director assessment evidence cannot be deleted while it is being written.")
     path = _assessment_path(assessment_id)
     try:
         path.unlink()

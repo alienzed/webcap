@@ -623,7 +623,11 @@ def _is_webcap_staged_lora(lora_file, model):
         return False
     if str(payload.get("stage") or "").strip().lower() != str(model.STAGING_KEY or "").strip().lower():
         return False
-    if not str(payload.get("sourceJobId") or "").strip():
+    has_run_identity = bool(
+        str(payload.get("sourceRunPath") or "").strip()
+        and str(payload.get("sourceActionId") or "").strip()
+    )
+    if not has_run_identity and not str(payload.get("sourceJobId") or "").strip():
         return False
     if not str(payload.get("sourceFolder") or "").strip():
         return False

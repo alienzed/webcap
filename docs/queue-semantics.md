@@ -657,6 +657,12 @@ its local condition changes.
 
 Only the dispatcher grants local-GPU execution. Clients must not independently reserve the GPU.
 
+Every active grant must have a unique process-local lease identity. A stale worker from an earlier
+grant must not be able to release or yield a newer lease acquired later by the same client.
+
+Client submissions must likewise be revisioned or otherwise fenced so a stale dispatch/cancel result
+cannot erase newer work submitted while an earlier callback was in flight.
+
 ### Ordering
 
 WebCap does **not** promise one global FIFO order across Training, LLM, and Inference.
@@ -690,20 +696,39 @@ The dispatcher needs to know only that the client still owns or has released the
 
 ### Handoff ownership
 
-The outgoing client owns runtime cleanup necessary for handoff.
+The **dispatcher owns the handoff event; the outgoing client owns the handoff implementation**.
+
+A client reaching its natural yield boundary does not directly clear shared GPU ownership. It tells
+the dispatcher that the current lease may be yielded.
+
+The dispatcher then decides whether:
+
+- the same client may continue under the existing lease without cleanup,
+- the lease is returning to idle, or
+- a different client is next and an actual runtime handoff is required.
+
+When an actual handoff is required, the dispatcher calls the outgoing client's cleanup/handoff
+callback. The dispatcher does not know how that cleanup works.
 
 Therefore:
 
-- Inference cleans up its own managed ComfyUI runtime before voluntary release,
-- LLM cleans up its own managed local llama runtime before voluntary release,
+- Inference cleans up its own managed ComfyUI runtime when the dispatcher requests an Inference handoff,
+- LLM cleans up its own managed local llama runtime when the dispatcher requests an LLM handoff,
 - Training owns its own runner lifecycle,
-- the incoming client does not interrogate or clean up the outgoing client's runtime.
+- the incoming client does not interrogate or clean up the outgoing client's runtime,
+- ownership does not transfer until the outgoing client reports a completed handoff.
 
 If a client's managed runtime is positively still active, that client may retain its lease.
 
+A pre-dispatch **not ready** result and a failed **handoff** are different:
+
+- not ready means the dispatcher may try another submitted client,
+- failed handoff means the current client has not yet established a safe transfer boundary, so another
+  local-GPU client must not start.
+
 If runtime state becomes unknown, unreachable, or ambiguous, uncertainty must not become an immortal
-shared-GPU claim. The owning client surfaces the failure and resolves its own work according to its
-domain semantics.
+shared-GPU claim. Each client therefore needs a bounded, deterministic cleanup/escalation path rather
+than an indefinite "maybe still owns VRAM" state.
 
 ## 14. Runtime and failure semantics
 

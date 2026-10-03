@@ -433,3 +433,15 @@ def test_diagnostics_separates_assessment_from_benchmark():
     assert "directorModelTestSelectedModels" in frontend
     assert "Delete Raw Evidence" in frontend
     assert "learned model results were preserved" in frontend
+
+
+
+def test_assessment_ladder_respects_advertised_recommended_ceilings():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
+
+    assert "advertised.recommendedContextMax" in frontend
+    assert "advertised.recommendedOutputTokens" in frontend
+    assert "Number(target) <= recommendedContextMax" in frontend
+    assert "Number(target) <= recommendedOutputTokens" in frontend
+    assert "respecting published recommended context ceiling" in frontend

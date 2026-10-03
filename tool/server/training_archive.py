@@ -14,7 +14,7 @@ from .training_action import read_action
 from .training_candidates import aggregate_detailed_loss_by_epoch, map_detailed_loss_to_epochs, read_loss_events, smooth_step_loss
 from .training_history import all_history_payload, clear_history_job
 from .training_run_manifest import read_run_manifest, record_archive_metadata
-from .training_runner import action_live_job_ids, candidate_run_snapshot
+from .training_runner import action_live_job_ids, candidate_run_snapshot, candidate_run_snapshot_from_provenance, candidate_staged_run_snapshot
 from .training_test_paths import test_copy_destination, test_source_path
 
 
@@ -170,13 +170,15 @@ def _global_step_directories(run_dir):
     ]
 
 
-def _staged_candidates(folder, job_id, stage):
+def _staged_candidates(folder, run_dir, action_id, stage):
     root, parts = test_copy_destination(stage, folder)
     directory = root.joinpath(*parts)
     if not directory.exists():
         return []
     if not directory.is_dir() or directory.is_symlink():
         raise RuntimeError("Configured staged Test directory is invalid.")
+    wanted_run = Path(run_dir).resolve(strict=True)
+    wanted_action = str(action_id or "").strip()
     matches = []
     for candidate in directory.iterdir():
         if candidate.suffix.lower() != ".safetensors" or candidate.is_symlink() or not candidate.is_file():
@@ -190,7 +192,11 @@ def _staged_candidates(folder, job_id, stage):
             raise RuntimeError("Staged Test provenance is unreadable: " + sidecar.name) from exc
         if not isinstance(payload, dict) or payload.get("version") != 1:
             raise RuntimeError("Staged Test provenance is invalid: " + sidecar.name)
-        if str(payload.get("sourceJobId") or "").strip() == str(job_id):
+        try:
+            candidate_run_dir, candidate_run = candidate_run_snapshot_from_provenance(payload)
+        except (LookupError, FileNotFoundError):
+            continue
+        if candidate_run_dir == wanted_run and str(candidate_run.get("actionId") or "").strip() == wanted_action:
             matches.append((candidate, sidecar, payload))
     return matches
 
@@ -226,10 +232,18 @@ def _production_path(selected):
     return path
 
 
-def _context(folder, job_id):
-    run_dir, run = candidate_run_snapshot(folder, job_id)
+def _context(folder, job_id="", stage="", staged_file_name=""):
+    staged_source = bool(str(staged_file_name or "").strip())
+    if staged_source:
+        _candidate, provenance, run_dir, run = candidate_staged_run_snapshot(folder, stage, staged_file_name)
+        effective_job_id = str(run.get("id") or provenance.get("sourceJobId") or "").strip()
+    else:
+        if not str(job_id or "").strip():
+            raise ValueError("Training job ID is required.")
+        run_dir, run = candidate_run_snapshot(folder, job_id)
+        effective_job_id = str(job_id)
     status = str(run.get("status") or "").strip()
-    if status not in ARCHIVABLE_STATUSES:
+    if not staged_source and status not in ARCHIVABLE_STATUSES:
         raise RuntimeError("Training run is not terminal and cannot be archived.")
     action_id = str(run.get("actionId") or "").strip()
     if not action_id:
@@ -256,7 +270,7 @@ def _context(folder, job_id):
     live_jobs = action_live_job_ids(action_id)
     if live_jobs:
         raise RuntimeError("Training action still has live or queued work: " + ", ".join(live_jobs))
-    staged = _staged_candidates(folder, job_id, str(run.get("stages") or "").strip().lower())
+    staged = _staged_candidates(folder, run_dir, action_id, str(run.get("stages") or "").strip().lower())
     set_folder = app_config.safe_join_fs_root(folder)
     test_cleanup = test_session_cleanup_status(set_folder)
     if test_cleanup["active"]:
@@ -271,11 +285,13 @@ def _context(folder, job_id):
     sibling_outputs = _sibling_output_directories(output_root, run_dir)
     related = [
         job for job in all_history_payload(folder=folder).get("jobs") or []
-        if str(job.get("id") or "") != str(job_id)
+        if str(job.get("id") or "") != effective_job_id
     ]
     return {
         "runDir": run_dir,
         "run": run,
+        "jobId": effective_job_id,
+        "stagedFileName": str(staged_file_name or "").strip(),
         "actionRoot": action_root,
         "action": action,
         "actionId": action_id,
@@ -313,11 +329,12 @@ def _staged_alternate_candidates(context):
     return rows
 
 
-def preview(folder, job_id):
-    context = _context(folder, job_id)
+def preview(folder, job_id="", stage="", staged_file_name=""):
+    context = _context(folder, job_id, stage=stage, staged_file_name=staged_file_name)
     alternates = _staged_alternate_candidates(context)
     return {
-        "jobId": str(job_id),
+        "jobId": str(context.get("jobId") or ""),
+        "stagedFileName": str(context.get("stagedFileName") or ""),
         "folder": str(folder),
         "runName": str(context["run"].get("runName") or ""),
         "stage": str(context["run"].get("stages") or ""),
@@ -364,8 +381,8 @@ def _move_archive(source, destination):
     shutil.rmtree(source)
 
 
-def finalize(folder, job_id, archive_name, retain_epochs=None):
-    context = _context(folder, job_id)
+def finalize(folder, job_id, archive_name, retain_epochs=None, stage="", staged_file_name=""):
+    context = _context(folder, job_id, stage=stage, staged_file_name=staged_file_name)
     destination_name = _safe_archive_name(archive_name)
     retained = sorted({int(value) for value in (retain_epochs or [])})
     if context["selectedEpoch"] in retained:
@@ -397,7 +414,7 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
         {
             "archivedAt": archived_at,
             "archiveName": destination_name,
-            "sourceJobId": str(job_id),
+            "sourceJobId": str(context.get("jobId") or ""),
             "sourceFolder": str(folder),
             "runName": str(context["run"].get("runName") or ""),
             "stage": str(context["run"].get("stages") or ""),
@@ -440,7 +457,8 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
             pass
 
     set_folder = app_config.safe_join_fs_root(folder)
-    clear_history_job(set_folder, job_id)
+    if context.get("jobId"):
+        clear_history_job(set_folder, context["jobId"])
     last_training_archive = {
         "archivedAt": archived_at,
         "archiveName": destination_name,

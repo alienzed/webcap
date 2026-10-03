@@ -813,7 +813,9 @@ def action(operation, job_id="", direction="", position=None):
         from .storyboard_llm_runtime import assert_stop_supported, stop_active_request
         assert_stop_supported()
         stopping = current if status == "stopping" else execution_request_stop(job_id)
-        stop_active_request()
+        active_id = str(execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("activeJobId") or "")
+        if active_id == job_id:
+            stop_active_request()
         # The worker may finish and remove the in-memory job while hard-stop is
         # synchronously shutting llama.cpp down. Return the stopping snapshot
         # captured before that race instead of re-reading a job that may already

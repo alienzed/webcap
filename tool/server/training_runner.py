@@ -91,6 +91,32 @@ def _jobs_root():
     return _runtime_root() / JOB_DIR_NAME
 
 
+def _reconcile_training_gpu_owner_from_runtime(jobs):
+    """Reconcile canonical Training ownership from exact managed-runner process truth."""
+    live_job = None
+    for job in jobs:
+        if str(job.get("status") or "") not in ACTIVE_STATUSES:
+            continue
+        process_state, _detail = _inspect_job_runner(job)
+        if process_state == "running":
+            live_job = job
+            break
+
+    owner = execution_resource_owner()
+    if live_job is not None:
+        if owner and owner != TRAINING_RESOURCE_OWNER:
+            raise RuntimeError(
+                "Training runner is active while the shared GPU is owned by " + owner + "."
+            )
+        if not owner and not reserve_execution_resource(TRAINING_RESOURCE_OWNER):
+            raise RuntimeError("Training runner is active but canonical GPU ownership could not be restored.")
+        return live_job
+
+    if owner == TRAINING_RESOURCE_OWNER:
+        release_execution_resource(TRAINING_RESOURCE_OWNER)
+    return None
+
+
 def external_gpu_work_block_reason(owner):
     owner = str(owner or "").strip()
     if not owner:
@@ -98,7 +124,7 @@ def external_gpu_work_block_reason(owner):
     with _lock:
         state = _read_state()
         jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
-        if any(job.get("status") in ACTIVE_STATUSES for job in jobs):
+        if _reconcile_training_gpu_owner_from_runtime(jobs) is not None:
             return "training"
         if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
             return "training"
@@ -124,7 +150,7 @@ def reserve_gpu_for_external_work(owner):
     with _lock:
         state = _read_state()
         jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
-        if any(job.get("status") in ACTIVE_STATUSES for job in jobs):
+        if _reconcile_training_gpu_owner_from_runtime(jobs) is not None:
             return False
         if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
             return False
@@ -144,14 +170,13 @@ def gpu_reservation_block_reason(owner):
     with _lock:
         state = _read_state()
         jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
-        active_jobs = [job for job in jobs if job.get("status") in ACTIVE_STATUSES]
-        if active_jobs:
-            labels = [
-                str(job.get("name") or job.get("id") or "unknown")
-                + " (" + str(job.get("status") or "active") + ")"
-                for job in active_jobs
-            ]
-            return "Training has active job(s): " + ", ".join(labels) + "."
+        live_job = _reconcile_training_gpu_owner_from_runtime(jobs)
+        if live_job is not None:
+            return (
+                "Training has active job: "
+                + str(live_job.get("name") or live_job.get("id") or "unknown")
+                + " (" + str(live_job.get("status") or "active") + ")."
+            )
         queued_jobs = [job for job in jobs if job.get("status") in QUEUE_STATUSES]
         if queued_jobs and not state.get("queuePaused"):
             return (
@@ -2957,24 +2982,31 @@ def _finish_queued_resume(job):
 def stop_response(job_id, cancel=False, pause=False, finish=False):
     with _lock:
         state = _read_state()
+        job = _find_job(state, job_id)
+        if not job:
+            return {"ok": False, "error": "Training job not found"}, 404
+
+        if job.get("status") in QUEUE_STATUSES:
+            _recover_queued_live_runner(job)
+            if job.get("status") in QUEUE_STATUSES and finish:
+                try:
+                    _finish_queued_resume(job)
+                except (FileNotFoundError, RuntimeError, ValueError, OSError) as exc:
+                    return {"ok": False, "error": str(exc), "job": _public_job(job)}, 409
+                _persist_reconciled_state(state)
+                return {"ok": True, "job": _public_job(job)}, 200
+            if job.get("status") in QUEUE_STATUSES and cancel:
+                job["status"] = "cancelled"
+                job["stage"] = "cancelled"
+                job["finishedAt"] = time.time()
+                job["updatedAt"] = time.time()
+                _persist_reconciled_state(state)
+                return {"ok": True, "job": _public_job(job)}, 200
+
         _refresh_state(state)
         job = _find_job(state, job_id)
         if not job:
             return {"ok": False, "error": "Training job not found"}, 404
-        if job.get("status") in QUEUE_STATUSES and finish:
-            try:
-                _finish_queued_resume(job)
-            except (FileNotFoundError, RuntimeError, ValueError, OSError) as exc:
-                return {"ok": False, "error": str(exc), "job": _public_job(job)}, 409
-            _persist_reconciled_state(state)
-            return {"ok": True, "job": _public_job(job)}, 200
-        if job.get("status") in QUEUE_STATUSES and cancel:
-            job["status"] = "cancelled"
-            job["stage"] = "cancelled"
-            job["finishedAt"] = time.time()
-            job["updatedAt"] = time.time()
-            _persist_reconciled_state(state)
-            return {"ok": True, "job": _public_job(job)}, 200
         if cancel:
             return {"ok": False, "error": "Only queued Training jobs can be cancelled. Use Pause or Finish for the active job."}, 400
         if job.get("status") not in ACTIVE_STATUSES:
@@ -2996,6 +3028,7 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
         job.pop("finishScheduledAt", None)
         _write_state(state)
         return {"ok": True, "job": _public_job(job)}, 200
+
 
 def finish_schedule_response(job_id, epoch=None, cancel=False):
     with _lock:

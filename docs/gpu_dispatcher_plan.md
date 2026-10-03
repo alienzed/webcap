@@ -2,7 +2,7 @@
 
 > **Status:** implementation plan only. No runtime code changes are included in this document.
 >
-> **Grounding:** this plan was derived from the current `main` branch at commit `0152c3087346c6e52e26cd6088e160c09d5e4ca0`, including `docs/queue-semantics.md`, `tool/server/execution_queue.py`, `inference_runner.py`, `llm_runner.py`, `training_runner.py`, `storyboard_llm_runtime.py`, `inference_runtime.py`, `activity_monitor.py`, startup wiring in `app.py`, and the queue/runner regression tests.
+> **Grounding:** this plan was derived from the current `main` branch and hostile-audited again after the queue-semantics rewrite at commit `0d187973ef3e340da4269079af7f17f25fd0f28c`. The audit covered `docs/queue-semantics.md`, `tool/server/execution_queue.py`, `inference_runner.py`, `llm_runner.py`, `training_runner.py`, `storyboard_llm_runtime.py`, `inference_runtime.py`, `activity_monitor.py`, startup wiring in `app.py`, and the queue/runner regression tests.
 >
 > The goal is not to merge the three domain queues. The goal is to replace distributed GPU negotiation with one small ephemeral dispatcher while keeping lane-specific work, ordering, recovery, and failure semantics inside each lane.
 
@@ -136,11 +136,42 @@ The dispatcher never calls:
 
 Those facts are meaningful only to the owning client.
 
-### 3.6 A client owns handoff cleanup
+### 3.6 The dispatcher owns the handoff event; the outgoing client owns the cleanup implementation
 
-Before a client releases its GPU lease, it is responsible for bringing **its own** managed runtime to the lane's handoff boundary.
+A client never clears shared GPU ownership by itself.
 
-The next client does not clean up the previous client.
+When the active client reaches its natural yield boundary, it tells the dispatcher that the current lease may be yielded.
+
+The dispatcher then decides whether a real client switch is required.
+
+- If the same client has already submitted more runnable work, the dispatcher may reuse the existing lease without cleanup.
+- If a different client is next, or the resource is being returned to idle, the dispatcher asks the **outgoing** client to prepare the GPU handoff.
+- The dispatcher does not know how ComfyUI, llama.cpp, Training, VRAM caches, or processes are cleaned.
+- The incoming client never cleans the outgoing client's runtime.
+- Ownership changes only after the outgoing client reports a completed handoff.
+
+This gives one deterministic transfer boundary:
+
+```text
+outgoing client owns lease
+        |
+        | yield(lease)
+        v
+dispatcher chooses next
+        |
+        | different client / idle
+        v
+dispatcher -> outgoing.prepare_handoff(lease)
+        |
+        | cleanup completed
+        v
+dispatcher clears old lease
+        |
+        v
+dispatcher grants next client
+```
+
+Once handoff cleanup has begun, a late same-client submission does not cancel the cleanup in progress. It remains pending and may reacquire the resource afterward.
 
 ### 3.7 No indefinite uncertainty hold
 
@@ -172,39 +203,60 @@ Do not embed this into `execution_queue.py`. That file should remain the durable
 
 The dispatcher needs only:
 
-- registered clients,
+- registered client callbacks,
 - at most one pending submission per client,
-- an insertion sequence for stable equal-priority ordering,
-- one provisional/active client,
+- a monotonically increasing **submission revision** per client,
+- priority plus insertion sequence for stable ordering,
+- one active **lease** with a unique lease ID,
+- an explicit dispatcher phase such as `idle`, `granting`, `active`, or `handoff`,
 - a condition variable / wake event,
 - a started/stopped flag,
-- read-only diagnostic snapshot data.
+- passive diagnostic snapshot data.
 
 No provider/job payload should be stored.
 
-A useful pending record is conceptually:
+The lease ID is mandatory. A stale worker from an earlier dispatch must never be able to release or yield a newer lease acquired later by the same client.
+
+The submission revision is also mandatory. A stale dispatch callback result must never erase a newer submission created while that callback was in flight.
+
+A pending record is conceptually:
 
 ```text
 client_id
 priority
+submission_revision
 sequence
 eligible
 submitted_at
 ```
 
-The client callback is registered separately.
+An active lease is conceptually:
+
+```text
+lease_id
+client_id
+submission_revision
+phase
+granted_at
+```
 
 ### 4.2 Client registration
 
-Each GPU client registers one callback:
+Each GPU client registers two callbacks:
 
 ```text
-register_client(client_id, dispatch_callback)
+register_client(
+    client_id,
+    dispatch_callback,
+    handoff_callback,
+)
 ```
 
-The callback is the only place where the dispatcher calls back into a lane.
+The dispatcher invokes neither callback while holding its own internal lock.
 
-The callback re-checks current lane-local truth immediately before it starts anything.
+The **dispatch callback** re-checks current lane-local truth and starts exactly one current execution turn.
+
+The **handoff callback** performs that client's own runtime cleanup when the dispatcher has decided that the lease must leave that client.
 
 ### 4.3 Submission
 
@@ -214,58 +266,96 @@ submit(client_id, priority)
 
 Requirements:
 
-- idempotent per client,
-- duplicate submit must not create duplicate runnable entries,
-- re-submit may update priority and re-arm a previously deferred client,
+- at most one pending submission per client,
+- re-submit is idempotent with respect to queue multiplicity,
+- re-submit increments/replaces the client's submission revision when it represents a new or re-armed execution opportunity,
+- priority may be updated by the client,
 - submission wakes the dispatcher,
-- submission does not claim a domain job.
+- submission does not claim a domain job,
+- submission during an in-flight dispatch callback is preserved as a newer revision and cannot be erased by the older callback result.
 
-This avoids synchronizing two copies of Queue/LLM/Training ordering.
+This avoids synchronizing two copies of Queue/LLM/Training ordering while still making stale callback races impossible.
 
 ### 4.4 Withdrawal
 
 ```text
-withdraw(client_id)
+withdraw(client_id, submission_revision=None)
 ```
 
-Withdrawal removes a pending claim only.
+Withdrawal removes pending execution eligibility only.
 
-It must not silently release an active client. An active client owns its lease until it explicitly releases it.
+It never releases an active lease.
 
-### 4.5 Dispatch result
+If a revision is supplied, only that exact pending revision may be withdrawn. This prevents a stale cancellation path from deleting a newer submission.
 
-The callback should return one of three outcomes:
+### 4.5 Dispatch callback and result
 
-- **STARTED** — the client started or reattached local-GPU work; it now owns the active lease.
-- **NOT_READY** — the client still has meaningful work, but a lane-local condition prevents start right now.
-- **EMPTY** — there is no longer runnable local-GPU work represented by this submission.
+The dispatcher chooses one pending submission, creates a unique lease, marks the lease `granting`, then invokes the client's dispatch callback **outside the dispatcher lock**.
 
-The names can differ in code, but the semantics should remain this small.
+The callback receives the lease identity and submission revision.
+
+It returns one of three outcomes:
+
+- **STARTED** — the client atomically claimed/started or reattached managed local-GPU work under that lease.
+- **NOT_READY** — the submission is still meaningful, but a lane-local condition prevents start right now.
+- **EMPTY** — the submission no longer represents runnable local-GPU work.
 
 Important behavior:
 
-- The dispatcher marks the candidate provisionally active before calling the callback so a second client cannot start concurrently.
-- The callback must be invoked outside the dispatcher's lock.
-- `NOT_READY` clears the provisional active slot and defers that client; the dispatcher immediately considers the next pending client.
-- A deferred client is not busy-looped. Its lane must re-submit/re-arm it when its own state changes or when its own retry timer decides to try again.
-- `EMPTY` clears the submission and continues.
-- An unexpected callback exception must never wedge the dispatcher. The provisional slot is cleared, the error is logged, and the lane wrapper must make its own job failure visible.
+- `STARTED` makes the lease active.
+- `NOT_READY` destroys only the provisional lease for that revision, defers that revision, and immediately lets the dispatcher consider another client.
+- `EMPTY` removes only that revision and continues.
+- A newer submission revision created while the callback ran remains pending regardless of the older result.
+- An unexpected callback exception clears only the provisional lease, is logged loudly, and must not wedge dispatcher state.
 
-### 4.6 Release
+The dispatch callback must be **short**. It may claim a domain job and start a lane-owned worker/process, but it must not synchronously occupy the dispatcher thread for the entire lifetime of a long LLM inference, ComfyUI generation, or Training run.
+
+Existing Inference/LLM synchronous execution loops therefore need a client-worker adaptation: the dispatcher grants the lease; the lane-owned worker performs execution and later signals the lease boundary.
+
+### 4.6 Yield and handoff
+
+An active client does not call `release()`.
+
+Instead:
 
 ```text
-release(client_id)
+yield_lease(client_id, lease_id)
 ```
 
-Only the active client may release.
+means:
 
-Release clears the active client and immediately wakes dispatch.
+> “The work covered by this lease has reached this client's natural yield boundary.”
 
-A client may retain the lease across multiple domain jobs if that is part of its lane semantics. The dispatcher does not need to understand why.
+The lease ID must match the current active lease. Stale yields are rejected loudly and cannot affect current ownership.
 
-This is how existing lane stickiness remains lane-local.
+On a valid yield:
 
-### 4.7 Snapshot
+1. If the same client already has a newer pending submission that can continue under the same runtime, the dispatcher may reuse the existing lease and dispatch that client again without handoff cleanup.
+2. Otherwise the dispatcher marks the lease `handoff`.
+3. The dispatcher calls the outgoing client's `handoff_callback(lease_id)` outside the dispatcher lock.
+4. Only after that callback completes successfully does the dispatcher clear the old lease.
+5. The dispatcher then grants the next pending client, if any.
+
+Once phase 3 has begun, new same-client work does not cancel the handoff. It remains pending for a later lease.
+
+### 4.7 Handoff failure
+
+The handoff callback is not a fuzzy readiness probe. It is a bounded cleanup operation owned by the outgoing client.
+
+A successful return means the client has reached its authoritative GPU handoff boundary.
+
+If handoff fails:
+
+- the lease remains owned by the outgoing client,
+- the dispatcher does not start another local-GPU client,
+- the exact failure is surfaced,
+- the owning client must retry or escalate through its own deterministic cleanup path.
+
+There is no `maybe released` dispatcher state.
+
+This makes authoritative client cleanup a **pre-cutover requirement**. We must not switch to the centralized dispatcher while a client can enter handoff without a deterministic way to complete or loudly fail that handoff.
+
+### 4.8 Snapshot
 
 Provide a passive:
 
@@ -275,14 +365,33 @@ snapshot()
 
 containing only:
 
+- dispatcher phase,
 - active client,
+- active lease age/identity for diagnostics,
 - ordered pending clients,
 - priority/sequence,
 - deferred/eligible state.
 
-This powers diagnostics and wait-reason projection.
+The public UI does not need the raw lease token.
 
-The snapshot must not call any client callback or trigger scheduling.
+Snapshot must not call any client callback or trigger scheduling.
+
+### 4.9 Locking and race rules
+
+The dispatcher lock protects only dispatcher state.
+
+No lane callback is ever invoked while that lock is held.
+
+A lane may submit/withdraw from normal request or worker threads while another callback is executing.
+
+The minimum race guarantees are:
+
+- stale lease completion cannot affect a newer lease,
+- stale submission results cannot erase newer submissions,
+- cancel/reorder between submit and dispatch is resolved by the lane's dispatch-time re-check,
+- a callback exception cannot strand a provisional owner,
+- a yield racing a same-client submission either reuses the lease before handoff starts or completes handoff and leaves the new submission pending,
+- there is never more than one active/provisional local-GPU lease.
 
 ## 5. Scheduling policy
 
@@ -391,16 +500,30 @@ If an Inference execution fails and exact provider state positively says that We
 
 If provider state becomes unavailable/unknown, the existing fail-open principle remains: the lane must not hold the shared GPU forever on uncertainty.
 
-### 6.6 Outgoing handoff
+### 6.6 Dispatcher-initiated Inference handoff
 
-Before Inference voluntarily releases at a natural idle boundary:
+Inference does not voluntarily free the shared resource and then hope another client can use it.
 
-- no exact managed provider job may still be confirmed active;
-- Inference performs its own Comfy cache/model release request.
+At its natural yield boundary, Inference calls `yield_lease()`.
 
-Today `/free` is not a synchronous proof that all model memory has vanished. Do not compensate by making Training or LLM query ComfyUI again.
+If the dispatcher decides the lease is actually leaving Inference, it calls the Inference handoff callback.
 
-If real-machine testing shows the Comfy handoff is still too weak, strengthen **Inference's** handoff primitive or Comfy integration. Do not reintroduce incoming-client checks.
+That callback must establish:
+
+- no exact managed provider job covered by the lease is still confirmed active;
+- ComfyUI's WebCap-managed execution state is quiesced;
+- cached model/allocator state has been released to the proven handoff boundary.
+
+Today `/free` is asynchronous and an HTTP 200 is not by itself proof that VRAM has been relinquished. Therefore `free_cached_models()` alone is not sufficient as the final authoritative handoff contract.
+
+Before dispatcher cutover, Inference needs a tested, bounded handoff primitive that can either:
+
+- prove the required ComfyUI handoff state, or
+- perform an explicitly authorized hard cleanup path.
+
+Training and LLM must never compensate by querying or cleaning ComfyUI themselves.
+
+## 7. LLM client design
 
 ## 7. LLM client design
 
@@ -448,15 +571,19 @@ If the FIFO head is local:
 
 ### 7.5 Local lane stickiness and grace
 
-While LLM owns the lease:
+While LLM owns a lease:
 
-- consecutive local FIFO jobs may execute without releasing between them;
-- when local work drains, hold the existing short continuation grace;
-- a new local job arriving during grace reuses the same lease;
-- if the next FIFO job is remote, end the local lease before executing the remote job;
-- when grace expires with no local continuation, quiesce the local runtime and release.
+- consecutive local FIFO jobs may execute without yielding,
+- when local work drains, LLM keeps the existing short continuation grace before yielding,
+- a new local job arriving during grace may reuse the same lease,
+- if the next FIFO job is remote, the local lease reaches its yield boundary before remote execution,
+- after grace expires with no local continuation, LLM calls `yield_lease()`.
 
-The dispatcher only sees that LLM still owns or has released the lease.
+The dispatcher, not LLM, decides whether that yield becomes an actual handoff.
+
+If same-client work has already appeared before handoff starts, the dispatcher may reuse the lease with no unload.
+
+If a different client is next, the dispatcher invokes the LLM handoff callback before transferring ownership.
 
 ### 7.6 Remove runtime-level arbitration
 
@@ -472,17 +599,24 @@ The runtime should therefore:
 
 Current model-test/calibration routes already enqueue through `llm_runner`, so there is no product requirement for a second local arbitration path.
 
-### 7.7 Outgoing llama cleanup
+### 7.7 Dispatcher-initiated llama handoff
 
 Training/Inference must stop calling `release_loaded_model_for_gpu_work()`.
 
-Instead, when LLM actually releases its dispatcher lease:
+When the dispatcher decides a lease is leaving LLM, it calls the LLM handoff callback.
 
-- unload the local model,
-- if unload cannot be made authoritative, stop the WebCap-owned llama server,
-- then release the lease.
+That callback must:
 
-The short grace exists specifically so this unload does not happen between causally adjacent local requests.
+- ensure no local LLM request covered by the lease is still executing,
+- unload the local model authoritatively,
+- if unload cannot be established, stop the exact WebCap-owned llama server,
+- return only after the LLM runtime has reached its handoff boundary.
+
+The existing short grace remains useful because it delays the yield event itself; it does not belong in dispatcher cleanup logic.
+
+Stale llama ownership after a backend crash must also be made deterministic before cutover, because dispatcher state disappears on restart while the child process may not.
+
+## 8. Training adapter design
 
 ## 8. Training adapter design
 
@@ -521,13 +655,13 @@ The Training queue remains the authority for whether Training is runnable.
 
 ### 8.3 Surviving Training after restart
 
-On startup, Training performs its normal runner recovery.
+On startup, Training performs its own runner recovery.
 
 If it positively re-establishes the exact surviving managed runner:
 
-- Training re-submits/reattaches itself to the dispatcher;
-- the dispatcher only learns that the Training client owns the GPU;
-- it does not inspect the PID, script, WSL, or queue file.
+- Training registers/re-establishes the Training client as active under a fresh dispatcher lease,
+- the dispatcher learns only that Training currently owns local-GPU execution,
+- it does not inspect the PID, script, WSL, queue file, or GPU process list.
 
 If there is queued Training but no surviving active runner:
 
@@ -536,108 +670,144 @@ If there is queued Training but no surviving active runner:
 
 This preserves the existing “Training never auto-starts merely because WebCap restarted” behavior.
 
-### 8.4 Initial adapter vs deeper recovery cleanup
+### 8.4 Training recovery authority is a pre-cutover boundary requirement
 
-The first dispatcher migration should not rewrite Training recovery.
+The current Training implementation can preserve an active status when exact runner inspection returns `unknown`.
 
-The existing “unverifiable active runner remains active” behavior is a known transitional debt:
+That behavior cannot be allowed to automatically recreate a dispatcher lease, because it would reintroduce persisted uncertainty as shared GPU truth.
 
-- if exact process inspection returns `unknown`, persisted active status may remain;
-- today that can indirectly reassert shared GPU ownership.
+At the same time, simply ignoring `unknown` is not safe if Training really is still executing.
 
-In the first adapter phase, preserve this behavior inside Training so the migration does not destabilize the queue that has proven robust.
+Therefore dispatcher cutover requires a narrow Training recovery hardening step **without migrating the Training queue**:
 
-After the dispatcher is stable, harden this separately so an unverifiable persisted runner cannot become a permanent GPU claim.
+- a surviving Training lease may be recreated only from positive exact runtime evidence;
+- queued-only Training remains paused;
+- the startup barrier must not open while Training recovery is still genuinely unresolved;
+- if current WSL PID+script inspection cannot deterministically classify the surviving runner, strengthen Training's launch/recovery identity before cutover rather than guessing.
 
-### 8.5 Final Training recovery target
+Potential stronger identity evidence includes:
 
-The final rule should be:
-
-- exact runner verified active -> Training may submit/retain the dispatcher lease;
-- exact runner positively absent -> recover to paused/resumable queue state;
-- exact runner inspection unavailable -> remain a Training-local recovery error, not a durable cross-lane scheduling fact.
-
-Do not use GPU utilization percentages as proof.
-
-If WSL `/proc` inspection alone cannot provide a deterministic fallback, add a stronger exact identity channel at Training launch time rather than guessing from stale queue status.
-
-Possible evidence to investigate in the later Training phase:
-
-- WSL boot identity recorded at launch,
+- WSL boot identity,
+- Linux process start identity in addition to PID,
 - exact process group/session identity,
-- an OS-visible guardian/launcher identity,
-- CUDA PID correlation only when it can be tied to the exact managed process tree.
+- a host-visible managed launcher/guardian if WSL control-plane availability otherwise leaves an unresolvable gap.
 
-`nvidia-smi` remains diagnostic unless it can be correlated to an exact owned runtime identity.
+`nvidia-smi` may corroborate exact owned process identity but generic GPU utilization or VRAM residency is not sufficient proof.
+
+Deeper Training queue semantics remain untouched. Only the shared-GPU recovery boundary must be authoritative from the first dispatcher cutover.
 
 ## 9. Restart lifecycle
 
-The dispatcher should have an explicit startup barrier.
+The dispatcher has an explicit startup barrier and does not accept normal dispatch until restart reconciliation finishes.
 
 Recommended startup order:
 
-1. create/register dispatcher clients, but do not allow dispatch yet;
+1. create the dispatcher in stopped/barriered state and register all clients;
 2. recover invalid durable execution-queue state;
 3. run Inference restart reconciliation:
-   - resolve committed results,
-   - cancel exact old provider IDs best-effort/authoritatively where possible,
+   - resolve committed outcomes,
+   - cancel exact old provider IDs,
+   - use broad Comfy discovery only as compatibility cleanup where still required,
    - shelve all unfinished work to Backlog,
-   - submit nothing;
+   - create no Inference dispatcher submission;
 4. run LLM restart reconciliation:
    - discard old ephemeral jobs,
-   - terminate any stale WebCap-owned local llama runtime,
-   - submit nothing;
-5. run one synchronous Training startup reconciliation:
-   - verified surviving runner may submit/reattach Training,
-   - queued-only Training is paused and submits nothing;
+   - terminate any exact stale WebCap-owned local llama runtime,
+   - create no LLM dispatcher submission;
+5. run one **synchronous** Training startup reconciliation:
+   - exact surviving runner -> re-establish Training active lease,
+   - queued-only Training -> pause and submit nothing,
+   - unresolved runner identity -> startup barrier remains closed and the failure is surfaced;
 6. start the Training observer;
-7. start the dispatcher;
-8. begin serving normal requests.
+7. open/start the dispatcher;
+8. begin normal local-GPU dispatch.
 
-This avoids a startup race where a fresh Inference/LLM request could be dispatched before Training has had the opportunity to re-establish an actually surviving runner.
+The current `app.py` starts the Training observer asynchronously before LLM reconciliation. That ordering must change for dispatcher cutover; otherwise a fresh request could race startup recovery.
+
+### Restart crash boundaries
+
+The design must also be safe if WebCap dies:
+
+- after a client submitted but before dispatch,
+- while a provisional lease is being granted,
+- after the outgoing client has cleaned up but before the next client starts,
+- immediately after Inference submits to ComfyUI,
+- while LLM is loading a local model,
+- while Training has launched but before all queue state is persisted.
+
+The restart rules above deliberately collapse those cases back into lane-owned recovery plus an empty dispatcher.
 
 ## 10. Runtime cleanup and crash hardening
 
-The dispatcher is intentionally ignorant of physical runtimes, so client cleanup must become stronger.
+The dispatcher is intentionally ignorant of physical runtimes, so each client's cleanup and recovery must be strong enough to support a deterministic handoff.
 
-### 10.1 Inference restart cleanup
+### 10.1 Inference restart identity
 
 Keep the write-ahead Comfy provider ID:
 
-`queue_managed_workflow()` persists `providerJobId` before submission.
+`queue_managed_workflow()` persists `providerJobId` before provider submission.
 
 That ID is the primary restart cleanup identity.
 
-The current Comfy queue scan for WebCap-owned jobs can remain as transitional compatibility for older jobs, but after write-ahead coverage is proven it should not be required for ordinary current-format recovery.
+The current Comfy queue scan for WebCap-owned jobs can remain as compatibility coverage for older/partial state, but current-format recovery should not depend on discovery when the exact provider ID is already known.
 
 Old Inference work never becomes a dispatcher submission after restart.
 
-### 10.2 LLM process ownership
+### 10.2 Inference handoff authority
+
+The current `free_cached_models()` call only acknowledges that ComfyUI accepted `/free`; it does not prove the asynchronous unload/free work has completed.
+
+Before cutover, define and test one authoritative Inference handoff primitive.
+
+The preferred solution is the least invasive ComfyUI-owned signal that proves its managed execution and cache have reached the handoff boundary.
+
+If ComfyUI exposes no sufficient confirmation, the remaining product decision is whether WebCap is allowed to perform a hard ComfyUI restart/termination when graceful handoff cannot be proven. This decision is intentionally not guessed in code.
+
+Do not replace this with arbitrary VRAM percentage thresholds.
+
+### 10.3 LLM process ownership
 
 The current local llama `_process` handle is memory-only. A backend crash can therefore leave a WebCap-started llama server alive while the new backend no longer has its `Popen` handle.
 
-This must be fixed before relying completely on “dispatcher empty means no old LLM owner.”
+Fix this **before cutover**.
 
-Preferred options, in order:
+Preferred approaches, in order:
 
 1. OS lifecycle ownership that guarantees the child dies with WebCap;
 2. otherwise persist enough exact process identity at launch to positively recognize and terminate only the WebCap-owned stale llama process on startup.
 
-PID alone is not enough if PID reuse is possible; include executable/command identity and a creation/start identity where available.
+PID alone is not enough where PID reuse is possible; include command/executable identity and creation/start identity where available.
 
-This remains LLM-runtime logic, not dispatcher logic.
+### 10.4 Training survivor identity
 
-### 10.3 Outgoing cleanup failures
+The current PID + exact runner-script check is good positive evidence while WSL inspection works, but its `unknown` result cannot become dispatcher ownership.
 
-A client may keep its lease while it has positive evidence that its own managed runtime is still active.
+Before cutover, make the surviving-runner decision exact enough that startup can resolve Training to:
 
-If cleanup becomes uninspectable:
+- verified active,
+- verified absent/terminal,
+- explicit startup recovery failure that keeps the dispatcher barrier closed.
 
-- record the exact failure,
-- fail/terminalize the owning work as appropriate,
-- do not convert uncertainty into an indefinite dispatcher hold.
+This is a narrow recovery-boundary requirement, not a Training queue migration.
 
-This follows the existing `AGENTS.md` managed-runtime rule.
+### 10.5 Handoff failure
+
+A handoff failure is materially different from a client's pre-dispatch `NOT_READY`.
+
+`NOT_READY` means another client may be tried.
+
+A failed handoff means the current client has not yet established that the shared GPU can safely transfer. The dispatcher therefore keeps that lease and does not start another local-GPU client.
+
+To prevent a new form of immortal uncertainty:
+
+- each client handoff must have a bounded graceful path,
+- each managed runtime should have a deterministic escalation path where technically possible,
+- failures are surfaced with exact runtime identity/evidence,
+- no generic “maybe still owns VRAM” loop is permitted.
+
+The cutover gate is that every production local-GPU client has a known handoff path with these semantics.
+
+## 11. Activity and wait-state projection
 
 ## 11. Activity and wait-state projection
 
@@ -708,17 +878,20 @@ Do not expose domain payloads or turn the dispatcher into another UI queue surfa
 
 ## 13. Implementation phases
 
-### Phase 0 — semantic lock-in
+### Phase 0 — semantic lock-in and hostile-audit corrections
 
-This document and `docs/queue-semantics.md` define the target before runtime code changes.
+This document and `docs/queue-semantics.md` define the target before runtime changes.
 
-No implementation should be merged that violates:
+Lock in:
 
 - one dispatcher authority,
 - ephemeral submissions,
-- client-owned readiness,
-- client-owned cleanup,
-- no cross-client state inspection.
+- unique lease IDs,
+- submission revisions,
+- dispatcher-owned handoff events,
+- outgoing-client cleanup,
+- no cross-client state inspection,
+- no unresolved runtime identity becoming shared GPU truth.
 
 ### Phase 1 — add the dispatcher in isolation
 
@@ -727,203 +900,189 @@ Files:
 - add `tool/server/gpu_dispatcher.py`;
 - add `tests/test_gpu_dispatcher.py`.
 
-Do not connect production lanes yet.
+Unit tests must cover:
 
-Tests must cover:
-
-- only one active client;
+- only one provisional/active lease;
 - priority ordering;
-- FIFO for equal priority;
-- idempotent duplicate submit;
-- priority update/re-arm;
-- withdraw pending client;
-- `NOT_READY` skips to the next client;
-- `EMPTY` removes the submission;
-- callback exception never wedges active state;
-- release wakes next client;
-- callbacks are not invoked under the dispatcher lock;
+- stable FIFO for equal priority;
+- idempotent one-submission-per-client behavior;
+- submission revision replacement/re-arm;
+- stale callback result cannot erase a newer submission;
+- stale lease yield cannot release a newer same-client lease;
+- withdrawal of one revision cannot delete a newer revision;
+- `NOT_READY` immediately allows another client;
+- `EMPTY` removes only the dispatched revision;
+- callback exception never wedges provisional state;
+- same-client continuation can reuse the lease before handoff begins;
+- once handoff begins it is not cancelled by late same-client submission;
+- handoff callback is never invoked under dispatcher lock;
+- failed handoff retains ownership;
+- successful handoff clears ownership and wakes the next client;
 - passive snapshot has no side effects;
-- dispatcher state is not persisted;
-- dispatcher starts empty after module/process recreation.
+- dispatcher state is never persisted.
 
-### Phase 2 — strengthen outgoing runtime handoff while old arbitration still exists
+### Phase 2 — prove client handoff authority while old arbitration still exists
 
-Purpose: remove the need for incoming-client cleanup before the dispatcher becomes authoritative.
-
-#### LLM
-
-- add an explicit “quiesce local runtime for GPU handoff” path;
-- after local grace expires, unload the local model or hard-stop the owned server before old GPU release;
-- add exact stale llama startup cleanup identity.
-
-Keep incoming `release_loaded_model_for_gpu_work()` temporarily as a compatibility check until cutover, then delete it.
+Do not cut over scheduling yet.
 
 #### Inference
 
-- add an explicit “quiesce Comfy state for GPU handoff” path owned by Inference;
-- invoke it when Inference actually leaves the foreground lane / releases old ownership;
-- keep existing provider exact-live rules.
+- build one lane-owned handoff primitive around exact provider quiescence plus Comfy cache/model release;
+- prove what authoritative completion signal exists after `/free`;
+- if graceful completion cannot be proven, resolve the hard-cleanup product decision before cutover;
+- keep incoming Training/LLM cleanup temporarily only as compatibility until cutover.
 
-Keep incoming Training/LLM Comfy cleanup temporarily until cutover, then delete it.
+#### LLM
 
-This phase should not change cross-lane scheduling yet.
+- add an explicit lane-owned llama handoff primitive;
+- after local grace/yield, unload the model authoritatively;
+- hard-stop the exact owned server if unload cannot complete;
+- make stale llama ownership across backend crash deterministic.
+
+#### Training
+
+- keep the specialized queue unchanged;
+- strengthen only the startup survivor identity boundary enough that `running` vs `absent` is authoritative for dispatcher restoration;
+- do not allow current `unknown` status to become a new dispatcher lease.
 
 ### Phase 3 — build dormant client adapters
 
-Add client-facing functions but keep old arbitration active until all three are ready.
+Add client-facing functions while old arbitration still remains the only production scheduler.
 
 #### Inference adapter
 
-- `sync_gpu_submission()`
-- `dispatch_gpu_client()`
-- `release_gpu_client()`
-
-The callback must be testable directly without the live dispatcher thread.
+- submission synchronization,
+- short dispatch callback that claims current Inference work and starts a lane worker,
+- handoff callback using the Phase 2 primitive,
+- lease-token-aware worker completion/yield.
 
 #### LLM adapter
 
-- lane driver distinguishes remote head vs local head;
-- local submission callback;
-- local lease release after FIFO/grace;
-- no LLM pause semantics in the adapter.
+- FIFO driver distinguishes remote head vs local head,
+- local submission callback,
+- short dispatch callback starts lane worker,
+- local grace delays `yield_lease()`,
+- handoff callback unloads/stops local llama,
+- remote work never touches dispatcher.
 
 #### Training adapter
 
-- sync a single Training submission from existing Training state;
-- dispatch callback wraps the existing launch path;
-- active-runner recovery can represent Training as active without changing the Training queue schema.
+- synchronize one Training submission from existing Training state,
+- short dispatch callback wraps existing launch path,
+- verified surviving runner can establish an active Training lease,
+- queue schema and long-running lifecycle remain untouched.
 
-Do not delete old reservation helpers yet.
+### Phase 4 — startup barrier and recovery wiring
 
-### Phase 4 — atomic dispatcher cutover
+Before dispatcher authority is enabled:
 
-This is the phase where there must be only one authority.
+- register clients;
+- reconcile Inference to Backlog;
+- discard/clean stale LLM runtime;
+- synchronously resolve Training survivor identity;
+- restore only verified Training active ownership;
+- keep dispatcher closed until this sequence completes.
 
-Wire startup and client submissions to the dispatcher.
+Add restart-boundary tests before production cutover.
+
+### Phase 5 — atomic dispatcher cutover
+
+This is the one-authority switch.
 
 At the same time:
 
-- Inference stops calling `reserve_gpu_for_external_work()`;
-- LLM stops calling `reserve_gpu_for_external_work()`;
-- Training launch stops directly calling `execution_queue.reserve_resource()`;
-- active Training is represented through the dispatcher adapter;
-- Activity `gpuOwner` comes from the dispatcher;
-- wait-state projections come from dispatcher state.
+- Inference stops reserving shared GPU through Training;
+- LLM stops reserving shared GPU through Training;
+- Training launch stops directly reserving `execution_queue` resource ownership;
+- all local-GPU starts require a dispatcher lease;
+- all lease exits go through dispatcher-initiated handoff;
+- Activity `gpuOwner` projects dispatcher state;
+- wait-state projections use dispatcher state.
 
 Do not leave old and new acquisition paths live simultaneously.
 
-The old resource-owner compatibility functions may remain temporarily only if they are dead wrappers for diagnostics/tests; they must not be a second scheduler.
+### Phase 6 — delete cross-lane arbitration and incoming cleanup
 
-### Phase 5 — delete cross-lane arbitration
-
-Once cutover tests pass, remove:
-
-From `inference_runner.py`:
+Remove from `inference_runner.py`:
 
 - `_local_llm_work_pending()`;
-- `_reserve_gpu()` / `_release_gpu()` Training wrappers;
-- direct `execution_resource_owner()` scheduling branches;
-- incoming `release_loaded_model_for_gpu_work()` logic.
+- Training reservation wrappers;
+- direct shared-owner scheduling;
+- incoming llama cleanup.
 
-From `llm_runner.py`:
+Remove from `llm_runner.py`:
 
-- Training reservation helper calls;
-- direct shared-owner scheduling branches;
-- Training blocker inspection in wait-state projection;
-- LLM pause/resume actions and related pause-only test coverage.
+- Training reservation helpers;
+- direct shared-owner scheduling;
+- Training blocker inspection;
+- LLM pause/resume actions and pause-only tests.
 
-From `training_runner.py`:
+Remove from `training_runner.py`:
 
-- `external_gpu_work_block_reason()`;
-- `reserve_gpu_for_external_work()`;
-- `gpu_reservation_block_reason()`;
-- `release_gpu_for_external_work()`;
+- external GPU reservation/block-reason helpers;
 - direct shared-resource claim/release;
 - `_prepare_comfyui_for_training()`;
 - incoming Director cleanup.
 
-From `storyboard_llm_runtime.py`:
+Remove from `storyboard_llm_runtime.py`:
 
 - implicit local GPU reservation fallback;
-- cross-lane Comfy cleanup before local generation;
+- cross-lane Comfy cleanup;
 - `release_loaded_model_for_gpu_work()` once no callers remain.
 
-From `execution_queue.py`:
+Remove from `execution_queue.py`:
 
 - `_resource_owner`;
 - `reserve_resource()`;
 - `release_resource()`;
 - `resource_owner()`.
 
-Keep queue mechanics intact.
+Keep domain queue mechanics intact.
 
-### Phase 6 — simplify lane monitors
-
-After dispatcher cutover, simplify the existing polling loops.
+### Phase 7 — simplify lane monitors
 
 #### Inference
 
-The monitor no longer polls for other lanes or GPU ownership.
-
-It is needed only for:
+Keep monitoring only for:
 
 - active provider lifecycle,
-- lane-local retry while Comfy is unavailable,
+- lane-local Comfy availability retry/re-arm,
 - submission synchronization.
 
-Prefer condition/event wakeups for queue changes. Keep a bounded Inference-owned provider retry interval only where an external Comfy availability change otherwise has no event source.
+No cross-lane polling.
 
 #### LLM
 
-The monitor becomes a FIFO driver:
+Reduce to a FIFO/client worker driver:
 
 - run remote head directly,
 - submit local head,
-- observe active local job/grace.
+- execute active local work,
+- manage local grace/yield.
 
 No generic GPU polling.
 
 #### Training
 
-Keep the always-on observer. It is justified by long-running external runner recovery and progress.
+Keep its always-on observer for the long-running external runner.
 
-Its GPU work is reduced to synchronizing the Training client with the dispatcher.
+Its shared-GPU role becomes only dispatcher submission/lease synchronization.
 
-### Phase 7 — restart hardening
+### Phase 8 — compatibility/UI cleanup
 
-#### LLM
-
-Prove that a WebCap-owned local llama process cannot survive a backend crash without being recognized and terminated on startup.
-
-#### Inference
-
-Verify every managed Comfy submission uses write-ahead `providerJobId` identity.
-
-Once current-format coverage is complete, decide whether the broad WebCap Comfy queue scan is still necessary or only legacy cleanup.
-
-#### Training
-
-Add the synchronous first startup reconciliation so a verified surviving runner is re-established before normal request dispatch can begin.
-
-Preserve queued-only restart pause.
-
-### Phase 8 — Training recovery cleanup
-
-Only after the dispatcher and thin Training adapter are stable:
-
-- replace the “unverifiable runner remains active” behavior with a stronger exact recovery contract;
-- add any extra process identity needed at Training launch time;
-- ensure only verified surviving Training can re-establish a dispatcher lease.
-
-Do not rewrite the Training queue or migrate it into `execution_queue.py`.
-
-### Phase 9 — compatibility/UI cleanup
-
-- keep public queue/job API payloads stable where practical;
-- remove obsolete LLM pause fields/actions if still exposed;
-- update Activity and Director/Inference wait labels to use dispatcher facts;
+- keep public queue/job payloads stable where practical;
+- remove obsolete LLM pause fields/actions;
+- update Activity and Director/Inference wait labels to dispatcher facts;
 - update `docs/execution_queue.md` to describe the post-migration implementation;
-- update `AGENTS.md` only if implementation reveals a missing invariant not already covered by Managed Runtime Ownership.
+- update `AGENTS.md` only if implementation exposes a missing invariant not already covered by Managed Runtime Ownership.
+
+### Phase 9 — deeper Training cleanup only if justified
+
+After the dispatcher proves stable, revisit remaining Training-local complexity independently.
+
+Do **not** migrate Training into `execution_queue.py` merely for symmetry.
+
+Any later Training refactor must be justified by a concrete Training problem, not by the dispatcher architecture.
 
 ## 14. Required integration tests
 
@@ -933,46 +1092,66 @@ In addition to dispatcher unit tests, preserve or replace the current cross-lane
 
 - Training ready + LLM ready + Inference ready -> Training gets the next free GPU turn.
 - LLM ready + Inference ready -> LLM gets the next free GPU turn.
-- Inference foreground already active -> it drains foreground Queue before releasing.
-- Inference Queue -> Backlog boundary releases before Backlog can run.
+- Inference foreground already active -> it drains foreground Queue before yielding.
+- Inference Queue -> Backlog boundary yields before Backlog can compete again.
 - Backlog waits behind newly ready foreground clients.
 - equal-priority submissions are stable FIFO.
+- an active client is never preempted merely because a higher-priority submission arrives.
 
 ### Readiness
 
 - Comfy unavailable -> Inference returns `NOT_READY`; another client may dispatch.
 - stale/cancelled Inference submission -> Inference returns `EMPTY`; dispatcher moves on.
 - remote LLM never appears as a GPU submission.
-- local LLM runtime failure fails its job and releases after cleanup/grace rules.
-- Training paused/empty -> no active lease.
+- local LLM runtime failure fails its job without inventing a readiness blocker.
+- Training paused/empty -> no Training submission.
 
-### Lease behavior
+### Lease and handoff
 
-- LLM grace blocks other clients for the intended short window.
-- a new local LLM request during grace reuses the lease.
-- a remote LLM head ends the local lease before remote execution.
-- positive current-session Comfy provider activity retains Inference lease.
-- unverifiable provider state does not retain it indefinitely.
-- active Training retains lease until Training's own terminal/pause boundary.
+- every grant has a unique lease ID.
+- stale yield from an old same-client worker cannot affect the current lease.
+- LLM grace delays yield for the intended short window.
+- new local LLM work during grace reuses the lease.
+- same-client submission racing yield may reuse the lease if handoff has not begun.
+- same-client submission arriving after handoff begins waits for a new lease.
+- a different next client cannot start before outgoing handoff succeeds.
+- handoff failure leaves outgoing ownership intact and visible.
+- positive current-session Comfy provider activity keeps Inference lease until resolved.
+- unverifiable provider state does not become an indefinite hold.
+- active Training retains its lease until Training's own lifecycle reaches a yield boundary.
+
+### Submission races
+
+- a re-submit during an in-flight dispatch callback survives the old callback's `EMPTY`/`NOT_READY` result.
+- stale withdrawal cannot remove a newer submission revision.
+- cancel/reorder between submission and dispatch is resolved by the lane callback's current-state re-check.
+- callback exception cannot leave a phantom provisional owner.
 
 ### Restart
 
-- dispatcher starts empty;
-- Inference unfinished work becomes Backlog and does not submit;
-- LLM unfinished work is gone and does not submit;
-- queued-only Training is paused and does not submit;
-- verified surviving Training re-establishes the Training client before normal dispatch;
-- stale local llama cleanup happens before dispatcher start;
+- dispatcher starts empty and barriered.
+- Inference unfinished work becomes Backlog and creates no submission.
+- LLM unfinished work is gone and creates no submission.
+- stale WebCap-owned llama is terminated before dispatcher opens.
+- queued-only Training is paused and creates no submission.
+- only positively verified surviving Training re-establishes active ownership.
+- unresolved Training survivor identity keeps the startup barrier closed rather than guessing.
 - old Inference provider cleanup never becomes a dispatcher submission.
 
-### Races
+### Crash boundaries
 
-- cancel/reorder between submission and callback is resolved by the lane's callback re-check;
-- duplicate submission is harmless;
-- release and new submission cannot produce two active clients;
-- callback exception cannot leave a phantom active client;
-- Activity snapshot cannot trigger dispatch;
-- passive queue reads cannot submit work.
+Simulate/reason through process death:
+
+- after submission but before dispatch,
+- during provisional grant,
+- after provider launch identity is persisted but before active status is written,
+- during handoff cleanup,
+- after handoff cleanup but before next grant,
+- after Training process launch but before queue projection catches up.
+
+Every case must recover through the owning lane without persisted dispatcher state.
+
+## 15. Tests to rewrite or delete
 
 ## 15. Tests to rewrite or delete
 
@@ -1001,20 +1180,28 @@ Tests that exist only because of cross-lane implementation details should be del
 
 The migration is complete when all of the following are true:
 
-1. There is exactly one production code path that grants local-GPU execution: `gpu_dispatcher.py`.
-2. No lane imports another lane merely to ask whether it may use the GPU.
-3. No incoming client cleans up another client's runtime.
-4. `execution_queue.py` contains no shared GPU owner.
-5. Dispatcher state is never persisted.
-6. Restart creates no Inference or LLM dispatcher submission.
-7. Only Training can re-establish active local-GPU work after restart, and that decision originates in Training recovery.
-8. Remote LLM never touches the dispatcher.
-9. Inference Queue/Backlog semantics and Training's specialized queue remain intact.
-10. LLM local grace and lane stickiness remain intact without cross-lane polling.
-11. Activity/wait UI explanations come from either lane-local facts or dispatcher facts, never guesses assembled from several subsystems.
-12. A “not ready” client never prevents the dispatcher from considering another submitted client.
-13. No ambiguous runtime state can become an indefinite shared GPU blocker.
-14. Real runtime failures remain visible and traceable.
+1. There is exactly one production authority that grants local-GPU execution: `gpu_dispatcher.py`.
+2. Every active grant has a unique lease ID; stale workers cannot release newer ownership.
+3. Pending client submissions are revisioned so stale callback/cancel results cannot erase newer work.
+4. No lane imports another lane merely to ask whether it may use the GPU.
+5. No incoming client cleans up another client's runtime.
+6. The dispatcher initiates every lease transfer and the outgoing client implements the handoff.
+7. The dispatcher never directly calls ComfyUI, llama.cpp, WSL, process inspection, `nvidia-smi`, or queue JSON.
+8. `execution_queue.py` contains no shared GPU owner.
+9. Dispatcher state is never persisted.
+10. Restart creates no Inference or LLM dispatcher submission.
+11. Only positively verified surviving Training may re-establish active local-GPU ownership after restart.
+12. Remote LLM never touches the dispatcher.
+13. Inference Queue/Backlog semantics and Training's specialized queue remain intact.
+14. LLM local grace and lane stickiness remain intact without cross-lane polling.
+15. Activity/wait UI explanations come from either lane-local facts or dispatcher facts, never guesses assembled from several subsystems.
+16. A pre-dispatch `NOT_READY` client never prevents the dispatcher from considering another submitted client.
+17. No different client starts until outgoing handoff has succeeded.
+18. Every production client has a bounded, authoritative handoff path or deterministic escalation.
+19. No ambiguous runtime state can become an indefinite shared GPU blocker.
+20. Real runtime failures remain visible and traceable.
+
+## 17. Explicit non-goals
 
 ## 17. Explicit non-goals
 
@@ -1031,8 +1218,26 @@ This work does **not**:
 
 ## 18. Decision status
 
-No blocking design question remains before implementation.
+The architecture is internally consistent after hostile audit with one explicit product/ownership decision still open:
 
-This plan deliberately preserves the current effective cross-lane order and lane-stickiness semantics while moving the mechanism into the correct layer.
+### Open: authority to hard-reset ComfyUI on failed graceful handoff
 
-If product policy later changes — for example, if Training should no longer have the next free turn ahead of already-waiting local LLM — that becomes a small dispatcher submission-priority change rather than another cross-lane code path.
+The current code does not appear to own ComfyUI's process lifecycle; it talks to ComfyUI over HTTP.
+
+ComfyUI's `/free` endpoint is asynchronous, so “HTTP request accepted” is not sufficient proof that the VRAM handoff is complete.
+
+Before dispatcher cutover we need to establish one of these:
+
+1. ComfyUI exposes a sufficiently authoritative completion signal that WebCap can wait on; or
+2. WebCap is allowed to hard-stop/restart the ComfyUI process when graceful handoff cannot be proven.
+
+The dispatcher itself will do neither. In either case the behavior belongs to the Inference handoff callback.
+
+Everything else in the dispatcher design now has a concrete ownership rule:
+
+- dispatcher owns ordering, leases, and handoff timing;
+- lane owns readiness, execution, runtime identity, and cleanup implementation;
+- stale operations are fenced by submission revisions and lease IDs;
+- restart is lane recovery plus an empty/barriered dispatcher;
+- Training remains specialized and is integrated only at the shared-GPU boundary.
+

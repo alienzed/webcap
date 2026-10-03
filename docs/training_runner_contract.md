@@ -23,6 +23,19 @@ The queue is globally running or paused. Only its first item is actionable.
 
 There is no independently paused item elsewhere in the queue and no user-facing action that merely disables a later handoff while the current run continues.
 
+## Resume Run Identity
+
+WebCap passes checkpoint Resume paths to Diffusion-Pipe as absolute paths. Under the current trainer behavior, resumed training continues in that same trainer-run directory.
+
+For live queue state:
+
+- a fresh job starts with both `resumeFromCheckpoint` and `outputRunPath` empty; `outputRunPath` is bound from trainer evidence after the timestamped run is created;
+- a resumed job keeps `resumeFromCheckpoint` as the launch instruction and records the same path in `outputRunPath` as the active trainer-run identity;
+- Pause keeps both fields pointed at the same resumable run instead of clearing `outputRunPath`;
+- older persisted queue rows with a resume path but no output path are normalized to this invariant when read.
+
+The two fields remain separate because they express different roles, even when their values are equal during Resume.
+
 ## Runner Recovery
 
 On refresh or restart:

@@ -252,6 +252,18 @@ def test_execution_queue_shelves_active_work_back_to_clean_backlog(queue_root):
     assert restored["startedAt"] is None
 
 
+
+def test_queue_bookkeeping_does_not_release_shared_gpu_owner(queue_root):
+    execution_queue.reserve_resource("training")
+
+    execution_queue.shelve_unfinished("inference")
+    execution_queue.ephemeral_lane("llm").clear()
+    execution_queue.clear_lane("inference")
+    execution_queue.recover_lane("inference")
+
+    assert execution_queue.resource_owner() == "training"
+    execution_queue.release_resource("training")
+
 def test_execution_queue_requeues_active_job_and_pauses_lane(queue_root):
     first = execution_queue.enqueue("inference", {"request": {"prompt": "first"}})
     second = execution_queue.enqueue("inference", {"request": {"prompt": "second"}})

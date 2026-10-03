@@ -539,7 +539,6 @@ class EphemeralExecutionQueue:
         with _lock:
             self._state = {"version": STATE_VERSION, "lanes": {self.lane_name: _default_lane()}}
             clear_transient_receipts(self.lane_name)
-        release_resource(self.lane_name)
 
     def recent_snapshot(self, limit=30):
         try:
@@ -965,7 +964,6 @@ def shelve_unfinished(lane_name):
         lane["activeJobId"] = ""
         _refresh_positions(lane)
         _write_state(state)
-    release_resource(lane_name)
     return changed
 
 
@@ -1004,7 +1002,6 @@ def clear_lane(lane_name):
         state = _read_state()
         state.setdefault("lanes", {}).pop(str(lane_name), None)
         _write_state(state)
-    release_resource(lane_name)
 
 
 def request_stop(job_id):
@@ -1195,5 +1192,4 @@ def recover_lane(lane_name, reason="Execution was interrupted by a WebCap restar
         lane["activeJobId"] = ""
         _refresh_positions(lane)
         _write_state(state)
-    release_resource(lane_name)
     return changed

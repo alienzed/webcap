@@ -129,13 +129,20 @@ def test_launch_rewrites_latest_only_to_existing_managed_global_step(tmp_path):
         "resumeFromCheckpoint": str(run),
         "resumeOutputId": "output/run",
         "resumeCheckpointTag": "global_step10",
+        "resumeCheckpointRewritePending": True,
     }
     training_runner._rewrite_resume_latest(job)
     assert (run / "latest").read_text(encoding="utf-8") == "global_step10\n"
     assert job["resumeCheckpointWallTime"] == (run / "global_step10").stat().st_mtime
     assert job["resumeBranchStartedAt"] > 0
+    assert job["resumeCheckpointRewritePending"] is False
+
+    (run / "latest").write_text("global_step20\n", encoding="utf-8")
+    training_runner._rewrite_resume_latest(job)
+    assert (run / "latest").read_text(encoding="utf-8") == "global_step20\n"
 
     job["resumeCheckpointTag"] = "global_step99"
+    job["resumeCheckpointRewritePending"] = True
     with pytest.raises(FileNotFoundError):
         training_runner._rewrite_resume_latest(job)
 

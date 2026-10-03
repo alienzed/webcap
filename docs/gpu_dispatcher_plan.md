@@ -1,5 +1,7 @@
 # GPU Dispatcher Migration Plan
 
+> **Status: SUPERSEDED for coordination implementation.** This document is retained as historical analysis only. The authoritative GPU coordination contract is `docs/gpu_coordination_invariants.md`. Do not implement any state, scheduler mechanism, fallback, or recovery behavior from this plan that conflicts with those invariants.
+>
 > **Status:** implementation plan only. No runtime code changes are included in this document.
 >
 > **Grounding:** this plan was derived from the current `main` branch and hostile-audited again after the queue-semantics rewrite at commit `0d187973ef3e340da4269079af7f17f25fd0f28c`. The audit covered `docs/queue-semantics.md`, `tool/server/execution_queue.py`, `inference_runner.py`, `llm_runner.py`, `training_runner.py`, `storyboard_llm_runtime.py`, `inference_runtime.py`, `activity_monitor.py`, startup wiring in `app.py`, and the queue/runner regression tests.

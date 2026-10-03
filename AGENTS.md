@@ -94,6 +94,8 @@ Silent failure is worse than a visible breakage in this project. â€œFail loudlyâ
 
 For local work started by WebCap, durable uncertainty is a bug, not a safety state.
 
+- GPU coordination must obey `docs/gpu_coordination_invariants.md`. Runtime coordination questions resolve to yes/no or raise; ambiguity is never a scheduling state.
+
 - Record a stable runtime identity before, or atomically with, the external side effect that starts the work.
 - After restart or crash, reconcile managed work from that exact identity plus authoritative runtime evidence. Managed work must resolve to active, terminal, absent, or failed; "possibly still running" must not become a durable state.
 - Positive evidence that managed GPU work is active may delay conflicting execution. Missing, unreachable, or ambiguous evidence must never create an indefinite GPU reservation or queue blocker.

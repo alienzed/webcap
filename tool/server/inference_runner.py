@@ -465,19 +465,12 @@ def _advance_queue():
                 return None
             reserved_here = True
 
-        try:
-            from .storyboard_llm_runtime import DirectorRuntimeBusy, release_loaded_model_for_gpu_work
-            release_loaded_model_for_gpu_work()
-        except DirectorRuntimeBusy:
+        from .gpu_prep import prepare_gpu_for
+        if not prepare_gpu_for(GPU_RESERVATION_OWNER):
             _set_backlog_wait_reason("Waiting for Prompt Assistant / Director.")
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
             return None
-        except Exception:
-            _logger.exception(
-                "Could not confirm Prompt Assistant / Director model cleanup before Inference; "
-                "proceeding rather than blocking on runtime uncertainty."
-            )
 
         _set_backlog_wait_reason("")
         backlog_ids = {

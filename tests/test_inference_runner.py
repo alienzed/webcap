@@ -7,6 +7,7 @@ from tool.server import epoch_test_bench
 from tool.server import execution_queue
 from tool.server import generate_generation
 from tool.server import generate_store
+from tool.server import gpu_prep
 from tool.server import inference_runner
 from tool.server import inference_runtime
 from tool.server import storyboard_generation
@@ -297,9 +298,9 @@ def test_inference_yields_retained_director_after_reserving_gpu(inference_root, 
     monkeypatch.setattr(inference_runner, "_reserve_gpu", reserve)
     monkeypatch.setattr(inference_runner, "_release_gpu", release)
     monkeypatch.setattr(
-        storyboard_llm_runtime,
-        "release_loaded_model_for_gpu_work",
-        lambda: calls.append("yield-director"),
+        gpu_prep,
+        "prepare_gpu_for",
+        lambda owner: calls.append("yield-director") or owner == "inference",
     )
     monkeypatch.setattr(inference_runner, "_execute_claimed", execute)
 

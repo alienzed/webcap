@@ -8,7 +8,7 @@ from PIL import Image
 
 from tool.server import config as app_config
 from tool.server import app as app_module
-from tool.server import execution_queue, inference_runtime, run_ops, storyboard_llm_runtime, training_archive, training_bundle, training_history, training_runner, training_review
+from tool.server import execution_queue, gpu_prep, inference_runtime, run_ops, storyboard_llm_runtime, training_archive, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
 from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_for_mode
@@ -102,7 +102,7 @@ def test_training_handoff_waits_for_positive_comfyui_work(monkeypatch):
         lambda: pytest.fail("Active ComfyUI work must not be freed."),
     )
 
-    assert training_runner._prepare_comfyui_for_training() is False
+    assert gpu_prep._prepare_comfyui_for_training() is False
 
 
 def test_training_handoff_does_not_block_or_free_non_webcap_comfyui_work(monkeypatch):
@@ -117,7 +117,7 @@ def test_training_handoff_does_not_block_or_free_non_webcap_comfyui_work(monkeyp
         lambda: pytest.fail("WebCap must not free non-WebCap ComfyUI work."),
     )
 
-    assert training_runner._prepare_comfyui_for_training() is True
+    assert gpu_prep._prepare_comfyui_for_training() is True
 
 
 def test_training_handoff_fails_open_when_comfyui_is_unavailable(monkeypatch):
@@ -132,7 +132,7 @@ def test_training_handoff_fails_open_when_comfyui_is_unavailable(monkeypatch):
         lambda: pytest.fail("Unavailable ComfyUI cannot be freed."),
     )
 
-    assert training_runner._prepare_comfyui_for_training() is True
+    assert gpu_prep._prepare_comfyui_for_training() is True
 
 
 def test_training_handoff_frees_idle_comfyui_before_launch(monkeypatch):
@@ -140,7 +140,7 @@ def test_training_handoff_frees_idle_comfyui_before_launch(monkeypatch):
     monkeypatch.setattr(inference_runtime, "queue_snapshot", lambda: {"running": [], "pending": []})
     monkeypatch.setattr(inference_runtime, "free_cached_models", lambda: freed.append(True))
 
-    assert training_runner._prepare_comfyui_for_training() is True
+    assert gpu_prep._prepare_comfyui_for_training() is True
     assert freed == [True]
 
 
@@ -175,9 +175,9 @@ def test_training_yields_retained_director_after_reserving_gpu(tmp_path, monkeyp
     monkeypatch.setattr(training_runner, "release_execution_resource", release)
     monkeypatch.setattr(training_runner, "_launch_job", launch)
     monkeypatch.setattr(
-        storyboard_llm_runtime,
-        "release_loaded_model_for_gpu_work",
-        lambda: calls.append("yield-director"),
+        gpu_prep,
+        "prepare_gpu_for",
+        lambda owner: calls.append("yield-director") or owner == "training",
     )
 
     training_runner._launch_next_queued_job(state)
@@ -200,11 +200,7 @@ def test_training_defers_without_pausing_if_director_runtime_is_busy(tmp_path, m
         "queuePauseReason": "",
     }
 
-    monkeypatch.setattr(
-        storyboard_llm_runtime,
-        "release_loaded_model_for_gpu_work",
-        lambda: (_ for _ in ()).throw(storyboard_llm_runtime.DirectorRuntimeBusy("busy")),
-    )
+    monkeypatch.setattr(gpu_prep, "prepare_gpu_for", lambda _owner: False)
     monkeypatch.setattr(
         training_runner,
         "_launch_job",
@@ -230,11 +226,7 @@ def test_training_proceeds_if_retained_director_cleanup_is_uncertain(tmp_path, m
         "queuePauseReason": "",
     }
 
-    monkeypatch.setattr(
-        storyboard_llm_runtime,
-        "release_loaded_model_for_gpu_work",
-        lambda: (_ for _ in ()).throw(RuntimeError("unload failed")),
-    )
+    monkeypatch.setattr(gpu_prep, "prepare_gpu_for", lambda _owner: True)
 
     def launch(job, folder_path):
         assert folder_path == folder

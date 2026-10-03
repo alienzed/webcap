@@ -318,11 +318,18 @@ def test_server_startup_shelves_inference_without_starting_it():
 
 
 def test_execution_queue_resource_claim_is_exclusive(queue_root):
-    assert execution_queue.reserve_resource("takes") is True
-    assert execution_queue.reserve_resource("tests") is False
-    assert execution_queue.reserve_resource("takes") is False
-    execution_queue.release_resource("takes")
-    assert execution_queue.reserve_resource("tests") is True
+    assert execution_queue.reserve_resource("training") is True
+    assert execution_queue.reserve_resource("llm") is False
+    assert execution_queue.reserve_resource("training") is False
+    execution_queue.release_resource("training")
+    assert execution_queue.reserve_resource("llm") is True
+
+
+def test_execution_queue_resource_owner_is_closed_to_gpu_lanes(queue_root):
+    with pytest.raises(ValueError, match="training, llm, or inference"):
+        execution_queue.reserve_resource("takes")
+    with pytest.raises(ValueError, match="training, llm, or inference"):
+        execution_queue.release_resource("tests")
 
 
 def test_execution_queue_orders_mixed_inference_client_metadata_in_one_lane(queue_root):

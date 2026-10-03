@@ -26,6 +26,7 @@ ACTIVE_STATUSES = {"starting", "running", "stopping"}
 TERMINAL_STATUSES = {"completed", "failed", "cancelled", "stopped", "interrupted"}
 
 _lock = threading.RLock()
+RESOURCE_OWNERS = {"training", "llm", "inference"}
 _resource_owner = ""
 _transient_receipts = {}
 _TRANSIENT_RECEIPT_LIMIT = 200
@@ -567,8 +568,8 @@ def ephemeral_lane(lane_name):
 
 def reserve_resource(owner):
     owner = str(owner or "").strip()
-    if not owner:
-        raise ValueError("Execution resource owner is required.")
+    if owner not in RESOURCE_OWNERS:
+        raise ValueError("Execution resource owner must be training, llm, or inference.")
     global _resource_owner
     with _lock:
         if _resource_owner:
@@ -580,6 +581,8 @@ def reserve_resource(owner):
 
 def release_resource(owner):
     owner = str(owner or "").strip()
+    if owner not in RESOURCE_OWNERS:
+        raise ValueError("Execution resource owner must be training, llm, or inference.")
     global _resource_owner
     with _lock:
         if _resource_owner == owner:

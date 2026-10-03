@@ -20,7 +20,7 @@ def _path():
 
 
 def _empty_document():
-    return {"version": PROFILE_VERSION, "profiles": {}}
+    return {"version": PROFILE_VERSION, "profiles": {}, "reports": {}}
 
 
 def _read_document():
@@ -36,6 +36,11 @@ def _read_document():
     profiles = payload.get("profiles")
     if not isinstance(profiles, dict):
         raise RuntimeError("Director model calibration profile file is missing its profiles object.")
+    reports = payload.get("reports")
+    if reports is None:
+        payload["reports"] = {}
+    elif not isinstance(reports, dict):
+        raise RuntimeError("Director model calibration profile file has an invalid reports object.")
     return payload
 
 
@@ -93,6 +98,7 @@ def _normalize_attempt(attempt):
         "status": status,
         "finishReason": str(attempt.get("finishReason") or ""),
         "error": str(attempt.get("error") or ""),
+        "failureKind": str(attempt.get("failureKind") or "").strip(),
     }
     for field in ("promptTokens", "completionTokens", "observedContextSize"):
         value = attempt.get(field)
@@ -111,6 +117,104 @@ def _normalize_attempt(attempt):
             normalized[field] = 0.0
     return normalized
 
+
+
+def _report_health(attempts, context_mode, context_size, max_tokens, status):
+    if status == "stopped":
+        return "stopped"
+
+    failed = [attempt for attempt in attempts if attempt["status"] == "failed"]
+    first_context = next((attempt for attempt in attempts if attempt["kind"] == "context"), None)
+    first_output = next((attempt for attempt in attempts if attempt["kind"] == "output"), None)
+    first_prose = next((attempt for attempt in attempts if attempt["kind"] == "prose"), None)
+
+    severe_kinds = {"runtime", "empty", "malformed"}
+    if context_mode == "calibrated" and first_context and first_context["status"] == "failed":
+        return "likely-unusable"
+    if first_output and first_output["status"] == "failed" and first_output.get("failureKind") in severe_kinds:
+        return "likely-unusable"
+    if first_prose and first_prose["status"] == "failed" and first_prose.get("failureKind") in severe_kinds:
+        return "likely-unusable"
+    if max_tokens > 0:
+        return "limited" if failed else "healthy"
+    if attempts:
+        return "calibration-failed"
+    return "unknown"
+
+
+def list_reports():
+    reports = _read_document()["reports"]
+    return [json.loads(json.dumps(reports[key])) for key in sorted(reports)]
+
+
+def get_report(model_ref):
+    model_ref = str(model_ref or "").strip()
+    if not model_ref:
+        return None
+    report = _read_document()["reports"].get(model_ref)
+    return json.loads(json.dumps(report)) if isinstance(report, dict) else None
+
+
+def save_report(report):
+    report = report if isinstance(report, dict) else {}
+    model_ref = str(report.get("modelRef") or "").strip()
+    runtime_id = str(report.get("runtimeId") or "").strip()
+    model_id = str(report.get("modelId") or "").strip()
+    if not model_ref or not runtime_id or not model_id:
+        raise ValueError("Director calibration report requires modelRef, runtimeId, and modelId.")
+
+    context_mode = str(report.get("contextMode") or "").strip()
+    if context_mode not in {"calibrated", "runtime"}:
+        raise ValueError("Director calibration report contextMode must be calibrated or runtime.")
+
+    attempts = report.get("attempts")
+    if not isinstance(attempts, list):
+        raise ValueError("Director calibration report attempts must be a list.")
+    normalized_attempts = [_normalize_attempt(item) for item in attempts]
+
+    try:
+        context_size = max(0, int(report.get("contextSize") or 0))
+    except (TypeError, ValueError):
+        context_size = 0
+    try:
+        max_tokens = max(0, int(report.get("maxTokens") or 0))
+    except (TypeError, ValueError):
+        max_tokens = 0
+
+    status = str(report.get("status") or "incomplete").strip()
+    if status not in {"complete", "incomplete", "error", "stopped"}:
+        raise ValueError("Director calibration report status is invalid.")
+
+    normalized = {
+        "version": PROFILE_VERSION,
+        "modelRef": model_ref,
+        "runtimeId": runtime_id,
+        "runtimeName": str(report.get("runtimeName") or "").strip(),
+        "modelId": model_id,
+        "label": str(report.get("label") or model_id).strip(),
+        "contextMode": context_mode,
+        "contextSize": context_size,
+        "maxTokens": max_tokens,
+        "status": status,
+        "error": str(report.get("error") or ""),
+        "health": _report_health(normalized_attempts, context_mode, context_size, max_tokens, status),
+        "updatedAt": _now_iso(),
+        "attempts": normalized_attempts,
+    }
+
+    payload = _read_document()
+    payload["reports"][model_ref] = normalized
+    _write_document(payload)
+    return json.loads(json.dumps(normalized))
+
+
+def clear_calibration():
+    path = _path()
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+    return {"profiles": [], "reports": []}
 
 def list_profiles():
     profiles = _read_document()["profiles"]
@@ -195,9 +299,14 @@ def save_profile(profile):
 
 
 def clear_profiles():
-    path = _path()
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        pass
+    payload = _read_document()
+    payload["profiles"] = {}
+    if payload.get("reports"):
+        _write_document(payload)
+    else:
+        path = _path()
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
     return []

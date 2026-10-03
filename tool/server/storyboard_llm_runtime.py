@@ -1019,11 +1019,13 @@ def _assessment_signal(model_ref):
     except (TypeError, ValueError):
         coherent_output = 0
     health = str(report.get("health") or "").strip()
-    serious = health == "likely-unusable"
+    pathologies = report.get("pathologies") if isinstance(report.get("pathologies"), list) else []
+    serious = bool(pathologies) or health == "likely-unusable"
     limited = not serious and coherent_output < 8192
     return {
         "status": str(report.get("status") or ""),
         "health": health,
+        "pathologies": [str(item) for item in pathologies if str(item or "").strip()],
         "seriousWarning": serious,
         "limited": limited,
         "fullStoryCapable": coherent_output >= 8192 and not serious,

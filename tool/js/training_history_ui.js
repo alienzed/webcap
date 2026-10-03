@@ -7,6 +7,30 @@ function formatTrainingHistoryTime(value) {
   });
 }
 
+function formatTrainingHistoryClock(value) {
+  var seconds = Number(value || 0);
+  if (!seconds) return '';
+  return new Date(seconds * 1000).toLocaleTimeString([], {
+    hour: 'numeric', minute: '2-digit'
+  });
+}
+
+function formatTrainingHistoryDay(value) {
+  var seconds = Number(value || 0);
+  if (!seconds) return '';
+  return new Date(seconds * 1000).toLocaleDateString([], {
+    year: 'numeric', month: 'short', day: 'numeric'
+  });
+}
+
+function trainingHistoryMetric(label, value, title, buttonAttribute) {
+  if (!value) return '';
+  var valueHtml = buttonAttribute
+    ? '<button type="button" class="training-history-metric-link" ' + buttonAttribute + (title ? ' title="' + escapeHtml(title) + '"' : '') + '>' + escapeHtml(value) + '</button>'
+    : '<strong' + (title ? ' title="' + escapeHtml(title) + '"' : '') + '>' + escapeHtml(value) + '</strong>';
+  return '<div class="training-history-metric"><span>' + escapeHtml(label) + '</span>' + valueHtml + '</div>';
+}
+
 
 function trainingHistoryTimestampKind(job) {
   if (Number(job && job.finishedAt || 0)) return 'Finished';
@@ -156,18 +180,12 @@ function renderTrainingHistory() {
     var plannedSteps = Number(progress.plannedSteps);
     var learningRate = String(progress.lr || '').trim();
     var artifact = job.artifactSummary && typeof job.artifactSummary === 'object' ? job.artifactSummary : {};
-    var runSummary = trainingHistoryRunSummary(job);
     var hasStarted = Number(job.startedAt || 0) > 0;
     var hasFinished = Number(job.finishedAt || 0) > 0;
-    var details = [];
     var activeTime = trainingHistoryActiveTimeLabel(job);
     var timingError = hasFinished && !hasStarted ? 'Timing invariant error: terminal job has no start time.' : '';
     var timestamp = job.finishedAt || job.startedAt || job.createdAt;
     var timestampKind = trainingHistoryTimestampKind(job);
-    if (isFinite(epoch) && epoch >= 0) details.push('Epoch ' + Math.round(epoch).toLocaleString() + (isFinite(epochs) && epochs > 0 ? ' / ' + Math.round(epochs).toLocaleString() : ''));
-    if (isFinite(finalStep) && finalStep >= 0) details.push('Step ' + Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : ''));
-    if (learningRate) details.push('LR ' + learningRate);
-    if (activeTime) details.push('Active ' + activeTime);
     var resumePath = String(job.outputRunPath || job.resumeCheckpoint || '');
     var resumeStage = String(job.resumeStage || job.stages || '');
     var canResume = job.status !== 'cancelled' && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(resumeStage) !== -1 && !!(job.resumeFromCheckpoint || job.outputRunPath || job.outputRoot);
@@ -176,7 +194,6 @@ function renderTrainingHistory() {
     if (job.outputAvailable === false) unavailable.push('output');
     if (job.logAvailable === false) unavailable.push('log');
     var status = String(job.status || 'unknown');
-    var detailsOpen = !!trainingWorkspaceState.historyDetailOpen[String(job.id || '')];
     var metricPending = !!trainingWorkspaceState.historyMetricRequests[String(job.id || '')];
     var modelSourcePath = String(job.model && job.model.source || '');
     var modelSource = modelSourcePath.split(/[\\/]/).pop();
@@ -190,69 +207,81 @@ function renderTrainingHistory() {
     var checkpointStage = String(job.stage || job.stages || '').toLowerCase();
     var canOpenCheckpointRun = !!(checkpointLabel && job.folder && job.outputRunPath && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(checkpointStage) !== -1);
     var runDirectory = String(job.outputRunPath || '').trim();
-    var runDirectoryLabel = runDirectory ? trainingOutputIdentity(job) : '';
-    var outputFact = job.folder && job.outputRoot && job.outputAvailable !== false
-      ? '<div class="training-history-fact"><span>Output</span><button type="button" class="training-history-fact-link" data-training-history-output="' + escapeHtml(job.id || '') + '" title="Open effective output folder">' + escapeHtml(trainingOutputIdentity(job)) + '</button></div>'
-      : trainingHistoryFact('Output', trainingOutputIdentity(job));
-    var checkpointFact = canOpenCheckpointRun
-      ? '<div class="training-history-fact"><span>Latest checkpoint</span><button type="button" class="training-history-fact-link" data-training-history-run="' + escapeHtml(job.id || '') + '" title="Open the run directory containing this checkpoint">' + escapeHtml(checkpointLabel) + '</button></div>'
-      : trainingHistoryFact('Latest checkpoint', checkpointLabel);
-    var runDirectoryFact = runDirectory
-      ? (canOpenCheckpointRun
-        ? '<div class="training-history-fact"><span>Run directory</span><button type="button" class="training-history-fact-link" data-training-history-run="' + escapeHtml(job.id || '') + '" title="Open Diffusion-Pipe run: ' + escapeHtml(runDirectory) + '">' + escapeHtml(runDirectoryLabel) + '</button></div>'
-        : trainingHistoryFact('Run directory', runDirectoryLabel, runDirectory))
-      : '';
-    var expandedFacts = detailsOpen ? '<div class="training-history-facts">' +
-      '<div class="training-history-fact-group"><div class="training-history-fact-heading">Timing</div>' +
-        trainingHistoryFact('Active time', activeTime || (metricPending ? 'Loading…' : 'Unavailable')) +
-        trainingHistoryFact('Started', formatTrainingHistoryTime(job.startedAt)) +
-        trainingHistoryFact('Finished', formatTrainingHistoryTime(job.finishedAt)) +
+    var runConfig = job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
+    var capturedItems = Number(job.capturedItemCount || runConfig.capturedItems || 0);
+    var startedAt = Number(job.startedAt || 0);
+    var finishedAt = Number(job.finishedAt || 0);
+    var startedDate = startedAt ? new Date(startedAt * 1000) : null;
+    var finishedDate = finishedAt ? new Date(finishedAt * 1000) : null;
+    var sameDay = !!(startedDate && finishedDate &&
+      startedDate.getFullYear() === finishedDate.getFullYear() &&
+      startedDate.getMonth() === finishedDate.getMonth() &&
+      startedDate.getDate() === finishedDate.getDate());
+    var timingLabel = '';
+    if (startedAt && finishedAt) {
+      timingLabel = sameDay
+        ? formatTrainingHistoryDay(startedAt) + ' · ' + formatTrainingHistoryClock(startedAt) + ' → ' + formatTrainingHistoryClock(finishedAt)
+        : formatTrainingHistoryTime(startedAt) + ' → ' + formatTrainingHistoryTime(finishedAt);
+    } else if (startedAt) {
+      timingLabel = 'Started ' + formatTrainingHistoryTime(startedAt);
+    } else if (finishedAt) {
+      timingLabel = 'Finished ' + formatTrainingHistoryTime(finishedAt);
+    } else {
+      timingLabel = formatTrainingHistoryTime(job.createdAt);
+    }
+    var timingTitle = [
+      startedAt ? 'Started ' + formatTrainingHistoryTime(startedAt) : '',
+      finishedAt ? 'Finished ' + formatTrainingHistoryTime(finishedAt) : ''
+    ].filter(Boolean).join(' · ');
+    var modelTitle = modelSource ? 'Base model: ' + modelSource : '';
+    var metricHtml =
+      trainingHistoryMetric('Epoch', isFinite(epoch) && epoch >= 0 ? Math.round(epoch).toLocaleString() + (isFinite(epochs) && epochs > 0 ? ' / ' + Math.round(epochs).toLocaleString() : '') : '') +
+      trainingHistoryMetric('Step', isFinite(finalStep) && finalStep >= 0 ? Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : '') : '') +
+      trainingHistoryMetric('LR', learningRate) +
+      trainingHistoryMetric('Shift', runConfig.shift !== undefined && runConfig.shift !== null ? trainingHistoryCompactNumber(runConfig.shift) : '') +
+      trainingHistoryMetric('Dropout', runConfig.dropout !== undefined && runConfig.dropout !== null ? trainingHistoryCompactNumber(runConfig.dropout) : '') +
+      trainingHistoryMetric('Selected epoch', selectedEpochLabel ? String(Math.round(selectedEpochNumber)) : '') +
+      trainingHistoryMetric(
+        'Latest checkpoint',
+        checkpointLabel,
+        canOpenCheckpointRun ? 'Open the run directory containing this checkpoint' : '',
+        canOpenCheckpointRun ? 'data-training-history-run="' + escapeHtml(job.id || '') + '"' : ''
+      );
+    return '<div class="training-history-item training-history-run' + (selectedEpochLabel ? ' has-selected-epoch' : '') + '" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
+      '<div class="training-history-header">' +
+        '<div class="training-history-identity">' +
+          '<div class="training-history-title">' +
+            (selectedEpochLabel ? '<span class="training-history-selected-mark" title="' + escapeHtml(selectedEpochLabel) + '" aria-label="' + escapeHtml(selectedEpochLabel) + '"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="3.5"></circle><path d="M5.5 9l-1 5 3.5-2 3.5 2-1-5"></path></svg></span>' : '') +
+            '<strong class="training-history-run-name">' + escapeHtml(runDisplayName) + '</strong>' +
+            '<span class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>' +
+            '<span class="training-history-stage"' + (modelTitle ? ' title="' + escapeHtml(modelTitle) + '"' : '') + '>' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span>' +
+          '</div>' +
+          '<div class="training-history-meta">' +
+            (timingLabel ? '<span class="training-history-timing"' + (timingTitle ? ' title="' + escapeHtml(timingTitle) + '"' : '') + '>' + escapeHtml(timingLabel) + '</span>' : '') +
+            (activeTime ? '<span class="training-history-active-time" title="Active training time">' + escapeHtml(activeTime) + ' active</span>' : (metricPending ? '<span class="training-history-active-time">Loading active time…</span>' : '')) +
+            (capturedItems > 0 ? '<span class="training-history-items" title="Captured training items">' + escapeHtml(capturedItems.toLocaleString()) + ' items</span>' : '') +
+            (job.folder ? '<button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="training-history-actions">' +
+          (selectedEpochLabel ? '<button type="button" class="training-btn training-history-finalize" data-training-history-finalize="' + escapeHtml(job.id || '') + '">Archive</button>' : '') +
+          (job.logAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show run log" aria-label="Show run log">&#128196;</button>' : '') +
+          (job.candidateRunAvailable ? '<button type="button" class="training-history-action" data-training-history-candidates="' + escapeHtml(job.id || '') + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
+          (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Continue captured run" aria-label="Continue captured run">&#8635;</button>' : '') +
+          '<details class="training-history-more"><summary class="training-history-action" title="More run actions" aria-label="More run actions">&#8230;</summary><div class="training-history-more-menu">' +
+            (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">&#128193; Open output</button>' : '') +
+            (job.actionAvailable !== false && job.actionPath ? '<button type="button" data-training-history-action="' + escapeHtml(job.id || '') + '">&#128451; Open action folder</button>' : '') +
+            '<button type="button" data-training-history-clear="' + escapeHtml(job.id || '') + '">Remove from Training History</button>' +
+          '</div></details>' +
+        '</div>' +
       '</div>' +
-      '<div class="training-history-fact-group"><div class="training-history-fact-heading">Training</div>' +
-        trainingHistoryFact('Profile', profileLabel) +
-        trainingHistoryFact('Epoch', isFinite(epoch) && epoch >= 0 ? Math.round(epoch).toLocaleString() + (isFinite(epochs) && epochs > 0 ? ' / ' + Math.round(epochs).toLocaleString() : '') : '') +
-        trainingHistoryFact('Step', isFinite(finalStep) && finalStep >= 0 ? Math.round(finalStep).toLocaleString() + (isFinite(plannedSteps) && plannedSteps > 0 ? ' / ' + Math.round(plannedSteps).toLocaleString() : '') : '') +
-        trainingHistoryFact('Last LR', learningRate) +
-        trainingHistoryFact('Base model', modelSource, modelSourcePath) +
-      '</div>' +
-      '<div class="training-history-fact-group"><div class="training-history-fact-heading">Dataset and output</div>' +
-        trainingHistoryFact('Captured items', Number(job.capturedItemCount || 0) ? String(job.capturedItemCount) : '') +
-        outputFact +
-        runDirectoryFact +
-        checkpointFact +
-        trainingHistoryFact('Continues', job.parentJobId ? 'run ' + job.parentJobId : '') +
-      '</div></div>' : '';
-    return '<div class="training-history-item' + (selectedEpochLabel ? ' has-selected-epoch' : '') + '" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
-      '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span></div>' +
-        '<span class="training-history-time" title="' + escapeHtml(timestampKind + ' time') + '">' + escapeHtml(formatTrainingHistoryTime(timestamp)) + '</span></div>' +
-      '<div class="training-history-context"><div class="training-history-model">' +
-        (selectedEpochLabel ? '<span class="training-history-selected-mark" title="' + escapeHtml(selectedEpochLabel) + '" aria-label="' + escapeHtml(selectedEpochLabel) + '"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="3.5"></circle><path d="M5.5 9l-1 5 3.5-2 3.5 2-1-5"></path></svg></span>' : '') +
-        escapeHtml(runDisplayName) + '</div>' +
-        '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
-      '<div class="training-history-details">' +
-        (runSummary ? '<div>' + escapeHtml(runSummary) + '</div>' : '') +
-        (details.length || selectedEpochLabel ? '<div>' +
-          escapeHtml([selectedEpochLabel].concat(details).filter(Boolean).join(' · ')) +
-          '</div>' : '') +
-        (timingError ? '<div class="training-runner-detail is-error">' + escapeHtml(timingError) + '</div>' : '') +
-        (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
-        buildTrainingFailureDetailsHtml(job) +
-        (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
-        (unavailable.length ? '<div class="training-runner-detail is-warning">Unavailable: ' + escapeHtml(unavailable.join(', ')) + '</div>' : '') +
-        expandedFacts +
-        '<button type="button" class="training-history-details-toggle" data-training-history-details="' + escapeHtml(job.id || '') + '" title="' + (detailsOpen ? 'Hide run details' : 'Show run details') + '" aria-label="' + (detailsOpen ? 'Hide run details' : 'Show run details') + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '">' + (detailsOpen ? '&#9652;' : '&#9662;') + '</button>' +
-      '</div>' +
-      '<div class="training-history-actions">' +
-       (selectedEpochLabel ? '<button type="button" class="training-btn training-history-finalize" data-training-history-finalize="' + escapeHtml(job.id || '') + '">Archive</button>' : '') +
-       (job.logAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show run log" aria-label="Show run log">&#128196;</button>' : '') +
-       (job.candidateRunAvailable ? '<button type="button" class="training-history-action" data-training-history-candidates="' + escapeHtml(job.id || '') + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
-       (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Continue captured run" aria-label="Continue captured run">&#8635;</button>' : '') +
-       '<details class="training-history-more"><summary class="training-history-action" title="More run actions" aria-label="More run actions">&#8230;</summary><div class="training-history-more-menu">' +
-         (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">&#128193; Open output</button>' : '') +
-         (job.actionAvailable !== false && job.actionPath ? '<button type="button" data-training-history-action="' + escapeHtml(job.id || '') + '">&#128451; Open action folder</button>' : '') +
-         '<button type="button" data-training-history-clear="' + escapeHtml(job.id || '') + '">Remove from Training History</button>' +
-       '</div></details>' +
-       '</div></div>';
+      (metricHtml ? '<div class="training-history-metrics">' + metricHtml + '</div>' : '') +
+      (timingError ? '<div class="training-runner-detail is-error">' + escapeHtml(timingError) + '</div>' : '') +
+      (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
+      buildTrainingFailureDetailsHtml(job) +
+      (job.completionNote ? '<div class="training-runner-detail is-warning">' + escapeHtml(job.completionNote) + '</div>' : '') +
+      (unavailable.length ? '<div class="training-runner-detail is-warning">Unavailable: ' + escapeHtml(unavailable.join(', ')) + '</div>' : '') +
+      '</div>';
   }).join('');
   if (els.historyShowAllBtn) {
     els.historyShowAllBtn.classList.toggle('hidden', archiveActive || jobs.length <= 2);

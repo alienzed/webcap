@@ -103,6 +103,11 @@ def external_gpu_work_block_reason(owner):
         if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
             return "training"
 
+    if owner == "inference":
+        from .llm_runner import local_gpu_work_runnable
+        if local_gpu_work_runnable():
+            return "llm"
+
     resource_owner = execution_resource_owner()
     if resource_owner and resource_owner != owner:
         return resource_owner
@@ -123,6 +128,10 @@ def reserve_gpu_for_external_work(owner):
             return False
         if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
             return False
+        if owner == "inference":
+            from .llm_runner import local_gpu_work_runnable
+            if local_gpu_work_runnable():
+                return False
         resource_owner = execution_resource_owner()
         if resource_owner:
             return False
@@ -1969,46 +1978,6 @@ def _refresh_job(job):
 
 
 
-def _prepare_comfyui_for_training():
-    """Use positive ComfyUI queue state for handoff; provider uncertainty never blocks Training."""
-    from . import inference_runtime
-    try:
-        provider_queue = inference_runtime.queue_snapshot()
-    except (ConnectionError, TimeoutError):
-        _logger.info("ComfyUI is unavailable during Training handoff; proceeding without a provider hold.")
-        return True
-    except Exception:
-        _logger.exception("Could not inspect ComfyUI queue during Training handoff; proceeding rather than blocking on uncertainty.")
-        return True
-
-    running = provider_queue.get("running") or []
-    pending = provider_queue.get("pending") or []
-    try:
-        managed_job_ids = inference_runtime.webcap_queue_job_ids(provider_queue)
-    except Exception:
-        _logger.exception("Could not classify ComfyUI queue ownership during Training handoff; proceeding rather than blocking on uncertainty.")
-        return True
-    if managed_job_ids:
-        _logger.info(
-            "Training is waiting for %d positively identified WebCap ComfyUI job(s).",
-            len(managed_job_ids),
-        )
-        return False
-    if running or pending:
-        _logger.warning(
-            "ComfyUI has non-WebCap queue activity during Training handoff; leaving it untouched and proceeding."
-        )
-        return True
-
-    try:
-        inference_runtime.free_cached_models()
-    except (ConnectionError, TimeoutError):
-        _logger.warning("ComfyUI became unavailable while releasing cached models before Training; proceeding.")
-    except Exception:
-        _logger.exception("ComfyUI cache release failed before Training; proceeding so the real launch failure remains visible.")
-    return True
-
-
 def _launch_next_queued_job(state):
     if state.get("queuePaused"):
         return
@@ -2025,19 +1994,8 @@ def _launch_next_queued_job(state):
     if not owner and not reserve_execution_resource(TRAINING_RESOURCE_OWNER):
         return
 
-    try:
-        from .storyboard_llm_runtime import DirectorRuntimeBusy, release_loaded_model_for_gpu_work
-        release_loaded_model_for_gpu_work()
-    except DirectorRuntimeBusy:
-        release_execution_resource(TRAINING_RESOURCE_OWNER)
-        return
-    except Exception:
-        _logger.exception(
-            "Could not confirm Prompt Assistant / Director model cleanup before Training; "
-            "proceeding rather than blocking on runtime uncertainty."
-        )
-
-    if not _prepare_comfyui_for_training():
+    from .gpu_prep import prepare_gpu_for
+    if not prepare_gpu_for(TRAINING_RESOURCE_OWNER):
         release_execution_resource(TRAINING_RESOURCE_OWNER)
         return
 

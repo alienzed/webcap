@@ -140,7 +140,15 @@ def archive_metrics(archive_name):
     if selected_epoch is None:
         raise ValueError("Archive manifest has no selected epoch: " + name)
     retained = archive.get("retainedAlternateEpochs") if isinstance(archive.get("retainedAlternateEpochs"), list) else []
-    detailed_events, epoch_events = read_loss_events(directory)
+    checkpoint_wall_time = archive.get("resumeCheckpointWallTime")
+    branch_started_at = archive.get("resumeBranchStartedAt")
+    if (checkpoint_wall_time is None) != (branch_started_at is None):
+        raise ValueError("Archive manifest has incomplete resume-branch metadata: " + name)
+    detailed_events, epoch_events = (
+        read_loss_events(directory, checkpoint_wall_time, branch_started_at)
+        if checkpoint_wall_time is not None
+        else read_loss_events(directory)
+    )
     return _archive_metrics_from_events(detailed_events, epoch_events, selected_epoch, retained)
 
 
@@ -394,6 +402,8 @@ def finalize(folder, job_id, archive_name, retain_epochs=None):
             "runName": str(context["run"].get("runName") or ""),
             "stage": str(context["run"].get("stages") or ""),
             "runSummary": context["run"].get("runSummary") if isinstance(context["run"].get("runSummary"), dict) else {},
+            "resumeCheckpointWallTime": context["run"].get("resumeCheckpointWallTime"),
+            "resumeBranchStartedAt": context["run"].get("resumeBranchStartedAt"),
             "productionFileName": context["production"].name,
             "selectedEpoch": context["selectedEpoch"],
             "retainedAlternateEpochs": retained,

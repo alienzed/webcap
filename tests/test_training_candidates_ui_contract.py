@@ -90,7 +90,8 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "remove_from_test" in script
     assert "copy_to_test" in script
     assert "artifact.status === 'available'" in script
-    assert "setTimeout" not in script
+    assert "scheduleTrainingCandidatesAutoRefresh" in script
+    assert "setTimeout(function ()" in script
     assert "training-candidates-modal" in css
     assert "width: min(95vw, 1800px)" in css
     assert "height: 94vh" in css
@@ -103,6 +104,15 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert ".training-candidates-pinned-popover" in css
     assert 'html[data-theme="dark"] .training-candidates-dialog .training-candidates-text-btn' in css
     assert 'html[data-theme="dark"] .training-candidates-dialog .training-candidates-line-toggle input' in css
+    assert "trainingCandidatesComparisonSources" in script
+    assert "trainingCandidatesComparisonHtml" in script
+    assert "data-training-candidate-compare-key" in script
+    assert "loadTrainingArchives()" in script
+    assert "/fs/training_archive/metrics?name=" in script
+    assert ".training-candidates-compare-popover" in css
+    assert ".training-candidates-compare-line" in css
+    assert "Candidate comparison control is missing from the chart footer." in script
+    assert "Candidate comparison chart is missing." in script
 
 
 def test_chart_geometry_step_lookup_and_algorithm_switching():
@@ -129,7 +139,17 @@ const context = {
   escapeHtml(s) { return String(s).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;'); },
   trainingWorkspaceState: {
     candidateFolder:'set',candidateJobId:'job',candidateAlgorithm:'v5',candidateRequestVersion:0,
-    runnerJobs:[{id:'job',folder:'set',stages:'h3',profileId:'minimax_h3'}],history:{jobs:[]},
+    runnerJobs:[{id:'job',folder:'set',stages:'h3',profileId:'minimax_h3'}],
+    history:{jobs:[
+      {id:'older',folder:'set',runName:'Older run',candidateRunAvailable:true,status:'completed',finishedAt:2},
+      {id:'other-set',folder:'other',runName:'Wrong set',candidateRunAvailable:true,status:'completed',finishedAt:3}
+    ]},
+    archivesLoaded:true,
+    archives:[
+      {name:'archive-a',runName:'Archived run',sourceFolder:'set',selectedEpoch:2},
+      {name:'broken',invalid:true,error:'bad archive'}
+    ],
+    archiveMetrics:{},
     profiles:[{id:'minimax_h3',test:{enabled:true,stagingKey:'h3'}}]
   },
   state: {folder:'set'},
@@ -205,7 +225,31 @@ assert(!svg.includes('data-training-candidate-line="showRawStep" checked'));
 assert(svg.includes('training-candidates-marker training-candidates-epoch-marker in-test-folder'));
 assert(svg.includes('Test Generations · 1'));
 assert(svg.includes('data-training-candidates-open-generations'));
+assert(svg.includes('Compare curves'));
+assert(svg.indexOf('Compare curves') < svg.indexOf('Test Generations'));
 assert(svg.includes('Remove from Test'));
+const sources = context.trainingCandidatesComparisonSources();
+assert.equal(sources.runs.length,1);
+assert.equal(sources.runs[0].key,'run:older');
+assert.equal(sources.archives.length,1);
+assert.equal(sources.archives[0].key,'archive:archive-a');
+const comparison = context.trainingCandidatesComparisonState();
+comparison.selected=['run:older','archive:archive-a'];
+comparison.colors={'run:older':1,'archive:archive-a':2};
+comparison.curves={
+  'run:older':{label:'Older run',points:[{epoch:1,loss:.6},{epoch:2,loss:.35}]},
+  'archive:archive-a':{label:'Archived run · archive',points:[{epoch:1,loss:.7},{epoch:2,loss:.32}]}
+};
+const comparisonHtml=context.trainingCandidatesComparisonHtml({run:{runName:'Current run'},analysis:Object.assign({},data,{selected:{epoch:1}})});
+assert(comparisonHtml.includes('Training epoch loss comparison'));
+assert(comparisonHtml.includes('Older run'));
+assert(comparisonHtml.includes('Archived run · archive'));
+assert(!comparisonHtml.includes('data-training-candidate-epoch='));
+assert(comparisonHtml.indexOf('Compare curves · 2') < comparisonHtml.indexOf('Test Generations'));
+const curveColors=Array.from(comparisonHtml.matchAll(/class="training-candidates-compare-line[^"]*" style="stroke:([^"]+)"/g)).map(match=>match[1]);
+assert.equal(curveColors.length,3);
+assert.equal(new Set(curveColors).size,3);
+context.trainingCandidatesResetComparison();
 context.trainingCandidatesDisplayState().showRawStep=false;
 context.trainingCandidatesDisplayState().showEpochLoss=false;
 const filteredSvg=context.trainingCandidatesSvg(data);
@@ -293,3 +337,105 @@ def test_candidate_analysis_remains_a_true_modal_artifact_view():
     assert "els.modal.onclick = function (event) { if (event.target === els.modal) closeTrainingCandidates(); };" in script
     assert "candidateModalOpen = true" in script
     assert "candidateModalOpen = false" in script
+
+
+def test_candidate_comparison_loading_uses_existing_routes_cache_and_state():
+    harness = r"""
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const requests = [];
+let renders = 0;
+let loadArchivesCalls = 0;
+const context = {
+  document: {
+    getElementById() { return null; },
+    querySelector() { return null; },
+    addEventListener() {},
+    removeEventListener() {}
+  },
+  window: { console: console },
+  escapeHtml(value) { return String(value); },
+  reportConsoleError() {},
+  loadTrainingArchives() { loadArchivesCalls++; return Promise.resolve([]); },
+  trainingWorkspaceState: {
+    candidateModalOpen:true,
+    candidateFolder:'set',
+    candidateJobId:'current',
+    candidateAlgorithm:'v5',
+    candidatePinnedEpoch:7,
+    history:{jobs:[
+      {id:'older',folder:'set',runName:'Older run',candidateRunAvailable:true,status:'completed',finishedAt:2},
+      {id:'other-set',folder:'other',runName:'Wrong set',candidateRunAvailable:true,status:'completed',finishedAt:3}
+    ]},
+    archivesLoaded:true,
+    archives:[
+      {name:'cached',runName:'Cached archive',sourceFolder:'set'},
+      {name:'uncached',runName:'Uncached archive',sourceFolder:'other'}
+    ],
+    archiveMetrics:{},
+    profiles:[]
+  },
+  state: {folder:'set'},
+  trainingRunnerRequest(url) {
+    requests.push(url);
+    if (url.includes('/fs/training_candidates?')) {
+      return Promise.resolve({analysis:{epochLossPoints:[{epoch:1,loss:.6},{epoch:2,loss:.4}]}});
+    }
+    if (url.includes('/fs/training_archive/metrics?name=uncached')) {
+      return Promise.resolve({metrics:{epochLossPoints:[{epoch:1,loss:.7},{epoch:2,loss:.5}]}});
+    }
+    throw new Error('Unexpected request: ' + url);
+  }
+};
+context.trainingWorkspaceState.archiveMetrics.cached = {epochLossPoints:[{epoch:1,loss:.51},{epoch:2,loss:.41}]};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+context.renderTrainingCandidates = function () { renders++; };
+
+(async () => {
+  context.trainingCandidatesToggleComparison('run:older', true);
+  assert.equal(context.trainingWorkspaceState.candidatePinnedEpoch, null);
+  await new Promise(setImmediate);
+  assert(requests[0].includes('/fs/training_candidates?folder=set&jobId=older&algorithm=v5'));
+  assert.equal(context.trainingCandidatesComparisonState().curves['run:older'].points.length, 2);
+
+  const requestCountAfterRun = requests.length;
+  context.trainingCandidatesToggleComparison('archive:cached', true);
+  await new Promise(setImmediate);
+  assert.equal(requests.length, requestCountAfterRun);
+  assert.equal(context.trainingCandidatesComparisonState().curves['archive:cached'].points.length, 2);
+
+  context.trainingCandidatesToggleComparison('archive:uncached', true);
+  await new Promise(setImmediate);
+  assert(requests.some(url => url.includes('/fs/training_archive/metrics?name=uncached')));
+  assert.equal(context.trainingWorkspaceState.archiveMetrics.uncached.epochLossPoints.length, 2);
+
+  context.trainingCandidatesToggleComparison('run:older', false);
+  assert(!context.trainingCandidatesComparisonState().selected.includes('run:older'));
+
+  let releasePending;
+  delete context.trainingCandidatesComparisonState().curves['run:older'];
+  context.trainingRunnerRequest = function (url) {
+    requests.push(url);
+    return new Promise(resolve => { releasePending = resolve; });
+  };
+  context.trainingCandidatesToggleComparison('run:older', true);
+  context.trainingCandidatesToggleComparison('run:older', false);
+  assert(!context.trainingCandidatesComparisonState().selected.includes('run:older'));
+  releasePending({analysis:{epochLossPoints:[{epoch:1,loss:.55}]}});
+  await new Promise(setImmediate);
+  assert(!context.trainingCandidatesComparisonState().selected.includes('run:older'));
+  assert.equal(context.trainingCandidatesComparisonState().curves['run:older'].points.length, 1);
+
+  assert.throws(
+    () => context.trainingCandidatesWireCompareControl({querySelector() { return null; }}),
+    /Candidate comparison control is missing/
+  );
+  assert.equal(loadArchivesCalls, 0);
+  assert(renders > 0);
+})().catch(err => { console.error(err); process.exitCode = 1; });
+"""
+    result = subprocess.run(
+        ["node", "-e", harness, str(ROOT / "tool" / "js" / "training_candidates.js")],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

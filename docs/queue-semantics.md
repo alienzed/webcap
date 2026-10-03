@@ -424,8 +424,8 @@ Its responsibilities are:
 - expose Inference-local failures and wait reasons.
 
 It does **not** arbitrate the shared GPU against LLM or Training. Inference exposes only its own
-runnable Queue/Backlog state. When the shared GPU owner is empty, shared scheduling may select
-Inference according to the ordering in `docs/gpu_coordination_invariants.md`.
+runnable Queue/Backlog state and requests a local-GPU turn from the Training arbiter. Training applies
+the ordering in `docs/gpu_coordination_invariants.md`.
 
 **Pause affects execution, not admission.** While the Inference Queue is paused, valid Generate,
 Storyboard Take, and Test requests may still be queued normally. They simply do not become runnable
@@ -473,10 +473,8 @@ that work is still active, Inference remains the current GPU owner while it reco
 runtime. Provider IDs, stale persisted metadata, failed status probes, or uncertainty alone must
 never create or retain a shared GPU claim.
 
-Before Inference ends GPU ownership at a natural handoff boundary, Inference is
-responsible for quiescing its own managed ComfyUI runtime sufficiently for another client to use the
-GPU. Training and LLM must not independently inspect or clean up ComfyUI as a prerequisite to their
-own execution.
+Cross-runtime handoff cleanup is not owned by Inference. The shared GPU prep path performs any
+required ComfyUI or retained-model cleanup directly from runtime facts before a new owner starts.
 
 If execution genuinely starts and then fails, preserve the frozen request in Queue and pause
 Inference. The failed attempt is the signal. The user resolves the problem and resumes the queue;
@@ -608,10 +606,11 @@ Shared coordination is intentionally small:
 
 - one process-local owner: `none | training | llm | inference`,
 - no durable dispatcher queue, submission registry, lease table, or second GPU-availability truth,
-- when owner is `none`, selection is deterministic: Training, then local LLM FIFO head, then
-  foreground Inference Queue, then eligible Inference Backlog,
-- each lane exposes only its own runnable state and performs only its own runtime preparation,
-- lanes do not inspect one another or ask one another for permission,
+- Training is the explicit arbitration backbone for new local-GPU turns,
+- when owner is `none`, Training applies deterministic order: Training, then local LLM FIFO head,
+  then foreground Inference Queue, then eligible Inference Backlog,
+- LLM and Inference expose only their own runnable state and do not inspect each other,
+- cross-runtime handoff preparation is one shared mechanical operation, not a client-lane permission,
 - remote LLM work never owns the local GPU,
 - running work is non-preemptive,
 - consecutive real same-lane work may continue according to that lane's queue semantics,

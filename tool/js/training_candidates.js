@@ -188,6 +188,395 @@ function trainingCandidatesClearChartWiring() {
   trainingWorkspaceState.candidateChartCleanup = null;
 }
 
+function trainingCandidatesComparisonState() {
+  var comparison = trainingWorkspaceState.candidateComparison;
+  if (!comparison || typeof comparison !== 'object') {
+    comparison = {
+      selected: [],
+      curves: {},
+      pending: {},
+      errors: {},
+      colors: {},
+      nextColor: 1,
+      open: false,
+      archiveListPending: false,
+      archiveListError: ''
+    };
+    trainingWorkspaceState.candidateComparison = comparison;
+  }
+  return comparison;
+}
+
+function trainingCandidatesResetComparison() {
+  trainingWorkspaceState.candidateComparison = null;
+  return trainingCandidatesComparisonState();
+}
+
+function trainingCandidatesComparisonActive() {
+  return trainingCandidatesComparisonState().selected.length > 0;
+}
+
+function trainingCandidatesComparisonColor(index) {
+  var hue = Math.round((205 + Number(index || 0) * 137.508) % 360);
+  return 'hsl(' + hue + ', 68%, 52%)';
+}
+
+function trainingCandidatesComparisonRunLabel(job) {
+  var name = String(job && job.runName || '').trim();
+  if (name) return name;
+  var sequence = String(job && job.sequence || '').trim();
+  if (sequence) return 'Run ' + sequence.replace(/^0+(?=\d)/, '');
+  return String(job && (job.profileLabel || job.modelLabel || job.id) || 'Run');
+}
+
+function trainingCandidatesComparisonSources() {
+  var currentJobId = String(trainingWorkspaceState.candidateJobId || '');
+  var currentFolder = String(trainingWorkspaceState.candidateFolder || '');
+  var history = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
+    ? trainingWorkspaceState.history.jobs
+    : [];
+  var runs = history.filter(function (job) {
+    return job && job.candidateRunAvailable === true &&
+      String(job.folder || '') === currentFolder &&
+      String(job.id || '') !== currentJobId;
+  }).sort(function (a, b) {
+    return Number(b.finishedAt || b.startedAt || b.createdAt || 0) - Number(a.finishedAt || a.startedAt || a.createdAt || 0);
+  }).map(function (job) {
+    return {
+      key: 'run:' + String(job.id || ''),
+      type: 'run',
+      label: trainingCandidatesComparisonRunLabel(job),
+      meta: String(job.status || ''),
+      folder: String(job.folder || ''),
+      jobId: String(job.id || '')
+    };
+  });
+  var archives = (Array.isArray(trainingWorkspaceState.archives) ? trainingWorkspaceState.archives : []).filter(function (archive) {
+    return archive && !archive.invalid && String(archive.name || '').trim();
+  }).map(function (archive) {
+    return {
+      key: 'archive:' + String(archive.name || ''),
+      type: 'archive',
+      label: String(archive.runName || archive.name || 'Archive'),
+      meta: String(archive.sourceFolder || ''),
+      archive: archive
+    };
+  });
+  return { runs: runs, archives: archives, all: runs.concat(archives) };
+}
+
+function trainingCandidatesComparisonSourceByKey(key) {
+  return trainingCandidatesComparisonSources().all.filter(function (source) {
+    return source.key === String(key || '');
+  })[0] || null;
+}
+
+function trainingCandidatesComparisonRowsHtml(sources) {
+  var comparison = trainingCandidatesComparisonState();
+  if (!sources.length) return '<div class="training-candidates-compare-empty">No comparable curves.</div>';
+  return sources.map(function (source) {
+    var checked = comparison.selected.indexOf(source.key) !== -1;
+    var color = checked ? trainingCandidatesComparisonColor(comparison.colors[source.key]) : '';
+    var stateText = comparison.pending[source.key]
+      ? 'Loading curve…'
+      : (comparison.errors[source.key] || '');
+    return '<label class="training-candidates-compare-option' + (stateText ? ' has-status' : '') + '">' +
+      '<input type="checkbox" data-training-candidate-compare-key="' + escapeHtml(source.key) + '"' + (checked ? ' checked' : '') + '>' +
+      '<i class="training-candidates-compare-swatch' + (checked ? ' is-active' : '') + '"' + (checked ? ' style="--curve-color:' + escapeHtml(color) + '"' : '') + '></i>' +
+      '<span><strong>' + escapeHtml(source.label) + '</strong>' +
+        (source.meta ? '<small>' + escapeHtml(source.meta) + '</small>' : '') +
+        (stateText ? '<small class="' + (comparison.errors[source.key] ? 'is-error' : '') + '">' + escapeHtml(stateText) + '</small>' : '') +
+      '</span></label>';
+  }).join('');
+}
+
+function trainingCandidatesCompareControlHtml() {
+  var comparison = trainingCandidatesComparisonState();
+  var sources = trainingCandidatesComparisonSources();
+  var count = comparison.selected.length;
+  var archiveRows = '';
+  if (!trainingWorkspaceState.archivesLoaded) {
+    var archiveStatus = comparison.archiveListPending
+      ? 'Loading archived runs…'
+      : (comparison.archiveListError || 'Archived runs load when this menu opens.');
+    archiveRows = '<div class="training-candidates-compare-empty' + (comparison.archiveListError ? ' is-error' : '') + '">' + escapeHtml(archiveStatus) + '</div>';
+  } else {
+    archiveRows = trainingCandidatesComparisonRowsHtml(sources.archives);
+  }
+  return '<details class="training-candidates-compare-control"' + (comparison.open ? ' open' : '') + '>' +
+    '<summary class="training-candidates-compare-summary">Compare curves' + (count ? ' · ' + count : '') + '</summary>' +
+    '<div class="training-candidates-compare-popover">' +
+      '<section><strong>This set</strong>' + trainingCandidatesComparisonRowsHtml(sources.runs) + '</section>' +
+      '<section><strong>Archive</strong>' + archiveRows + '</section>' +
+    '</div></details>';
+}
+
+function trainingCandidatesFooterActionsHtml(data) {
+  return '<div class="training-candidates-footer-actions">' +
+    trainingCandidatesCompareControlHtml() +
+    trainingCandidatesTestGenerationsButtonHtml(data) +
+  '</div>';
+}
+
+function trainingCandidatesEnsureComparisonArchives() {
+  var comparison = trainingCandidatesComparisonState();
+  if (trainingWorkspaceState.archivesLoaded || comparison.archiveListPending) return;
+  comparison.archiveListPending = true;
+  comparison.archiveListError = '';
+  loadTrainingArchives().catch(function (err) {
+    if (trainingWorkspaceState.candidateComparison !== comparison) return;
+    comparison.archiveListError = String(err && err.message ? err.message : err);
+    reportConsoleError('Training Candidates', 'Could not load archived comparison runs: ' + comparison.archiveListError);
+  }).finally(function () {
+    if (trainingWorkspaceState.candidateComparison !== comparison) return;
+    comparison.archiveListPending = false;
+    if (trainingWorkspaceState.candidateModalOpen) renderTrainingCandidates();
+  });
+}
+
+function trainingCandidatesComparisonPoints(points) {
+  return (Array.isArray(points) ? points : []).map(function (point) {
+    return { epoch: Number(point.epoch), loss: Number(point.loss) };
+  }).filter(function (point) {
+    return isFinite(point.epoch) && isFinite(point.loss);
+  }).sort(function (a, b) {
+    return a.epoch - b.epoch;
+  });
+}
+
+function trainingCandidatesLoadComparisonSource(source) {
+  var comparison = trainingCandidatesComparisonState();
+  if (!source || !source.key) throw new Error('Comparison source is unavailable.');
+  if (comparison.curves[source.key] || comparison.pending[source.key]) return comparison.pending[source.key] || Promise.resolve(comparison.curves[source.key]);
+
+  var request;
+  if (source.type === 'run') {
+    request = trainingRunnerRequest(
+      '/fs/training_candidates?folder=' + encodeURIComponent(source.folder) +
+      '&jobId=' + encodeURIComponent(source.jobId) +
+      '&algorithm=' + encodeURIComponent(String(trainingWorkspaceState.candidateAlgorithm || 'v5'))
+    ).then(function (payload) {
+      return ((payload || {}).analysis || {}).epochLossPoints || [];
+    });
+  } else if (source.type === 'archive') {
+    var archiveName = String(source.archive && source.archive.name || '');
+    var cached = Object.prototype.hasOwnProperty.call(trainingWorkspaceState.archiveMetrics, archiveName)
+      ? trainingWorkspaceState.archiveMetrics[archiveName]
+      : null;
+    request = cached
+      ? Promise.resolve(cached)
+      : trainingRunnerRequest('/fs/training_archive/metrics?name=' + encodeURIComponent(archiveName)).then(function (payload) {
+          var metrics = payload.metrics || {};
+          trainingWorkspaceState.archiveMetrics[archiveName] = metrics;
+          return metrics;
+        });
+    request = request.then(function (metrics) {
+      if (metrics && metrics.error) throw new Error(metrics.error);
+      return metrics && metrics.epochLossPoints || [];
+    });
+  } else {
+    throw new Error('Unknown comparison source type: ' + String(source.type || ''));
+  }
+
+  comparison.pending[source.key] = request.then(function (points) {
+    if (trainingWorkspaceState.candidateComparison !== comparison) return null;
+    var normalized = trainingCandidatesComparisonPoints(points);
+    if (!normalized.length) throw new Error('No completed TensorBoard epoch-loss points are available.');
+    comparison.curves[source.key] = {
+      label: source.label + (source.type === 'archive' ? ' · archive' : ''),
+      points: normalized
+    };
+    delete comparison.errors[source.key];
+    return comparison.curves[source.key];
+  }).catch(function (err) {
+    if (trainingWorkspaceState.candidateComparison !== comparison) return null;
+    var message = String(err && err.message ? err.message : err);
+    comparison.errors[source.key] = message;
+    reportConsoleError('Training Candidates', 'Comparison curve "' + source.label + '" failed: ' + message);
+    return null;
+  }).finally(function () {
+    if (trainingWorkspaceState.candidateComparison !== comparison) return;
+    delete comparison.pending[source.key];
+    if (trainingWorkspaceState.candidateModalOpen) renderTrainingCandidates();
+  });
+  return comparison.pending[source.key];
+}
+
+function trainingCandidatesToggleComparison(key, checked) {
+  var comparison = trainingCandidatesComparisonState();
+  var source = trainingCandidatesComparisonSourceByKey(key);
+  if (!source) throw new Error('Comparison source is no longer available.');
+  comparison.open = true;
+  if (!checked) {
+    comparison.selected = comparison.selected.filter(function (value) { return value !== source.key; });
+    delete comparison.errors[source.key];
+    renderTrainingCandidates();
+    return;
+  }
+  if (comparison.selected.indexOf(source.key) === -1) comparison.selected.push(source.key);
+  trainingCandidatesClearPinnedDetails();
+  if (!Object.prototype.hasOwnProperty.call(comparison.colors, source.key)) {
+    comparison.colors[source.key] = comparison.nextColor++;
+  }
+  delete comparison.errors[source.key];
+  renderTrainingCandidates();
+  trainingCandidatesLoadComparisonSource(source);
+}
+
+function trainingCandidatesWireCompareControl(root) {
+  if (!root) throw new Error('Candidate comparison requires a chart root.');
+  var details = root.querySelector('.training-candidates-compare-control');
+  if (!details) throw new Error('Candidate comparison control is missing from the chart footer.');
+  details.addEventListener('toggle', function () {
+    var comparison = trainingCandidatesComparisonState();
+    comparison.open = details.open;
+    if (details.open) trainingCandidatesEnsureComparisonArchives();
+  });
+  root.addEventListener('change', function (event) {
+    var input = event.target.closest ? event.target.closest('[data-training-candidate-compare-key]') : null;
+    if (!input) return;
+    event.stopPropagation();
+    trainingCandidatesToggleComparison(input.getAttribute('data-training-candidate-compare-key'), !!input.checked);
+  });
+}
+
+function trainingCandidatesComparisonCurves(payload) {
+  var analysis = payload && payload.analysis ? payload.analysis : {};
+  var run = payload && payload.run ? payload.run : {};
+  var primaryPoints = trainingCandidatesComparisonPoints(analysis.epochLossPoints);
+  var primaryLabel = String(run.runName || run.folder || trainingWorkspaceState.candidateFolder || 'Current run');
+  var curves = [{
+    key: 'current',
+    label: primaryLabel + ' · current',
+    color: trainingCandidatesComparisonColor(0),
+    points: primaryPoints,
+    primary: true
+  }];
+  var comparison = trainingCandidatesComparisonState();
+  comparison.selected.forEach(function (key) {
+    var curve = comparison.curves[key];
+    if (!curve || !curve.points || !curve.points.length) return;
+    curves.push({
+      key: key,
+      label: curve.label,
+      color: trainingCandidatesComparisonColor(comparison.colors[key]),
+      points: curve.points,
+      primary: false
+    });
+  });
+  return curves;
+}
+
+function trainingCandidatesComparisonHtml(payload) {
+  var analysis = payload && payload.analysis ? payload.analysis : null;
+  if (!analysis) return '<div class="training-candidates-empty">Loading loss curve…</div>';
+  var curves = trainingCandidatesComparisonCurves(payload);
+  if (!curves[0].points.length) return '<div class="training-candidates-empty">No completed TensorBoard epoch-loss points are available.</div>';
+
+  var geometry = trainingCandidatesChartGeometry();
+  var viewWidth = geometry.width, viewHeight = geometry.height;
+  var plotLeft = Math.max(50, Math.round(viewWidth * .052)), plotRight = viewWidth - 22;
+  var plotTop = 28, plotBottom = viewHeight - 42, plotHeight = plotBottom - plotTop;
+  var allPoints = [];
+  curves.forEach(function (curve) { allPoints = allPoints.concat(curve.points); });
+  var minEpoch = Math.min.apply(Math, allPoints.map(function (point) { return point.epoch; }));
+  var maxEpoch = Math.max.apply(Math, allPoints.map(function (point) { return point.epoch; }));
+  var losses = allPoints.map(function (point) { return point.loss; });
+  var minLoss = Math.min.apply(Math, losses), maxLoss = Math.max.apply(Math, losses);
+  if (minEpoch === maxEpoch) maxEpoch = minEpoch + 1;
+  if (minLoss === maxLoss) {
+    minLoss -= Math.max(.01, Math.abs(minLoss) * .02);
+    maxLoss += Math.max(.01, Math.abs(maxLoss) * .02);
+  }
+  var padding = (maxLoss - minLoss) * .08;
+  minLoss -= padding;
+  maxLoss += padding;
+  trainingWorkspaceState.candidateAutoYRange = { min: minLoss, max: maxLoss };
+  var display = trainingCandidatesDisplayState();
+  var requestedMin = trainingCandidatesRangeValue(display.yMin);
+  var requestedMax = trainingCandidatesRangeValue(display.yMax);
+  if (requestedMin !== null && requestedMax !== null && requestedMin < requestedMax) {
+    minLoss = requestedMin;
+    maxLoss = requestedMax;
+  } else if (requestedMin !== null && requestedMin < maxLoss) {
+    minLoss = requestedMin;
+  } else if (requestedMax !== null && requestedMax > minLoss) {
+    maxLoss = requestedMax;
+  }
+
+  function x(epoch) { return plotLeft + (Number(epoch) - minEpoch) / (maxEpoch - minEpoch) * (plotRight - plotLeft); }
+  function y(loss) { return plotTop + (maxLoss - Number(loss)) / (maxLoss - minLoss) * plotHeight; }
+  function polyline(points) {
+    return points.map(function (point) { return x(point.epoch).toFixed(2) + ',' + y(point.loss).toFixed(2); }).join(' ');
+  }
+
+  var yTicks = trainingCandidatesYAxisTicks(minLoss, maxLoss).map(function (value) {
+    var tickY = y(value);
+    return '<line class="training-candidates-gridline" x1="' + plotLeft + '" y1="' + tickY.toFixed(2) + '" x2="' + plotRight + '" y2="' + tickY.toFixed(2) + '"></line>' +
+      '<text class="training-candidates-axis-label" x="' + (plotLeft - 8) + '" y="' + (tickY + 4).toFixed(2) + '" text-anchor="end">' + escapeHtml(value.toFixed(4)) + '</text>';
+  }).join('');
+
+  var epochTicks = [];
+  for (var index = 0; index < 6; index++) {
+    var epoch = Math.round(minEpoch + (maxEpoch - minEpoch) * index / 5);
+    if (epochTicks.indexOf(epoch) === -1) epochTicks.push(epoch);
+  }
+  var xTicks = epochTicks.map(function (epoch) {
+    var tickX = x(epoch);
+    return '<line class="training-candidates-gridline training-candidates-compare-gridline" x1="' + tickX.toFixed(2) + '" y1="' + plotTop + '" x2="' + tickX.toFixed(2) + '" y2="' + plotBottom + '"></line>' +
+      '<text class="training-candidates-axis-label" x="' + tickX.toFixed(2) + '" y="' + (plotBottom + 24) + '" text-anchor="middle">' + escapeHtml(String(epoch)) + '</text>';
+  }).join('');
+
+  var lines = curves.map(function (curve) {
+    return '<polyline class="training-candidates-compare-line' + (curve.primary ? ' is-primary' : '') + '" style="stroke:' + escapeHtml(curve.color) + '" points="' + polyline(curve.points) + '"></polyline>';
+  }).join('');
+
+  var selectedMarker = '';
+  var selectedEpoch = Number(analysis.selected && analysis.selected.epoch);
+  if (isFinite(selectedEpoch)) {
+    var selectedPoint = curves[0].points.filter(function (point) { return Number(point.epoch) === selectedEpoch; })[0];
+    if (selectedPoint) {
+      selectedMarker = '<circle class="training-candidates-compare-selected" cx="' + x(selectedPoint.epoch).toFixed(2) + '" cy="' + y(selectedPoint.loss).toFixed(2) + '" r="5"></circle>';
+    }
+  }
+
+  var legend = curves.map(function (curve) {
+    return '<span><i class="training-candidates-compare-swatch is-active" style="--curve-color:' + escapeHtml(curve.color) + '"></i>' + escapeHtml(curve.label) + '</span>';
+  }).join('');
+
+  return '<div class="training-candidates-chart-wrap training-candidates-comparison-wrap">' +
+    '<svg class="training-candidates-chart training-candidates-comparison-chart" viewBox="0 0 ' + viewWidth + ' ' + viewHeight + '" role="img" aria-label="Training epoch loss comparison">' +
+      yTicks + xTicks +
+      '<line class="training-candidates-axis" x1="' + plotLeft + '" y1="' + plotBottom + '" x2="' + plotRight + '" y2="' + plotBottom + '"></line>' +
+      '<line class="training-candidates-axis" x1="' + plotLeft + '" y1="' + plotTop + '" x2="' + plotLeft + '" y2="' + plotBottom + '"></line>' +
+      lines + selectedMarker +
+      '<text class="training-candidates-axis-label training-candidates-compare-axis-title" x="' + ((plotLeft + plotRight) / 2).toFixed(2) + '" y="' + (viewHeight - 5) + '" text-anchor="middle">epoch</text>' +
+    '</svg>' +
+    '<div class="training-candidates-chart-footer"><div class="training-candidates-compare-legend">' + legend + '</div>' +
+      trainingCandidatesFooterActionsHtml(analysis) +
+    '</div></div>';
+}
+
+function wireTrainingCandidatesComparison() {
+  var wrap = document.querySelector('.training-candidates-comparison-wrap');
+  if (!wrap) throw new Error('Candidate comparison chart is missing.');
+  if (wrap.__trainingCandidatesComparisonWired) return;
+  wrap.__trainingCandidatesComparisonWired = true;
+  trainingCandidatesWireCompareControl(wrap);
+  wrap.addEventListener('click', function (event) {
+    if (event.target.closest && event.target.closest('.training-candidates-compare-control')) return;
+    var openGenerations = event.target.closest ? event.target.closest('[data-training-candidates-open-generations]') : null;
+    if (!openGenerations) return;
+    event.stopPropagation();
+    var testFolder = String(trainingWorkspaceState.candidateFolder || '');
+    var profileId = trainingCandidatesTestProfileId();
+    if (!testFolder || !profileId) throw new Error('Candidate analysis has no supported Test Generations context.');
+    setWorkingModelProfileId(profileId, testFolder);
+    closeTrainingCandidates();
+    window.openTestBenchForFolder(testFolder);
+  });
+}
+
 var trainingCandidatesAutoRefreshTimer = 0;
 
 function clearTrainingCandidatesAutoRefresh() {
@@ -357,7 +746,7 @@ function trainingCandidatesSvg(data) {
       '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showSmoothedStep"' + (display.showSmoothedStep ? ' checked' : '') + '><i class="step-smoothed"></i>Smoothed step loss</label>' +
       '<label class="training-candidates-line-toggle"><input type="checkbox" data-training-candidate-line="showEpochLoss"' + (display.showEpochLoss ? ' checked' : '') + '><i class="raw"></i>Epoch loss</label>' +
       '<span><i class="suggested"></i>Suggested epoch</span><span><i class="saved"></i>Saved LoRA</span><span><i class="selected"></i>Selected epoch</span><span><i class="in-test-folder"></i>In Test Folder</span><span><i class="basin"></i>Candidate region</span></div>' +
-      trainingCandidatesTestGenerationsButtonHtml(data) + '</div>' +
+      trainingCandidatesFooterActionsHtml(data) + '</div>' +
       (candidates.length ? '' : '<div class="training-candidates-no-candidates">No candidate regions identified by this algorithm.</div>') + '</div>';
 }
 
@@ -492,6 +881,7 @@ function wireTrainingCandidatesChart() {
   var pointMarker = wrap.querySelector('.training-candidates-hover-point');
   if (!chart || !tooltip || !popover || !guide || !pointMarker) return;
   wrap.__trainingCandidatesChartWired = true;
+  trainingCandidatesWireCompareControl(wrap);
   var data = JSON.parse(chart.getAttribute('data-training-candidates-chart') || '{}');
   data.smoothedStepPoints = data.smoothedStepPoints || [];
   function hide() { tooltip.classList.add('hidden'); guide.classList.add('hidden'); pointMarker.classList.add('hidden'); }
@@ -563,6 +953,7 @@ function wireTrainingCandidatesChart() {
     tooltip.style.top = Math.max(bounds.top + 4, Math.min(bounds.bottom - tooltip.offsetHeight - 4, tooltipTop)) + 'px';
   });
   wrap.addEventListener('click', function (event) {
+    if (event.target.closest && event.target.closest('.training-candidates-compare-control')) return;
     var openGenerations = event.target.closest ? event.target.closest('[data-training-candidates-open-generations]') : null;
     if (openGenerations) {
       event.stopPropagation();
@@ -878,7 +1269,7 @@ function trainingCandidatesRegionSummary(region) {
 function trainingCandidatesContentHtml(payload) {
   var analysis = payload && payload.analysis ? payload.analysis : null;
   if (!analysis) return '<div class="training-candidates-empty">Loading loss curve…</div>';
-  return '<section class="training-candidates-analysis">' + trainingCandidatesSvg(analysis) + '</section>';
+  return '<section class="training-candidates-analysis">' + (trainingCandidatesComparisonActive() ? trainingCandidatesComparisonHtml(payload) : trainingCandidatesSvg(analysis)) + '</section>';
 }
 
 function openTrainingCandidatesFolder(epoch) {
@@ -902,15 +1293,18 @@ function renderTrainingCandidates() {
   }
   els.content.innerHTML = trainingCandidatesContentHtml(trainingWorkspaceState.candidatePayload);
   syncTrainingCandidatesDisplayControls();
-  wireTrainingCandidatesChart();
+  if (trainingCandidatesComparisonActive()) wireTrainingCandidatesComparison();
+  else wireTrainingCandidatesChart();
 }
 
 function syncTrainingCandidatesDisplayControls() {
   var els = trainingCandidatesElements();
   var display = trainingCandidatesDisplayState();
   var autoRange = trainingWorkspaceState.candidateAutoYRange || {};
-  if (els.smoothing) els.smoothing.value = String(display.smoothing);
-  if (els.smoothingNumber) els.smoothingNumber.value = Number(display.smoothing).toFixed(3);
+  var comparing = trainingCandidatesComparisonActive();
+  if (els.algorithm) els.algorithm.disabled = comparing;
+  if (els.smoothing) { els.smoothing.value = String(display.smoothing); els.smoothing.disabled = comparing; }
+  if (els.smoothingNumber) { els.smoothingNumber.value = Number(display.smoothing).toFixed(3); els.smoothingNumber.disabled = comparing; }
   if (els.yMin) els.yMin.value = display.yMin === null ? trainingCandidatesRangeInputValue(autoRange.min) : String(display.yMin);
   if (els.yMax) els.yMax.value = display.yMax === null ? trainingCandidatesRangeInputValue(autoRange.max) : String(display.yMax);
 }
@@ -975,6 +1369,7 @@ function closeTrainingCandidates() {
   trainingWorkspaceState.candidateModalOpen = false;
   trainingWorkspaceState.candidatePending = false;
   trainingWorkspaceState.candidatePayload = null;
+  trainingCandidatesResetComparison();
   trainingWorkspaceState.candidateChartGeometry = null;
   trainingWorkspaceState.candidateAutoYRange = null;
   trainingCandidatesClearPinnedDetails();
@@ -992,6 +1387,7 @@ function openTrainingCandidates(job, options) {
   trainingWorkspaceState.candidateFolder = String(job.folder);
   trainingWorkspaceState.candidateAlgorithm = 'v5';
   trainingWorkspaceState.candidatePayload = null;
+  trainingCandidatesResetComparison();
   trainingWorkspaceState.candidateChartGeometry = null;
   trainingWorkspaceState.candidateAutoYRange = null;
   trainingCandidatesClearPinnedDetails();

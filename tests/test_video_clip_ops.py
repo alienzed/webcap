@@ -92,3 +92,32 @@ def test_named_export_cannot_bypass_reversible_source_overwrite(tmp_path, monkey
     assert response.status_code == 400
     assert "source overwrite mode" in response.get_json()["error"]
     assert (source_folder / "source.mp4").read_bytes() == b"source-video"
+
+
+def test_queued_clip_reserves_non_overwrite_output_path(tmp_path, monkeypatch):
+    source_folder = tmp_path / "set"
+    source_folder.mkdir()
+    (source_folder / "source.mp4").write_bytes(b"source-video")
+    monkeypatch.setattr(video_clip_ops, "safe_join_fs_root", lambda _folder: source_folder)
+    monkeypatch.setattr(video_clip_ops, "probe_media_metadata", lambda _path: {"resolution": "320x240", "duration": 10.0})
+    monkeypatch.setattr(video_clip_ops, "_ensure_clip_worker_started", lambda: None)
+    with video_clip_ops._video_clip_lock:
+        video_clip_ops._video_clip_jobs.clear()
+        video_clip_ops._video_clip_signatures.clear()
+
+    client = app_module.app.test_client()
+    base = {
+        "folder": "set",
+        "fileName": "source.mp4",
+        "outputName": "same.mp4",
+        "durationSec": 2,
+        "crop": {"x": 0, "y": 0, "width": 320, "height": 240},
+        "overwrite": False,
+        "overwriteSource": False,
+    }
+    first = client.post("/media/video_clip", json={**base, "startSec": 0})
+    second = client.post("/media/video_clip", json={**base, "startSec": 3})
+
+    assert first.status_code == 202
+    assert second.status_code == 409
+    assert second.get_json()["outputName"] == "same.mp4"

@@ -66,6 +66,7 @@ Examples:
 - durable Training queue intent;
 - durable Inference queue/backlog intent;
 - lightweight Training History / Recent Runs convenience metadata;
+- compact Director model assessment lessons / validated calibration profiles;
 - provider bookkeeping that is meaningful across restarts.
 
 Persistent JSON should be consolidated by **shared lifecycle**, not merely because several files are JSON.
@@ -106,6 +107,7 @@ Anything here must be safe to delete at any time while WebCap is not actively wr
 Examples:
 
 - Storage Manager measurements/discovery cache;
+- temporary full Director model assessment evidence (probe prompts and outputs) after compact learned findings have been published to state;
 - other advisory/rebuildable indexes.
 
 Deleting `cache/` must never remove user-authored state, pending queue intent, durable generated results, checkpoints, or required provider identity.

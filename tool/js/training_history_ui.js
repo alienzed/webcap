@@ -330,16 +330,19 @@ function closeTrainingArchiveModal() {
   els.archiveModal.setAttribute('aria-hidden', 'true');
 }
 
-function openTrainingArchiveModal(jobId) {
+function openTrainingArchiveModal(jobContext) {
   var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs) ? trainingWorkspaceState.history.jobs : [];
-  var job = jobs.filter(function (item) { return String(item.id || '') === String(jobId || ''); })[0];
-  if (!job || !job.folder) throw new Error('Training History entry does not identify its run.');
-  trainingRunnerRequest('/fs/training_archive/preview?folder=' + encodeURIComponent(job.folder) + '&jobId=' + encodeURIComponent(job.id))
+  var job = jobContext && typeof jobContext === 'object'
+    ? jobContext
+    : jobs.filter(function (item) { return String(item.id || '') === String(jobContext || ''); })[0];
+  var jobId = String(job && (job.id || job.jobId) || '');
+  if (!job || !job.folder || !jobId) throw new Error('Training run does not identify its archive source.');
+  trainingRunnerRequest('/fs/training_archive/preview?folder=' + encodeURIComponent(job.folder) + '&jobId=' + encodeURIComponent(jobId))
     .then(function (payload) {
       var preview = payload.preview;
       var els = getTrainingWorkspaceEls();
       trainingWorkspaceState.archivePreview = preview;
-      trainingWorkspaceState.archiveJobId = String(job.id || '');
+      trainingWorkspaceState.archiveJobId = jobId;
       els.archiveName.value = String(preview.archiveName || '');
       els.archiveRecap.innerHTML =
         '<div><strong>Production keeper:</strong> Epoch ' + escapeHtml(String(preview.selectedEpoch && preview.selectedEpoch.epoch || '')) + ' · ' + escapeHtml(preview.productionFileName || '') + '</div>' +
@@ -397,6 +400,13 @@ function finalizeTrainingArchive() {
         markerSave = Promise.resolve(false);
       }
     }
+    window.dispatchEvent(new CustomEvent('webcap:training-archived', {
+      detail: {
+        folder: String(preview.folder || ''),
+        jobId: String(preview.jobId || ''),
+        archive: archive
+      }
+    }));
     if (!archive.testCleanupWarning) {
       window.dispatchEvent(new CustomEvent('webcap:test-sessions-cleared', {
         detail: { folder: String(preview.folder || '') }

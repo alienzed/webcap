@@ -1275,15 +1275,25 @@
       var actions = document.createElement('div');
       actions.className = 'test-generations-staged-actions';
       if (metadata && metadata.jobId && metadata.folder && Number(metadata.epoch) > 0) {
-        var save = document.createElement('button');
-        save.type = 'button';
-        save.className = 'test-generations-save-candidate' + (metadata.selected ? ' is-selected' : '');
-        save.dataset.saveCandidate = String(fileName || '');
-        save.title = metadata.selected ? 'Selected epoch' : 'Save this epoch';
-        save.setAttribute('aria-label', metadata.selected ? 'Selected epoch ' + String(metadata.epoch) : 'Save epoch ' + String(metadata.epoch));
-        save.disabled = !!metadata.selected;
-        save.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5h9l2 2v9h-11z"></path><path d="M5 2.5v4h6v-4"></path><path d="M5 10h6v3.5H5z"></path></svg>';
-        actions.appendChild(save);
+        if (metadata.selected) {
+          var archive = document.createElement('button');
+          archive.type = 'button';
+          archive.className = 'training-btn test-generations-archive-candidate';
+          archive.dataset.archiveCandidate = String(fileName || '');
+          archive.title = 'Archive this training run';
+          archive.setAttribute('aria-label', 'Archive training run for selected epoch ' + String(metadata.epoch));
+          archive.textContent = 'Archive';
+          actions.appendChild(archive);
+        } else {
+          var save = document.createElement('button');
+          save.type = 'button';
+          save.className = 'test-generations-save-candidate';
+          save.dataset.saveCandidate = String(fileName || '');
+          save.title = 'Save this epoch';
+          save.setAttribute('aria-label', 'Save epoch ' + String(metadata.epoch));
+          save.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5h9l2 2v9h-11z"></path><path d="M5 2.5v4h6v-4"></path><path d="M5 10h6v3.5H5z"></path></svg>';
+          actions.appendChild(save);
+        }
       }
       var remove = document.createElement('button');
       remove.type = 'button';
@@ -3312,6 +3322,19 @@
       syncActiveRunControls(currentStatus);
     });
     el('test-generations-files').onclick = function (event) {
+      var archiveButton = event.target.closest('[data-archive-candidate]');
+      if (archiveButton) {
+        var archiveFileName = String(archiveButton.dataset.archiveCandidate || '');
+        var archiveMetadata = prepared && prepared.candidateMetadata && prepared.candidateMetadata[archiveFileName];
+        if (!archiveMetadata || !archiveMetadata.selected || !archiveMetadata.jobId || !archiveMetadata.folder) {
+          throw new Error('Selected Test candidate has no archiveable training-run provenance.');
+        }
+        openTrainingArchiveModal({
+          id: archiveMetadata.jobId,
+          folder: archiveMetadata.folder
+        });
+        return;
+      }
       var saveButton = event.target.closest('[data-save-candidate]');
       if (saveButton) {
         if (saveButton.disabled) return;
@@ -3441,6 +3464,11 @@
     };
     window.addEventListener('webcap:inference-queue-snapshot', function (event) {
       syncTestInferenceSnapshot(event && event.detail && event.detail.queue);
+    });
+    window.addEventListener('webcap:training-archived', function (event) {
+      var folder = String(event && event.detail && event.detail.folder || '');
+      if (!folder || !isOpen() || String(launchFolder || '') !== String(owningSetFolder(folder) || '')) return;
+      refreshStagedFilesAfterCandidates().catch(showError);
     });
     window.addEventListener('webcap:test-sessions-cleared', function (event) {
       var folder = String(event && event.detail && event.detail.folder || '');

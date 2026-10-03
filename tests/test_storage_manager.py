@@ -1141,3 +1141,56 @@ def test_storage_overview_keeps_unrelated_inventory_when_execution_queue_is_unav
     assert "runtime" in payload["unavailable"]
     assert "comfy" in payload["unavailable"]
     assert story_dir.is_dir()
+
+
+
+def test_storage_manager_lists_and_purges_director_assessment_evidence(monkeypatch, tmp_path):
+    assessment_root = tmp_path / "app-data" / "cache" / "director-model-assessments"
+    assessment_root.mkdir(parents=True)
+    assessment_id = "20261003T120000Z-deadbeef"
+    evidence = assessment_root / (assessment_id + ".json")
+    evidence.write_text("{}", encoding="utf-8")
+    learned = tmp_path / "app-data" / "state" / "diagnostics" / "director-model-calibration.json"
+    learned.parent.mkdir(parents=True)
+    learned.write_text('{"version":1,"profiles":{},"reports":{}}', encoding="utf-8")
+
+    monkeypatch.setattr(storage_manager, "director_assessment_root", lambda: assessment_root)
+    monkeypatch.setattr(
+        storage_manager,
+        "list_director_assessments",
+        lambda: [{
+            "id": assessment_id,
+            "status": "complete",
+            "startedAt": "2026-10-03T12:00:00+00:00",
+            "finishedAt": "2026-10-03T12:01:00+00:00",
+            "model": {
+                "modelRef": "local::director.gguf",
+                "modelId": "director.gguf",
+                "label": "Director",
+            },
+            "attemptCount": 3,
+            "bytes": evidence.stat().st_size,
+        }],
+    )
+    monkeypatch.setattr(
+        storage_manager,
+        "delete_director_assessment",
+        lambda item_id: evidence.unlink(),
+    )
+
+    payload = storage_manager.overview("")
+    items = payload["items"]["director_assessment"]
+
+    assert len(items) == 1
+    assert items[0]["id"] == assessment_id
+    assert items[0]["kind"] == "Director assessment evidence"
+    assert items[0]["purgeable"] is True
+    assert items[0]["bytes"] == evidence.stat().st_size
+    category = next(row for row in payload["categories"] if row["area"] == "director_assessment")
+    assert category["label"] == "Director Assessments"
+    assert "learned Director model results are preserved" in category["note"]
+
+    storage_manager.purge("director_assessment", assessment_id)
+
+    assert not evidence.exists()
+    assert learned.is_file()

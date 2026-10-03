@@ -655,13 +655,20 @@ A "not ready" answer has no authority beyond that dispatch attempt. It must not 
 global blocker or an indefinite shared wait state. The owning client may re-arm/re-submit itself when
 its local condition changes.
 
-Only the dispatcher grants local-GPU execution. Clients must not independently reserve the GPU.
+Only the dispatcher owns local-GPU scheduling authority.
 
-Every active grant must have a unique process-local lease identity. A stale worker from an earlier
-grant must not be able to release or yield a newer lease acquired later by the same client.
+Lanes do not reserve, retain, release, yield, or transfer GPU ownership. They own domain work and the
+implementation of that work only.
 
-Client submissions must likewise be revisioned or otherwise fenced so a stale dispatch/cancel result
-cannot erase newer work submitted while an earlier callback was in flight.
+The dispatcher runs one exact submitted execution in its own active worker/future. While that future
+is running, no other local-GPU work starts. When the future returns or raises, active scheduling state
+ends automatically in the dispatcher.
+
+A stale worker/future completion must never clear a newer active record, so the dispatcher may use an
+internal generation/token for fencing. That token is not a client lease or permission right.
+
+Submitted work must have exact immutable submission identity so cancellation, reorder, retry, and
+stale callback results cannot affect unrelated or newer work.
 
 ### Ordering
 
@@ -681,54 +688,43 @@ lane reading another lane's state.
 
 Equal-priority submissions should be stable FIFO.
 
-### Non-preemption and lease retention
+### Non-preemption and active execution
 
-Once a client owns the GPU, it is not preempted merely because another client submits work.
+Once the dispatcher has started one execution future, it is not preempted merely because another
+submission arrives.
 
-Client-local retention rules remain:
+Lane-specific drain behavior is expressed through what exact execution the dispatcher was asked to
+run and when the lane submits the next opportunity:
 
-- Training is non-preemptive while its active long-running lifecycle continues,
-- LLM may retain the lease across consecutive local FIFO work and its short continuation grace,
-- Inference may retain the lease while foreground Queue work drains,
-- Inference releases at the Queue-to-Backlog boundary before Backlog competes again at lower priority.
+- Training's active long-running run remains one non-preemptive execution,
+- LLM preserves its short continuation grace before exposing the next cross-client opportunity,
+- Inference may keep foreground Queue work ahead of Backlog,
+- Backlog competes again only after the foreground boundary is reached.
 
-The dispatcher needs to know only that the client still owns or has released the lease.
+No lane retains a shared GPU lease after its dispatcher-owned execution future has ended.
 
-### Handoff ownership
+### Runtime cleanup between clients
 
-The **dispatcher owns the handoff event; the outgoing client owns the handoff implementation**.
+After an execution future ends, the previous lane has no scheduling authority.
 
-A client reaching its natural yield boundary does not directly clear shared GPU ownership. It tells
-the dispatcher that the current lease may be yielded.
+The dispatcher may remember the previous client only so it can avoid needless cache cleanup when the
+next selected submission belongs to the same client.
 
-The dispatcher then decides whether:
+Before starting a different client, the dispatcher may command the previous client's runtime cleanup
+callback:
 
-- the same client may continue under the existing lease without cleanup,
-- the lease is returning to idle, or
-- a different client is next and an actual runtime handoff is required.
+- Inference cleanup may free ComfyUI caches/models,
+- LLM cleanup may unload its local llama model,
+- Training cleanup follows Training's existing lifecycle where applicable.
 
-When an actual handoff is required, the dispatcher calls the outgoing client's cleanup/handoff
-callback. The dispatcher does not know how that cleanup works.
+This cleanup is maintenance, not a permission handshake.
 
-Therefore:
+The previous lane does not decide whether the dispatcher may continue. Cleanup failure is surfaced as
+a concrete runtime error, but it must not recreate an old-client ownership hold or indefinite shared
+GPU blocker.
 
-- Inference cleans up its own managed ComfyUI runtime when the dispatcher requests an Inference handoff,
-- LLM cleans up its own managed local llama runtime when the dispatcher requests an LLM handoff,
-- Training owns its own runner lifecycle,
-- the incoming client does not interrogate or clean up the outgoing client's runtime,
-- ownership does not transfer until the outgoing client reports a completed handoff.
-
-If a client's managed runtime is positively still active, that client may retain its lease.
-
-A pre-dispatch **not ready** result and a failed **handoff** are different:
-
-- not ready means the dispatcher may try another submitted client,
-- failed handoff means the current client has not yet established a safe transfer boundary, so another
-  local-GPU client must not start.
-
-If runtime state becomes unknown, unreachable, or ambiguous, uncertainty must not become an immortal
-shared-GPU claim. Each client therefore needs a bounded, deterministic cleanup/escalation path rather
-than an indefinite "maybe still owns VRAM" state.
+If the next workload then genuinely fails because runtime residue remains, that is a real execution
+failure and should be exposed as such.
 
 ## 14. Runtime and failure semantics
 

@@ -7,9 +7,11 @@ from tool.server import director_model_assessment_store as assessment
 
 @pytest.fixture
 def assessment_root(monkeypatch, tmp_path):
+    assessment._active_assessment_ids.clear()
     root = tmp_path / "app-data" / "cache"
     monkeypatch.setattr(assessment.app_config, "app_cache_root", lambda: root)
-    return root / assessment.ROOT_NAME
+    yield root / assessment.ROOT_NAME
+    assessment._active_assessment_ids.clear()
 
 
 def _model():

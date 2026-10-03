@@ -540,11 +540,12 @@ LLM work is **server-session-bound** and held in backend memory rather than dura
 For local LLM work, the LLM client owns llama.cpp lifecycle and GPU handoff.
 
 LLM may retain ownership across consecutive local FIFO jobs so real queued LLM work can drain without
-needless model churn. The current implementation also has a short post-empty continuation grace; that
-specific behavior is intentionally left for separate semantic review and is not defined by this
-document. When LLM actually ends ownership, it is responsible for unloading/stopping its own local
-runtime to the required handoff boundary. Inference and Training must not independently inspect or
-clean up llama.cpp before they start.
+needless model churn. It may also retain that already-established ownership through the existing short
+post-empty quiescence window so a burst of closely spaced LLM calls does not expose an artificial
+cross-lane gap. The timer only ends the current LLM turn; it never acquires or recreates ownership.
+When LLM actually ends ownership, it is responsible for unloading/stopping its own local runtime to
+the required handoff boundary. Inference and Training must not independently inspect or clean up
+llama.cpp before they start.
 
 A local model/runtime failure is a real LLM execution failure and should fail visibly. The scheduler
 should not add speculative "runtime usable" gates in front of the request.

@@ -44,9 +44,11 @@ Queued work does not own the GPU.
 
 Backlogged work does not own the GPU.
 
-A grace timer does not own the GPU.
+A timer cannot acquire or recreate GPU ownership. A short deterministic quiescence deadline may
+bound when an already-owning lane ends a same-lane drain turn; during that interval the canonical
+`owner` remains the only ownership fact.
 
-Cached model/runtime residency does not own the GPU.
+Cached model/runtime residency by itself does not own the GPU.
 
 Stale persisted state does not own the GPU.
 

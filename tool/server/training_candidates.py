@@ -45,10 +45,16 @@ def _resume_branch_event_filter(events, checkpoint_wall_time=None, branch_starte
         return list(events or [])
     checkpoint_time = float(checkpoint_wall_time)
     branch_time = float(branch_started_at)
-    return [
-        event for event in (events or [])
-        if float(event.wall_time) <= checkpoint_time or float(event.wall_time) >= branch_time
-    ]
+    retained = []
+    for event in events or []:
+        try:
+            wall_time = float(event.wall_time)
+        except (AttributeError, TypeError, ValueError):
+            retained.append(event)
+            continue
+        if wall_time <= checkpoint_time or wall_time >= branch_time:
+            retained.append(event)
+    return retained
 
 
 def read_loss_events(run_dir, resume_checkpoint_wall_time=None, resume_branch_started_at=None):

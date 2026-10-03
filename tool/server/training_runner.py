@@ -1025,11 +1025,17 @@ def candidate_analysis_response(folder, job_id, algorithm="v5"):
         run_dir = host_path_for_training_path(raw_run_path)
         if not run_dir.is_dir():
             raise FileNotFoundError("Recorded training run directory is unavailable.")
-        analysis = _analyze_run_directory(
-            run_dir,
-            algorithm=algorithm,
-            resume_checkpoint_wall_time=run.get("resumeCheckpointWallTime"),
-            resume_branch_started_at=run.get("resumeBranchStartedAt"),
+        checkpoint_wall_time = run.get("resumeCheckpointWallTime")
+        branch_started_at = run.get("resumeBranchStartedAt")
+        analysis = (
+            _analyze_run_directory(
+                run_dir,
+                algorithm=algorithm,
+                resume_checkpoint_wall_time=checkpoint_wall_time,
+                resume_branch_started_at=branch_started_at,
+            )
+            if checkpoint_wall_time is not None and branch_started_at is not None
+            else _analyze_run_directory(run_dir, algorithm=algorithm)
         )
         _annotate_candidate_test_folder_status(run, analysis)
         selected = _candidate_selected_epoch(run_dir, run)

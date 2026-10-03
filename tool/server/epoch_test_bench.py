@@ -15,7 +15,7 @@ from . import config as app_config
 from .folder_state_store import read_folder_state, set_media_rating
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path
-from .training_runner import candidate_selected_epoch
+from .training_runner import candidate_run_snapshot_from_provenance, candidate_selected_epoch_from_provenance
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
@@ -710,15 +710,22 @@ def _staged_candidate_metadata(lora_files, model):
         folder = str(provenance.get("sourceFolder") or "").strip()
         job_id = str(provenance.get("sourceJobId") or "").strip()
         epoch = int(provenance.get("sourceEpoch"))
-        run_key = (folder, job_id)
+        try:
+            run_dir, resolved_run = candidate_run_snapshot_from_provenance(provenance)
+            resolved_job_id = str(resolved_run.get("id") or job_id)
+            run_key = str(run_dir)
+        except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
+            resolved_job_id = job_id
+            run_key = (folder, job_id)
         if run_key not in selected_by_run:
             try:
-                selected_by_run[run_key] = candidate_selected_epoch(folder, job_id)
-            except (LookupError, FileNotFoundError, RuntimeError):
+                selected_by_run[run_key] = candidate_selected_epoch_from_provenance(provenance)
+            except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
                 selected_by_run[run_key] = None
         selected = selected_by_run[run_key]
         result[lora_file.name] = {
-            "jobId": job_id,
+            "jobId": resolved_job_id,
+            "sourceJobId": job_id,
             "folder": folder,
             "epoch": epoch,
             "stage": str(provenance.get("stage") or "").strip().lower(),

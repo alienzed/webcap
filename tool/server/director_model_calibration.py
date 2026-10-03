@@ -174,7 +174,9 @@ def _report_health(attempts, context_mode, context_size, max_tokens, status):
         return "healthy"
 
     if failed:
-        return "assessment-failed"
+        if any(attempt.get("failureKind") == "runtime" for attempt in failed):
+            return "assessment-failed"
+        return "calibration-failed"
     if attempts:
         return "assessment-incomplete"
     return "unknown"

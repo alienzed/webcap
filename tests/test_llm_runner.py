@@ -1527,16 +1527,18 @@ def test_llm_snapshot_retries_startup_reconciliation_when_needed(llm_root):
 
 
 
-def test_chat_runtime_overrides_are_validated_and_forwarded(llm_root, monkeypatch):
+@pytest.mark.parametrize("assessment_evidence", [False, True])
+def test_chat_runtime_overrides_are_validated_and_forwarded(llm_root, monkeypatch, assessment_evidence):
     captured = {}
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "run_freeform_chat",
-        lambda model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None: captured.update({
+        lambda model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False: captured.update({
             "model": model_id,
             "maxTokens": max_tokens,
             "contextSize": context_size,
+            "assessmentEvidence": assessment_evidence,
         }) or {
             "text": "CONTEXT_OK",
             "model": model_id,
@@ -1549,7 +1551,7 @@ def test_chat_runtime_overrides_are_validated_and_forwarded(llm_root, monkeypatc
         "chat",
         "local::director.gguf",
         {"operation": "freeform_chat", "messages": [{"role": "user", "content": "probe"}]},
-        context={"runtimeOverrides": {"maxTokens": 64, "contextSize": 16384}},
+        context={"runtimeOverrides": {"maxTokens": 64, "contextSize": 16384}, "assessmentEvidence": assessment_evidence},
         label="Director Context Calibration",
     )
     llm_runner._advance_queue()
@@ -1560,6 +1562,7 @@ def test_chat_runtime_overrides_are_validated_and_forwarded(llm_root, monkeypatc
         "model": "local::director.gguf",
         "maxTokens": 64,
         "contextSize": 16384,
+        "assessmentEvidence": assessment_evidence,
     }
     assert finished["result"]["contextSize"] == 16384
 

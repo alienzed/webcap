@@ -137,6 +137,7 @@ def _normalize_attempt(attempt):
         "status": status,
         "prompt": str(attempt.get("prompt") or ""),
         "text": str(attempt.get("text") or ""),
+        "reasoning": str(attempt.get("reasoning") or ""),
         "finishReason": str(attempt.get("finishReason") or ""),
         "error": str(attempt.get("error") or ""),
         "failureKind": str(attempt.get("failureKind") or "").strip(),
@@ -167,16 +168,21 @@ def update_assessment(assessment_id, attempts, summary=None, *, final=False, sta
             raise ValueError("Director assessment final status is invalid.")
         payload["status"] = final_status
         payload["finishedAt"] = _now_iso()
-        _active_assessment_ids.discard(str(assessment_id))
     else:
         payload["status"] = "running"
         payload["finishedAt"] = ""
     _write(_assessment_path(assessment_id), payload)
+    if final:
+        _active_assessment_ids.discard(str(assessment_id))
     return _copy(payload)
 
 
 def get_assessment(assessment_id):
-    return _copy(_read(assessment_id))
+    payload = _read(assessment_id)
+    if payload.get("status") == "running" and str(assessment_id) not in _active_assessment_ids:
+        payload["status"] = "incomplete"
+        payload["error"] = payload.get("error") or "Assessment interrupted before finalization; no assessment is active in this server session."
+    return _copy(payload)
 
 
 def list_assessments():
@@ -185,12 +191,7 @@ def list_assessments():
         return []
     rows = []
     for path in root.glob("*.json"):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if not isinstance(payload, dict) or payload.get("version") != ASSESSMENT_VERSION:
-            continue
+        payload = get_assessment(path.stem)
         attempts = payload.get("attempts") if isinstance(payload.get("attempts"), list) else []
         rows.append({
             "id": str(payload.get("id") or path.stem),

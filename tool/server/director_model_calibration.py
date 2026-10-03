@@ -137,7 +137,7 @@ def _report_abilities(attempts, context_mode, context_size, max_tokens):
         "responds": bool(passed),
         "contextTokens": max(0, int(proven_context or 0)),
         "structuredOutputTokens": max(0, int(structured_output or 0)),
-        "coherentOutputTokens": max(0, int(coherent_output or max_tokens or 0)),
+        "coherentOutputTokens": coherent_output,
     }
 
 
@@ -154,6 +154,8 @@ def _report_pathologies(attempts):
 
 
 def _report_health(attempts, context_mode, context_size, max_tokens, status):
+    max_tokens = max([attempt["target"] for attempt in attempts
+                      if attempt["kind"] == "prose" and attempt["status"] == "passed"], default=0)
     if status == "stopped":
         return "stopped"
 
@@ -167,10 +169,12 @@ def _report_health(attempts, context_mode, context_size, max_tokens, status):
         return "warning" if max_tokens > 0 else "likely-unusable"
 
     if max_tokens > 0:
-        if any(attempt.get("failureKind") == "capacity" for attempt in failed):
-            return "limited"
-        if failed:
+        if status != "complete":
             return "assessment-incomplete"
+        if any(attempt.get("failureKind") != "capacity" for attempt in failed):
+            return "assessment-incomplete"
+        if failed:
+            return "limited"
         return "healthy"
 
     if failed:

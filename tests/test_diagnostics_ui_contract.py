@@ -13,7 +13,8 @@ def test_diagnostics_is_a_secondary_utility_not_a_workspace():
     assert 'id="diagnostics-modal"' in html
     assert 'data-diagnostics-tab="health"' in html
     assert 'data-diagnostics-tab="h3"' in html
-    assert 'data-diagnostics-tab="director"' in html
+    assert 'data-diagnostics-tab="models"' in html
+    assert 'data-diagnostics-tab="benchmark"' in html
     assert html.index('id="shell-diagnostics-btn"') > html.index('class="activity-rail-spacer"')
     assert 'aria-controls="diagnostics-modal"' in html
 

@@ -229,17 +229,17 @@ def test_calibration_protocol_is_progressive_and_versioned():
     assert protocol["contextSteps"] == [4096, 8192, 16384, 32768, 65536, 98304, 131072, 163840]
     assert protocol["outputSteps"] == [512, 1024, 2048, 4096, 8192, 12288, 16384, 24576, 32768]
     assert protocol["outputItemCounts"]["512"] == 12
-    assert protocol["outputItemCounts"]["32768"] == 1440
+    assert protocol["outputItemCounts"]["32768"] == 960
     assert protocol["proseSectionCounts"]["512"] == 2
     assert protocol["proseSectionCounts"]["32768"] == 160
     assert protocol["marker"] == model_test.CALIBRATION_MARKER
     assert protocol["proseMarker"] == model_test.PROSE_MARKER
     prompt = model_test._calibration_output_prompt(4096)
     prose_prompt = model_test._calibration_prose_prompt(4096)
-    assert "exactly 180 numbered items" in prompt
+    assert "exactly 120 numbered items" in prompt
     assert model_test.CALIBRATION_MARKER in prompt
     assert "exactly 20 consecutively numbered sections" in prose_prompt
-    assert "80-110 words" in prose_prompt
+    assert "1600-2200 words of actual story prose in total" in prose_prompt
     assert "requested generation budget" in protocol["description"]
     assert model_test.PROSE_MARKER in prose_prompt
 
@@ -310,13 +310,14 @@ def test_output_calibration_uses_proven_local_context(monkeypatch):
         "local::director.gguf",
         "output",
         4096,
-        context_size=24576,
+        context_size=32768,
     )
 
     assert captured["context"]["runtimeOverrides"] == {
         "maxTokens": 4096,
-        "contextSize": 24576,
+        "contextSize": 32768,
     }
+    assert captured["context"]["assessmentEvidence"] is True
     assert model_test.CALIBRATION_MARKER in captured["contract"]["messages"][0]["content"]
 
 

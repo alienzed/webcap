@@ -111,6 +111,56 @@ def test_completion_result_can_return_partial_text_for_freeform_chat():
     assert result["finishReason"] == "length"
 
 
+@pytest.mark.parametrize("text,finish_reason", [("", "stop"), ("", "length"), ("  partial\n", "length")])
+def test_assessment_preserves_empty_and_truncated_output_verbatim(text, finish_reason):
+    response = {"choices": [{"message": {"content": text}, "finish_reason": finish_reason}],
+                "usage": {"completion_tokens": 512}}
+    result = storyboard_llm_runtime._completion_result(
+        response, "director", allow_truncated=True, assessment_evidence=True,
+    )
+    assert result["text"] == text
+    assert result["finishReason"] == finish_reason
+    assert result["usage"] == response["usage"]
+
+
+def test_assessment_missing_completion_is_runtime_failure():
+    with pytest.raises(RuntimeError, match="no completion message"):
+        storyboard_llm_runtime._completion_result({}, "director", assessment_evidence=True)
+
+
+def test_assessment_retains_separate_provider_reasoning():
+    result = storyboard_llm_runtime._completion_result({"choices": [{
+        "message": {"content": "", "reasoning": "Thinking consumed the budget."}, "finish_reason": "length",
+    }]}, "qwen", allow_truncated=True, assessment_evidence=True)
+    assert result["text"] == ""
+    assert result["reasoning"] == "Thinking consumed the budget."
+
+
+@pytest.mark.parametrize("ollama,assessment_evidence", [(True, True), (True, False), (False, True)])
+def test_only_ollama_assessment_requests_disable_thinking(monkeypatch, ollama, assessment_evidence):
+    runtime = storyboard_llm_runtime
+    captured = {}
+    monkeypatch.setattr(runtime, "_ensure_server", lambda: None)
+    monkeypatch.setattr(runtime, "_model_record", lambda *_args: {})
+    monkeypatch.setattr(runtime, "_director_config", lambda: {"mode": "remote", "max_tokens": None})
+    monkeypatch.setattr(runtime, "_remote_is_ollama", lambda: ollama)
+    monkeypatch.setattr(runtime, "_set_activity", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runtime, "_ollama_running_model", lambda *_args: {"contextSize": 8192})
+    def transport(_path, **kwargs):
+        captured.update(kwargs["payload"])
+        return {"choices": [{"message": {"content": "answer"}, "finish_reason": "stop"}]}
+    monkeypatch.setattr(runtime, "_remote_http_json_cancellable", transport)
+    monkeypatch.setattr(runtime, "_http_json", transport)
+    result = runtime.chat("remote-1::qwen", [{"role": "user", "content": "probe"}],
+                          max_tokens=512, allow_truncated=True, assessment_evidence=assessment_evidence)
+    assert result["text"] == "answer"
+    assert captured["max_tokens"] == 512
+    if ollama and assessment_evidence:
+        assert captured["reasoning_effort"] == "none"
+    else:
+        assert "reasoning_effort" not in captured
+
+
 def test_normalize_models_exposes_local_gguf_identity_and_status():
     payload = {
         "data": [

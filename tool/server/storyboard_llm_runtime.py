@@ -1020,7 +1020,8 @@ def _assessment_signal(model_ref):
     health = str(report.get("health") or "").strip()
     pathologies = report.get("pathologies") if isinstance(report.get("pathologies"), list) else []
     serious = bool(pathologies) or health == "likely-unusable"
-    limited = not serious and 0 < coherent_output < 8192
+    limited = (not serious and report.get("status") == "complete"
+               and health in {"healthy", "limited"} and 0 < coherent_output < 8192)
     return {
         "status": str(report.get("status") or ""),
         "health": health,
@@ -1028,7 +1029,7 @@ def _assessment_signal(model_ref):
         "seriousWarning": serious,
         "limited": limited,
         "fullStoryCapable": coherent_output >= 8192 and not serious,
-        "individualScenesRecommended": 0 < coherent_output < 8192 and not serious,
+        "individualScenesRecommended": limited,
         "abilities": {
             "contextTokens": max(0, int(abilities.get("contextTokens") or 0)),
             "structuredOutputTokens": max(0, int(abilities.get("structuredOutputTokens") or 0)),
@@ -1345,7 +1346,7 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
     )
 
 
-def chat(model_ref, messages, response_schema=None, max_tokens=None, context_size=None, gpu_reserved=False, sampling=None, allow_truncated=False):
+def chat(model_ref, messages, response_schema=None, max_tokens=None, context_size=None, gpu_reserved=False, sampling=None, allow_truncated=False, assessment_evidence=False):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director messages are required.")
 
@@ -1399,6 +1400,8 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             if requested_max_tokens <= 0:
                 raise ValueError("Director max_tokens override must be greater than zero.")
             payload["max_tokens"] = requested_max_tokens
+        if assessment_evidence and settings.get("mode", "local") == "remote" and _remote_is_ollama():
+            payload["reasoning_effort"] = "none"
         if settings.get("mode", "local") == "local":
             payload["reasoning_effort"] = "none"
             payload["chat_template_kwargs"] = {"enable_thinking": False}
@@ -1434,7 +1437,7 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
                 _debug_llm_failure(model_ref, time.perf_counter() - request_started, exc)
                 raise
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
-            result = _completion_result(response, model_ref, allow_truncated=allow_truncated)
+            result = _completion_result(response, model_ref, allow_truncated=allow_truncated, assessment_evidence=assessment_evidence)
             if _remote_is_ollama():
                 remote_model = _ollama_running_model(model_id)
                 result["contextSize"] = int(remote_model.get("contextSize") or 0)
@@ -1466,7 +1469,7 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
                 raise
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
             _relay_log_updates()
-            result = _completion_result(response, model_ref, allow_truncated=allow_truncated)
+            result = _completion_result(response, model_ref, allow_truncated=allow_truncated, assessment_evidence=assessment_evidence)
             effective_context = int(settings.get("context_size") or 0)
             if context_size is not None:
                 slot = _slot_snapshot(model_id)
@@ -1489,12 +1492,16 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
                         )
 
 
-def _completion_result(response, model_id, allow_truncated=False):
+def _completion_result(response, model_id, allow_truncated=False, assessment_evidence=False):
     choices = response.get("choices") if isinstance(response, dict) else None
     choice = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
     message = choice.get("message") if isinstance(choice, dict) else None
-    content = str(message.get("content") or "").strip() if isinstance(message, dict) else ""
-    if not content:
+    if not isinstance(message, dict):
+        raise RuntimeError("Director runtime returned no completion message.")
+    content = str(message.get("content") or "")
+    if not assessment_evidence:
+        content = content.strip()
+    if not content and not assessment_evidence:
         raise RuntimeError("Director runtime returned an empty response.")
     finish_reason = str(choice.get("finish_reason") or "").strip().lower() if isinstance(choice, dict) else ""
     if finish_reason in {"length", "max_tokens"}:
@@ -1503,9 +1510,11 @@ def _completion_result(response, model_id, allow_truncated=False):
                 "Director output was truncated because the runtime reached its available token/context limit "
                 + "(finish_reason=" + finish_reason + ")."
             )
-        content += "\n\n[Output truncated by model/runtime token or context limit.]"
+        if not assessment_evidence:
+            content += "\n\n[Output truncated by model/runtime token or context limit.]"
     return {
         "text": content,
+        "reasoning": str(message.get("reasoning") or message.get("reasoning_content") or "") if assessment_evidence else "",
         "model": model_id,
         "finishReason": finish_reason,
         "usage": response.get("usage") if isinstance(response, dict) else None,
@@ -1531,7 +1540,7 @@ def normalize_freeform_messages(messages):
     return normalized
 
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None):
+def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False):
     normalized = normalize_freeform_messages(messages)
 
     operation = "freeform_chat"
@@ -1563,6 +1572,7 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, c
                 context_size=context_size,
                 gpu_reserved=bool(gpu_reserved),
                 allow_truncated=True,
+                assessment_evidence=assessment_evidence,
             )
             _set_activity(
                 "complete",

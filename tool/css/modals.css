@@ -723,8 +723,30 @@ details.director-model-calibration-finding {
 }
 
 details.director-model-calibration-finding > .director-model-finding-summary {
-  padding: 9px 10px;
+  padding: 9px 10px 9px 26px;
   cursor: pointer;
+}
+
+details.director-model-calibration-finding > summary,
+.director-model-assessment-run > summary,
+.director-model-assessment-probe > summary {
+  position: relative;
+  padding-left: 26px;
+  cursor: pointer;
+}
+
+details.director-model-calibration-finding > summary::before,
+.director-model-assessment-run > summary::before,
+.director-model-assessment-probe > summary::before {
+  content: '▸';
+  position: absolute;
+  left: 10px;
+}
+
+details.director-model-calibration-finding[open] > summary::before,
+.director-model-assessment-run[open] > summary::before,
+.director-model-assessment-probe[open] > summary::before {
+  content: '▾';
 }
 
 .director-model-finding-title {

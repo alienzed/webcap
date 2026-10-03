@@ -168,6 +168,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
     if client == "chat":
         return {
             "text": llm_result["text"],
+            "reasoning": llm_result.get("reasoning", ""),
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
@@ -416,6 +417,8 @@ def _execute_claimed(job_id, gpu_reserved):
         if client == "chat":
             overrides = context.get("runtimeOverrides") if isinstance(context.get("runtimeOverrides"), dict) else {}
             chat_kwargs = {"gpu_reserved": bool(gpu_reserved)}
+            if context.get("assessmentEvidence"):
+                chat_kwargs["assessment_evidence"] = True
             if "maxTokens" in overrides:
                 chat_kwargs["max_tokens"] = overrides["maxTokens"]
             if "contextSize" in overrides:

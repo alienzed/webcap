@@ -21,13 +21,13 @@ OUTPUT_STEPS = (512, 1024, 2048, 4096, 8192, 12288, 16384, 24576, 32768)
 OUTPUT_ITEM_COUNTS = {
     512: 12,
     1024: 30,
-    2048: 90,
-    4096: 180,
-    8192: 360,
-    12288: 540,
-    16384: 720,
-    24576: 1080,
-    32768: 1440,
+    2048: 60,
+    4096: 120,
+    8192: 240,
+    12288: 360,
+    16384: 480,
+    24576: 720,
+    32768: 960,
 }
 PROSE_SECTION_COUNTS = {
     512: 2,
@@ -227,8 +227,9 @@ def _calibration_prose_prompt(target):
         "This is a long-form coherence and completion stress test. "
         "Write one continuous realistic suspense story divided into exactly "
         + str(section_count) + " consecutively numbered sections labelled 'Section 1:' through 'Section "
-        + str(section_count) + ":'. Each section must contain 80-110 words of actual story prose, "
-        "continue causally from the previous section, preserve character identities, locations, objects, "
+        + str(section_count) + ":'. Write " + str(section_count * 80) + "-" + str(section_count * 110)
+        + " words of actual story prose in total, distributed across the sections. "
+        "Each section must continue causally from the previous section, preserve character identities, locations, objects, "
         "injuries, time progression, and established facts, and materially advance the plot. "
         "Vary sentence structure and avoid recaps, filler, repeated paragraphs, outlines, commentary, or meta discussion. "
         "The story begins with a night-shift maintenance worker discovering that an elevator in an occupied office tower "
@@ -328,7 +329,7 @@ def enqueue_calibration_run(model_ref, kind, target, context_size=None):
             "operation": "freeform_chat",
             "messages": messages,
         },
-        context={"runtimeOverrides": overrides},
+        context={"runtimeOverrides": overrides, "assessmentEvidence": True},
         label=label,
     )
 

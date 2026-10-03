@@ -338,3 +338,59 @@ def test_late_pathology_warns_without_discarding_proven_usable_range(calibration
     assert saved["health"] == "warning"
     assert saved["pathologies"] == ["looping"]
     assert saved["abilities"]["coherentOutputTokens"] == 8192
+
+
+@pytest.mark.parametrize("status", ["error", "incomplete", "stopped"])
+def test_inconclusive_small_proven_range_is_neutral_in_selectors(calibration_root, status):
+    from tool.server.storyboard_llm_runtime import _assessment_signal
+    saved = calibration.save_report(_report(status=status))
+    assert saved["health"] == ("stopped" if status == "stopped" else "assessment-incomplete")
+    signal = _assessment_signal(saved["modelRef"])
+    assert signal["abilities"]["coherentOutputTokens"] == 512
+    assert signal["seriousWarning"] is False
+    assert signal["limited"] is False
+    assert signal["individualScenesRecommended"] is False
+
+
+def test_declared_output_without_prose_evidence_is_not_proven(calibration_root):
+    from tool.server.storyboard_llm_runtime import _assessment_signal
+    report = _report(maxTokens=8192, attempts=[{"kind": "output", "target": 8192, "status": "passed"}])
+    saved = calibration.save_report(report)
+    assert saved["abilities"]["coherentOutputTokens"] == 0
+    assert saved["health"] == "assessment-incomplete"
+    signal = _assessment_signal(saved["modelRef"])
+    assert not signal["limited"] and not signal["fullStoryCapable"]
+
+
+def test_contract_miss_after_proven_range_remains_neutral(calibration_root):
+    from tool.server.storyboard_llm_runtime import _assessment_signal
+    report = _report()
+    report["attempts"].append({"kind": "prose", "target": 1024, "status": "failed", "failureKind": "contract"})
+    saved = calibration.save_report(report)
+    assert saved["health"] == "assessment-incomplete"
+    signal = _assessment_signal(saved["modelRef"])
+    assert signal["abilities"]["coherentOutputTokens"] == 512
+    assert not signal["limited"] and not signal["seriousWarning"]
+
+
+def test_earlier_capacity_failure_does_not_mask_later_contract_miss(calibration_root):
+    from tool.server.storyboard_llm_runtime import _assessment_signal
+    report = _report()
+    report["attempts"].extend([
+        {"kind": "context", "target": 32768, "status": "failed", "failureKind": "capacity"},
+        {"kind": "prose", "target": 1024, "status": "failed", "failureKind": "contract"},
+    ])
+    saved = calibration.save_report(report)
+    assert saved["health"] == "assessment-incomplete"
+    signal = _assessment_signal(saved["modelRef"])
+    assert not signal["limited"] and not signal["seriousWarning"]
+
+
+@pytest.mark.parametrize("failure_kind", ["empty", "looping", "leakage", "garbled"])
+def test_output_pathologies_warn_in_normal_selectors(calibration_root, failure_kind):
+    from tool.server.storyboard_llm_runtime import _assessment_signal
+    report = _report(maxTokens=0, attempts=[{
+        "kind": "output", "target": 512, "status": "failed", "failureKind": failure_kind,
+    }])
+    saved = calibration.save_report(report)
+    assert _assessment_signal(saved["modelRef"])["seriousWarning"] is True

@@ -688,14 +688,30 @@ def _staged_candidate_runs(lora_files, model):
         if not _is_webcap_staged_lora(lora_file, model):
             continue
         provenance = _staged_lora_provenance(lora_file)
-        job_id = str(provenance.get("sourceJobId") or "").strip()
+        source_job_id = str(provenance.get("sourceJobId") or "").strip()
+        folder = str(provenance.get("sourceFolder") or "").strip()
+        run_name = str(provenance.get("sourceRunName") or "").strip()
+        run_sequence = str(provenance.get("sourceRunSequence") or "").strip()
+        run_summary = provenance.get("runSummary") if isinstance(provenance.get("runSummary"), dict) else {}
+        job_id = source_job_id
+        run_key = source_job_id
+        try:
+            run_dir, resolved_run = candidate_run_snapshot_from_provenance(provenance)
+            job_id = str(resolved_run.get("id") or source_job_id)
+            run_name = str(resolved_run.get("runName") or run_name)
+            run_sequence = str(resolved_run.get("sequence") or run_sequence)
+            run_summary = resolved_run.get("runSummary") if isinstance(resolved_run.get("runSummary"), dict) else run_summary
+            run_key = str(run_dir)
+        except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
+            pass
         if job_id:
-            runs[job_id] = {
+            runs[run_key] = {
                 "jobId": job_id,
-                "folder": str(provenance.get("sourceFolder") or "").strip(),
-                "runName": str(provenance.get("sourceRunName") or "").strip(),
-                "runSequence": str(provenance.get("sourceRunSequence") or "").strip(),
-                "runSummary": provenance.get("runSummary") if isinstance(provenance.get("runSummary"), dict) else {},
+                "sourceJobId": source_job_id,
+                "folder": folder,
+                "runName": run_name,
+                "runSequence": run_sequence,
+                "runSummary": run_summary,
             }
     return list(runs.values())
 

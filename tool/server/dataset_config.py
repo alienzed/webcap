@@ -405,8 +405,17 @@ def _h3_calibrated_ceiling(frames: int, ar_label: str):
     if not isinstance(calibration, dict):
         raise ValueError("training.h3_calibration must be an object.")
     from .h3_probe import current_h3_hardware
-    if calibration.get("hardware") != current_h3_hardware():
-        raise ValueError("H3 calibrated ceilings do not match the current training hardware. Reset calibration before using them.")
+    try:
+        current_hardware = current_h3_hardware()
+    except RuntimeError:
+        # Calibration is an optional optimization. If hardware identity cannot
+        # be resolved while browsing/reviewing a set, use the conservative
+        # baseline policy instead of making Training Review unavailable.
+        return None
+    if calibration.get("hardware") != current_hardware:
+        # A calibration only applies to the hardware it measured. Treat stale
+        # calibration as absent; the baseline ceilings remain safe.
+        return None
     safe_shapes = calibration.get("safe_shapes")
     if safe_shapes is None:
         return None

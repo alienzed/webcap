@@ -499,6 +499,48 @@ def test_legacy_staged_provenance_reconnects_to_resumed_job_for_same_timestamp_r
     assert resolved_run["actionId"] == "003-h3"
 
 
+def test_candidate_snapshot_recovers_unindexed_job_from_staged_run_identity(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    run = tmp_path / "trainer" / "output" / "20261003_120000"
+    run.mkdir(parents=True)
+    for epoch in (12, 18):
+        candidate = staged / ("baseline-03__epoch" + str(epoch) + ".safetensors")
+        candidate.write_bytes(b"weights")
+        candidate.with_suffix(".webcap.json").write_text(json.dumps({
+            "version": 1,
+            "sourceJobId": "old-job",
+            "sourceRunName": "baseline",
+            "sourceRunSequence": "03",
+            "sourceRunPath": str(run),
+            "sourceActionId": "003-h3",
+            "sourceEpoch": epoch,
+            "sourceFileName": "adapter_epoch" + str(epoch) + ".safetensors",
+            "sourceFolder": "sets/subject",
+            "stage": "h3",
+            "runSummary": {"capturedItemCount": 23},
+        }), encoding="utf-8")
+
+    monkeypatch.setattr(training_runner.app_config, "safe_join_fs_root", lambda _folder: tmp_path / "set")
+    monkeypatch.setattr(training_runner, "_read_state_readonly", lambda: {"version": 3, "jobs": []})
+    monkeypatch.setattr(training_runner, "_find_history_job", lambda _folder, _job_id: None)
+    monkeypatch.setattr(training_runner, "test_copy_destination", lambda _stage, _folder: (tmp_path, ["staged"]))
+
+    def validate_managed_run(_folder, raw_run_path, action_id):
+        assert action_id == "003-h3"
+        return Path(raw_run_path).resolve()
+
+    monkeypatch.setattr(training_runner, "_candidate_validate_managed_run", validate_managed_run)
+
+    raw_run_path, resolved_run = training_runner._candidate_run_snapshot("sets/subject", "old-job")
+
+    assert Path(raw_run_path) == run.resolve()
+    assert resolved_run["id"] == "old-job"
+    assert resolved_run["actionId"] == "003-h3"
+    assert resolved_run["stages"] == "h3"
+    assert resolved_run["runSummary"] == {"capturedItemCount": 23}
+
+
 def test_remove_candidate_from_test_deletes_copy_and_sidecar_but_preserves_saved_epoch(tmp_path, monkeypatch):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
     copied = training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)

@@ -622,6 +622,64 @@ def history_metrics_response(folder, job_id):
     }, 200
 
 
+def _candidate_staged_run_snapshot_for_job(folder, job_id):
+    """Recover one unindexed training run from app-owned staged Test provenance."""
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    wanted = str(job_id or "").strip()
+    matches = {}
+    for stage in TEST_COPY_STAGE_LABELS:
+        try:
+            root, parts = test_copy_destination(stage, folder_text)
+        except (OSError, ValueError):
+            continue
+        directory = Path(root).joinpath(*parts)
+        if not directory.is_dir() or directory.is_symlink():
+            continue
+        for candidate in sorted(directory.glob("*.safetensors"), key=lambda path: path.name.lower()):
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            sidecar = candidate.with_suffix(".webcap.json")
+            if sidecar.is_symlink() or not sidecar.is_file():
+                continue
+            try:
+                provenance = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(provenance, dict) or provenance.get("version") != 1:
+                continue
+            if str(provenance.get("sourceJobId") or "").strip() != wanted:
+                continue
+            if str(provenance.get("sourceFolder") or "").strip().replace("\\", "/").strip("/") != folder_text:
+                continue
+            if str(provenance.get("stage") or "").strip().lower() != stage:
+                continue
+            raw_run_path = str(provenance.get("sourceRunPath") or "").strip()
+            action_id = str(provenance.get("sourceActionId") or "").strip()
+            if not raw_run_path or not action_id:
+                continue
+            run_dir = _candidate_validate_managed_run(folder_text, raw_run_path, action_id)
+            matches[(str(run_dir), action_id, stage)] = (run_dir, provenance)
+
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise RuntimeError("Staged Test candidates for this training job point at multiple managed training runs.")
+
+    run_dir, provenance = next(iter(matches.values()))
+    stage = str(provenance.get("stage") or "").strip().lower()
+    return str(run_dir), {
+        "id": wanted,
+        "folder": folder_text,
+        "runName": str(provenance.get("sourceRunName") or "").strip(),
+        "sequence": str(provenance.get("sourceRunSequence") or "").strip(),
+        "actionId": str(provenance.get("sourceActionId") or "").strip(),
+        "stage": stage,
+        "stages": stage,
+        "status": "unknown",
+        "runSummary": provenance.get("runSummary") if isinstance(provenance.get("runSummary"), dict) else {},
+    }
+
+
 def _candidate_run_snapshot(folder, job_id):
     """Copy recorded candidate-run metadata while holding the runner lock briefly."""
     folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
@@ -637,6 +695,9 @@ def _candidate_run_snapshot(folder, job_id):
         if not job:
             job = _find_history_job(folder_text, wanted)
         if not job:
+            recovered = _candidate_staged_run_snapshot_for_job(folder_text, wanted)
+            if recovered is not None:
+                return recovered
             raise LookupError("Training job not found.")
         raw_run_path = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "").strip()
         if not raw_run_path:

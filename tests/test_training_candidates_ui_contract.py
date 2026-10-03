@@ -240,7 +240,11 @@ comparison.curves={
   'run:older':{label:'Older run',points:[{epoch:1,loss:.6},{epoch:2,loss:.35}]},
   'archive:archive-a':{label:'Archived run · archive',points:[{epoch:1,loss:.7},{epoch:2,loss:.32}]}
 };
-const comparisonHtml=context.trainingCandidatesComparisonHtml({run:{runName:'Current run'},analysis:Object.assign({},data,{selected:{epoch:1}})});
+const comparePayload={run:{runName:'Current run'},analysis:Object.assign({},data,{selected:{epoch:1}})};
+const comparisonCurves=context.trainingCandidatesComparisonCurves(comparePayload);
+assert(Math.abs(comparisonCurves[0].points[1].loss-context.trainingCandidatesEma(data.epochLossPoints,.97)[1].loss) < 1e-12);
+assert(Math.abs(comparisonCurves[1].points[1].loss-context.trainingCandidatesEma(comparison.curves['run:older'].points,.97)[1].loss) < 1e-12);
+const comparisonHtml=context.trainingCandidatesComparisonHtml(comparePayload);
 assert(comparisonHtml.includes('Training epoch loss comparison'));
 assert(comparisonHtml.includes('Older run'));
 assert(comparisonHtml.includes('Archived run · archive'));

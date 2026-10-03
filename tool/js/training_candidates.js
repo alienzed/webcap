@@ -443,7 +443,8 @@ function trainingCandidatesWireCompareControl(root) {
 function trainingCandidatesComparisonCurves(payload) {
   var analysis = payload && payload.analysis ? payload.analysis : {};
   var run = payload && payload.run ? payload.run : {};
-  var primaryPoints = trainingCandidatesComparisonPoints(analysis.epochLossPoints);
+  var smoothing = trainingCandidatesDisplayState().smoothing;
+  var primaryPoints = trainingCandidatesEma(trainingCandidatesComparisonPoints(analysis.epochLossPoints), smoothing);
   var primaryLabel = String(run.runName || run.folder || trainingWorkspaceState.candidateFolder || 'Current run');
   var curves = [{
     key: 'current',
@@ -460,7 +461,7 @@ function trainingCandidatesComparisonCurves(payload) {
       key: key,
       label: curve.label,
       color: trainingCandidatesComparisonColor(comparison.colors[key]),
-      points: curve.points,
+      points: trainingCandidatesEma(curve.points, smoothing),
       primary: false
     });
   });

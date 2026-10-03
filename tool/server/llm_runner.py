@@ -95,6 +95,19 @@ def _job_model_id(job):
     return str(metadata.get("modelId") or job.get("modelId") or "").strip()
 
 
+def local_gpu_work_runnable():
+    """Return whether the current FIFO head needs the local GPU."""
+    _ensure_execution_reconciled()
+    current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+    if current.get("activeJobId"):
+        return False
+    queued = [job for job in current.get("jobs", []) if str(job.get("status") or "") == "queued"]
+    if not queued:
+        return False
+    from .storyboard_llm_runtime import uses_local_gpu
+    return uses_local_gpu(_job_model_id(queued[0]))
+
+
 def _job_view(job):
     if not isinstance(job, dict):
         return None

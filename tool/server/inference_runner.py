@@ -57,30 +57,6 @@ def _release_gpu():
     release_gpu_for_external_work(GPU_RESERVATION_OWNER)
 
 
-def _local_llm_work_pending():
-    from .storyboard_llm_runtime import uses_local_gpu
-
-    snapshot = execution_lane_snapshot("llm", include_terminal=False)
-    jobs = snapshot.get("jobs", [])
-
-    def job_uses_local_gpu(job):
-        metadata = job.get("metadata") if isinstance((job or {}).get("metadata"), dict) else {}
-        model_id = str(metadata.get("modelId") or "").strip()
-        return bool(model_id) and uses_local_gpu(model_id)
-
-    active_id = str(snapshot.get("activeJobId") or "").strip()
-    if active_id:
-        active = next((job for job in jobs if str(job.get("id") or "") == active_id), None)
-        return bool(active) and job_uses_local_gpu(active)
-
-    if snapshot.get("paused"):
-        return False
-    return any(
-        str(job.get("status") or "") == "queued" and job_uses_local_gpu(job)
-        for job in jobs
-    )
-
-
 def _set_backlog_wait_reason(reason):
     global _backlog_wait_reason
     with _backlog_lock:
@@ -458,12 +434,8 @@ def _advance_queue():
             return None
 
         # Once Inference owns the GPU, let its normal Queue drain before
-        # considering another local-GPU lane. This prevents lane thrash between
-        # adjacent foreground inference jobs. A lane trying to acquire the GPU
-        # still yields to pending local LLM work.
-        if not owner and _local_llm_work_pending():
-            _set_backlog_wait_reason("Waiting for Prompt Assistant / Director.")
-            return None
+        # yielding at its defined handoff boundary. New turns are arbitrated by
+        # Training rather than by Inference inspecting another lane.
 
         # Provider availability is an execution concern, not an admission
         # concern. Keep both fresh queued work and restored backlog intact while
@@ -482,7 +454,14 @@ def _advance_queue():
         reserved_here = False
         if not owner:
             if not _reserve_gpu():
-                _set_backlog_wait_reason("Waiting for Training to release the shared GPU.")
+                from .training_runner import external_gpu_work_block_reason
+                blocker = external_gpu_work_block_reason(GPU_RESERVATION_OWNER)
+                if blocker == "llm":
+                    _set_backlog_wait_reason("Waiting for Prompt Assistant / Director.")
+                elif blocker == "training":
+                    _set_backlog_wait_reason("Waiting for Training to release the shared GPU.")
+                else:
+                    _set_backlog_wait_reason("Waiting for " + blocker + " to release the shared GPU.")
                 return None
             reserved_here = True
 

@@ -309,41 +309,34 @@ def test_inference_yields_retained_director_after_reserving_gpu(inference_root, 
     assert inference_runner.job_status(queued["jobId"])["status"] == "completed"
 
 
-def test_inference_yields_when_local_llm_work_is_already_queued(inference_root, monkeypatch):
+def test_training_arbiter_gives_local_llm_fifo_head_priority_over_inference(inference_root, monkeypatch):
     monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
     queued = inference_runner.enqueue_generate(
         {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
     )
-    execution_queue.enqueue(
-        "llm",
-        {"contract": {}},
-        metadata={"client": "storyboard"},
+    llm_runner.enqueue(
+        "storyboard",
+        "qwen-local",
+        {"operation": "write_prompt", "prompt": "Prompt.", "output": "text"},
     )
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
-    monkeypatch.setattr(
-        inference_runner,
-        "_reserve_gpu",
-        lambda: (_ for _ in ()).throw(AssertionError("Inference must yield before reserving the shared GPU.")),
-    )
 
     assert inference_runner._advance_queue() is None
 
     assert execution_queue.get_job(queued["jobId"])["status"] == "queued"
+    assert inference_runner.snapshot()["waitReason"] == "Waiting for Prompt Assistant / Director."
     assert execution_queue.resource_owner() == ""
 
 
-def test_inference_does_not_yield_to_remote_llm_work(inference_root, monkeypatch):
-    remote = execution_queue.enqueue(
-        "llm",
-        {"contract": {"operation": "freeform_chat"}, "clientContext": {}},
-        metadata={"client": "chat", "modelId": "macbook::qwen"},
+def test_training_arbiter_does_not_block_inference_for_remote_llm_fifo_head(inference_root, monkeypatch):
+    llm_runner.enqueue(
+        "chat",
+        "macbook::qwen",
+        {"operation": "freeform_chat", "prompt": "Prompt.", "output": "text"},
     )
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
 
-    assert inference_runner._local_llm_work_pending() is False
-
-    execution_queue.claim_next("llm")
-    assert execution_queue.lane_snapshot("llm", include_terminal=False)["activeJobId"] == remote["id"]
-    assert inference_runner._local_llm_work_pending() is False
+    assert training_runner.external_gpu_work_block_reason(inference_runner.GPU_RESERVATION_OWNER) == ""
 
 
 def test_inference_yields_while_llm_retains_gpu_during_grace(inference_root, monkeypatch):

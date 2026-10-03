@@ -25,6 +25,25 @@ def llm_root(tmp_path, monkeypatch):
     return tmp_path
 
 
+def test_local_gpu_work_runnable_uses_real_ephemeral_fifo_head(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda model_id: model_id == "local")
+    llm_runner.enqueue(
+        "chat",
+        "remote",
+        {"operation": "freeform_chat", "prompt": "Remote.", "output": "text"},
+    )
+    llm_runner.enqueue(
+        "storyboard",
+        "local",
+        {"operation": "write_prompt", "prompt": "Local.", "output": "text"},
+    )
+
+    assert llm_runner.local_gpu_work_runnable() is False
+
+    llm_runner.execution_claim_next("llm")
+    assert llm_runner.local_gpu_work_runnable() is False
+
+
 def test_llm_test_job_returns_structured_analysis_without_side_effects(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(

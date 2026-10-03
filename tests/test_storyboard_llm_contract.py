@@ -258,3 +258,83 @@ def test_develop_story_requires_concept():
 def test_unknown_llm_operation_fails_loudly():
     with pytest.raises(ValueError, match="Unsupported"):
         storyboard_llm_contract.build_request(_story(), "scene-2", "chat")
+
+
+
+def test_individual_development_outline_keeps_story_context_and_defers_prompts():
+    story = _story()
+    request = storyboard_llm_contract.build_request(
+        story,
+        "",
+        "develop_story_outline",
+    )
+    prompt = request["prompt"]
+    scene_schema = request["response_schema"]["properties"]["scenes"]["items"]
+
+    assert request["operation"] == "develop_story_outline"
+    assert request["output"] == "json"
+    assert request["response_schema"]["properties"]["scenes"]["minItems"] == 12
+    assert request["response_schema"]["properties"]["scenes"]["maxItems"] == 12
+    assert set(scene_schema["required"]) == {"title", "summary", "suggestedDurationSeconds"}
+    assert "prompt" not in scene_schema["properties"]
+    assert "[STORY CONCEPT]" in prompt
+    assert "[STORY VISUAL / ATMOSPHERE]" in prompt
+    assert "[STORY INVARIANTS]" in prompt
+    assert "without writing generation prompts yet" in prompt
+    assert "This outline will be used to author each full H3 Scene separately" in prompt
+
+
+def test_individual_development_scene_uses_whole_outline_and_previous_authored_scene():
+    story = _story()
+    outline = {
+        "scenes": [
+            {
+                "title": "Arrival",
+                "summary": "She reaches the station.",
+                "entryState": "",
+                "exitState": "She sees the platform.",
+                "suggestedDurationSeconds": 10,
+            },
+            {
+                "title": "Platform",
+                "summary": "She crosses the empty platform.",
+                "entryState": "She sees the platform.",
+                "exitState": "A train appears.",
+                "suggestedDurationSeconds": 10,
+            },
+        ]
+    }
+    previous = {
+        "title": "Arrival",
+        "summary": "She reaches the station.",
+        "entryState": "",
+        "exitState": "She sees the platform.",
+        "prompt": "PREVIOUS FULL H3 PROMPT",
+        "suggestedDurationSeconds": 10,
+    }
+
+    request = storyboard_llm_contract.build_request(
+        story,
+        "",
+        "develop_story_scene",
+        development={
+            "outline": outline,
+            "sceneIndex": 1,
+            "previousScene": previous,
+        },
+    )
+    prompt = request["prompt"]
+    scene_schema = request["response_schema"]["properties"]["scene"]
+
+    assert request["operation"] == "develop_story_scene"
+    assert request["output"] == "json"
+    assert set(scene_schema["required"]) == {"title", "summary", "prompt", "suggestedDurationSeconds"}
+    assert "[STORY CONCEPT / OVERVIEW]" in prompt
+    assert "[STORY VISUAL / ATMOSPHERE]" in prompt
+    assert "[STORY INVARIANTS]" in prompt
+    assert "[COMPLETE SCENE OUTLINE]" in prompt
+    assert "[CURRENT PLANNED SCENE]" in prompt
+    assert "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]" in prompt
+    assert "PREVIOUS FULL H3 PROMPT" in prompt
+    assert "Scene 2 of 2" in prompt
+    assert "Author exactly this one planned Scene" in prompt

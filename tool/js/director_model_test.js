@@ -79,9 +79,9 @@ function directorModelTestIsoFromEpoch(seconds) {
   return new Date(value * 1000).toISOString();
 }
 
-function directorModelTestRenderModels() {
-  var host = directorModelTestEl('director-model-test-models');
-  if (!host) return;
+function directorModelTestRenderModelChoices(hostId, dataAttribute) {
+  var host = directorModelTestEl(hostId);
+  if (!host) throw new Error('Director model choice markup is missing: ' + hostId);
   if (!directorModelTestState.models.length) {
     host.innerHTML = '<p class="app-settings-help">No Director models are currently available.</p>';
     return;
@@ -107,12 +107,17 @@ function directorModelTestRenderModels() {
       '<div class="app-settings-section-title">' + escapeHtml(group.name) + '</div>' +
       group.models.map(function (model) {
         return '<label class="app-settings-toggle">' +
-          '<input type="checkbox" data-director-model-test-model="' + escapeHtml(String(model.id || '')) + '" checked>' +
+          '<input type="checkbox" ' + dataAttribute + '="' + escapeHtml(String(model.id || '')) + '" checked>' +
           '<span>' + escapeHtml(formatDirectorModelLabel(model)) + '</span>' +
           '</label>';
       }).join('') +
       '</div>';
   }).join('');
+}
+
+function directorModelTestRenderModels() {
+  directorModelTestRenderModelChoices('director-model-assessment-models', 'data-director-model-assessment-model');
+  directorModelTestRenderModelChoices('director-model-test-models', 'data-director-model-test-model');
 }
 
 function directorModelTestPhaseText(phase) {
@@ -179,14 +184,17 @@ function directorModelTestFormatElapsed(startedAt) {
 }
 
 function directorModelTestRenderActivity() {
-  var host = directorModelTestEl('director-model-test-activity');
-  if (!host) return;
-  if (!directorModelTestState.running) {
+  var benchmarkHost = directorModelTestEl('director-model-test-activity');
+  var assessmentHost = directorModelTestEl('director-model-assessment-activity');
+  if (!benchmarkHost || !assessmentHost) throw new Error('Director diagnostic activity markup is incomplete.');
+
+  [benchmarkHost, assessmentHost].forEach(function (host) {
     host.innerHTML = '';
     host.classList.add('hidden');
-    return;
-  }
+  });
+  if (!directorModelTestState.running) return;
 
+  var host = directorModelTestState.mode === 'calibration' ? assessmentHost : benchmarkHost;
   var session = directorModelTestState.session;
   var total = directorModelTestState.mode === 'calibration'
     ? Number(directorModelTestState.calibrationTotal || 0)
@@ -204,7 +212,7 @@ function directorModelTestRenderActivity() {
     '<article class="activity-monitor-card status-running director-model-test-activity-card">' +
       '<span class="activity-monitor-dot active"></span>' +
       '<div class="activity-monitor-copy">' +
-        '<strong>' + (directorModelTestState.mode === 'calibration' ? 'Director Model Calibration' : 'Director Model Test') + '</strong>' +
+        '<strong>' + (directorModelTestState.mode === 'calibration' ? 'Director Model Assessment' : 'Director Benchmark') + '</strong>' +
         '<span>' + escapeHtml(detail) + '</span>' +
         '<small>' + escapeHtml(meta) + '</small>' +
         '<div class="activity-monitor-progress"><span style="width:' + progress.toFixed(1) + '%"></span></div>' +
@@ -213,11 +221,13 @@ function directorModelTestRenderActivity() {
 }
 
 function directorModelTestSetStatus(text, state, summaryText) {
-  var summary = directorModelTestEl('director-model-test-summary-status');
-  if (summary) {
-    summary.textContent = summaryText || 'Ready';
-    summary.dataset.state = state || 'ready';
-  }
+  var summaryId = directorModelTestState.mode === 'calibration'
+    ? 'director-model-assessment-summary-status'
+    : 'director-model-test-summary-status';
+  var summary = directorModelTestEl(summaryId);
+  if (!summary) throw new Error('Director diagnostic summary markup is missing: ' + summaryId);
+  summary.textContent = summaryText || 'Ready';
+  summary.dataset.state = state || 'ready';
   directorModelTestRenderActivity();
 }
 
@@ -274,18 +284,27 @@ function directorModelTestRenderSession() {
 }
 function directorModelTestSyncControls() {
   var run = directorModelTestEl('director-model-test-run');
-  var calibrate = directorModelTestEl('director-model-test-calibrate');
+  var assess = directorModelTestEl('director-model-assessment-run');
   var clearCalibration = directorModelTestEl('director-model-test-clear-calibration');
-  var stop = directorModelTestEl('director-model-test-stop');
-  var refresh = directorModelTestEl('director-model-test-refresh');
-  if (run) run.disabled = directorModelTestState.running || !directorModelTestState.models.length;
-  if (calibrate) calibrate.disabled = directorModelTestState.running || !directorModelTestState.models.length;
-  if (clearCalibration) clearCalibration.disabled = directorModelTestState.running || (!directorModelTestState.calibrationProfiles.length && !directorModelTestState.calibrationReports.length);
-  if (refresh) refresh.disabled = directorModelTestState.running;
-  if (stop) {
-    stop.classList.toggle('hidden', !directorModelTestState.running);
-    stop.disabled = !directorModelTestState.running;
+  var benchmarkStop = directorModelTestEl('director-model-test-stop');
+  var assessmentStop = directorModelTestEl('director-model-assessment-stop');
+  var benchmarkRefresh = directorModelTestEl('director-model-test-refresh');
+  var assessmentRefresh = directorModelTestEl('director-model-assessment-refresh');
+
+  if (!run || !assess || !clearCalibration || !benchmarkStop || !assessmentStop || !benchmarkRefresh || !assessmentRefresh) {
+    throw new Error('Director diagnostic controls are incomplete.');
   }
+
+  run.disabled = directorModelTestState.running || !directorModelTestState.models.length;
+  assess.disabled = directorModelTestState.running || !directorModelTestState.models.length;
+  clearCalibration.disabled = directorModelTestState.running || (!directorModelTestState.calibrationProfiles.length && !directorModelTestState.calibrationReports.length);
+  benchmarkRefresh.disabled = directorModelTestState.running;
+  assessmentRefresh.disabled = directorModelTestState.running;
+
+  benchmarkStop.classList.toggle('hidden', !directorModelTestState.running || directorModelTestState.mode !== 'test');
+  benchmarkStop.disabled = !directorModelTestState.running || directorModelTestState.mode !== 'test';
+  assessmentStop.classList.toggle('hidden', !directorModelTestState.running || directorModelTestState.mode !== 'calibration');
+  assessmentStop.disabled = !directorModelTestState.running || directorModelTestState.mode !== 'calibration';
 }
 
 function directorModelTestRefresh() {
@@ -326,11 +345,11 @@ function directorModelTestRefresh() {
   });
 }
 
-function directorModelTestSelectedModels() {
+function directorModelSelectedModels(attributeName) {
   var selected = {};
   Array.prototype.forEach.call(
-    document.querySelectorAll('[data-director-model-test-model]:checked'),
-    function (input) { selected[String(input.getAttribute('data-director-model-test-model') || '')] = true; }
+    document.querySelectorAll('[' + attributeName + ']:checked'),
+    function (input) { selected[String(input.getAttribute(attributeName) || '')] = true; }
   );
   return directorModelTestState.models.filter(function (model) {
     return !!selected[String(model.id || '')];
@@ -344,6 +363,14 @@ function directorModelTestSelectedModels() {
       sizeBytes: Number(model.sizeBytes || 0)
     };
   });
+}
+
+function directorModelTestSelectedModels() {
+  return directorModelSelectedModels('data-director-model-test-model');
+}
+
+function directorModelAssessmentSelectedModels() {
+  return directorModelSelectedModels('data-director-model-assessment-model');
 }
 
 function directorModelTestFormatCapacity(value) {
@@ -746,7 +773,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
 
 function directorModelTestStartCalibration() {
   if (directorModelTestState.running) return;
-  var models = directorModelTestSelectedModels();
+  var models = directorModelAssessmentSelectedModels();
   if (!models.length) {
     directorModelTestSetStatus('Choose at least one model.', 'ready', 'Ready');
     return;
@@ -1108,22 +1135,31 @@ function directorModelTestExport() {
 }
 
 function initializeDirectorModelTest() {
-  var details = directorModelTestEl('director-model-test-settings');
-  if (!details) throw new Error('Director model test Diagnostics markup is missing.');
+  if (!directorModelTestEl('director-model-test-settings') || !directorModelTestEl('director-model-assessment-settings')) {
+    throw new Error('Director diagnostic markup is missing.');
+  }
 
-  directorModelTestEl('director-model-test-refresh').addEventListener('click', function () {
-    directorModelTestRefresh();
-  });
+  directorModelTestEl('director-model-test-refresh').addEventListener('click', directorModelTestRefresh);
+  directorModelTestEl('director-model-assessment-refresh').addEventListener('click', directorModelTestRefresh);
+
   directorModelTestEl('director-model-test-select-all').addEventListener('click', function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-director-model-test-model]'), function (input) { input.checked = true; });
   });
   directorModelTestEl('director-model-test-select-none').addEventListener('click', function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-director-model-test-model]'), function (input) { input.checked = false; });
   });
+  directorModelTestEl('director-model-assessment-select-all').addEventListener('click', function () {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-director-model-assessment-model]'), function (input) { input.checked = true; });
+  });
+  directorModelTestEl('director-model-assessment-select-none').addEventListener('click', function () {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-director-model-assessment-model]'), function (input) { input.checked = false; });
+  });
+
   directorModelTestEl('director-model-test-run').addEventListener('click', directorModelTestStart);
-  directorModelTestEl('director-model-test-calibrate').addEventListener('click', directorModelTestStartCalibration);
+  directorModelTestEl('director-model-assessment-run').addEventListener('click', directorModelTestStartCalibration);
   directorModelTestEl('director-model-test-clear-calibration').addEventListener('click', directorModelTestClearCalibration);
   directorModelTestEl('director-model-test-stop').addEventListener('click', directorModelTestStop);
+  directorModelTestEl('director-model-assessment-stop').addEventListener('click', directorModelTestStop);
   directorModelTestEl('director-model-test-export').addEventListener('click', directorModelTestExport);
 
   directorModelTestRenderSession();

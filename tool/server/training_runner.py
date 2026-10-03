@@ -1196,7 +1196,7 @@ def _validated_resume_checkpoint(run_path, checkpoint_tag):
 
 def _rewrite_resume_latest(job):
     tag = str(job.get("resumeCheckpointTag") or "").strip()
-    if not tag:
+    if not tag or job.get("resumeCheckpointRewritePending") is not True:
         return
     if not str(job.get("resumeOutputId") or "").strip():
         raise ValueError("A previous saved resume point requires a managed checkpoint.")
@@ -1207,6 +1207,7 @@ def _rewrite_resume_latest(job):
     temporary.replace(latest)
     job["resumeCheckpointWallTime"] = selected["wallTime"]
     job["resumeBranchStartedAt"] = time.time()
+    job["resumeCheckpointRewritePending"] = False
 
 
 def _build_runner_script(job, settings, artifacts, job_dir):
@@ -2121,7 +2122,7 @@ def start_observer():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "resumeCheckpointTag", "resumeCheckpointWallTime", "resumeBranchStartedAt", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
+    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "resumeCheckpointTag", "resumeCheckpointRewritePending", "resumeCheckpointWallTime", "resumeBranchStartedAt", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -2283,6 +2284,7 @@ def _new_job(
         "resumeActionId": str(resume_action_id or ""),
         "resumeOutputId": str(resume_output_id or ""),
         "resumeCheckpointTag": str(resume_checkpoint_tag or ""),
+        "resumeCheckpointRewritePending": bool(str(resume_checkpoint_tag or "").strip()),
         "parentJobId": str(parent_job_id or ""),
         "activeTrainingSeconds": float(parent_active_seconds or 0),
         "activeTrainingTimingComplete": parent_active_seconds is not None,
@@ -2458,6 +2460,12 @@ def start_response(
                 key: resume["point"].get(key)
                 for key in ("checkpointAvailable", "checkpointTag", "epoch", "step", "expectedEpochs", "completed")
             }
+            if not resume_checkpoint_tag:
+                current_tag = str(resume_point.get("checkpointTag") or "").strip()
+                current_match = _GLOBAL_STEP_TAG_PATTERN.fullmatch(current_tag)
+                highest_step = int(resume_point.get("step") or 0)
+                if current_match and int(current_match.group(1)) < highest_step:
+                    resume_checkpoint_tag = current_tag
             if resume_checkpoint_tag:
                 selected_checkpoint = _validated_resume_checkpoint(resume_path, resume_checkpoint_tag)
                 resume_point.update({

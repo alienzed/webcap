@@ -142,13 +142,22 @@
 
   function sweepFolders(model) {
     var seen = {};
-    (model && Array.isArray(model.loras) ? model.loras : []).forEach(function (name) {
+    availableSweepLoras(model).forEach(function (name) {
       seen[loraFolder(name)] = true;
     });
     return Object.keys(seen).sort(function (left, right) {
       if (!left) return -1;
       if (!right) return 1;
       return left.localeCompare(right, undefined, { sensitivity: 'base' });
+    });
+  }
+
+  function availableSweepLoras(model) {
+    var fixed = savedLoras(String(model && model.id || '')).map(function (item) {
+      return String(item.name || '').replace(/\\/g, '/').toLowerCase();
+    });
+    return (model && Array.isArray(model.loras) ? model.loras : []).filter(function (name) {
+      return fixed.indexOf(String(name || '').replace(/\\/g, '/').toLowerCase()) === -1;
     });
   }
 
@@ -166,7 +175,7 @@
   }
 
   function sweepLoras(model, folder) {
-    return (model && Array.isArray(model.loras) ? model.loras : []).filter(function (name) {
+    return availableSweepLoras(model).filter(function (name) {
       return loraFolder(name) === String(folder || '');
     });
   }
@@ -312,9 +321,8 @@
 
     selectedTab.classList.toggle('active', selectedMode === 'selected');
     sweepTab.classList.toggle('active', selectedMode === 'sweep');
-    selectedTab.setAttribute('aria-selected', selectedMode === 'selected' ? 'true' : 'false');
-    sweepTab.setAttribute('aria-selected', selectedMode === 'sweep' ? 'true' : 'false');
-    selectedPanel.classList.toggle('hidden', selectedMode !== 'selected');
+    selectedTab.setAttribute('aria-pressed', selectedMode === 'selected' ? 'true' : 'false');
+    sweepTab.setAttribute('aria-pressed', selectedMode === 'sweep' ? 'true' : 'false');
     sweepPanel.classList.toggle('hidden', selectedMode !== 'sweep');
     if (selectedMode === 'sweep') renderSweep();
     else syncGenerateRunLabel();
@@ -401,10 +409,10 @@
     if (base) {
       base.textContent = (model.baseLoras || []).length
         ? 'Required workflow LoRA: ' + model.baseLoras.join(', ')
-        : 'No required workflow LoRAs.';
+        : '';
+      base.classList.toggle('hidden', !(model.baseLoras || []).length);
     }
     renderLoras();
-    renderSweep();
     setLoraMode(generateState.loraMode);
   }
 
@@ -414,6 +422,7 @@
     var items = savedLoras(String(generateState.modelId || ''));
     if (!items.length) {
       host.innerHTML = '<div class="generate-empty-inline">No added LoRAs.</div>';
+      renderSweep();
       return;
     }
     host.innerHTML = items.map(function (item, index) {
@@ -423,6 +432,7 @@
         '<button type="button" class="review-captions-btn" data-generate-lora-remove="' + index + '">Remove</button>' +
       '</div>';
     }).join('');
+    renderSweep();
   }
 
   function addLora() {
@@ -804,7 +814,7 @@
     var includeBase = !!(el('generate-sweep-base') && el('generate-sweep-base').checked);
     var strength = Number(el('generate-sweep-strength').value);
     if (!Number.isFinite(strength)) throw new Error('Sweep LoRA strength must be numeric.');
-    if (!names.length && !includeBase) throw new Error('Select at least one Sweep LoRA or include Base.');
+    if (!names.length && !includeBase) throw new Error('Select at least one Sweep LoRA or include the fixed-only baseline.');
 
     generateState.sweepSubmissionSerial += 1;
     return {
@@ -812,6 +822,9 @@
       modelId: String(model.id || ''),
       prompt: prompt,
       settings: Object.assign({}, frozenSweepSettings()),
+      fixedLoras: savedLoras(model.id).map(function (item) {
+        return { name: item.name, strength: item.strength };
+      }),
       strength: strength,
       items: includeBase ? [null].concat(names) : names,
       referenceFiles: captureReferenceFiles(model)
@@ -836,7 +849,7 @@
           modelId: submission.modelId,
           prompt: submission.prompt,
           settings: Object.assign({}, submission.settings),
-          loras: name ? [{ name: name, strength: submission.strength }] : [],
+          loras: submission.fixedLoras.concat(name ? [{ name: name, strength: submission.strength }] : []),
           references: references
         });
       }).then(function (payload) {

@@ -432,11 +432,11 @@ def test_generate_lora_sweep_uses_existing_generate_queue_without_set_semantics(
     assert "function setSweepSelection(model, folder, name, selected)" in script
     assert "function setAllSweepSelections(selected)" in script
     assert "data-generate-sweep-lora" in script
-    assert "selectedNames.length + ' of ' + names.length + ' selected'" in script
+    assert "selectedNames.length + ' of ' + names.length + ' selected · '" in script
     assert "button.disabled = generateState.director.busy || submitBusy || count === 0;" in script
     assert "function captureSweepSubmission()" in script
     assert "var names = selectedSweepLoras(model, folder).slice();" in script
-    assert "Select at least one Sweep LoRA or include Base." in script
+    assert "Select at least one Sweep LoRA or include the fixed-only baseline." in script
     assert "function runGenerateSweep()" in script
     assert "referenceFiles: captureReferenceFiles(model)" in script
     assert "uploadReferenceFiles(submission.referenceFiles)" in script
@@ -444,7 +444,7 @@ def test_generate_lora_sweep_uses_existing_generate_queue_without_set_semantics(
     assert "modelId: submission.modelId" in script
     assert "prompt: submission.prompt" in script
     assert "settings: Object.assign({}, submission.settings)" in script
-    assert "loras: name ? [{ name: name, strength: submission.strength }] : []" in script
+    assert "loras: submission.fixedLoras.concat(name ? [{ name: name, strength: submission.strength }] : [])" in script
     assert "function frozenSweepSettings()" in script
     assert "window.crypto.getRandomValues(values);" in script
     sweep = script.split("function runGenerateSweep()", 1)[1].split("function setGenerateViewMode", 1)[0]

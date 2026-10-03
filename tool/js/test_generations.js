@@ -3,6 +3,7 @@
   var supportedTestModels = {};
   var testModelsLoaded = false;
   var pollTimer = null;
+  var pendingElapsedTimer = null;
   var lastActivityRefreshAt = 0;
   var lastSessionsRefreshAt = 0;
   var prepared = null;
@@ -1945,7 +1946,7 @@
     label.textContent = identity.primary;
     primaryRow.appendChild(label);
 
-    var elapsed = formatCandidateElapsed(result && result.elapsedMs);
+    var elapsed = result && result.elapsedMs != null ? formatCandidateElapsed(result.elapsedMs) : '';
     if (elapsed) {
       var timing = document.createElement('span');
       timing.className = 'test-generations-result-elapsed';
@@ -1981,6 +1982,35 @@
 
     footer.appendChild(copy);
     return footer;
+  }
+
+  function syncResultElapsed(card, result, failed) {
+    var primary = card.querySelector('.test-generations-result-primary');
+    var timing = primary.querySelector('.test-generations-result-elapsed');
+    var elapsed = result && result.elapsedMs != null ? formatCandidateElapsed(result.elapsedMs) : '';
+    if (!timing && elapsed) {
+      timing = document.createElement('span');
+      timing.className = 'test-generations-result-elapsed';
+      primary.appendChild(timing);
+    }
+    if (timing) {
+      timing.textContent = failed ? 'Failed after ' + elapsed : elapsed;
+      timing.classList.toggle('hidden', !elapsed);
+    }
+  }
+
+  function syncPendingElapsed(status) {
+    if (pendingElapsedTimer) clearTimeout(pendingElapsedTimer);
+    pendingElapsedTimer = null;
+    var pending = el('test-generations-results').querySelector('.test-generations-result-card.is-pending');
+    if (!pending) return;
+    var timing = pending.querySelector('.test-generations-result-elapsed');
+    var startedAt = Number(status && status.candidateStartedAt || 0);
+    timing.textContent = startedAt ? formatElapsedMs(Date.now() - startedAt) : '';
+    timing.classList.toggle('hidden', !startedAt);
+    if (startedAt && isOpen()) {
+      pendingElapsedTimer = setTimeout(function () { syncPendingElapsed(currentStatus); }, 1000);
+    }
   }
 
   function formatTestVideoTime(value) {
@@ -2212,6 +2242,7 @@
     var total = Number(status && status.total || (prepared && prepared.count) || 0);
     var resultFolder = String(status && status.resultFolder || '');
     var sessionName = String(status && status.session || '');
+    var live = status && (status.status === 'running' || status.status === 'stopping');
     var resultScope = sessionName + '|' + resultFolder;
     var priorScope = String(host.dataset.resultScope || '');
 
@@ -2234,16 +2265,19 @@
     );
 
     var empty = host.querySelector('.test-generations-empty');
-    if ((results.length || failures.length || (status && status.status === 'running')) && empty) empty.remove();
+    if ((results.length || failures.length || live) && empty) empty.remove();
 
     results.forEach(function (result, index) {
       var mediaFile = resultMediaFile(result);
       var resultKey = mediaFile || (String(result.sourceLoRA || 'result') + ':' + index);
-      var exists = Array.prototype.some.call(
+      var existing = Array.prototype.find.call(
         host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
         function (card) { return card.dataset.resultKey === resultKey; }
       );
-      if (exists) return;
+      if (existing) {
+        syncResultElapsed(existing, result, false);
+        return;
+      }
 
       var card = document.createElement('article');
       card.className = 'test-generations-result-card';
@@ -2279,11 +2313,14 @@
           )
         );
       }
-      var exists = Array.prototype.some.call(
+      var existing = Array.prototype.find.call(
         host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
         function (card) { return card.dataset.resultKey === failureKey; }
       );
-      if (exists) return;
+      if (existing) {
+        syncResultElapsed(existing, failure, true);
+        return;
+      }
 
       var card = document.createElement('article');
       card.className = 'test-generations-result-card is-failed';
@@ -2303,7 +2340,7 @@
     });
 
     var pending = host.querySelector('.test-generations-result-card.is-pending');
-    if (status && status.status === 'running' && (results.length + failures.length) < total) {
+    if (live && (results.length + failures.length) < total) {
       if (!pending) {
         pending = document.createElement('article');
         pending.className = 'test-generations-result-card is-pending';
@@ -2313,18 +2350,29 @@
         pendingPlaceholder.textContent = 'Generating…';
         pending.appendChild(pendingPlaceholder);
 
+        var pendingFooter = document.createElement('div');
+        pendingFooter.className = 'test-generations-result-footer';
+        var pendingPrimary = document.createElement('div');
+        pendingPrimary.className = 'test-generations-result-primary';
         var pendingLabel = document.createElement('div');
         pendingLabel.className = 'test-generations-result-name';
-        pending.appendChild(pendingLabel);
+        pendingPrimary.appendChild(pendingLabel);
+        var pendingTiming = document.createElement('span');
+        pendingTiming.className = 'test-generations-result-elapsed';
+        pendingPrimary.appendChild(pendingTiming);
+        pendingFooter.appendChild(pendingPrimary);
+        pending.appendChild(pendingFooter);
 
         host.appendChild(pending);
       }
       pending.querySelector('.test-generations-result-name').textContent = String(status.current || 'Next LoRA');
+      pending.querySelector('.test-generations-preview-placeholder').textContent = status.status === 'stopping' ? 'Stopping…' : 'Generating…';
     } else if (pending) {
       pending.remove();
     }
+    syncPendingElapsed(status);
 
-    if (!results.length && !failures.length && !(status && status.status === 'running') && !host.querySelector('.test-generations-result-card')) {
+    if (!results.length && !failures.length && !live && !host.querySelector('.test-generations-result-card')) {
       host.innerHTML = '<div class="test-generations-empty">Generated previews will appear here.</div>';
     }
 
@@ -2901,6 +2949,8 @@
     if (node) node.classList.add('hidden');
     if (frame) frame.classList.remove('workspace-test-open');
     launchFolder = '';
+    if (pendingElapsedTimer) clearTimeout(pendingElapsedTimer);
+    pendingElapsedTimer = null;
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;

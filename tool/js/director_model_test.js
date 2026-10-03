@@ -403,6 +403,7 @@ function directorModelTestHealthLabel(value) {
   value = String(value || '');
   if (value === 'healthy') return 'Healthy';
   if (value === 'limited') return 'Healthy · limit found';
+  if (value === 'warning') return 'Warning · usable range found';
   if (value === 'likely-unusable') return 'Likely unusable';
   if (value === 'calibration-failed') return 'Calibration failed';
   if (value === 'stopped') return 'Stopped';
@@ -428,12 +429,17 @@ function directorModelTestRenderCalibrationProfiles() {
     var profile = profileByRef[modelRef] || null;
     var abilities = report.abilities && typeof report.abilities === 'object' ? report.abilities : {};
     var advertised = directorModelTestAdvertisedCapability(modelRef);
+    var coherentOutput = Number(abilities.coherentOutputTokens || 0);
     var findings = [
       Number(abilities.contextTokens || 0) > 0 ? directorModelTestFormatCapacity(abilities.contextTokens) + ' context proven' : '',
       Number(abilities.structuredOutputTokens || 0) > 0 ? directorModelTestFormatCapacity(abilities.structuredOutputTokens) + ' structured output' : '',
-      Number(abilities.coherentOutputTokens || 0) > 0 ? directorModelTestFormatCapacity(abilities.coherentOutputTokens) + ' coherent output' : ''
+      coherentOutput > 0 ? directorModelTestFormatCapacity(coherentOutput) + ' coherent output' : ''
     ].filter(Boolean);
     if (!findings.length) findings.push('No successful capability tier yet');
+    if (coherentOutput >= 8192) findings.push('full-story output proven');
+    else if (coherentOutput > 0) findings.push('individual scenes recommended');
+    var pathologies = Array.isArray(report.pathologies) ? report.pathologies : [];
+    if (pathologies.length) findings.push('warning: ' + pathologies.join(', '));
     var advertisedText = '';
     if (advertised) {
       advertisedText = advertised.contextLabel ? 'Advertised ' + advertised.contextLabel + ' context' : '';

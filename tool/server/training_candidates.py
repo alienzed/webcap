@@ -239,9 +239,14 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
     detector_result = ALGORITHMS[algorithm](detector_points, robust_points)
     regions = detector_result["regions"]
     analysis_points = detector_result["analysisPoints"]
-    saved_artifacts = saved_artifacts_for_run(
-        run_dir, resume_checkpoint_wall_time, resume_branch_started_at
-    ) if run_dir is not None else []
+    if run_dir is None:
+        saved_artifacts = []
+    elif resume_checkpoint_wall_time is not None and resume_branch_started_at is not None:
+        saved_artifacts = saved_artifacts_for_run(
+            run_dir, resume_checkpoint_wall_time, resume_branch_started_at
+        )
+    else:
+        saved_artifacts = saved_artifacts_for_run(run_dir)
     for region in regions:
         region["savedEpochs"] = [
             artifact["epoch"] for artifact in saved_artifacts
@@ -256,9 +261,15 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
         "label": region["label"],
         "savedEpochs": region["savedEpochs"],
         "reason": region["label"] + ".",
-        "artifact": artifact_for_epoch(
-            run_dir, region["representativeEpoch"], resume_checkpoint_wall_time, resume_branch_started_at
-        ) if run_dir is not None else {"available": False, "status": "not_checked"},
+        "artifact": (
+            artifact_for_epoch(
+                run_dir, region["representativeEpoch"], resume_checkpoint_wall_time, resume_branch_started_at
+            )
+            if run_dir is not None and resume_checkpoint_wall_time is not None and resume_branch_started_at is not None
+            else artifact_for_epoch(run_dir, region["representativeEpoch"])
+            if run_dir is not None
+            else {"available": False, "status": "not_checked"}
+        ),
     } for region in regions]
     return {
         "analysisVersion": ANALYSIS_VERSION,
@@ -277,9 +288,14 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
 def analyze_run_directory(run_dir, algorithm="v5", resume_checkpoint_wall_time=None, resume_branch_started_at=None):
     if algorithm not in ALGORITHMS:
         raise ValueError("Unknown candidate analysis algorithm: " + str(algorithm))
-    detailed_events, epoch_events = read_loss_events(
-        run_dir, resume_checkpoint_wall_time, resume_branch_started_at
+    has_branch_boundary = resume_checkpoint_wall_time is not None and resume_branch_started_at is not None
+    detailed_events, epoch_events = (
+        read_loss_events(run_dir, resume_checkpoint_wall_time, resume_branch_started_at)
+        if has_branch_boundary
+        else read_loss_events(run_dir)
     )
+    if not has_branch_boundary:
+        return analyze_loss_points(detailed_events, epoch_events, run_dir=run_dir, algorithm=algorithm)
     return analyze_loss_points(
         detailed_events,
         epoch_events,

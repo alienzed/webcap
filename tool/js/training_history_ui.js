@@ -192,13 +192,12 @@ function renderTrainingHistory() {
       : trainingHistoryFact('Latest checkpoint', checkpointLabel);
     var runDirectoryFact = runDirectory
       ? (canOpenCheckpointRun
-        ? '<div class="training-history-fact"><span>Run directory</span><button type="button" class="training-history-fact-link" data-training-history-run="' + escapeHtml(job.id || '') + '" title="Open Diffusion-Pipe run: ' + escapeHtml(runDirectory) + '">' + escapeHtml(runDirectoryLabel) + '</button></div>'
-        : trainingHistoryFact('Run directory', runDirectoryLabel, runDirectory))
+        ? '<div class="training-history-fact"><span>Run</span><button type="button" class="training-history-fact-link" data-training-history-run="' + escapeHtml(job.id || '') + '" title="Open Diffusion-Pipe run: ' + escapeHtml(runDirectory) + '">' + escapeHtml(runDirectoryLabel) + '</button></div>'
+        : trainingHistoryFact('Run', runDirectoryLabel, runDirectory))
       : '';
+    var primaryOutputFact = runDirectoryFact || outputFact;
     var runConfig = job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
     var datasetTarget = String(job.datasetTarget || '').trim();
-    var outputRootPath = String(job.outputRoot || '').trim();
-    if (runDirectory && outputRootPath && runDirectory === outputRootPath) runDirectoryFact = '';
     var factGrid = '<div class="training-history-facts">' +
       '<div class="training-history-fact-group"><div class="training-history-fact-heading">Timing</div>' +
         trainingHistoryFact('Active time', activeTime || (metricPending ? 'Loading…' : 'Unavailable')) +
@@ -220,8 +219,7 @@ function renderTrainingHistory() {
         trainingHistoryFact('Target', datasetTarget) +
       '</div>' +
       '<div class="training-history-fact-group"><div class="training-history-fact-heading">Output</div>' +
-        outputFact +
-        runDirectoryFact +
+        primaryOutputFact +
         checkpointFact +
         trainingHistoryFact('Continues', job.parentJobId ? 'run ' + job.parentJobId : '') +
       '</div></div>';

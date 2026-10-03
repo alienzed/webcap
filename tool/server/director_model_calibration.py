@@ -141,31 +141,7 @@ def _report_abilities(attempts, context_mode, context_size, max_tokens):
     }
 
 
-SEVERE_FAILURE_KINDS = {"runtime", "empty", "malformed", "looping", "leakage", "garbled"}
-
-
-def _report_health(attempts, context_mode, context_size, max_tokens, status):
-    if status == "stopped":
-        return "stopped"
-
-    failed = [attempt for attempt in attempts if attempt["status"] == "failed"]
-    first_context = next((attempt for attempt in attempts if attempt["kind"] == "context"), None)
-    first_output = next((attempt for attempt in attempts if attempt["kind"] == "output"), None)
-    first_prose = next((attempt for attempt in attempts if attempt["kind"] == "prose"), None)
-
-    if context_mode == "calibrated" and first_context and first_context["status"] == "failed":
-        return "likely-unusable"
-    if first_output and first_output["status"] == "failed" and first_output.get("failureKind") in SEVERE_FAILURE_KINDS:
-        return "likely-unusable"
-    if first_prose and first_prose["status"] == "failed" and first_prose.get("failureKind") in SEVERE_FAILURE_KINDS:
-        return "likely-unusable"
-    if max_tokens > 0:
-        if any(attempt.get("failureKind") in SEVERE_FAILURE_KINDS for attempt in failed):
-            return "warning"
-        return "limited" if failed else "healthy"
-    if attempts:
-        return "calibration-failed"
-    return "unknown"
+MODEL_PATHOLOGY_FAILURE_KINDS = {"empty", "looping", "leakage", "garbled"}
 
 
 def _report_pathologies(attempts):
@@ -173,21 +149,77 @@ def _report_pathologies(attempts):
         str(attempt.get("failureKind") or "").strip()
         for attempt in attempts
         if attempt.get("status") == "failed"
-        and str(attempt.get("failureKind") or "").strip() in SEVERE_FAILURE_KINDS
+        and str(attempt.get("failureKind") or "").strip() in MODEL_PATHOLOGY_FAILURE_KINDS
     })
+
+
+def _report_health(attempts, context_mode, context_size, max_tokens, status):
+    if status == "stopped":
+        return "stopped"
+
+    failed = [attempt for attempt in attempts if attempt["status"] == "failed"]
+    pathologies = _report_pathologies(attempts)
+
+    # Only evidence about emitted model output becomes a model-health warning.
+    # Runtime/transport failures, probe-contract misses, and exhausted request
+    # budgets are assessment outcomes, not model pathologies.
+    if pathologies:
+        return "warning" if max_tokens > 0 else "likely-unusable"
+
+    if max_tokens > 0:
+        if any(attempt.get("failureKind") == "capacity" for attempt in failed):
+            return "limited"
+        if failed:
+            return "assessment-incomplete"
+        return "healthy"
+
+    if failed:
+        return "assessment-failed"
+    if attempts:
+        return "assessment-incomplete"
+    return "unknown"
+
+
+def _report_with_derived_fields(report):
+    if not isinstance(report, dict):
+        return None
+
+    value = json.loads(json.dumps(report))
+    attempts = value.get("attempts")
+    attempts = [_normalize_attempt(item) for item in attempts] if isinstance(attempts, list) else []
+    value["attempts"] = attempts
+
+    context_mode = str(value.get("contextMode") or "").strip()
+    try:
+        context_size = max(0, int(value.get("contextSize") or 0))
+    except (TypeError, ValueError):
+        context_size = 0
+    try:
+        max_tokens = max(0, int(value.get("maxTokens") or 0))
+    except (TypeError, ValueError):
+        max_tokens = 0
+    status = str(value.get("status") or "incomplete").strip()
+
+    value["health"] = _report_health(attempts, context_mode, context_size, max_tokens, status)
+    value["pathologies"] = _report_pathologies(attempts)
+    value["abilities"] = _report_abilities(attempts, context_mode, context_size, max_tokens)
+    return value
 
 
 def list_reports():
     reports = _read_document()["reports"]
-    return [json.loads(json.dumps(reports[key])) for key in sorted(reports)]
+    return [
+        _report_with_derived_fields(reports[key])
+        for key in sorted(reports)
+        if isinstance(reports.get(key), dict)
+    ]
 
 
 def get_report(model_ref):
     model_ref = str(model_ref or "").strip()
     if not model_ref:
         return None
-    report = _read_document()["reports"].get(model_ref)
-    return json.loads(json.dumps(report)) if isinstance(report, dict) else None
+    return _report_with_derived_fields(_read_document()["reports"].get(model_ref))
 
 
 def save_report(report):

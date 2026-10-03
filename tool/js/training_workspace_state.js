@@ -38,7 +38,6 @@ var trainingWorkspaceState = {
   resumeSelectionTouched: false,
   historyExpanded: false,
   historyCollapsed: true,
-  historyDetailOpen: {},
   historyMetrics: {},
   historyMetricRequests: {},
   runnerQueueCollapsed: false,

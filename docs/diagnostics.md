@@ -30,15 +30,17 @@ Calibration continues to use the existing H3 probe routes and persisted training
 
 Assesses selected local or remote Director models progressively from small probes upward. The assessment records mechanical evidence WebCap can defend: usable context/output tiers, clean completion, truncation/capacity limits, runtime failures, empty output, obvious repetition/looping, garbled output, and obvious control/reasoning-token leakage.
 
-Assessment intentionally does **not** score writing quality. Compact current findings and strict Auto calibration profiles live under app-data `state/diagnostics`. Full probe prompts and full model outputs are timestamped temporary evidence under app-data `cache/director-model-assessments`; they can be inspected in Diagnostics or purged independently through Storage Manager.
+Assessment intentionally does **not** score writing quality. Compact current findings and strict Auto calibration profiles live under app-data `state/diagnostics`. Full probe prompts and full model outputs are timestamped temporary evidence under app-data `cache/director-model-assessments`; the latest evidence is expandable directly from each finding, full raw runs are listed below, and either can be purged independently through Storage Manager.
 
 Normal Director model selectors receive only a compact operational signal:
 
-- serious observed pathology -> warning marker;
-- reduced proven long-form capacity -> limited marker;
-- unknown / unassessed -> neutral.
+- serious observed output pathology -> warning marker;
+- reduced **proven** long-form capacity -> limited marker;
+- unknown, unproven, or operationally failed assessment -> neutral.
 
-A clean coherent-output tier of at least 8K is the current simple full-story signal. Lower proven output can recommend individual Scene development without making the model unusable.
+Runtime/transport failures, probe-contract misses, and exhausted requested budgets are assessment outcomes, not model pathologies. A model is not marked unusable merely because the assessment itself could not establish a tier.
+
+A clean coherent-output tier of at least 8K is the current simple full-story signal. Lower proven output can recommend individual Scene development without making the model unusable. Output tiers are requested generation budgets with deliberate prompt headroom; exhausting a tier is evidence about that probe budget, not proof of a provider or model hard maximum.
 
 ### Benchmark
 

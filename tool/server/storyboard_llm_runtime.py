@@ -1020,7 +1020,7 @@ def _assessment_signal(model_ref):
     health = str(report.get("health") or "").strip()
     pathologies = report.get("pathologies") if isinstance(report.get("pathologies"), list) else []
     serious = bool(pathologies) or health == "likely-unusable"
-    limited = not serious and coherent_output < 8192
+    limited = not serious and 0 < coherent_output < 8192
     return {
         "status": str(report.get("status") or ""),
         "health": health,

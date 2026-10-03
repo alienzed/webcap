@@ -290,6 +290,24 @@ def _resume_artifacts(entry):
     return [latest]
 
 
+def _previous_resume_points(entry, checkpoint_tag):
+    """List older direct-child DeepSpeed checkpoints without changing the run."""
+    current = _STEP_PATTERN.fullmatch(str(checkpoint_tag or "").strip())
+    if not current:
+        return []
+    current_step = int(current.group(1))
+    points = []
+    for child in Path(entry).iterdir():
+        match = _STEP_PATTERN.fullmatch(child.name)
+        if not match or not child.is_dir() or child.is_symlink():
+            continue
+        step = int(match.group(1))
+        if step >= current_step:
+            continue
+        points.append({"tag": child.name, "step": step})
+    return sorted(points, key=lambda item: item["step"], reverse=True)
+
+
 def _default_history(folder_path):
     return {
         "version": HISTORY_VERSION,
@@ -362,6 +380,7 @@ def discover_runs(folder_path, stage=""):
                     "matchType": "exact" if saved_hash == source_hash else "compatible",
                     "configHash": saved_hash, "modifiedAt": modified,
                     "checkpointAvailable": True, "checkpointName": "latest", "checkpointTag": checkpoint_tag,
+                    "resumePoints": _previous_resume_points(entry, checkpoint_tag),
                     "completed": completed, "epoch": highest_epoch or None, "steps": highest_step or None,
                     "expectedEpochs": expected_epochs or None,
                     "resumeActionId": str(action.get("actionId") or ""),

@@ -91,8 +91,13 @@ def _jobs_root():
     return _runtime_root() / JOB_DIR_NAME
 
 
+def _active_h3_training_runtime():
+    from .h3_probe import training_gpu_runtime
+    return training_gpu_runtime()
+
+
 def _reconcile_training_gpu_owner_from_runtime(jobs):
-    """Reconcile canonical Training ownership from exact managed-runner process truth."""
+    """Reconcile canonical Training ownership from exact managed runtime truth."""
     live_job = None
     for job in jobs:
         if str(job.get("status") or "") not in ACTIVE_STATUSES:
@@ -102,19 +107,56 @@ def _reconcile_training_gpu_owner_from_runtime(jobs):
             live_job = job
             break
 
+    h3_runtime = _active_h3_training_runtime()
+    if live_job is not None and h3_runtime is not None:
+        raise RuntimeError("A managed Training runner and H3 calibration are both active.")
+
+    live_runtime = live_job or h3_runtime
     owner = execution_resource_owner()
-    if live_job is not None:
+    if live_runtime is not None:
         if owner and owner != TRAINING_RESOURCE_OWNER:
             raise RuntimeError(
-                "Training runner is active while the shared GPU is owned by " + owner + "."
+                "Training runtime is active while the shared GPU is owned by " + owner + "."
             )
         if not owner and not reserve_execution_resource(TRAINING_RESOURCE_OWNER):
-            raise RuntimeError("Training runner is active but canonical GPU ownership could not be restored.")
-        return live_job
+            raise RuntimeError("Training runtime is active but canonical GPU ownership could not be restored.")
+        return live_runtime
 
     if owner == TRAINING_RESOURCE_OWNER:
         release_execution_resource(TRAINING_RESOURCE_OWNER)
     return None
+
+
+def reserve_gpu_for_h3_probe():
+    """Atomically claim the existing Training owner for an H3 calibration."""
+    with _lock:
+        state = _read_state()
+        jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
+        if _reconcile_training_gpu_owner_from_runtime(jobs) is not None:
+            return False
+        if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
+            return False
+        if execution_resource_owner():
+            return False
+        return reserve_execution_resource(TRAINING_RESOURCE_OWNER)
+
+
+def release_gpu_for_h3_probe():
+    """Release a failed/unstarted H3 claim only when no Training runtime is live."""
+    with _lock:
+        state = _read_state()
+        jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
+        if _reconcile_training_gpu_owner_from_runtime(jobs) is None:
+            return execution_resource_owner() == ""
+        return False
+
+
+def reconcile_after_h3_probe():
+    """Release H3 ownership or continue the normal Training queue after H3 ends."""
+    with _lock:
+        state = _read_state()
+        _refresh_state(state)
+        _persist_reconciled_state(state)
 
 
 def external_gpu_work_block_reason(owner):
@@ -2224,6 +2266,8 @@ def _launch_next_queued_job(state):
         return
     if any(job.get("status") in ACTIVE_STATUSES for job in state.get("jobs", [])):
         return
+    if _active_h3_training_runtime() is not None:
+        return
 
     queued_jobs = [job for job in state.get("jobs", []) if job.get("status") in QUEUE_STATUSES]
     if not queued_jobs:
@@ -2283,9 +2327,13 @@ def _refresh_state(state):
     active_jobs = [job for job in state.get("jobs", []) if job.get("status") in ACTIVE_STATUSES]
     state["activeJobId"] = active_jobs[0]["id"] if active_jobs else ""
 
+    h3_runtime = _active_h3_training_runtime()
+    if active_jobs and h3_runtime is not None:
+        raise RuntimeError("A managed Training runner and H3 calibration are both active.")
+
     resource_conflict = ""
     owner = execution_resource_owner()
-    if active_jobs:
+    if active_jobs or h3_runtime is not None:
         if not owner:
             if not reserve_execution_resource(TRAINING_RESOURCE_OWNER):
                 resource_conflict = "Training is active but the shared GPU resource could not be reserved."
@@ -2310,7 +2358,7 @@ def _refresh_state(state):
     if hold_reason:
         state["queuePaused"] = True
         state["queuePauseReason"] = hold_reason
-    if not _startup_reconciled and queued_jobs and not active_jobs:
+    if not _startup_reconciled and queued_jobs and not active_jobs and h3_runtime is None:
         state["queuePaused"] = True
         state["queuePauseReason"] = state.get("queuePauseReason") or "Queue waiting for manual start after WebCap restarted."
     _startup_reconciled = True

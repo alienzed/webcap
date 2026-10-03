@@ -26,7 +26,7 @@ Persisted `running`, provider IDs, queue state, or old ownership records cannot 
 
 Each managed local runtime has one concrete source of truth:
 
-- **Training:** the recorded managed runner PID identifies the process to check. No PID means no surviving Training process. A PID that is not alive as the expected managed runner means no surviving Training process. Only that exact expected runner being alive establishes active Training.
+- **Training:** the recorded managed runner PID identifies the process to check. H3 calibration is Training traffic and uses the same rule: its recorded exact probe PID identifies the expected `h3_shape_probe.py` process. No exact PID means no surviving Training process. A PID that is not alive as the expected managed runner means no surviving Training process. Only an exact expected managed Training or H3 probe process being alive establishes active Training.
 - **Inference:** only exact current-session ComfyUI work that WebCap started and can positively identify as still active establishes continuing Inference execution. Persisted provider IDs from a prior WebCap process never recreate GPU ownership.
 - **LLM:** only current-session WebCap local LLM execution establishes LLM ownership. A loaded/cached model is not execution. Remote LLM work never owns the local GPU.
 
@@ -95,7 +95,7 @@ A WebCap restart starts without inherited LLM or Inference ownership.
 ```text
 LLM       -> none
 Inference -> none
-Training  -> exact recorded managed PID is alive as our expected runner ? training : none
+Training  -> exact recorded managed Training/H3 PID is alive as our expected runner ? training : none
 ```
 
 Inference may preserve unfinished requests as Backlog. LLM session work may be discarded. Training may recover its specialized queue state. Those recovery actions are independent from shared GPU ownership.

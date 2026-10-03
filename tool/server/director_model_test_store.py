@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from flask import jsonify, request
 
-from .director_model_calibration import clear_calibration, list_profiles, list_reports, save_profile, save_report
+from .director_model_calibration import begin_calibration, clear_calibration, list_profiles, list_reports, save_profile, save_report
 from .director_model_capabilities import list_capability_hints
 
 
@@ -358,6 +358,13 @@ def register_routes(app):
                     "ok": True,
                     "job": enqueue_protocol_run(data.get("sessionId"), data.get("modelRef")),
                 }), 202
+            if action == "begin_calibration":
+                begun = begin_calibration(data.get("modelRef"))
+                return jsonify({
+                    "ok": True,
+                    "calibrationProfiles": begun["profiles"],
+                    "calibrationReports": begun["reports"],
+                })
             if action == "enqueue_calibration":
                 return jsonify({
                     "ok": True,

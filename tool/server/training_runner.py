@@ -1541,11 +1541,13 @@ def _request_job_action(job, action, confirmation_note=""):
 
 def _checkpointed_stop_run_directory(job):
     """Find the one Diffusion-Pipe run belonging to this managed job."""
-    raw_run_path = str(job.get("outputRunPath") or "").strip()
+    raw_run_path = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "").strip()
     if raw_run_path:
         run_dir = host_path_for_training_path(raw_run_path)
         if not run_dir.is_dir():
             raise ValueError("Recorded training run directory is unavailable: " + raw_run_path)
+        if not str(job.get("outputRunPath") or "").strip():
+            job["outputRunPath"] = raw_run_path
         return run_dir
     root = Path(str(job.get("outputRoot") or "").strip())
     if not root.is_dir():
@@ -1773,7 +1775,7 @@ def _populate_queued_resume_point(job, folder_path=None):
 
 def _queue_paused_job(job):
     """Return paused work to the front as ordinary queued resume intent."""
-    resume_path = str(job.get("outputRunPath") or "").strip()
+    resume_path = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "").strip()
     if resume_path:
         job["resumeFromCheckpoint"] = resume_path
         job["resumeStage"] = str(job.get("stages") or "")

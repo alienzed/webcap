@@ -1,5 +1,6 @@
 import json
 import math
+import os
 import sys
 import time
 import types
@@ -82,6 +83,110 @@ def test_tensorboard_reader_requires_both_streams(tmp_path, monkeypatch):
     _fake_tensorboard(monkeypatch, {"train/epoch_loss": []})
     with pytest.raises(ValueError, match="train/loss is unavailable"):
         training_candidates.read_loss_events(run)
+
+
+def test_tensorboard_reader_drops_abandoned_future_after_rewind(tmp_path, monkeypatch):
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "events.out.tfevents.fake").write_bytes(b"fixture")
+    streams = {
+        "train/loss": [
+            SimpleNamespace(step=10, value=.5, wall_time=100),
+            SimpleNamespace(step=20, value=.4, wall_time=200),
+            SimpleNamespace(step=20, value=.3, wall_time=300),
+        ],
+        "train/epoch_loss": [
+            SimpleNamespace(step=1, value=.5, wall_time=110),
+            SimpleNamespace(step=2, value=.4, wall_time=210),
+            SimpleNamespace(step=2, value=.3, wall_time=310),
+        ],
+    }
+    _fake_tensorboard(monkeypatch, streams)
+    detailed, epochs = training_candidates.read_loss_events(run, 150, 250)
+    assert [(point["axis"], point["loss"]) for point in detailed] == [(10, .5), (20, .3)]
+    assert [(point["axis"], point["loss"]) for point in epochs] == [(1, .5), (2, .3)]
+
+
+def test_saved_artifacts_hide_abandoned_future_after_rewind(tmp_path):
+    run = tmp_path / "run"
+    run.mkdir()
+    for epoch, modified in ((1, 100), (2, 200), (3, 300)):
+        directory = run / ("epoch" + str(epoch))
+        directory.mkdir()
+        (directory / "adapter.safetensors").write_bytes(b"x")
+        os.utime(directory, (modified, modified))
+    artifacts = training_candidates.saved_artifacts_for_run(run, 150, 250)
+    assert [item["epoch"] for item in artifacts] == [1, 3]
+
+
+def test_launch_rewrites_latest_only_to_existing_managed_global_step(tmp_path):
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "global_step10").mkdir()
+    (run / "global_step20").mkdir()
+    (run / "latest").write_text("global_step20\n", encoding="utf-8")
+    job = {
+        "resumeFromCheckpoint": str(run),
+        "resumeOutputId": "output/run",
+        "resumeCheckpointTag": "global_step10",
+        "resumeCheckpointRewritePending": True,
+    }
+    training_runner._rewrite_resume_latest(job)
+    assert (run / "latest").read_text(encoding="utf-8") == "global_step10\n"
+    assert job["resumeCheckpointWallTime"] == (run / "global_step10").stat().st_mtime
+    assert job["resumeBranchStartedAt"] > 0
+    assert job["resumeCheckpointRewritePending"] is False
+
+    (run / "latest").write_text("global_step20\n", encoding="utf-8")
+    training_runner._rewrite_resume_latest(job)
+    assert (run / "latest").read_text(encoding="utf-8") == "global_step20\n"
+
+    job["resumeCheckpointTag"] = "global_step99"
+    job["resumeCheckpointRewritePending"] = True
+    with pytest.raises(FileNotFoundError):
+        training_runner._rewrite_resume_latest(job)
+
+
+def test_finish_queued_rewind_applies_selected_checkpoint_before_finalizing(tmp_path, monkeypatch):
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "global_step10").mkdir()
+    (run / "global_step20").mkdir()
+    (run / "latest").write_text("global_step20\n", encoding="utf-8")
+    monkeypatch.setattr(training_runner, "host_path_for_training_path", lambda path: Path(path))
+    monkeypatch.setattr(training_runner, "_annotate_finished_early_job", lambda _job: None)
+    job = {
+        "status": "queued",
+        "stages": "h3",
+        "resumeStage": "h3",
+        "resumeFromCheckpoint": str(run),
+        "resumeOutputId": "output/run",
+        "resumeCheckpointTag": "global_step10",
+        "resumeCheckpointRewritePending": True,
+        "resumePoint": {"step": 10},
+    }
+    training_runner._finish_queued_resume(job)
+    assert (run / "latest").read_text(encoding="utf-8") == "global_step10\n"
+    assert job["status"] == "finished_early"
+    assert job["resumeCheckpointRewritePending"] is False
+
+
+def test_manual_rewind_candidate_detection_fails_loudly_when_checkpoint_is_missing(tmp_path, monkeypatch):
+    root = tmp_path
+    run = root / "run"
+    run.mkdir()
+    monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(training_runner, "host_path_for_training_path", lambda path: Path(path))
+    monkeypatch.setattr(training_runner, "_read_state_readonly", lambda: {"jobs": [{
+        "id": "job-1",
+        "folder": "sets/subject",
+        "resumeFromCheckpoint": str(run),
+        "status": "running",
+        "startedAt": 300,
+        "resumePoint": {"checkpointTag": "global_step10", "step": 20},
+    }]})
+    with pytest.raises(RuntimeError, match="Could not inspect rewound resume checkpoint global_step10"):
+        training_runner._candidate_run_snapshot("sets/subject", "job-1")
 
 
 def test_epoch_median_aggregation_rejects_isolated_step_spikes():
@@ -227,13 +332,14 @@ def test_candidate_endpoint_resolves_recorded_job_and_remains_read_only(tmp_path
     root, folder, run = tmp_path / "root", tmp_path / "root" / "sets" / "subject", tmp_path / "root" / "runs" / "one"
     folder.mkdir(parents=True)
     run.mkdir(parents=True)
-    state_path = root / ".webcap_training" / "queue.json"
+    state_path = root / ".test-webcap-app-data" / "state" / "training_queue.json"
     state_path.parent.mkdir()
     state_path.write_text(json.dumps({"version": 3, "activeJobId": "job-1", "jobs": [
         {"id": "job-1", "folder": "sets/subject", "outputRunPath": str(run), "status": "running", "progress": {"epoch": 12, "epochs": 70}},
         {"id": "job-2", "folder": "sets/subject", "resumeFromCheckpoint": str(run), "outputRunPath": "", "status": "queued"},
     ]}), encoding="utf-8")
     monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: root / ".test-webcap-app-data" / "state")
     epoch_directory = run / "epoch12"
     epoch_directory.mkdir()
     monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm: {"analysisVersion": 11, "algorithm": algorithm, "stepLossPoints": [], "smoothedStepLossPoints": [], "epochLossPoints": [], "analysisPoints": [], "regions": [], "candidates": [], "savedArtifacts": []})
@@ -272,7 +378,7 @@ def _copy_to_test_fixture(tmp_path, monkeypatch, stage="h3", subfolder="az"):
     destination_root.mkdir()
     source = epoch / "adapter_model_epoch12.safetensors"
     source.write_bytes(b"test weights")
-    state_path = root / ".webcap_training" / "queue.json"
+    state_path = root / ".test-webcap-app-data" / "state" / "training_queue.json"
     state_path.parent.mkdir()
     state_path.write_text(json.dumps({"version": 3, "jobs": [{
         "id": "job-1", "folder": "sets/subject", "outputRunPath": str(run),
@@ -280,6 +386,7 @@ def _copy_to_test_fixture(tmp_path, monkeypatch, stage="h3", subfolder="az"):
         "runName": "baseline", "sequence": "3", "actionId": "003-h3",
     }]}), encoding="utf-8")
     monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: root / ".test-webcap-app-data" / "state")
     roots = {key: "" for key in ("h3", "krea2", "wan21", "hi", "lo")}
     roots[stage] = str(destination_root)
     monkeypatch.setattr(training_runner.app_config, "load_config_from_disk", lambda: {
@@ -293,7 +400,7 @@ def test_candidate_analysis_marks_artifacts_already_in_the_configured_test_folde
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, stage=stage)
     run = {"folder": "sets/subject", "stages": stage, "runName": "baseline", "sequence": "3", "id": "job-1"}
     analysis = {"savedArtifacts": [{"epoch": 12, "fileName": source.name, "status": "available"}]}
-    expected_folder = destination_root / "az" / "subject"
+    expected_folder = destination_root / "az" / "sets" / "subject"
 
     training_runner._annotate_candidate_test_folder_status(run, analysis)
     assert analysis["testFolderStatus"] == {"state": "absent"}
@@ -342,7 +449,7 @@ def test_candidate_analysis_reports_unavailable_test_folder_without_blocking_ana
 def test_copy_candidate_to_configured_stage_root_uses_recorded_stages(tmp_path, monkeypatch, stage):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch, stage=stage)
     result = training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
-    destination = destination_root / "az" / "subject" / "baseline-03__epoch12.safetensors"
+    destination = destination_root / "az" / "sets" / "subject" / "baseline-03__epoch12.safetensors"
     assert Path(result["destination"]) == destination
     assert destination.read_bytes() == b"test weights"
     assert source.read_bytes() == b"test weights"
@@ -381,7 +488,7 @@ def test_remove_candidate_from_test_deletes_copy_and_sidecar_but_preserves_saved
 
 def test_copy_candidate_reuses_set_directory_and_refuses_filename_collision(tmp_path, monkeypatch):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
-    destination = destination_root / "az" / "subject" / "baseline-03__epoch12.safetensors"
+    destination = destination_root / "az" / "sets" / "subject" / "baseline-03__epoch12.safetensors"
     destination.parent.mkdir(parents=True)
     second_epoch = source.parent.parent / "epoch13"
     second_epoch.mkdir()
@@ -400,7 +507,7 @@ def test_copy_candidate_reuses_set_directory_and_refuses_filename_collision(tmp_
 
 def test_open_test_folder_requires_existing_destination_and_never_creates_it(tmp_path, monkeypatch):
     source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
-    expected = destination_root / "az" / "subject"
+    expected = destination_root / "az" / "sets" / "subject"
     client = app_module.app.test_client()
     opened = []
     monkeypatch.setattr(app_module, "open_path_in_explorer_response", lambda path: opened.append(path) or app_module.jsonify({"ok": True}))
@@ -434,7 +541,7 @@ def test_copy_candidate_concurrent_requests_create_one_file(tmp_path, monkeypatc
             outcomes.append("conflict")
     assert outcomes.count("conflict") == 1
     assert len([item for item in outcomes if item != "conflict"]) == 1
-    assert (destination_root / "subject" / "baseline-03__epoch12.safetensors").read_bytes() == b"test weights"
+    assert (destination_root / "sets" / "subject" / "baseline-03__epoch12.safetensors").read_bytes() == b"test weights"
 
 
 def test_copy_candidate_revalidates_source_and_removes_only_its_partial_destination(tmp_path, monkeypatch):
@@ -451,7 +558,7 @@ def test_copy_candidate_revalidates_source_and_removes_only_its_partial_destinat
     monkeypatch.setattr(training_runner.shutil, "copyfileobj", interrupted_copy)
     with pytest.raises(OSError, match="interrupted"):
         training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
-    assert not (destination_root / "az" / "subject" / "baseline-03__epoch12.safetensors").exists()
+    assert not (destination_root / "az" / "sets" / "subject" / "baseline-03__epoch12.safetensors").exists()
 
 
 def test_copy_candidate_requires_saved_root_and_rejects_extra_request_fields(tmp_path, monkeypatch):
@@ -807,6 +914,91 @@ def test_display_centering_spike_rejection_and_density():
     assert max(abs(lookup[p["step"]] - p["loss"]) for p in reduced) < .03
 
 
+
+def test_save_candidate_epoch_copies_source_marks_selected_and_leaves_test_copy_alone(tmp_path, monkeypatch):
+    source = tmp_path / "epoch41.safetensors"
+    source.write_bytes(b"chosen-weights")
+    destination = tmp_path / "models"
+    destination.mkdir()
+    staged = tmp_path / "test-copy.safetensors"
+    staged.write_bytes(b"chosen-weights")
+
+    monkeypatch.setattr(
+        training_runner,
+        "_candidate_run_snapshot",
+        lambda folder, job_id: ("run", {"stages": "h3"}),
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "_candidate_safetensors_path",
+        lambda folder, job_id, epoch: source,
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "test_source_path",
+        lambda stage, relative: destination,
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "select_candidate_epoch",
+        lambda folder, job_id, epoch: {"selected": {"epoch": int(epoch), "step": 8200}},
+    )
+
+    payload = training_runner.save_candidate_epoch(
+        "sets/subject",
+        "job-1",
+        41,
+        "selected",
+        "winner",
+    )
+
+    assert (destination / "winner.safetensors").read_bytes() == b"chosen-weights"
+    assert payload["selected"] == {"epoch": 41, "step": 8200}
+    assert payload["fileName"] == "winner.safetensors"
+    assert source.read_bytes() == b"chosen-weights"
+    assert staged.read_bytes() == b"chosen-weights"
+
+
+def test_save_candidate_epoch_rolls_back_copy_when_selection_fails(tmp_path, monkeypatch):
+    source = tmp_path / "epoch41.safetensors"
+    source.write_bytes(b"chosen-weights")
+    destination = tmp_path / "models"
+    destination.mkdir()
+
+    monkeypatch.setattr(
+        training_runner,
+        "_candidate_run_snapshot",
+        lambda folder, job_id: ("run", {"stages": "h3"}),
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "_candidate_safetensors_path",
+        lambda folder, job_id, epoch: source,
+    )
+    monkeypatch.setattr(
+        training_runner,
+        "test_source_path",
+        lambda stage, relative: destination,
+    )
+
+    def fail_selection(folder, job_id, epoch):
+        raise RuntimeError("selection failed")
+
+    monkeypatch.setattr(training_runner, "select_candidate_epoch", fail_selection)
+
+    with pytest.raises(RuntimeError, match="selection failed"):
+        training_runner.save_candidate_epoch(
+            "sets/subject",
+            "job-1",
+            41,
+            "",
+            "winner.safetensors",
+        )
+
+    assert not (destination / "winner.safetensors").exists()
+    assert source.is_file()
+
+
 def test_candidate_selection_persists_with_trainer_timestamp_run_and_replaces_cleanly(tmp_path, monkeypatch):
     root = tmp_path / "root"
     folder = root / "sets" / "subject"
@@ -819,7 +1011,7 @@ def test_candidate_selection_persists_with_trainer_timestamp_run_and_replaces_cl
     (epoch12 / "epoch12.safetensors").write_bytes(b"twelve")
     (epoch18 / "epoch18.safetensors").write_bytes(b"eighteen")
 
-    state_path = root / ".webcap_training" / "queue.json"
+    state_path = root / ".test-webcap-app-data" / "state" / "training_queue.json"
     state_path.parent.mkdir()
     state_path.write_text(json.dumps({"version": 3, "jobs": [{
         "id": "job-1",
@@ -831,6 +1023,7 @@ def test_candidate_selection_persists_with_trainer_timestamp_run_and_replaces_cl
     }]}), encoding="utf-8")
 
     monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: root / ".test-webcap-app-data" / "state")
     monkeypatch.setattr(training_runner, "_analyze_run_directory", lambda path, algorithm="v5": {
         "analysisVersion": 13,
         "algorithm": algorithm,

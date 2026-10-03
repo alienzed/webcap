@@ -562,7 +562,17 @@ function switchTrainingSetup(profileId, mode) {
     if (profileId) setSelectedTrainingModelProfile(profileId);
     if (mode) trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(mode);
     try { localStorage.setItem(trainingModeStorageKey(state.folder), trainingWorkspaceState.selectedMode); } catch (err) {}
+
+    // Model-specific workspace state must never survive a model switch. The
+    // next refresh may fail, and stale files/review from the previous model
+    // would otherwise remain visible under the newly selected model.
+    trainingWorkspaceState.configFiles = [];
+    trainingWorkspaceState.review = null;
+    trainingWorkspaceState.reviewError = '';
+    trainingWorkspaceState.reviewPending = false;
     if (priorConfig && state.currentConfigFile === priorConfig) clearEditorAndPreview();
+    renderTrainingWorkspaceConfigList([]);
+    renderTrainingReview();
     refreshTrainingWorkspace();
   }).catch(function (err) {
     setStatus('Could not save the open TOML before switching setup: ' + String(err && err.message ? err.message : err));
@@ -595,11 +605,16 @@ function wireTrainingWorkspace() {
   });
   var runnerQueue = document.getElementById('training-runner-queue');
   var historyList = document.getElementById('training-history-list');
+  var archiveList = document.getElementById('training-archive-list');
   var historyCollapseBtn = document.getElementById('training-history-collapse-btn');
   var historyShowAllBtn = document.getElementById('training-history-show-all-btn');
   var historySearch = document.getElementById('training-history-search');
   var historyScope = document.getElementById('training-history-scope');
   var historyClearBtn = document.getElementById('training-history-clear-btn');
+  var historyTabs = document.getElementById('training-history-tabs');
+  var archiveModalClose = document.getElementById('training-archive-close');
+  var archiveModalCancel = document.getElementById('training-archive-cancel');
+  var archiveModalConfirm = document.getElementById('training-archive-confirm');
   itemOverviewToggleBtn.onclick = function () {
     trainingWorkspaceState.itemOverviewHidden = !trainingWorkspaceState.itemOverviewHidden;
     renderTrainingItemOverview(null);
@@ -738,6 +753,8 @@ function wireTrainingWorkspace() {
       event.stopPropagation();
       if (action === 'cancel') {
         cancelQueuedTrainingJob(jobId);
+      } else if (action === 'finish') {
+        finishQueuedTrainingResume(jobId);
       } else {
         reorderManagedTraining(jobId, action);
       }
@@ -770,6 +787,11 @@ function wireTrainingWorkspace() {
     var historyMoreMenu = event.target.closest('.training-history-more');
     if (historyMoreMenu && event.target.closest('[data-training-history-output], [data-training-history-action], [data-training-history-clear]')) {
       historyMoreMenu.removeAttribute('open');
+    }
+    var finalizeButton = event.target.closest('[data-training-history-finalize]');
+    if (finalizeButton) {
+      openTrainingArchiveModal(finalizeButton.getAttribute('data-training-history-finalize'));
+      return;
     }
     var logId = event.target.getAttribute('data-training-history-log');
     var candidateId = event.target.getAttribute('data-training-history-candidates');
@@ -810,6 +832,13 @@ function wireTrainingWorkspace() {
       resumeTrainingHistoryJob(resumeId);
     }
   };
+  archiveList.onclick = function (event) {
+    var detailsButton = event.target.closest('[data-training-archive-details]');
+    if (!detailsButton) return;
+    var archiveName = detailsButton.getAttribute('data-training-archive-details');
+    trainingWorkspaceState.archiveDetailOpen[archiveName] = !trainingWorkspaceState.archiveDetailOpen[archiveName];
+    renderTrainingArchives();
+  };
   historyCollapseBtn.onclick = function () {
     trainingWorkspaceState.historyCollapsed = !trainingWorkspaceState.historyCollapsed;
     renderTrainingHistory();
@@ -828,6 +857,22 @@ function wireTrainingWorkspace() {
   };
   if (historySearch) historySearch.oninput = renderTrainingHistory;
   if (historyClearBtn) historyClearBtn.onclick = clearTrainingHistory;
+  if (historyTabs) historyTabs.onclick = function (event) {
+    var button = event.target.closest('[data-training-history-tab]');
+    if (!button) return;
+    trainingWorkspaceState.historyPrimaryTab = button.getAttribute('data-training-history-tab') === 'archive' ? 'archive' : 'history';
+    if (trainingWorkspaceState.historyPrimaryTab === 'archive') {
+      loadTrainingArchives(false).catch(function (err) {
+        setStatus('Could not load Training Archive: ' + String(err.message || err));
+        throw err;
+      });
+    } else {
+      renderTrainingHistory();
+    }
+  };
+  archiveModalClose.onclick = closeTrainingArchiveModal;
+  archiveModalCancel.onclick = closeTrainingArchiveModal;
+  archiveModalConfirm.onclick = finalizeTrainingArchive;
 }
 
 function syncTrainingConsoleUi() {

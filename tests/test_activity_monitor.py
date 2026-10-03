@@ -1,7 +1,15 @@
+import pytest
+
 from tool.server import activity_monitor
 
 
+@pytest.fixture(autouse=True)
+def _idle_gpu_owner(monkeypatch):
+    monkeypatch.setattr(activity_monitor, "execution_resource_owner", lambda: "")
+
+
 def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
+    monkeypatch.setattr(activity_monitor, "execution_resource_owner", lambda: "inference")
     monkeypatch.setattr(activity_monitor, "inference_snapshot", lambda include_terminal=False: {
         "paused": False,
         "pauseReason": "",
@@ -39,7 +47,7 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
             },
         ],
     })
-    monkeypatch.setattr(activity_monitor, "training_status_response", lambda: ({
+    monkeypatch.setattr(activity_monitor, "training_status_snapshot", lambda: ({
         "ok": True,
         "queuePaused": False,
         "queuePauseReason": "",
@@ -82,6 +90,7 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
     payload = activity_monitor.activity_snapshot(limit=10)
 
     assert payload["ok"] is True
+    assert payload["gpuOwner"] == "inference"
     assert {item["kind"] for item in payload["active"]} == {"storyboard", "training", "storage"}
     assert [item["id"] for item in payload["recent"]] == ["train-done"]
     assert payload["queues"]["inference"]["running"] == 1
@@ -95,7 +104,7 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
 def test_activity_recent_is_limited_to_client_session(monkeypatch):
     monkeypatch.setattr(activity_monitor, "inference_snapshot", lambda include_terminal=False: {"paused": False, "pauseReason": "", "jobs": []})
     monkeypatch.setattr(activity_monitor, "llm_snapshot", lambda include_terminal=False: {"paused": False, "pauseReason": "", "jobs": []})
-    monkeypatch.setattr(activity_monitor, "training_status_response", lambda: ({"ok": True, "queuePaused": False, "queuePauseReason": "", "jobs": []}, 200))
+    monkeypatch.setattr(activity_monitor, "training_status_snapshot", lambda: ({"ok": True, "queuePaused": False, "queuePauseReason": "", "jobs": []}, 200))
     monkeypatch.setattr(activity_monitor, "storage_scan_status", lambda: {"ok": True, "scan": {}})
     monkeypatch.setattr(activity_monitor, "execution_recent_snapshot", lambda lane, limit=30: [
         {"id": lane + "-old", "status": "completed", "finishedAt": 90.0, "metadata": {"client": "generate" if lane == "inference" else "storyboard"}},
@@ -117,7 +126,7 @@ def test_activity_snapshot_keeps_other_domains_when_execution_state_is_unavailab
 
     monkeypatch.setattr(activity_monitor, "inference_snapshot", unavailable)
     monkeypatch.setattr(activity_monitor, "llm_snapshot", unavailable)
-    monkeypatch.setattr(activity_monitor, "training_status_response", lambda: ({
+    monkeypatch.setattr(activity_monitor, "training_status_snapshot", lambda: ({
         "ok": True,
         "queuePaused": False,
         "queuePauseReason": "",
@@ -133,3 +142,26 @@ def test_activity_snapshot_keeps_other_domains_when_execution_state_is_unavailab
     assert payload["queues"]["inference"]["unavailable"] is True
     assert payload["queues"]["director"]["unavailable"] is True
     assert {item["area"] for item in payload["errors"]} == {"inference", "director"}
+
+
+def test_execution_item_exposes_llm_finish_diagnostics():
+    item = activity_monitor._execution_item("llm", {
+        "id": "llm-done",
+        "status": "completed",
+        "metadata": {
+            "client": "chat",
+            "modelId": "hemmingway",
+            "operation": "freeform_chat",
+        },
+        "result": {
+            "finishReason": "stop",
+            "usage": {
+                "prompt_tokens": 4210,
+                "completion_tokens": 3781,
+            },
+        },
+    })
+
+    assert item["finishReason"] == "stop"
+    assert item["promptTokens"] == 4210
+    assert item["outputTokens"] == 3781

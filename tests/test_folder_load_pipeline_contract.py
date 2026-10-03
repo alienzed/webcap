@@ -35,3 +35,17 @@ def test_folder_navigation_does_not_scan_training_history_for_badges():
     assert "status === 'queued'" in badge_logic
     assert "['starting', 'running', 'stopping']" in badge_logic
     assert "refreshFolderQueueStatusBadges();" in runner_ui
+
+
+def test_advanced_filter_panel_open_state_is_transient_while_filter_values_persist():
+    state = (ROOT / "tool" / "js" / "folder_state.js").read_text(encoding="utf-8")
+
+    assert "missing_captions_only" in state
+    assert "reviewed_only" in state
+    assert "unreviewed_only" in state
+    assert "tag_mismatch_only" in state
+    assert "incomplete_only" in state
+    assert "invalid_ar_only" in state
+    assert "stars:" in state
+    assert "flags:" in state
+    assert "panel_expanded" not in state

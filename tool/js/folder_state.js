@@ -16,6 +16,9 @@ function sanitizeFolderState(data) {
   var testGenerationByModel = (src.test_generation_by_model && typeof src.test_generation_by_model === 'object')
     ? JSON.parse(JSON.stringify(src.test_generation_by_model))
     : {};
+  var lastTrainingArchive = (src.last_training_archive && typeof src.last_training_archive === 'object' && !Array.isArray(src.last_training_archive))
+    ? JSON.parse(JSON.stringify(src.last_training_archive))
+    : {};
   var testGenerationMegapixels = Number(testGenerationSettings.megapixels);
   var testGenerationDuration = Number(testGenerationSettings.duration);
   var testGenerationSelectedFiles = Array.isArray(testGenerationSettings.selectedFiles)
@@ -196,11 +199,11 @@ function sanitizeFolderState(data) {
       selectedFiles: testGenerationSelectedFiles
     },
     test_generation_by_model: testGenerationByModel,
+    last_training_archive: lastTrainingArchive,
     annotate_strip_visible: !!src.annotate_strip_visible,
     caption_helper_panel_collapsed: !!src.caption_helper_panel_collapsed,
     media_filters: {
       text: String(mediaFilters.text || ''),
-      panel_expanded: !!mediaFilters.panel_expanded,
       missing_captions_only: !!mediaFilters.missing_captions_only,
       reviewed_only: !!mediaFilters.reviewed_only,
       unreviewed_only: !!mediaFilters.unreviewed_only,
@@ -381,7 +384,6 @@ function snapshotFolderStateFromDom() {
     .sort();
   var mediaFilters = {
     text: String((ui.filterEl && ui.filterEl.value) || ''),
-    panel_expanded: !!(ui.advancedFilterPanel && !ui.advancedFilterPanel.classList.contains('hidden')),
     missing_captions_only: !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked),
     reviewed_only: !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked),
     unreviewed_only: !!(ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked),
@@ -416,6 +418,9 @@ function snapshotFolderStateFromDom() {
       : {},
     test_generation_by_model: (state.testGenerationByModel && typeof state.testGenerationByModel === 'object')
       ? JSON.parse(JSON.stringify(state.testGenerationByModel))
+      : {},
+    last_training_archive: (state.lastTrainingArchive && typeof state.lastTrainingArchive === 'object')
+      ? JSON.parse(JSON.stringify(state.lastTrainingArchive))
       : {},
     annotate_strip_visible: !!window.annotateStripVisible,
     caption_helper_panel_collapsed: !!window.captionHelperPanelCollapsed,
@@ -460,6 +465,9 @@ function applyFolderStateToDom(folderState) {
     : {};
   state.testGenerationByModel = (clean.test_generation_by_model && typeof clean.test_generation_by_model === 'object')
     ? JSON.parse(JSON.stringify(clean.test_generation_by_model))
+    : {};
+  state.lastTrainingArchive = (clean.last_training_archive && typeof clean.last_training_archive === 'object')
+    ? JSON.parse(JSON.stringify(clean.last_training_archive))
     : {};
   state.mutatedSet = new Set(Array.isArray(clean.mutated_media_keys) ? clean.mutated_media_keys : []);
   state.mutatedByMediaSource = {};
@@ -523,14 +531,6 @@ function applyFolderStateToDom(folderState) {
     Array.prototype.forEach.call(ui.advancedFilterFlagEl.querySelectorAll('input[type="checkbox"]'), function (input) {
       input.checked = flagSelections.has(String(input.value || '').trim().toLowerCase());
     });
-  }
-  if (ui.advancedFilterPanel) {
-    var panelExpanded = !!(clean.media_filters && clean.media_filters.panel_expanded);
-    ui.advancedFilterPanel.classList.toggle('hidden', !panelExpanded);
-    if (ui.advancedFilterToggleBtn) {
-      ui.advancedFilterToggleBtn.classList.toggle('expanded', panelExpanded);
-      ui.advancedFilterToggleBtn.setAttribute('aria-expanded', panelExpanded ? 'true' : 'false');
-    }
   }
   updateSuperSetControls();
   // Add new field restoration logic here as needed

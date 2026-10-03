@@ -27,7 +27,7 @@ from .training_preflight import (
     preflight_payload as _preflight_payload,
     resolve_folder as _resolve_folder,
 )
-from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination, test_source_for_set
+from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination, test_source_for_set, test_source_path
 from .training_progress import (
     annotate_completed_job as _annotate_completed_job,
     annotate_finished_early_job as _annotate_finished_early_job,
@@ -50,7 +50,6 @@ from .training_run_manifest import clear_selected_epoch as _clear_selected_epoch
 from .execution_queue import reserve_resource as reserve_execution_resource, release_resource as release_execution_resource, resource_owner as execution_resource_owner
 
 
-STATE_FILE_NAME = "queue.json"
 JOB_DIR_NAME = "jobs"
 ACTIVE_STATUSES = {"starting", "running", "stopping"}
 QUEUE_STATUSES = {"queued"}
@@ -65,6 +64,7 @@ _state_file_seen = None
 _persisted_managed_job_ids = set()
 _logger = logging.getLogger(__name__)
 _CHECKPOINT_SAVE_PATH_PATTERN = re.compile(r"Saving model checkpoint:\s+(.+?)[/\\]global_step\d+[/\\]")
+_GLOBAL_STEP_TAG_PATTERN = re.compile(r"^global_step(\d+)$", re.IGNORECASE)
 _TRAINING_LOG_TIMESTAMP_PATTERN = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\]", re.MULTILINE)
 _DISTRIBUTED_SOCKET_HOLD_REASON = (
     "Queue held: PyTorch distributed could not open its server socket because the address is already in use. "
@@ -89,10 +89,6 @@ def _state_path():
 
 def _jobs_root():
     return _runtime_root() / JOB_DIR_NAME
-
-
-def _ensure_runtime_dirs():
-    _runtime_root().mkdir(parents=True, exist_ok=True)
 
 
 def external_gpu_work_block_reason(owner):
@@ -304,6 +300,10 @@ def _read_state():
     parsed.setdefault("jobs", [])
     parsed.setdefault("queuePaused", False)
     parsed.setdefault("queuePauseReason", "")
+    for job in parsed["jobs"]:
+        resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
+        if resume_path and not str(job.get("outputRunPath") or "").strip():
+            job["outputRunPath"] = resume_path
     _state_job_ids(parsed, path)
     _persisted_managed_job_ids = _managed_job_ids(parsed)
     _state_file_seen = path
@@ -326,14 +326,18 @@ def _read_state_readonly():
     if not isinstance(parsed, dict) or parsed.get("version") not in (3, 4):
         raise TrainingStateError("Existing training queue state is invalid: " + str(path))
     parsed.setdefault("jobs", [])
+    for job in parsed["jobs"]:
+        resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
+        if resume_path and not str(job.get("outputRunPath") or "").strip():
+            job["outputRunPath"] = resume_path
     _state_job_ids(parsed, path)
     return parsed
 
 
 def _write_state(state, retired_job_ids=()):
     global _state_file_seen, _persisted_managed_job_ids
-    _ensure_runtime_dirs()
     path = _state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     job_ids = _state_job_ids(state, path)
     allowed_retirements = {str(job_id) for job_id in retired_job_ids}
     missing_job_ids = _persisted_managed_job_ids - job_ids - allowed_retirements if _state_file_seen == path else set()
@@ -561,6 +565,22 @@ def _candidate_run_snapshot(folder, job_id):
         if not raw_run_path:
             raise RuntimeError("This training job has no recorded or resume run directory yet.")
         progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+        resume_point = job.get("resumePoint") if isinstance(job.get("resumePoint"), dict) else {}
+        checkpoint_wall_time = job.get("resumeCheckpointWallTime")
+        branch_started_at = job.get("resumeBranchStartedAt")
+        if checkpoint_wall_time is None and branch_started_at is None and job.get("startedAt"):
+            checkpoint_tag = str(resume_point.get("checkpointTag") or "").strip()
+            checkpoint_match = _GLOBAL_STEP_TAG_PATTERN.fullmatch(checkpoint_tag)
+            recorded_highest_step = int(resume_point.get("step") or 0)
+            if checkpoint_match and int(checkpoint_match.group(1)) < recorded_highest_step:
+                checkpoint_path = host_path_for_training_path(raw_run_path) / checkpoint_tag
+                try:
+                    if not checkpoint_path.is_dir() or checkpoint_path.is_symlink():
+                        raise FileNotFoundError("Rewound resume checkpoint is unavailable: " + checkpoint_tag)
+                    checkpoint_wall_time = checkpoint_path.stat().st_mtime
+                    branch_started_at = job.get("startedAt")
+                except OSError as exc:
+                    raise RuntimeError("Could not inspect rewound resume checkpoint " + checkpoint_tag + ": " + str(exc)) from exc
         run_summary = job.get("runSummary") if isinstance(job.get("runSummary"), dict) else {}
         if not run_summary:
             run_summary = run_summary_from_capture(
@@ -579,8 +599,19 @@ def _candidate_run_snapshot(folder, job_id):
             "status": str(job.get("status") or "unknown"),
             "currentEpoch": progress.get("epoch"),
             "plannedEpochs": progress.get("epochs"),
+            "resumeCheckpointTag": str(job.get("resumeCheckpointTag") or ""),
+            "resumeCheckpointWallTime": checkpoint_wall_time,
+            "resumeBranchStartedAt": branch_started_at,
             "runSummary": run_summary,
         }
+
+
+def candidate_run_snapshot(folder, job_id):
+    raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    run_dir = host_path_for_training_path(raw_run_path)
+    if not run_dir.is_dir() or run_dir.is_symlink():
+        raise FileNotFoundError("Recorded training run directory is unavailable.")
+    return run_dir.resolve(strict=True), run
 
 
 def candidate_run_available(folder, job_id):
@@ -651,10 +682,10 @@ def _candidate_test_directory_for_run(run, create_missing):
     stage = str(run.get("stages") or "").strip().lower()
     if stage not in TEST_COPY_STAGE_LABELS:
         raise ValueError("Recorded training job has no supported Copy to Test model stage.")
-    set_name = PurePosixPath(str(run.get("folder") or "")).name
-    if not set_name or set_name in (".", ".."):
-        raise RuntimeError("Recorded training folder has no usable set name.")
-    root, parts = test_copy_destination(stage, set_name)
+    set_folder = str(run.get("folder") or "").strip().replace("\\", "/").strip("/")
+    if not set_folder:
+        raise RuntimeError("Recorded training folder has no usable Set path.")
+    root, parts = test_copy_destination(stage, set_folder)
     return _copy_to_test_directory(root, parts, create_missing=create_missing)
 
 
@@ -726,7 +757,7 @@ def _annotate_candidate_test_folder_status(run, analysis):
         try:
             artifact["testSource"] = test_source_for_set(
                 artifact["testStage"],
-                PurePosixPath(str(run.get("folder") or "")).name,
+                str(run.get("folder") or ""),
             )
         except (ValueError, OSError):
             artifact["testSource"] = ""
@@ -737,6 +768,91 @@ def _annotate_candidate_test_folder_status(run, analysis):
             or (legacy_destination.is_file() and not legacy_destination.is_symlink())
         )
     analysis["testFolderStatus"] = {"state": "available"}
+
+
+
+def save_candidate_epoch(folder, job_id, epoch, destination, filename):
+    """Copy one recorded epoch to a chosen Test-model folder and mark it selected."""
+    _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    source = _candidate_safetensors_path(folder, job_id, epoch)
+    stage = str(run.get("stages") or "").strip().lower()
+    if stage not in TEST_COPY_STAGE_LABELS:
+        raise ValueError("Recorded training job has no supported Test model stage.")
+
+    destination_directory = test_source_path(stage, destination)
+    if not destination_directory.is_dir():
+        raise FileNotFoundError("Selected LoRA destination folder does not exist.")
+
+    requested_name = str(filename or "").strip()
+    if (
+        not requested_name
+        or requested_name in (".", "..")
+        or Path(requested_name).name != requested_name
+        or "/" in requested_name
+        or "\\" in requested_name
+    ):
+        raise ValueError("Selected LoRA filename must be a single filename.")
+    if Path(requested_name).suffix == "":
+        requested_name += ".safetensors"
+
+    destination_path = destination_directory / requested_name
+    if destination_path.exists() or destination_path.is_symlink():
+        raise FileExistsError("Selected LoRA destination already exists: " + requested_name)
+
+    created = False
+    try:
+        with source.open("rb") as source_handle, destination_path.open("xb") as destination_handle:
+            shutil.copyfileobj(source_handle, destination_handle)
+            created = True
+        raw_run_path, selected_run = _candidate_run_snapshot(folder, job_id)
+        run_dir = host_path_for_training_path(raw_run_path)
+        if not run_dir.is_dir() or run_dir.is_symlink():
+            raise FileNotFoundError("Recorded training run directory is unavailable.")
+        analysis = _analyze_run_directory(run_dir, algorithm="v5")
+        step = _candidate_epoch_step(analysis, epoch)
+        identity = _candidate_manifest_id(selected_run)
+        if not identity:
+            raise RuntimeError("Recorded training job has no managed action identity for durable selection.")
+        selected = _select_epoch(
+            run_dir.resolve(strict=True),
+            identity,
+            int(epoch),
+            step,
+            saved_stage=stage,
+            saved_destination=str(destination or ""),
+            saved_file_name=destination_path.name,
+        )
+    except Exception:
+        if created:
+            try:
+                destination_path.unlink()
+            except OSError:
+                pass
+        raise
+
+    return {
+        "destination": str(destination_path),
+        "fileName": destination_path.name,
+        "sourceFileName": source.name,
+        "stage": stage,
+        "selected": selected,
+    }
+
+
+def save_candidate_epoch_response(folder, job_id, epoch, destination, filename):
+    try:
+        return {
+            "ok": True,
+            **save_candidate_epoch(folder, job_id, epoch, destination, filename),
+        }, 200
+    except FileExistsError as exc:
+        return {"ok": False, "error": str(exc)}, 409
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    except (RuntimeError, ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
 
 
 def copy_candidate_epoch_to_test(folder, job_id, epoch):
@@ -851,6 +967,14 @@ def _candidate_selected_epoch(run_dir, run):
     return _selected_epoch(run_dir, identity) if identity else None
 
 
+def candidate_selected_epoch(folder, job_id):
+    raw_run_path, run = _candidate_run_snapshot(folder, job_id)
+    run_dir = host_path_for_training_path(raw_run_path)
+    if not run_dir.is_dir() or run_dir.is_symlink():
+        raise FileNotFoundError("Recorded training run directory is unavailable.")
+    return _candidate_selected_epoch(run_dir.resolve(strict=True), run)
+
+
 def _candidate_epoch_step(analysis, epoch):
     wanted = int(epoch)
     for point in analysis.get("epochLossPoints") or []:
@@ -925,9 +1049,22 @@ def candidate_analysis_response(folder, job_id, algorithm="v5"):
         run_dir = host_path_for_training_path(raw_run_path)
         if not run_dir.is_dir():
             raise FileNotFoundError("Recorded training run directory is unavailable.")
-        analysis = _analyze_run_directory(run_dir, algorithm=algorithm)
+        checkpoint_wall_time = run.get("resumeCheckpointWallTime")
+        branch_started_at = run.get("resumeBranchStartedAt")
+        analysis = (
+            _analyze_run_directory(
+                run_dir,
+                algorithm=algorithm,
+                resume_checkpoint_wall_time=checkpoint_wall_time,
+                resume_branch_started_at=branch_started_at,
+            )
+            if checkpoint_wall_time is not None and branch_started_at is not None
+            else _analyze_run_directory(run_dir, algorithm=algorithm)
+        )
         _annotate_candidate_test_folder_status(run, analysis)
-        analysis["selected"] = _candidate_selected_epoch(run_dir, run)
+        selected = _candidate_selected_epoch(run_dir, run)
+        visible_epochs = {int(point.get("epoch") or 0) for point in analysis.get("epochLossPoints") or []}
+        analysis["selected"] = selected if selected and int(selected.get("epoch") or 0) in visible_epochs else None
     except (OSError, RuntimeError, ValueError) as exc:
         return {"ok": False, "error": str(exc)}, 422
     return {"ok": True, "run": run, "analysis": analysis}, 200
@@ -1071,6 +1208,36 @@ def _normalize_resume_stage(stages, resume_from_checkpoint, resume_stage):
     if value not in ("hi", "lo"):
         raise ValueError("Resume stage must be hi or lo.")
     return value
+
+
+def _validated_resume_checkpoint(run_path, checkpoint_tag):
+    tag = str(checkpoint_tag or "").strip()
+    if not tag:
+        return None
+    match = _GLOBAL_STEP_TAG_PATTERN.fullmatch(tag)
+    if not match:
+        raise ValueError("Resume checkpoint must be an existing global_step checkpoint.")
+    run_dir = host_path_for_training_path(run_path)
+    checkpoint = run_dir / tag
+    if not run_dir.is_dir() or run_dir.is_symlink() or not checkpoint.is_dir() or checkpoint.is_symlink():
+        raise FileNotFoundError("Selected resume checkpoint is unavailable: " + tag)
+    return {"tag": tag, "step": int(match.group(1)), "path": checkpoint, "wallTime": checkpoint.stat().st_mtime}
+
+
+def _rewrite_resume_latest(job):
+    tag = str(job.get("resumeCheckpointTag") or "").strip()
+    if not tag or job.get("resumeCheckpointRewritePending") is not True:
+        return
+    if not str(job.get("resumeOutputId") or "").strip():
+        raise ValueError("A previous saved resume point requires a managed checkpoint.")
+    selected = _validated_resume_checkpoint(job.get("resumeFromCheckpoint"), tag)
+    latest = host_path_for_training_path(job.get("resumeFromCheckpoint")) / "latest"
+    temporary = latest.with_name("latest.webcap.tmp")
+    temporary.write_text(selected["tag"] + "\n", encoding="utf-8")
+    temporary.replace(latest)
+    job["resumeCheckpointWallTime"] = selected["wallTime"]
+    job["resumeBranchStartedAt"] = time.time()
+    job["resumeCheckpointRewritePending"] = False
 
 
 def _build_runner_script(job, settings, artifacts, job_dir):
@@ -1253,6 +1420,14 @@ def _launch_job(job, folder_path):
         job["finishedAt"] = time.time()
         return False
     log_wsl = _to_wsl_path(log_path, settings["wslDistribution"])
+    try:
+        _rewrite_resume_latest(job)
+    except Exception as exc:
+        job["status"] = "failed"
+        job["stage"] = "launch"
+        job["error"] = "Could not select the requested resume checkpoint: " + str(exc)
+        job["finishedAt"] = time.time()
+        return False
     launch = "setsid bash " + shlex.quote(script_wsl) + " > " + shlex.quote(log_wsl) + " 2>&1 < /dev/null & echo $!"
     code, stdout, stderr = _run_wsl(launch, timeout=15, distribution=settings["wslDistribution"])
     pid = (stdout or "").strip().splitlines()[-1] if (stdout or "").strip() else ""
@@ -1321,11 +1496,11 @@ def _job_runner_script_wsl(job):
 def _inspect_job_runner(job):
     pid = _job_runner_pid(job)
     if pid <= 0:
-        return "unknown", "Runner PID is not available."
+        return "absent", "Runner PID is not available."
     try:
         script_wsl = _job_runner_script_wsl(job)
     except Exception as exc:
-        return "unknown", "Could not resolve the runner script in WSL: " + str(exc)
+        raise RuntimeError("Could not resolve the runner script in WSL: " + str(exc)) from exc
     proc_dir = "/proc/" + str(pid)
     command = (
         "if [ ! -d " + shlex.quote(proc_dir) + " ]; then exit 3; fi; "
@@ -1337,7 +1512,7 @@ def _inspect_job_runner(job):
         return "absent", ""
     if code != 0:
         detail = (stderr or stdout).strip() or "process inspection exited with code " + str(code)
-        return "unknown", "Could not inspect the runner process: " + detail
+        raise RuntimeError("Could not inspect the runner process: " + detail)
     arguments = [line.strip() for line in (stdout or "").splitlines() if line.strip()]
     if script_wsl in arguments:
         job["pid"] = pid
@@ -1606,11 +1781,11 @@ def _populate_queued_resume_point(job, folder_path=None):
 
 def _queue_paused_job(job):
     """Return paused work to the front as ordinary queued resume intent."""
-    resume_path = str(job.get("outputRunPath") or "").strip()
+    resume_path = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "").strip()
     if resume_path:
         job["resumeFromCheckpoint"] = resume_path
         job["resumeStage"] = str(job.get("stages") or "")
-        job["outputRunPath"] = ""
+        job["outputRunPath"] = resume_path
         _populate_queued_resume_point(job)
     else:
         job.pop("resumeFromCheckpoint", None)
@@ -1628,17 +1803,21 @@ def _queue_paused_job(job):
     job["updatedAt"] = time.time()
 
 
-def _record_unverified_runner(job, detail):
-    """Expose missing runner evidence without inventing a new queue state."""
-    message = (
-        "WebCap could not verify the recorded training runner and left this job unchanged. "
-        + str(detail or "No runner evidence is available.").strip()
-    )
-    job.pop("runnerVerified", None)
-    if job.get("error") != message:
-        job["error"] = message
-        job["updatedAt"] = time.time()
-    return {"holdReason": ""}
+def _recover_queued_live_runner(job):
+    """Reattach a runner that launched before its queued state could be persisted as active."""
+    if str(job.get("status") or "") != "queued":
+        return False
+    if _job_runner_pid(job) <= 0:
+        return False
+    process_state, _detail = _inspect_job_runner(job)
+    if process_state != "running":
+        return False
+    job["runnerVerified"] = True
+    job["status"] = "starting"
+    job["stage"] = str(job.get("stage") or "starting")
+    job["updatedAt"] = time.time()
+    _logger.warning("Recovered live Training runner %s from queued restart state.", job.get("id"))
+    return True
 
 
 def _recover_dead_runner(job, detail):
@@ -1694,7 +1873,7 @@ def _refresh_job(job):
     )
     if result_state == "absent" and not has_runner_evidence:
         if prior_status in ACTIVE_STATUSES:
-            return _record_unverified_runner(job, "Runner PID and script evidence are unavailable.")
+            return _recover_dead_runner(job, "Runner PID and script evidence are unavailable.")
         return {"holdReason": ""}
     if not job.get("progressPlan"):
         job["progressPlan"] = _default_progress_plan()
@@ -1754,10 +1933,6 @@ def _refresh_job(job):
         job["updatedAt"] = now
         _trigger_scheduled_finish(job)
         return {"holdReason": ""}
-    if process_state == "unknown":
-        if prior_status in ACTIVE_STATUSES:
-            return _record_unverified_runner(job, result_error or process_detail)
-        return {"holdReason": ""}
     if prior_status in ACTIVE_STATUSES and not job.get("actionRequested"):
         return _recover_dead_runner(
             job,
@@ -1794,6 +1969,46 @@ def _refresh_job(job):
 
 
 
+def _prepare_comfyui_for_training():
+    """Use positive ComfyUI queue state for handoff; provider uncertainty never blocks Training."""
+    from . import inference_runtime
+    try:
+        provider_queue = inference_runtime.queue_snapshot()
+    except (ConnectionError, TimeoutError):
+        _logger.info("ComfyUI is unavailable during Training handoff; proceeding without a provider hold.")
+        return True
+    except Exception:
+        _logger.exception("Could not inspect ComfyUI queue during Training handoff; proceeding rather than blocking on uncertainty.")
+        return True
+
+    running = provider_queue.get("running") or []
+    pending = provider_queue.get("pending") or []
+    try:
+        managed_job_ids = inference_runtime.webcap_queue_job_ids(provider_queue)
+    except Exception:
+        _logger.exception("Could not classify ComfyUI queue ownership during Training handoff; proceeding rather than blocking on uncertainty.")
+        return True
+    if managed_job_ids:
+        _logger.info(
+            "Training is waiting for %d positively identified WebCap ComfyUI job(s).",
+            len(managed_job_ids),
+        )
+        return False
+    if running or pending:
+        _logger.warning(
+            "ComfyUI has non-WebCap queue activity during Training handoff; leaving it untouched and proceeding."
+        )
+        return True
+
+    try:
+        inference_runtime.free_cached_models()
+    except (ConnectionError, TimeoutError):
+        _logger.warning("ComfyUI became unavailable while releasing cached models before Training; proceeding.")
+    except Exception:
+        _logger.exception("ComfyUI cache release failed before Training; proceeding so the real launch failure remains visible.")
+    return True
+
+
 def _launch_next_queued_job(state):
     if state.get("queuePaused"):
         return
@@ -1817,11 +2032,13 @@ def _launch_next_queued_job(state):
         release_execution_resource(TRAINING_RESOURCE_OWNER)
         return
     except Exception:
-        release_execution_resource(TRAINING_RESOURCE_OWNER)
-        _logger.debug(
-            "Training is waiting for the retained Prompt Assistant / Director model to yield the GPU.",
-            exc_info=True,
+        _logger.exception(
+            "Could not confirm Prompt Assistant / Director model cleanup before Training; "
+            "proceeding rather than blocking on runtime uncertainty."
         )
+
+    if not _prepare_comfyui_for_training():
+        release_execution_resource(TRAINING_RESOURCE_OWNER)
         return
 
     state["activeJobId"] = ""
@@ -1836,6 +2053,9 @@ def _launch_next_queued_job(state):
 
 def _refresh_state(state):
     global _startup_reconciled
+    if not _startup_reconciled:
+        for job in state.get("jobs", []):
+            _recover_queued_live_runner(job)
     hold_reason = ""
     pause_requested = False
     recovered_jobs = []
@@ -1918,13 +2138,21 @@ def _ensure_monitor_started():
         _monitor_thread.start()
 
 
+def reconcile_startup():
+    """Synchronously establish Training runtime truth before normal dispatch starts."""
+    with _lock:
+        state = _read_state()
+        _refresh_state(state)
+        _persist_reconciled_state(state)
+
+
 def start_observer():
     """Start queue observation independently of whether Training is open."""
     _ensure_monitor_started()
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
+    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "resumeCheckpointTag", "resumeCheckpointRewritePending", "resumeCheckpointWallTime", "resumeBranchStartedAt", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -1936,7 +2164,7 @@ def _public_job(job):
             payload["sourceUnavailable"] = "Set folder is currently unavailable; this job remains queued."
     return payload
 
-def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None):
+def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None, resume_checkpoint_tag=""):
     try:
         _, selected_run = profile_run(profile_id, run_id)
         stages = selected_run["stages"][0]
@@ -1953,6 +2181,10 @@ def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage
         resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage) if requested_resume else (
             validate_resumable_run_for_path(folder_path, resume_stage, resume_path) if resume_path else None
         )
+        if resume_checkpoint_tag:
+            if not requested_resume or resume is None:
+                raise ValueError("A previous saved resume point requires a managed checkpoint.")
+            _validated_resume_checkpoint(resume["runPath"], resume_checkpoint_tag)
         payload = _preflight_payload(folder, stages, profile_id=profile_id, mode=selected_mode)
         settings = payload.pop("settings")
         artifacts = {key: Path(value) for key, value in payload.pop("artifacts").items()}
@@ -2016,6 +2248,7 @@ def _new_job(
     resume_action_id="",
     resume_output_id="",
     parent_active_seconds=None,
+    resume_checkpoint_tag="",
 ):
     job_id = uuid.uuid4().hex[:12]
     _, folder_path = _resolve_folder(folder)
@@ -2053,7 +2286,7 @@ def _new_job(
         "input": input_evidence,
         "resumeFromCheckpoint": resume_path,
         "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
-        "outputRunPath": "",
+        "outputRunPath": resume_path,
         "resumePoint": {},
         "status": "queued",
         "stage": "queued",
@@ -2080,6 +2313,8 @@ def _new_job(
         "sequence": sequence_match.group(1) if sequence_match else "",
         "resumeActionId": str(resume_action_id or ""),
         "resumeOutputId": str(resume_output_id or ""),
+        "resumeCheckpointTag": str(resume_checkpoint_tag or ""),
+        "resumeCheckpointRewritePending": bool(str(resume_checkpoint_tag or "").strip()),
         "parentJobId": str(parent_job_id or ""),
         "activeTrainingSeconds": float(parent_active_seconds or 0),
         "activeTrainingTimingComplete": parent_active_seconds is not None,
@@ -2194,6 +2429,7 @@ def start_response(
     reuse_capture_action_id="",
     reuse_capture_path="",
     config_settings=None,
+    resume_checkpoint_tag="",
 ):
     try:
         selected_profile, selected_run = profile_run(profile_id, run_id)
@@ -2254,7 +2490,24 @@ def start_response(
                 key: resume["point"].get(key)
                 for key in ("checkpointAvailable", "checkpointTag", "epoch", "step", "expectedEpochs", "completed")
             }
+            if not resume_checkpoint_tag:
+                current_tag = str(resume_point.get("checkpointTag") or "").strip()
+                current_match = _GLOBAL_STEP_TAG_PATTERN.fullmatch(current_tag)
+                highest_step = int(resume_point.get("step") or 0)
+                if current_match and int(current_match.group(1)) < highest_step:
+                    resume_checkpoint_tag = current_tag
+            if resume_checkpoint_tag:
+                selected_checkpoint = _validated_resume_checkpoint(resume_path, resume_checkpoint_tag)
+                resume_point.update({
+                    "checkpointAvailable": True,
+                    "checkpointTag": selected_checkpoint["tag"],
+                    "epoch": None,
+                    "step": selected_checkpoint["step"],
+                    "completed": False,
+                })
         elif resume_path:
+            if resume_checkpoint_tag:
+                raise ValueError("A previous saved resume point requires a managed checkpoint.")
             validated_resume = validate_resumable_run_for_path(folder_path, resume_stage, resume_path)
             resume_point = {
                 key: validated_resume.get(key)
@@ -2302,6 +2555,7 @@ def start_response(
             str(folder).strip(), preflight, stages, bundle, output_root, output_dir,
             resume_path, resume_stage, "", selected_profile["id"], selected_run["id"], selected_mode,
             action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, 0,
+            resume_checkpoint_tag=resume_checkpoint_tag,
         )
         job["resumePoint"] = resume_point
         job["trainingSettings"] = dict(effective_config_settings)
@@ -2331,43 +2585,43 @@ def start_response(
         return {"ok": True, "job": _public_job(job), "jobs": [_public_job(job)], "queued": job.get("status") == "queued"}, 200
 
 
-def passive_status_snapshot():
-    """Read the last persisted Training scheduler state without advancing or persisting it."""
+def action_live_job_ids(action_id):
+    wanted = str(action_id or "").strip()
+    if not wanted:
+        raise ValueError("Training action identity is required.")
     with _lock:
-        try:
-            state = _read_state_readonly()
-        except TrainingStateError as exc:
-            return {"ok": False, "stateError": True, "error": str(exc)}, 409
-        jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
-        active_jobs = [job for job in jobs if job.get("status") in ACTIVE_STATUSES]
-        active_job_id = str(active_jobs[0].get("id") or "") if active_jobs else ""
-        return {
-            "ok": True,
-            "activeJobId": active_job_id,
-            "queuePaused": bool(state.get("queuePaused")),
-            "queuePauseReason": str(state.get("queuePauseReason") or ""),
-            "runnerNotice": str(state.get("runnerNotice") or ""),
-            "jobs": [_public_job(job) for job in jobs],
-        }, 200
+        state = _read_state_readonly()
+        return [
+            str(job.get("id") or "")
+            for job in state.get("jobs") or []
+            if isinstance(job, dict)
+            and str(job.get("actionId") or job.get("resumeActionId") or "").strip() == wanted
+            and str(job.get("status") or "") not in TERMINAL_STATUSES
+        ]
+
+
+def passive_status_snapshot():
+    """Read atomically persisted Training state without waiting on live runner inspection."""
+    try:
+        state = _read_state_readonly()
+    except TrainingStateError as exc:
+        return {"ok": False, "stateError": True, "error": str(exc)}, 409
+    jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
+    active_jobs = [job for job in jobs if job.get("status") in ACTIVE_STATUSES]
+    active_job_id = str(active_jobs[0].get("id") or "") if active_jobs else ""
+    return {
+        "ok": True,
+        "activeJobId": active_job_id,
+        "queuePaused": bool(state.get("queuePaused")),
+        "queuePauseReason": str(state.get("queuePauseReason") or ""),
+        "runnerNotice": str(state.get("runnerNotice") or ""),
+        "jobs": [_public_job(job) for job in jobs],
+    }, 200
 
 
 def status_response():
-    with _lock:
-        _ensure_monitor_started()
-        try:
-            state = _read_state()
-        except TrainingStateError as exc:
-            return {"ok": False, "stateError": True, "error": str(exc)}, 409
-        _refresh_state(state)
-        _persist_reconciled_state(state)
-        return {
-            "ok": True,
-            "activeJobId": state.get("activeJobId") or "",
-            "queuePaused": bool(state.get("queuePaused")),
-            "queuePauseReason": str(state.get("queuePauseReason") or ""),
-            "runnerNotice": str(state.get("runnerNotice") or ""),
-            "jobs": [_public_job(job) for job in state.get("jobs", [])],
-        }, 200
+    _ensure_monitor_started()
+    return passive_status_snapshot()
 
 
 def clear_history_response(folder, job_id):
@@ -2388,7 +2642,9 @@ def clear_history_response(folder, job_id):
 
 
 def gpu_status_response():
-    return {"ok": True, "gpu": _gpu_snapshot()}, 200
+    gpu = _gpu_snapshot()
+    gpu["reservationOwner"] = execution_resource_owner()
+    return {"ok": True, "gpu": gpu}, 200
 
 
 def log_response(job_id, offset=0, tail=False, folder=""):
@@ -2473,6 +2729,57 @@ def action_path_for_job(job_id, folder=""):
         return path
 
 
+def _finish_queued_resume(job):
+    if str(job.get("status") or "") not in QUEUE_STATUSES:
+        raise ValueError("Only a queued Training job can be finalized without starting.")
+    resume_path = str(job.get("resumeFromCheckpoint") or "").strip()
+    if not resume_path:
+        raise ValueError("Only queued resume jobs can be finished without starting.")
+    run_path = host_path_for_training_path(resume_path)
+    if not run_path.is_dir() or run_path.is_symlink():
+        raise FileNotFoundError("Recorded resume run directory is unavailable: " + resume_path)
+    _rewrite_resume_latest(job)
+    latest = run_path / "latest"
+    if not latest.is_file() or latest.is_symlink():
+        raise FileNotFoundError("Recorded resume run has no valid latest checkpoint: " + resume_path)
+    try:
+        checkpoint_tag = latest.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+    except (OSError, IndexError) as exc:
+        raise RuntimeError("Could not read the recorded resume checkpoint: " + resume_path) from exc
+    checkpoint_path = run_path / checkpoint_tag
+    if not checkpoint_tag or not checkpoint_path.is_dir() or checkpoint_path.is_symlink():
+        raise FileNotFoundError("Recorded resume checkpoint is unavailable: " + str(checkpoint_path))
+
+    now = time.time()
+    resume_point = job.get("resumePoint") if isinstance(job.get("resumePoint"), dict) else {}
+    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+    if not progress:
+        progress = {}
+    if resume_point.get("epoch") is not None:
+        progress["epoch"] = resume_point.get("epoch")
+    if resume_point.get("expectedEpochs") is not None:
+        progress["epochs"] = resume_point.get("expectedEpochs")
+    if resume_point.get("step") is not None:
+        progress["step"] = resume_point.get("step")
+    if progress:
+        progress.setdefault("stage", str(job.get("resumeStage") or job.get("stages") or ""))
+        job["progress"] = progress
+
+    job["outputRunPath"] = str(run_path)
+    job["status"] = "finished_early"
+    job["stage"] = "finished_early"
+    job["finishedAt"] = now
+    job["updatedAt"] = now
+    job.pop("error", None)
+    job.pop("confirmationNote", None)
+    job.pop("actionRequested", None)
+    job.pop("actionRequestedAt", None)
+    job.pop("finishAfterEpoch", None)
+    job.pop("finishScheduledAt", None)
+    job.pop("finishTriggeredEpoch", None)
+    _annotate_finished_early_job(job)
+
+
 def stop_response(job_id, cancel=False, pause=False, finish=False):
     with _lock:
         state = _read_state()
@@ -2480,12 +2787,19 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
         job = _find_job(state, job_id)
         if not job:
             return {"ok": False, "error": "Training job not found"}, 404
+        if job.get("status") in QUEUE_STATUSES and finish:
+            try:
+                _finish_queued_resume(job)
+            except (FileNotFoundError, RuntimeError, ValueError, OSError) as exc:
+                return {"ok": False, "error": str(exc), "job": _public_job(job)}, 409
+            _persist_reconciled_state(state)
+            return {"ok": True, "job": _public_job(job)}, 200
         if job.get("status") in QUEUE_STATUSES and cancel:
             job["status"] = "cancelled"
             job["stage"] = "cancelled"
             job["finishedAt"] = time.time()
             job["updatedAt"] = time.time()
-            _write_state(state)
+            _persist_reconciled_state(state)
             return {"ok": True, "job": _public_job(job)}, 200
         if cancel:
             return {"ok": False, "error": "Only queued Training jobs can be cancelled. Use Pause or Finish for the active job."}, 400

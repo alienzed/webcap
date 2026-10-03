@@ -34,6 +34,10 @@ def test_generate_is_first_class_static_activity():
     assert "window.refreshInferenceQueue" in script
     assert "postJson('/fs/generate'" in script
     assert "uploadReference(file)" in script
+    assert 'data-generate-reference-dropzone="first_frame"' in html
+    assert 'data-generate-reference-dropzone="last_frame"' in html
+    assert "function bindReferenceDropzones()" in script
+    assert "input.dispatchEvent(new Event('change', { bubbles: true }))" in script
 
     assert ".app-frame.workspace-generate-open > .app" in css
     assert ".generate-create-view" in css
@@ -52,7 +56,7 @@ def test_generate_reuses_concepts_not_storyboard_dom():
     assert "entryState" not in script
     assert "exitState" not in script
 
-def test_generate_result_polling_preserves_existing_media_nodes():
+def test_generate_results_refresh_on_queue_transitions_without_perpetual_polling():
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
 
     assert "function resultKey(result)" in script
@@ -61,6 +65,11 @@ def test_generate_result_polling_preserves_existing_media_nodes():
     assert "if (!key || existingKeys[key]) return;" in script
     assert "host.insertBefore(buildResultCard(result), host.firstChild)" in script
     assert "host.innerHTML = results.map" not in script
+    assert "webcap:inference-queue-snapshot" in script
+    assert "refreshTrackedGenerateJobs(queue)" in script
+    assert "return refreshResultsNeeded ? refreshResults() : jobs;" in script
+    assert "function schedulePoll()" not in script
+    assert "generateState.timer" not in script
 
 def test_generate_director_is_a_reversible_prompt_editor():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
@@ -89,7 +98,7 @@ def test_generate_prompt_assistant_uses_shared_llm_queue():
     assert "function queueDirectorRequest(payload)" in script
     assert "function waitForDirectorJob(job)" in script
     assert "function directorJobPollDelay(job)" in script
-    assert "return String(job && job.status || '') === 'queued' ? 2000 : 1000;" in script
+    assert "return String(job && job.status || '') === 'queued' ? 3000 : 1500;" in script
     assert "setTimeout(resolve, directorJobPollDelay(current))" in script
     assert "'/fs/director/job?job='" in script
     assert "queued: 'Queued…'" in script
@@ -404,4 +413,73 @@ def test_generate_secondary_controls_are_collapsible_by_default():
     assert 'id="generate-references"' in html
     assert "assistant.open = true" in script
     assert ".generate-collapsible > summary" in css
+
+def test_generate_lora_sweep_uses_existing_generate_queue_without_set_semantics():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert 'id="generate-lora-selected-tab"' in html
+    assert 'id="generate-lora-sweep-tab"' in html
+    assert 'id="generate-sweep-folder"' in html
+    assert 'id="generate-sweep-strength"' in html
+    assert 'id="generate-sweep-base"' in html
+    assert 'id="generate-sweep-all"' in html
+    assert 'id="generate-sweep-none"' in html
+    assert "function sweepFolders(model)" in script
+    assert "return loraFolder(name) === String(folder || '');" in script
+    assert "function selectedSweepLoras(model, folder)" in script
+    assert "function setSweepSelection(model, folder, name, selected)" in script
+    assert "function setAllSweepSelections(selected)" in script
+    assert "data-generate-sweep-lora" in script
+    assert "selectedNames.length + ' of ' + names.length + ' selected · '" in script
+    assert "button.disabled = generateState.director.busy || submitBusy || count === 0;" in script
+    assert "function captureSweepSubmission()" in script
+    assert "var names = selectedSweepLoras(model, folder).slice();" in script
+    assert "Select at least one Sweep LoRA or include the fixed-only baseline." in script
+    assert "function runGenerateSweep()" in script
+    assert "referenceFiles: captureReferenceFiles(model)" in script
+    assert "uploadReferenceFiles(submission.referenceFiles)" in script
+    assert "postJson('/fs/generate'" in script
+    assert "modelId: submission.modelId" in script
+    assert "prompt: submission.prompt" in script
+    assert "settings: Object.assign({}, submission.settings)" in script
+    assert "loras: submission.fixedLoras.concat(name ? [{ name: name, strength: submission.strength }] : [])" in script
+    assert "function frozenSweepSettings()" in script
+    assert "window.crypto.getRandomValues(values);" in script
+    sweep = script.split("function runGenerateSweep()", 1)[1].split("function setGenerateViewMode", 1)[0]
+    assert "generateSubmitBusy" not in sweep
+    assert "button.disabled" not in sweep
+    assert "sourceFolder" not in script
+    assert "sourceJobId" not in script
+    assert ".generate-lora-tabs" in css
+    assert ".generate-sweep-list" in css
+    assert ".generate-sweep-selection-actions" in css
+
+def test_generate_sweep_matches_storyboard_lora_picker_language_without_losing_multiselect():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert 'id="generate-sweep-filter"' in html
+    assert 'placeholder="Filter / choose LoRAs…"' in html
+    assert "el('generate-sweep-filter').addEventListener('input', renderSweep);" in script
+    assert "var visibleNames = query" in script
+    assert "No matching LoRAs" in script
+    assert "data-generate-sweep-lora" in script
+    assert "generate-sweep-row-copy" in script
+    assert ".generate-sweep-row {" in css
+    assert "min-height: 38px;" in css
+    assert ".generate-sweep-row:hover" in css
+    assert ".generate-sweep-row:has(input:checked)" in css
+
+
+def test_generate_sweep_preserves_folder_prefixes_from_model_capabilities():
+    backend = (ROOT / "tool" / "server" / "generate_generation.py").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert 'selectable = [_portable_name(value) for value in selectable]' in backend
+    assert '"loras": selectable' in backend
+    assert "normalized.lastIndexOf('/')" in script
+    assert "savedSweepFolder(model && model.id, folders)" in script
 

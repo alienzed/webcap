@@ -204,6 +204,35 @@ def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
 
 
 
+def test_local_llm_failure_terminalizes_without_uncertainty_pause(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
+    monkeypatch.setattr(
+        llm_runner,
+        "_execute_claimed",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("model exploded")),
+    )
+
+    job = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+    )
+
+    llm_runner._advance_queue()
+
+    failed = llm_runner.job_status(job["jobId"])
+    assert failed["status"] == "failed"
+    assert "model exploded" in failed["error"]
+    assert llm_runner.snapshot()["paused"] is False
+    assert execution_queue.resource_owner() == "llm"
+    assert llm_runner.local_gpu_drain_pending() is True
+
+    llm_runner._local_gpu_drain_until = 0.0
+    llm_runner._advance_queue()
+
+    assert execution_queue.resource_owner() == ""
+
+
 def test_local_llm_completion_opens_short_gpu_drain_window(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
@@ -313,31 +342,6 @@ def test_local_llm_job_arriving_during_grace_reuses_retained_gpu(llm_root, monke
     assert calls == ["reserve"]
     assert execution_queue.resource_owner() == "llm"
 
-
-
-def test_pausing_idle_llm_grace_releases_retained_gpu(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
-    monkeypatch.setattr(
-        storyboard_llm_runtime,
-        "run_contract",
-        lambda model_id, contract, gpu_reserved=False: {"text": "Done", "model": model_id},
-    )
-
-    job = llm_runner.enqueue(
-        "generate",
-        "qwen",
-        {"operation": "write_prompt", "prompt": "Prompt.", "output": "text"},
-    )
-    llm_runner._advance_queue()
-
-    assert llm_runner.job_status(job["jobId"])["status"] == "completed"
-    assert execution_queue.resource_owner() == "llm"
-
-    llm_runner.action("pause_queue")
-    llm_runner._advance_queue()
-
-    assert execution_queue.resource_owner() == ""
-    assert llm_runner._monitor_has_work() is False
 
 
 def test_local_llm_queue_reuses_gpu_ownership_until_queued_work_is_drained(llm_root, monkeypatch):
@@ -1378,6 +1382,32 @@ def test_llm_snapshot_explains_training_queue_priority(llm_root, monkeypatch):
     assert snapshot["waitReason"].startswith("2 Training job(s) are queued")
 
 
+def test_llm_snapshot_surfaces_gpu_blocker_inspection_failure(llm_root, monkeypatch):
+    from tool.server import training_runner
+
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
+    monkeypatch.setattr(
+        training_runner,
+        "gpu_reservation_block_reason",
+        lambda _owner: (_ for _ in ()).throw(RuntimeError("training blocker inspection failed")),
+    )
+    llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+        label="Prompt Assistant",
+    )
+
+    with pytest.raises(RuntimeError, match="training blocker inspection failed"):
+        llm_runner.snapshot()
+
+
+def test_llm_queue_rejects_pause_resume_and_reorder_actions(llm_root):
+    for operation in ("pause_queue", "resume_queue", "reorder"):
+        with pytest.raises(ValueError, match="Unsupported LLM queue action"):
+            llm_runner.action(operation)
+
+
 def test_llm_stop_or_cancel_cancels_queued_job_without_touching_runtime(llm_root, monkeypatch):
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -1494,3 +1524,120 @@ def test_llm_snapshot_retries_startup_reconciliation_when_needed(llm_root):
 
     assert llm_runner._startup_reconciled is True
     assert snapshot["jobs"] == []
+
+
+
+def test_chat_runtime_overrides_are_validated_and_forwarded(llm_root, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_freeform_chat",
+        lambda model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None: captured.update({
+            "model": model_id,
+            "maxTokens": max_tokens,
+            "contextSize": context_size,
+        }) or {
+            "text": "CONTEXT_OK",
+            "model": model_id,
+            "finishReason": "stop",
+            "contextSize": context_size,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "chat",
+        "local::director.gguf",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "probe"}]},
+        context={"runtimeOverrides": {"maxTokens": 64, "contextSize": 16384}},
+        label="Director Context Calibration",
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert captured == {
+        "model": "local::director.gguf",
+        "maxTokens": 64,
+        "contextSize": 16384,
+    }
+    assert finished["result"]["contextSize"] == 16384
+
+
+def test_runtime_overrides_are_rejected_outside_chat(llm_root):
+    with pytest.raises(ValueError, match="only for chat jobs"):
+        llm_runner.enqueue(
+            "storyboard",
+            "qwen",
+            {"operation": "write_prompt", "prompt": "Write."},
+            context={"runtimeOverrides": {"maxTokens": 2048}},
+        )
+
+
+def test_runtime_override_rejects_unknown_fields(llm_root):
+    with pytest.raises(ValueError, match="Unsupported LLM runtime override"):
+        llm_runner.enqueue(
+            "chat",
+            "qwen",
+            {"operation": "freeform_chat", "messages": [{"role": "user", "content": "probe"}]},
+            context={"runtimeOverrides": {"magic": 123}},
+        )
+
+
+
+def test_individual_story_development_jobs_do_not_mutate_story_before_final_apply(llm_root, monkeypatch):
+    story = storyboard_store.create_story({
+        "title": "Story",
+        "concept": "A woman crosses an empty station.",
+        "targetSceneCount": 2,
+    })
+    original_updated_at = story["updatedAt"]
+    from tool.server.storyboard_llm_contract import build_request
+
+    outline_contract = build_request(story, "", "develop_story_outline")
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "data": {
+                "scenes": [
+                    {
+                        "title": "Arrival",
+                        "summary": "She enters the station.",
+                        "suggestedDurationSeconds": 10,
+                    },
+                    {
+                        "title": "Platform",
+                        "summary": "She reaches the platform.",
+                        "suggestedDurationSeconds": 10,
+                    },
+                ]
+            },
+            "text": "{}",
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "storyboard",
+        "qwen",
+        outline_contract,
+        context={
+            "storyId": story["id"],
+            "sceneId": "",
+            "operation": "develop_story_outline",
+            "deferredApply": True,
+        },
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    stored = storyboard_store.load_story(story["id"])
+
+    assert finished["status"] == "completed"
+    assert len(finished["result"]["outline"]["scenes"]) == 2
+    assert stored["sceneOrder"] == []
+    assert stored["updatedAt"] == original_updated_at

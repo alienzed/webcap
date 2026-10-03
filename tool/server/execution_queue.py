@@ -26,6 +26,7 @@ ACTIVE_STATUSES = {"starting", "running", "stopping"}
 TERMINAL_STATUSES = {"completed", "failed", "cancelled", "stopped", "interrupted"}
 
 _lock = threading.RLock()
+RESOURCE_OWNERS = {"training", "llm", "inference"}
 _resource_owner = ""
 _transient_receipts = {}
 _TRANSIENT_RECEIPT_LIMIT = 200
@@ -539,7 +540,6 @@ class EphemeralExecutionQueue:
         with _lock:
             self._state = {"version": STATE_VERSION, "lanes": {self.lane_name: _default_lane()}}
             clear_transient_receipts(self.lane_name)
-        release_resource(self.lane_name)
 
     def recent_snapshot(self, limit=30):
         try:
@@ -568,21 +568,25 @@ def ephemeral_lane(lane_name):
 
 def reserve_resource(owner):
     owner = str(owner or "").strip()
-    if not owner:
-        raise ValueError("Execution resource owner is required.")
+    if owner not in RESOURCE_OWNERS:
+        raise ValueError("Execution resource owner must be training, llm, or inference.")
     global _resource_owner
     with _lock:
         if _resource_owner:
             return False
         _resource_owner = owner
+        _logger.info("GPU resource owner: none -> %s", owner)
         return True
 
 
 def release_resource(owner):
     owner = str(owner or "").strip()
+    if owner not in RESOURCE_OWNERS:
+        raise ValueError("Execution resource owner must be training, llm, or inference.")
     global _resource_owner
     with _lock:
         if _resource_owner == owner:
+            _logger.info("GPU resource owner: %s -> none", owner)
             _resource_owner = ""
 
 
@@ -620,6 +624,14 @@ def enqueue(lane_name, payload, metadata=None, job_id=None, initial_status="queu
         if _find_job(state, job["id"])[1] is not None:
             raise ValueError("Execution queue job ID already exists.")
         lane["jobs"].append(job)
+        if (
+            str(lane_name) == "inference"
+            and initial_status == "queued"
+            and not lane.get("activeJobId")
+            and lane.get("paused")
+        ):
+            lane["paused"] = False
+            lane["pauseReason"] = ""
         _prune_terminal(lane)
         _refresh_positions(lane)
         _write_state(state)
@@ -955,7 +967,6 @@ def shelve_unfinished(lane_name):
         lane["activeJobId"] = ""
         _refresh_positions(lane)
         _write_state(state)
-    release_resource(lane_name)
     return changed
 
 
@@ -994,7 +1005,6 @@ def clear_lane(lane_name):
         state = _read_state()
         state.setdefault("lanes", {}).pop(str(lane_name), None)
         _write_state(state)
-    release_resource(lane_name)
 
 
 def request_stop(job_id):
@@ -1185,5 +1195,4 @@ def recover_lane(lane_name, reason="Execution was interrupted by a WebCap restar
         lane["activeJobId"] = ""
         _refresh_positions(lane)
         _write_state(state)
-    release_resource(lane_name)
     return changed

@@ -256,7 +256,11 @@ def test_model_switch_has_no_removed_trained_status_dependency():
     switch_end = workspace.index("function wireTrainingWorkspace(", switch_start)
     switch_code = workspace[switch_start:switch_end]
     assert "setSelectedTrainingModelProfile(profileId)" in switch_code
-    assert "refreshTrainingWorkspace();" in switch_code
+    assert "trainingWorkspaceState.configFiles = [];" in switch_code
+    assert "trainingWorkspaceState.review = null;" in switch_code
+    assert "renderTrainingWorkspaceConfigList([]);" in switch_code
+    assert "renderTrainingReview();" in switch_code
+    assert switch_code.index("renderTrainingWorkspaceConfigList([]);") < switch_code.index("refreshTrainingWorkspace();")
 
 
 

@@ -285,6 +285,8 @@ def test_app_data_helpers_use_configured_root(tmp_path, monkeypatch):
     assert config_module.app_data_root() == root
     assert config_module.app_state_root() == root / "state"
     assert config_module.app_cache_root() == root / "cache"
+    assert config_module.training_queue_state_path() == root / "state" / "training_queue.json"
+    assert config_module.training_history_state_path() == root / "state" / "recent_runs.json"
 
 
 def test_filesystem_app_data_root_rejects_relative_override():

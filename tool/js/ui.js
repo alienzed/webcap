@@ -413,6 +413,9 @@ function refreshCurrentDirectory() {
               hasCaption: !!(cap.error || (text && text.trim().length))
             };
           });
+          if (typeof window.rememberApplicationSetContext === 'function' && isSetFolderContext(path, state.items)) {
+            window.rememberApplicationSetContext(path);
+          }
           // --- Load and apply folder state fields ---
            var folderState = resp.folder_state || {};
            applyFolderStateToDom(folderState);
@@ -454,17 +457,18 @@ function refreshCurrentDirectory() {
               if (typeof window.restoreInitialShellLocationRoute === 'function') window.restoreInitialShellLocationRoute();
             });
             if (typeof window.testGenerationsFolderLoaded === 'function') window.testGenerationsFolderLoaded();
+            var pendingSelectFileName = window.state && state.pendingSelectFileName ? state.pendingSelectFileName : '';
+            if (pendingSelectFileName) {
+              state.pendingSelectFileName = undefined;
+            }
             refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {
               completeFolderLoadPipeline(path, loadSequence, metadataResult);
               if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
               refreshTrainingWorkspace();
+              if (pendingSelectFileName) {
+                setTimeout(function() { selectByFileName(pendingSelectFileName); }, 0);
+              }
             });
-          // If a file was just renamed, reselect it
-          if (window.state && state.pendingSelectFileName) {
-            var fname = state.pendingSelectFileName;
-            state.pendingSelectFileName = undefined;
-            setTimeout(function() { selectByFileName(fname); }, 0);
-          }
         } catch (e) {
           state.folderStateWritable = false;
           console.error('[webcap] Folder load failed:', e);

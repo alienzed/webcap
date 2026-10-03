@@ -8,11 +8,17 @@ from PIL import Image
 
 from tool.server import config as app_config
 from tool.server import app as app_module
-from tool.server import execution_queue, run_ops, storyboard_llm_runtime, training_bundle, training_history, training_runner, training_review
+from tool.server import execution_queue, inference_runtime, run_ops, storyboard_llm_runtime, training_archive, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
 from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_for_mode
 from tool.server.training_setup import ensure_training_setup
+
+
+@pytest.fixture(autouse=True)
+def _idle_comfyui_handoff(monkeypatch):
+    monkeypatch.setattr(inference_runtime, "queue_snapshot", lambda: {"running": [], "pending": []})
+    monkeypatch.setattr(inference_runtime, "free_cached_models", lambda: None)
 
 
 def _set(root):
@@ -27,6 +33,7 @@ def _set(root):
 
 def _configure_root(monkeypatch, root):
     monkeypatch.setattr(app_config, "FS_ROOT", root)
+    monkeypatch.setattr(app_config, "app_state_root", lambda: Path(root) / ".test-webcap-app-data" / "state")
     training_runner._state_file_seen = None
     training_runner._persisted_managed_job_ids = set()
     training_runner._startup_reconciled = False
@@ -41,6 +48,32 @@ def _fake_runtime(monkeypatch):
     monkeypatch.setattr(training_bundle, "to_wsl_path", as_wsl)
 
 
+def test_archive_staged_candidates_preserve_full_set_relative_path(tmp_path, monkeypatch):
+    test_root = tmp_path / "test-root"
+    staged = test_root / "az" / "sets" / "subject"
+    staged.mkdir(parents=True)
+    candidate = staged / "baseline-03__epoch12.safetensors"
+    candidate.write_bytes(b"weights")
+    candidate.with_suffix(".webcap.json").write_text(json.dumps({
+        "version": 1,
+        "sourceJobId": "job-1",
+        "sourceEpoch": 12,
+    }), encoding="utf-8")
+
+    monkeypatch.setattr(training_archive.app_config, "load_config_from_disk", lambda: {
+        "training": {
+            "test_copy_roots": {"h3": str(test_root)},
+            "test_copy_subfolder": "az",
+        }
+    })
+
+    matches = training_archive._staged_candidates("sets/subject", "job-1", "h3")
+
+    assert [item[0] for item in matches] == [candidate]
+    assert not (test_root / "az" / "subject").exists()
+
+
+
 def test_relaunch_archives_existing_training_log(tmp_path):
     job_dir = tmp_path / "job"
     job_dir.mkdir()
@@ -53,6 +86,62 @@ def test_relaunch_archives_existing_training_log(tmp_path):
     assert len(archived) == 1
     assert archived[0].read_text(encoding="utf-8") == "first attempt\n"
     assert not log_path.exists()
+
+
+
+
+def test_training_handoff_waits_for_positive_comfyui_work(monkeypatch):
+    monkeypatch.setattr(
+        inference_runtime,
+        "queue_snapshot",
+        lambda: {"running": [[0, "provider-1", {}, {"client_id": "webcap-provider-1"}, []]], "pending": []},
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "free_cached_models",
+        lambda: pytest.fail("Active ComfyUI work must not be freed."),
+    )
+
+    assert training_runner._prepare_comfyui_for_training() is False
+
+
+def test_training_handoff_does_not_block_or_free_non_webcap_comfyui_work(monkeypatch):
+    monkeypatch.setattr(
+        inference_runtime,
+        "queue_snapshot",
+        lambda: {"running": [[0, "foreign", {}, {"client_id": "manual-client"}, []]], "pending": []},
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "free_cached_models",
+        lambda: pytest.fail("WebCap must not free non-WebCap ComfyUI work."),
+    )
+
+    assert training_runner._prepare_comfyui_for_training() is True
+
+
+def test_training_handoff_fails_open_when_comfyui_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        inference_runtime,
+        "queue_snapshot",
+        lambda: (_ for _ in ()).throw(ConnectionError("offline")),
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "free_cached_models",
+        lambda: pytest.fail("Unavailable ComfyUI cannot be freed."),
+    )
+
+    assert training_runner._prepare_comfyui_for_training() is True
+
+
+def test_training_handoff_frees_idle_comfyui_before_launch(monkeypatch):
+    freed = []
+    monkeypatch.setattr(inference_runtime, "queue_snapshot", lambda: {"running": [], "pending": []})
+    monkeypatch.setattr(inference_runtime, "free_cached_models", lambda: freed.append(True))
+
+    assert training_runner._prepare_comfyui_for_training() is True
+    assert freed == [True]
 
 
 def test_training_yields_retained_director_after_reserving_gpu(tmp_path, monkeypatch):
@@ -129,7 +218,7 @@ def test_training_defers_without_pausing_if_director_runtime_is_busy(tmp_path, m
     assert execution_queue.resource_owner() == ""
 
 
-def test_training_retries_if_retained_director_cannot_yield_yet(tmp_path, monkeypatch):
+def test_training_proceeds_if_retained_director_cleanup_is_uncertain(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
     execution_queue._resource_owner = ""
@@ -140,33 +229,22 @@ def test_training_retries_if_retained_director_cannot_yield_yet(tmp_path, monkey
         "queuePaused": False,
         "queuePauseReason": "",
     }
-    attempts = []
 
-    def yield_director():
-        attempts.append(True)
-        if len(attempts) == 1:
-            raise RuntimeError("unload failed")
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "release_loaded_model_for_gpu_work",
+        lambda: (_ for _ in ()).throw(RuntimeError("unload failed")),
+    )
 
     def launch(job, folder_path):
         assert folder_path == folder
         job["status"] = "starting"
 
-    monkeypatch.setattr(
-        storyboard_llm_runtime,
-        "release_loaded_model_for_gpu_work",
-        yield_director,
-    )
     monkeypatch.setattr(training_runner, "_launch_job", launch)
 
     training_runner._launch_next_queued_job(state)
 
     assert state["queuePaused"] is False
-    assert state["jobs"][0]["status"] == "queued"
-    assert execution_queue.resource_owner() == ""
-
-    training_runner._launch_next_queued_job(state)
-
-    assert attempts == [True, True]
     assert state["activeJobId"] == "job-one"
     assert state["jobs"][0]["status"] == "starting"
     assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER
@@ -549,6 +627,8 @@ def test_train_captures_before_it_writes_the_queue_and_skips_preflight(tmp_path,
     state = training_runner._read_state()
     assert len(state["jobs"]) == 1
     assert Path(state["jobs"][0]["inputPath"]).is_dir()
+    assert state["jobs"][0]["resumeFromCheckpoint"] == ""
+    assert state["jobs"][0]["outputRunPath"] == ""
 
 
 def test_pre_layout_queue_state_uses_recorded_paths_without_action_resolution(tmp_path, monkeypatch):
@@ -592,7 +672,7 @@ def test_pre_layout_queue_state_uses_recorded_paths_without_action_resolution(tm
 def test_recent_runs_v1_remains_readable_without_layout_migration(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
-    recent = tmp_path / ".webcap_training" / "recent_runs.json"
+    recent = app_config.training_history_state_path()
     recent.parent.mkdir()
     recent.write_text(json.dumps({"version": 1, "jobs": [{"id": "old", "folder": "sets/subject"}]}), encoding="utf-8")
 
@@ -616,7 +696,7 @@ def test_training_history_record_persists_without_output_artifacts(tmp_path, mon
         "finishedAt": 3,
     })
 
-    recent = json.loads((tmp_path / ".webcap_training" / "recent_runs.json").read_text(encoding="utf-8"))
+    recent = json.loads((app_config.training_history_state_path()).read_text(encoding="utf-8"))
     assert [item["id"] for item in recent["jobs"]] == ["job-one"]
     history = training_history.all_history_payload()["jobs"]
     assert [item["id"] for item in history] == ["job-one"]
@@ -688,6 +768,7 @@ def test_recent_run_resume_reuses_its_recorded_capture(tmp_path, monkeypatch):
     assert status == 200 and payload["ok"] is True
     assert list((action / "captures").iterdir()) == captures_before
     assert payload["job"]["inputPath"] == str(bundle["path"])
+    assert payload["job"]["outputRunPath"] == str(resume_output)
 
 
 def test_capture_failure_never_appends_a_queue_item(tmp_path, monkeypatch):
@@ -703,6 +784,35 @@ def test_capture_failure_never_appends_a_queue_item(tmp_path, monkeypatch):
 
     assert status == 400 and payload["ok"] is False
     assert training_runner._read_state()["jobs"] == []
+
+
+def test_managed_resume_records_resume_run_as_current_output(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    action, action_data = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    resumed_run = action / "output" / "managed-run"
+    (resumed_run / "global_step1").mkdir(parents=True)
+    (resumed_run / "latest").write_text("global_step1\n", encoding="utf-8")
+    (resumed_run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    training_runner._write_state({"version": 3, "activeJobId": "", "jobs": [], "queuePaused": True, "queuePauseReason": "test"})
+
+    payload, status = training_runner.start_response(
+        "sets/subject",
+        queue=True,
+        stages="h3",
+        profile_id=MINIMAX_H3_PROFILE_ID,
+        run_id="train",
+        selected_media=["one.png"],
+        resume_action_id=action_data["actionId"],
+        resume_output_id="output/managed-run",
+    )
+
+    assert status == 200 and payload["ok"] is True
+    assert payload["job"]["resumeFromCheckpoint"] == str(resumed_run)
+    assert payload["job"]["outputRunPath"] == str(resumed_run)
 
 
 def test_custom_resume_creates_a_new_logical_run_without_writing_beside_source(tmp_path, monkeypatch):
@@ -728,7 +838,8 @@ def test_custom_resume_creates_a_new_logical_run_without_writing_beside_source(t
     capture = Path(job["inputPath"])
     assert capture.parent == action_root / "captures"
     assert Path(job["outputRoot"]) == action_root / "output"
-    assert job["resumeFromCheckpoint"] == str(resumed_run) and job["outputRunPath"] == ""
+    assert job["resumeFromCheckpoint"] == str(resumed_run)
+    assert job["outputRunPath"] == str(resumed_run)
     assert not (resumed_run.parent / ".webcap-captures").exists()
 
 
@@ -848,6 +959,85 @@ def test_initializer_picker_lists_only_current_set_managed_epoch_exports(tmp_pat
     assert exports[0]["sourcePath"] == str(epoch)
 
 
+
+
+def test_restart_recovers_live_runner_even_if_queue_still_says_queued(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
+    state = {
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "queued-live", "folder": "sets/subject", "status": "queued"}],
+    }
+    monkeypatch.setattr(training_runner, "_job_runner_pid", lambda _job: 4242)
+    monkeypatch.setattr(training_runner, "_inspect_job_runner", lambda _job: ("running", ""))
+    monkeypatch.setattr(training_runner, "_refresh_job", lambda job: {"holdReason": ""})
+    monkeypatch.setattr(training_runner, "_apply_training_disk_protection", lambda *_args: "safe")
+    monkeypatch.setattr(training_runner, "_launch_job", lambda *_args: pytest.fail("Recovered live runner must not be launched twice."))
+
+    training_runner._refresh_state(state)
+
+    assert state["activeJobId"] == "queued-live"
+    assert state["jobs"][0]["status"] == "starting"
+    assert state["jobs"][0]["runnerVerified"] is True
+    assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER
+    execution_queue._resource_owner = ""
+
+
+def test_training_startup_reconciliation_establishes_live_owner_synchronously(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (0, "/bin/bash\n/runs/runner.sh\n", ""))
+    monkeypatch.setattr(training_runner, "_log_has_progress", lambda _text: True)
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "active",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{
+            "id": "active",
+            "status": "running",
+            "stages": "h3",
+            "pid": 4242,
+            "runnerScriptWsl": "/runs/runner.sh",
+            "outputRunPath": "/runs/original",
+        }],
+    })
+
+    training_runner.reconcile_startup()
+
+    assert execution_queue.resource_owner() == training_runner.TRAINING_RESOURCE_OWNER
+    assert training_runner._read_state()["activeJobId"] == "active"
+    execution_queue._resource_owner = ""
+
+
+def test_training_startup_reconciliation_failure_does_not_create_owner(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "active",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{
+            "id": "active",
+            "status": "running",
+            "stages": "h3",
+            "pid": 4242,
+            "runnerScriptWsl": "/runs/runner.sh",
+            "outputRunPath": "/runs/original",
+        }],
+    })
+    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (1, "", "WSL is unavailable"))
+
+    with pytest.raises(RuntimeError, match="Could not inspect the runner process: WSL is unavailable"):
+        training_runner.reconcile_startup()
+
+    assert execution_queue.resource_owner() == ""
+
+
 def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     monitor_starts = []
@@ -883,6 +1073,47 @@ def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
     assert active["runnerVerified"] is True
 
 
+def test_persisted_resume_job_restores_output_run_path_on_read(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    state_path = training_runner._state_path()
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text(json.dumps({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [{
+            "id": "resume-job",
+            "status": "queued",
+            "resumeFromCheckpoint": "/runs/resume",
+            "outputRunPath": "",
+        }],
+    }), encoding="utf-8")
+
+    state = training_runner._read_state()
+
+    assert state["jobs"][0]["outputRunPath"] == "/runs/resume"
+
+
+def test_queue_paused_job_preserves_existing_resume_path_when_output_path_is_unbound(monkeypatch):
+    job = {
+        "id": "active",
+        "status": "running",
+        "stages": "h3",
+        "resumeFromCheckpoint": "/runs/resume",
+        "outputRunPath": "",
+    }
+
+    monkeypatch.setattr(training_runner, "_populate_queued_resume_point", lambda item: item.setdefault("resumePoint", {"checkpointAvailable": True}))
+
+    training_runner._queue_paused_job(job)
+
+    assert job["resumeFromCheckpoint"] == "/runs/resume"
+    assert job["resumeStage"] == "h3"
+    assert job["status"] == "queued"
+    assert job["outputRunPath"] == "/runs/resume"
+
+
 def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (3, "", ""))
@@ -916,8 +1147,9 @@ def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, m
     assert restored["queuePauseReason"] == "Previous runner ended without a result. Resume or restart the first item."
 
 
-def test_restart_preserves_unverifiable_runner_until_exact_process_verifies(tmp_path, monkeypatch):
+def test_runner_inspection_failure_is_an_error_not_a_coordination_state(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
+    execution_queue._resource_owner = ""
     state = {
         "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
         "jobs": [
@@ -930,23 +1162,10 @@ def test_restart_preserves_unverifiable_runner_until_exact_process_verifies(tmp_
     }
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (1, "", "WSL is unavailable"))
 
-    training_runner._refresh_state(state)
-    active = state["jobs"][0]
+    with pytest.raises(RuntimeError, match="Could not inspect the runner process: WSL is unavailable"):
+        training_runner._refresh_state(state)
 
-    assert state["queuePaused"] is False
-    assert state["activeJobId"] == "active"
-    assert [job["id"] for job in state["jobs"]] == ["active", "later"]
-    assert active["status"] == "running"
-    assert active["pid"] == 4242
-    assert "runnerVerified" not in active
-    assert "WSL is unavailable" in active["error"]
-
-    monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (0, "/bin/bash\n/runs/runner.sh\n", ""))
-    monkeypatch.setattr(training_runner, "_log_has_progress", lambda _text: True)
-    training_runner._refresh_state(state)
-
-    assert active["runnerVerified"] is True
-    assert "error" not in active
+    assert execution_queue.resource_owner() == ""
 
 
 def test_first_monitor_pass_pauses_pending_queue_without_active_job(tmp_path, monkeypatch):
@@ -1004,6 +1223,27 @@ def test_passive_training_status_does_not_advance_or_persist_queue(tmp_path, mon
     assert payload["jobs"][0]["id"] == "queued"
     assert payload["jobs"][0]["status"] == "queued"
     assert training_runner._state_path().read_bytes() == before
+
+
+
+
+def test_training_status_response_is_passive_even_if_live_reconciliation_is_blocked(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": False,
+        "queuePauseReason": "",
+        "jobs": [{"id": "queued", "folder": "sets/subject", "status": "queued"}],
+    })
+    monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(training_runner, "_refresh_state", lambda *_args: pytest.fail("HTTP status must not inspect WSL runners."))
+    monkeypatch.setattr(training_runner, "_persist_reconciled_state", lambda *_args: pytest.fail("HTTP status must not persist scheduler state."))
+
+    payload, status = training_runner.status_response()
+
+    assert status == 200
+    assert payload["jobs"][0]["status"] == "queued"
 
 
 def test_invalid_queue_state_is_loud_and_not_offered_recovery(tmp_path, monkeypatch):
@@ -1259,7 +1499,7 @@ def test_missing_history_is_empty_and_invalid_history_is_loud(tmp_path, monkeypa
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
     assert training_history.read_history(folder)["jobs"] == []
-    recent = tmp_path / ".webcap_training" / "recent_runs.json"
+    recent = app_config.training_history_state_path()
     recent.parent.mkdir()
     recent.write_text("{bad", encoding="utf-8")
 
@@ -1489,3 +1729,83 @@ def test_checkpoint_resume_forces_selected_learning_rate(tmp_path, monkeypatch):
     assert captured["optimizer"]["lr"] == pytest.approx(9e-5)
     assert captured["force_constant_lr"] == pytest.approx(9e-5)
     assert job["trainingSettings"]["forceConstantLr"] == "9e-5"
+
+
+def test_queued_resume_can_finish_into_history_without_restarting(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    resumed_run = tmp_path / "output" / "resume-run"
+    checkpoint = resumed_run / "global_step700"
+    checkpoint.mkdir(parents=True)
+    (resumed_run / "latest").write_text("global_step700\n", encoding="utf-8")
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [{
+            "id": "resume-job",
+            "folder": "sets/subject",
+            "status": "queued",
+            "stage": "queued",
+            "stages": "h3",
+            "resumeFromCheckpoint": str(resumed_run),
+            "resumeStage": "h3",
+            "resumePoint": {
+                "checkpointAvailable": True,
+                "checkpointTag": "global_step700",
+                "epoch": 7,
+                "step": 700,
+                "expectedEpochs": 80,
+            },
+            "createdAt": 1.0,
+            "updatedAt": 1.0,
+            "outputRoot": str(tmp_path / "output"),
+        }],
+    })
+
+    payload, status = training_runner.stop_response("resume-job", finish=True)
+
+    assert status == 200 and payload["ok"] is True
+    assert payload["job"]["status"] == "finished_early"
+    assert payload["job"]["outputRunPath"] == str(resumed_run)
+    assert training_runner._read_state()["jobs"] == []
+    history_jobs = training_history.read_history(tmp_path / "sets" / "subject")["jobs"]
+    assert len(history_jobs) == 1
+    assert history_jobs[0]["id"] == "resume-job"
+    assert history_jobs[0]["status"] == "finished_early"
+    assert history_jobs[0]["outputRunPath"] == str(resumed_run)
+    assert "epoch 7 / 80" in history_jobs[0]["completionNote"]
+    assert checkpoint.is_dir()
+    assert (resumed_run / "latest").read_text(encoding="utf-8").strip() == "global_step700"
+
+
+def test_fresh_queued_job_cannot_finish_without_starting(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    training_runner._write_state({
+        "version": 3,
+        "activeJobId": "",
+        "queuePaused": True,
+        "queuePauseReason": "test",
+        "jobs": [{
+            "id": "fresh-job",
+            "folder": "sets/subject",
+            "status": "queued",
+            "stage": "queued",
+            "stages": "h3",
+            "resumeFromCheckpoint": "",
+            "createdAt": 1.0,
+            "updatedAt": 1.0,
+        }],
+    })
+
+    payload, status = training_runner.stop_response("fresh-job", finish=True)
+
+    assert status == 409 and payload["ok"] is False
+    assert "Only queued resume jobs" in payload["error"]
+    state = training_runner._read_state()
+    assert len(state["jobs"]) == 1
+    assert state["jobs"][0]["id"] == "fresh-job"
+    assert state["jobs"][0]["status"] == "queued"
+    assert training_history.read_history(tmp_path / "sets" / "subject")["jobs"] == []

@@ -39,6 +39,64 @@ def test_training_history_offers_curve_analysis_for_an_available_resume_run():
     assert 'job.candidateRunAvailable' in script
 
 
+
+def test_training_history_surfaces_selected_epoch_as_completed_decision_state():
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'item["selectedEpoch"] = selected_run_epoch' in history
+    assert "var selectedEpoch = job.selectedEpoch" in script
+    assert "'Selected Epoch ' + Math.round(selectedEpochNumber).toLocaleString()" in script
+    assert "has-selected-epoch" in script
+    assert "training-history-selected-mark" in script
+    assert ".training-history-item.has-selected-epoch" in css
+
+def test_training_history_exposes_finalize_and_archive_lifecycle():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "training_archive.py").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert 'data-training-history-tab="history"' in html
+    assert 'data-training-history-tab="archive"' in html
+    assert 'id="training-archive-modal"' in html
+    assert 'data-training-history-finalize="' in script
+    assert '">Archive</button>' in script
+    assert "openTrainingArchiveModal(" in workspace
+    assert "/fs/training_archive/preview" in app
+    assert "/fs/training_archive/finalize" in app
+    assert "Selected epoch has no recorded production LoRA" in backend
+    assert "retainedAlternateEpochs" in backend
+    assert "removedStagedCandidates" in backend
+    assert "removedTestSessions" in backend
+    assert "testCleanupWarning" in backend
+    assert "test_session_cleanup_status" in backend
+    assert 'path.name != ".webcap"' in backend
+    assert "_record_last_training_archive" not in backend
+    assert "saveFolderStateForCurrentRoot()" in script
+
+
+def test_finalize_archive_uses_staged_candidate_folder_as_retention_truth_and_surfaces_legacy_archive_errors():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "training_archive.py").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert '"availableAlternateCandidates": alternates' in backend
+    assert 'payload.get("sourceEpoch")' in backend
+    assert "Requested retained epoch is not present in the staged candidate folder" in backend
+    assert '"invalid": True' in backend
+    assert '"Archive is missing webcap-run.json."' in backend
+    assert "Archive issue" in script
+    assert "preview.availableAlternateCandidates" in script
+    assert "candidate.fileName" in script
+    assert "No staged candidate LoRAs available to retain." in script
+    assert "preview.testSessionCount" in script
+    assert "Finalized and archived, but Archive refresh failed:" in script
+    assert ".training-archive-alternate small" in css
+
+
 def test_training_history_loads_timing_for_completed_and_finished_early_rows():
     script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
 
@@ -87,3 +145,36 @@ def test_metadata_backed_training_history_contract():
     assert "record_job(folder_path, job)" in runner
     assert "clear_history_job" in runner
     assert "historyHidden" in runner
+
+
+
+def test_training_archive_lazily_surfaces_selected_epoch_loss_context():
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "training_archive.py").read_text(encoding="utf-8")
+    state = (ROOT / "tool" / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "/fs/training_archive/metrics" in app
+    assert "def archive_metrics(" in backend
+    assert "read_loss_events" in backend
+    assert '"lossReductionPercent"' in backend
+    assert '"recentLossChangePercent"' in backend
+    assert '"trainingSecondsToSelected"' in backend
+    assert '"selectedEpochSeconds"' in backend
+    assert "archiveMetrics: {}" in state
+    assert "loadTrainingArchiveMetrics" in script
+    assert "trainingArchiveLossChart" in script
+    assert 'data-training-archive-details="' in script
+    assert "archiveList.onclick" in workspace
+    assert ".training-archive-analysis" in css
+
+
+def test_checkpoint_picker_groups_previous_saved_resume_points():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+
+    assert 'Previous saved resumable points' in script
+    assert 'data-checkpoint-tag=' in script
+    assert "resumeCheckpointTag" in runner

@@ -198,8 +198,10 @@ def _progress_client_id(prompt_id):
     return "webcap-" + str(prompt_id or "").strip()
 
 
-def queue_workflow(workflow):
-    prompt_id = str(uuid.uuid4())
+def _submit_workflow(workflow, prompt_id):
+    prompt_id = str(prompt_id or "").strip()
+    if not prompt_id:
+        raise ValueError("ComfyUI provider job ID is required.")
     response = _read_json_response(
         COMFY_BASE_URL + "/prompt",
         method="POST",
@@ -215,6 +217,24 @@ def queue_workflow(workflow):
     return prompt_id
 
 
+def queue_workflow(workflow):
+    return _submit_workflow(workflow, str(uuid.uuid4()))
+
+
+def queue_managed_workflow(execution_job_id, workflow):
+    execution_job_id = str(execution_job_id or "").strip()
+    if not execution_job_id:
+        raise ValueError("WebCap inference job ID is required.")
+    prompt_id = str(uuid.uuid4())
+    execution_update_job(
+        execution_job_id,
+        details={"providerJobId": prompt_id, "providerStatus": "submitting"},
+    )
+    _submit_workflow(workflow, prompt_id)
+    execution_update_job(execution_job_id, details={"providerStatus": "pending"})
+    return prompt_id
+
+
 def read_job(prompt_id):
     url = COMFY_BASE_URL + "/api/jobs/" + urllib.parse.quote(str(prompt_id or ""), safe="")
     try:
@@ -226,6 +246,39 @@ def read_job(prompt_id):
     if not isinstance(payload, dict):
         raise RuntimeError("ComfyUI returned invalid inference job status.")
     return payload
+
+
+def queue_snapshot():
+    payload = _read_json_response(COMFY_BASE_URL + "/queue", timeout=3)
+    if not isinstance(payload, dict):
+        raise RuntimeError("ComfyUI returned invalid queue state.")
+    running = payload.get("queue_running")
+    pending = payload.get("queue_pending")
+    if not isinstance(running, list) or not isinstance(pending, list):
+        raise RuntimeError("ComfyUI returned invalid queue state.")
+    return {"running": running, "pending": pending}
+
+
+def webcap_queue_job_ids(snapshot=None):
+    snapshot = queue_snapshot() if snapshot is None else snapshot
+    found = []
+    for item in list(snapshot.get("running") or []) + list(snapshot.get("pending") or []):
+        if not isinstance(item, (list, tuple)) or len(item) < 4:
+            raise RuntimeError("ComfyUI returned an invalid queue item.")
+        prompt_id = str(item[1] or "").strip()
+        extra_data = item[3] if isinstance(item[3], dict) else {}
+        if prompt_id and str(extra_data.get("client_id") or "") == _progress_client_id(prompt_id):
+            found.append(prompt_id)
+    return found
+
+
+def free_cached_models():
+    _read_json_response(
+        COMFY_BASE_URL + "/free",
+        method="POST",
+        payload={"unload_models": True, "free_memory": True},
+        timeout=5,
+    )
 
 
 def _progress_socket_url(prompt_id):

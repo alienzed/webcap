@@ -10,6 +10,7 @@ from tool.server import execution_queue
 @pytest.fixture
 def queue_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
+    monkeypatch.setattr(app_config, "app_state_root", lambda: Path(tmp_path) / ".test-webcap-app-data" / "state")
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
     execution_queue.ephemeral_lane("llm").clear()
@@ -79,6 +80,33 @@ def test_execution_queue_preserves_fifo_and_snapshots_payload(queue_root):
 
     stored = execution_queue.get_job(first["id"], include_payload=True)
     assert stored["payload"] == {"prompt": "one", "nested": {"value": 1}}
+
+
+def test_fresh_inference_enqueue_resumes_idle_paused_lane(queue_root):
+    execution_queue.pause_lane("inference")
+    job = execution_queue.enqueue("inference", {"request": {"prompt": "run now"}})
+
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+
+    assert snapshot["paused"] is False
+    assert snapshot["pauseReason"] == ""
+    claimed = execution_queue.claim_next("inference")
+    assert claimed["id"] == job["id"]
+
+
+def test_inference_backlog_enqueue_does_not_resume_idle_paused_lane(queue_root):
+    execution_queue.pause_lane("inference")
+    job = execution_queue.enqueue(
+        "inference",
+        {"request": {"prompt": "later"}},
+        initial_status="backlog",
+    )
+
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+
+    assert snapshot["paused"] is True
+    assert snapshot["pauseReason"] == "Queue paused by the user."
+    assert execution_queue.claim_next("inference", runnable_backlog_ids={job["id"]}) is None
 
 
 def test_execution_queue_pause_resume_claim_and_reorder(queue_root):
@@ -224,6 +252,18 @@ def test_execution_queue_shelves_active_work_back_to_clean_backlog(queue_root):
     assert restored["startedAt"] is None
 
 
+
+def test_queue_bookkeeping_does_not_release_shared_gpu_owner(queue_root):
+    execution_queue.reserve_resource("training")
+
+    execution_queue.shelve_unfinished("inference")
+    execution_queue.ephemeral_lane("llm").clear()
+    execution_queue.clear_lane("inference")
+    execution_queue.recover_lane("inference")
+
+    assert execution_queue.resource_owner() == "training"
+    execution_queue.release_resource("training")
+
 def test_execution_queue_requeues_active_job_and_pauses_lane(queue_root):
     first = execution_queue.enqueue("inference", {"request": {"prompt": "first"}})
     second = execution_queue.enqueue("inference", {"request": {"prompt": "second"}})
@@ -269,6 +309,8 @@ def test_server_startup_shelves_inference_without_starting_it():
     assert "start_training_runner_observer()" in startup
     assert "start_inference_observer()" not in startup
     assert "reconcile_llm_startup()" in startup
+    assert "reconcile_training_startup()" in startup
+    assert startup.index("reconcile_training_startup()") < startup.index("start_training_runner_observer()")
     assert "INFERENCE STARTUP RECONCILIATION FAILED" in startup
     assert "DIRECTOR STARTUP RECONCILIATION FAILED" in startup
     assert "TRAINING OBSERVER STARTUP FAILED" not in startup
@@ -276,11 +318,18 @@ def test_server_startup_shelves_inference_without_starting_it():
 
 
 def test_execution_queue_resource_claim_is_exclusive(queue_root):
-    assert execution_queue.reserve_resource("takes") is True
-    assert execution_queue.reserve_resource("tests") is False
-    assert execution_queue.reserve_resource("takes") is False
-    execution_queue.release_resource("takes")
-    assert execution_queue.reserve_resource("tests") is True
+    assert execution_queue.reserve_resource("training") is True
+    assert execution_queue.reserve_resource("llm") is False
+    assert execution_queue.reserve_resource("training") is False
+    execution_queue.release_resource("training")
+    assert execution_queue.reserve_resource("llm") is True
+
+
+def test_execution_queue_resource_owner_is_closed_to_gpu_lanes(queue_root):
+    with pytest.raises(ValueError, match="training, llm, or inference"):
+        execution_queue.reserve_resource("takes")
+    with pytest.raises(ValueError, match="training, llm, or inference"):
+        execution_queue.release_resource("tests")
 
 
 def test_execution_queue_orders_mixed_inference_client_metadata_in_one_lane(queue_root):
@@ -504,7 +553,7 @@ def test_execution_queue_lane_guard_is_durable_and_explicitly_clearable(queue_ro
 
 
 def test_execution_queue_unreadable_runtime_state_is_moved_aside_on_startup(queue_root):
-    state_path = queue_root / ".webcap" / "execution_queue.json"
+    state_path = app_config.execution_queue_state_path()
     state_path.parent.mkdir(parents=True)
     state_path.write_text("{not-json", encoding="utf-8")
 

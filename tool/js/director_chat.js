@@ -16,7 +16,14 @@
     requestStartedAt: 0,
     generationStartedAt: 0,
     lastGeneratedTokens: 0,
-    jobId: ''
+    jobId: '',
+    requestDiagnostic: null,
+    systemStatus: null,
+    systemStatusAt: 0,
+    systemStatusRequest: null,
+    activityLastMemory: null,
+    activityLoadBaseline: null,
+    activityLoadModelId: ''
   };
   var contextualModes = {};
   var inputHistory = [];
@@ -227,6 +234,87 @@
     }[String(phase || '')] || 'Working';
   }
 
+  function directorBytesGiB(bytes) {
+    var value = Number(bytes);
+    return isFinite(value) && value > 0 ? (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB' : '';
+  }
+
+  function directorMemorySample(system) {
+    var gpu = system && system.gpu;
+    var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
+    var ram = system && system.ram;
+    var ramBytes = ram && ram.available ? Number(ram.used) : NaN;
+    var vramMiB = primary ? Number(primary.memoryUsed) : NaN;
+    if (!isFinite(ramBytes) || !isFinite(vramMiB)) return null;
+    return {
+      ramBytes: ramBytes,
+      vramBytes: vramMiB * 1024 * 1024
+    };
+  }
+
+  function progressSystemStatus(activity) {
+    if (String(activity && activity.runtimeMode || '') === 'remote') return Promise.resolve(null);
+    var now = performance.now();
+    if (state.systemStatus && now - state.systemStatusAt < 1250) return Promise.resolve(state.systemStatus);
+    if (state.systemStatusRequest) return state.systemStatusRequest;
+
+    state.systemStatusRequest = requestJson('/fs/system_status').then(function (system) {
+      state.systemStatus = system;
+      state.systemStatusAt = performance.now();
+      return system;
+    }).catch(function () {
+      return state.systemStatus;
+    }).then(function (system) {
+      state.systemStatusRequest = null;
+      return system;
+    });
+    return state.systemStatusRequest;
+  }
+
+  function updateModelLoadProgress(activity, system) {
+    var progress = el('director-chat-progress');
+    var fill = progress && progress.querySelector('.director-chat-progress-track span');
+    if (!progress || !fill) return '';
+
+    var phase = String(activity && activity.phase || '');
+    var sample = directorMemorySample(system);
+    if (phase !== 'loading_model') {
+      delete progress.dataset.loadKnown;
+      fill.style.width = '';
+      if (sample) state.activityLastMemory = sample;
+      if (phase === 'preparing' || phase === 'queued' || phase === 'freeing_comfy') {
+        state.activityLoadBaseline = null;
+        state.activityLoadModelId = '';
+      }
+      return '';
+    }
+
+    var modelId = String(activity && activity.model || state.modelId || '');
+    if (state.activityLoadModelId !== modelId) {
+      state.activityLoadModelId = modelId;
+      state.activityLoadBaseline = state.activityLastMemory || sample;
+    } else if (!state.activityLoadBaseline && sample) {
+      state.activityLoadBaseline = state.activityLastMemory || sample;
+    }
+
+    var modelSizeBytes = Number(activity && activity.modelSizeBytes);
+    var baseline = state.activityLoadBaseline;
+    if (!sample || !baseline || !isFinite(modelSizeBytes) || modelSizeBytes <= 0) {
+      delete progress.dataset.loadKnown;
+      fill.style.width = '';
+      return '';
+    }
+
+    var ramDelta = Math.max(0, sample.ramBytes - baseline.ramBytes);
+    var vramDelta = Math.max(0, sample.vramBytes - baseline.vramBytes);
+    var residentBytes = Math.max(0, ramDelta + vramDelta);
+    var displayBytes = Math.min(modelSizeBytes, residentBytes);
+    var percent = Math.max(0, Math.min(100, residentBytes / modelSizeBytes * 100));
+    progress.dataset.loadKnown = '1';
+    fill.style.width = percent.toFixed(1) + '%';
+    return '≈ ' + directorBytesGiB(displayBytes) + ' / ' + directorBytesGiB(modelSizeBytes) + ' · ~' + Math.round(percent) + '%';
+  }
+
   function setProgressVisible(visible) {
     var progress = el('director-chat-progress');
     if (progress) progress.classList.toggle('hidden', !visible);
@@ -271,13 +359,29 @@
     });
   }
 
-  function renderProgress(activity) {
+  function formatRequestDiagnostic(request) {
+    request = request && typeof request === 'object' ? request : null;
+    if (!request) return '';
+    var count = Number(request.messageCount) || 0;
+    var chars = Number(request.contentChars) || 0;
+    var messageLabel = count === 1 ? '1 msg' : String(count) + ' msgs';
+    return 'Prompt sent · ' + messageLabel + ' · ' + chars.toLocaleString() + ' chars · Copy';
+  }
+
+  function copyRequestDiagnostic(request) {
+    request = request && typeof request === 'object' ? request : null;
+    if (!request || !Array.isArray(request.messages)) throw new Error('LLM request diagnostic is missing its messages.');
+    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
+  }
+
+  function renderProgress(activity, system) {
     var phaseEl = el('director-chat-progress-phase');
     var detailEl = el('director-chat-progress-detail');
     var elapsedEl = el('director-chat-progress-elapsed');
     var progress = el('director-chat-progress');
     var stop = el('director-chat-stop');
-    if (!phaseEl || !detailEl || !elapsedEl || !progress || !stop) return;
+    var copy = el('director-chat-prompt-copy');
+    if (!phaseEl || !detailEl || !elapsedEl || !progress || !stop || !copy) return;
 
     activity = activityForCurrentJob(activity);
     var phase = String(activity && activity.phase || 'preparing');
@@ -285,8 +389,10 @@
     if (phase === 'queued') {
       var position = Number(activity && activity.queuePosition || 0);
       detail = position > 1 ? ('Queue #' + position) : 'Waiting for Director runtime';
-    } else if (phase === 'loading_model') detail = 'Loading ' + String(activity && activity.model || state.modelId || 'model');
-    else if (phase === 'generating') {
+    } else if (phase === 'loading_model') {
+      var loadDetail = updateModelLoadProgress(activity, system);
+      detail = String(activity && activity.model || state.modelId || 'model') + (loadDetail ? (' · ' + loadDetail) : '');
+    } else if (phase === 'generating') {
       var now = performance.now();
       if (!state.generationStartedAt) state.generationStartedAt = now;
       var slot = activity && activity.slot && typeof activity.slot === 'object' ? activity.slot : {};
@@ -302,6 +408,7 @@
       detail = liveParts.join(' · ');
     } else if (phase === 'freeing_comfy') detail = 'Releasing local GPU resources';
     else detail = String(activity && activity.model || state.modelId || '');
+    if (phase !== 'loading_model') updateModelLoadProgress(activity, system);
 
     var jobStatus = String(activity && activity.jobStatus || '');
     var terminal = ['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(jobStatus) !== -1;
@@ -310,6 +417,11 @@
     stop.classList.toggle('hidden', !state.pending || terminal || !canCancel);
     stop.disabled = jobStatus === 'stopping';
     stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
+
+    var requestLabel = formatRequestDiagnostic(state.requestDiagnostic);
+    copy.classList.toggle('hidden', !requestLabel);
+    copy.textContent = requestLabel;
+    copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
 
     phaseEl.textContent = directorPhaseLabel(phase);
     detailEl.textContent = detail;
@@ -327,11 +439,13 @@
     if (!state.pending) return;
     requestJson('/fs/director/activity').then(function (activity) {
       observeTransientLlmActivity(activity);
-      if (state.pending) renderProgress(activity);
+      return progressSystemStatus(activity).then(function (system) {
+        if (state.pending) renderProgress(activity, system);
+      });
     }).catch(function () {
-      if (state.pending) renderProgress(null);
+      if (state.pending) renderProgress(null, null);
     }).then(function () {
-      if (state.pending) state.progressTimer = setTimeout(pollProgress, 500);
+      if (state.pending) state.progressTimer = setTimeout(pollProgress, 1000);
     });
   }
 
@@ -339,6 +453,9 @@
     state.requestStartedAt = performance.now();
     state.generationStartedAt = 0;
     state.lastGeneratedTokens = 0;
+    state.requestDiagnostic = null;
+    state.activityLoadBaseline = null;
+    state.activityLoadModelId = '';
     setProgressVisible(true);
     renderProgress(null);
     pollProgress();
@@ -484,7 +601,7 @@
         terminalError.jobStatus = status;
         throw terminalError;
       }
-      var delay = status === 'queued' ? 2000 : 1000;
+      var delay = status === 'queued' ? 3000 : 1500;
       return new Promise(function (resolve) { setTimeout(resolve, delay); })
         .then(function () { return jobRequest(current.jobId); })
         .then(poll);
@@ -576,6 +693,7 @@
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Assistant did not return a queued job.');
         state.jobId = String(payload.job.jobId);
+        state.requestDiagnostic = payload.job.request || null;
         trackTransientLlmJob(payload.job);
         renderProgress({ phase: payload.job.status === 'queued' ? 'queued' : 'preparing', jobStatus: payload.job.status, model: payload.job.modelId });
         return waitForJob(payload.job);
@@ -645,7 +763,7 @@
 
     if (state.open) {
       syncModeUi();
-      loadModels().then(function () {
+      (state.modelsLoaded ? Promise.resolve() : loadModels()).then(function () {
         var input = el('director-chat-input');
         if (input) input.focus();
       });
@@ -660,12 +778,13 @@
     var clear = el('director-chat-clear');
     var send = el('director-chat-send');
     var stop = el('director-chat-stop');
+    var copy = el('director-chat-prompt-copy');
     var input = el('director-chat-input');
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
     var modeSwitch = el('director-chat-mode-switch');
     var presetsHost = el('director-chat-mode-presets');
-    if (!toggle || !drawer || !pin || !close || !clear || !send || !stop || !input || !model || !refresh || !modeSwitch || !presetsHost) return;
+    if (!toggle || !drawer || !pin || !close || !clear || !send || !stop || !copy || !input || !model || !refresh || !modeSwitch || !presetsHost) return;
 
     toggle.onclick = function () { setOpen(!state.open); };
     pin.onclick = function () { setPinned(!state.pinned); };
@@ -673,6 +792,18 @@
     clear.onclick = newChat;
     send.onclick = sendMessage;
     stop.onclick = stopJob;
+    copy.onclick = function () {
+      copyRequestDiagnostic(state.requestDiagnostic).then(function () {
+        var original = formatRequestDiagnostic(state.requestDiagnostic);
+        copy.textContent = 'Copied';
+        window.setTimeout(function () {
+          if (state.requestDiagnostic) copy.textContent = original;
+        }, 1200);
+      }).catch(function (err) {
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Assistant', err);
+        throw err;
+      });
+    };
     modeSwitch.onclick = function (event) {
       var button = event.target.closest('[data-assistant-mode]');
       if (button) setMode(button.dataset.assistantMode);

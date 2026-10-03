@@ -40,7 +40,24 @@ def normalize_scalar_events(events):
     return [{"axis": axis, "loss": item[1], "wallTime": item[0][0], "order": item[0][1]} for axis, item in by_axis.items()]
 
 
-def read_loss_events(run_dir):
+def _resume_branch_event_filter(events, checkpoint_wall_time=None, branch_started_at=None):
+    if checkpoint_wall_time is None or branch_started_at is None:
+        return list(events or [])
+    checkpoint_time = float(checkpoint_wall_time)
+    branch_time = float(branch_started_at)
+    retained = []
+    for event in events or []:
+        try:
+            wall_time = float(event.wall_time)
+        except (AttributeError, TypeError, ValueError):
+            retained.append(event)
+            continue
+        if wall_time <= checkpoint_time or wall_time >= branch_time:
+            retained.append(event)
+    return retained
+
+
+def read_loss_events(run_dir, resume_checkpoint_wall_time=None, resume_branch_started_at=None):
     """Read the two required TensorBoard scalar streams without writing derived data."""
     directory = Path(run_dir)
     if not any(path.is_file() and path.name.startswith("events.out.tfevents") for path in directory.iterdir()):
@@ -59,8 +76,12 @@ def read_loss_events(run_dir):
         missing = next((tag for tag in (DETAILED_LOSS_TAG, EPOCH_LOSS_TAG) if tag not in tags), "")
         if missing:
             raise ValueError("TensorBoard scalar " + missing + " is unavailable for this run.")
-        detailed = normalize_scalar_events(accumulator.Scalars(DETAILED_LOSS_TAG))
-        epoch = normalize_scalar_events(accumulator.Scalars(EPOCH_LOSS_TAG))
+        detailed = normalize_scalar_events(_resume_branch_event_filter(
+            accumulator.Scalars(DETAILED_LOSS_TAG), resume_checkpoint_wall_time, resume_branch_started_at
+        ))
+        epoch = normalize_scalar_events(_resume_branch_event_filter(
+            accumulator.Scalars(EPOCH_LOSS_TAG), resume_checkpoint_wall_time, resume_branch_started_at
+        ))
     except Exception as exc:
         if isinstance(exc, ValueError) and str(exc).startswith("TensorBoard scalar"):
             raise
@@ -150,10 +171,14 @@ ALGORITHMS = {
 }
 
 
-def artifact_for_epoch(run_dir, epoch):
+def artifact_for_epoch(run_dir, epoch, resume_checkpoint_wall_time=None, resume_branch_started_at=None):
     directory = Path(run_dir) / ("epoch" + str(int(epoch)))
     if not directory.is_dir() or directory.is_symlink():
         return {"available": False, "status": "not_saved"}
+    if resume_checkpoint_wall_time is not None and resume_branch_started_at is not None:
+        modified = directory.stat().st_mtime
+        if modified > float(resume_checkpoint_wall_time) and modified < float(resume_branch_started_at):
+            return {"available": False, "status": "not_saved"}
     files = sorted(path for path in directory.iterdir() if path.is_file() and path.suffix.lower() == ".safetensors")
     if len(files) == 1:
         return {"available": True, "status": "available", "fileName": files[0].name}
@@ -162,13 +187,17 @@ def artifact_for_epoch(run_dir, epoch):
     return {"available": False, "status": "not_saved"}
 
 
-def saved_artifacts_for_run(run_dir):
+def saved_artifacts_for_run(run_dir, resume_checkpoint_wall_time=None, resume_branch_started_at=None):
     """Describe saved epoch adapters without treating them as candidates."""
     artifacts = []
     for directory in sorted(Path(run_dir).iterdir(), key=lambda path: path.name):
         match = _EPOCH_DIRECTORY_PATTERN.fullmatch(directory.name)
         if not match or not directory.is_dir() or directory.is_symlink():
             continue
+        if resume_checkpoint_wall_time is not None and resume_branch_started_at is not None:
+            modified = directory.stat().st_mtime
+            if modified > float(resume_checkpoint_wall_time) and modified < float(resume_branch_started_at):
+                continue
         files = sorted(path for path in directory.iterdir() if path.is_file() and path.suffix.lower() == ".safetensors")
         if len(files) == 1:
             artifacts.append({"epoch": int(match.group(1)), "fileName": files[0].name, "status": "available"})
@@ -177,7 +206,7 @@ def saved_artifacts_for_run(run_dir):
     return sorted(artifacts, key=lambda item: item["epoch"])
 
 
-def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="v5"):
+def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="v5", resume_checkpoint_wall_time=None, resume_branch_started_at=None):
     """Analyze completed loss points with one explicit candidate algorithm."""
     if algorithm not in ALGORITHMS:
         raise ValueError("Unknown candidate analysis algorithm: " + str(algorithm))
@@ -216,7 +245,14 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
     detector_result = ALGORITHMS[algorithm](detector_points, robust_points)
     regions = detector_result["regions"]
     analysis_points = detector_result["analysisPoints"]
-    saved_artifacts = saved_artifacts_for_run(run_dir) if run_dir is not None else []
+    if run_dir is None:
+        saved_artifacts = []
+    elif resume_checkpoint_wall_time is not None and resume_branch_started_at is not None:
+        saved_artifacts = saved_artifacts_for_run(
+            run_dir, resume_checkpoint_wall_time, resume_branch_started_at
+        )
+    else:
+        saved_artifacts = saved_artifacts_for_run(run_dir)
     for region in regions:
         region["savedEpochs"] = [
             artifact["epoch"] for artifact in saved_artifacts
@@ -231,7 +267,15 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
         "label": region["label"],
         "savedEpochs": region["savedEpochs"],
         "reason": region["label"] + ".",
-        "artifact": artifact_for_epoch(run_dir, region["representativeEpoch"]) if run_dir is not None else {"available": False, "status": "not_checked"},
+        "artifact": (
+            artifact_for_epoch(
+                run_dir, region["representativeEpoch"], resume_checkpoint_wall_time, resume_branch_started_at
+            )
+            if run_dir is not None and resume_checkpoint_wall_time is not None and resume_branch_started_at is not None
+            else artifact_for_epoch(run_dir, region["representativeEpoch"])
+            if run_dir is not None
+            else {"available": False, "status": "not_checked"}
+        ),
     } for region in regions]
     return {
         "analysisVersion": ANALYSIS_VERSION,
@@ -247,8 +291,22 @@ def analyze_loss_points(detailed_events, epoch_events, run_dir=None, algorithm="
     }
 
 
-def analyze_run_directory(run_dir, algorithm="v5"):
+def analyze_run_directory(run_dir, algorithm="v5", resume_checkpoint_wall_time=None, resume_branch_started_at=None):
     if algorithm not in ALGORITHMS:
         raise ValueError("Unknown candidate analysis algorithm: " + str(algorithm))
-    detailed_events, epoch_events = read_loss_events(run_dir)
-    return analyze_loss_points(detailed_events, epoch_events, run_dir=run_dir, algorithm=algorithm)
+    has_branch_boundary = resume_checkpoint_wall_time is not None and resume_branch_started_at is not None
+    detailed_events, epoch_events = (
+        read_loss_events(run_dir, resume_checkpoint_wall_time, resume_branch_started_at)
+        if has_branch_boundary
+        else read_loss_events(run_dir)
+    )
+    if not has_branch_boundary:
+        return analyze_loss_points(detailed_events, epoch_events, run_dir=run_dir, algorithm=algorithm)
+    return analyze_loss_points(
+        detailed_events,
+        epoch_events,
+        run_dir=run_dir,
+        algorithm=algorithm,
+        resume_checkpoint_wall_time=resume_checkpoint_wall_time,
+        resume_branch_started_at=resume_branch_started_at,
+    )

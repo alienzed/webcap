@@ -14,7 +14,8 @@ from pathlib import Path, PurePosixPath
 from . import config as app_config
 from .folder_state_store import read_folder_state, set_media_rating
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
-from .training_test_paths import browse_test_source, test_copy_path, test_source_for_set, test_source_path, test_source_root_for_stage
+from .training_test_paths import browse_test_source, test_copy_path
+from .training_runner import candidate_selected_epoch
 from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
@@ -34,6 +35,7 @@ LEGACY_EXECUTION_LANE = "test-generations"
 TEST_ASPECT_RATIO_OPTIONS = tuple(getattr(get_test_model(), "ASPECT_RATIO_OPTIONS", ()))
 _status_lock = threading.RLock()
 _recent_sets_cache = {"expires": 0.0, "items": []}
+_recent_prompts_cache = {"expires": 0.0, "items": [], "root": None}
 _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _logger = logging.getLogger(__name__)
@@ -47,18 +49,8 @@ def _owning_set_directory(folder_path):
     return path
 
 
-def _default_test_source(folder_path):
-    return _owning_set_directory(folder_path).name
-
-
 def _test_directory(folder_path, model, source=None):
-    if source is not None:
-        return test_source_path(model.STAGING_KEY, str(source or "").strip())
-    return test_copy_path(model.STAGING_KEY, _owning_set_directory(folder_path).name)
-
-
-def _resolved_test_directory(folder_path, model, source=None):
-    return _test_directory(folder_path, model) if source is None else _test_directory(folder_path, model, source=source)
+    return test_copy_path(model.STAGING_KEY, _relative_set_folder(folder_path))
 
 
 def _owner_folder_available(owner_folder):
@@ -86,116 +78,6 @@ def browse_keep_lora_destination(stage, source=""):
     return payload
 
 
-def browse_source(model_id=None, source=None, set_name=""):
-    model = get_test_model(model_id)
-    default_source = test_source_for_set(model.STAGING_KEY, set_name) if str(set_name or "").strip() else ""
-    resolved_source = default_source if source is None and default_source else str(source or "")
-    payload = browse_test_source(model.STAGING_KEY, resolved_source)
-    owner_folder = _deterministic_source_owner(model, resolved_source)
-    payload.update({
-        "operation": "test_source_browse",
-        "modelId": model.PROFILE_ID,
-        "modelLabel": str(model.profile["label"]),
-        "defaultSource": default_source,
-        "ownerFolder": owner_folder,
-        "ownerAvailable": _owner_folder_available(owner_folder),
-    })
-    return payload
-
-
-def _test_candidate_source_path(folder_path, model, source, candidate_name):
-    directory = _resolved_test_directory(folder_path, model, source=source)
-    name = str(candidate_name or "").strip()
-    if not name or Path(name).name != name or "/" in name or "\\" in name or not name.lower().endswith(".safetensors"):
-        raise ValueError("A staged .safetensors filename is required.")
-    candidate = directory / name
-    if candidate.is_symlink() or not candidate.is_file():
-        raise FileNotFoundError("Staged Test candidate is unavailable: " + name)
-    return candidate
-
-
-def _remove_empty_test_directory(directory):
-    directory = Path(directory)
-    if not directory.is_dir() or directory.is_symlink():
-        return False
-    try:
-        next(directory.iterdir())
-    except StopIteration:
-        try:
-            directory.rmdir()
-            return True
-        except OSError:
-            return False
-    return False
-
-
-def keep_test_candidate(
-    folder_path,
-    stage,
-    source,
-    candidate_name,
-    destination,
-    filename,
-):
-    model = get_test_model_for_staging_key(stage)
-    candidate = _test_candidate_source_path(folder_path, model, source, candidate_name)
-    destination_directory = test_source_path(model.STAGING_KEY, destination)
-    if destination_directory.is_symlink() or not destination_directory.is_dir():
-        raise FileNotFoundError("Keep LoRA destination folder does not exist.")
-    staging_root = test_source_root_for_stage(model.STAGING_KEY).resolve()
-    candidate_directory = candidate.parent.resolve()
-    destination_resolved = destination_directory.resolve()
-    if destination_resolved == candidate_directory:
-        raise ValueError("Keep LoRA destination must be outside the Test candidate folder.")
-    try:
-        destination_resolved.relative_to(staging_root)
-    except ValueError as exc:
-        raise ValueError("Keep LoRA destination must stay inside the configured Test staging root.") from exc
-
-    requested_name = str(filename or "").strip()
-    if not requested_name or requested_name in (".", "..") or Path(requested_name).name != requested_name or "/" in requested_name or "\\" in requested_name:
-        raise ValueError("Keep LoRA filename must be a single filename.")
-    if Path(requested_name).suffix == "":
-        requested_name += ".safetensors"
-    destination_path = destination_directory / requested_name
-    if destination_path.exists() or destination_path.is_symlink():
-        raise FileExistsError("Keep LoRA destination already exists: " + requested_name)
-
-    sidecar = candidate.with_suffix(".webcap.json")
-    created = False
-    try:
-        with candidate.open("rb") as source_handle, destination_path.open("xb") as destination_handle:
-            shutil.copyfileobj(source_handle, destination_handle)
-            created = True
-        if not destination_path.is_file():
-            raise RuntimeError("Kept LoRA was not written successfully.")
-    except Exception:
-        if created:
-            try:
-                destination_path.unlink()
-            except OSError:
-                pass
-        raise
-
-    cleanup_error = ""
-    try:
-        candidate.unlink()
-        if sidecar.is_file() and not sidecar.is_symlink():
-            sidecar.unlink()
-        _remove_empty_test_directory(candidate.parent)
-    except OSError as exc:
-        cleanup_error = str(exc)
-
-    return {
-        "destination": str(destination_path),
-        "fileName": destination_path.name,
-        "sourceFileName": candidate.name,
-        "stage": model.STAGING_KEY,
-        "cleanupError": cleanup_error,
-        "candidateRemoved": not candidate.exists(),
-    }
-
-
 def _lora_files(test_directory):
     if not test_directory.is_dir():
         raise FileNotFoundError("Test staging folder does not exist: " + str(test_directory))
@@ -203,39 +85,6 @@ def _lora_files(test_directory):
         [path for path in test_directory.iterdir() if path.is_file() and path.suffix.lower() == ".safetensors"],
         key=lambda path: path.name.lower(),
     )
-
-
-def _selected_lora_files(test_directory, selected_files=None):
-    if selected_files is None:
-        return _lora_files(test_directory)
-    if not isinstance(selected_files, (list, tuple)):
-        raise ValueError("Selected Test candidates must be a list of staged filenames.")
-
-    requested = []
-    seen = set()
-    for value in selected_files:
-        name = str(value or "").strip()
-        if (
-            not name
-            or name in (".", "..")
-            or "/" in name
-            or "\\" in name
-            or not name.lower().endswith(".safetensors")
-        ):
-            raise ValueError("Selected Test candidates must be staged .safetensors filenames.")
-        if name in seen:
-            continue
-        seen.add(name)
-        requested.append(name)
-
-    if not requested:
-        raise ValueError("Select at least one staged LoRA to test.")
-
-    return sorted(
-        [Path(test_directory) / name for name in requested],
-        key=lambda path: path.name.lower(),
-    )
-
 
 
 def _relative_set_folder(folder_path):
@@ -249,15 +98,10 @@ def test_presence(folder_path):
     for profile_id in supported_profile_ids():
         model = get_test_model(profile_id)
         try:
-            test_directory = _test_directory(set_folder, model)
-            if test_directory.is_dir():
-                staged_count += len([
-                    path for path in test_directory.iterdir()
-                    if path.is_file() and path.suffix.lower() == ".safetensors"
-                ])
+            staged_count += len(_staged_loras_for_set(set_folder, model))
         except (OSError, ValueError):
             continue
-    sessions = list_sessions(set_folder, source=set_folder.name)
+    sessions = list_sessions(set_folder)
     return {
         "folder": _relative_set_folder(set_folder),
         "stagedCount": staged_count,
@@ -266,7 +110,7 @@ def test_presence(folder_path):
     }
 
 def recent_test_sets(limit=8):
-    """Return recent Test Sources from the bounded central session directory."""
+    """Return recent Test Sets from the bounded central session directory."""
     now = time.monotonic()
     cached_items = _recent_sets_cache.get("items") if isinstance(_recent_sets_cache.get("items"), list) else []
     if now < float(_recent_sets_cache.get("expires") or 0):
@@ -287,17 +131,15 @@ def recent_test_sets(limit=8):
                 continue
             seen_sessions.add(session.name)
             payload = _read_status(session) or {}
-            source = str(payload.get("source") or "").strip()
             model_id = str(payload.get("modelId") or payload.get("model") or "").strip()
             owner_folder = str(payload.get("ownerFolder") or "").strip()
-            key = (owner_folder, model_id, source)
+            key = (owner_folder, model_id)
             try:
                 modified = (session / "test.json").stat().st_mtime
             except OSError:
                 modified = 0
             item = recent_by_key.setdefault(key, {
                 "folder": owner_folder,
-                "source": source,
                 "modelId": model_id,
                 "sessionCount": 0,
                 "latestSession": "",
@@ -322,7 +164,57 @@ def recent_test_sets(limit=8):
     return result
 
 
-def remove_candidate(folder_path, file_name, session_name=None, model_id=None, source=None):
+def recent_test_prompts(limit=8):
+    """Return recent distinct source prompts from Test sessions."""
+    now = time.monotonic()
+    root_key = tuple(str(path) for path in (_central_session_root(), _legacy_central_session_root()))
+    cached_items = _recent_prompts_cache.get("items") if isinstance(_recent_prompts_cache.get("items"), list) else []
+    if _recent_prompts_cache.get("root") == root_key and now < float(_recent_prompts_cache.get("expires") or 0):
+        return [dict(item) for item in cached_items[:max(1, int(limit or 8))]]
+
+    items = []
+    seen_prompts = set()
+    sessions = []
+    seen_sessions = set()
+    for central_root in (_central_session_root(), _legacy_central_session_root()):
+        if not central_root.is_dir() or central_root.is_symlink():
+            continue
+        for session in central_root.iterdir():
+            if session.name in seen_sessions:
+                continue
+            if session.is_symlink() or not session.is_dir() or not (session / "test.json").is_file():
+                continue
+            seen_sessions.add(session.name)
+            try:
+                modified = (session / "test.json").stat().st_mtime
+            except OSError:
+                modified = 0
+            sessions.append((modified, session))
+    sessions.sort(key=lambda item: item[0], reverse=True)
+
+    for modified, session in sessions:
+        payload = _read_status(session) or {}
+        prompt = str(payload.get("sourcePrompt") or "").strip()
+        if not prompt or prompt in seen_prompts:
+            continue
+        seen_prompts.add(prompt)
+        items.append({
+            "prompt": prompt,
+            "folder": str(payload.get("ownerFolder") or "").strip(),
+            "modelId": str(payload.get("modelId") or payload.get("model") or "").strip(),
+            "session": session.name,
+            "modified": modified,
+        })
+        if len(items) >= max(1, int(limit or 8)):
+            break
+    _recent_prompts_cache["items"] = [dict(item) for item in items]
+    _recent_prompts_cache["root"] = root_key
+    _recent_prompts_cache["expires"] = time.monotonic() + 10.0
+    return items
+
+
+
+def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
     name = str(file_name or "").strip()
     if (
         not name
@@ -334,7 +226,6 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None, s
         raise ValueError("A staged .safetensors filename is required.")
 
     resolved_model_id = str(model_id or "").strip()
-    resolved_source = None if source is None else str(source or "").strip()
     if session_name:
         session = _session_directory(folder_path, session_name)
         session_status = _read_status(session) or {}
@@ -344,15 +235,18 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None, s
             or resolved_model_id
             or get_test_model().PROFILE_ID
         )
-        if "source" in session_status:
-            resolved_source = str(session_status.get("source") or "").strip()
+
     model = get_test_model(resolved_model_id or get_test_model().PROFILE_ID)
-    test_directory = _resolved_test_directory(folder_path, model, source=resolved_source)
+    test_directory = _test_directory(folder_path, model)
     candidate = test_directory / name
     sidecar = candidate.with_suffix(".webcap.json")
+    owned = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
 
-    if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
-        raise RuntimeError("Staged Test candidate is not a regular file: " + name)
+    if candidate.exists() or candidate.is_symlink():
+        if name not in owned:
+            raise ValueError("Staged Test candidate does not belong to the current Set: " + name)
+        if candidate.is_symlink() or not candidate.is_file():
+            raise RuntimeError("Staged Test candidate is not a regular file: " + name)
     if sidecar.is_symlink() or (sidecar.exists() and not sidecar.is_file()):
         raise RuntimeError("Staged Test candidate sidecar is not a regular file: " + sidecar.name)
 
@@ -363,7 +257,7 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None, s
     if sidecar.is_file():
         sidecar.unlink()
 
-    remaining = _lora_files(test_directory) if test_directory.is_dir() else []
+    remaining = _staged_loras_for_set(folder_path, model)
     return {
         "operation": "test_remove_candidate",
         "modelId": model.PROFILE_ID,
@@ -626,26 +520,12 @@ def _with_session_ratings(session_directory, payload):
     return visible
 
 
-def _session_source(payload, folder_path):
-    if isinstance(payload, dict) and "source" in payload:
-        return str(payload.get("source") or "").strip()
-    return _default_test_source(folder_path)
-
-
-def _session_matches_source(payload, folder_path, source):
-    if source is None:
-        return True
-    return _session_source(payload, folder_path) == str(source or "").strip()
-
-
-def _candidate_rating_scores(folder_path, model_id=None, source=None):
+def _candidate_rating_scores(folder_path, model_id=None):
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
     totals = {}
     for session in _session_directories(folder_path):
         payload = _read_status(session) or {}
-        if not _session_matches_source(payload, folder_path, source):
-            continue
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
         if selected_model_id and session_model_id != selected_model_id:
             continue
@@ -710,11 +590,12 @@ def rate_result(folder_path, session_name, media_name, rating):
     }
 
 
-def rating_summary(folder_path, model_id=None, source=None):
+
+def rating_summary(folder_path, model_id=None):
     return {
         "operation": "test_rating_summary",
-        "candidateScores": _candidate_rating_scores(folder_path, model_id, source=source),
-        "sessions": list_sessions(folder_path, source=source, model_id=model_id),
+        "candidateScores": _candidate_rating_scores(folder_path, model_id),
+        "sessions": list_sessions(folder_path, model_id=model_id),
     }
 
 def _session_result_path(session_directory, file_name):
@@ -754,6 +635,53 @@ def _is_webcap_staged_lora(lora_file, model):
         return False
 
 
+
+def _staged_loras_for_set(folder_path, model):
+    expected_folder = _relative_set_folder(folder_path)
+    directory = _test_directory(folder_path, model)
+    if not directory.is_dir():
+        return []
+    candidates = []
+    for path in _lora_files(directory):
+        if not _is_webcap_staged_lora(path, model):
+            continue
+        provenance = _staged_lora_provenance(path)
+        source_folder = str(provenance.get("sourceFolder") or "").replace("\\", "/").strip("/")
+        if source_folder == expected_folder:
+            candidates.append(path)
+    return candidates
+
+
+def _selected_lora_files_for_set(folder_path, model, selected_files=None):
+    available = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
+    if selected_files is None:
+        return sorted(available.values(), key=lambda path: path.name.lower())
+    if not isinstance(selected_files, (list, tuple)):
+        raise ValueError("Selected Test candidates must be a list of staged filenames.")
+
+    selected = []
+    seen = set()
+    for value in selected_files:
+        name = str(value or "").strip()
+        if (
+            not name
+            or name in (".", "..")
+            or "/" in name
+            or "\\" in name
+            or not name.lower().endswith(".safetensors")
+        ):
+            raise ValueError("Selected Test candidates must be staged .safetensors filenames.")
+        if name in seen:
+            continue
+        seen.add(name)
+        if name not in available:
+            raise ValueError("Selected Test candidate does not belong to the current Set: " + name)
+        selected.append(available[name])
+
+    if not selected:
+        raise ValueError("Select at least one staged LoRA to test.")
+    return sorted(selected, key=lambda path: path.name.lower())
+
 def _staged_candidate_runs(lora_files, model):
     runs = {}
     for lora_file in lora_files:
@@ -765,36 +693,40 @@ def _staged_candidate_runs(lora_files, model):
             runs[job_id] = {
                 "jobId": job_id,
                 "folder": str(provenance.get("sourceFolder") or "").strip(),
+                "runName": str(provenance.get("sourceRunName") or "").strip(),
+                "runSequence": str(provenance.get("sourceRunSequence") or "").strip(),
+                "runSummary": provenance.get("runSummary") if isinstance(provenance.get("runSummary"), dict) else {},
             }
     return list(runs.values())
 
 
-def _deterministic_source_owner(model, source):
-    try:
-        directory = test_source_path(model.STAGING_KEY, str(source or "").strip())
-        loras = _lora_files(directory) if directory.is_dir() else []
-    except (OSError, ValueError):
-        return ""
-    if not loras:
-        return ""
-
-    owners = set()
-    for lora in loras:
-        if not _is_webcap_staged_lora(lora, model):
-            return ""
-        payload = _staged_lora_provenance(lora)
-        owner = str(payload.get("sourceFolder") or "").strip().replace("\\", "/").strip("/")
-        relative = PurePosixPath(owner)
-        if (
-            not owner
-            or relative.is_absolute()
-            or any(part in ("", ".", "..") for part in relative.parts)
-        ):
-            return ""
-        owners.add(relative.as_posix())
-        if len(owners) > 1:
-            return ""
-    return next(iter(owners)) if len(owners) == 1 else ""
+def _staged_candidate_metadata(lora_files, model):
+    selected_by_run = {}
+    result = {}
+    for lora_file in lora_files:
+        if not _is_webcap_staged_lora(lora_file, model):
+            continue
+        provenance = _staged_lora_provenance(lora_file)
+        folder = str(provenance.get("sourceFolder") or "").strip()
+        job_id = str(provenance.get("sourceJobId") or "").strip()
+        epoch = int(provenance.get("sourceEpoch"))
+        run_key = (folder, job_id)
+        if run_key not in selected_by_run:
+            try:
+                selected_by_run[run_key] = candidate_selected_epoch(folder, job_id)
+            except (LookupError, FileNotFoundError, RuntimeError):
+                selected_by_run[run_key] = None
+        selected = selected_by_run[run_key]
+        result[lora_file.name] = {
+            "jobId": job_id,
+            "folder": folder,
+            "epoch": epoch,
+            "stage": str(provenance.get("stage") or "").strip().lower(),
+            "sourceFileName": str(provenance.get("sourceFileName") or "").strip(),
+            "selected": bool(selected and int(selected.get("epoch") or 0) == epoch),
+            "selectedEpoch": selected,
+        }
+    return result
 
 
 def _new_session_seed():
@@ -840,13 +772,12 @@ def supported_models():
     }
 
 
-def prepare(folder_path, model_id=None, source=None):
+
+def prepare(folder_path, model_id=None):
     model = get_test_model(model_id)
     template = model.load_template()
-    selected_source = None if source is None else str(source or "").strip()
     try:
-        test_directory = _resolved_test_directory(folder_path, model, source=selected_source)
-        loras = _lora_files(test_directory) if test_directory.is_dir() else []
+        loras = _staged_loras_for_set(folder_path, model)
     except ValueError:
         loras = []
     defaults = model.template_settings(template)
@@ -865,7 +796,6 @@ def prepare(folder_path, model_id=None, source=None):
         "modelId": model.PROFILE_ID,
         "modelLabel": str(model.profile["label"]),
         "mediaKind": model.MEDIA_KIND,
-        "source": _default_test_source(folder_path) if selected_source is None else selected_source,
         "settings": list(model.settings),
         "settingOptions": setting_options,
         "warnings": prepare_warnings,
@@ -874,45 +804,51 @@ def prepare(folder_path, model_id=None, source=None):
         "aspectRatioOptions": list(getattr(model, "ASPECT_RATIO_OPTIONS", ())),
         "count": len(loras),
         "files": [path.name for path in loras],
-        "removableFiles": [
-            path.name for path in loras
-            if _is_webcap_staged_lora(path, model)
-        ],
+        "removableFiles": [path.name for path in loras],
         "candidateRuns": _staged_candidate_runs(loras, model),
-        "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, source=selected_source),
-        "sessions": list_sessions(folder_path, source=selected_source, model_id=model.PROFILE_ID),
-        "latest": status(folder_path, model_id=model.PROFILE_ID, source=selected_source),
+        "candidateMetadata": _staged_candidate_metadata(loras, model),
+        "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID),
+        "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID),
+        "latest": status(folder_path, model_id=model.PROFILE_ID),
     }
 
 def handle_request(folder_path, mode, selection_criteria=None):
     operation = str(mode or "").strip().lower()
     if operation == "test_prepare":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return prepare(folder_path, model_id=criteria.get("modelId"), source=criteria.get("source"))
+        return prepare(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_status":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return status(folder_path, model_id=criteria.get("modelId"), source=criteria.get("source"))
+        return status(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_sessions":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return {"operation": "test_sessions", "sessions": list_sessions(folder_path, source=criteria.get("source"), model_id=criteria.get("modelId"))}
+        return {"operation": "test_sessions", "sessions": list_sessions(folder_path, model_id=criteria.get("modelId"))}
     if operation == "test_queue":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return queued_jobs(folder_path, source=criteria.get("source"), model_id=criteria.get("modelId"))
+        return queued_jobs(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_queue_cancel":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return cancel_queued(folder_path, criteria.get("jobId"))
     if operation == "test_queue_clear":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return clear_queued(folder_path, source=criteria.get("source"), model_id=criteria.get("modelId"))
+        return clear_queued(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_open_session":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return open_session(folder_path, criteria.get("session"))
     if operation == "test_delete_session":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return delete_session(folder_path, criteria.get("session"))
+    if operation == "test_clear_sessions":
+        deleted = clear_sessions(folder_path)
+        return {
+            "operation": "test_clear_sessions",
+            "deleted": deleted,
+            "sessions": [],
+            "latest": _latest_status(folder_path),
+        }
     if operation == "test_rating_summary":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return rating_summary(folder_path, model_id=criteria.get("modelId"), source=criteria.get("source"))
+        return rating_summary(folder_path, model_id=criteria.get("modelId"))
     if operation == "test_rate_result":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return rate_result(
@@ -923,7 +859,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
         )
     if operation == "test_stop":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
-        return stop(folder_path, session_name=criteria.get("session"), source=criteria.get("source"))
+        return stop(folder_path, session_name=criteria.get("session"))
     if operation == "test_remove_candidate":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return remove_candidate(
@@ -931,7 +867,6 @@ def handle_request(folder_path, mode, selection_criteria=None):
             criteria.get("fileName"),
             session_name=criteria.get("session"),
             model_id=criteria.get("modelId"),
-            source=criteria.get("source"),
         )
     if operation == "test_enqueue":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
@@ -947,7 +882,6 @@ def handle_request(folder_path, mode, selection_criteria=None):
             selected_files=criteria.get("selectedFiles"),
             include_base=criteria.get("includeBase"),
             model_id=criteria.get("modelId"),
-            source=criteria.get("source"),
         )
     raise ValueError("Unsupported Test Generations operation: " + operation)
 
@@ -987,8 +921,9 @@ def _resolved_wildcard_values(source_prompt, resolved_prompt):
     return values
 
 
+
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
-                           selected_files=None, include_base=True, model_id=None, source=None,
+                           selected_files=None, include_base=True, model_id=None,
                            aspect_ratio=None, megapixels=None, duration=None):
     from . import inference_runtime
 
@@ -996,11 +931,7 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     prompt = str(prompt or "").strip()
     if not prompt:
         raise ValueError("A test prompt is required.")
-    selected_source = None if source is None else str(source or "").strip()
-    test_directory = _resolved_test_directory(folder_path, model, source=selected_source)
-    loras = _selected_lora_files(test_directory, selected_files=selected_files)
-    if not loras:
-        raise ValueError("The Test folder contains no .safetensors files.")
+    loras = _selected_lora_files_for_set(folder_path, model, selected_files=selected_files)
     session_name = str(name or "").strip()
     if len(session_name) > 120:
         raise ValueError("Test session name must be 120 characters or fewer.")
@@ -1019,10 +950,6 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     template = model.load_template()
     normalized_settings = model.normalize_settings(template, _new_session_seed, requested_settings)
 
-    # Queue admission must not depend on ComfyUI being online. Preserve the
-    # existing eager wildcard resolution when the provider is reachable so
-    # queue labels keep their resolved differentiators; otherwise freeze the
-    # source prompt + seed and resolve it when the job is actually runnable.
     prompt_needs_resolve = False
     try:
         resolved_prompt = inference_runtime.resolve_wildcard_prompt(
@@ -1035,7 +962,6 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     request = {
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,
-        "source": _default_test_source(folder_path) if selected_source is None else selected_source,
         "name": session_name,
         "sourcePrompt": prompt,
         "prompt": resolved_prompt,
@@ -1045,7 +971,6 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     }
     request.update(_workflow_evidence(model, template))
     return request, loras, include_base is not False
-
 
 def committed_inference_outcome(job):
     metadata = job.get("metadata") if isinstance(job, dict) and isinstance(job.get("metadata"), dict) else {}
@@ -1152,7 +1077,7 @@ def _cancel_shared_pending_job(job_id, session_directory=None, reduce_total=Fals
         raise
 
 
-def _session_job_records(status):
+def _session_job_records(status, missing_job_ids=None):
     job_ids = status.get("inferenceJobs") if isinstance(status.get("inferenceJobs"), list) else []
     results = status.get("results") if isinstance(status.get("results"), list) else []
     failures = status.get("failures") if isinstance(status.get("failures"), list) else []
@@ -1167,9 +1092,6 @@ def _session_job_records(status):
         for value in (status.get(key) or [])
         if str(value or "").strip()
     )
-    session_terminal = str(status.get("status") or "") in {
-        "complete", "stopped", "interrupted", "failed"
-    }
 
     jobs = []
     for raw_job_id in job_ids:
@@ -1178,17 +1100,14 @@ def _session_job_records(status):
             continue
         try:
             jobs.append(execution_get_job(job_id))
-        except FileNotFoundError as exc:
+        except FileNotFoundError:
             try:
                 jobs.append(execution_transient_receipt(job_id))
                 continue
             except FileNotFoundError:
                 pass
-            if job_id in terminal_job_ids or session_terminal:
-                continue
-            raise RuntimeError(
-                "Test Session references a missing active inference job: " + job_id
-            ) from exc
+            if job_id not in terminal_job_ids and missing_job_ids is not None:
+                missing_job_ids.append(job_id)
     return jobs
 
 
@@ -1227,7 +1146,8 @@ def _sync_inference_session(session_directory):
         if not isinstance(status.get("inferenceJobs"), list):
             return _session_status(session_directory)
 
-        jobs = _session_job_records(status)
+        missing_job_ids = []
+        jobs = _session_job_records(status, missing_job_ids=missing_job_ids)
         results = status.get("results") if isinstance(status.get("results"), list) else []
         failures = status.get("failures") if isinstance(status.get("failures"), list) else []
         result_job_ids = {
@@ -1239,6 +1159,25 @@ def _sync_inference_session(session_directory):
         skipped_job_ids = set(str(value) for value in (status.get("skippedJobIds") or []))
         cancelled_job_ids = set(str(value) for value in (status.get("cancelledJobIds") or []))
         changed = False
+
+        if missing_job_ids:
+            missing = set(missing_job_ids)
+            status["inferenceJobs"] = [
+                str(job_id)
+                for job_id in (status.get("inferenceJobs") or [])
+                if str(job_id or "").strip() and str(job_id or "").strip() not in missing
+            ]
+            status["total"] = max(
+                len(results) + len(failures),
+                int(status.get("total") or 0) - len(missing),
+            )
+            changed = True
+            _logger.warning(
+                "Dropped %d stale Test inference job reference(s) from Session %s: %s",
+                len(missing),
+                Path(session_directory).name,
+                ", ".join(sorted(missing)),
+            )
 
         stopping_session = str(status.get("status") or "") in {"stopping", "stopped"}
         for job in jobs:
@@ -1386,7 +1325,6 @@ def execute_inference(job_id, request, context):
     session_id = str(context.get("sessionId") or "").strip()
     candidate_kind = str(context.get("candidateKind") or "").strip()
     candidate_file = str(context.get("candidateFile") or "").strip()
-    source = str(context.get("source") or request.get("source") or "").strip()
     candidate_label = str(context.get("candidateLabel") or "").strip() or (
         "Base" if candidate_kind == "base" else candidate_file
     )
@@ -1398,8 +1336,9 @@ def execute_inference(job_id, request, context):
     model = get_test_model(request.get("modelId"))
     lora_file = None
     if candidate_kind == "lora":
-        lora_file = _test_directory(folder_path, model, source=source) / candidate_file
-        if not lora_file.is_file():
+        available = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
+        lora_file = available.get(candidate_file)
+        if lora_file is None or not lora_file.is_file():
             _logger.warning("Queued Test skipped removed staged LoRA: %s", candidate_file)
             _record_skipped_inference(session_directory, str(job_id))
             return {"status": "skipped", "session": session_id, "candidateFile": candidate_file}
@@ -1466,12 +1405,10 @@ def execute_inference(job_id, request, context):
             settings=settings,
             filename_prefix=output_prefix,
         )
-        provider_job_id = inference_runtime.queue_workflow(workflow)
+        provider_job_id = inference_runtime.queue_managed_workflow(str(job_id), workflow)
         execution_update_job(
             str(job_id),
             details={
-                "providerJobId": provider_job_id,
-                "providerStatus": "pending",
                 "session": session_id,
                 "resultFolder": _session_result_folder(session_directory),
             },
@@ -1562,14 +1499,18 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
     if include_base:
         candidates.append({"kind": "base", "label": "Base", "file": ""})
     candidates.extend(
-        {"kind": "lora", "label": path.name, "file": path.name}
+        {
+            "kind": "lora",
+            "label": path.name,
+            "file": path.name,
+            "provenance": _staged_lora_provenance(path),
+        }
         for path in loras
     )
     payload = {
         "status": "queued",
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,
-        "source": str(request.get("source") or ""),
         "ownerFolder": folder,
         "session": session_directory.name,
         "name": str(request.get("name") or ""),
@@ -1591,6 +1532,15 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "workflowFile": str(request.get("workflowFile") or ""),
         "workflowSha256": str(request.get("workflowSha256") or ""),
         "includeBase": bool(include_base),
+        "candidates": [
+            {
+                "kind": candidate["kind"],
+                "fileName": candidate["file"],
+                "label": candidate["label"],
+                "provenance": dict(candidate.get("provenance") or {}),
+            }
+            for candidate in candidates
+        ],
         "results": [],
         "resultFolder": _session_result_folder(session_directory),
         "inferenceJobs": [],
@@ -1613,7 +1563,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 "candidateFile": candidate["file"],
                 "candidateLabel": candidate["label"],
                 "candidateIndex": index,
-                "source": str(request.get("source") or ""),
+                "candidateProvenance": dict(candidate.get("provenance") or {}),
                 "wildcardValues": _resolved_wildcard_values(
                     request.get("sourcePrompt"),
                     request.get("prompt"),
@@ -1791,8 +1741,9 @@ def reconcile_startup():
                         continue
 
                 model = get_test_model(request.get("modelId") or request.get("model"))
-                selected = _selected_lora_files(
-                    _test_directory(folder_path, model),
+                selected = _selected_lora_files_for_set(
+                    folder_path,
+                    model,
                     selected_files=request.get("selectedFiles"),
                 )
                 _enqueue_frozen_test_request(
@@ -1823,7 +1774,7 @@ def reconcile_startup():
 
 
 def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
-            include_base=True, model_id=None, source=None, aspect_ratio=None, megapixels=None, duration=None):
+            include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None):
     reconcile_startup()
     request, loras, include_base = _new_inference_request(
         folder_path,
@@ -1834,7 +1785,6 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
         selected_files=selected_files,
         include_base=include_base,
         model_id=model_id,
-        source=source,
         aspect_ratio=aspect_ratio,
         megapixels=megapixels,
         duration=duration,
@@ -1863,7 +1813,8 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
     }
 
 
-def queued_jobs(folder_path, source=None, model_id=None):
+
+def queued_jobs(folder_path, model_id=None):
     reconcile_startup()
     jobs = []
     selected_model_id = str(model_id or "").strip()
@@ -1872,7 +1823,7 @@ def queued_jobs(folder_path, source=None, model_id=None):
         key=lambda path: path.name.lower(),
     ):
         visible = _sync_inference_session(session_directory)
-        if not visible or not _session_matches_source(visible, folder_path, source) or visible.get("status") != "queued":
+        if not visible or visible.get("status") != "queued":
             continue
         if selected_model_id and str(visible.get("modelId") or visible.get("model") or "") != selected_model_id:
             continue
@@ -1895,14 +1846,12 @@ def queued_jobs(folder_path, source=None, model_id=None):
     jobs.sort(key=lambda item: (int(item.get("queuePosition") or 0) or 10 ** 9, item["createdAt"]))
     return {"operation": "test_queue", "jobs": jobs}
 
-
 def cancel_queued(folder_path, job_id):
     reconcile_startup()
     session_directory = _session_directory(folder_path, str(job_id or "").strip())
     visible = _sync_inference_session(session_directory)
     if visible.get("status") != "queued":
         raise RuntimeError("Only a fully queued Test session can be cancelled here.")
-    source = _session_source(visible, folder_path)
     status_payload = _read_status(session_directory) or {}
     for child in _session_job_records(status_payload):
         if str(child.get("status") or "") in {"backlog", "queued"}:
@@ -1915,22 +1864,20 @@ def cancel_queued(folder_path, job_id):
     return {
         "operation": "test_queue_cancel",
         "removed": str(job_id),
-        "source": source,
         "jobs": queued_jobs(
             folder_path,
-            source=source,
             model_id=str(visible.get("modelId") or visible.get("model") or ""),
         )["jobs"],
     }
 
 
-def clear_queued(folder_path, source=None, model_id=None):
+
+def clear_queued(folder_path, model_id=None):
     removed = 0
-    for job in list(queued_jobs(folder_path, source=source, model_id=model_id)["jobs"]):
+    for job in list(queued_jobs(folder_path, model_id=model_id)["jobs"]):
         cancel_queued(folder_path, job["id"])
         removed += 1
-    return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path, source=source, model_id=model_id)["jobs"]}
-
+    return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path, model_id=model_id)["jobs"]}
 
 def _visible_session_status(folder_path, session_directory):
     status_payload = _read_status(session_directory) or {}
@@ -1943,7 +1890,8 @@ def _visible_session_status(folder_path, session_directory):
     return payload
 
 
-def list_sessions(folder_path, source=None, model_id=None):
+
+def list_sessions(folder_path, model_id=None):
     sessions = []
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
@@ -1953,7 +1901,7 @@ def list_sessions(folder_path, source=None, model_id=None):
         reverse=True,
     ):
         payload = _visible_session_status(folder_path, session)
-        if not payload or not _session_matches_source(payload, folder_path, source) or payload.get("status") == "queued":
+        if not payload or payload.get("status") == "queued":
             continue
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
         if selected_model_id and session_model_id != selected_model_id:
@@ -1962,7 +1910,6 @@ def list_sessions(folder_path, source=None, model_id=None):
             "session": session.name,
             "name": str(payload.get("name") or ""),
             "modelId": str(payload.get("modelId") or payload.get("model") or ""),
-            "source": _session_source(payload, folder_path),
             "ownerFolder": str(payload.get("ownerFolder") or _relative_set_folder(folder_path)),
             "status": str(payload.get("status") or ""),
             "startedAt": int(payload.get("startedAt") or 0),
@@ -1977,7 +1924,7 @@ def list_sessions(folder_path, source=None, model_id=None):
     return sessions
 
 
-def _latest_status(folder_path, model_id=None, source=None):
+def _latest_status(folder_path, model_id=None):
     selected_model = str(model_id or "").strip()
     sessions = sorted(
         _session_directories(folder_path),
@@ -1989,8 +1936,6 @@ def _latest_status(folder_path, model_id=None, source=None):
         payload = _visible_session_status(folder_path, session)
         if not payload:
             continue
-        if not _session_matches_source(payload, folder_path, source):
-            continue
         if selected_model and str(payload.get("modelId") or payload.get("model") or "") != selected_model:
             continue
         payloads.append(payload)
@@ -2000,26 +1945,26 @@ def _latest_status(folder_path, model_id=None, source=None):
     return payloads[0] if payloads else {"status": "idle"}
 
 
-def _visible_status(folder_path, model_id=None, source=None):
-    return _latest_status(folder_path, model_id=model_id, source=source)
+def _visible_status(folder_path, model_id=None):
+    return _latest_status(folder_path, model_id=model_id)
 
 
-def status(folder_path, model_id=None, source=None):
-    payload = _visible_status(folder_path, model_id=model_id, source=source)
+def status(folder_path, model_id=None):
+    payload = _visible_status(folder_path, model_id=model_id)
     session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
     if not session_name:
         return payload
     return _with_session_ratings(_session_directory(folder_path, session_name), payload)
 
 
-def stop(folder_path, session_name=None, source=None):
+def stop(folder_path, session_name=None):
     reconcile_startup()
     session_id = str(session_name or "").strip()
     if session_id:
         session_directory = _session_directory(folder_path, session_id)
         payload = _visible_session_status(folder_path, session_directory)
     else:
-        payload = _latest_status(folder_path, source=source)
+        payload = _latest_status(folder_path)
         session_id = str(payload.get("session") or "").strip()
         session_directory = _session_directory(folder_path, session_id) if session_id else None
     if not session_id or session_directory is None or payload.get("status") not in {"running", "stopping"}:
@@ -2041,23 +1986,80 @@ def stop(folder_path, session_name=None, source=None):
     return _sync_inference_session(session_directory)
 
 
+def _invalidate_recent_session_caches():
+    _recent_sets_cache["items"] = []
+    _recent_sets_cache["expires"] = 0.0
+    _recent_prompts_cache["items"] = []
+    _recent_prompts_cache["root"] = None
+    _recent_prompts_cache["expires"] = 0.0
+
+
+def _all_owned_session_directories(folder_path):
+    sessions = []
+    seen_paths = set()
+    for root in _session_roots(folder_path):
+        if not root.is_dir() or root.is_symlink():
+            continue
+        for session in root.iterdir():
+            if session.is_symlink() or not session.is_dir() or not (session / "test.json").is_file():
+                continue
+            key = str(session.resolve())
+            if key in seen_paths:
+                continue
+            payload = _read_status(session) or {}
+            if not _session_belongs_to_folder(folder_path, session, payload):
+                continue
+            seen_paths.add(key)
+            sessions.append(session)
+    return sessions
+
+
+def session_cleanup_status(folder_path):
+    sessions = _all_owned_session_directories(folder_path)
+    active = sorted(
+        session.name
+        for session in sessions
+        if _session_has_nonterminal_jobs(session)
+    )
+    return {
+        "count": len(sessions),
+        "active": active,
+    }
+
+
+def clear_sessions(folder_path):
+    sessions = _all_owned_session_directories(folder_path)
+    active = sorted(
+        session.name
+        for session in sessions
+        if _session_has_nonterminal_jobs(session)
+    )
+    if active:
+        raise RuntimeError(
+            "Cannot clear Test Generations sessions while active work remains: " + ", ".join(active)
+        )
+    for session in sessions:
+        shutil.rmtree(session)
+    if sessions:
+        _invalidate_recent_session_caches()
+    return len(sessions)
+
+
 def delete_session(folder_path, session_name):
     session = _session_directory(folder_path, session_name)
     session_payload = _read_status(session) or {}
-    source = _session_source(session_payload, folder_path)
     model_id = str(session_payload.get("modelId") or session_payload.get("model") or get_test_model().PROFILE_ID)
     if isinstance(session_payload.get("inferenceJobs"), list) and _session_has_nonterminal_jobs(session):
         raise RuntimeError("Cannot delete an active Test Generations session. Stop it first.")
     shutil.rmtree(session)
+    _invalidate_recent_session_caches()
     return {
         "operation": "test_delete_session",
         "deleted": Path(session_name).name,
         "modelId": model_id,
-        "source": source,
-        "sessions": list_sessions(folder_path, source=source, model_id=model_id),
-        "latest": _latest_status(folder_path, model_id=model_id, source=source),
+        "sessions": list_sessions(folder_path, model_id=model_id),
+        "latest": _latest_status(folder_path, model_id=model_id),
     }
-
 
 def _remove_candidate_from_session(folder_path, session_name, candidate_name):
     session = _session_directory(folder_path, session_name)
@@ -2120,7 +2122,6 @@ def activity_snapshot(folder_path=None):
         owner_folder = str(visible.get("ownerFolder") or key[0])
         active.append({
             "folder": owner_folder,
-            "source": _session_source(visible, set_folder),
             "modelId": str(visible.get("modelId") or visible.get("model") or ""),
             "session": key[1],
             "status": str(visible.get("status") or "running"),
@@ -2129,5 +2130,10 @@ def activity_snapshot(folder_path=None):
             "ownerAvailable": _owner_folder_available(owner_folder),
         })
     current = test_presence(folder_path) if folder_path is not None else None
-    return {"active": active, "current": current, "recent": recent_test_sets()}
+    return {
+        "active": active,
+        "current": current,
+        "recent": recent_test_sets(),
+        "recentPrompts": recent_test_prompts(),
+    }
 

@@ -483,8 +483,8 @@ def test_completed_generation_becomes_story_take_with_frozen_provenance(storyboa
     monkeypatch.setattr(storyboard_generation, "get_inference_model", lambda _model_id: FakeModel())
     monkeypatch.setattr(
         storyboard_generation.inference_runtime,
-        "queue_workflow",
-        lambda _workflow: "comfy-123",
+        "queue_managed_workflow",
+        lambda _job_id, _workflow: "comfy-123",
     )
     monkeypatch.setattr(
         storyboard_generation.inference_runtime,
@@ -642,7 +642,7 @@ def test_storyboard_generation_cleans_owned_comfy_reference_inputs_after_capture
     monkeypatch.setattr(storyboard_generation.inference_runtime, "upload_image", lambda _path, subfolder, filename=None: subfolder + "/" + str(filename))
     monkeypatch.setattr(storyboard_generation.inference_runtime, "available_names", lambda *_args: [])
     monkeypatch.setattr(storyboard_generation.inference_runtime, "resolve_name", lambda value, *_args: value)
-    monkeypatch.setattr(storyboard_generation.inference_runtime, "queue_workflow", lambda _workflow: "comfy-123")
+    monkeypatch.setattr(storyboard_generation.inference_runtime, "queue_managed_workflow", lambda _job_id, _workflow: "comfy-123")
     output_ref = {"filename": "render.mp4", "subfolder": "webcap-storyboard", "type": "output"}
     monkeypatch.setattr(storyboard_generation.inference_runtime, "wait_for_output", lambda *_args: output_ref)
     monkeypatch.setattr(storyboard_generation.inference_runtime, "download_output", lambda _ref: b"video")

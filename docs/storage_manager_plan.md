@@ -380,23 +380,25 @@ The filesystem archive is the long-term record. A future archive browser may be 
 
 #### Retention contract
 
-Finalization is destructive cleanup with one deliberately retained result.
+Finalization is destructive cleanup after the selected epoch has already been copied into the configured production LoRA folder.
 
 Keep:
 
-- the **selected `epochN/` folder**, unchanged, including its selected `.safetensors`;
-- `webcap-run.json`, including selected epoch/step/time;
+- `webcap-run.json`, including selected epoch/step/time and the recorded production LoRA destination;
 - TensorBoard `events.out.tfevents*`;
 - the copied training config(s) already present in the trainer run;
 - `latest`;
-- other small non-resume evidence already present in the trainer timestamp folder when retaining it is cheap and unambiguous.
+- other small non-resume evidence already present in the trainer timestamp folder when retaining it is cheap and unambiguous;
+- only user-selected **alternate** `epochN/` folders retained as temporary backup candidates.
 
 Delete:
 
-- every unselected `epoch*` folder;
-- every `global_step*` folder.
+- the original selected `epochN/` folder after the recorded production LoRA has been re-resolved and verified;
+- every unretained `epoch*` folder;
+- every `global_step*` folder;
+- staged Test LoRA copies owned by this exact training job. Completed Test Generation sessions remain independent and are not deleted by finalization.
 
-Do not flatten or rename the selected epoch. The archive should retain the actual chosen artifact in the same `epochN/` structure that existed during training.
+The selected production LoRA is intentionally **not duplicated into Archive**. Archive alternates are fallback copies only.
 
 Keeping `latest` is harmless and useful evidence. Resume validation requires that its referenced `global_stepN` directory also exist; after all `global_step*` folders are pruned, `latest` alone must not make an archived run resumable.
 
@@ -419,8 +421,10 @@ The operation should:
 1. verify and, where useful, enrich the compact `webcap-run.json` record before destructive cleanup;
 2. remove all unselected `epoch*` folders;
 3. remove all `global_step*` folders;
-4. retain the selected epoch and small experiment evidence listed above;
-5. move the finalized trainer timestamp folder from the managed runs tree to the archive root.
+4. retain only explicitly chosen alternate epochs plus the small experiment evidence listed above;
+5. remove staged Test candidate copies owned by this exact run;
+6. move the compact finalized trainer timestamp folder from the managed runs tree to the flat archive root;
+7. remove now-empty managed action/set shells when no sibling output or live/queued work remains.
 
 A same-filesystem atomic rename is preferred. A configurable archive root may live on another filesystem, so cross-filesystem finalization must use copy -> verify -> remove-source semantics. Failure before the final source removal must remain recoverable and must not silently destroy the only selected artifact.
 
@@ -440,11 +444,12 @@ After archive:
 
 ```text
 filesystem archive folder
--> selected epoch + webcap-run.json + small experiment evidence
--> no active WebCap ownership
+-> webcap-run.json + curve/config evidence + optional alternate backup epochs
+-> selected production LoRA remains in the normal LoRA folder
+-> no active Training ownership
 ```
 
-The retained manifest is portable evidence for the user or future tooling, not a reason for WebCap to maintain an archive database today.
+The retained manifest is portable evidence and now powers a lightweight read-only Archive list in Training. Storage Manager also surfaces archived runs for size/accounting and explicit deletion; no separate archive database is required.
 
 
 #### Deferred implementation notes / risks

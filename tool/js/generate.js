@@ -6,6 +6,10 @@
     unavailableModels: [],
     modelId: window.localStorage.getItem('webcap.generate.model') || '',
     lorasByModel: {},
+    loraMode: window.localStorage.getItem('webcap.generate.loraMode') === 'sweep' ? 'sweep' : 'selected',
+    sweepFolderByModel: {},
+    sweepSelections: {},
+    sweepSubmissionSerial: 0,
     promptLibrary: { items: [], open: false, activeId: '', query: '' },
     director: {
       models: [],
@@ -21,7 +25,8 @@
       activityLoadBaseline: null,
       activityLoadModelId: '',
       activitySlotSample: null,
-      jobId: ''
+      jobId: '',
+      requestDiagnostic: null
     },
     trackedJobIds: loadTrackedGenerateJobs(),
     results: [],
@@ -29,8 +34,7 @@
     activeResultKey: '',
     activePendingJobId: '',
     takesCollapsed: window.localStorage.getItem('webcap.generate.takesCollapsed') === '1',
-    open: false,
-    timer: 0
+    open: false
   };
 
   function el(id) { return document.getElementById(id); }
@@ -130,6 +134,200 @@
     window.localStorage.setItem('webcap.generate.loras.' + id, JSON.stringify(savedLoras(id)));
   }
 
+  function loraFolder(name) {
+    var normalized = String(name || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    var index = normalized.lastIndexOf('/');
+    return index === -1 ? '' : normalized.slice(0, index);
+  }
+
+  function sweepFolders(model) {
+    var seen = {};
+    availableSweepLoras(model).forEach(function (name) {
+      seen[loraFolder(name)] = true;
+    });
+    return Object.keys(seen).sort(function (left, right) {
+      if (!left) return -1;
+      if (!right) return 1;
+      return left.localeCompare(right, undefined, { sensitivity: 'base' });
+    });
+  }
+
+  function availableSweepLoras(model) {
+    var fixed = savedLoras(String(model && model.id || '')).map(function (item) {
+      return String(item.name || '').replace(/\\/g, '/').toLowerCase();
+    });
+    return (model && Array.isArray(model.loras) ? model.loras : []).filter(function (name) {
+      return fixed.indexOf(String(name || '').replace(/\\/g, '/').toLowerCase()) === -1;
+    });
+  }
+
+  function savedSweepFolder(modelId, folders) {
+    var id = String(modelId || '');
+    var available = Array.isArray(folders) ? folders : [];
+    if (!Object.prototype.hasOwnProperty.call(generateState.sweepFolderByModel, id)) {
+      var saved = window.localStorage.getItem('webcap.generate.sweepFolder.' + id);
+      generateState.sweepFolderByModel[id] = saved === null ? '' : String(saved);
+    }
+    var selected = String(generateState.sweepFolderByModel[id] || '');
+    if (available.indexOf(selected) === -1) selected = available.length ? available[0] : '';
+    generateState.sweepFolderByModel[id] = selected;
+    return selected;
+  }
+
+  function sweepLoras(model, folder) {
+    return availableSweepLoras(model).filter(function (name) {
+      return loraFolder(name) === String(folder || '');
+    });
+  }
+
+  function sweepSelectionKey(modelId, folder) {
+    return String(modelId || '') + '|' + String(folder || '');
+  }
+
+  function selectedSweepLoras(model, folder) {
+    var available = sweepLoras(model, folder);
+    var key = sweepSelectionKey(model && model.id, folder);
+    if (!Object.prototype.hasOwnProperty.call(generateState.sweepSelections, key)) {
+      generateState.sweepSelections[key] = available.reduce(function (selected, name) {
+        selected[name] = true;
+        return selected;
+      }, {});
+    }
+    var selected = generateState.sweepSelections[key];
+    Object.keys(selected).forEach(function (name) {
+      if (available.indexOf(name) === -1) delete selected[name];
+    });
+    return available.filter(function (name) { return selected[name] === true; });
+  }
+
+  function setSweepSelection(model, folder, name, selected) {
+    var available = sweepLoras(model, folder);
+    if (available.indexOf(name) === -1) throw new Error('Sweep LoRA is not available in the selected folder.');
+    var key = sweepSelectionKey(model && model.id, folder);
+    selectedSweepLoras(model, folder);
+    generateState.sweepSelections[key][name] = !!selected;
+  }
+
+  function syncSweepSelectionState() {
+    var model = currentModel();
+    var folders = sweepFolders(model);
+    var folder = savedSweepFolder(model && model.id, folders);
+    var names = sweepLoras(model, folder);
+    var selectedNames = selectedSweepLoras(model, folder);
+    var summary = el('generate-sweep-summary');
+    var allButton = el('generate-sweep-all');
+    var noneButton = el('generate-sweep-none');
+    if (!summary || !allButton || !noneButton) throw new Error('Generate Sweep selection controls are missing.');
+
+    summary.textContent = names.length
+      ? selectedNames.length + ' of ' + names.length + ' selected · ' + (folder || 'root')
+      : 'No LoRAs available for Sweep.';
+    allButton.disabled = !names.length || selectedNames.length === names.length;
+    noneButton.disabled = !selectedNames.length;
+    syncGenerateRunLabel();
+  }
+
+  function setAllSweepSelections(selected) {
+    var model = currentModel();
+    var folders = sweepFolders(model);
+    var folder = savedSweepFolder(model && model.id, folders);
+    var key = sweepSelectionKey(model && model.id, folder);
+    generateState.sweepSelections[key] = sweepLoras(model, folder).reduce(function (values, name) {
+      values[name] = !!selected;
+      return values;
+    }, {});
+    el('generate-sweep-list').querySelectorAll('[data-generate-sweep-lora]').forEach(function (checkbox) {
+      checkbox.checked = !!selected;
+    });
+    syncSweepSelectionState();
+  }
+
+  function syncGenerateRunLabel() {
+    var button = el('generate-run-btn');
+    if (!button) return;
+    var submitBusy = button.dataset.generateSubmitBusy === '1';
+    if (generateState.loraMode !== 'sweep') {
+      button.textContent = 'Generate';
+      button.disabled = generateState.director.busy || submitBusy;
+      return;
+    }
+    var model = currentModel();
+    var folders = sweepFolders(model);
+    var folder = savedSweepFolder(model && model.id, folders);
+    var count = selectedSweepLoras(model, folder).length +
+      (el('generate-sweep-base') && el('generate-sweep-base').checked ? 1 : 0);
+    button.textContent = count ? 'Generate Sweep (' + count + ')' : 'Generate Sweep';
+    button.disabled = generateState.director.busy || submitBusy || count === 0;
+  }
+
+  function renderSweep() {
+    var model = currentModel();
+    var select = el('generate-sweep-folder');
+    var summary = el('generate-sweep-summary');
+    var host = el('generate-sweep-list');
+    var filter = el('generate-sweep-filter');
+    var allButton = el('generate-sweep-all');
+    var noneButton = el('generate-sweep-none');
+    if (!select || !summary || !host || !filter || !allButton || !noneButton) {
+      throw new Error('Generate Sweep controls are missing.');
+    }
+
+    var folders = sweepFolders(model);
+    var folder = savedSweepFolder(model && model.id, folders);
+    select.innerHTML = folders.map(function (value) {
+      var label = value || '(Root)';
+      return '<option value="' + escapeHtml(value) + '">' + escapeHtml(label) + '</option>';
+    }).join('');
+    select.disabled = !folders.length;
+    if (folders.length) select.value = folder;
+
+    var names = sweepLoras(model, folder);
+    var selectedNames = selectedSweepLoras(model, folder);
+    var selectedLookup = selectedNames.reduce(function (values, name) {
+      values[name] = true;
+      return values;
+    }, {});
+    var query = String(filter.value || '').trim().toLowerCase();
+    var visibleNames = query
+      ? names.filter(function (name) { return String(name || '').toLowerCase().indexOf(query) !== -1; })
+      : names;
+
+    host.innerHTML = visibleNames.length
+      ? visibleNames.map(function (name) {
+          var leaf = String(name || '').split('/').pop();
+          var parent = loraFolder(name);
+          return '<label class="generate-sweep-row" title="' + escapeHtml(name) + '">' +
+            '<input type="checkbox" data-generate-sweep-lora="' + escapeHtml(name) + '"' +
+              (selectedLookup[name] ? ' checked' : '') + '>' +
+            '<span class="generate-sweep-row-copy"><strong>' + escapeHtml(leaf) + '</strong>' +
+              (parent ? '<small>' + escapeHtml(parent) + '</small>' : '') +
+            '</span>' +
+          '</label>';
+        }).join('')
+      : '<div class="generate-sweep-empty">No matching LoRAs</div>';
+    syncSweepSelectionState();
+  }
+
+  function setLoraMode(mode) {
+    var selectedMode = mode === 'sweep' ? 'sweep' : 'selected';
+    generateState.loraMode = selectedMode;
+    window.localStorage.setItem('webcap.generate.loraMode', selectedMode);
+
+    var selectedTab = el('generate-lora-selected-tab');
+    var sweepTab = el('generate-lora-sweep-tab');
+    var selectedPanel = el('generate-lora-selected-panel');
+    var sweepPanel = el('generate-lora-sweep-panel');
+    if (!selectedTab || !sweepTab || !selectedPanel || !sweepPanel) throw new Error('Generate LoRA mode controls are missing.');
+
+    selectedTab.classList.toggle('active', selectedMode === 'selected');
+    sweepTab.classList.toggle('active', selectedMode === 'sweep');
+    selectedTab.setAttribute('aria-pressed', selectedMode === 'selected' ? 'true' : 'false');
+    sweepTab.setAttribute('aria-pressed', selectedMode === 'sweep' ? 'true' : 'false');
+    sweepPanel.classList.toggle('hidden', selectedMode !== 'sweep');
+    if (selectedMode === 'sweep') renderSweep();
+    else syncGenerateRunLabel();
+  }
+
   function populateModelSelector() {
     var select = el('generate-model');
     if (!select) return;
@@ -211,9 +409,11 @@
     if (base) {
       base.textContent = (model.baseLoras || []).length
         ? 'Required workflow LoRA: ' + model.baseLoras.join(', ')
-        : 'No required workflow LoRAs.';
+        : '';
+      base.classList.toggle('hidden', !(model.baseLoras || []).length);
     }
     renderLoras();
+    setLoraMode(generateState.loraMode);
   }
 
   function renderLoras() {
@@ -222,6 +422,7 @@
     var items = savedLoras(String(generateState.modelId || ''));
     if (!items.length) {
       host.innerHTML = '<div class="generate-empty-inline">No added LoRAs.</div>';
+      renderSweep();
       return;
     }
     host.innerHTML = items.map(function (item, index) {
@@ -231,6 +432,7 @@
         '<button type="button" class="review-captions-btn" data-generate-lora-remove="' + index + '">Remove</button>' +
       '</div>';
     }).join('');
+    renderSweep();
   }
 
   function addLora() {
@@ -340,17 +542,82 @@
     });
   }
 
-  function collectReferences() {
-    var model = currentModel();
-    var references = {};
-    var uploadedPaths = [];
-    var roles = (model && model.references || []).slice();
-    var chain = Promise.resolve();
+  function syncReferenceDropzone(role) {
+    var input = el('generate-reference-' + role);
+    var zone = document.querySelector('[data-generate-reference-dropzone="' + role + '"]');
+    var name = document.querySelector('[data-generate-reference-name="' + role + '"]');
+    var clear = document.querySelector('[data-generate-reference-clear="' + role + '"]');
+    if (!input || !zone || !name || !clear) throw new Error('Generate reference dropzone markup is missing for ' + role + '.');
+    var file = input.files && input.files[0];
+    zone.classList.toggle('has-file', !!file);
+    name.textContent = file ? file.name : 'No file selected';
+    clear.classList.toggle('hidden', !file);
+    clear.disabled = input.disabled;
+  }
 
-    roles.forEach(function (role) {
+  function setReferenceInputFile(input, file) {
+    if (!file) return;
+    if (file.type && file.type.indexOf('image/') !== 0) {
+      window.alert('Reference files must be images.');
+      return;
+    }
+    var transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function bindReferenceDropzones() {
+    ['first_frame', 'last_frame'].forEach(function (role) {
+      var input = el('generate-reference-' + role);
+      var zone = document.querySelector('[data-generate-reference-dropzone="' + role + '"]');
+      var clear = document.querySelector('[data-generate-reference-clear="' + role + '"]');
+      if (!input || !zone || !clear) throw new Error('Generate reference dropzone markup is missing for ' + role + '.');
+
+      input.addEventListener('change', function () { syncReferenceDropzone(role); });
+      ['dragenter', 'dragover'].forEach(function (eventName) {
+        zone.addEventListener(eventName, function (event) {
+          event.preventDefault();
+          if (input.disabled) return;
+          zone.classList.add('is-dragover');
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+        });
+      });
+      zone.addEventListener('dragleave', function (event) {
+        if (!event.relatedTarget || !zone.contains(event.relatedTarget)) zone.classList.remove('is-dragover');
+      });
+      zone.addEventListener('drop', function (event) {
+        event.preventDefault();
+        zone.classList.remove('is-dragover');
+        if (input.disabled) return;
+        setReferenceInputFile(input, event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
+      });
+      clear.addEventListener('click', function () {
+        input.value = '';
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      syncReferenceDropzone(role);
+    });
+  }
+
+  function captureReferenceFiles(model) {
+    var files = {};
+    (model && Array.isArray(model.references) ? model.references : []).forEach(function (role) {
       var input = el('generate-reference-' + role);
       var file = input && input.files && input.files[0];
-      if (!file) return;
+      if (file) files[role] = file;
+    });
+    return files;
+  }
+
+  function uploadReferenceFiles(referenceFiles) {
+    var files = referenceFiles && typeof referenceFiles === 'object' ? referenceFiles : {};
+    var references = {};
+    var uploadedPaths = [];
+    var chain = Promise.resolve();
+
+    Object.keys(files).forEach(function (role) {
+      var file = files[role];
       chain = chain.then(function () {
         return uploadReference(file).then(function (path) {
           references[role] = path;
@@ -366,6 +633,10 @@
         throw err;
       });
     });
+  }
+
+  function collectReferences() {
+    return uploadReferenceFiles(captureReferenceFiles(currentModel()));
   }
 
   function promptLibraryItem(promptId) {
@@ -513,6 +784,95 @@
     }).then(function () {
       delete button.dataset.generateSubmitBusy;
       syncPromptAssistantDependencies();
+    });
+  }
+
+
+  function frozenSweepSettings() {
+    var settings = collectSettings();
+    if (Object.prototype.hasOwnProperty.call(settings, 'seed')) {
+      var seed = Number(settings.seed);
+      if (!Number.isFinite(seed) || seed < 0) {
+        var values = new Uint32Array(1);
+        window.crypto.getRandomValues(values);
+        settings.seed = String(values[0]);
+      }
+    }
+    return settings;
+  }
+
+  function captureSweepSubmission() {
+    if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before generating.');
+    var model = currentModel();
+    var prompt = String(el('generate-prompt').value || '').trim();
+    if (!model) throw new Error('Choose a Base Model.');
+    if (!prompt) throw new Error('Enter a generation prompt.');
+
+    var folders = sweepFolders(model);
+    var folder = savedSweepFolder(model.id, folders);
+    var names = selectedSweepLoras(model, folder).slice();
+    var includeBase = !!(el('generate-sweep-base') && el('generate-sweep-base').checked);
+    var strength = Number(el('generate-sweep-strength').value);
+    if (!Number.isFinite(strength)) throw new Error('Sweep LoRA strength must be numeric.');
+    if (!names.length && !includeBase) throw new Error('Select at least one Sweep LoRA or include the fixed-only baseline.');
+
+    generateState.sweepSubmissionSerial += 1;
+    return {
+      id: generateState.sweepSubmissionSerial,
+      modelId: String(model.id || ''),
+      prompt: prompt,
+      settings: Object.assign({}, frozenSweepSettings()),
+      fixedLoras: savedLoras(model.id).map(function (item) {
+        return { name: item.name, strength: item.strength };
+      }),
+      strength: strength,
+      items: includeBase ? [null].concat(names) : names,
+      referenceFiles: captureReferenceFiles(model)
+    };
+  }
+
+  function setSweepSubmissionStatus(submission, message, tone) {
+    if (submission.id === generateState.sweepSubmissionSerial) setStatus(message, tone);
+  }
+
+  function runGenerateSweep() {
+    var submission = captureSweepSubmission();
+    var queued = 0;
+    setSweepSubmissionStatus(submission, 'Queueing Sweep…');
+
+    var chain = Promise.resolve();
+    submission.items.forEach(function (name) {
+      chain = chain.then(function () {
+        return uploadReferenceFiles(submission.referenceFiles);
+      }).then(function (references) {
+        return postJson('/fs/generate', {
+          modelId: submission.modelId,
+          prompt: submission.prompt,
+          settings: Object.assign({}, submission.settings),
+          loras: submission.fixedLoras.concat(name ? [{ name: name, strength: submission.strength }] : []),
+          references: references
+        });
+      }).then(function (payload) {
+        queued += 1;
+        trackGenerateJob(payload.job && payload.job.jobId);
+        syncGenerationPreviewCard(payload.job);
+        setSweepSubmissionStatus(submission, 'Queued Sweep · ' + queued + ' / ' + submission.items.length);
+      });
+    });
+
+    return chain.then(function () {
+      return typeof window.refreshInferenceQueue === 'function' ? window.refreshInferenceQueue() : null;
+    }).then(function () {
+      setSweepSubmissionStatus(
+        submission,
+        'Sweep queued · ' + queued + ' generation' + (queued === 1 ? '' : 's') + '.'
+      );
+    }).catch(function (err) {
+      if (submission.id === generateState.sweepSubmissionSerial) {
+        reportError(err, 'Sweep stopped · ' + queued + ' / ' + submission.items.length + ' queued');
+      } else if (typeof window.reportConsoleError === 'function') {
+        window.reportConsoleError('Generate', String(err && err.message ? err.message : err));
+      }
     });
   }
 
@@ -833,6 +1193,15 @@
 
         untrackGenerateJob(jobId);
         if (status === 'completed') {
+          window.recordActivityCompletion({
+            id: jobId,
+            kind: 'generate',
+            lane: 'inference',
+            status: 'completed',
+            label: 'Generation',
+            modelId: String(job.modelId || ''),
+            finishedAt: job.finishedAt
+          });
           refreshResultsNeeded = true;
           if (generateState.open) setStatus('Generation complete.');
           return;
@@ -1044,7 +1413,7 @@
   }
 
   function directorJobPollDelay(job) {
-    return String(job && job.status || '') === 'queued' ? 2000 : 1000;
+    return String(job && job.status || '') === 'queued' ? 3000 : 1500;
   }
 
   function waitForDirectorJob(job) {
@@ -1068,8 +1437,22 @@
     return postJson('/fs/generate/director', payload).then(function (response) {
       trackTransientLlmJob(response.job);
       generateState.director.jobId = String(response.job && response.job.jobId || '');
+      generateState.director.requestDiagnostic = response.job && response.job.request || null;
       return waitForDirectorJob(response.job);
     });
+  }
+
+  function generateDirectorRequestDiagnosticLabel(request) {
+    request = request && typeof request === 'object' ? request : null;
+    if (!request) return '';
+    var count = Number(request.messageCount) || 0;
+    var chars = Number(request.contentChars) || 0;
+    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Copy';
+  }
+
+  function copyGenerateDirectorRequestDiagnostic(request) {
+    if (!request || !Array.isArray(request.messages)) throw new Error('Prompt Assistant request diagnostic is missing its messages.');
+    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
   }
 
   function directorActivityForCurrentJob(activity, queue) {
@@ -1351,7 +1734,8 @@
     var phase = el('generate-director-activity-phase');
     var detail = el('generate-director-activity-detail');
     var stop = el('generate-director-stop');
-    if (!card || !phase || !detail || !stop) throw new Error('Prompt Assistant activity markup is missing.');
+    var copy = el('generate-director-prompt-copy');
+    if (!card || !phase || !detail || !stop || !copy) throw new Error('Prompt Assistant activity markup is missing.');
 
     var phaseName = String(activity && activity.phase || '');
     var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
@@ -1363,6 +1747,10 @@
     stop.classList.toggle('hidden', !canStop);
     stop.disabled = jobStatus === 'stopping';
     stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
+    var requestLabel = generateDirectorRequestDiagnosticLabel(generateState.director.requestDiagnostic);
+    copy.classList.toggle('hidden', !requestLabel);
+    copy.textContent = requestLabel;
+    copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
     if (!visible) return;
 
     positionDirectorActivity();
@@ -1447,7 +1835,7 @@
     }).then(function () {
       if (!directorActivityActive()) return;
       if (generateState.director.activityTimer) clearTimeout(generateState.director.activityTimer);
-      generateState.director.activityTimer = setTimeout(refreshDirectorActivity, 1500);
+      generateState.director.activityTimer = setTimeout(refreshDirectorActivity, 2500);
     });
   }
 
@@ -1456,6 +1844,7 @@
     if (assistant) assistant.open = true;
     generateState.director.activityStartedAt = Date.now() / 1000;
     generateState.director.activityHistory = [];
+    generateState.director.requestDiagnostic = null;
     generateState.director.activitySlotSample = null;
     renderDirectorActivity({ phase: 'preparing', active: true, startedAt: generateState.director.activityStartedAt }, null);
     refreshDirectorActivity();
@@ -1486,7 +1875,7 @@
     var runButton = el('generate-run-btn');
     if (!runButton) throw new Error('Generate action markup is missing.');
     var assistantBusy = generateState.director.busy;
-    runButton.disabled = assistantBusy || runButton.dataset.generateSubmitBusy === '1';
+    syncGenerateRunLabel();
 
     [
       'generate-model',
@@ -1503,6 +1892,7 @@
       var control = el(id);
       if (control) control.disabled = assistantBusy;
     });
+    ['first_frame', 'last_frame'].forEach(syncReferenceDropzone);
 
     document.querySelectorAll('[data-generate-prompt-use], [data-generate-open-result-key]').forEach(function (button) {
       button.disabled = assistantBusy;
@@ -1639,13 +2029,6 @@
     });
   }
 
-  function schedulePoll() {
-    if (generateState.timer) clearTimeout(generateState.timer);
-    generateState.timer = setTimeout(function () {
-      (generateState.open ? refreshResults() : Promise.resolve()).then(schedulePoll);
-    }, generateState.open ? 5000 : 12000);
-  }
-
   function openGenerateActivity(target) {
     target = target && typeof target === 'object' ? target : {};
     var targetJobId = String(target.jobId || '');
@@ -1673,7 +2056,6 @@
       refreshTrackedGenerateJobs(),
       refreshResults()
     ]).catch(reportError);
-    schedulePoll();
   }
 
   function closeGenerateActivity() {
@@ -1684,12 +2066,12 @@
     if (frame) frame.classList.remove('workspace-generate-open');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
-    schedulePoll();
   }
 
   function bindUi() {
     var workspace = el('generate-workspace');
     if (!workspace) throw new Error('Generate workspace markup is missing.');
+    bindReferenceDropzones();
 
     el('generate-create-mode-btn').onclick = function () {
       setGenerateViewMode('create');
@@ -1740,8 +2122,34 @@
     el('generate-lora-add').onclick = function () {
       try { addLora(); } catch (err) { reportError(err); }
     };
+    el('generate-lora-selected-tab').onclick = function () { setLoraMode('selected'); };
+    el('generate-lora-sweep-tab').onclick = function () { setLoraMode('sweep'); };
+    el('generate-sweep-folder').addEventListener('change', function () {
+      generateState.sweepFolderByModel[generateState.modelId] = this.value;
+      window.localStorage.setItem('webcap.generate.sweepFolder.' + generateState.modelId, this.value);
+      el('generate-sweep-filter').value = '';
+      renderSweep();
+    });
+    el('generate-sweep-filter').addEventListener('input', renderSweep);
+    el('generate-sweep-all').onclick = function () { setAllSweepSelections(true); };
+    el('generate-sweep-none').onclick = function () { setAllSweepSelections(false); };
+    el('generate-sweep-list').addEventListener('change', function (event) {
+      var checkbox = event.target.closest('[data-generate-sweep-lora]');
+      if (!checkbox) return;
+      var model = currentModel();
+      var folders = sweepFolders(model);
+      var folder = savedSweepFolder(model && model.id, folders);
+      setSweepSelection(model, folder, String(checkbox.dataset.generateSweepLora || ''), checkbox.checked);
+      syncSweepSelectionState();
+    });
+    el('generate-sweep-base').addEventListener('change', syncGenerateRunLabel);
     el('generate-run-btn').onclick = function () {
-      try { runGenerate(); } catch (err) { reportError(err, conciseGenerateError(err, 'Generation blocked')); }
+      try {
+        if (generateState.loraMode === 'sweep') runGenerateSweep();
+        else runGenerate();
+      } catch (err) {
+        reportError(err, conciseGenerateError(err, generateState.loraMode === 'sweep' ? 'Sweep blocked' : 'Generation blocked'));
+      }
     };
     el('generate-director-write').onclick = function () {
       try { runDirector('write_prompt'); } catch (err) { reportError(err); }
@@ -1761,6 +2169,19 @@
     };
     el('generate-director-stop').onclick = function () {
       stopDirectorJob();
+    };
+    el('generate-director-prompt-copy').onclick = function () {
+      var button = this;
+      var requestDiagnostic = generateState.director.requestDiagnostic;
+      copyGenerateDirectorRequestDiagnostic(requestDiagnostic).then(function () {
+        var original = generateDirectorRequestDiagnosticLabel(requestDiagnostic);
+        button.textContent = 'Copied';
+        window.setTimeout(function () {
+          if (generateState.director.requestDiagnostic === requestDiagnostic) button.textContent = original;
+        }, 1200);
+      }).catch(function (err) {
+        reportError(err);
+      });
     };
     window.addEventListener('resize', function () {
       if (directorActivityActive()) positionDirectorActivity();
@@ -1862,7 +2283,6 @@
         reportError(err, 'Configuration restore blocked');
       }
     });
-    schedulePoll();
   }
 
   window.openGenerateActivity = openGenerateActivity;

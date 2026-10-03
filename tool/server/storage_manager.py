@@ -10,18 +10,20 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .epoch_test_bench import delete_session
+from .director_model_assessment_store import assessment_root as director_assessment_root, delete_assessment as delete_director_assessment, list_assessments as list_director_assessments
 from .generate_store import MANIFEST_NAME
 from .execution_queue import ExecutionQueueStateError, get_job as execution_get_job, lane_snapshot as execution_lane_snapshot
 from . import inference_runtime
 from .storyboard_store import delete_take, list_stories, load_story, storyboard_root
 from .training_action import managed_actions, read_action
+from .training_archive import archive_root as training_archive_root, list_archives as list_training_archives
 from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
 
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
-MEASURABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy"}
-PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}
+MEASURABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy", "director_assessment"}
+PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy", "director_assessment"}
 ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
 ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
 GENERATE_REFERENCE_TOKEN_RE = re.compile(r"^[0-9]+-[0-9a-f]{12}$")
@@ -149,6 +151,74 @@ def _training_items(cache):
                 "folder": str(data.get("folder") or ""),
                 "profileId": str(data.get("profileId") or ""),
                 "createdAt": data.get("createdAt"),
+            },
+            cache=cache,
+        ))
+    return rows
+
+
+
+def _director_assessment_items(cache):
+    rows = []
+    root = director_assessment_root()
+    for assessment in list_director_assessments():
+        assessment_id = str(assessment.get("id") or "").strip()
+        if not assessment_id:
+            continue
+        path = root / (assessment_id + ".json")
+        model = assessment.get("model") if isinstance(assessment.get("model"), dict) else {}
+        active = bool(assessment.get("active"))
+        row = _item(
+            "director_assessment",
+            assessment_id,
+            model.get("label") or model.get("modelId") or assessment_id,
+            path,
+            kind="Director assessment evidence",
+            status=("active" if active else str(assessment.get("status") or "")),
+            purgeable=not active,
+            protected_reason=("Active Director assessment; stop or finish it before deletion." if active else ""),
+            meta={
+                "startedAt": assessment.get("startedAt"),
+                "finishedAt": assessment.get("finishedAt"),
+                "attemptCount": assessment.get("attemptCount"),
+                "modelRef": model.get("modelRef"),
+            },
+            cache=cache,
+        )
+        try:
+            stat = path.stat()
+        except OSError:
+            rows.append(row)
+            continue
+        row["measured"] = True
+        row["bytes"] = int(stat.st_size)
+        row["measuredAt"] = float(stat.st_mtime)
+        row["fileCount"] = 1
+        row["measurementSource"] = "producer"
+        rows.append(row)
+    return rows
+
+
+def _archive_items(cache):
+    root = training_archive_root()
+    rows = []
+    for archive in list_training_archives():
+        name = str(archive.get("name") or "")
+        path = root / name
+        alternates = archive.get("retainedAlternateEpochs") if isinstance(archive.get("retainedAlternateEpochs"), list) else []
+        rows.append(_item(
+            "archive",
+            name,
+            archive.get("runName") or name,
+            path,
+            kind="Archived training run",
+            status=("selected epoch " + str(archive.get("selectedEpoch") or "") + (" · " + str(len(alternates)) + " backup epoch(s)" if alternates else "")),
+            purgeable=True,
+            meta={
+                "sourceFolder": archive.get("sourceFolder"),
+                "archivedAt": archive.get("archivedAt"),
+                "selectedEpoch": archive.get("selectedEpoch"),
+                "retainedAlternateEpochs": alternates,
             },
             cache=cache,
         ))
@@ -460,9 +530,8 @@ def _test_items_for_folder(cache, folder, qualify_label=False):
 def _central_test_items(cache):
     rows = []
     seen_names = set()
-    for root in _central_test_roots():
-        if not root.is_dir() or root.is_symlink():
-            continue
+    root = _central_test_root()
+    if root.is_dir() and not root.is_symlink():
         for path in sorted(root.iterdir(), key=lambda candidate: candidate.name.lower(), reverse=True):
             if path.name in seen_names or not path.is_dir() or path.is_symlink():
                 continue
@@ -710,7 +779,7 @@ def _active_generate_reference_tokens():
             parts = PurePosixPath(str(raw_path or "").replace("\\", "/")).parts
             if (
                 len(parts) >= 4
-                and parts[0] == ".webcap_runtime"
+                and parts[0] == "work"
                 and parts[1] == "generate-references"
                 and GENERATE_REFERENCE_TOKEN_RE.fullmatch(parts[2])
             ):
@@ -942,6 +1011,8 @@ def overview(folder=""):
 
     groups = {
         "training": collect("training", lambda: _training_items(cache)),
+        "archive": _archive_items(cache),
+        "director_assessment": _director_assessment_items(cache),
         "tests": _test_items(cache, folder),
         "staged": collect("staged", lambda: _staged_items(cache, folder)),
         "generate": collect("generate", lambda: _generate_items(cache)),
@@ -955,6 +1026,8 @@ def overview(folder=""):
             "training", "Training", groups["training"], complete="training" not in unavailable,
             note=("Training queue state is unavailable; inventory is hidden until it can be read." if "training" in unavailable else "")
         ),
+        _category("archive", "Training Archives", groups["archive"]),
+        _category("director_assessment", "Director Assessments", groups["director_assessment"], note="Raw diagnostic evidence only; learned Director model results are preserved when this is deleted."),
         _category(
             "tests", "Tests", groups["tests"], complete=scan_complete,
             note=(
@@ -1084,28 +1157,11 @@ def _resolve_generate(item_id, *, require_manifest=False):
     return directory
 
 
-def _legacy_central_test_root():
-    return Path(app_config.FS_ROOT) / ".webcap" / "test-generations"
-
-
 def _central_test_root():
     root = app_config.output_root() / "test-generations"
     if root.is_symlink():
         raise ValueError("Central Test Session storage path is symlinked.")
     return root
-
-
-def _central_test_roots():
-    roots = [_central_test_root(), _legacy_central_test_root()]
-    unique = []
-    seen = set()
-    for root in roots:
-        key = str(Path(root).absolute())
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(Path(root))
-    return unique
 
 
 def _resolve_test(folder, session_id):
@@ -1128,12 +1184,11 @@ def _resolve_test(folder, session_id):
             raise FileNotFoundError("Test Session is unavailable.")
         return session
 
-    for central_root in _central_test_roots():
-        central_session = central_root / name
-        if central_session.is_symlink():
-            raise ValueError("Test Session storage path is symlinked.")
-        if central_session.is_dir() and (central_session / "test.json").is_file():
-            return central_session.resolve()
+    central_session = _central_test_root() / name
+    if central_session.is_symlink():
+        raise ValueError("Test Session storage path is symlinked.")
+    if central_session.is_dir() and (central_session / "test.json").is_file():
+        return central_session.resolve()
 
     raise FileNotFoundError("Test Session is unavailable.")
 
@@ -1289,6 +1344,30 @@ def resolve_item(area, item_id, folder=""):
     area = str(area or "").strip()
     if area == "training":
         return read_action(item_id)[0]
+    if area == "archive":
+        name = str(item_id or "").strip()
+        if not name or Path(name).name != name:
+            raise ValueError("Training Archive storage ID is invalid.")
+        root = training_archive_root()
+        raw = root / name
+        if root.is_symlink() or raw.is_symlink():
+            raise ValueError("Training Archive storage path is symlinked.")
+        path = raw.resolve()
+        if path.parent != root.resolve() or not path.is_dir():
+            raise FileNotFoundError("Training Archive is unavailable.")
+        return path
+    if area == "director_assessment":
+        assessment_id = str(item_id or "").strip()
+        if not assessment_id or Path(assessment_id).name != assessment_id:
+            raise ValueError("Director assessment storage ID is invalid.")
+        root = director_assessment_root()
+        raw = root / (assessment_id + ".json")
+        if root.is_symlink() or raw.is_symlink():
+            raise ValueError("Director assessment storage path is symlinked.")
+        path = raw.resolve()
+        if path.parent != root.resolve() or not path.is_file():
+            raise FileNotFoundError("Director assessment evidence is unavailable.")
+        return path
     if area == "tests":
         return _resolve_test(folder, item_id)
     if area == "staged":
@@ -1705,6 +1784,11 @@ def purge(area, item_id, folder=""):
             path.parent.rmdir()
         except OSError:
             pass
+    elif area == "director_assessment":
+        delete_director_assessment(item_id)
+    elif area == "archive":
+        path = resolve_item("archive", item_id)
+        shutil.rmtree(path)
     elif area == "tests":
         session = _resolve_test(folder, item_id)
         session_payload = _read_test_session_manifest(session)

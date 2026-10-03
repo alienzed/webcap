@@ -526,11 +526,11 @@ def work_root():
 
 
 def h3_probe_root():
-    return training_runtime_root() / "h3-probes"
+    return work_root() / "h3-probes"
 
 
 def execution_queue_state_path():
-    return Path(FS_ROOT) / ".webcap" / "execution_queue.json"
+    return app_state_root() / "execution_queue.json"
 
 
 def training_runtime_root():
@@ -538,15 +538,15 @@ def training_runtime_root():
 
 
 def training_queue_state_path():
-    return training_runtime_root() / "queue.json"
+    return app_state_root() / "training_queue.json"
 
 
 def training_history_state_path():
-    return training_runtime_root() / "recent_runs.json"
+    return app_state_root() / "recent_runs.json"
 
 
 def generate_reference_root():
-    return Path(FS_ROOT) / ".webcap_runtime" / "generate-references"
+    return work_root() / "generate-references"
 
 
 reload_runtime_config()

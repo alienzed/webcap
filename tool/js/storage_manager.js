@@ -79,7 +79,7 @@
 
   function allItems() {
     var groups = storageState.payload && storageState.payload.items || {};
-    return ['training', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].reduce(function (rows, area) {
+    return ['training', 'archive', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].reduce(function (rows, area) {
       return rows.concat((groups[area] || []).map(function (item) {
         return item;
       }));
@@ -134,6 +134,8 @@
       var label = 'Delete';
       if (item.area === 'storyboard') label = 'Delete Take';
       else if (item.area === 'staged') label = 'Delete Copy';
+      else if (item.area === 'archive') label = 'Delete Archive';
+      else if (item.area === 'director_assessment') label = 'Delete Evidence';
       else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) label = 'Delete Probe';
       else if (item.area === 'runtime' && String(item.id || '').indexOf('generate-reference/') === 0) label = 'Delete Reference';
       else if (item.area === 'comfy') label = 'Delete Scratch';
@@ -149,13 +151,15 @@
     var groups = storageState.payload && storageState.payload.items || {};
     var areaLabels = {
       training: 'Training',
+      archive: 'Training Archives',
       tests: 'Tests',
       staged: 'Staged Test LoRAs',
       generate: 'Generations',
       storyboard: 'Storyboard Takes',
       set: 'Set Data (protected)',
       runtime: 'Runtime / Temporary',
-      comfy: 'ComfyUI Scratch'
+      comfy: 'ComfyUI Scratch',
+      director_assessment: 'Director Assessments'
     };
     var area = String(storageState.activeArea || '');
     if (categoriesHost) categoriesHost.classList.toggle('hidden', !!area);
@@ -304,7 +308,7 @@
   function scheduleScanPoll() {
     stopScanPolling();
     if (!storageState.open || !scanIsActive()) return;
-    storageState.scanPollTimer = window.setTimeout(refreshScanStatus, 750);
+    storageState.scanPollTimer = window.setTimeout(refreshScanStatus, 1000);
   }
 
   function refreshScanStatus() {
@@ -351,12 +355,18 @@
     } else if (item.area === 'staged') {
       label = 'staged Test LoRA copy';
       consequence = '\nThe source training epoch is not deleted.';
+    } else if (item.area === 'archive') {
+      label = 'Training Archive';
+      consequence = '\nThis removes the archived experiment record and any retained backup epochs. The production LoRA is not deleted.';
     } else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) {
       label = 'H3 probe';
       consequence = '\nThis removes the captured probe inputs, logs, and probe results.';
     } else if (item.area === 'runtime' && String(item.id || '').indexOf('generate-reference/') === 0) {
       label = 'Generate reference bundle';
       consequence = '\nThis may invalidate that reference in an unsubmitted Generate draft.';
+    } else if (item.area === 'director_assessment') {
+      label = 'Director assessment evidence';
+      consequence = '\nThis removes only the raw prompts and model outputs. Learned Director model results are preserved.';
     } else if (item.area === 'comfy') {
       label = 'ComfyUI scratch tree';
       consequence = '\nOnly this exact WebCap-prefixed provider job tree is removed.';
@@ -383,6 +393,12 @@
         itemLabel: 'temporary runtime artifact',
         protectedLabel: 'active/protected artifact',
         consequence: 'This removes WebCap-owned H3 probes and Generate reference bundles that are currently safe to purge.'
+      },
+      director_assessment: {
+        buttonLabel: 'Delete all evidence',
+        itemLabel: 'Director assessment evidence file',
+        protectedLabel: 'protected evidence file',
+        consequence: 'Only raw prompts and model outputs are removed. Learned Director model results are preserved.'
       },
       comfy: {
         buttonLabel: 'Delete all scratch',

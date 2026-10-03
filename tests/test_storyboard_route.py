@@ -629,3 +629,144 @@ def test_storyboard_route_can_upload_scene_reference(tmp_path, monkeypatch):
     media = root / "output" / "storyboards" / story["id"] / reference["mediaPath"]
     assert media.read_bytes() == b"image"
 
+
+
+
+def test_storyboard_generation_route_cancels_only_requested_story(monkeypatch):
+    stopped = []
+    monkeypatch.setattr(app_module, "stop_storyboard_jobs", lambda story_id: stopped.append(story_id))
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_generation_queue",
+        lambda story_id: {
+            "jobs": [
+                {
+                    "jobId": "remaining",
+                    "storyId": story_id,
+                    "sceneId": "scene-2",
+                    "status": "stopping",
+                }
+            ]
+        },
+    )
+
+    response = app_module.app.test_client().post("/fs/storyboard/generation", json={
+        "operation": "cancel_story",
+        "storyId": "story-1",
+    })
+
+    assert response.status_code == 200
+    assert stopped == ["story-1"]
+    assert response.get_json()["queue"]["jobs"][0]["storyId"] == "story-1"
+
+
+
+def test_individual_development_apply_rejects_stale_story_revision(monkeypatch):
+    story = {
+        "id": "story-1",
+        "updatedAt": "newer-revision",
+        "concept": "Story.",
+        "sceneOrder": [],
+        "scenes": {},
+    }
+    applied = []
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_apply_developed_plan",
+        lambda *args, **kwargs: applied.append((args, kwargs)),
+    )
+
+    response = app_module.app.test_client().post("/fs/storyboard/director", json={
+        "storyId": "story-1",
+        "operation": "apply_individual_development",
+        "model": "director.gguf",
+        "expectedUpdatedAt": "older-revision",
+        "plan": {"scenes": []},
+    })
+
+    assert response.status_code == 400
+    assert "inputs changed" in response.get_json()["error"]
+    assert applied == []
+
+
+def test_individual_development_apply_uses_existing_atomic_plan_path(monkeypatch):
+    story = {
+        "id": "story-1",
+        "updatedAt": "same-revision",
+        "concept": "Story.",
+        "sceneOrder": [],
+        "scenes": {},
+    }
+    plan = {
+        "scenes": [{
+            "title": "Scene One",
+            "summary": "Opening.",
+            "prompt": "Full H3 prompt.",
+            "suggestedDurationSeconds": 10,
+        }]
+    }
+    applied = {
+        "id": "story-1",
+        "updatedAt": "applied-revision",
+        "sceneOrder": ["scene-new"],
+        "scenes": {"scene-new": {"id": "scene-new"}},
+    }
+    calls = []
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr(app_module, "storyboard_generation_queue", lambda story_id: {"jobs": []})
+
+    def fake_apply(story_id, received_plan, model_id=""):
+        calls.append((story_id, received_plan, model_id))
+        return applied
+
+    monkeypatch.setattr(app_module, "storyboard_apply_developed_plan", fake_apply)
+
+    response = app_module.app.test_client().post("/fs/storyboard/director", json={
+        "storyId": "story-1",
+        "operation": "apply_individual_development",
+        "model": "director.gguf",
+        "expectedUpdatedAt": "same-revision",
+        "plan": plan,
+    })
+
+    assert response.status_code == 200
+    assert response.get_json()["sceneCount"] == 1
+    assert calls == [("story-1", plan, "director.gguf")]
+
+
+def test_individual_development_outline_freezes_source_revision(monkeypatch):
+    story = {
+        "id": "story-1",
+        "updatedAt": "source-revision",
+        "concept": "Story.",
+        "sceneOrder": [],
+        "scenes": {},
+    }
+    contract = {
+        "operation": "develop_story_outline",
+        "output": "json",
+        "prompt": "outline",
+        "response_schema": {"type": "object"},
+    }
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: story)
+    monkeypatch.setattr(app_module, "storyboard_generation_queue", lambda story_id: {"jobs": []})
+    monkeypatch.setattr(
+        app_module,
+        "storyboard_build_llm_request",
+        lambda loaded, scene_id, operation, instruction="", **kwargs: contract,
+    )
+    monkeypatch.setattr(
+        app_module,
+        "enqueue_llm",
+        lambda *args, **kwargs: {"jobId": "outline-job"},
+    )
+
+    response = app_module.app.test_client().post("/fs/storyboard/director", json={
+        "storyId": "story-1",
+        "operation": "develop_story_outline",
+        "model": "director.gguf",
+    })
+
+    assert response.status_code == 202
+    assert response.get_json()["sourceUpdatedAt"] == "source-revision"

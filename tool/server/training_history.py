@@ -16,6 +16,7 @@ from . import config as app_config
 from .training_config_files import output_dir_from_config, training_config_path
 from .training_action import managed_actions_for_folder, read_action
 from .training_profiles import config_for_id, config_for_stage
+from .training_run_manifest import selected_epoch as selected_run_epoch
 
 
 HISTORY_VERSION = 4
@@ -289,6 +290,24 @@ def _resume_artifacts(entry):
     return [latest]
 
 
+def _previous_resume_points(entry, checkpoint_tag):
+    """List older direct-child DeepSpeed checkpoints without changing the run."""
+    current = _STEP_PATTERN.fullmatch(str(checkpoint_tag or "").strip())
+    if not current:
+        return []
+    current_step = int(current.group(1))
+    points = []
+    for child in Path(entry).iterdir():
+        match = _STEP_PATTERN.fullmatch(child.name)
+        if not match or not child.is_dir() or child.is_symlink():
+            continue
+        step = int(match.group(1))
+        if step >= current_step:
+            continue
+        points.append({"tag": child.name, "step": step})
+    return sorted(points, key=lambda item: item["step"], reverse=True)
+
+
 def _default_history(folder_path):
     return {
         "version": HISTORY_VERSION,
@@ -361,6 +380,7 @@ def discover_runs(folder_path, stage=""):
                     "matchType": "exact" if saved_hash == source_hash else "compatible",
                     "configHash": saved_hash, "modifiedAt": modified,
                     "checkpointAvailable": True, "checkpointName": "latest", "checkpointTag": checkpoint_tag,
+                    "resumePoints": _previous_resume_points(entry, checkpoint_tag),
                     "completed": completed, "epoch": highest_epoch or None, "steps": highest_step or None,
                     "expectedEpochs": expected_epochs or None,
                     "resumeActionId": str(action.get("actionId") or ""),
@@ -479,7 +499,7 @@ def record_job(folder_path, job):
     folder = Path(folder_path)
     folder_key = _folder_key(folder)
     record_fields = (
-        "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumeActionId", "resumeOutputId", "outputRunPath", "status", "stage",
+        "id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumeActionId", "resumeOutputId", "resumeCheckpointTag", "resumeCheckpointWallTime", "resumeBranchStartedAt", "outputRunPath", "status", "stage",
         "createdAt", "startedAt", "finishedAt", "updatedAt", "error", "completionNote", "exitCode", "failureScope", "failureExcerpt", "preflight", "parentJobId", "activeTrainingSeconds", "activeTrainingTimingComplete",
         "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "progress", "model", "input", "artifactDir", "artifactSummary",
     )
@@ -551,7 +571,12 @@ def _history_job_view(job):
         candidate_path = host_path_for_training_path(raw_candidate) if raw_candidate else None
         item["candidateRunAvailable"] = bool(candidate_path) and candidate_path.is_dir()
     except (OSError, ValueError):
+        candidate_path = None
         item["candidateRunAvailable"] = False
+    item["selectedEpoch"] = None
+    action_id = str(item.get("actionId") or "").strip()
+    if candidate_path and candidate_path.is_dir() and not candidate_path.is_symlink() and action_id:
+        item["selectedEpoch"] = selected_run_epoch(candidate_path.resolve(strict=True), action_id)
     summary = item.get("artifactSummary") if isinstance(item.get("artifactSummary"), dict) else {}
     if output_path and not str(summary.get("checkpointTag") or "").strip():
         try:

@@ -3,6 +3,7 @@
   var supportedTestModels = {};
   var testModelsLoaded = false;
   var pollTimer = null;
+  var pendingElapsedTimer = null;
   var lastActivityRefreshAt = 0;
   var lastSessionsRefreshAt = 0;
   var prepared = null;
@@ -10,20 +11,16 @@
   var currentSession = '';
   var currentSessionFolder = '';
   var currentSessionModel = '';
-  var currentSessionSource = '';
   var currentStatus = {};
   var resultsView = 'grid';
   var compareIndex = 0;
   var pendingActivityFolder = '';
   var testActivity = {};
   var selectedCandidates = null;
-  var testSource = null;
-  var pendingTestSource = null;
-  var pendingLaunchFolder = '';
   var pendingActivitySession = '';
-  var pendingSourceOwnerFolder = '';
-  var sourceBrowser = null;
   var queuedTestJobs = [];
+  var trackedTestInferenceSessions = Object.create(null);
+  var pendingTestCompletionChecks = Object.create(null);
   var showSessionError = false;
   var reportedFailureKeys = new Set();
   var debouncedPromptSave = debounceCreate(500);
@@ -33,6 +30,7 @@
     available: false,
     busy: false,
     jobId: '',
+    requestDiagnostic: null,
     requestFolder: '',
     analysis: null,
     activityStartedAt: 0,
@@ -57,96 +55,12 @@
     return parts.length ? parts[parts.length - 1] : '';
   }
 
-  function sourceChildPath(parent, child) {
-    return [String(parent || '').replace(/^\/+|\/+$/g, ''), String(child || '').replace(/^\/+|\/+$/g, '')]
-      .filter(Boolean)
-      .join('/');
-  }
-
-  function renderTestSourceBrowser(payload) {
-    sourceBrowser = payload || {};
-    var pathEl = el('test-generations-source-path');
-    var up = el('test-generations-source-up-btn');
-    var host = el('test-generations-source-folders');
-    var source = String(sourceBrowser.source || '');
-    if (pathEl) {
-      pathEl.textContent = source || 'Test root';
-      pathEl.title = source || 'Test root';
-    }
-    if (up) {
-      up.disabled = !source;
-      up.dataset.sourceParent = String(sourceBrowser.parent || '');
-    }
-    if (!host) return;
-    host.innerHTML = '';
-    (Array.isArray(sourceBrowser.folders) ? sourceBrowser.folders : []).forEach(function (folderName) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'test-generations-source-folder';
-      button.dataset.testSource = sourceChildPath(source, folderName);
-      var label = document.createElement('span');
-      label.className = 'test-generations-source-folder-name';
-      label.textContent = folderName;
-      button.appendChild(label);
-      host.appendChild(button);
-    });
-  }
-
-  function refreshTestSourceBrowser() {
-    if (!isTestModelSupported()) return Promise.resolve(null);
-    var url = '/fs/test_generations/source?modelId=' + encodeURIComponent(currentTestModelId());
-    if (testSource === null) {
-      url += '&setName=' + encodeURIComponent(setFolderName(launchFolder));
-    } else {
-      url += '&source=' + encodeURIComponent(String(testSource || ''));
-    }
-    return fetch(url).then(function (response) {
-      return response.json().then(function (payload) {
-        if (!response.ok || !payload || payload.ok === false) {
-          throw new Error(payload && payload.error ? payload.error : 'Could not browse Test Sources.');
-        }
-        testSource = String(payload.source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-        renderTestSourceBrowser(payload);
-        renderWildcardDirector();
-        var ownerFolder = String(payload.ownerFolder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-        var currentFolder = String(state && state.folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-        if (ownerFolder && ownerFolder !== currentFolder) {
-          if (payload.ownerAvailable === false) {
-            launchFolder = ownerFolder;
-            pendingSourceOwnerFolder = '';
-            return payload;
-          }
-          pendingSourceOwnerFolder = ownerFolder;
-          pendingTestSource = testSource;
-          openTrainingWorkspaceFolder(ownerFolder);
-          return { navigated: true };
-        }
-        pendingSourceOwnerFolder = '';
-        return payload;
-      });
-    });
-  }
-
-  function chooseTestSource(source) {
-    testSource = String(source || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-    pendingTestSource = testSource;
-    currentSession = '';
-    currentSessionFolder = '';
-    currentSessionModel = '';
-    currentSessionSource = '';
-    selectedCandidates = null;
-    openPane();
-  }
-
   function request(operation, criteria) {
     var body = {
       folder: owningSetFolder(launchFolder || (state && state.folder) || ''),
       operation: operation
     };
     var resolvedCriteria = criteria ? Object.assign({}, criteria) : {};
-    if (testSource !== null && !Object.prototype.hasOwnProperty.call(resolvedCriteria, 'source')) {
-      resolvedCriteria.source = String(testSource || '');
-    }
     if (Object.keys(resolvedCriteria).length) body.criteria = resolvedCriteria;
     return fetch('/fs/test_generations', {
       method: 'POST',
@@ -158,6 +72,83 @@
           throw new Error(payload && payload.error ? payload.error : 'Test Generations request failed.');
         }
         return payload;
+      });
+    });
+  }
+
+  function requestForFolder(folder, operation, criteria) {
+    var body = {
+      folder: owningSetFolder(folder),
+      operation: operation
+    };
+    var resolvedCriteria = criteria ? Object.assign({}, criteria) : {};
+    if (Object.keys(resolvedCriteria).length) body.criteria = resolvedCriteria;
+    return fetch('/fs/test_generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : 'Test Generations request failed.');
+        }
+        return payload;
+      });
+    });
+  }
+
+  function testInferenceSessionKey(folder, sessionId) {
+    return String(owningSetFolder(folder) || '') + '|' + String(sessionId || '');
+  }
+
+  function syncTestInferenceSnapshot(queue) {
+    if (!queue || !Array.isArray(queue.jobs)) return;
+    var current = Object.create(null);
+
+    queue.jobs.forEach(function (job) {
+      if (String(job && job.client || '') !== 'test') return;
+      var folder = String(job.folder || '').trim();
+      var sessionId = String(job.sessionId || '').trim();
+      if (!folder || !sessionId) return;
+      var key = testInferenceSessionKey(folder, sessionId);
+      current[key] = true;
+      trackedTestInferenceSessions[key] = {
+        folder: folder,
+        sessionId: sessionId,
+        modelId: String(job.modelId || ''),
+        label: String(job.label || '')
+      };
+    });
+
+    Object.keys(trackedTestInferenceSessions).forEach(function (key) {
+      if (current[key] || pendingTestCompletionChecks[key]) return;
+      var tracked = trackedTestInferenceSessions[key];
+      pendingTestCompletionChecks[key] = true;
+      requestForFolder(tracked.folder, 'test_open_session', { session: tracked.sessionId }).then(function (status) {
+        var state = String(status && status.status || '');
+        if (state === 'complete') {
+          window.recordActivityCompletion({
+            id: 'test-session:' + key,
+            kind: 'test',
+            lane: 'inference',
+            status: 'completed',
+            label: String(status.name || '').trim() || sessionLabel(tracked.sessionId),
+            folder: tracked.folder,
+            sessionId: tracked.sessionId,
+            modelId: String(status.modelId || status.model || tracked.modelId || '')
+          });
+          delete trackedTestInferenceSessions[key];
+          return;
+        }
+        if (['stopped', 'failed', 'interrupted'].indexOf(state) !== -1) {
+          delete trackedTestInferenceSessions[key];
+        }
+      }).catch(function () {
+        // Completion breadcrumbs are best-effort browser state. A Session may
+        // legitimately disappear because the user cleared it or archived the Set.
+        delete trackedTestInferenceSessions[key];
+      }).then(function () {
+        delete pendingTestCompletionChecks[key];
       });
     });
   }
@@ -200,11 +191,10 @@
     wildcardDirector.modelId = renderDirectorModelOptions(select, wildcardDirector.models, wildcardDirector.modelId);
     if (wildcardDirector.modelId) setDirectorModelPreference('webcap.testGenerations.directorModel', wildcardDirector.modelId);
     select.value = wildcardDirector.modelId;
-    var ownerAvailable = !sourceBrowser || sourceBrowser.ownerAvailable !== false;
     select.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
-    button.disabled = wildcardDirector.busy || !wildcardDirector.modelId || !ownerAvailable;
+    button.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
     button.textContent = wildcardDirector.busy ? 'Analyzing…' : 'Generate Wildcard';
-    button.title = ownerAvailable ? 'Generate a wildcard prompt from this Set\'s captions' : 'Original Set is unavailable';
+    button.title = 'Generate a wildcard prompt from this Set\'s captions';
   }
 
   function renderWildcardAnalysis(analysis) {
@@ -473,12 +463,26 @@
     });
   }
 
+  function wildcardDirectorRequestDiagnosticLabel(request) {
+    request = request && typeof request === 'object' ? request : null;
+    if (!request) return '';
+    var count = Number(request.messageCount) || 0;
+    var chars = Number(request.contentChars) || 0;
+    return 'Prompt sent · ' + (count === 1 ? '1 msg' : String(count) + ' msgs') + ' · ' + chars.toLocaleString() + ' chars · Copy';
+  }
+
+  function copyWildcardDirectorRequestDiagnostic(request) {
+    if (!request || !Array.isArray(request.messages)) throw new Error('Wildcard Director request diagnostic is missing its messages.');
+    return navigator.clipboard.writeText(JSON.stringify(request.messages, null, 2));
+  }
+
   function renderWildcardDirectorActivity(activity, system) {
     var card = el('test-generations-director-activity');
     var phase = el('test-generations-director-activity-phase');
     var detail = el('test-generations-director-activity-detail');
     var stop = el('test-generations-director-stop');
-    if (!card || !phase || !detail || !stop) throw new Error('Test Generations Director activity markup is missing.');
+    var copy = el('test-generations-director-prompt-copy');
+    if (!card || !phase || !detail || !stop || !copy) throw new Error('Test Generations Director activity markup is missing.');
 
     var phaseName = String(activity && activity.phase || '');
     var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
@@ -491,6 +495,10 @@
     stop.classList.toggle('hidden', !canStop);
     stop.disabled = jobStatus === 'stopping';
     stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
+    var requestLabel = wildcardDirectorRequestDiagnosticLabel(wildcardDirector.requestDiagnostic);
+    copy.classList.toggle('hidden', !requestLabel);
+    copy.textContent = requestLabel;
+    copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
     if (!visible) return;
 
     updateWildcardDirectorTrend(activity, system);
@@ -556,13 +564,14 @@
     }).then(function () {
       if (!wildcardDirector.busy) return;
       if (wildcardDirector.activityTimer) clearTimeout(wildcardDirector.activityTimer);
-      wildcardDirector.activityTimer = setTimeout(refreshWildcardDirectorActivity, 1500);
+      wildcardDirector.activityTimer = setTimeout(refreshWildcardDirectorActivity, 2500);
     });
   }
 
   function startWildcardDirectorActivity() {
     wildcardDirector.activityStartedAt = Date.now() / 1000;
     wildcardDirector.activityHistory = [];
+    wildcardDirector.requestDiagnostic = null;
     renderWildcardDirectorActivity({
       phase: 'preparing',
       active: true,
@@ -613,7 +622,7 @@
         err.jobStatus = status;
         throw err;
       }
-      return new Promise(function (resolve) { setTimeout(resolve, status === 'queued' ? 2000 : 1000); }).then(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, status === 'queued' ? 3000 : 1500); }).then(function () {
         return wildcardRequestJson('/fs/director/job?job=' + encodeURIComponent(current.jobId) + '&consume=1');
       }).then(function (payload) {
         if (!payload.job) throw new Error('Wildcard analysis job response is missing its job.');
@@ -641,6 +650,7 @@
       directorModel: wildcardDirector.modelId
     }).then(function (payload) {
       wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
+      wildcardDirector.requestDiagnostic = payload.job && payload.job.request || null;
       trackTransientLlmJob(payload.job);
       return waitForWildcardJob(payload.job);
     }).then(function (result) {
@@ -698,8 +708,9 @@
 
   function testPromptDraftKey() {
     var modelId = currentTestModelId();
-    if (!modelId || testSource === null) return '';
-    return 'webcap.test.promptDraft.' + encodeURIComponent(modelId) + '.' + encodeURIComponent(String(testSource || ''));
+    var folder = String(owningSetFolder(launchFolder || (state && state.folder) || ''));
+    if (!modelId || !folder) return '';
+    return 'webcap.test.promptDraft.' + encodeURIComponent(modelId) + '.' + encodeURIComponent(folder);
   }
 
   function loadTestPromptDraft() {
@@ -811,25 +822,11 @@
     return parts.length ? parts[parts.length - 1] : String(folder || '');
   }
 
-  function testSourceLabel(item) {
-    var source = String(item && item.source || '');
-    if (source) {
-      var parts = source.split('/').filter(Boolean);
-      return parts.length ? parts[parts.length - 1] : source;
-    }
-    return 'Test root';
-  }
-
-  function openTestBenchSource(folder, source, modelId, ownerAvailable) {
+  function openTestBenchSet(folder, modelId) {
     var targetFolder = String(folder || '');
-    pendingTestSource = String(source || '');
+    if (!targetFolder) return;
     if (modelId) setWorkingModelProfileId(String(modelId), targetFolder);
-    if (targetFolder && ownerAvailable !== false) {
-      openTestBenchFolder(targetFolder, false);
-      return;
-    }
-    pendingLaunchFolder = targetFolder;
-    openPane();
+    openTestBenchFolder(targetFolder);
   }
 
   function buildTestActivityContextActions() {
@@ -840,37 +837,66 @@
 
     active.forEach(function (item) {
       var folder = String(item && item.folder || '');
-      var source = String(item && item.source || '');
       var modelId = String(item && item.modelId || '');
-      var key = modelId + '|' + source;
-      if (seen[key]) return;
+      var key = folder + '|' + modelId;
+      if (!folder || seen[key]) return;
       seen[key] = true;
       var completed = Number(item.completed || 0);
       var total = Number(item.total || 0);
       actions.push({
-        label: 'Running · ' + testSourceLabel(item) + (total ? ' · ' + completed + ' / ' + total : ''),
-        run: function () { openTestBenchSource(folder, source, modelId, item.ownerAvailable); }
+        label: 'Running · ' + recentSetLabel(folder) + (total ? ' · ' + completed + ' / ' + total : ''),
+        run: function () { openTestBenchSet(folder, modelId); }
       });
     });
 
     var recentActions = [];
     recent.some(function (item) {
       var folder = String(item && item.folder || '');
-      var source = String(item && item.source || '');
       var modelId = String(item && item.modelId || '');
-      var key = modelId + '|' + source;
-      if (seen[key]) return false;
+      var key = folder + '|' + modelId;
+      if (!folder || seen[key]) return false;
       seen[key] = true;
       var sessionCount = Number(item.sessionCount || 0);
       recentActions.push({
-        label: testSourceLabel(item) + (sessionCount ? ' · ' + sessionCount + ' session' + (sessionCount === 1 ? '' : 's') : ''),
-        run: function () { openTestBenchSource(folder, source, modelId, item.ownerAvailable); }
+        label: recentSetLabel(folder) + (sessionCount ? ' · ' + sessionCount + ' session' + (sessionCount === 1 ? '' : 's') : ''),
+        run: function () { openTestBenchSet(folder, modelId); }
       });
       return recentActions.length >= 5;
     });
 
     if (actions.length && recentActions.length) actions.push({ separator: true });
     return actions.concat(recentActions);
+  }
+
+  function recentPromptLabel(item) {
+    var folder = String(item && item.folder || '');
+    var session = String(item && item.session || '');
+    return recentSetLabel(folder) + (session ? ' · ' + sessionLabel(session) : '');
+  }
+
+  function applyRecentPrompt(item) {
+    var prompt = String(item && item.prompt || '');
+    if (!prompt) throw new Error('Recent Test prompt is empty.');
+    var field = el('test-generations-prompt');
+    field.value = prompt;
+    saveTestPromptDraft(prompt);
+    saveTestBenchState(prompt);
+    field.focus();
+  }
+
+  function openRecentPromptsMenu(button) {
+    var prompts = Array.isArray(testActivity.recentPrompts) ? testActivity.recentPrompts : [];
+    if (!prompts.length) {
+      setStatus('No recent Test prompts yet.');
+      return;
+    }
+    var rect = button.getBoundingClientRect();
+    showContextMenu(rect.left, rect.bottom + 4, prompts.map(function (item) {
+      return {
+        label: recentPromptLabel(item),
+        run: function () { applyRecentPrompt(item); }
+      };
+    }));
   }
 
   function syncActivityButton(payload) {
@@ -886,9 +912,9 @@
     if (active) {
       var completed = Number(active.completed || 0);
       var total = Number(active.total || 0);
-      activityButton.title = 'Test Generations · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total + ' · Right-click for Test sources';
+      activityButton.title = 'Test Generations · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total + ' · Right-click for Test Sets';
     } else {
-      activityButton.title = 'Test Generations · Right-click for recent Test sources';
+      activityButton.title = 'Test Generations · Right-click for recent Test Sets';
     }
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
@@ -914,31 +940,33 @@
     return refreshActivityButton();
   }
 
-  function openTestBenchFolder(folder, useSetSource) {
+  function prepareTestBenchSetSwitch(folder) {
+    var targetFolder = String(folder || '').replace(/^[/\\]+|[/\\]+$/g, '');
+    if (!targetFolder) throw new Error('Test Generations Set switching requires a Set folder.');
+    pendingActivityFolder = targetFolder;
+  }
+
+  function openTestBenchFolder(folder) {
     var targetFolder = String(folder || '');
     if (!targetFolder) return;
-    if (useSetSource) pendingTestSource = null;
     if (String(state && state.folder || '') === targetFolder && state.folderStateWritable) {
       openPane();
       return;
     }
     pendingActivityFolder = targetFolder;
-    openTrainingWorkspaceFolder(targetFolder);
+    if (typeof window.setApplicationSetContext !== 'function') throw new Error('Application Set switching is unavailable.');
+    window.setApplicationSetContext(targetFolder);
   }
 
   function openTestBenchForSetFolder(folder) {
-    openTestBenchFolder(folder, true);
+    openTestBenchFolder(folder);
   }
 
   function openTestBenchActivity(target) {
     target = target && typeof target === 'object' ? target : {};
     if (target.sessionId) pendingActivitySession = String(target.sessionId || '');
-    if (target.folder || target.source || target.modelId) {
-      openTestBenchSource(
-        String(target.folder || ''),
-        String(target.source || ''),
-        String(target.modelId || '')
-      );
+    if (target.folder || target.modelId) {
+      openTestBenchSet(String(target.folder || ''), String(target.modelId || ''));
       return;
     }
     if (isOpen()) {
@@ -962,13 +990,8 @@
   function testGenerationsFolderLoaded() {
     syncLaunchVisibility();
     refreshActivityButton();
-    if (pendingSourceOwnerFolder && String(state && state.folder || '') === String(pendingSourceOwnerFolder)) {
-      pendingSourceOwnerFolder = '';
-      openPane();
-      return;
-    }
-    if (!pendingActivityFolder) return;
-    if (String(state && state.folder || '') !== String(pendingActivityFolder)) return;
+    if (!isOpen() && !pendingActivityFolder) return;
+    if (pendingActivityFolder && String(state && state.folder || '') !== String(pendingActivityFolder)) return;
     pendingActivityFolder = '';
     openPane();
   }
@@ -1014,23 +1037,58 @@
     button.disabled = hasFolder && (!testModelsLoaded || !supported);
     button.textContent = !testModelsLoaded ? 'Loading Test Bench…' : (supported ? 'Open Test Bench' : 'Testing unavailable');
     button.title = supported
-      ? 'Compare staged LoRAs with frozen generation settings.'
+      ? 'Compare staged training candidates with frozen generation settings.'
       : 'Test Generations is not available for the selected Base Model.';
+  }
+
+  function candidateRunLabel(run, index) {
+    var name = String(run && run.runName || '').trim();
+    var sequence = String(run && run.runSequence || '').trim();
+    if (name && sequence) return name + ' · Run ' + sequence;
+    if (name) return name;
+    if (sequence) return 'Run ' + sequence;
+    return 'Run ' + String(index + 1);
+  }
+
+  function openCandidatesForRun(run) {
+    if (!run || !run.jobId || !run.folder) throw new Error('Training candidate run provenance is incomplete.');
+    if (typeof openTrainingCandidates !== 'function') throw new Error('Training Candidates is unavailable.');
+    openTrainingCandidates({ id: String(run.jobId), folder: String(run.folder) }, {
+      onClose: function () {
+        refreshStagedFilesAfterCandidates().catch(showError);
+      }
+    });
   }
 
   function syncCandidatesButton(payload) {
     var button = el('test-generations-candidates-btn');
     if (!button) return;
-    var runs = payload && Array.isArray(payload.candidateRuns) ? payload.candidateRuns : [];
-    var connected = runs.length === 1 && runs[0] && runs[0].jobId && runs[0].folder;
-    button.classList.toggle('hidden', !connected);
-    if (connected) {
-      button.dataset.candidateJobId = String(runs[0].jobId);
-      button.dataset.candidateFolder = String(runs[0].folder);
-    } else {
-      delete button.dataset.candidateJobId;
-      delete button.dataset.candidateFolder;
+    var runs = payload && Array.isArray(payload.candidateRuns)
+      ? payload.candidateRuns.filter(function (run) { return run && run.jobId && run.folder; })
+      : [];
+    button.classList.toggle('hidden', !runs.length);
+    button.textContent = 'Candidates';
+    button.title = runs.length > 1
+      ? 'Choose which training run to open'
+      : 'Open the training candidates for this Set';
+  }
+
+  function openCandidateRunMenu(button) {
+    var runs = prepared && Array.isArray(prepared.candidateRuns)
+      ? prepared.candidateRuns.filter(function (run) { return run && run.jobId && run.folder; })
+      : [];
+    if (!runs.length) throw new Error('This Test source has no linked training candidate runs.');
+    if (runs.length === 1) {
+      openCandidatesForRun(runs[0]);
+      return;
     }
+    var rect = button.getBoundingClientRect();
+    showContextMenu(rect.left, rect.bottom + 4, runs.map(function (run, index) {
+      return {
+        label: candidateRunLabel(run, index),
+        run: function () { openCandidatesForRun(run); }
+      };
+    }));
   }
 
   function refreshStagedFilesAfterCandidates() {
@@ -1040,6 +1098,19 @@
       syncCandidatesButton(payload);
       syncActiveRunControls(currentStatus);
     });
+  }
+
+  function lastTrainingArchiveText() {
+    var archive = state && state.lastTrainingArchive && typeof state.lastTrainingArchive === 'object'
+      ? state.lastTrainingArchive
+      : null;
+    if (!archive) return '';
+    var parts = ['Last archived'];
+    var epoch = Number(archive.selectedEpoch || 0);
+    if (epoch > 0) parts.push('Epoch ' + Math.round(epoch));
+    var archivedAt = Number(archive.archivedAt || 0);
+    if (archivedAt > 0) parts.push(new Date(archivedAt * 1000).toLocaleString());
+    return parts.join(' · ');
   }
 
   function stagedFileParts(fileName) {
@@ -1087,6 +1158,9 @@
     var scores = payload && payload.candidateScores && typeof payload.candidateScores === 'object'
       ? payload.candidateScores
       : {};
+    var candidateMetadata = payload && payload.candidateMetadata && typeof payload.candidateMetadata === 'object'
+      ? payload.candidateMetadata
+      : {};
     if (!(selectedCandidates instanceof Set)) {
       var savedSettings = savedTestModelState().settings;
       var savedSelection = state
@@ -1103,12 +1177,26 @@
     var countEl = el('test-generations-files-count');
     var host = el('test-generations-files');
     if (summary) {
+      var runCount = payload && Array.isArray(payload.candidateRuns) ? payload.candidateRuns.length : 0;
       summary.textContent = (String(payload && payload.modelLabel || '').trim() ? String(payload.modelLabel).trim() + ' · ' : '') +
-        count + ' LoRA' + (count === 1 ? '' : 's') + ' · ' + (String(testSource || '') || 'Test root');
+        count + ' candidate' + (count === 1 ? '' : 's') +
+        (runCount ? ' · ' + runCount + ' run' + (runCount === 1 ? '' : 's') : '');
     }
     if (countEl) countEl.textContent = String(count);
     if (!host) return;
     host.innerHTML = '';
+
+    var archiveText = lastTrainingArchiveText();
+    if (archiveText) {
+      var archiveFact = document.createElement('div');
+      archiveFact.className = 'test-generations-library-empty test-generations-archive-fact';
+      archiveFact.textContent = archiveText;
+      var archive = state && state.lastTrainingArchive && typeof state.lastTrainingArchive === 'object'
+        ? state.lastTrainingArchive
+        : {};
+      if (archive.productionFileName) archiveFact.title = 'Production LoRA: ' + String(archive.productionFileName);
+      host.appendChild(archiveFact);
+    }
 
     var baseRow = document.createElement('div');
     baseRow.className = 'test-generations-staged-row test-generations-base-row';
@@ -1145,15 +1233,16 @@
     if (!files.length) {
       var emptyCandidates = document.createElement('div');
       emptyCandidates.className = 'test-generations-library-empty';
-      emptyCandidates.textContent = 'No LoRAs in this folder.';
+      emptyCandidates.textContent = 'No staged candidates for this Set.';
       host.appendChild(emptyCandidates);
       syncCandidateMasterSelect(files);
       return;
     }
     files.forEach(function (fileName) {
       var parts = stagedFileParts(fileName);
+      var metadata = candidateMetadata[String(fileName || '')] || null;
       var row = document.createElement('div');
-      row.className = 'test-generations-staged-row';
+      row.className = 'test-generations-staged-row' + (metadata && metadata.selected ? ' is-selected' : '');
       row.title = parts.fileName;
       var include = document.createElement('input');
       include.type = 'checkbox';
@@ -1166,7 +1255,16 @@
       var copy = document.createElement('div');
       copy.className = 'test-generations-staged-copy';
       var name = document.createElement('strong');
+      name.className = 'test-generations-staged-name';
       name.textContent = parts.label;
+      if (metadata && metadata.selected) {
+        var selectedMark = document.createElement('span');
+        selectedMark.className = 'test-generations-selected-mark';
+        selectedMark.title = 'Selected epoch';
+        selectedMark.setAttribute('aria-label', 'Selected epoch');
+        selectedMark.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="3.5"></circle><path d="M5.5 9l-1 5 3.5-2 3.5 2-1-5"></path></svg>';
+        name.appendChild(selectedMark);
+      }
       var detail = document.createElement('span');
       var score = scores[String(fileName || '')];
       var scoreText = score && Number(score.count || 0)
@@ -1175,6 +1273,29 @@
       detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
       copy.appendChild(name);
       if (detail.textContent) copy.appendChild(detail);
+      var actions = document.createElement('div');
+      actions.className = 'test-generations-staged-actions';
+      if (metadata && metadata.jobId && metadata.folder && Number(metadata.epoch) > 0) {
+        if (metadata.selected) {
+          var archive = document.createElement('button');
+          archive.type = 'button';
+          archive.className = 'training-btn test-generations-archive-candidate';
+          archive.dataset.archiveCandidate = String(fileName || '');
+          archive.title = 'Archive this training run';
+          archive.setAttribute('aria-label', 'Archive training run for selected epoch ' + String(metadata.epoch));
+          archive.textContent = 'Archive';
+          actions.appendChild(archive);
+        } else {
+          var save = document.createElement('button');
+          save.type = 'button';
+          save.className = 'test-generations-save-candidate';
+          save.dataset.saveCandidate = String(fileName || '');
+          save.title = 'Save this epoch';
+          save.setAttribute('aria-label', 'Save epoch ' + String(metadata.epoch));
+          save.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5h9l2 2v9h-11z"></path><path d="M5 2.5v4h6v-4"></path><path d="M5 10h6v3.5H5z"></path></svg>';
+          actions.appendChild(save);
+        }
+      }
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'test-generations-remove-candidate';
@@ -1182,9 +1303,10 @@
       remove.title = 'Remove this Test candidate';
       remove.setAttribute('aria-label', 'Remove ' + String(fileName || 'candidate'));
       remove.textContent = '×';
+      actions.appendChild(remove);
       row.appendChild(include);
       row.appendChild(copy);
-      row.appendChild(remove);
+      row.appendChild(actions);
       host.appendChild(row);
     });
     syncCandidateMasterSelect(files);
@@ -1248,6 +1370,17 @@
     if (countEl) countEl.textContent = String(items.length + queued.length);
     var clearBtn = el('test-generations-clear-queue-btn');
     if (clearBtn) clearBtn.classList.toggle('hidden', !queued.length);
+    var clearSessionsBtn = el('test-generations-clear-sessions-btn');
+    if (clearSessionsBtn) {
+      var hasActiveSession = queued.length > 0 || items.some(function (session) {
+        return session && (session.status === 'running' || session.status === 'stopping' || session.status === 'starting');
+      });
+      clearSessionsBtn.classList.toggle('hidden', !items.length);
+      clearSessionsBtn.disabled = hasActiveSession;
+      clearSessionsBtn.title = hasActiveSession
+        ? 'Stop or clear queued Test work before clearing history'
+        : 'Delete all Test session history for this Set';
+    }
     if (!host) return;
 
     var activeItems = items.filter(function (session) {
@@ -1548,6 +1681,32 @@
     return request('test_queue_clear', { modelId: currentTestModelId() }).then(function () { return refreshSessions(); });
   }
 
+  function forgetTrackedTestSessions(folder, sessionName) {
+    var owner = String(owningSetFolder(folder) || '');
+    var prefix = owner + '|';
+    Object.keys(trackedTestInferenceSessions).forEach(function (key) {
+      if (key.indexOf(prefix) !== 0) return;
+      if (sessionName && key !== testInferenceSessionKey(owner, sessionName)) return;
+      delete trackedTestInferenceSessions[key];
+      delete pendingTestCompletionChecks[key];
+    });
+  }
+
+  function clearTestSessions() {
+    if (!window.confirm('Clear all Test session history for this Set? Generated session results will be deleted.')) {
+      return Promise.resolve();
+    }
+    return request('test_clear_sessions', {}).then(function () {
+      forgetTrackedTestSessions(launchFolder);
+      currentSession = '';
+      currentSessionFolder = '';
+      currentSessionModel = '';
+      showSessionError = false;
+      renderStatus({ status: 'idle' });
+      return refreshSessions();
+    });
+  }
+
   function formatElapsedMs(milliseconds) {
     var seconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000));
     var minutes = Math.floor(seconds / 60);
@@ -1787,7 +1946,7 @@
     label.textContent = identity.primary;
     primaryRow.appendChild(label);
 
-    var elapsed = formatCandidateElapsed(result && result.elapsedMs);
+    var elapsed = result && result.elapsedMs != null ? formatCandidateElapsed(result.elapsedMs) : '';
     if (elapsed) {
       var timing = document.createElement('span');
       timing.className = 'test-generations-result-elapsed';
@@ -1823,6 +1982,35 @@
 
     footer.appendChild(copy);
     return footer;
+  }
+
+  function syncResultElapsed(card, result, failed) {
+    var primary = card.querySelector('.test-generations-result-primary');
+    var timing = primary.querySelector('.test-generations-result-elapsed');
+    var elapsed = result && result.elapsedMs != null ? formatCandidateElapsed(result.elapsedMs) : '';
+    if (!timing && elapsed) {
+      timing = document.createElement('span');
+      timing.className = 'test-generations-result-elapsed';
+      primary.appendChild(timing);
+    }
+    if (timing) {
+      timing.textContent = failed ? 'Failed after ' + elapsed : elapsed;
+      timing.classList.toggle('hidden', !elapsed);
+    }
+  }
+
+  function syncPendingElapsed(status) {
+    if (pendingElapsedTimer) clearTimeout(pendingElapsedTimer);
+    pendingElapsedTimer = null;
+    var pending = el('test-generations-results').querySelector('.test-generations-result-card.is-pending');
+    if (!pending) return;
+    var timing = pending.querySelector('.test-generations-result-elapsed');
+    var startedAt = Number(status && status.candidateStartedAt || 0);
+    timing.textContent = startedAt ? formatElapsedMs(Date.now() - startedAt) : '';
+    timing.classList.toggle('hidden', !startedAt);
+    if (startedAt && isOpen()) {
+      pendingElapsedTimer = setTimeout(function () { syncPendingElapsed(currentStatus); }, 1000);
+    }
   }
 
   function formatTestVideoTime(value) {
@@ -2054,6 +2242,7 @@
     var total = Number(status && status.total || (prepared && prepared.count) || 0);
     var resultFolder = String(status && status.resultFolder || '');
     var sessionName = String(status && status.session || '');
+    var live = status && (status.status === 'running' || status.status === 'stopping');
     var resultScope = sessionName + '|' + resultFolder;
     var priorScope = String(host.dataset.resultScope || '');
 
@@ -2076,21 +2265,23 @@
     );
 
     var empty = host.querySelector('.test-generations-empty');
-    if ((results.length || failures.length || (status && status.status === 'running')) && empty) empty.remove();
+    if ((results.length || failures.length || live) && empty) empty.remove();
 
     results.forEach(function (result, index) {
       var mediaFile = resultMediaFile(result);
       var resultKey = mediaFile || (String(result.sourceLoRA || 'result') + ':' + index);
-      var exists = Array.prototype.some.call(
+      var existing = Array.prototype.find.call(
         host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
         function (card) { return card.dataset.resultKey === resultKey; }
       );
-      if (exists) return;
+      if (existing) {
+        syncResultElapsed(existing, result, false);
+        return;
+      }
 
       var card = document.createElement('article');
       card.className = 'test-generations-result-card';
       card.dataset.resultKey = resultKey;
-      card.dataset.compareIndex = String(index);
 
       if (sessionName && mediaFile) {
         appendTestPreview(card, sessionName, result);
@@ -2122,11 +2313,14 @@
           )
         );
       }
-      var exists = Array.prototype.some.call(
+      var existing = Array.prototype.find.call(
         host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
         function (card) { return card.dataset.resultKey === failureKey; }
       );
-      if (exists) return;
+      if (existing) {
+        syncResultElapsed(existing, failure, true);
+        return;
+      }
 
       var card = document.createElement('article');
       card.className = 'test-generations-result-card is-failed';
@@ -2146,7 +2340,7 @@
     });
 
     var pending = host.querySelector('.test-generations-result-card.is-pending');
-    if (status && status.status === 'running' && (results.length + failures.length) < total) {
+    if (live && (results.length + failures.length) < total) {
       if (!pending) {
         pending = document.createElement('article');
         pending.className = 'test-generations-result-card is-pending';
@@ -2156,18 +2350,29 @@
         pendingPlaceholder.textContent = 'Generating…';
         pending.appendChild(pendingPlaceholder);
 
+        var pendingFooter = document.createElement('div');
+        pendingFooter.className = 'test-generations-result-footer';
+        var pendingPrimary = document.createElement('div');
+        pendingPrimary.className = 'test-generations-result-primary';
         var pendingLabel = document.createElement('div');
         pendingLabel.className = 'test-generations-result-name';
-        pending.appendChild(pendingLabel);
+        pendingPrimary.appendChild(pendingLabel);
+        var pendingTiming = document.createElement('span');
+        pendingTiming.className = 'test-generations-result-elapsed';
+        pendingPrimary.appendChild(pendingTiming);
+        pendingFooter.appendChild(pendingPrimary);
+        pending.appendChild(pendingFooter);
 
         host.appendChild(pending);
       }
       pending.querySelector('.test-generations-result-name').textContent = String(status.current || 'Next LoRA');
+      pending.querySelector('.test-generations-preview-placeholder').textContent = status.status === 'stopping' ? 'Stopping…' : 'Generating…';
     } else if (pending) {
       pending.remove();
     }
+    syncPendingElapsed(status);
 
-    if (!results.length && !failures.length && !(status && status.status === 'running') && !host.querySelector('.test-generations-result-card')) {
+    if (!results.length && !failures.length && !live && !host.querySelector('.test-generations-result-card')) {
       host.innerHTML = '<div class="test-generations-empty">Generated previews will appear here.</div>';
     }
 
@@ -2634,9 +2839,8 @@
     currentSessionModel = currentSession
       ? String(status.modelId || status.model || currentTestModelId() || '')
       : '';
-    currentSessionSource = currentSession
-      ? String(status.source == null ? testSource || '' : status.source)
-      : '';
+    var savedPrompt = currentSession ? String(status.sourcePrompt || status.prompt || '') : '';
+    if (savedPrompt.trim()) el('test-generations-prompt').value = savedPrompt;
     renderStatus(status);
   }
 
@@ -2662,7 +2866,7 @@
     if (!isOpen()) return;
     request('test_status', { modelId: currentTestModelId() }).then(function (status) {
       syncActiveRunControls(status);
-      refreshActivityButtonIfDue(5000);
+      refreshActivityButtonIfDue(15000);
       if (status && (status.status === 'running' || status.status === 'stopping')) showSessionError = true;
       var activeSession = String(status && status.session || '');
       var selectedPreviewLive = !!(
@@ -2684,12 +2888,12 @@
 
       return previewRefresh.then(function () {
         if (status && (status.status === 'running' || status.status === 'stopping')) {
-          if (queuedTestJobs.length) refreshSessionsIfDue(5000).catch(showError);
-          pollTimer = setTimeout(pollStatus, 2000);
+          if (queuedTestJobs.length) refreshSessionsIfDue(10000).catch(showError);
+          pollTimer = setTimeout(pollStatus, 4000);
           return null;
         }
         return refreshSessions().then(function () {
-          if (queuedTestJobs.length && isOpen()) pollTimer = setTimeout(pollStatus, 5000);
+          if (queuedTestJobs.length && isOpen()) pollTimer = setTimeout(pollStatus, 8000);
         });
       });
     }).catch(showError);
@@ -2745,6 +2949,8 @@
     if (node) node.classList.add('hidden');
     if (frame) frame.classList.remove('workspace-test-open');
     launchFolder = '';
+    if (pendingElapsedTimer) clearTimeout(pendingElapsedTimer);
+    pendingElapsedTimer = null;
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
@@ -2816,27 +3022,18 @@
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
     if (!node || !frame) throw new Error('Test Generations requires the app frame and Test workspace.');
-    var logicalFolder = pendingLaunchFolder || (isOpen() ? launchFolder : '') || (state && state.folder) || '';
-    launchFolder = owningSetFolder(logicalFolder);
-    pendingLaunchFolder = '';
+    launchFolder = owningSetFolder((state && state.folder) || '');
+    if (!launchFolder) throw new Error('Test Generations requires a current Set.');
     var requestedModelId = currentTestModelId();
-    if (pendingTestSource !== null) {
-      testSource = String(pendingTestSource || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-      pendingTestSource = null;
-    } else {
-      testSource = null;
-    }
     var rememberedSession = (
       currentSession &&
       currentSessionFolder === launchFolder &&
-      currentSessionModel === requestedModelId &&
-      currentSessionSource === String(testSource || '')
+      currentSessionModel === requestedModelId
     ) ? currentSession : '';
     if (!rememberedSession) {
       currentSession = '';
       currentSessionFolder = '';
       currentSessionModel = '';
-      currentSessionSource = '';
     }
     frame.classList.add('workspace-test-open');
     node.classList.remove('hidden');
@@ -2875,11 +3072,7 @@
       el('test-generations-wildcard-status').textContent = 'Director unavailable.';
       reportConsoleError('Test Generations', err);
     });
-    refreshTestSourceBrowser().then(function (sourcePayload) {
-      if (sourcePayload && sourcePayload.navigated) return null;
-      return request('test_prepare', { modelId: getWorkingModelProfileId() });
-    }).then(function (payload) {
-      if (!payload) return;
+    request('test_prepare', { modelId: getWorkingModelProfileId() }).then(function (payload) {
       prepared = payload;
       syncCandidatesButton(payload);
       if (Array.isArray(payload.warnings)) {
@@ -2907,8 +3100,7 @@
             currentSession = '';
             currentSessionFolder = '';
             currentSessionModel = '';
-            currentSessionSource = '';
-            if (initialStatus && initialStatus.session) selectSessionStatus(initialStatus);
+                  if (initialStatus && initialStatus.session) selectSessionStatus(initialStatus);
             else renderStatus(initialStatus);
           })
         : Promise.resolve(
@@ -3036,12 +3228,12 @@
 
   function deleteSession(sessionName) {
     return request('test_delete_session', { session: String(sessionName || '') }).then(function (payload) {
+      forgetTrackedTestSessions(launchFolder, String(payload && payload.deleted || ''));
       removeDeletedSessionRow(payload && payload.deleted);
       if (currentSession === String(payload.deleted || '')) {
         currentSession = '';
         currentSessionFolder = '';
         currentSessionModel = '';
-        currentSessionSource = '';
         showSessionError = false;
         if (payload.latest && payload.latest.session) selectSessionStatus(payload.latest);
         else renderStatus({ status: 'idle' });
@@ -3090,10 +3282,7 @@
     var node = el('test-generations-pane');
     if (!button || !workspace || !node) throw new Error('Test Generations requires its Training handoff and Test workspace markup.');
 
-    button.onclick = function () {
-      pendingTestSource = null;
-      openPane();
-    };
+    button.onclick = openPane;
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
@@ -3126,24 +3315,30 @@
       if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) modelSelect.value = selected;
     });
     el('test-generations-director-stop').onclick = stopWildcardDirectorJob;
+    el('test-generations-director-prompt-copy').onclick = function () {
+      var button = this;
+      var requestDiagnostic = wildcardDirector.requestDiagnostic;
+      copyWildcardDirectorRequestDiagnostic(requestDiagnostic).then(function () {
+        var original = wildcardDirectorRequestDiagnosticLabel(requestDiagnostic);
+        button.textContent = 'Copied';
+        window.setTimeout(function () {
+          if (wildcardDirector.requestDiagnostic === requestDiagnostic) button.textContent = original;
+        }, 1200);
+      }).catch(showError);
+    };
     el('test-generations-wildcard-use-btn').onclick = function () {
       try { useGeneratedWildcard(); } catch (err) { showError(err); }
     };
     el('test-generations-wildcard-output').addEventListener('input', function () {
       el('test-generations-wildcard-use-btn').disabled = !this.value.trim();
     });
-    el('test-generations-source-up-btn').onclick = function () {
-      if (!this.disabled) chooseTestSource(String(this.dataset.sourceParent || ''));
-    };
-    el('test-generations-source-path-btn').onclick = function () {
-      if (String(testSource || '')) chooseTestSource('');
-    };
-    el('test-generations-source-folders').onclick = function (event) {
-      var button = event.target.closest('[data-test-source]');
-      if (button) chooseTestSource(String(button.dataset.testSource || ''));
-    };
     el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
+    el('test-generations-clear-sessions-btn').onclick = function () {
+      var button = this;
+      button.disabled = true;
+      clearTestSessions().catch(showError).then(function () { button.disabled = false; });
+    };
     el('test-generations-view-grid-btn').onclick = function () {
       setResultsView('grid');
     };
@@ -3151,16 +3346,10 @@
       setResultsView('compare');
     };
     el('test-generations-candidates-btn').onclick = function () {
-      var button = this;
-      var jobId = String(button.dataset.candidateJobId || '');
-      var folder = String(button.dataset.candidateFolder || '');
-      if (!jobId || !folder) return;
-      if (typeof openTrainingCandidates !== 'function') throw new Error('Training Candidates is unavailable.');
-      openTrainingCandidates({ id: jobId, folder: folder }, {
-        onClose: function () {
-          refreshStagedFilesAfterCandidates().catch(showError);
-        }
-      });
+      openCandidateRunMenu(this);
+    };
+    el('test-generations-recent-prompts-btn').onclick = function () {
+      openRecentPromptsMenu(this);
     };
     el('test-generations-files').addEventListener('change', function (event) {
       var checkbox = event.target.closest('[data-candidate-select]');
@@ -3183,6 +3372,47 @@
       syncActiveRunControls(currentStatus);
     });
     el('test-generations-files').onclick = function (event) {
+      var archiveButton = event.target.closest('[data-archive-candidate]');
+      if (archiveButton) {
+        var archiveFileName = String(archiveButton.dataset.archiveCandidate || '');
+        var archiveMetadata = prepared && prepared.candidateMetadata && prepared.candidateMetadata[archiveFileName];
+        if (!archiveMetadata || !archiveMetadata.selected || !archiveMetadata.jobId || !archiveMetadata.folder) {
+          throw new Error('Selected Test candidate has no archiveable training-run provenance.');
+        }
+        openTrainingArchiveModal({
+          id: archiveMetadata.jobId,
+          folder: archiveMetadata.folder
+        });
+        return;
+      }
+      var saveButton = event.target.closest('[data-save-candidate]');
+      if (saveButton) {
+        if (saveButton.disabled) return;
+        var fileName = String(saveButton.dataset.saveCandidate || '');
+        var metadata = prepared && prepared.candidateMetadata && prepared.candidateMetadata[fileName];
+        if (!metadata) throw new Error('Test candidate has no training-run provenance.');
+        if (typeof window.openEpochSaveModal !== 'function') throw new Error('Epoch Save modal is unavailable.');
+        window.openEpochSaveModal({
+          epoch: metadata.epoch,
+          stage: metadata.stage,
+          folder: metadata.folder,
+          jobId: metadata.jobId,
+          fileName: metadata.sourceFileName || fileName,
+          onSaved: function (payload) {
+            var selected = payload && payload.selected ? payload.selected : null;
+            Object.keys(prepared.candidateMetadata || {}).forEach(function (candidateFile) {
+              var item = prepared.candidateMetadata[candidateFile];
+              if (item && item.jobId === metadata.jobId && item.folder === metadata.folder) {
+                item.selected = !!(selected && Number(item.epoch) === Number(selected.epoch));
+                item.selectedEpoch = selected;
+              }
+            });
+            renderStagedFiles(prepared);
+            if (typeof refreshTrainingHistory === 'function') refreshTrainingHistory(true);
+          }
+        });
+        return;
+      }
       var button = event.target.closest('[data-file-name]');
       if (!button) return;
       button.disabled = true;
@@ -3238,11 +3468,6 @@
         removeCurrentSessionCandidate(remove);
         return;
       }
-      if (event.target.closest('.test-generations-video-transport, video, button')) return;
-      var card = event.target.closest('[data-compare-index]');
-      if (!card) return;
-      compareIndex = Number(card.dataset.compareIndex || 0);
-      setResultsView('compare');
     };
     el('test-generations-compare').onclick = function (event) {
       var rating = event.target.closest('[data-test-rating]');
@@ -3287,6 +3512,32 @@
       button.title = expanded ? 'Close session details' : 'View frozen session settings and resolved prompt';
       button.setAttribute('aria-label', button.title);
     };
+    window.addEventListener('webcap:inference-queue-snapshot', function (event) {
+      syncTestInferenceSnapshot(event && event.detail && event.detail.queue);
+    });
+    window.addEventListener('webcap:training-archived', function (event) {
+      var folder = String(event && event.detail && event.detail.folder || '');
+      if (!folder || !isOpen() || String(launchFolder || '') !== String(owningSetFolder(folder) || '')) return;
+      refreshStagedFilesAfterCandidates().catch(showError);
+    });
+    window.addEventListener('webcap:test-sessions-cleared', function (event) {
+      var folder = String(event && event.detail && event.detail.folder || '');
+      if (!folder) return;
+      forgetTrackedTestSessions(folder);
+      if (String(currentSessionFolder || '') === String(owningSetFolder(folder) || '')) {
+        currentSession = '';
+        currentSessionFolder = '';
+        currentSessionModel = '';
+        showSessionError = false;
+        if (isOpen() && String(launchFolder || '') === String(owningSetFolder(folder) || '')) {
+          renderStatus({ status: 'idle' });
+          refreshSessions().catch(showError);
+        }
+      }
+    });
+    if (typeof window.getInferenceQueueSnapshot === 'function') {
+      syncTestInferenceSnapshot(window.getInferenceQueueSnapshot());
+    }
     window.addEventListener('webcap:working-model-changed', function () {
       syncLaunchVisibility();
       syncActiveRunControls(currentStatus);
@@ -3299,6 +3550,7 @@
   }
 
   window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
+  window.prepareTestBenchSetSwitch = prepareTestBenchSetSwitch;
   window.openTestBenchActivity = openTestBenchActivity;
   window.openTestBenchActivityMenu = openTestBenchActivityMenu;
   window.openTestBenchForFolder = openTestBenchForSetFolder;

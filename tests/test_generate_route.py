@@ -124,7 +124,7 @@ def test_generate_reference_upload_uses_generate_store(monkeypatch):
     monkeypatch.setattr(
         app_module,
         "generate_save_reference",
-        lambda upload: {"id": "ref-1", "name": upload.filename, "path": ".webcap_runtime/generate-references/ref-1/frame.png"},
+        lambda upload: {"id": "ref-1", "name": upload.filename, "path": "work/generate-references/ref-1/frame.png"},
     )
     client = app_module.app.test_client()
 
@@ -391,12 +391,12 @@ def test_generate_enqueue_failure_cleans_uploaded_references(monkeypatch):
     response = client.post("/fs/generate", json={
         "modelId": "minimax_h3",
         "prompt": "idea",
-        "references": {"first_frame": ".webcap_runtime/generate-references/ref-1/frame.png"},
+        "references": {"first_frame": "work/generate-references/ref-1/frame.png"},
     })
 
     assert response.status_code == 400
     assert cleaned == [{
-        "first_frame": ".webcap_runtime/generate-references/ref-1/frame.png"
+        "first_frame": "work/generate-references/ref-1/frame.png"
     }]
 
 
@@ -529,14 +529,13 @@ def test_generate_execute_cleans_transient_refs_and_captured_provider_output(tmp
     )
     monkeypatch.setattr(generate_generation.inference_runtime, "available_names", lambda *_args: [])
     monkeypatch.setattr(generate_generation.inference_runtime, "resolve_name", lambda value, *_args: value)
-    monkeypatch.setattr(generate_generation.inference_runtime, "queue_workflow", lambda _workflow: "provider-1")
+    monkeypatch.setattr(generate_generation.inference_runtime, "queue_managed_workflow", lambda _job_id, _workflow: "provider-1")
     monkeypatch.setattr(
         generate_generation.inference_runtime,
         "wait_for_output",
         lambda *_args: output_ref,
     )
     monkeypatch.setattr(generate_generation.inference_runtime, "download_output", lambda _ref: b"video")
-    monkeypatch.setattr(generate_generation, "execution_update_job", lambda *_args, **_kwargs: None)
     cleaned_refs = []
     monkeypatch.setattr(
         generate_generation,
@@ -572,16 +571,16 @@ def test_generate_reference_cleanup_route_is_scoped_to_store_helper(monkeypatch)
 
     response = client.post("/fs/generate/reference/cleanup", json={
         "paths": [
-            ".webcap_runtime/generate-references/ref-1/first.png",
-            ".webcap_runtime/generate-references/ref-2/last.png",
+            "work/generate-references/ref-1/first.png",
+            "work/generate-references/ref-2/last.png",
         ]
     })
 
     assert response.status_code == 200
     assert response.get_json()["removed"] == 2
     assert seen == [
-        ".webcap_runtime/generate-references/ref-1/first.png",
-        ".webcap_runtime/generate-references/ref-2/last.png",
+        "work/generate-references/ref-1/first.png",
+        "work/generate-references/ref-2/last.png",
     ]
 
 

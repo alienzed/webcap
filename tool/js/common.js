@@ -83,6 +83,9 @@ window.setDirectorModelPreference = setDirectorModelPreference;
 function formatDirectorModelLabel(model) {
   model = model && typeof model === 'object' ? model : {};
   var label = String(model.label || model.modelId || model.id || '').trim();
+  var assessment = model.assessment && typeof model.assessment === 'object' ? model.assessment : null;
+  if (assessment && assessment.seriousWarning) label = '⚠ ' + label;
+  else if (assessment && assessment.limited) label = '△ ' + label;
   var sizeBytes = Number(model.sizeBytes);
   if (!isFinite(sizeBytes) || sizeBytes <= 0) return label;
   return label + ' · ' + (sizeBytes / (1024 * 1024 * 1024)).toFixed(1) + ' GiB';
@@ -110,6 +113,9 @@ function renderDirectorModelOptions(select, models, selectedId) {
       var option = document.createElement('option');
       option.value = String(model.id || '');
       option.textContent = formatDirectorModelLabel(model);
+      var assessment = model.assessment && typeof model.assessment === 'object' ? model.assessment : null;
+      if (assessment && assessment.seriousWarning) option.title = 'Assessment found serious generation issues.';
+      else if (assessment && assessment.limited) option.title = 'Assessment found reduced long-form output capacity.';
       host.appendChild(option);
     });
     select.appendChild(host);

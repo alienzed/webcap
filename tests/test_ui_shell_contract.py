@@ -129,6 +129,38 @@ def test_activity_drawer_marks_owning_workspace_links_while_work_is_active():
     assert ".activity-rail-btn.has-active-work::after" in css
 
 
+def test_activity_recent_completions_are_kept_in_browser_memory():
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    generate = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "recentCompletions: []" in activity
+    assert "function captureRecent(items)" in activity
+    assert "function rememberRecentCompletion(item)" in activity
+    assert "window.recordActivityCompletion = rememberRecentCompletion;" in activity
+    assert "state.recentCompletions = Object.keys(byKey)" in activity
+    assert "captureRecent(payload.recent);" in activity
+    assert "return state.recentCompletions.slice();" in activity
+    assert "window.recordActivityCompletion({" in storyboard
+    assert "kind: 'storyboard'" in storyboard
+    assert "window.recordActivityCompletion({" in generate
+    assert "kind: 'generate'" in generate
+
+
+def test_test_generations_records_session_completion_destination():
+    test_bench = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "trackedTestInferenceSessions = Object.create(null)" in test_bench
+    assert "function syncTestInferenceSnapshot(queue)" in test_bench
+    assert "String(job && job.client || '') !== 'test'" in test_bench
+    assert "requestForFolder(tracked.folder, 'test_open_session', { session: tracked.sessionId })" in test_bench
+    assert "window.recordActivityCompletion({" in test_bench
+    assert "kind: 'test'" in test_bench
+    assert "folder: tracked.folder" in test_bench
+    assert "sessionId: tracked.sessionId" in test_bench
+    assert "window.addEventListener('webcap:inference-queue-snapshot'" in test_bench
+
+
 def test_activity_navigation_passes_stable_target_identity_to_workspaces():
     activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
@@ -674,7 +706,7 @@ def test_activity_polling_backs_off_only_when_managed_work_is_idle():
     assert "Number(queue.backlog || 0) > 0" in activity
     assert "!!queue.paused" in activity
     assert "30000" in activity
-    assert "(activeCount() || hasQueuedOrPausedWork()) ? 4000 : 30000" in activity
+    assert "(activeCount() || hasQueuedOrPausedWork()) ? 8000 : 30000" in activity
     assert "function wake()" in activity
     assert "pendingPromise: null" in activity
     assert "if (state.pending) {" in activity
@@ -989,3 +1021,37 @@ def test_director_stop_buttons_are_card_level_actions_not_graph_children():
         trend = card.split(f'id="{trend_id}"', 1)[1].split("</div>", 1)[0]
         assert f'id="{stop_id}"' in card
         assert f'id="{stop_id}"' not in trend
+
+def test_shell_separates_set_aware_and_global_creative_activities():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+
+    prep = html.index('id="activity-prep-btn"')
+    training = html.index('id="activity-training-btn"')
+    test = html.index('id="activity-test-btn"')
+    context_separator = html.index('class="activity-rail-separator activity-rail-context-separator"')
+    generate = html.index('id="activity-generate-btn"')
+    storyboard = html.index('id="activity-storyboard-btn"')
+
+    assert prep < training < test < context_separator < generate < storyboard
+    assert "var setControl = document.getElementById('app-header-set-control');" in shell
+    assert "setControl.classList.toggle('hidden', generateOpen || storyboardOpen);" in shell
+
+
+def test_pending_media_reselection_waits_for_metadata_hydration():
+    ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+
+    start = ui.index("function refreshCurrentDirectory()")
+    end = ui.index("// Ensure live filtering as you type", start)
+    refresh = ui[start:end]
+
+    capture = "var pendingSelectFileName = window.state && state.pendingSelectFileName ? state.pendingSelectFileName : '';"
+    metadata_refresh = "refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {"
+    metadata_apply = "completeFolderLoadPipeline(path, loadSequence, metadataResult);"
+    reselect = "setTimeout(function() { selectByFileName(pendingSelectFileName); }, 0);"
+
+    assert capture in refresh
+    assert "state.pendingSelectFileName = undefined;" in refresh
+    assert reselect in refresh
+    assert refresh.index(capture) < refresh.index(metadata_refresh)
+    assert refresh.index(metadata_refresh) < refresh.index(metadata_apply) < refresh.index(reselect)

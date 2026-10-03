@@ -1118,9 +1118,8 @@
 }
 
 .storyboard-reference-upload-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  grid-column: 1 / -1;
+  min-height: 56px;
   cursor: pointer;
 }
 
@@ -3061,6 +3060,30 @@
   color: var(--text);
 }
 
+.storyboard-develop-individual {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.storyboard-develop-individual input {
+  margin: 0;
+}
+
+.storyboard-develop-individual.recommended {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
 .storyboard-develop-controls .storyboard-primary-btn {
   flex: 1 1 auto;
   min-height: 42px;
@@ -3230,7 +3253,7 @@
   margin: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(150px, 42%);
-  grid-template-areas: "label trend" "phase trend" "detail trend" "load trend";
+  grid-template-areas: "label trend" "phase trend" "detail trend" "load trend" "copy trend";
   align-items: center;
   column-gap: 16px;
   row-gap: 4px;
@@ -3272,6 +3295,7 @@
 
 #storyboard-director-activity-detail { grid-area: detail; }
 #storyboard-director-model-load { grid-area: load; }
+#storyboard-director-prompt-copy { grid-area: copy; margin-top: 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #storyboard-director-activity-trend { grid-area: trend; }
 
 #storyboard-director-activity-trend svg {
@@ -3282,7 +3306,7 @@
   .storyboard-director-activity {
     width: min(340px, calc(100% - 24px));
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "label" "phase" "detail" "load" "trend";
+    grid-template-areas: "label" "phase" "detail" "load" "copy" "trend";
     row-gap: 5px;
   }
 
@@ -3388,12 +3412,32 @@
 }
 
 .storyboard-scenes-title-row #storyboard-generate-scenes-btn,
-.storyboard-scenes-title-row #storyboard-assistant-btn {
+.storyboard-scenes-title-row #storyboard-cancel-takes-btn,
+.storyboard-scenes-title-row #storyboard-director-tools-btn {
   width: auto;
   min-height: 30px;
   flex: 0 0 auto;
   padding: 4px 10px;
   white-space: nowrap;
+}
+
+.storyboard-director-tools-dialog {
+  width: min(620px, calc(100vw - 48px));
+}
+
+.storyboard-director-tools-dialog textarea {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+}
+
+.storyboard-director-tools-dialog select {
+  width: 100%;
+}
+
+.storyboard-director-tools-dialog small {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .storyboard-scenes-heading-actions {
@@ -3513,7 +3557,8 @@
     "label trend"
     "phase trend"
     "detail trend"
-    "load trend";
+    "load trend"
+    "copy trend";
   align-items: stretch;
   padding: 16px 18px;
 }
@@ -3537,6 +3582,7 @@
       "phase"
       "detail"
       "load"
+      "copy"
       "trend";
   }
 }

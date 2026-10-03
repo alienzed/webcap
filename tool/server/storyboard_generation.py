@@ -210,11 +210,7 @@ def execute_inference(job_id, request, context):
             inference_runtime.resolve_name,
         )
         effective_input = model.effective_input(workflow)
-        provider_job_id = inference_runtime.queue_workflow(workflow)
-        execution_update_job(
-            job_id,
-            details={"providerJobId": provider_job_id, "providerStatus": "pending"},
-        )
+        provider_job_id = inference_runtime.queue_managed_workflow(job_id, workflow)
         output_ref = inference_runtime.wait_for_output(
             provider_job_id,
             job_id,

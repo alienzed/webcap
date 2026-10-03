@@ -55,18 +55,8 @@ def execution_lane_snapshot(lane_name, include_terminal=True):
 execution_mark_running = _execution_queue.mark_running
 
 
-def execution_pause_lane(lane_name, reason="Queue paused by the user."):
-    _require_llm_lane(lane_name)
-    return _execution_queue.pause_lane(reason=reason)
-
-
-execution_reorder_job = _execution_queue.reorder_job
 execution_request_stop = _execution_queue.request_stop
 
-
-def execution_resume_lane(lane_name):
-    _require_llm_lane(lane_name)
-    return _execution_queue.resume_lane()
 
 _dispatch_lock = threading.Lock()
 _enqueue_lock = threading.Lock()
@@ -149,6 +139,8 @@ def reconcile_startup():
 
 
 def _assert_storyboard_contract_current(context, frozen_contract):
+    if context.get("deferredApply") is True:
+        return
     if "sourceInstruction" not in context:
         return
 
@@ -177,14 +169,17 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         return {
             "text": llm_result["text"],
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
+            "contextSize": llm_result.get("contextSize"),
         }
 
     if client == "generate":
         return {
             "result": llm_result["text"],
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -197,6 +192,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         return {
             "analysis": normalize_result(llm_result.get("data")),
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -219,6 +215,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "storyId": story["id"],
             "result": story["concept"],
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -230,6 +227,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "storyId": story["id"],
             "addedCount": added_count,
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -253,6 +251,33 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "changedSceneCount": changed_scene_count,
             "changedFieldCount": changed_field_count,
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
+    if operation == "develop_story_outline":
+        data = copy.deepcopy(llm_result.get("data"))
+        if not isinstance(data, dict) or not isinstance(data.get("scenes"), list) or not data["scenes"]:
+            raise ValueError("Storyboard Director returned an invalid Scene outline.")
+        return {
+            "storyId": story_id,
+            "outline": data,
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
+    if operation == "develop_story_scene":
+        data = copy.deepcopy(llm_result.get("data"))
+        if not isinstance(data, dict) or not isinstance(data.get("scene"), dict):
+            raise ValueError("Storyboard Director returned an invalid individual Scene.")
+        return {
+            "storyId": story_id,
+            "scene": data["scene"],
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -277,6 +302,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "storyId": story["id"],
             "sceneCount": len(story.get("sceneOrder") or []),
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -300,6 +326,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "sceneId": scene["id"],
             "insertedAfterSceneId": scene_id,
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -345,6 +372,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "sceneId": scene["id"],
             "result": scene["prompt"],
             "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
         }
@@ -386,10 +414,16 @@ def _execute_claimed(job_id, gpu_reserved):
     from .storyboard_llm_runtime import run_contract, run_freeform_chat
     try:
         if client == "chat":
+            overrides = context.get("runtimeOverrides") if isinstance(context.get("runtimeOverrides"), dict) else {}
+            chat_kwargs = {"gpu_reserved": bool(gpu_reserved)}
+            if "maxTokens" in overrides:
+                chat_kwargs["max_tokens"] = overrides["maxTokens"]
+            if "contextSize" in overrides:
+                chat_kwargs["context_size"] = overrides["contextSize"]
             llm_result = run_freeform_chat(
                 model_id,
                 contract.get("messages"),
-                gpu_reserved=bool(gpu_reserved),
+                **chat_kwargs,
             )
         else:
             llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
@@ -478,13 +512,6 @@ def _advance_queue():
         try:
             _execute_claimed(job_id, gpu_reserved=local_gpu)
         except Exception as exc:
-            from .storyboard_llm_runtime import DirectorGpuHoldRequired
-            if isinstance(exc, DirectorGpuHoldRequired):
-                release_gpu = False
-                execution_pause_lane(
-                    EXECUTION_LANE,
-                    reason="Queue paused: llama.cpp GPU state could not be confirmed safe after a failed LLM request.",
-                )
             current = execution_get_job(job_id)
             current_status = str(current.get("status") or "")
             if current_status == "stopping":
@@ -566,7 +593,7 @@ def _storyboard_target(context, operation):
         return None
     if operation in {"expand_concept", "define_invariants"}:
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
-    if operation in {"develop_story", "insert_scene"}:
+    if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene"}:
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
     if operation == "repair_scenes":
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}
@@ -615,6 +642,21 @@ def storyboard_story_busy(story_id):
     )
 
 
+def _request_diagnostic(client, contract):
+    if client == "chat":
+        from .storyboard_llm_runtime import normalize_freeform_messages
+        messages = normalize_freeform_messages(contract.get("messages"))
+    else:
+        prompt = str(contract.get("prompt") or "").strip()
+        messages = [{"role": "user", "content": prompt}] if prompt else []
+
+    return {
+        "messages": copy.deepcopy(messages),
+        "messageCount": len(messages),
+        "contentChars": sum(len(str(message.get("content") or "")) for message in messages),
+    }
+
+
 def enqueue(client, model_id, contract, context=None, label=""):
     _ensure_execution_reconciled()
     client = str(client or "").strip()
@@ -627,6 +669,22 @@ def enqueue(client, model_id, contract, context=None, label=""):
         raise ValueError("LLM contract must be an object.")
 
     context = copy.deepcopy(context) if isinstance(context, dict) else {}
+    runtime_overrides = context.get("runtimeOverrides")
+    if runtime_overrides is not None:
+        if client != "chat" or not isinstance(runtime_overrides, dict):
+            raise ValueError("LLM runtimeOverrides are supported only for chat jobs.")
+        unknown_overrides = set(runtime_overrides) - {"maxTokens", "contextSize"}
+        if unknown_overrides:
+            raise ValueError("Unsupported LLM runtime override: " + sorted(unknown_overrides)[0])
+        for field in ("maxTokens", "contextSize"):
+            if field not in runtime_overrides:
+                continue
+            value = runtime_overrides[field]
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError("LLM runtime override " + field + " must be a positive integer.")
+        if "contextSize" in runtime_overrides and runtime_overrides["contextSize"] < 1024:
+            raise ValueError("LLM runtime override contextSize must be at least 1024.")
+    request_diagnostic = _request_diagnostic(client, contract)
     with _enqueue_lock:
         job = execution_enqueue(
             EXECUTION_LANE,
@@ -644,7 +702,9 @@ def enqueue(client, model_id, contract, context=None, label=""):
             },
         )
     _ensure_monitor_started()
-    return _job_view(execution_get_job(job["id"]))
+    view = _job_view(execution_get_job(job["id"]))
+    view["request"] = request_diagnostic
+    return view
 
 
 def job_status(job_id, consume=False):
@@ -696,16 +756,8 @@ def _queue_wait_state(current):
             "waitReason": label + " currently holds the shared GPU.",
         }
 
-    try:
-        from .training_runner import gpu_reservation_block_reason
-        reason = str(gpu_reservation_block_reason(GPU_RESERVATION_OWNER) or "")
-    except Exception:
-        _logger.exception("Could not inspect the shared GPU blocker for queued LLM work.")
-        return {
-            "queueDepth": len(queued),
-            "waitOwner": "unknown",
-            "waitReason": "Shared GPU availability could not be determined.",
-        }
+    from .training_runner import gpu_reservation_block_reason
+    reason = str(gpu_reservation_block_reason(GPU_RESERVATION_OWNER) or "")
 
     if reason.startswith("Training "):
         return {
@@ -750,29 +802,4 @@ def action(operation, job_id="", direction="", position=None):
         # captured before that race instead of re-reading a job that may already
         # be an in-memory terminal receipt.
         return {"job": _job_view(stopping)}
-    if operation == "pause_queue":
-        execution_pause_lane(EXECUTION_LANE)
-        return {"queue": snapshot()}
-    if operation == "resume_queue":
-        execution_resume_lane(EXECUTION_LANE)
-        _ensure_monitor_started()
-        return {"queue": snapshot()}
-    if operation == "reorder":
-        lane = execution_reorder_job(
-            job_id,
-            direction=str(direction or "").strip() or None,
-            position=position,
-        )
-        return {
-            "queue": {
-                "paused": bool(lane.get("paused")),
-                "pauseReason": str(lane.get("pauseReason") or ""),
-                "activeJobId": str(lane.get("activeJobId") or ""),
-                "jobs": [
-                    _job_view(job)
-                    for job in lane.get("jobs", [])
-                    if str(job.get("status") or "") not in {"completed", "failed", "cancelled", "stopped", "interrupted"}
-                ],
-            }
-        }
     raise ValueError("Unsupported LLM queue action: " + operation)

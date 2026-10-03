@@ -10,6 +10,7 @@
     pendingPromise: null,
     lastSeen: sessionStartedAt,
     openedAt: 0,
+    recentCompletions: [],
     notified: Object.create(null),
     reportedErrors: Object.create(null)
   };
@@ -21,9 +22,39 @@
   }
 
   function sessionRecent() {
-    return (Array.isArray(state.payload.recent) ? state.payload.recent : []).filter(function (item) {
-      return finishedAt(item) >= sessionStartedAt;
+    return state.recentCompletions.slice();
+  }
+
+  function recentIdentity(item) {
+    var id = String(item && item.id || '').trim();
+    if (!id) return recentKey(item);
+    return [String(item.lane || item.kind || ''), id].join(':');
+  }
+
+  function rememberRecentCompletion(item) {
+    if (!item || !item.id) return;
+    captureRecent([Object.assign({}, item, {
+      finishedAt: finishedAt(item) || Date.now() / 1000,
+      updatedAt: finishedAt(item) || Date.now() / 1000
+    })]);
+    notifyRecent(sessionRecent());
+    render();
+  }
+
+  function captureRecent(items) {
+    var byKey = Object.create(null);
+    state.recentCompletions.forEach(function (item) {
+      byKey[recentIdentity(item)] = item;
     });
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      if (finishedAt(item) < sessionStartedAt) return;
+      byKey[recentIdentity(item)] = Object.assign({}, item);
+    });
+    state.recentCompletions = Object.keys(byKey).map(function (key) {
+      return byKey[key];
+    }).sort(function (a, b) {
+      return finishedAt(b) - finishedAt(a);
+    }).slice(0, 24);
   }
 
   function requestJson(url) {
@@ -126,6 +157,9 @@
     } else {
       if (item.modelId) parts.push(item.modelId);
       if (item.operation) parts.push(String(item.operation).replace(/_/g, ' '));
+      if (item.kind === 'director' && item.finishReason) parts.push('finish=' + String(item.finishReason));
+      if (item.kind === 'director' && Number(item.promptTokens) > 0) parts.push('prompt=' + String(item.promptTokens));
+      if (item.kind === 'director' && Number(item.outputTokens) > 0) parts.push('output=' + String(item.outputTokens));
       if (item.folder) parts.push(item.folder);
       if (item.sceneId && !item.label) parts.push('Scene ' + item.sceneId);
     }
@@ -576,6 +610,7 @@
     state.pending = true;
     state.pendingPromise = requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
       state.payload = payload;
+      captureRecent(payload.recent);
       window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);
       var activeErrorKeys = Object.create(null);
       (Array.isArray(payload.errors) ? payload.errors : []).forEach(function (item) {
@@ -617,7 +652,7 @@
     if (state.timer) clearTimeout(state.timer);
     state.timer = setTimeout(function () {
       refresh().then(schedule);
-    }, state.open ? 2500 : ((activeCount() || hasQueuedOrPausedWork()) ? 4000 : 30000));
+    }, state.open ? 3000 : ((activeCount() || hasQueuedOrPausedWork()) ? 8000 : 30000));
   }
 
   function wake() {
@@ -667,6 +702,7 @@
     window.addEventListener('webcap:inference-queue-changed', wake);
   }
 
+  window.recordActivityCompletion = rememberRecentCompletion;
   window.setActivityDrawerOpen = setOpen;
   window.refreshActivityMonitor = wake;
   bind();

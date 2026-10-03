@@ -66,6 +66,7 @@ Examples:
 - durable Training queue intent;
 - durable Inference queue/backlog intent;
 - lightweight Training History / Recent Runs convenience metadata;
+- compact Director model assessment lessons / validated calibration profiles;
 - provider bookkeeping that is meaningful across restarts.
 
 Persistent JSON should be consolidated by **shared lifecycle**, not merely because several files are JSON.
@@ -106,6 +107,7 @@ Anything here must be safe to delete at any time while WebCap is not actively wr
 Examples:
 
 - Storage Manager measurements/discovery cache;
+- temporary full Director model assessment evidence (probe prompts and outputs) after compact learned findings have been published to state;
 - other advisory/rebuildable indexes.
 
 Deleting `cache/` must never remove user-authored state, pending queue intent, durable generated results, checkpoints, or required provider identity.
@@ -178,7 +180,7 @@ The queue contracts remain domain-specific:
 - LLM/Director work is server-session-bound and should not become restart-recovery state.
 - GPU ownership is runtime truth and is never persisted.
 
-The current split between `.webcap/execution_queue.json` and `.webcap_training/queue.json` is transitional. The north star is one durable queue-state document for the queue intent that genuinely survives restart, while Training keeps its specialized lifecycle implementation.
+Durable Inference and Training queue intent now lives under host-local app-data `state/`. The queue implementations remain domain-specific even though their persisted state shares one lifecycle home.
 
 Do not merge unrelated lifecycle data into that file:
 
@@ -191,7 +193,7 @@ Do not merge unrelated lifecycle data into that file:
 
 Migration is incremental and must preserve working behavior.
 
-1. **Do not move live queue state merely for cleanliness.** A long/running Training queue is a hard no-touch condition for `.webcap_training/queue.json`.
+1. **Do not move live queue state merely for cleanliness.** A long/running Training queue is a hard no-touch condition for any queue-state path transition.
 2. Start with data whose deletion is already harmless, especially advisory caches.
 3. Next move small persistent bookkeeping that has one clear owner and no active-process identity.
 4. Move media-bearing temporary work only when its producer and cleanup lifecycle are explicit.
@@ -202,13 +204,13 @@ Migration is incremental and must preserve working behavior.
 
 ## 9. Current legacy roots
 
-Current code still uses several transitional locations beneath `FS_ROOT`, including:
+The only remaining active global transitional root beneath `FS_ROOT` is `.webcap_training/`, retained temporarily for Training-specific fallback/diagnostic behavior that may still intersect historical Training evidence.
 
-- `.webcap/`;
-- `.webcap_training/`;
-- `.webcap_runtime/`.
+Global `.webcap/` and `.webcap_runtime/` are no longer active state homes. Storage discovery may still ignore those names so stale leftovers are not mistaken for user Sets, but WebCap does not read them as compatibility sources. In particular, legacy global `.webcap/test-generations/` sessions are no longer discovered.
 
-Do not add new uses of these roots. Existing uses should be classified and migrated only when their lifecycle permits it.
+Training queue state and Recent Runs metadata no longer belong under `.webcap_training/`; they live in app-data `state/training_queue.json` and `state/recent_runs.json`.
+
+Do not add new uses of these roots. The remaining `.webcap_training/` dependency should be removed only when its Training-history-sensitive fallback surface can be retired safely.
 
 ## 10. Review rule for future work
 

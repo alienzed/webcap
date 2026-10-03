@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from tool.server import inference_runtime
 
 
@@ -60,3 +62,60 @@ def test_progress_message_ignores_unrelated_jobs_and_unknown_shapes():
 def test_progress_socket_url_uses_provider_host_and_job_scoped_client_id(monkeypatch):
     monkeypatch.setattr(inference_runtime, "COMFY_BASE_URL", "http://127.0.0.1:8188")
     assert inference_runtime._progress_socket_url("abc") == "ws://127.0.0.1:8188/ws?clientId=webcap-abc"
+
+
+def test_managed_workflow_records_provider_identity_before_submission(monkeypatch):
+    events = []
+    monkeypatch.setattr(inference_runtime.uuid, "uuid4", lambda: "provider-1")
+
+    def update(job_id, details):
+        events.append(("update", job_id, dict(details)))
+
+    def submit(url, method="GET", payload=None, timeout=10):
+        assert events == [
+            ("update", "webcap-1", {"providerJobId": "provider-1", "providerStatus": "submitting"})
+        ]
+        assert url.endswith("/prompt")
+        assert payload["prompt_id"] == "provider-1"
+        events.append(("submit", payload["prompt_id"]))
+        return {"prompt_id": "provider-1"}
+
+    monkeypatch.setattr(inference_runtime, "execution_update_job", update)
+    monkeypatch.setattr(inference_runtime, "_read_json_response", submit)
+
+    assert inference_runtime.queue_managed_workflow("webcap-1", {"node": {}}) == "provider-1"
+    assert events[-1] == ("update", "webcap-1", {"providerStatus": "pending"})
+
+
+def test_managed_workflow_keeps_provider_identity_when_submission_fails(monkeypatch):
+    updates = []
+    monkeypatch.setattr(inference_runtime.uuid, "uuid4", lambda: "provider-2")
+    monkeypatch.setattr(
+        inference_runtime,
+        "execution_update_job",
+        lambda job_id, details: updates.append((job_id, dict(details))),
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "_read_json_response",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("provider dropped")),
+    )
+
+    with pytest.raises(ConnectionError, match="provider dropped"):
+        inference_runtime.queue_managed_workflow("webcap-2", {"node": {}})
+
+    assert updates == [
+        ("webcap-2", {"providerJobId": "provider-2", "providerStatus": "submitting"})
+    ]
+
+
+def test_webcap_queue_job_ids_only_returns_webcap_client_ids():
+    snapshot = {
+        "running": [[0, "owned-1", {}, {"client_id": "webcap-owned-1"}, []]],
+        "pending": [
+            [1, "other", {}, {"client_id": "someone-else"}, []],
+            [2, "owned-2", {}, {"client_id": "webcap-owned-2"}, []],
+        ],
+    }
+
+    assert inference_runtime.webcap_queue_job_ids(snapshot) == ["owned-1", "owned-2"]

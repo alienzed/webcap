@@ -19,8 +19,9 @@ from .video_clip_ops import clip_video_response, get_clip_job_status
 from .video_frame_ops import extract_video_frame_response, inspect_video_frame_response
 from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
-from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_available as training_runner_candidate_run_available, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, select_candidate_epoch_response as training_runner_select_candidate_epoch_response, clear_candidate_epoch_selection_response as training_runner_clear_candidate_epoch_selection_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, clear_history_response as training_runner_clear_history_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, start_observer as start_training_runner_observer
+from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_available as training_runner_candidate_run_available, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, save_candidate_epoch_response as training_runner_save_candidate_epoch_response, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, select_candidate_epoch_response as training_runner_select_candidate_epoch_response, clear_candidate_epoch_selection_response as training_runner_clear_candidate_epoch_selection_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, clear_history_response as training_runner_clear_history_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, reconcile_startup as reconcile_training_startup, start_observer as start_training_runner_observer
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
+from .training_archive import preview as training_archive_preview, finalize as training_archive_finalize, list_archives as training_archive_list, archive_metrics as training_archive_metrics
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
 from .prune_candidates import prune_candidates_response
 from .duplicate_candidates import duplicate_candidates_response
@@ -28,19 +29,17 @@ from .training_setup import ensure_training_setup
 from .environment_check import build_environment_report
 from .epoch_test_bench import (
     activity_snapshot as test_generations_activity_snapshot,
-    browse_source as test_generations_browse_source,
     handle_request as handle_epoch_test_bench_request,
     resolve_result_media as test_generations_resolve_result_media,
     supported_models as test_generations_supported_models,
     browse_keep_lora_destination as test_generations_browse_keep_lora_destination,
-    keep_test_candidate as test_generations_keep_test_candidate,
 )
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_rating, write_folder_state_atomic
 from .storage_manager import cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, scan_status as storage_scan_status, start_scan as storage_start_scan
-from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, resolve_story_media as storyboard_resolve_media, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_scene_repairs as storyboard_restore_scene_repairs, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
+from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, resolve_story_media as storyboard_resolve_media, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_scene_repairs as storyboard_restore_scene_repairs, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
@@ -839,6 +838,13 @@ def storyboard_generation_route():
 
         data = request.get_json(silent=True) or {}
         operation = str(data.get("operation") or "").strip()
+        if operation == "cancel_story":
+            story_id = str(data.get("storyId") or "").strip()
+            stop_storyboard_jobs(story_id)
+            return jsonify({
+                "ok": True,
+                "queue": storyboard_generation_queue(story_id),
+            })
         if operation:
             return jsonify({
                 "ok": True,
@@ -976,21 +982,47 @@ def storyboard_director_route():
         operation = str(data.get("operation") or "").strip()
         model_id = str(data.get("model") or "").strip()
         instruction = str(data.get("instruction") or "").strip()
+        development = data.get("development") if isinstance(data.get("development"), dict) else None
 
         story = storyboard_load_story(story_id)
         replace_existing = bool(data.get("replaceExisting"))
-        if operation == "develop_story":
+        if operation in {"develop_story", "develop_story_outline"}:
             if story.get("sceneOrder") and not replace_existing:
                 raise ValueError("Story already has Scenes. Confirm replacement before developing it again.")
             active_generation = storyboard_generation_queue(story_id)
             if active_generation.get("jobs"):
                 raise ValueError("Story has pending Take generation. Stop or finish it before developing Scenes.")
 
+        if operation == "apply_individual_development":
+            expected_updated_at = str(data.get("expectedUpdatedAt") or "").strip()
+            if not expected_updated_at or expected_updated_at != str(story.get("updatedAt") or ""):
+                raise RuntimeError(
+                    "Story inputs changed during individual Scene development. "
+                    "The staged result was not applied; run Develop Scenes again."
+                )
+            if story.get("sceneOrder") and not replace_existing:
+                raise ValueError("Story already has Scenes. Confirm replacement before developing it again.")
+            active_generation = storyboard_generation_queue(story_id)
+            if active_generation.get("jobs"):
+                raise ValueError("Story has pending Take generation. Stop or finish it before developing Scenes.")
+            plan = data.get("plan")
+            if not isinstance(plan, dict):
+                raise ValueError("Individual Scene development is missing its final Scene plan.")
+            applied_story = storyboard_apply_developed_plan(story_id, plan, model_id=model_id)
+            return jsonify({
+                "ok": True,
+                "story": applied_story,
+                "sceneCount": len(applied_story.get("sceneOrder") or []),
+            })
+
+        contract_kwargs = {"instruction": instruction}
+        if development is not None:
+            contract_kwargs["development"] = development
         contract = storyboard_build_llm_request(
             story,
             scene_id,
             operation,
-            instruction=instruction,
+            **contract_kwargs,
         )
         repair_base = None
         if operation == "repair_scenes":
@@ -1042,11 +1074,15 @@ def storyboard_director_route():
                 "operation": operation,
                 "replaceExisting": replace_existing,
                 "sourceInstruction": instruction,
+                **({"deferredApply": True} if operation in {"develop_story_outline", "develop_story_scene"} else {}),
                 **({"repairBase": repair_base} if repair_base is not None else {}),
             },
             label=("Story: " + operation.replace("_", " ")).strip(),
         )
-        return jsonify({"ok": True, "job": job}), 202
+        response = {"ok": True, "job": job}
+        if operation == "develop_story_outline":
+            response["sourceUpdatedAt"] = str(story.get("updatedAt") or "")
+        return jsonify(response), 202
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
@@ -1328,22 +1364,6 @@ def test_generations_models_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
-@app.route("/fs/test_generations/source", methods=["GET"])
-def test_generations_source_route():
-    try:
-        raw_source = request.args.get("source")
-        payload = test_generations_browse_source(
-            str(request.args.get("modelId") or "").strip(),
-            None if raw_source is None else str(raw_source).strip(),
-            str(request.args.get("setName") or "").strip(),
-        )
-        return jsonify({"ok": True, **payload})
-    except FileNotFoundError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 404
-    except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
-
-
 @app.route("/fs/test_generations/media", methods=["GET"])
 def test_generations_media_route():
     try:
@@ -1535,6 +1555,7 @@ def training_runner_validate_route():
         data.get("fallback_captions"),
         data.get("selection_criteria"),
         data.get("total_media_count"),
+        resume_checkpoint_tag=data.get("resumeCheckpointTag") or "",
     )
     return jsonify(payload), status
 
@@ -1552,6 +1573,7 @@ def training_runner_start_route():
         run_name=data.get("runName") or "",
         resume_action_id=data.get("resumeActionId") or "",
         resume_output_id=data.get("resumeOutputId") or "",
+        resume_checkpoint_tag=data.get("resumeCheckpointTag") or "",
         profile_id=data.get("profileId") or "",
         run_id=data.get("runId") or "",
         mode=data.get("mode") or "normal",
@@ -1699,6 +1721,63 @@ def training_history_job_clear_route():
     return jsonify(payload), status
 
 
+@app.route("/fs/training_archive", methods=["GET"])
+def training_archive_list_route():
+    try:
+        return jsonify({"ok": True, "archives": training_archive_list()})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/training_archive/metrics", methods=["GET"])
+def training_archive_metrics_route():
+    archive_name = request.args.get("name", "").strip()
+    if not archive_name:
+        return jsonify({"ok": False, "error": "Archive name is required."}), 400
+    try:
+        return jsonify({"ok": True, "metrics": training_archive_metrics(archive_name)})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (RuntimeError, ValueError, OSError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 422
+
+
+@app.route("/fs/training_archive/preview", methods=["GET"])
+def training_archive_preview_route():
+    folder = request.args.get("folder", "").strip()
+    job_id = request.args.get("jobId", "").strip()
+    if not folder or not job_id:
+        return jsonify({"ok": False, "error": "Folder and job ID are required."}), 400
+    try:
+        return jsonify({"ok": True, "preview": training_archive_preview(folder, job_id)})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (RuntimeError, ValueError, OSError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/training_archive/finalize", methods=["POST"])
+def training_archive_finalize_route():
+    data = request.get_json(silent=True) or {}
+    allowed = {"folder", "jobId", "archiveName", "retainEpochs"}
+    if not isinstance(data, dict) or set(data) - allowed:
+        return jsonify({"ok": False, "error": "Finalize & Archive received unsupported fields."}), 400
+    folder = str(data.get("folder") or "").strip()
+    job_id = str(data.get("jobId") or "").strip()
+    archive_name = str(data.get("archiveName") or "").strip()
+    retain_epochs = data.get("retainEpochs")
+    if not folder or not job_id or not archive_name or not isinstance(retain_epochs, list):
+        return jsonify({"ok": False, "error": "Folder, job ID, archive name, and retained epochs are required."}), 400
+    try:
+        return jsonify({"ok": True, "archive": training_archive_finalize(folder, job_id, archive_name, retain_epochs)})
+    except FileExistsError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 409
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (RuntimeError, ValueError, OSError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/training_history/job/metrics", methods=["GET"])
 def training_history_job_metrics_route():
     folder = request.args.get("folder", "").strip()
@@ -1715,29 +1794,6 @@ def test_generations_keep_lora_destinations_route():
     source = request.args.get("source", "").strip()
     try:
         return jsonify({"ok": True, **test_generations_browse_keep_lora_destination(stage, source)})
-    except FileNotFoundError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 404
-    except (RuntimeError, ValueError, OSError) as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
-
-
-@app.route("/fs/test_generations/keep_lora", methods=["POST"])
-def test_generations_keep_lora_route():
-    data = request.get_json(silent=True) or {}
-    allowed = {"folder", "stage", "source", "candidateFile", "destination", "filename"}
-    if not isinstance(data, dict) or set(data) - allowed:
-        return jsonify({"ok": False, "error": "Keep LoRA accepts only folder, stage, source, candidateFile, destination, and filename."}), 400
-    try:
-        return jsonify({"ok": True, **test_generations_keep_test_candidate(
-            data.get("folder", ""),
-            data.get("stage", ""),
-            data.get("source", ""),
-            data.get("candidateFile", ""),
-            data.get("destination", ""),
-            data.get("filename", ""),
-        )})
-    except FileExistsError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 409
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404
     except (RuntimeError, ValueError, OSError) as exc:
@@ -1781,6 +1837,22 @@ def training_candidates_open_epoch_route():
         return jsonify({"ok": False, "error": str(exc)}), 422
     except (TrainingStateError, ValueError, RuntimeError) as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/training_candidates/save", methods=["POST"])
+def training_candidates_save_route():
+    data = request.get_json(silent=True) or {}
+    allowed = {"folder", "jobId", "epoch", "destination", "filename"}
+    if not isinstance(data, dict) or set(data) - allowed:
+        return jsonify({"ok": False, "error": "Select accepts only folder, jobId, epoch, destination, and filename."}), 400
+    payload, status = training_runner_save_candidate_epoch_response(
+        data.get("folder", ""),
+        data.get("jobId", ""),
+        data.get("epoch", ""),
+        data.get("destination", ""),
+        data.get("filename", ""),
+    )
+    return jsonify(payload), status
 
 
 @app.route("/fs/training_candidates/copy_to_test", methods=["POST"])
@@ -2224,11 +2296,12 @@ if __name__ == "__main__":
         prepare_inference_startup_backlog()
     except ExecutionQueueStateError:
         app.logger.exception("INFERENCE STARTUP RECONCILIATION FAILED; inference state was left unchanged.")
-    start_training_runner_observer()
     try:
         reconcile_llm_startup()
     except ExecutionQueueStateError:
         app.logger.exception("DIRECTOR STARTUP RECONCILIATION FAILED; Director queue state was left unchanged.")
+    reconcile_training_startup()
+    start_training_runner_observer()
     # Only bind to localhost for desktop/offline use.
     # Disable Flask debug mode for a production-like local runtime.
     app.run(host="127.0.0.1", port=4200, debug=False)

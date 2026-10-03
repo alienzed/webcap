@@ -37,6 +37,12 @@
                     <span id="app-header-context-separator" class="app-header-context-separator hidden" aria-hidden="true">›</span>
                     <nav id="app-header-breadcrumb" class="app-header-breadcrumb" aria-label="Current path"></nav>
                     <span id="app-header-workspace-context" class="app-header-workspace-context"></span>
+                    <label id="app-header-set-control" class="app-header-set-control">
+                        <span class="app-header-set-label">Set</span>
+                        <select id="app-header-set-select" aria-label="Working Set">
+                            <option value="">Select set…</option>
+                        </select>
+                    </label>
                     <label id="app-header-model-control" class="app-header-model-control hidden">
                         <span class="app-header-model-label">Base Model</span>
                         <select id="app-header-model-profile-select" aria-label="Base Model"></select>
@@ -58,15 +64,6 @@
                         <path d="m8 15 3-3 2.5 2.5 2-2L20 17"></path>
                     </svg>
                 </button>
-                <button id="activity-generate-btn" type="button" class="activity-rail-btn" title="Generate" aria-label="Generate" aria-pressed="false" aria-controls="generate-workspace">
-                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 3v18"></path>
-                        <path d="M3 12h18"></path>
-                        <path d="m5 5 14 14"></path>
-                        <path d="m19 5-14 14"></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                </button>
                 <button id="activity-training-btn" type="button" class="activity-rail-btn" title="Training Queue &amp; History" aria-label="Training Queue and History" aria-pressed="false" aria-controls="training-navigator">
                     <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M4 19V11"></path>
@@ -82,6 +79,16 @@
                         <path d="M7 3h10"></path>
                         <path d="M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"></path>
                         <path d="M8 14h8"></path>
+                    </svg>
+                </button>
+                <div class="activity-rail-separator activity-rail-context-separator" aria-hidden="true"></div>
+                <button id="activity-generate-btn" type="button" class="activity-rail-btn" title="Generate" aria-label="Generate" aria-pressed="false" aria-controls="generate-workspace">
+                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 3v18"></path>
+                        <path d="M3 12h18"></path>
+                        <path d="m5 5 14 14"></path>
+                        <path d="m19 5-14 14"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
                     </svg>
                 </button>
                 <button id="activity-storyboard-btn" type="button" class="activity-rail-btn" title="Storyboard" aria-label="Storyboard" aria-pressed="false" aria-controls="storyboard-workspace">
@@ -165,44 +172,64 @@
                         <path d="M11 17h8"></path>
                     </svg>
                 </button>
-                <button
-                    id="shell-diagnostics-btn"
-                    type="button"
-                    class="activity-rail-btn"
-                    title="Diagnostics"
-                    aria-label="Diagnostics"
-                    aria-haspopup="dialog"
-                    aria-controls="diagnostics-modal"
-                >
-                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M14.7 6.3a4 4 0 0 0-5 5L4 17l3 3 5.7-5.7a4 4 0 0 0 5-5l-2.2 2.2-3-3z"></path>
-                    </svg>
-                </button>
-                <button
-                    id="shell-settings-btn"
-                    type="button"
-                    class="activity-rail-btn"
-                    title="App settings"
-                    aria-label="App settings"
-                >
-                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.01A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09c0 .66.39 1.26 1 1.51.57.24 1.23.11 1.68-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.01c.24.61.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.26.39-1.51 1z"></path>
-                    </svg>
-                </button>
-                <button
-                    id="shell-help-btn"
-                    type="button"
-                    class="activity-rail-btn"
-                    title="Open help"
-                    aria-label="Open help"
-                >
-                    <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9"></circle>
-                        <path d="M9.75 9.75a2.25 2.25 0 0 1 4.02 1.37c0 1.5-1.77 1.88-1.77 3.13"></path>
-                        <path d="M12 16.75h.01"></path>
-                    </svg>
-                </button>
+                <div id="shell-more-wrap" class="shell-more-wrap">
+                    <button
+                        id="shell-more-btn"
+                        type="button"
+                        class="activity-rail-btn"
+                        title="More"
+                        aria-label="More"
+                        aria-haspopup="menu"
+                        aria-expanded="false"
+                        aria-controls="shell-more-menu"
+                    >
+                        <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="5" cy="12" r="1.4"></circle>
+                            <circle cx="12" cy="12" r="1.4"></circle>
+                            <circle cx="19" cy="12" r="1.4"></circle>
+                        </svg>
+                    </button>
+                    <div id="shell-more-menu" class="shell-more-menu hidden" role="menu" aria-label="More">
+                        <button
+                            id="shell-diagnostics-btn"
+                            type="button"
+                            class="shell-more-menu-item"
+                            role="menuitem"
+                            aria-haspopup="dialog"
+                            aria-controls="diagnostics-modal"
+                        >
+                            <svg class="shell-more-menu-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M14.7 6.3a4 4 0 0 0-5 5L4 17l3 3 5.7-5.7a4 4 0 0 0 5-5l-2.2 2.2-3-3z"></path>
+                            </svg>
+                            <span>Diagnostics</span>
+                        </button>
+                        <button
+                            id="shell-settings-btn"
+                            type="button"
+                            class="shell-more-menu-item"
+                            role="menuitem"
+                        >
+                            <svg class="shell-more-menu-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.01A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09c0 .66.39 1.26 1 1.51.57.24 1.23.11 1.68-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.01c.24.61.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.26.39-1.51 1z"></path>
+                            </svg>
+                            <span>Settings</span>
+                        </button>
+                        <button
+                            id="shell-help-btn"
+                            type="button"
+                            class="shell-more-menu-item"
+                            role="menuitem"
+                        >
+                            <svg class="shell-more-menu-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9"></circle>
+                                <path d="M9.75 9.75a2.25 2.25 0 0 1 4.02 1.37c0 1.5-1.77 1.88-1.77 3.13"></path>
+                                <path d="M12 16.75h.01"></path>
+                            </svg>
+                            <span>Help</span>
+                        </button>
+                    </div>
+                </div>
             </nav>
             <div id="status" class="status shell-status-bar" role="status" aria-live="polite">
                 <span id="status-text"></span>
@@ -918,7 +945,11 @@
                             </section>
                             <section class="training-history-card" aria-label="Training History">
                                 <div class="training-history-heading">
-                                    <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Training History</button>
+                                    <button id="training-history-collapse-btn" type="button" class="training-section-toggle" aria-expanded="false">Training</button>
+                                    <div id="training-history-tabs" class="training-history-tabs" role="tablist" aria-label="Training records">
+                                        <button type="button" class="training-history-tab active" data-training-history-tab="history" role="tab" aria-selected="true">History</button>
+                                        <button type="button" class="training-history-tab" data-training-history-tab="archive" role="tab" aria-selected="false">Archive</button>
+                                    </div>
                                     <div id="training-history-tools" class="training-history-tools hidden">
                                         <div id="training-history-scope" class="training-history-scope hidden" role="group" aria-label="Training History scope">
                                             <button type="button" class="review-captions-btn" data-training-history-scope="set" aria-pressed="false">Current Set</button>
@@ -932,6 +963,8 @@
                                 <div id="training-history-content" class="training-history-content hidden">
                                     <div id="training-history-summary" class="training-history-summary">No managed training runs yet.</div>
                                     <div id="training-history-list" class="training-history-list"></div>
+                                    <div id="training-archive-summary" class="training-history-summary hidden">No archived training runs yet.</div>
+                                    <div id="training-archive-list" class="training-history-list hidden"></div>
                                 </div>
                             </section>
                         </section>
@@ -1024,10 +1057,13 @@
                                         </div>
                                         <span id="test-generations-summary" class="test-generations-summary">Loading Test folder...</span>
                                     </div>
-                                    <label class="training-run-option test-generations-prompt">
-                                        <span>Prompt</span>
+                                    <div class="training-run-option test-generations-prompt">
+                                        <div class="test-generations-prompt-heading">
+                                            <span>Prompt</span>
+                                            <button id="test-generations-recent-prompts-btn" type="button" class="review-captions-btn" title="Reuse a recent prompt">Recent</button>
+                                        </div>
                                         <textarea id="test-generations-prompt" rows="5"></textarea>
-                                    </label>
+                                    </div>
                                     <div class="test-generations-wildcard-tools">
                                         <select id="test-generations-wildcard-model" aria-label="Wildcard Director model"></select>
                                         <button id="test-generations-wildcard-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
@@ -1042,6 +1078,7 @@
                                             <div class="director-model-load-copy"><span>Model</span><strong id="test-generations-director-model-load-label"></strong></div>
                                             <div class="director-model-load-track" role="progressbar" aria-label="Approximate Director model load" aria-valuemin="0" aria-valuemax="100"><span id="test-generations-director-model-load-fill"></span></div>
                                         </div>
+                                        <button id="test-generations-director-prompt-copy" type="button" class="director-prompt-copy-btn hidden"></button>
                                         <div id="test-generations-director-activity-trend" class="director-activity-trend" role="img" aria-label="System history, waiting for samples">
                                             <div class="director-activity-trend-legend"><span><i class="director-activity-trend-ram"></i>RAM</span><span><i class="director-activity-trend-vram"></i>VRAM</span><span><i class="director-activity-trend-gpu"></i>GPU</span><span><i class="director-activity-trend-thermal"></i>°C</span><small>last minute</small></div>
                                             <svg viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path class="director-activity-trend-grid" d="M0 7.5H120 M0 15H120 M0 22.5H120"></path><path class="director-activity-trend-ram-line"></path><path class="director-activity-trend-vram-line"></path><path class="director-activity-trend-gpu-line"></path><path class="director-activity-trend-thermal-line"></path></svg>
@@ -1084,26 +1121,18 @@
                                     <div class="test-generations-library-panel test-generations-staged-panel">
                                         <div class="test-generations-library-heading">
                                             <div class="test-generations-library-heading-primary">
-                                                <input id="test-generations-master-select" class="test-generations-master-select" type="checkbox" title="Select/deselect all LoRAs" aria-label="Select or deselect all LoRAs">
-                                                <strong>LoRAs</strong>
+                                                <input id="test-generations-master-select" class="test-generations-master-select" type="checkbox" title="Select/deselect all candidates" aria-label="Select or deselect all candidates">
+                                                <strong>Candidates</strong>
                                             </div>
                                             <div class="test-generations-library-heading-tools">
-                                                <button id="test-generations-candidates-btn" type="button" class="review-captions-btn hidden" title="Open the training candidates for this Test source">Candidates</button>
+                                                <button id="test-generations-candidates-btn" type="button" class="review-captions-btn hidden" title="Open training candidates for this Set">Candidates</button>
                                                 <span id="test-generations-files-count">0</span>
                                             </div>
                                         </div>
-                                        <div class="test-generations-source-bar">
-                                            <button id="test-generations-source-up-btn" type="button" class="test-generations-source-up" title="Go to parent Test Source" aria-label="Go to parent Test Source">..</button>
-                                            <button id="test-generations-source-path-btn" type="button" class="test-generations-source-path" title="Browse Test Sources">
-                                                <span class="test-generations-source-label">Source</span>
-                                                <span id="test-generations-source-path">Test root</span>
-                                            </button>
-                                        </div>
-                                        <div id="test-generations-source-folders" class="test-generations-source-folders"></div>
                                         <div id="test-generations-files" class="test-generations-staged-list"></div>
                                     </div>
                                     <div class="test-generations-library-panel test-generations-sessions">
-                                        <div class="test-generations-library-heading"><strong>Sessions</strong><div class="test-generations-library-heading-tools"><button id="test-generations-clear-queue-btn" type="button" class="review-captions-btn hidden">Clear queued</button><span id="test-generations-sessions-count">0</span></div></div>
+                                        <div class="test-generations-library-heading"><strong>Sessions</strong><div class="test-generations-library-heading-tools"><button id="test-generations-clear-sessions-btn" type="button" class="review-captions-btn hidden">Clear all</button><button id="test-generations-clear-queue-btn" type="button" class="review-captions-btn hidden">Clear queued</button><span id="test-generations-sessions-count">0</span></div></div>
                                         <div id="test-generations-sessions-list" class="test-generations-sessions-list"></div>
                                     </div>
                                 </section>
@@ -1170,6 +1199,9 @@
                 <main class="generate-main">
                     <section id="generate-create-view" class="generate-create-view" aria-label="Create">
                         <aside class="generate-create-controls" aria-label="Generation controls">
+                            <div class="generate-model-row">
+                            <label class="generate-field"><span>Base Model</span><select id="generate-model" aria-label="Generate Base Model"></select></label>
+                            </div>
                             <div class="generate-prompt-panel">
                             <div class="generate-section-heading">
                             <strong>Prompt</strong>
@@ -1186,6 +1218,8 @@
                             <div class="generate-prompt-tools">
                             <select id="generate-director-model" aria-label="Generate Prompt Assistant model"><option value="">Prompt Assistant unavailable</option></select>
                             <button id="generate-director-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
+                            </div>
+                            <div class="generate-prompt-assistant-actions">
                             <button id="generate-director-write" type="button" class="review-captions-btn" title="Turn the current idea into a polished model-ready prompt.">Expand Prompt</button>
                             <button id="generate-director-restore" type="button" class="review-captions-btn hidden">Restore Previous</button>
                             </div>
@@ -1202,6 +1236,7 @@
                             <div class="director-model-load-copy"><span>Model</span><strong id="generate-director-model-load-label"></strong></div>
                             <div class="director-model-load-track" role="progressbar" aria-label="Approximate Director model load" aria-valuemin="0" aria-valuemax="100"><span id="generate-director-model-load-fill"></span></div>
                             </div>
+                            <button id="generate-director-prompt-copy" type="button" class="director-prompt-copy-btn hidden"></button>
                             <div id="generate-director-activity-trend" class="director-activity-trend" role="img" aria-label="System history, waiting for samples">
                             <div class="director-activity-trend-legend"><span><i class="director-activity-trend-ram"></i>RAM</span><span><i class="director-activity-trend-vram"></i>VRAM</span><span><i class="director-activity-trend-gpu"></i>GPU</span><span><i class="director-activity-trend-thermal"></i>°C</span><small>last minute</small></div>
                             <svg viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path class="director-activity-trend-grid" d="M0 7.5H120 M0 15H120 M0 22.5H120"></path><path class="director-activity-trend-ram-line"></path><path class="director-activity-trend-vram-line"></path><path class="director-activity-trend-gpu-line"></path><path class="director-activity-trend-thermal-line"></path></svg>
@@ -1222,7 +1257,6 @@
                             <aside class="generate-inspector" aria-label="Generation controls">
                             <div class="generate-inspector-heading"><strong>Generation Settings</strong><span id="generate-status" class="generate-status-badge hidden" aria-live="polite"></span></div>
                             <section class="generate-output-settings">
-                            <label class="generate-field"><span>Base Model</span><select id="generate-model" aria-label="Generate Base Model"></select></label>
                             <div class="generate-settings-grid">
                             <label id="generate-field-aspectRatio" class="generate-field"><span>Aspect ratio</span><select id="generate-aspect"></select></label>
                             <label id="generate-field-megapixels" class="generate-field"><span>Megapixels</span><input id="generate-megapixels" type="number" min="0.05" step="0.05"></label>
@@ -1232,25 +1266,67 @@
                             </div>
                             </section>
                             <section class="generate-conditioning">
-                            <div class="generate-conditioning-heading"><strong>LoRAs</strong><span id="generate-base-loras"></span></div>
-                            <div class="generate-lora-picker-row">
-                            <input id="generate-lora-picker" class="generate-lora-picker" type="search" list="generate-lora-options" placeholder="Filter / choose LoRA…" autocomplete="off">
-                            <datalist id="generate-lora-options"></datalist>
-                            <button id="generate-lora-add" type="button" class="review-captions-btn">Add LoRA</button>
+                            <div class="generate-conditioning-heading"><strong>Fixed LoRAs</strong><span class="generate-field-hint">Applied to every generation</span></div>
+                            <span id="generate-base-loras" class="generate-base-loras hidden"></span>
+                            <div id="generate-lora-selected-panel" class="generate-lora-mode-panel">
+                                <div class="generate-lora-picker-row">
+                                <input id="generate-lora-picker" class="generate-lora-picker" type="search" list="generate-lora-options" placeholder="Filter / choose LoRA…" autocomplete="off">
+                                <datalist id="generate-lora-options"></datalist>
+                                <button id="generate-lora-add" type="button" class="review-captions-btn">Add LoRA</button>
+                                </div>
+                                <div id="generate-lora-list" class="generate-lora-list"></div>
                             </div>
-                            <div id="generate-lora-list" class="generate-lora-list"></div>
+                            <div class="generate-mode-row">
+                                <span class="generate-field-hint">Generation</span>
+                                <div class="generate-lora-tabs" role="group" aria-label="Generation mode">
+                                    <button id="generate-lora-selected-tab" type="button" class="review-captions-btn active" aria-pressed="true">Single</button>
+                                    <button id="generate-lora-sweep-tab" type="button" class="review-captions-btn" aria-pressed="false" aria-controls="generate-lora-sweep-panel">LoRA Sweep</button>
+                                </div>
+                            </div>
+                            <div id="generate-lora-sweep-panel" class="generate-lora-mode-panel hidden">
+                                <div class="generate-sweep-options">
+                                    <label class="generate-field" title="Each selected LoRA is added to the fixed LoRAs above. Fixed LoRAs are excluded from Sweep choices."><span>Sweep folder</span><select id="generate-sweep-folder" aria-label="Sweep LoRA folder"></select></label>
+                                    <label class="generate-field"><span>Strength</span><input id="generate-sweep-strength" type="number" min="-2" max="2" step="0.05" value="0.9"></label>
+                                </div>
+                                <div class="generate-sweep-group generate-sweep-selection-group">
+                                    <input id="generate-sweep-filter" class="generate-lora-picker" type="search" placeholder="Filter / choose LoRAs…" autocomplete="off" aria-label="Filter Sweep LoRAs">
+                                    <div class="generate-sweep-selection-bar">
+                                        <label class="generate-sweep-base" title="Add one comparison using only the fixed LoRAs above. Without fixed LoRAs, this is the base model alone."><input id="generate-sweep-base" type="checkbox"> Fixed-only baseline</label>
+                                        <div class="generate-sweep-selection-actions">
+                                            <button id="generate-sweep-all" type="button" class="review-captions-btn">All</button>
+                                            <button id="generate-sweep-none" type="button" class="review-captions-btn">None</button>
+                                        </div>
+                                    </div>
+                                    <div id="generate-sweep-summary" class="generate-empty-inline"></div>
+                                    <div id="generate-sweep-list" class="generate-sweep-list"></div>
+                                </div>
+                            </div>
                             </section>
                             <details id="generate-references" class="generate-references generate-collapsible hidden">
                             <summary><strong>References</strong><span>Optional exact frame anchors</span></summary>
                             <div class="generate-collapsible-body">
-                            <label id="generate-reference-first_frame-field" class="generate-field hidden"><span>First frame</span><input id="generate-reference-first_frame" type="file" accept="image/*"></label>
-                            <label id="generate-reference-last_frame-field" class="generate-field hidden"><span>Last frame</span><input id="generate-reference-last_frame" type="file" accept="image/*"></label>
+                            <div id="generate-reference-first_frame-field" class="generate-field hidden">
+                                <span>First frame</span>
+                                <label class="reference-dropzone" data-generate-reference-dropzone="first_frame" title="Drop a first-frame reference image here or click to browse.">
+                                    <input id="generate-reference-first_frame" type="file" accept="image/*">
+                                    <span class="reference-dropzone-copy"><strong>Drop image here or browse</strong><small data-generate-reference-name="first_frame">No file selected</small></span>
+                                </label>
+                                <button type="button" class="review-captions-btn generate-reference-clear hidden" data-generate-reference-clear="first_frame">Clear</button>
+                            </div>
+                            <div id="generate-reference-last_frame-field" class="generate-field hidden">
+                                <span>Last frame</span>
+                                <label class="reference-dropzone" data-generate-reference-dropzone="last_frame" title="Drop a last-frame reference image here or click to browse.">
+                                    <input id="generate-reference-last_frame" type="file" accept="image/*">
+                                    <span class="reference-dropzone-copy"><strong>Drop image here or browse</strong><small data-generate-reference-name="last_frame">No file selected</small></span>
+                                </label>
+                                <button type="button" class="review-captions-btn generate-reference-clear hidden" data-generate-reference-clear="last_frame">Clear</button>
+                            </div>
                             </div>
                             </details>
+                            </aside>
                             <div class="generate-run-row">
                             <button id="generate-run-btn" type="button" class="storyboard-primary-btn generate-run-btn">Generate</button>
                             </div>
-                            </aside>
                         </aside>
                         <section class="generate-stage-panel" aria-label="Active generation preview">
                             <header class="generate-stage-heading">
@@ -1308,6 +1384,7 @@
                             <div class="director-model-load-copy"><span>Model</span><strong id="storyboard-director-model-load-label"></strong></div>
                             <div class="director-model-load-track" role="progressbar" aria-label="Approximate Director model load" aria-valuemin="0" aria-valuemax="100"><span id="storyboard-director-model-load-fill"></span></div>
                         </div>
+                        <button id="storyboard-director-prompt-copy" type="button" class="director-prompt-copy-btn hidden"></button>
                         <div id="storyboard-director-activity-trend" class="director-activity-trend" role="img" aria-label="System history, waiting for samples">
                             <div class="director-activity-trend-legend"><span><i class="director-activity-trend-ram"></i>RAM</span><span><i class="director-activity-trend-vram"></i>VRAM</span><span><i class="director-activity-trend-gpu"></i>GPU</span><span><i class="director-activity-trend-thermal"></i>°C</span><small>last minute</small></div>
                             <svg viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path class="director-activity-trend-grid" d="M0 7.5H120 M0 15H120 M0 22.5H120"></path><path class="director-activity-trend-ram-line"></path><path class="director-activity-trend-vram-line"></path><path class="director-activity-trend-gpu-line"></path><path class="director-activity-trend-thermal-line"></path></svg>
@@ -1405,6 +1482,10 @@
                                             <span>scenes</span>
                                         </label>
                                         <button id="storyboard-scene-count-auto" type="button" class="review-captions-btn storyboard-scene-count-auto" aria-pressed="false" title="Let Director choose the Scene count from the Story">Auto</button>
+                                        <label class="storyboard-develop-individual" title="Plan the Story once, then author each full Scene in a separate Director request.">
+                                            <input id="storyboard-develop-individual" type="checkbox">
+                                            <span>One at a time</span>
+                                        </label>
                                         <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn storyboard-director-action">Develop Scenes</button>
                                     </div>
                                     <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite"></span>
@@ -1450,7 +1531,8 @@
                                         <div class="storyboard-scenes-title-row">
                                             <strong id="storyboard-workspace-mode-title">Scenes</strong>
                                             <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn" title="Queue one new Take for every Scene in this Story.">Generate</button>
-                                            <button id="storyboard-assistant-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Assistant">Assistant</button>
+                                            <button id="storyboard-cancel-takes-btn" type="button" class="review-captions-btn hidden" title="Cancel this Story's queued and running Take generation.">Cancel Takes</button>
+                                            <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Director Tools">Director Tools</button>
                                         </div>
                                         <span id="storyboard-progress-summary" class="storyboard-progress-summary"></span>
                                     </div>
@@ -1515,6 +1597,7 @@
                         <strong id="director-chat-progress-phase">Preparing</strong>
                         <span id="director-chat-progress-detail"></span>
                         <time id="director-chat-progress-elapsed">0.0s</time>
+                        <button id="director-chat-prompt-copy" type="button" class="director-prompt-copy-btn hidden"></button>
                         <button id="director-chat-stop" type="button" class="review-captions-btn hidden">Stop</button>
                     </div>
                     <div class="director-chat-progress-track" aria-hidden="true"><span></span></div>
@@ -1618,14 +1701,70 @@
                         <div id="training-candidates-modal-content" class="training-candidates-modal-content"></div>
                     </section>
                 </div>
+        <div id="storyboard-director-tools-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-director-tools-close">
+            <section class="keep-lora-dialog storyboard-director-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-director-tools-title">
+                <header class="keep-lora-header">
+                    <div>
+                        <h2 id="storyboard-director-tools-title">Director Tools</h2>
+                        <p class="keep-lora-source">Apply a targeted revision across the current Story's Scenes.</p>
+                    </div>
+                    <button id="storyboard-director-tools-close" type="button" class="training-review-modal-close" aria-label="Close Director Tools">&times;</button>
+                </header>
+                <div class="keep-lora-content">
+                    <div class="keep-lora-field">
+                        <label for="storyboard-director-tools-preset">Preset</label>
+                        <select id="storyboard-director-tools-preset">
+                            <option value="">Custom revision</option>
+                            <option value="continuity">Continuity pass</option>
+                        </select>
+                    </div>
+                    <div class="keep-lora-field">
+                        <label for="storyboard-director-tools-instruction">Revise Scenes</label>
+                        <textarea id="storyboard-director-tools-instruction" rows="7" placeholder="Describe what should be revised across these Scenes."></textarea>
+                        <small>Presets prime this instruction; edit it freely before running.</small>
+                    </div>
+                    <div id="storyboard-director-tools-status" class="training-history-summary" aria-live="polite"></div>
+                </div>
+                <footer class="keep-lora-footer">
+                    <button id="storyboard-director-tools-cancel" type="button" class="review-captions-btn">Cancel</button>
+                    <button id="storyboard-director-tools-run" type="button" class="training-btn">Revise Scenes</button>
+                </footer>
+            </section>
+        </div>
+        <div id="training-archive-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="training-archive-close">
+            <section class="keep-lora-dialog training-archive-dialog" role="dialog" aria-modal="true" aria-labelledby="training-archive-title">
+                <header class="keep-lora-header">
+                    <div>
+                        <h2 id="training-archive-title">Finalize &amp; Archive</h2>
+                        <p class="keep-lora-source">Review the final cleanup before removing training artifacts.</p>
+                    </div>
+                    <button id="training-archive-close" type="button" class="training-review-modal-close" aria-label="Close Finalize & Archive">&times;</button>
+                </header>
+                <div class="keep-lora-content">
+                    <div id="training-archive-recap" class="training-archive-recap"></div>
+                    <div class="keep-lora-field">
+                        <label for="training-archive-name">Archive folder name</label>
+                        <input id="training-archive-name" type="text" spellcheck="false" autocomplete="off">
+                    </div>
+                    <div class="keep-lora-field">
+                        <label>Keep alternate epochs as backup</label>
+                        <div id="training-archive-alternates" class="training-archive-alternates"></div>
+                    </div>
+                </div>
+                <footer class="keep-lora-footer">
+                    <button id="training-archive-cancel" type="button" class="review-captions-btn">Cancel</button>
+                    <button id="training-archive-confirm" type="button" class="training-btn">Finalize &amp; Archive</button>
+                </footer>
+            </section>
+        </div>
         <div id="keep-lora-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="keep-lora-close">
             <section class="keep-lora-dialog" role="dialog" aria-modal="true" aria-labelledby="keep-lora-title">
                 <header class="keep-lora-header">
                     <div>
-                        <h2 id="keep-lora-title">Keep LoRA</h2>
+                        <h2 id="keep-lora-title">Select Epoch</h2>
                         <p id="keep-lora-source" class="keep-lora-source"></p>
                     </div>
-                    <button id="keep-lora-close" type="button" class="training-review-modal-close" aria-label="Close Keep LoRA">&times;</button>
+                    <button id="keep-lora-close" type="button" class="training-review-modal-close" aria-label="Close Select Epoch">&times;</button>
                 </header>
                 <div class="keep-lora-content">
                     <div class="keep-lora-field">
@@ -1644,7 +1783,7 @@
                 </div>
                 <footer class="keep-lora-footer">
                     <button id="keep-lora-cancel" type="button" class="review-captions-btn">Cancel</button>
-                    <button id="keep-lora-save" type="button" class="review-captions-btn keep-lora-save">Keep LoRA</button>
+                    <button id="keep-lora-save" type="button" class="review-captions-btn keep-lora-save">Save &amp; Select</button>
                 </footer>
             </section>
         </div>
@@ -1960,7 +2099,8 @@
                 <div class="app-settings-tabs diagnostics-tabs" role="tablist" aria-label="Diagnostics sections">
                     <button id="diagnostics-tab-health" type="button" class="app-settings-tab diagnostics-tab active" data-diagnostics-tab="health" role="tab" aria-selected="true" aria-controls="diagnostics-panel-health">Health</button>
                     <button id="diagnostics-tab-h3" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="h3" role="tab" aria-selected="false" aria-controls="diagnostics-panel-h3" tabindex="-1">H3 Calibration</button>
-                    <button id="diagnostics-tab-director" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="director" role="tab" aria-selected="false" aria-controls="diagnostics-panel-director" tabindex="-1">Director Model Test</button>
+                    <button id="diagnostics-tab-models" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="models" role="tab" aria-selected="false" aria-controls="diagnostics-panel-models" tabindex="-1">Director Models</button>
+                    <button id="diagnostics-tab-benchmark" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="benchmark" role="tab" aria-selected="false" aria-controls="diagnostics-panel-benchmark" tabindex="-1">Benchmark</button>
                 </div>
                 <div class="app-settings-tab-panels diagnostics-panels">
                     <div id="diagnostics-panel-health" class="app-settings-panel diagnostics-panel" data-diagnostics-panel="health" role="tabpanel" aria-labelledby="diagnostics-tab-health">
@@ -1997,20 +2137,53 @@
                             </details>
                         </section>
                     </div>
-                    <div id="diagnostics-panel-director" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="director" role="tabpanel" aria-labelledby="diagnostics-tab-director" hidden>
+                    <div id="diagnostics-panel-models" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="models" role="tabpanel" aria-labelledby="diagnostics-tab-models" hidden>
+                        <section class="app-settings-section" id="director-model-assessment-settings">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Director Models <span id="director-model-assessment-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
+                                <div class="app-settings-section-copy">Assess usable context and output capacity, preserve diagnostic evidence, and surface only meaningful model warnings or limitations to the rest of WebCap.</div>
+                            </div>
+                            <div class="director-model-test-model-header">
+                                <span class="app-settings-field-label">Models to assess</span>
+                                <div class="director-model-test-model-actions">
+                                    <button id="director-model-assessment-refresh" type="button" class="review-captions-btn">Refresh Models</button>
+                                    <button id="director-model-assessment-select-all" type="button" class="review-captions-btn">All</button>
+                                    <button id="director-model-assessment-select-none" type="button" class="review-captions-btn">None</button>
+                                </div>
+                            </div>
+                            <div id="director-model-assessment-models" class="director-model-test-models"></div>
+                            <div class="app-settings-actions app-settings-actions-inline director-model-test-actions">
+                                <button id="director-model-assessment-run" type="button">Assess Selected</button>
+                                <button id="director-model-assessment-stop" type="button" class="hidden">Stop</button>
+                                <button id="director-model-test-clear-calibration" type="button" class="review-captions-btn" disabled>Clear Learned Results</button>
+                            </div>
+                            <div id="director-model-assessment-activity" class="director-model-test-activity" aria-live="polite"></div>
+                            <div class="app-settings-section-header director-model-assessment-results-heading">
+                                <div class="app-settings-section-title">Current Findings</div>
+                                <div class="app-settings-section-copy">High-level interpretation only. Expand a finding to inspect the latest full probe evidence.</div>
+                            </div>
+                            <div id="director-model-test-calibration-profiles"><p class="app-settings-help">No calibration findings yet.</p></div>
+                            <div class="app-settings-section-header director-model-assessment-history-heading">
+                                <div class="app-settings-section-title">Raw Assessment Runs</div>
+                                <div class="app-settings-section-copy">Full prompts and model outputs are temporary diagnostic evidence. Expand a run to inspect it; learned model results remain when raw history is deleted.</div>
+                            </div>
+                            <div id="director-model-assessment-history"><p class="app-settings-help">No raw assessment runs are available.</p></div>
+                        </section>
+                    </div>
+                    <div id="diagnostics-panel-benchmark" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="benchmark" role="tabpanel" aria-labelledby="diagnostics-tab-benchmark" hidden>
                         <section class="app-settings-section" id="director-model-test-settings">
                             <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Director Model Test <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
-                                <div class="app-settings-section-copy">Run one fixed expansion protocol sequentially across selected Director models. Results remain available for this WebCap session; export JSON to keep them.</div>
+                                <div class="app-settings-section-title">Director Benchmark <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
+                                <div class="app-settings-section-copy">Run one editable prompt sequentially across selected Director models for side-by-side qualitative comparison. Benchmark results remain session-only unless exported.</div>
                             </div>
                             <div id="director-model-test-protocol" class="app-settings-help">Open this tab to load the protocol and available models.</div>
                             <label class="app-settings-field app-settings-field-wide">
                                 <span class="app-settings-field-label">Benchmark Prompt</span>
                                 <textarea id="director-model-test-prompt" rows="14" spellcheck="true"></textarea>
-                                <span class="app-settings-note">The exact text is frozen into the current test session when the test starts.</span>
+                                <span class="app-settings-note">The exact text is frozen into the current benchmark session when the test starts.</span>
                             </label>
                             <div class="director-model-test-model-header">
-                                <span class="app-settings-field-label">Models</span>
+                                <span class="app-settings-field-label">Models to benchmark</span>
                                 <div class="director-model-test-model-actions">
                                     <button id="director-model-test-refresh" type="button" class="review-captions-btn">Refresh Models</button>
                                     <button id="director-model-test-select-all" type="button" class="review-captions-btn">All</button>

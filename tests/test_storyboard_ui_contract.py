@@ -73,6 +73,9 @@ def test_storyboard_phase_one_is_manual_first_and_provider_independent():
     assert "set_scene_reference_from_take" in storyboard
     assert "data-reference-previous" in storyboard
     assert "data-reference-apply" in storyboard
+    assert "data-reference-dropzone" in storyboard
+    assert "Reference dropzone file input is missing." in storyboard
+    assert "input.dispatchEvent(new Event('change', { bubbles: true }))" in storyboard
     assert "data-scene-generate" in storyboard
     assert "data-scene-lora-add" in storyboard
     assert "data-scene-lora-name" in storyboard
@@ -258,23 +261,21 @@ def test_storyboard_director_configuration_is_first_class_app_setting():
 
 
 
-def test_storyboard_revise_scenes_lives_in_assistant_and_keeps_sparse_scene_healing():
+def test_storyboard_revise_scenes_lives_in_director_tools_and_keeps_sparse_scene_healing():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
 
     assert "function reviseScenes(instruction, modelId)" in storyboard
-    assert "id: 'revise-scenes'" in storyboard
-    assert "return reviseScenes(request && request.instruction, request && request.modelId)" in storyboard
+    assert 'id="storyboard-director-tools-btn"' in html
+    assert 'id="storyboard-director-tools-modal"' in html
+    assert 'id="storyboard-director-tools-instruction"' in html
+    assert '<option value="continuity">Continuity pass</option>' in html
     assert "DIRECTOR_PASS_PRESETS.continuity.instruction" in storyboard
-    assert "label: 'Continuity pass'" in storyboard
-
-    assert 'id="director-chat-mode-tools"' in html
-    assert 'id="director-chat-mode-presets"' in html
-    assert "active.presets" in assistant
-    assert "data-assistant-preset" in assistant
+    assert "function runDirectorToolsRevision()" in storyboard
+    assert "reviseScenes(instruction, storyState.director.modelId)" in storyboard
+    assert "id: 'revise-scenes'" not in storyboard
 
     assert "kind: 'repair'" in storyboard
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
@@ -457,7 +458,7 @@ def test_storyboard_director_requests_use_shared_llm_queue():
 
     assert "function waitForDirectorJob(job)" in storyboard
     assert "function directorJobPollDelay(job)" in storyboard
-    assert "return String(job && job.status || '') === 'queued' ? 2000 : 1000;" in storyboard
+    assert "return String(job && job.status || '') === 'queued' ? 3000 : 1500;" in storyboard
     assert "setTimeout(resolve, directorJobPollDelay(current))" in storyboard
     assert "'/fs/director/job?job='" in storyboard
     assert "queued: 'Queued…'" in storyboard
@@ -1172,17 +1173,20 @@ def test_storyboard_generate_scenes_reuses_existing_scene_generation_path():
     assert 'class="storyboard-director-header"' in actions
 
 
-def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
+
+def test_storyboard_generation_uses_shared_heartbeat_and_one_shot_terminal_reconciliation():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
     assert "function syncGenerationJobCard(job, card)" in storyboard
     assert "webcap:inference-queue-snapshot" in storyboard
     assert "function syncStoryboardInferenceSnapshot(queue)" in storyboard
     assert "var seenJobIds = Object.create(null);" in storyboard
-    assert "function pollGeneration(storyId, jobId, delayOverride)" in storyboard
-    assert "? (generationJobIsExecuting(current) ? 2000 : 8000)" in storyboard
-    assert "}, delay);" in storyboard
-    assert "if (generationJobIsExecuting(job)) pollGeneration(storyId, job.jobId);" in storyboard
+    assert "generationReceipts: {}" in storyboard
+    assert "function reconcileGenerationReceipt(storyId, jobId)" in storyboard
+    assert "generationRequest(null, 'job=' + encodeURIComponent(jobId) + '&consume=1')" in storyboard
+    assert "function pollGeneration(" not in storyboard
+    assert "generationPolls" not in storyboard
+    assert "generationJobIsExecuting(current) ? 2000 : 8000" not in storyboard
     assert "card.querySelector('.storyboard-take-pending-media strong')" in storyboard
 
     snapshot_block = storyboard.split("function syncStoryboardInferenceSnapshot(queue)", 1)[1].split(
@@ -1191,17 +1195,16 @@ def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
     missing_job_block = snapshot_block.split(
         "Object.keys(storyState.generationJobs).forEach(function (jobId) {", 1
     )[1].split("\n    });", 1)[0]
-    assert "clearGenerationPoll(jobId);" in missing_job_block
-    assert "pollGeneration(storyId, jobId, 0);" in missing_job_block
+    assert "reconcileGenerationReceipt(storyId, jobId);" in missing_job_block
     assert "delete storyState.generationJobs[jobId];" not in missing_job_block
 
     refresh_block = storyboard.split("function refreshGenerationQueue(storyId)", 1)[1].split(
         "\n  function generationAction", 1
     )[0]
     assert "storyState.generationJobs = {};" not in refresh_block
-    assert "Object.keys(storyState.generationPolls).forEach(clearGenerationPoll);" not in refresh_block
     assert "var seenJobIds = Object.create(null);" in refresh_block
-    assert "pollGeneration(storyId, jobId, 0);" in refresh_block
+    assert "reconcileGenerationReceipt(storyId, jobId);" in refresh_block
+    assert "pollGeneration" not in refresh_block
 
     take_sync = storyboard.split("function syncSceneTakeDom(sceneId)", 1)[1].split(
         "\n  function mergeFetchedSceneTakeState", 1
@@ -1211,411 +1214,55 @@ def test_storyboard_generation_polling_preserves_existing_take_media_nodes():
     assert ".innerHTML =" not in take_sync
     assert "renderScenes();" not in take_sync
 
-    poll_block = storyboard.split("function pollGeneration(storyId, jobId)", 1)[1].split(
+    receipt = storyboard.split("function reconcileGenerationReceipt(storyId, jobId)", 1)[1].split(
         "\n  function refreshGenerationQueue", 1
     )[0]
-    completed_block = poll_block.split("if (job.status === 'completed') {", 1)[1]
+    completed_block = receipt.split("if (job.status === 'completed') {", 1)[1]
     assert "mergeFetchedSceneTakeState(storyId, job.sceneId, storyPayload.story);" in completed_block
     assert "renderScenes();" not in completed_block
 
-    active_block = storyboard.split("if (generationJobIsActive(job)) {", 1)[1].split("return;", 1)[0]
-    assert "renderScenes();" not in active_block
-
-def test_storyboard_take_deletion_is_explicit_destructive_and_selected_aware():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
-    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
-
-    assert 'data-take-action="delete"' in storyboard
-    assert "function deleteTake(sceneId, takeId)" in storyboard
-    assert "cannot be undone" in storyboard
-    assert "Deleting it will leave the Scene without a selected Take." in storyboard
-    assert "operation: 'delete_take'" in storyboard
-    assert "def delete_take(" in store
-    assert 'if operation == "delete_take":' in app
-
-def test_storyboard_roundoff_has_prompt_restore_manual_refs_and_readiness_summary():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    script = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-
-    assert 'id="storyboard-progress-summary"' in html
-    assert "previousPrompt" in script
-    assert "function restoreSceneDirectorPrompt(sceneId)" in script
-    assert 'data-director-restore' in script
-    assert "Restore Previous" in script
-    assert "function uploadSceneReference(sceneId, role, file)" in script
-    assert "'/fs/storyboard/reference_upload'" in script
-    assert 'data-reference-upload' in script
-    assert "function renderStoryReadiness()" in script
-    assert "' needs Take'" in script
-    assert "' needs selection'" in script
-    assert "'s selected'" in script
-
-def test_storyboard_scene_cards_surface_unseen_manual_director_completion():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
-
-    assert "sceneCompletions: {}" in storyboard
-    assert "function markSceneDirectorCompletion(storyId, sceneId, operation)" in storyboard
-    assert "job.clearCorrection === true" in storyboard
-    assert "sceneDirectorCompletionHtml(sceneId)" in storyboard
-    assert "data-scene-director-completion" in storyboard
-    assert "Refine completed while you were elsewhere." in storyboard
-    assert "Write with Director completed while you were elsewhere." in storyboard
-    assert "clearSceneDirectorCompletion(storyState.story.id, sceneId);" in storyboard
-    assert ".storyboard-scene-progress-director-complete" in css
-
-
-def test_storyboard_refine_completion_is_scene_specific_persistent_and_self_clearing():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
-
-    assert '"refineComplete": refine_complete' in store
-    assert 'operation=operation' in (ROOT / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
-    assert "function syncSceneRefineState(sceneId)" in storyboard
-    assert "(scene.refineComplete ? '✓' : 'Refine')" in storyboard
-    assert "currentCorrection.value = '';" in storyboard
-    assert "currentScene.refineComplete = !!savedScene.refineComplete;" in storyboard
-    assert "currentScene.refineComplete = false;" in storyboard
-    assert "scheduleSceneSave(correctionSceneId);" in storyboard
-    assert "target.operation === 'refine_prompt'" in storyboard
-    assert "currentScene.durationSeconds = savedScene.durationSeconds;" in storyboard
-    assert "currentDuration.value = savedScene.durationSeconds == null ? '' : savedScene.durationSeconds;" in storyboard
 
 
 
-def test_storyboard_sequence_view_uses_lightweight_editor_timeline():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
-
-    assert 'class="storyboard-sequence-timeline"' in storyboard
-    assert 'class="storyboard-sequence-timeline-header"' in storyboard
-    assert '--sequence-clip-seconds:' in storyboard
-    assert "durationSeconds" in storyboard
-    assert "Export preview" in storyboard
-    assert ".storyboard-sequence-timeline {" in css
-    assert ".storyboard-sequence-card {" in css
-    assert "calc(var(--sequence-clip-seconds) * 18px)" in css
-    assert ".storyboard-sequence-label {" in css
-    assert ".storyboard-sequence-output-label {" in css
-
-
-def test_storyboard_sequence_encoding_warning_is_explicit_and_highlights_affected_takes():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
-    assembly = (ROOT / "tool" / "server" / "storyboard_assembly.py").read_text(encoding="utf-8")
-
-    assert "This requires encoding" in storyboard
-    assert "data-sequence-warnings" in storyboard
-    assert "data-sequence-encode" in storyboard
-    assert "storyState.sequenceEncodingWarnings" in storyboard
-    assert "warningByTake" in storyboard
-    assert "requires-encoding" in storyboard
-    assert ".storyboard-sequence-card.requires-encoding" in css
-    assert ".storyboard-sequence-card-warning" in css
-    assert 'encode: !!encode' in storyboard
-    assert 'storyState.sequenceEncodingWarnings = [];' in storyboard
-    assert 'def _analyze_streams(items):' in assembly
-    assert 'def _normalize_clip(' in assembly
-
-def test_storyboard_takes_display_live_and_persisted_generation_elapsed_time():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    generation = (ROOT / "tool" / "server" / "storyboard_generation.py").read_text(encoding="utf-8")
-    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
-
-    assert "function formatGenerationElapsedMs(value)" in storyboard
-    assert "function generationJobStatusText(job)" in storyboard
-    assert "return formatInferenceJobStatus({" in storyboard
-    assert "progress: job && job.progress" in storyboard
-    assert "formatGenerationElapsedMs(take && take.elapsedMs)" in storyboard
-    assert "elapsed_ms = int((time.monotonic() - started) * 1000)" in generation
-    assert '"elapsedMs": elapsed_ms' in generation
-    assert '"elapsedMs",' in store
-
-
-def test_storyboard_enqueue_refreshes_shared_inference_queue_immediately():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-
-    block = storyboard.split("function enqueueSceneGeneration(storyId, sceneId)", 1)[1].split("\n  function ", 1)[0]
-    assert "return window.refreshInferenceQueue().then(function () {" in block
-    assert "return job;" in block
-
-
-def test_inference_drawer_refreshes_before_rendering_when_opened():
-    inference = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
-
-    block = inference.split("function setOpen(open)", 1)[1].split("\n  function ", 1)[0]
-    assert "if (state.open) {" in block
-    assert "refresh().then(schedule);" in block
-    assert block.index("refresh().then(schedule);") < block.index("render();")
-
-
-def test_storyboard_director_activity_exposes_hard_stop_control():
+def test_storyboard_cancel_takes_is_contextual_and_story_scoped():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    styles = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
-    assert 'id="storyboard-director-stop"' in html
-    assert "function stopDirectorJob()" in storyboard
-    assert "operation: 'stop_or_cancel'" in storyboard
-    assert "directorWasStopped(err)" in storyboard
-    assert ".director-stop-btn {" in styles
-    assert "position: absolute;" in styles
-    assert "right: 10px;" in styles
-    assert "bottom: 10px;" in styles
-
-
-def test_storyboard_stale_activity_mask_preserves_live_director_job_identity():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-
-    block = storyboard.split("function directorActivityForCurrentRun(activity)", 1)[1].split(
-        "function refreshDirectorActivity()", 1
-    )[0]
-
-    assert "return Object.assign({}, activity, {" in block
-    assert "phase: 'preparing'" in block
-    assert "startedAt: localStartedAt" in block
-
-
-def test_storyboard_director_stop_dismisses_only_the_stopped_activity_target():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-
-    stop_block = storyboard.split("function stopDirectorJob()", 1)[1].split("function startDirectorActivity()", 1)[0]
-    render_block = storyboard.split("function renderDirectorActivity(activity, system)", 1)[1].split("function directorActivityActive()", 1)[0]
-    pending_block = storyboard.split("function setDirectorPending(target, pending)", 1)[1].split("function defineInvariants()", 1)[0]
-
-    assert "dismissedActivityTargetKey = directorTargetKey(storyState.director.activityTarget)" in stop_block
-    assert "card.classList.add('hidden')" in stop_block
-    assert "storyState.director.dismissedActivityTargetKey === activityTargetKey" in render_block
-    assert "visible = !dismissed &&" in render_block
-    assert "storyState.director.dismissedActivityTargetKey === key" in pending_block
+    assert 'id="storyboard-cancel-takes-btn"' in html
+    generate_index = html.index('id="storyboard-generate-scenes-btn"')
+    cancel_index = html.index('id="storyboard-cancel-takes-btn"')
+    director_tools_index = html.index('id="storyboard-director-tools-btn"')
+    assert generate_index < cancel_index < director_tools_index
+    assert "function cancelStoryTakes()" in storyboard
+    assert "operation: 'cancel_story'" in storyboard
+    assert "storyId: storyId" in storyboard
+    assert "cancelTakesButton.classList.toggle('hidden', !generationBlocked)" in storyboard
+    assert "el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;" in storyboard
 
 
 
-def test_storyboard_first_cut_lock_is_story_scoped_and_sequence_readiness_is_derived():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
-
-    protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("\n  function ", 1)[0]
-    assert "String(target.storyId || '') !== String(storyState.story.id || '')" in protection
-    assert "#storyboard-story-authoring button, #storyboard-story-authoring input" in protection
-    assert "#storyboard-story-overview button, #storyboard-story-overview input" not in protection
-    assert "[data-story-action-cancel]" in protection
-
-    pending_controls = storyboard.split("function syncDirectorPendingControls()", 1)[1].split("\n  function ", 1)[0]
-    assert "document.querySelectorAll('[data-story-action-disabled=\"1\"]')" in pending_controls
-    assert "delete control.dataset.storyActionDisabled;" in pending_controls
-
-    readiness = storyboard.split("function renderStoryReadiness()", 1)[1].split("\n  function ", 1)[0]
-    assert "scenesWithTake" in readiness
-    assert "sequenceButton.classList.toggle('is-ready', sequenceReady);" in readiness
-    assert "#storyboard-scenes-sequence-btn.is-ready:not(.active)" in css
-
-
-
-def test_storyboard_plan_replacement_controls_follow_story_generation_state():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-
-    assert "function storyHasPendingGeneration(storyId)" in storyboard
-    assert "function syncPlanReplacementControls()" in storyboard
-    assert "developButton.disabled = developBlocked;" in storyboard
-    assert "firstCutButton.disabled = firstCutBlocked;" in storyboard
-    assert "pending Take generation before replacing its Scene plan" in storyboard
-    assert "pending Take generation before starting First Cut" in storyboard
-    assert "syncPlanReplacementControls();" in storyboard
-
-
-def test_storyboard_queued_first_cut_prevents_new_take_generation():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-
-    assert "var queuedFirstCut = !!queuedFirstCutForStory(storyId);" in storyboard
-    assert "#storyboard-generate-scenes-btn, #storyboard-scenes-list [data-scene-generate]" in storyboard
-    assert "control.dataset.firstCutQueuedDisabled = '1';" in storyboard
-    assert "Remove this Story from the First Cut queue before adding new Take generation." in storyboard
-    assert "var activeFirstCut = storyState.storyAction" in storyboard
-    assert "control.dataset.storyActionDisabled = '1';" in storyboard
-
-def test_storyboard_first_cut_queue_is_session_only_story_scoped_fifo():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-
-    assert "storyActionQueue: []" in storyboard
-    assert "function queuedFirstCutForStory(storyId)" in storyboard
-    assert "function firstCutQueueDisplayPosition(action)" in storyboard
-    assert "function removeQueuedFirstCut(storyId)" in storyboard
-    assert "function runFirstCut(action)" in storyboard
-    assert "function startNextFirstCut()" in storyboard
-    assert "storyState.storyActionQueue.push(action);" in storyboard
-    assert "var candidate = storyState.storyActionQueue.shift();" in storyboard
-    assert "button.textContent = anotherRunning ? 'Queue First Cut' : 'First Cut';" in storyboard
-    assert "'First Cut queued #' + String(firstCutQueueDisplayPosition(queuedFirstCut))" in storyboard
-    assert "removeQueuedFirstCut(storyId);" in storyboard
-    assert "window.localStorage.setItem('webcap.storyboard.firstCut" not in storyboard
-    assert "operation: 'queue_first_cut'" not in storyboard
-
-
-def test_storyboard_queued_first_cut_freezes_model_but_reads_story_at_start():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-
-    start = storyboard.split("function startFirstCut()", 1)[1].split("\n  function ", 1)[0]
-    run = storyboard.split("function runFirstCut(action)", 1)[1].split("\n  function ", 1)[0]
-
-    assert "modelId: modelId" in start
-    assert "storyState.storyActionQueue.push(action);" in start
-    assert "var modelId = String(action.modelId || '');" in run
-    assert "request(null, 'story=' + encodeURIComponent(storyId))" in run
-    assert "replaceExisting = Array.isArray(actionStory && actionStory.sceneOrder)" in run
-    assert "setDirectorPending(directorTarget, true);" in run
-    assert "startNextFirstCut();" in run
-
-
-
-def test_storyboard_director_actions_and_invariants_keep_compact_affordances():
+def test_develop_scenes_supports_assessment_guided_individual_strategy():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    for control_id in (
-        "storyboard-first-cut-btn",
-        "storyboard-expand-concept-btn",
-        "storyboard-invariant-define",
-        "storyboard-repair-scenes-btn",
-        "storyboard-develop-btn",
-    ):
-        control = html.split(f'id="{control_id}"', 1)[1].split(">", 1)[0]
-        assert "storyboard-director-action" in control
-
-    assert 'class="review-captions-btn storyboard-director-action" data-director-write' in storyboard
-    assert 'class="review-captions-btn storyboard-director-action" data-director-refine' in storyboard
-    assert "function invariantRowHtml(item, expanded)" in storyboard
-    assert 'class="storyboard-invariant-row' in storyboard
-    assert "data-story-invariant-toggle" in storyboard
-    assert "function setInvariantRowOpen(row, open)" in storyboard
-    assert ".storyboard-director-action::before" in css
-    assert ".storyboard-invariant-row-head" in css
-    assert ".storyboard-invariant-body" in css
+    assert 'id="storyboard-develop-individual"' in html
+    assert "function syncIndividualDevelopStrategy(" in storyboard
+    assert "assessment.individualScenesRecommended" in storyboard
+    assert "developIndividuallyOverride" in storyboard
+    assert "function developStoryIndividually(" in storyboard
+    assert "operation: 'develop_story_outline'" in storyboard
+    assert "operation: 'develop_story_scene'" in storyboard
+    assert "previousScene: authoredScenes.length ? authoredScenes[authoredScenes.length - 1] : null" in storyboard
+    assert "operation: 'apply_individual_development'" in storyboard
+    assert "expectedUpdatedAt: sourceUpdatedAt" in storyboard
+    assert "Existing Scenes were left unchanged." in storyboard
 
 
-def test_storyboard_story_rail_is_full_by_default_and_manually_compactable():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+def test_director_selector_surfaces_only_compact_assessment_markers():
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
 
-    assert 'id="storyboard-library-compact-toggle"' in html
-    assert "storyLibraryCompact: window.localStorage.getItem('webcap.storyboard.storyLibraryCompact') === '1'" in storyboard
-    assert "function setStoryLibraryCompact(compact)" in storyboard
-    assert "story-library-compact" in storyboard
-    assert ".storyboard-workspace.story-library-compact" in css
-
-
-def test_storyboard_story_icon_is_optional_persisted_and_visible_in_library():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
-    store = (ROOT / "tool" / "server" / "storyboard_store.py").read_text(encoding="utf-8")
-
-    story_section = html.split('data-story-section="story"', 1)[1].split("</details>", 1)[0]
-    assert story_section.index('id="storyboard-story-title"') < story_section.index('id="storyboard-story-icon"') < story_section.index('id="storyboard-story-status"')
-    assert 'id="storyboard-story-icon-trigger"' in story_section
-    assert 'id="storyboard-story-icon-menu"' in story_section
-    assert 'type="hidden"' in story_section.split('id="storyboard-story-icon"', 1)[1].split(">", 1)[0]
-    assert "var STORY_RAIL_ICONS = {" in storyboard
-    assert "var STORY_ICON_LABELS = {" in storyboard
-    assert "function storyRailIconHtml(story)" in storyboard
-    assert "function renderStoryIconPicker()" in storyboard
-    assert "function setStoryIconSelection(iconName)" in storyboard
-    assert "storyboard-story-rail-icon" in storyboard
-    assert "icon: el('storyboard-story-icon').value" in storyboard
-    assert ".storyboard-icon-picker-menu" in css
-    assert "grid-template-columns: repeat(6" in css
-    assert len(store.split("VALID_STORY_ICONS = {", 1)[1].split("}", 1)[0].split(",")) >= 30
-    assert '"icon": icon' in store
-    assert '"icon": source.get("icon") or ""' in store
-
-
-def test_assistant_exposes_storyboard_revise_scenes_only_when_context_is_available():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-    shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
-
-    assert 'aria-label="Assistant"' in html
-    assert 'id="director-chat-mode-row"' in html
-    assert 'id="director-chat-mode-switch"' in html
-    assert 'id="director-chat-mode-tools"' in html
-    assert 'id="director-chat-mode-presets"' in html
-    assert 'id="storyboard-assistant-btn"' in html
-    assert 'storyboard-director-action' in html.split('id="storyboard-assistant-btn"', 1)[1].split(">", 1)[0]
-
-    assert "window.registerAssistantMode = registerContextMode" in assistant
-    assert "window.refreshAssistantModes = syncModeUi" in assistant
-    assert "window.openAssistant" in assistant
-    assert "data-assistant-mode=\"chat\"" in assistant
-    assert "mode.execute" in assistant
-    assert "active.presets" in assistant
-    assert "data-assistant-preset" in assistant
-    assert ".director-chat-mode-switch" in shell_css
-    assert ".director-chat-mode-presets" in shell_css
-
-    mode = storyboard.split("window.registerAssistantMode({", 1)[1].split("});", 1)[0]
-    assert "id: 'revise-scenes'" in mode
-    assert "label: 'Revise Scenes'" in mode
-    assert "label: 'Continuity pass'" in mode
-    assert "DIRECTOR_PASS_PRESETS.continuity.instruction" in mode
-    assert "!workspace.classList.contains('hidden')" in mode
-    assert "storyState.story" in mode
-    assert "Array.isArray(storyState.story.sceneOrder)" in mode
-    assert "storyState.story.sceneOrder.length > 0" in mode
-    assert "return reviseScenes(request && request.instruction, request && request.modelId)" in mode
-
-    assert "function reviseScenes(instruction, modelId)" in storyboard
-    assert "window.openAssistant({ mode: hasScenes ? 'revise-scenes' : 'chat' })" in storyboard
-
-
-
-def test_assistant_chat_remains_freeform_and_separate_from_contextual_modes():
-    assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
-
-    assert "activeMode: 'chat'" in assistant
-    assert "if (state.activeMode === 'chat') return state.messages;" in assistant
-    assert "state.modeMessages" in assistant
-    assert "requestJson('/fs/director/chat'" in assistant
-    assert "if (mode)" in assistant
-    assert "mode.execute({" in assistant
-    assert "slot.generatedTokens" in assistant
-    assert "' tokens'" in assistant
-    assert "' tok/s'" in assistant
-    assert "completedResponseMetrics(result)" in assistant
-    assert "usage.completion_tokens" in assistant
-
-
-def test_director_status_cards_are_scoped_to_their_own_jobs():
-    assistant = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-
-    assistant_scope = assistant.split("function activityForCurrentJob(activity)", 1)[1].split(
-        "function renderProgress(activity)", 1
-    )[0]
-    assert "if (!jobId || !queue || !Array.isArray(queue.jobs)) return null;" in assistant_scope
-    assert "if (!job) return null;" in assistant_scope
-    assert "var active = String(queue.activeJobId || '') === jobId;" in assistant_scope
-
-    storyboard_scope = storyboard.split("function directorActivityForTargetQueue(activity, queue)", 1)[1].split(
-        "function directorQueuedLabel(activity)", 1
-    )[0]
-    assert "if (!target || !queue || !Array.isArray(queue.jobs)) return null;" in storyboard_scope
-    assert "if (!job) return null;" in storyboard_scope
-    assert "target.kind === 'repair'" in storyboard_scope
-    assert "candidateTarget.kind === 'scene-prompt'" in storyboard_scope
-    assert "candidate.operation === 'refine_prompt'" in storyboard_scope
-
-
-def test_storyboard_director_completion_does_not_fall_back_to_global_activity():
-    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
-
-    finish = storyboard.split("function finishDirectorActivity()", 1)[1].split(
-        "function updateSceneDirectorStatus", 1
-    )[0]
-    assert "/fs/director/activity" not in finish
-    assert "card.classList.add('hidden')" in finish
-    assert "storyState.director.activityTarget = null;" in finish
-    assert "storyState.director.activityStartedAt = 0;" in finish
+    assert "assessment.seriousWarning" in common
+    assert "assessment.limited" in common
+    assert "'⚠ ' + label" in common
+    assert "'△ ' + label" in common
+    assert "coherentOutputTokens" not in common

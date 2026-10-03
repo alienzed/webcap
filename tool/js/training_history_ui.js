@@ -93,6 +93,18 @@ function renderTrainingHistory() {
   var els = getTrainingWorkspaceEls();
   if (!els.historySummary || !els.historyList || !els.checkpointSelect) return;
   var history = trainingWorkspaceState.history || {};
+  var archiveActive = trainingWorkspaceState.historyPrimaryTab === 'archive';
+  if (els.historyTabs) Array.prototype.forEach.call(els.historyTabs.querySelectorAll('[data-training-history-tab]'), function (button) {
+    var active = button.getAttribute('data-training-history-tab') === (archiveActive ? 'archive' : 'history');
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  if (els.historyList) els.historyList.classList.toggle('hidden', archiveActive);
+  if (els.historySummary) els.historySummary.classList.toggle('hidden', archiveActive);
+  if (els.archiveList) els.archiveList.classList.toggle('hidden', !archiveActive);
+  if (els.archiveSummary) els.archiveSummary.classList.toggle('hidden', !archiveActive || !!(trainingWorkspaceState.archives || []).length);
+  if (els.historyTools) els.historyTools.classList.toggle('hidden', archiveActive || trainingWorkspaceState.historyCollapsed);
+  if (archiveActive) renderTrainingArchives();
   var searchText = String((els.historySearch && els.historySearch.value) || '').trim().toLowerCase();
   var scope = trainingWorkspaceState.historyViewScope === 'set' ? 'set' : 'all';
   var currentFolder = trainingWorkspaceState.entryMode === 'set' ? String(state.folder || '').trim() : '';
@@ -120,12 +132,12 @@ function renderTrainingHistory() {
   var runs = Array.isArray(history.runs) ? history.runs : [];
   var latest = jobs.length ? jobs[0] : null;
   if (els.historyContent) els.historyContent.classList.toggle('hidden', trainingWorkspaceState.historyCollapsed);
-  if (els.historyTools) els.historyTools.classList.toggle('hidden', trainingWorkspaceState.historyCollapsed);
+  if (els.historyTools) els.historyTools.classList.toggle('hidden', archiveActive || trainingWorkspaceState.historyCollapsed);
   if (els.historyCollapseBtn) {
-    els.historyCollapseBtn.textContent = 'Training History' + (jobs.length ? ' · ' + jobs.length : '');
+    els.historyCollapseBtn.textContent = 'Training' + (archiveActive ? ' · Archive' : (jobs.length ? ' · ' + jobs.length : ''));
     els.historyCollapseBtn.setAttribute('aria-expanded', trainingWorkspaceState.historyCollapsed ? 'false' : 'true');
   }
-  els.historySummary.classList.toggle('hidden', !!latest);
+  els.historySummary.classList.toggle('hidden', archiveActive || !!latest);
   els.historySummary.textContent = latest ? '' : (scope === 'set'
     ? 'No completed or actionable training outcomes for this set yet.'
     : 'No completed or actionable training outcomes yet.');
@@ -171,6 +183,9 @@ function renderTrainingHistory() {
     var stageLabel = trainingStageLabel(job.stages || '');
     var profileLabel = modelLabel + (stageLabel && stageLabel.toLowerCase() !== modelLabel.toLowerCase() ? ' · ' + stageLabel : '');
     var runDisplayName = trainingHistoryRunDisplayName(job, profileLabel);
+    var selectedEpoch = job.selectedEpoch && typeof job.selectedEpoch === 'object' ? job.selectedEpoch : null;
+    var selectedEpochNumber = selectedEpoch ? Number(selectedEpoch.epoch) : NaN;
+    var selectedEpochLabel = isFinite(selectedEpochNumber) && selectedEpochNumber > 0 ? 'Selected Epoch ' + Math.round(selectedEpochNumber).toLocaleString() : '';
     var checkpointLabel = trainingHistoryCheckpointLabel(artifact);
     var checkpointStage = String(job.stage || job.stages || '').toLowerCase();
     var canOpenCheckpointRun = !!(checkpointLabel && job.folder && job.outputRunPath && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(checkpointStage) !== -1);
@@ -207,15 +222,17 @@ function renderTrainingHistory() {
         checkpointFact +
         trainingHistoryFact('Continues', job.parentJobId ? 'run ' + job.parentJobId : '') +
       '</div></div>' : '';
-    return '<div class="training-history-item" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
+    return '<div class="training-history-item' + (selectedEpochLabel ? ' has-selected-epoch' : '') + '" data-training-history-job="' + escapeHtml(job.id || '') + '">' +
       '<div class="training-history-primary"><div class="training-history-outcome"><strong class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</strong><span class="training-history-stage">' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span></div>' +
         '<span class="training-history-time" title="' + escapeHtml(timestampKind + ' time') + '">' + escapeHtml(formatTrainingHistoryTime(timestamp)) + '</span></div>' +
-      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(runDisplayName) + '</div>' +
+      '<div class="training-history-context"><div class="training-history-model">' +
+        (selectedEpochLabel ? '<span class="training-history-selected-mark" title="' + escapeHtml(selectedEpochLabel) + '" aria-label="' + escapeHtml(selectedEpochLabel) + '"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="3.5"></circle><path d="M5.5 9l-1 5 3.5-2 3.5 2-1-5"></path></svg></span>' : '') +
+        escapeHtml(runDisplayName) + '</div>' +
         '<div class="training-history-set"><button type="button" class="training-history-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button></div></div>' +
       '<div class="training-history-details">' +
         (runSummary ? '<div>' + escapeHtml(runSummary) + '</div>' : '') +
-        (details.length ? '<div>' +
-          (details.length ? escapeHtml(details.join(' · ')) : '') +
+        (details.length || selectedEpochLabel ? '<div>' +
+          escapeHtml([selectedEpochLabel].concat(details).filter(Boolean).join(' · ')) +
           '</div>' : '') +
         (timingError ? '<div class="training-runner-detail is-error">' + escapeHtml(timingError) + '</div>' : '') +
         (job.error ? '<div class="training-runner-detail is-error">' + escapeHtml(job.error) + '</div>' : '') +
@@ -226,6 +243,7 @@ function renderTrainingHistory() {
         '<button type="button" class="training-history-details-toggle" data-training-history-details="' + escapeHtml(job.id || '') + '" title="' + (detailsOpen ? 'Hide run details' : 'Show run details') + '" aria-label="' + (detailsOpen ? 'Hide run details' : 'Show run details') + '" aria-expanded="' + (detailsOpen ? 'true' : 'false') + '">' + (detailsOpen ? '&#9652;' : '&#9662;') + '</button>' +
       '</div>' +
       '<div class="training-history-actions">' +
+       (selectedEpochLabel ? '<button type="button" class="training-btn training-history-finalize" data-training-history-finalize="' + escapeHtml(job.id || '') + '">Archive</button>' : '') +
        (job.logAvailable !== false ? '<button type="button" class="training-history-action" data-training-history-log="' + escapeHtml(job.id || '') + '" title="Show run log" aria-label="Show run log">&#128196;</button>' : '') +
        (job.candidateRunAvailable ? '<button type="button" class="training-history-action" data-training-history-candidates="' + escapeHtml(job.id || '') + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
        (canResume ? '<button type="button" class="training-history-action" data-training-history-resume="' + escapeHtml(job.id || '') + '" title="Continue captured run" aria-label="Continue captured run">&#8635;</button>' : '') +
@@ -237,7 +255,7 @@ function renderTrainingHistory() {
        '</div></div>';
   }).join('');
   if (els.historyShowAllBtn) {
-    els.historyShowAllBtn.classList.toggle('hidden', jobs.length <= 2);
+    els.historyShowAllBtn.classList.toggle('hidden', archiveActive || jobs.length <= 2);
     els.historyShowAllBtn.textContent = trainingWorkspaceState.historyExpanded ? 'Show less' : 'Show all (' + jobs.length + ')';
   }
   var selectedCheckpoint = String(els.checkpointSelect.value || '');
@@ -246,7 +264,7 @@ function renderTrainingHistory() {
   var checkpointPrompt = trainingWorkspaceState.historyRunsLoading
     ? 'Loading current-set checkpoints…'
     : (runs.length ? 'Choose a managed checkpoint…' : 'No managed checkpoints for this set');
-  els.checkpointSelect.innerHTML = '<option value="">' + checkpointPrompt + '</option>' + runs.map(function (run) {
+  var currentOptions = runs.map(function (run) {
     var details = [];
     if (run.epoch && run.expectedEpochs) details.push('epoch ' + run.epoch + ' / ' + run.expectedEpochs);
     var matchLabel = run.matchType === 'exact' ? 'exact' : 'compatible';
@@ -255,10 +273,352 @@ function renderTrainingHistory() {
       escapeHtml(String(run.runName || run.logicalRun || run.name || 'run') + ' - ' + trainingStageLabel(run.stage) +
         (details.length ? ' - ' + details.join(' / ') : '') + ' - ' + matchLabel) + '</option>';
   }).join('');
-  if (selectedCheckpoint && runs.some(function (run) { return String(run.resumeOutputId || run.runPath || '') === selectedCheckpoint; })) {
+  var previousOptions = [];
+  runs.forEach(function (run) {
+    (Array.isArray(run.resumePoints) ? run.resumePoints : []).forEach(function (point) {
+      var optionValue = String(run.resumeOutputId || run.runPath || '') + '::' + String(point.tag || '');
+      previousOptions.push(
+        '<option value="' + escapeHtml(optionValue) + '" data-action-id="' + escapeHtml(run.resumeActionId || '') + '" data-output-id="' + escapeHtml(run.resumeOutputId || '') + '" data-run-path="' + escapeHtml(run.runPath || '') + '" data-checkpoint-tag="' + escapeHtml(point.tag || '') + '">' +
+        escapeHtml(String(run.runName || run.logicalRun || run.name || 'run') + ' - ' + String(point.tag || '')) + '</option>'
+      );
+    });
+  });
+  els.checkpointSelect.innerHTML = '<option value="">' + checkpointPrompt + '</option>' +
+    currentOptions +
+    (previousOptions.length ? '<optgroup label="Previous saved resumable points">' + previousOptions.join('') + '</optgroup>' : '');
+  if (selectedCheckpoint && Array.prototype.some.call(els.checkpointSelect.options, function (option) { return option.value === selectedCheckpoint; })) {
     els.checkpointSelect.value = selectedCheckpoint;
   }
   syncManagedTrainingResumeUi();
+}
+
+function trainingArchiveLossValue(value) {
+  var number = Number(value);
+  if (!isFinite(number)) return '';
+  if (number !== 0 && Math.abs(number) < .0001) return number.toExponential(2);
+  return number.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function trainingArchivePercent(value, signed) {
+  var number = Number(value);
+  if (!isFinite(number)) return '';
+  if (Math.abs(number) < .05) number = 0;
+  return (signed && number > 0 ? '+' : '') + number.toFixed(1) + '%';
+}
+
+function trainingArchiveDuration(value) {
+  var seconds = Number(value);
+  return isFinite(seconds) && seconds >= 0 ? formatTrainingRunnerDuration(Math.round(seconds)) : '';
+}
+
+function trainingArchiveMetricFact(label, value, title) {
+  if (value === '' || value === null || value === undefined) return '';
+  return '<div class="training-archive-metric"><span>' + escapeHtml(label) + '</span><strong' +
+    (title ? ' title="' + escapeHtml(title) + '"' : '') + '>' + escapeHtml(String(value)) + '</strong></div>';
+}
+
+function trainingArchiveLossChart(metrics) {
+  var points = (Array.isArray(metrics && metrics.epochLossPoints) ? metrics.epochLossPoints : []).map(function (point) {
+    return { epoch: Number(point.epoch), loss: Number(point.loss) };
+  }).filter(function (point) {
+    return isFinite(point.epoch) && isFinite(point.loss);
+  }).sort(function (a, b) {
+    return a.epoch - b.epoch;
+  });
+  if (!points.length) return '';
+
+  var width = 520;
+  var top = 9;
+  var bottom = 63;
+  var left = 12;
+  var right = width - 12;
+  var minEpoch = points[0].epoch;
+  var maxEpoch = points[points.length - 1].epoch;
+  var losses = points.map(function (point) { return point.loss; });
+  var minLoss = Math.min.apply(Math, losses);
+  var maxLoss = Math.max.apply(Math, losses);
+  var xFor = function (epoch) {
+    return minEpoch === maxEpoch ? width / 2 : left + ((epoch - minEpoch) / (maxEpoch - minEpoch)) * (right - left);
+  };
+  var yFor = function (loss) {
+    return minLoss === maxLoss ? (top + bottom) / 2 : top + ((maxLoss - loss) / (maxLoss - minLoss)) * (bottom - top);
+  };
+  var path = points.map(function (point, index) {
+    return (index ? 'L' : 'M') + xFor(point.epoch).toFixed(2) + ' ' + yFor(point.loss).toFixed(2);
+  }).join(' ');
+
+  var selectedEpoch = Number(metrics.selectedEpoch);
+  var saved = {};
+  (Array.isArray(metrics.savedEpochs) ? metrics.savedEpochs : []).forEach(function (epoch) {
+    var number = Number(epoch);
+    if (isFinite(number)) saved[number] = true;
+  });
+  var markers = points.filter(function (point) {
+    return saved[point.epoch];
+  }).map(function (point) {
+    var selected = point.epoch === selectedEpoch;
+    var title = (selected ? 'Selected epoch ' : 'Retained epoch ') + point.epoch + ' · loss ' + trainingArchiveLossValue(point.loss);
+    return '<circle class="training-archive-loss-marker' + (selected ? ' is-selected' : '') + '" cx="' +
+      xFor(point.epoch).toFixed(2) + '" cy="' + yFor(point.loss).toFixed(2) + '" r="' + (selected ? '4' : '2.8') + '">' +
+      '<title>' + escapeHtml(title) + '</title></circle>';
+  }).join('');
+
+  return '<div class="training-archive-loss-chart">' +
+    '<div class="training-archive-loss-chart-title">Epoch loss curve</div>' +
+    '<svg viewBox="0 0 ' + width + ' 72" role="img" aria-label="' +
+      escapeHtml('Epoch loss curve with selected epoch ' + selectedEpoch + ' highlighted') + '">' +
+      '<line class="training-archive-loss-guide" x1="' + left + '" y1="' + bottom + '" x2="' + right + '" y2="' + bottom + '"></line>' +
+      '<path class="training-archive-loss-line" d="' + path + '"></path>' +
+      markers +
+    '</svg>' +
+    '<div class="training-archive-loss-axis"><span>Epoch ' + escapeHtml(String(minEpoch)) + '</span>' +
+      '<span>Selected ' + escapeHtml(String(selectedEpoch)) + '</span>' +
+      '<span>Epoch ' + escapeHtml(String(maxEpoch)) + '</span></div>' +
+  '</div>';
+}
+
+function trainingArchiveAnalysisHtml(metrics, pending) {
+  if (pending && !metrics) {
+    return '<div class="training-archive-analysis"><div class="training-history-summary">Loading TensorBoard metrics…</div></div>';
+  }
+  if (!metrics) return '';
+  if (metrics.error) {
+    return '<div class="training-archive-analysis"><div class="training-runner-detail is-error">' +
+      escapeHtml(metrics.error) + '</div></div>';
+  }
+
+  var selectedEpoch = Number(metrics.selectedEpoch);
+  var startingEpoch = Number(metrics.startingEpoch);
+  var comparisonEpoch = Number(metrics.recentComparisonEpoch);
+  var recentWindow = Number(metrics.recentWindowEpochs);
+  var reductionTitle = isFinite(startingEpoch)
+    ? 'Epoch ' + startingEpoch + ' loss ' + trainingArchiveLossValue(metrics.startingLoss) +
+      ' → epoch ' + selectedEpoch + ' loss ' + trainingArchiveLossValue(metrics.epochLoss)
+    : '';
+  var recentTitle = isFinite(comparisonEpoch)
+    ? 'Compared with epoch ' + comparisonEpoch + ' loss ' + trainingArchiveLossValue(metrics.recentComparisonLoss)
+    : '';
+  var facts =
+    trainingArchiveMetricFact('Selected step', isFinite(Number(metrics.step)) ? Math.round(Number(metrics.step)).toLocaleString() : '') +
+    trainingArchiveMetricFact('Epoch steps',
+      isFinite(Number(metrics.stepStart)) && isFinite(Number(metrics.stepEnd))
+        ? Math.round(Number(metrics.stepStart)).toLocaleString() + '–' + Math.round(Number(metrics.stepEnd)).toLocaleString()
+        : '') +
+    trainingArchiveMetricFact('Elapsed to selected', trainingArchiveDuration(metrics.trainingSecondsToSelected), 'TensorBoard wall time from the first recorded scalar to the selected epoch.') +
+    trainingArchiveMetricFact('Epoch elapsed', trainingArchiveDuration(metrics.selectedEpochSeconds), 'TensorBoard wall time since the previous completed epoch.') +
+    trainingArchiveMetricFact('Epoch loss', trainingArchiveLossValue(metrics.epochLoss)) +
+    trainingArchiveMetricFact('Smoothed loss', trainingArchiveLossValue(metrics.smoothedLoss), 'Existing display smoothing over detailed train/loss samples near the selected epoch.') +
+    trainingArchiveMetricFact('Loss reduction', trainingArchivePercent(metrics.lossReductionPercent, false), reductionTitle) +
+    (isFinite(recentWindow) && recentWindow > 0
+      ? trainingArchiveMetricFact(Math.round(recentWindow) + '-epoch change', trainingArchivePercent(metrics.recentLossChangePercent, true), recentTitle)
+      : '');
+
+  return '<div class="training-archive-analysis">' +
+    '<div class="training-archive-metrics">' + facts + '</div>' +
+    trainingArchiveLossChart(metrics) +
+  '</div>';
+}
+
+function loadTrainingArchiveMetrics(archive) {
+  var name = String(archive && archive.name || '').trim();
+  if (!name) throw new Error('Archived training run has no archive name.');
+  if (Object.prototype.hasOwnProperty.call(trainingWorkspaceState.archiveMetrics, name)) {
+    return Promise.resolve(trainingWorkspaceState.archiveMetrics[name]);
+  }
+  if (trainingWorkspaceState.archiveMetricRequests[name]) return Promise.resolve(null);
+  trainingWorkspaceState.archiveMetricRequests[name] = true;
+  return trainingRunnerRequest('/fs/training_archive/metrics?name=' + encodeURIComponent(name))
+    .then(function (payload) {
+      trainingWorkspaceState.archiveMetrics[name] = payload.metrics || {};
+      return trainingWorkspaceState.archiveMetrics[name];
+    })
+    .catch(function (err) {
+      var message = String(err && err.message ? err.message : err);
+      trainingWorkspaceState.archiveMetrics[name] = { error: message };
+      reportConsoleError('Training Archive', message);
+      return trainingWorkspaceState.archiveMetrics[name];
+    })
+    .then(function (metrics) {
+      delete trainingWorkspaceState.archiveMetricRequests[name];
+      renderTrainingArchives();
+      return metrics;
+    });
+}
+
+function loadTrainingArchives(force) {
+  if (!force && trainingWorkspaceState.archivesLoaded) return Promise.resolve(trainingWorkspaceState.archives || []);
+  return trainingRunnerRequest('/fs/training_archive').then(function (payload) {
+    trainingWorkspaceState.archives = Array.isArray(payload.archives) ? payload.archives : [];
+    trainingWorkspaceState.archivesLoaded = true;
+    renderTrainingHistory();
+    return trainingWorkspaceState.archives;
+  });
+}
+
+function renderTrainingArchives() {
+  var els = getTrainingWorkspaceEls();
+  if (!els.archiveList) return;
+  var rows = Array.isArray(trainingWorkspaceState.archives) ? trainingWorkspaceState.archives : [];
+  if (els.archiveSummary) {
+    els.archiveSummary.textContent = rows.length ? '' : 'No archived training runs yet.';
+    els.archiveSummary.classList.toggle('hidden', !!rows.length || trainingWorkspaceState.historyPrimaryTab !== 'archive');
+  }
+  els.archiveList.innerHTML = rows.map(function (archive) {
+    if (archive.invalid) {
+      return '<div class="training-history-item is-error">' +
+        '<div class="training-history-primary"><strong>Archive issue</strong></div>' +
+        '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(archive.name || 'Unknown archive') + '</div></div>' +
+        '<div class="training-history-details"><div>' + escapeHtml(archive.error || 'Archive metadata is invalid.') + '</div></div>' +
+      '</div>';
+    }
+    var summary = archive.runSummary && typeof archive.runSummary === 'object' ? archive.runSummary : {};
+    var settings = [];
+    if (summary.lr !== undefined) settings.push('LR ' + summary.lr);
+    if (summary.dropout !== undefined) settings.push('dropout ' + summary.dropout);
+    if (summary.shift !== undefined) settings.push('shift ' + summary.shift);
+    var alternates = Array.isArray(archive.retainedAlternateEpochs) ? archive.retainedAlternateEpochs : [];
+    var archiveName = String(archive.name || '');
+    var detailsOpen = !!trainingWorkspaceState.archiveDetailOpen[archiveName];
+    if (
+      detailsOpen &&
+      !Object.prototype.hasOwnProperty.call(trainingWorkspaceState.archiveMetrics, archiveName) &&
+      !trainingWorkspaceState.archiveMetricRequests[archiveName]
+    ) {
+      loadTrainingArchiveMetrics(archive);
+    }
+    var metrics = Object.prototype.hasOwnProperty.call(trainingWorkspaceState.archiveMetrics, archiveName)
+      ? trainingWorkspaceState.archiveMetrics[archiveName]
+      : null;
+    var metricPending = !!trainingWorkspaceState.archiveMetricRequests[archiveName];
+    return '<div class="training-history-item has-selected-epoch">' +
+      '<div class="training-history-primary"><strong>Archived</strong><span class="training-history-time">' + escapeHtml(formatTrainingHistoryTime(archive.archivedAt)) + '</span></div>' +
+      '<div class="training-history-context"><div class="training-history-model">' + escapeHtml(archive.runName || archive.name) + '</div><div class="training-history-set">' + escapeHtml(archive.sourceFolder || '') + '</div></div>' +
+      '<div class="training-history-details"><div>Selected Epoch ' + escapeHtml(String(archive.selectedEpoch || '')) +
+        (alternates.length ? ' · backups ' + escapeHtml(alternates.join(', ')) : '') + '</div>' +
+        (settings.length ? '<div>' + escapeHtml(settings.join(' · ')) + '</div>' : '') +
+        '<div>' + escapeHtml(archive.productionFileName || '') + '</div>' +
+        '<button type="button" class="training-history-details-toggle" data-training-archive-details="' + escapeHtml(archiveName) + '" title="' +
+          (detailsOpen ? 'Hide selected epoch metrics' : 'Show selected epoch metrics') + '" aria-label="' +
+          (detailsOpen ? 'Hide selected epoch metrics' : 'Show selected epoch metrics') + '" aria-expanded="' +
+          (detailsOpen ? 'true' : 'false') + '">' + (detailsOpen ? '&#9652;' : '&#9662;') + '</button>' +
+      '</div>' +
+      (detailsOpen ? trainingArchiveAnalysisHtml(metrics, metricPending) : '') +
+      '</div>';
+  }).join('');
+}
+
+function closeTrainingArchiveModal() {
+  var els = getTrainingWorkspaceEls();
+  trainingWorkspaceState.archivePreview = null;
+  trainingWorkspaceState.archiveJobId = '';
+  els.archiveModal.classList.add('hidden');
+  els.archiveModal.setAttribute('aria-hidden', 'true');
+}
+
+function openTrainingArchiveModal(jobContext) {
+  var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs) ? trainingWorkspaceState.history.jobs : [];
+  var job = jobContext && typeof jobContext === 'object'
+    ? jobContext
+    : jobs.filter(function (item) { return String(item.id || '') === String(jobContext || ''); })[0];
+  var jobId = String(job && (job.id || job.jobId) || '');
+  if (!job || !job.folder || !jobId) throw new Error('Training run does not identify its archive source.');
+  trainingRunnerRequest('/fs/training_archive/preview?folder=' + encodeURIComponent(job.folder) + '&jobId=' + encodeURIComponent(jobId))
+    .then(function (payload) {
+      var preview = payload.preview;
+      var els = getTrainingWorkspaceEls();
+      trainingWorkspaceState.archivePreview = preview;
+      trainingWorkspaceState.archiveJobId = jobId;
+      els.archiveName.value = String(preview.archiveName || '');
+      els.archiveRecap.innerHTML =
+        '<div><strong>Production keeper:</strong> Epoch ' + escapeHtml(String(preview.selectedEpoch && preview.selectedEpoch.epoch || '')) + ' · ' + escapeHtml(preview.productionFileName || '') + '</div>' +
+        '<div><strong>Training cleanup:</strong> ' + escapeHtml(String(preview.epochCount || 0)) + ' epoch folders · ' + escapeHtml(String(preview.globalStepCount || 0)) + ' global-step folders</div>' +
+        '<div><strong>Test cleanup:</strong> ' + escapeHtml(String(preview.stagedCandidateCount || 0)) + ' staged candidate(s) · ' + escapeHtml(String(preview.testSessionCount || 0)) + ' session(s) will be cleared.</div>' +
+        '<div><strong>Related runs:</strong> ' + escapeHtml(String(preview.relatedRunCount || 0)) + (preview.siblingOutputCount ? ' · ' + escapeHtml(String(preview.siblingOutputCount)) + ' sibling output(s) remain' : ' · this is the last managed output') + '</div>';
+      var alternateCandidates = Array.isArray(preview.availableAlternateCandidates) ? preview.availableAlternateCandidates : [];
+      els.archiveAlternates.innerHTML = alternateCandidates.length
+        ? alternateCandidates.map(function (candidate) {
+            return '<label class="training-archive-alternate"><input type="checkbox" value="' + escapeHtml(String(candidate.epoch)) + '">' +
+              '<span>Epoch ' + escapeHtml(String(candidate.epoch)) + '</span>' +
+              '<small>' + escapeHtml(candidate.fileName || '') + '</small></label>';
+          }).join('')
+        : '<div class="training-history-summary">No staged candidate LoRAs available to retain.</div>';
+      els.archiveModal.classList.remove('hidden');
+      els.archiveModal.setAttribute('aria-hidden', 'false');
+    })
+    .catch(function (err) {
+      setStatus('Could not prepare Finalize & Archive: ' + String(err.message || err));
+      throw err;
+    });
+}
+
+function finalizeTrainingArchive() {
+  var els = getTrainingWorkspaceEls();
+  var preview = trainingWorkspaceState.archivePreview;
+  if (!preview) throw new Error('Archive preview is unavailable.');
+  var retainEpochs = Array.prototype.map.call(els.archiveAlternates.querySelectorAll('input[type="checkbox"]:checked'), function (input) {
+    return Number(input.value);
+  });
+  els.archiveModalConfirm.disabled = true;
+  trainingRunnerRequest('/fs/training_archive/finalize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder: preview.folder,
+      jobId: preview.jobId,
+      archiveName: String(els.archiveName.value || '').trim(),
+      retainEpochs: retainEpochs
+    })
+  }).then(function (payload) {
+    closeTrainingArchiveModal();
+    trainingWorkspaceState.archivesLoaded = false;
+    var archive = payload.archive || {};
+    var archiveName = String(archive.archiveName || '');
+    var markerSave = Promise.resolve(true);
+    if (archive.lastTrainingArchive && typeof state === 'object' && state) {
+      state.lastTrainingArchive = JSON.parse(JSON.stringify(archive.lastTrainingArchive));
+      if (
+        String(state.folder || '') === String(preview.folder || '') &&
+        typeof saveFolderStateForCurrentRoot === 'function'
+      ) {
+        markerSave = Promise.resolve(saveFolderStateForCurrentRoot());
+      } else {
+        markerSave = Promise.resolve(false);
+      }
+    }
+    window.dispatchEvent(new CustomEvent('webcap:training-archived', {
+      detail: {
+        folder: String(preview.folder || ''),
+        jobId: String(preview.jobId || ''),
+        archive: archive
+      }
+    }));
+    if (!archive.testCleanupWarning) {
+      window.dispatchEvent(new CustomEvent('webcap:test-sessions-cleared', {
+        detail: { folder: String(preview.folder || '') }
+      }));
+    }
+    return markerSave.catch(function () {
+      return false;
+    }).then(function (markerSaved) {
+      var notices = [];
+      if (markerSaved === false) notices.push('the Set archive marker could not be saved');
+      if (archive.testCleanupWarning) notices.push('Test sessions were not fully cleared: ' + String(archive.testCleanupWarning));
+      setStatus(
+        'Finalized and archived ' + archiveName + '.' +
+        (notices.length ? ' ' + notices.join(' · ') : '')
+      );
+      return refreshTrainingHistory(true).then(function () {
+        return loadTrainingArchives(true);
+      }).catch(function (err) {
+        setStatus('Finalized and archived, but Archive refresh failed: ' + String(err.message || err));
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Training Archive', String(err.message || err));
+      });
+    });
+  }, function (err) {
+    els.archiveModalConfirm.disabled = false;
+    setStatus('Finalize & Archive failed: ' + String(err.message || err));
+    throw err;
+  });
 }
 
 function clearTrainingHistory() {
@@ -418,6 +778,13 @@ function loadTrainingHistoryIndex(force) {
       trainingWorkspaceState.history.runs = previous.runs || [];
       trainingWorkspaceState.history.resumeDefaults = previous.resumeDefaults || {};
       trainingWorkspaceState.historyLoaded = true;
+      if (typeof window.syncApplicationRecentSetsFromJobs === 'function') {
+        window.syncApplicationRecentSetsFromJobs(
+          trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
+            ? trainingWorkspaceState.history.jobs
+            : []
+        );
+      }
       return trainingWorkspaceState.history;
     });
   trainingWorkspaceState.historyLoadPromise = request;

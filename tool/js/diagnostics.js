@@ -6,7 +6,7 @@ function diagnosticsEl(id) {
 }
 
 function setDiagnosticsTab(tabName, focusTab) {
-  var next = ['health', 'h3', 'director'].indexOf(tabName) !== -1 ? tabName : 'health';
+  var next = ['health', 'h3', 'models', 'benchmark'].indexOf(tabName) !== -1 ? tabName : 'health';
   diagnosticsActiveTab = next;
   var selectedButton = null;
 
@@ -25,7 +25,7 @@ function setDiagnosticsTab(tabName, focusTab) {
   });
 
   if (next === 'h3') refreshH3CalibrationSettings();
-  if (next === 'director' && !directorModelTestState.loaded) directorModelTestRefresh();
+  if ((next === 'models' || next === 'benchmark') && !directorModelTestState.loaded) directorModelTestRefresh();
   if (focusTab && selectedButton) selectedButton.focus();
 }
 
@@ -341,7 +341,7 @@ function wireDiagnosticsUi() {
       setDiagnosticsTab(button.getAttribute('data-diagnostics-tab'), false);
     };
     button.onkeydown = function (event) {
-      var tabs = ['health', 'h3', 'director'];
+      var tabs = ['health', 'h3', 'models', 'benchmark'];
       var current = tabs.indexOf(button.getAttribute('data-diagnostics-tab'));
       var next = current;
       if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;

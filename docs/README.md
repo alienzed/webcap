@@ -30,6 +30,7 @@ Start here when you need to know what the app does today:
 - `docs/phrase_copy.md` - helper panel, annotate strip, and tag copy/paste
 - `docs/primer_mappings_v2.md` - structured mappings/rules storage and UI contract
 - `docs/execution_queue.md` - current shared inference/LLM scheduling, backlog, GPU arbitration, and Activity/Inference Queue boundaries
+- `docs/gpu_coordination_invariants.md` - authoritative local-GPU coordination invariants; runtime truth, ownership, restart, and deterministic dispatch
 - `docs/storyboard.md` - current Storyboard storage, Director, generation, First Cut, and Sequence behavior
 - `INSTALLATION.md` - current installation/bootstrap and environment-diagnostics guide
 

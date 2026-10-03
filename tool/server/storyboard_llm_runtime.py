@@ -21,15 +21,10 @@ LLAMA_HOST = "127.0.0.1"
 DEFAULT_PORT = 8189
 DEFAULT_CONTEXT_SIZE = None
 DEFAULT_MAX_TOKENS = None
-GPU_RESERVATION_OWNER = "llm"
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 
 
 class DirectorRuntimeBusy(RuntimeError):
-    pass
-
-
-class DirectorGpuHoldRequired(RuntimeError):
     pass
 
 
@@ -236,6 +231,9 @@ def _runtime_settings(runtime_id=""):
             runtime_id = "local"
 
     if runtime_id == "local":
+        context_size_override = getattr(_runtime_context, "context_size_override", None)
+        if context_size_override is not None:
+            base = {**base, "context_size": int(context_size_override)}
         if base["models_dir"] is None:
             raise ValueError("WebCap Model Root is required for local Storyboard Director model discovery.")
         if base["port"] <= 0 or base["port"] > 65535:
@@ -267,6 +265,31 @@ def _runtime_settings(runtime_id=""):
 
 def _director_config():
     return _runtime_settings()
+
+
+@contextlib.contextmanager
+def _use_context_size_override(context_size):
+    previous = getattr(_runtime_context, "context_size_override", None)
+    if context_size is None:
+        yield
+        return
+    try:
+        value = int(context_size)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Director context_size override must be an integer.") from exc
+    if value < 1024:
+        raise ValueError("Director context_size override must be at least 1024.")
+    _runtime_context.context_size_override = value
+    try:
+        yield
+    finally:
+        if previous is None:
+            try:
+                delattr(_runtime_context, "context_size_override")
+            except AttributeError:
+                pass
+        else:
+            _runtime_context.context_size_override = previous
 
 
 @contextlib.contextmanager
@@ -982,8 +1005,49 @@ def list_models(reload=False):
 list_models.last_warnings = []
 
 
+
+def _assessment_signal(model_ref):
+    from .director_model_calibration import get_report
+
+    report = get_report(model_ref)
+    if not isinstance(report, dict):
+        return None
+    abilities = report.get("abilities") if isinstance(report.get("abilities"), dict) else {}
+    try:
+        coherent_output = max(0, int(abilities.get("coherentOutputTokens") or 0))
+    except (TypeError, ValueError):
+        coherent_output = 0
+    health = str(report.get("health") or "").strip()
+    pathologies = report.get("pathologies") if isinstance(report.get("pathologies"), list) else []
+    serious = bool(pathologies) or health == "likely-unusable"
+    limited = not serious and 0 < coherent_output < 8192
+    return {
+        "status": str(report.get("status") or ""),
+        "health": health,
+        "pathologies": [str(item) for item in pathologies if str(item or "").strip()],
+        "seriousWarning": serious,
+        "limited": limited,
+        "fullStoryCapable": coherent_output >= 8192 and not serious,
+        "individualScenesRecommended": 0 < coherent_output < 8192 and not serious,
+        "abilities": {
+            "contextTokens": max(0, int(abilities.get("contextTokens") or 0)),
+            "structuredOutputTokens": max(0, int(abilities.get("structuredOutputTokens") or 0)),
+            "coherentOutputTokens": coherent_output,
+        },
+        "updatedAt": str(report.get("updatedAt") or ""),
+    }
+
+
+def _attach_assessment_signals(models):
+    for model in models:
+        model_ref = str(model.get("id") or "").strip()
+        signal = _assessment_signal(model_ref)
+        if signal is not None:
+            model["assessment"] = signal
+    return models
+
 def status():
-    models = list_models(reload=True)
+    models = _attach_assessment_signals(list_models(reload=True))
     warnings = list(getattr(list_models, "last_warnings", []) or [])
     return {
         "available": bool(models),
@@ -1038,18 +1102,6 @@ def _unload_model(model_id):
     if response.get("success") is not True:
         raise RuntimeError("llama.cpp did not unload the selected Director model.")
     _wait_for_model(model_id, "unloaded", timeout=30)
-
-
-def _reserve_gpu():
-    from .training_runner import gpu_reservation_block_reason, reserve_gpu_for_external_work
-    if not reserve_gpu_for_external_work(GPU_RESERVATION_OWNER):
-        reason = gpu_reservation_block_reason(GPU_RESERVATION_OWNER)
-        raise RuntimeError("Director runtime could not reserve the shared GPU resource: " + reason)
-
-
-def _release_gpu():
-    from .training_runner import release_gpu_for_external_work
-    release_gpu_for_external_work(GPU_RESERVATION_OWNER)
 
 
 def _windows_curl_path():
@@ -1293,12 +1345,39 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
     )
 
 
-def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserved=False, sampling=None, allow_truncated=False):
+def chat(model_ref, messages, response_schema=None, max_tokens=None, context_size=None, gpu_reserved=False, sampling=None, allow_truncated=False):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director messages are required.")
 
     runtime_id, model_id = _split_model_ref(model_ref)
-    with _request_lock, _use_runtime(runtime_id):
+    if context_size is not None and runtime_id != "local":
+        raise ValueError("Director context_size override is supported only by the local llama.cpp runtime.")
+
+    with _use_runtime(runtime_id):
+        base_settings = _director_config()
+    if base_settings.get("mode", "local") == "local" and not gpu_reserved:
+        raise RuntimeError("Local Director runtime requires existing LLM GPU ownership.")
+    profile = None
+    needs_profile_context = (
+        runtime_id == "local"
+        and context_size is None
+        and base_settings.get("context_size") is None
+    )
+    needs_profile_output = max_tokens is None and base_settings.get("max_tokens") is None
+    if needs_profile_context or needs_profile_output:
+        from .director_model_calibration import get_profile
+        profile = get_profile(model_ref)
+
+    effective_context_size = context_size
+    if (
+        effective_context_size is None
+        and needs_profile_context
+        and isinstance(profile, dict)
+        and profile.get("contextMode") == "calibrated"
+    ):
+        effective_context_size = profile.get("contextSize")
+
+    with _request_lock, _use_runtime(runtime_id), _use_context_size_override(effective_context_size):
         _ensure_server()
         _model_record(model_ref)
         settings = _director_config()
@@ -1313,6 +1392,8 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserve
             "frequency_penalty": float(sampling.get("frequency_penalty", 0.0)),
         }
         requested_max_tokens = max_tokens if max_tokens is not None else settings["max_tokens"]
+        if requested_max_tokens is None and needs_profile_output and isinstance(profile, dict):
+            requested_max_tokens = profile.get("maxTokens")
         if requested_max_tokens is not None:
             requested_max_tokens = int(requested_max_tokens)
             if requested_max_tokens <= 0:
@@ -1353,12 +1434,13 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserve
                 _debug_llm_failure(model_ref, time.perf_counter() - request_started, exc)
                 raise
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
-            return _completion_result(response, model_ref, allow_truncated=allow_truncated)
+            result = _completion_result(response, model_ref, allow_truncated=allow_truncated)
+            if _remote_is_ollama():
+                remote_model = _ollama_running_model(model_id)
+                result["contextSize"] = int(remote_model.get("contextSize") or 0)
+            return result
 
-        if not gpu_reserved:
-            _reserve_gpu()
         completed = False
-        cleanup_safe = True
         try:
             _set_activity("freeing_comfy", model_id=model_ref)
             _free_comfy_models()
@@ -1385,30 +1467,26 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, gpu_reserve
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
             _relay_log_updates()
             result = _completion_result(response, model_ref, allow_truncated=allow_truncated)
+            effective_context = int(settings.get("context_size") or 0)
+            if context_size is not None:
+                slot = _slot_snapshot(model_id)
+                effective_context = int(slot.get("contextSize") or effective_context)
+            result["contextSize"] = effective_context
             completed = True
             return result
         finally:
-            cleanup_error = None
             if not completed and not _stop_requested.is_set():
                 try:
                     if _model_status(model_id) != "unloaded":
                         _unload_model(model_id)
-                except Exception as exc:
+                except Exception:
                     if _process is not None:
                         stop_server()
                     else:
-                        cleanup_safe = False
-                        cleanup_error = DirectorGpuHoldRequired(
-                            "Director runtime could not confirm that the selected model was unloaded "
-                            "from an external llama.cpp router after a failed request. The GPU reservation is being kept "
-                            "to avoid colliding with Training or generation work. Stop/unload that router model, then "
-                            "restart WebCap before using GPU work again."
+                        _logger.exception(
+                            "Director runtime could not confirm model unload from an external llama.cpp router; "
+                            "GPU ownership remains with the LLM runner while this request fails."
                         )
-                        cleanup_error.__cause__ = exc
-            if cleanup_safe and not gpu_reserved:
-                _release_gpu()
-            if cleanup_error is not None:
-                raise cleanup_error
 
 
 def _completion_result(response, model_id, allow_truncated=False):
@@ -1422,18 +1500,20 @@ def _completion_result(response, model_id, allow_truncated=False):
     if finish_reason in {"length", "max_tokens"}:
         if not allow_truncated:
             raise RuntimeError(
-                "Director output was truncated because the runtime reached its available token/context limit."
+                "Director output was truncated because the runtime reached its available token/context limit "
+                + "(finish_reason=" + finish_reason + ")."
             )
         content += "\n\n[Output truncated by model/runtime token or context limit.]"
     return {
         "text": content,
         "model": model_id,
+        "finishReason": finish_reason,
         "usage": response.get("usage") if isinstance(response, dict) else None,
         "timings": response.get("timings") if isinstance(response, dict) else None,
     }
 
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False):
+def normalize_freeform_messages(messages):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director Chat messages are required.")
 
@@ -1448,6 +1528,11 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
         if not content:
             raise ValueError("Director Chat messages cannot be empty.")
         normalized.append({"role": role, "content": content})
+    return normalized
+
+
+def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None):
+    normalized = normalize_freeform_messages(messages)
 
     operation = "freeform_chat"
     with _request_lock:
@@ -1471,7 +1556,14 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False):
                 operation=operation,
                 context_size=(settings.get("context_size") or 0) if settings.get("mode", "local") == "local" else 0,
             )
-            result = chat(model_id, normalized, gpu_reserved=bool(gpu_reserved), allow_truncated=True)
+            result = chat(
+                model_id,
+                normalized,
+                max_tokens=max_tokens,
+                context_size=context_size,
+                gpu_reserved=bool(gpu_reserved),
+                allow_truncated=True,
+            )
             _set_activity(
                 "complete",
                 model_id=model_id,

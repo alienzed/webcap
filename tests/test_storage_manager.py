@@ -19,6 +19,11 @@ def isolate_storage_output_root(monkeypatch):
         "app_cache_root",
         lambda: Path(storage_manager.app_config.FS_ROOT) / ".test-webcap-app-data" / "cache",
     )
+    monkeypatch.setattr(
+        storage_manager.app_config,
+        "app_state_root",
+        lambda: Path(storage_manager.app_config.FS_ROOT) / ".test-webcap-app-data" / "state",
+    )
 
 
 def _write_json(path, payload):
@@ -123,6 +128,47 @@ def test_overview_enumerates_known_producer_roots_without_measuring(monkeypatch,
     assert tests["complete"] is False
     assert "Start scan" in tests["note"]
     assert "workspace-wide Test inventory" in tests["note"]
+
+
+def test_storage_manager_surfaces_training_archives(monkeypatch, tmp_path):
+    fs_root = tmp_path / "sets"
+    output_root = tmp_path / "creative"
+    fs_root.mkdir()
+    archive = fs_root / "output" / "archive" / "2026-10-01-demo"
+    archive.mkdir(parents=True)
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", fs_root)
+    monkeypatch.setattr(storage_manager.app_config, "output_root", lambda: output_root)
+    _write_json(archive / "webcap-run.json", {
+        "schemaVersion": 1,
+        "runId": "demo--123/001-h3",
+        "selected": {
+            "epoch": 44,
+            "step": 8000,
+            "selectedAt": "2026-10-01T12:00:00Z",
+            "savedStage": "h3",
+            "savedDestination": "production",
+            "savedFileName": "demo.safetensors",
+        },
+        "archive": {
+            "archivedAt": 1,
+            "archiveName": "2026-10-01-demo",
+            "sourceFolder": "demo",
+            "runName": "demo",
+            "stage": "h3",
+            "runSummary": {"lr": 0.0001},
+            "productionFileName": "demo.safetensors",
+            "selectedEpoch": 44,
+            "retainedAlternateEpochs": [42, 46],
+        },
+    })
+
+    payload = storage_manager.overview("")
+    item = payload["items"]["archive"][0]
+
+    assert item["id"] == "2026-10-01-demo"
+    assert item["purgeable"] is True
+    assert item["meta"]["retainedAlternateEpochs"] == [42, 46]
+    assert storage_manager.resolve_item("archive", item["id"]) == archive.resolve()
 
 
 def test_storage_manager_finds_generations_in_configured_output_root(monkeypatch, tmp_path):
@@ -357,7 +403,7 @@ def test_training_purge_blocks_nonterminal_queue_reference(monkeypatch, tmp_path
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     action_id = "001-set--abc/001-h3--demo"
     action = _training_action(tmp_path, action_id)
-    _write_json(tmp_path / ".webcap_training" / "queue.json", {
+    _write_json(storage_manager.app_config.training_queue_state_path(), {
         "version": 3,
         "jobs": [{"id": "job-live", "actionId": action_id, "status": "queued"}],
     })
@@ -372,7 +418,7 @@ def test_training_overview_marks_nonterminal_reference_protected(monkeypatch, tm
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     action_id = "001-set--abc/001-h3--demo"
     _training_action(tmp_path, action_id)
-    _write_json(tmp_path / ".webcap_training" / "queue.json", {
+    _write_json(storage_manager.app_config.training_queue_state_path(), {
         "version": 3,
         "jobs": [{"id": "job-live", "actionId": action_id, "status": "running"}],
     })
@@ -480,7 +526,7 @@ def test_storage_ui_is_isolated_global_activity():
     assert "workspace === 'storage'" in shell
     assert "activity === 'storage'" in shell
     assert "os.walk" not in backend
-    assert 'PURGEABLE_AREAS = {"training", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}' in backend
+    assert 'PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}' in backend
     assert '"set": _set_items(cache, folder)' in backend
     assert '"staged": _staged_items(cache, folder)' in backend
     assert '"comfy": _comfy_items(cache)' in backend
@@ -579,7 +625,7 @@ def test_workspace_scan_cancellation_is_checked_during_recursive_inspection(monk
 
 
 def _h3_probe(root, probe_id="h3-20260923-120000-deadbeef", status="completed"):
-    probe = root / ".webcap_training" / "h3-probes" / probe_id
+    probe = root / "output" / "work" / "h3-probes" / probe_id
     probe.mkdir(parents=True)
     _write_json(probe / "seed.json", {
         "version": 1,
@@ -617,7 +663,7 @@ def test_runtime_h3_probe_is_purgeable_only_when_inactive(monkeypatch, tmp_path)
 
 def test_runtime_h3_probe_requires_matching_ownership_seed(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
-    probe = tmp_path / ".webcap_training" / "h3-probes" / "h3-demo"
+    probe = tmp_path / "output" / "work" / "h3-probes" / "h3-demo"
     probe.mkdir(parents=True)
     _write_json(probe / "seed.json", {"version": 1, "id": "someone-else"})
 
@@ -883,7 +929,7 @@ def test_generate_purge_rechecks_active_shared_inference_job(monkeypatch, tmp_pa
 
 
 def _generate_reference(root, token="1790180000000-abcdef123456"):
-    directory = root / ".webcap_runtime" / "generate-references" / token
+    directory = root / "output" / "work" / "generate-references" / token
     directory.mkdir(parents=True)
     (directory / "reference.png").write_bytes(b"reference")
     return directory
@@ -924,7 +970,7 @@ def test_generate_reference_bundle_is_protected_while_queued(monkeypatch, tmp_pa
         "payload": {
             "request": {
                 "references": {
-                    "first": ".webcap_runtime/generate-references/" + token + "/reference.png"
+                    "first": "work/generate-references/" + token + "/reference.png"
                 }
             }
         },
@@ -954,7 +1000,7 @@ def test_generate_reference_bundle_is_protected_while_queued(monkeypatch, tmp_pa
 
 def test_generate_reference_bundle_refuses_unknown_or_symlinked_tokens(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
-    root = tmp_path / ".webcap_runtime" / "generate-references"
+    root = tmp_path / "output" / "work" / "generate-references"
     root.mkdir(parents=True)
     unknown = root / "not-a-webcap-token"
     unknown.mkdir()
@@ -980,10 +1026,11 @@ def test_generate_reference_bundle_refuses_unknown_or_symlinked_tokens(monkeypat
     assert outside.is_dir()
 
 
+
 def test_test_resolution_honors_explicit_set_folder_before_central_id_collision(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
 
-    central = tmp_path / ".webcap" / "test-generations" / "same-id"
+    central = tmp_path / "output" / "test-generations" / "same-id"
     central.mkdir(parents=True)
     _write_json(central / "test.json", {
         "status": "completed",
@@ -991,17 +1038,16 @@ def test_test_resolution_honors_explicit_set_folder_before_central_id_collision(
         "ownerFolder": "sets/central",
     })
 
-    legacy = tmp_path / "sets" / "demo" / "test-generations" / "same-id"
-    legacy.mkdir(parents=True)
-    _write_json(legacy / "test.json", {
+    owned = tmp_path / "sets" / "demo" / "test-generations" / "same-id"
+    owned.mkdir(parents=True)
+    _write_json(owned / "test.json", {
         "status": "completed",
         "modelId": "minimax_h3",
     })
 
     resolved = storage_manager._resolve_test("sets/demo", "same-id")
 
-    assert resolved == legacy.resolve()
-
+    assert resolved == owned.resolve()
 
 def test_storage_manager_lists_and_purges_output_test_sessions(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
@@ -1032,7 +1078,8 @@ def test_storage_manager_lists_and_purges_output_test_sessions(monkeypatch, tmp_
     assert not session.exists()
 
 
-def test_storage_manager_keeps_legacy_central_test_sessions_readable(monkeypatch, tmp_path):
+
+def test_storage_manager_ignores_legacy_global_test_sessions(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     session = tmp_path / ".webcap" / "test-generations" / "legacy-central"
     session.mkdir(parents=True)
@@ -1041,19 +1088,17 @@ def test_storage_manager_keeps_legacy_central_test_sessions_readable(monkeypatch
         "modelId": "minimax_h3",
         "source": "archive/demo",
         "ownerFolder": "sets/demo",
-        "completed": 1,
-        "failed": 0,
-        "total": 1,
         "results": [],
     })
 
     items = storage_manager.overview("")["items"]["tests"]
 
-    assert any(item["id"] == "legacy-central" for item in items)
-    assert storage_manager._resolve_test("", "legacy-central") == session.resolve()
+    assert all(item["id"] != "legacy-central" for item in items)
+    with pytest.raises(FileNotFoundError):
+        storage_manager._resolve_test("", "legacy-central")
 
 
-def test_storage_manager_prefers_output_test_session_on_legacy_name_collision(monkeypatch, tmp_path):
+def test_storage_manager_uses_output_test_session_when_legacy_name_collides(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     current = tmp_path / "output" / "test-generations" / "same-id"
     legacy = tmp_path / ".webcap" / "test-generations" / "same-id"
@@ -1072,8 +1117,6 @@ def test_storage_manager_prefers_output_test_session_on_legacy_name_collision(mo
     assert len(items) == 1
     assert items[0]["meta"]["source"] == "current"
     assert storage_manager._resolve_test("", "same-id") == current.resolve()
-
-
 
 def test_storage_overview_keeps_unrelated_inventory_when_execution_queue_is_unavailable(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
@@ -1098,3 +1141,57 @@ def test_storage_overview_keeps_unrelated_inventory_when_execution_queue_is_unav
     assert "runtime" in payload["unavailable"]
     assert "comfy" in payload["unavailable"]
     assert story_dir.is_dir()
+
+
+
+def test_storage_manager_lists_and_purges_director_assessment_evidence(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    assessment_root = tmp_path / "app-data" / "cache" / "director-model-assessments"
+    assessment_root.mkdir(parents=True)
+    assessment_id = "20261003T120000Z-deadbeef"
+    evidence = assessment_root / (assessment_id + ".json")
+    evidence.write_text("{}", encoding="utf-8")
+    learned = tmp_path / "app-data" / "state" / "diagnostics" / "director-model-calibration.json"
+    learned.parent.mkdir(parents=True)
+    learned.write_text('{"version":1,"profiles":{},"reports":{}}', encoding="utf-8")
+
+    monkeypatch.setattr(storage_manager, "director_assessment_root", lambda: assessment_root)
+    monkeypatch.setattr(
+        storage_manager,
+        "list_director_assessments",
+        lambda: [{
+            "id": assessment_id,
+            "status": "complete",
+            "startedAt": "2026-10-03T12:00:00+00:00",
+            "finishedAt": "2026-10-03T12:01:00+00:00",
+            "model": {
+                "modelRef": "local::director.gguf",
+                "modelId": "director.gguf",
+                "label": "Director",
+            },
+            "attemptCount": 3,
+            "bytes": evidence.stat().st_size,
+        }],
+    )
+    monkeypatch.setattr(
+        storage_manager,
+        "delete_director_assessment",
+        lambda item_id: evidence.unlink(),
+    )
+
+    payload = storage_manager.overview("")
+    items = payload["items"]["director_assessment"]
+
+    assert len(items) == 1
+    assert items[0]["id"] == assessment_id
+    assert items[0]["kind"] == "Director assessment evidence"
+    assert items[0]["purgeable"] is True
+    assert items[0]["bytes"] == evidence.stat().st_size
+    category = next(row for row in payload["categories"] if row["area"] == "director_assessment")
+    assert category["label"] == "Director Assessments"
+    assert "learned Director model results are preserved" in category["note"]
+
+    storage_manager.purge("director_assessment", assessment_id)
+
+    assert not evidence.exists()
+    assert learned.is_file()

@@ -70,3 +70,16 @@ def test_discovery_excludes_wrong_model_invalid_latest_and_sorts(tmp_path, monke
     _checkpoint(action / "output", "wrong", source.read_text(encoding="utf-8").replace("minimax-h3", "other")); _checkpoint(action / "output", "bad", source.read_text(encoding="utf-8"), "not-a-step")
     os.utime(older, (100, 100)); os.utime(newer, (200, 200)); runs = training_history.discover_runs(folder, "h3")
     assert [run["name"] for run in runs] == ["newer", "older"] and runs[0]["matchType"] == "compatible"
+
+
+def test_discovery_exposes_only_previous_direct_child_resume_points(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path); folder = _set(tmp_path); action, data = _action(folder)
+    source = folder / "config.h3.toml"; _write_h3_config(source, action / "output")
+    run = _checkpoint(action / "output", "managed-run", source.read_text(encoding="utf-8"), "global_step30")
+    (run / "global_step10").mkdir()
+    (run / "global_step20").mkdir()
+    (run / "global_step40").mkdir()
+    (run / "global_step20.txt").write_text("not a checkpoint", encoding="utf-8")
+    points = training_history.discover_runs(folder, "h3")[0]["resumePoints"]
+    assert points == [{"tag": "global_step20", "step": 20}, {"tag": "global_step10", "step": 10}]
+    assert training_history.discover_runs(folder, "h3")[0]["resumeOutputId"] == "output/managed-run"

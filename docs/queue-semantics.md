@@ -411,79 +411,83 @@ snapshot, the ordinary dependency rule applies.
 
 ## 9. Inference Queue semantics
 
-The Inference Queue is an **execution-management surface**.
+The Inference Queue is an **execution-management surface and durable domain queue**.
 
 Its responsibilities are:
 
 - preserve requested work,
 - distinguish Queue from Backlog,
-- pause/resume dispatch,
+- pause/resume Inference dispatch intent,
 - reorder where supported,
 - cancel pending work,
 - stop active work,
-- expose failures and wait reasons.
+- expose Inference-local failures and wait reasons.
+
+It does **not** arbitrate the shared GPU against LLM or Training. Inference exposes only its own
+runnable Queue/Backlog state. When the shared GPU owner is empty, shared scheduling may select
+Inference according to the ordering in `docs/gpu_coordination_invariants.md`.
 
 **Pause affects execution, not admission.** While the Inference Queue is paused, valid Generate,
-Storyboard Take, and Test requests may still be queued normally. They simply do not begin execution
-until the queue is resumed.
+Storyboard Take, and Test requests may still be queued normally. They simply do not become runnable
+local-GPU work until Inference is resumed.
 
-**Reordering changes priority, not meaning.** Moving frozen work earlier or later in a queue changes
-only when it executes. It must not re-resolve, rebase, or reinterpret that job against newer
-authoring state.
+**Reordering changes priority inside Inference, not meaning.** Moving frozen work earlier or later
+changes only which Inference request would run first when Inference is dispatched. It must not
+re-resolve, rebase, or reinterpret that job against newer authoring state.
 
 Inference work is **durable across normal WebCap server restarts**:
 
 - browser reload does not change queued Inference work,
-- unfinished Inference work survives a WebCap server restart,
+- unfinished Inference work survives a WebCap server restart as durable frozen requests,
 - on restart, unfinished work returns to **Backlog** rather than automatically resuming execution,
 - the frozen request remains unchanged,
-- the user decides when normal Inference execution resumes.
+- restart creates **no Inference GPU ownership**,
+- the user decides when preserved Backlog work becomes executable again.
 
 **Queue and Backlog have distinct execution meaning:**
 
 - **Queue** contains normal foreground Inference work,
 - **Backlog** contains parked durable low-priority work behind the normal Queue,
 - fresh/manual Inference requests enter Queue, so they run ahead of existing Backlog work,
-- Backlog is consumed only when Queue has no runnable work; it is not bulk-promoted into Queue,
-- Backlog should not extend Inference GPU ownership when another foreground local-GPU lane is waiting,
-- if that distinction would require fragile scheduler logic, prefer simpler yielding behavior over protecting Backlog throughput,
+- Backlog is consumed only when Queue has no runnable work and Backlog draining is explicitly active,
+- foreground Queue work may retain Inference ownership while consecutive Queue jobs drain,
+- at the Queue-to-Backlog boundary, Inference ends ownership,
+- eligible Backlog work re-enters shared idle selection as lower-priority Inference work,
 - while Inference is paused, neither Queue nor Backlog advances,
-- moving work between Queue and Backlog changes execution order/intent only; the frozen request itself remains unchanged.
+- moving work between Queue and Backlog changes Inference execution order/intent only; the frozen request itself remains unchanged.
 
-"Backlog draining" is an implementation detail, not a separate product state or user-facing mode. Users
-can explicitly Add all to queue when backlogged work should become foreground work.
+"Backlog draining" is an Inference implementation detail, not a separate product queue. Users can
+explicitly Add all to Queue when backlogged work should become foreground work.
 
-This intentionally differs from LLM work, which is server-session-bound.
+Inference is not the authority for feature-specific semantic validity. A feature decides whether an
+action should be enabled. The Inference Queue preserves and orders the resulting valid request.
 
-It is not the authority for feature-specific semantic validity.
+ComfyUI/provider state belongs entirely to Inference.
 
-A feature decides whether an action should be enabled. The Inference Queue schedules the resulting
-valid request.
+Provider **unavailability before an execution attempt** is an Inference-local wait state, not a
+failed job. The request remains intact and unclaimed. Inference is simply not runnable for that
+selection attempt, so shared scheduling may consider another lane.
 
-ComfyUI/provider state may prevent execution or cause visible execution failure. It should not turn
-a previously valid feature action into a speculative admission refusal.
+If Inference has positively identified current-session ComfyUI work that WebCap itself started and
+that work is still active, Inference remains the current GPU owner while it reconciles that exact
+runtime. Provider IDs, stale persisted metadata, failed status probes, or uncertainty alone must
+never create or retain a shared GPU claim.
 
-Provider **unavailability before an execution attempt** is a wait state, not a failed job. The queued
-request remains intact and unclaimed until the provider is available. From the user's perspective,
-nothing has failed because nothing was attempted.
+Before Inference ends GPU ownership at a natural handoff boundary, Inference is
+responsible for quiescing its own managed ComfyUI runtime sufficiently for another client to use the
+GPU. Training and LLM must not independently inspect or clean up ComfyUI as a prerequisite to their
+own execution.
 
-If execution genuinely starts and then fails, the Inference rule is simple: preserve the frozen
-request in the queue and pause Inference. The failed attempt is the signal. The user resolves the
-problem and resumes the queue; WebCap does not need a separate "Retry" semantic that rebuilds or
-duplicates the request.
+If execution genuinely starts and then fails, preserve the frozen request in Queue and pause
+Inference. The failed attempt is the signal. The user resolves the problem and resumes the queue;
+WebCap does not need a separate Retry semantic that rebuilds or duplicates the request.
 
 Stopping the active Inference job is **job-local**. Once that job reaches a terminal state, normal
-Inference scheduling continues with the next queued job unless the Inference lane itself is paused.
+Inference scheduling continues with the next queued job unless Inference itself is paused.
 **Stop does not imply Pause.**
 
 Cancelling pending Inference work is also job-local. Cancelling one queued or backlogged job removes
 only that job; remaining work keeps its relative order and no implicit queue pause occurs.
-
-Queued Inference work is not automatically demoted to Backlog merely because execution is waiting.
-Training ownership, local LLM priority, provider unavailability, or other temporary execution blockers
-leave the job in Queue with a visible wait reason. Automatic shelving to Backlog is reserved for
-explicit lifecycle transitions such as server-restart recovery, or an intentional user action such
-as Move all to Backlog.
 
 Generate, Storyboard Takes, and Tests share one Inference Queue with no hidden feature priority.
 Within Queue, work is FIFO unless the user explicitly reorders it. Feature type alone does not let a
@@ -491,8 +495,8 @@ newer request jump ahead of older queued work.
 
 ## 10. LLM / Director Queue semantics
 
-The LLM queue serializes Director, Prompt Assistant, Test Director, and Chat work according to its
-execution behavior.
+The LLM queue serializes Director, Prompt Assistant, Test Director, model-test/calibration, and Chat
+work according to one server-session FIFO.
 
 North Star semantics:
 
@@ -502,33 +506,49 @@ North Star semantics:
 - local/remote runtime choice affects execution resources, not semantic validity,
 - Stop/Cancel apply to the exact requested job,
 - stale-result protection belongs at application/commit time,
-- LLM work is simple FIFO; manual queue reordering is not a product requirement.
+- LLM work is simple FIFO; manual queue reordering is not a product requirement,
+- LLM has no product-level manual pause/resume queue semantic.
 
-LLM commands are short-lived, contextual, and often causally related. WebCap should not add a manual
-reordering surface for Director/Prompt Assistant/Chat work unless a concrete workflow later proves
-that FIFO is insufficient.
+Local and remote LLM jobs share FIFO ordering, but only local jobs use the shared local GPU.
+
+If the FIFO head is remote, LLM executes it without owning the local GPU.
+
+If the FIFO head is local, LLM exposes that head as its runnable local work for shared idle selection.
+A later remote LLM job does not bypass an earlier local job that is waiting for the GPU, and a later
+local job does not bypass an earlier remote job.
 
 Cancellation is **job-local**. Cancelling one queued LLM job removes only that job; later queued
 work remains queued and preserves its relative FIFO order. Cancellation does not cascade merely
 because another request was submitted afterward.
 
 Stopping the currently running LLM job is also job-local. Once that job reaches a terminal state,
-the LLM queue continues automatically with the next queued job in FIFO order. Stopping one job does
-not implicitly pause the whole LLM lane.
+the LLM queue continues automatically with the next FIFO job. Stopping one job does not implicitly
+pause the whole LLM lane.
 
-LLM work is **server-session-bound** and its execution lane is held in backend memory rather than the durable execution-state file:
+LLM work is **server-session-bound** and held in backend memory rather than durable execution state:
 
 - browser refresh, navigation, or returning to the feature does not end the server session; queued
   or running LLM work remains authoritative and the UI should reconnect to it,
 - a WebCap server restart ends the LLM session,
 - all unfinished LLM work is discarded across server restart regardless of whether it was queued,
   starting, running, or stopping,
+- restart creates **no LLM GPU ownership**,
 - successfully applied Story/prompt state remains because the authoritative result already lives in
   its feature store,
 - orphaned external/remote model responses from the old server session must not later mutate WebCap.
 
-The queue should preserve work within the live server session, not reinterpret user intent or grow
-restart-recovery machinery for short-lived LLM commands.
+For local LLM work, the LLM client owns llama.cpp lifecycle and GPU handoff.
+
+LLM may retain ownership across consecutive local FIFO jobs so real queued LLM work can drain without
+needless model churn. It may also retain that already-established ownership through the existing short
+post-empty quiescence window so a burst of closely spaced LLM calls does not expose an artificial
+cross-lane gap. The timer only ends the current LLM turn; it never acquires or recreates ownership.
+When LLM actually ends ownership, it is responsible for unloading/stopping its own local runtime to
+the required handoff boundary. Inference and Training must not independently inspect or clean up
+llama.cpp before they start.
+
+A local model/runtime failure is a real LLM execution failure and should fail visibly. The scheduler
+should not add speculative "runtime usable" gates in front of the request.
 
 ## 11. Director Chat semantics
 
@@ -546,89 +566,106 @@ Training is deliberately special.
 
 Training owns a specialized long-running lifecycle with checkpoint, pause, finish, recovery, and
 machine-ownership semantics that do not need to be forced into the shorter-lived Inference/LLM
-model.
+queue model.
+
+Training remains the authority for:
+
+- its durable queue,
+- whether that queue is paused,
+- exact runner identity and recovery,
+- checkpoint-safe Pause/Finish,
+- disk protection,
+- resume/checkpoint behavior,
+- Training History.
+
+Training participates in shared GPU scheduling only through the shared owner/idle-selection boundary.
 
 North Star semantics:
 
-- a running Training job owns the local GPU until its normal/checkpoint-safe lifecycle releases it,
-- resuming or queueing Training does not preempt a local-GPU lane that is already draining ordinary foreground work,
-- once the current foreground lane reaches its natural idle boundary, Training may acquire the GPU,
-- local Inference and local LLM may wait,
-- valid Inference and LLM work may still be queued,
+- when the owner is empty and Training has runnable work, Training is the first shared selection,
+- before launching, Training re-checks only its own authoritative state,
+- a running Training job retains local GPU ownership until its normal/checkpoint-safe lifecycle ends,
+- resuming or queueing Training does not preempt a lane that already owns the GPU,
+- valid Inference and LLM work may remain queued while Training runs,
 - Training state does not create semantic locks in Storyboard, Generate, Test Generations, or Chat,
 - remote LLM work does not consume the local GPU.
 
-Training's special execution status must not leak into speculative queue-admission rules.
+Training restart recovery remains special:
 
-## 13. Cross-lane ordering and resource arbitration
+- queued Training alone does not auto-start after WebCap restart,
+- if no exact surviving runner is established, queued Training is paused and owns nothing,
+- if Training positively re-establishes the exact prior managed runner, owner becomes `training`,
+- shared scheduling does not inspect Training JSON, WSL, PIDs, logs, or checkpoints; Training does.
 
-WebCap does **not** promise one global FIFO order across Training, LLM, and Inference.
+Training-specific runtime errors remain inside Training. Persisted Training status by itself must
+not become shared GPU truth.
 
-Ordering is lane-local:
+## 13. Shared GPU coordination semantics
 
-- each queue preserves its own ordering semantics,
-- explicit user reordering changes order only within that queue,
-- Inference Queue remains Queue-before-Backlog,
-- running work is not preempted merely because another lane receives newer work.
+The authoritative contract is `docs/gpu_coordination_invariants.md`.
 
-Cross-lane GPU contention should preserve simple resource-ownership behavior rather than grow a
-fairness scheduler, timestamp arbitration layer, weighted priority system, or other global ordering
-mechanism.
+Shared coordination is intentionally small:
 
-The preferred anti-thrash rule is **lane stickiness**:
+- one process-local owner: `none | training | llm | inference`,
+- no durable dispatcher queue, submission registry, lease table, or second GPU-availability truth,
+- when owner is `none`, selection is deterministic: Training, then local LLM FIFO head, then
+  foreground Inference Queue, then eligible Inference Backlog,
+- each lane exposes only its own runnable state and performs only its own runtime preparation,
+- lanes do not inspect one another or ask one another for permission,
+- remote LLM work never owns the local GPU,
+- running work is non-preemptive,
+- consecutive real same-lane work may continue according to that lane's queue semantics,
+- restart reconstructs ownership from runtime reality, never from persisted ownership history.
 
-- once a local-GPU lane owns the resource, it keeps it while that lane still has ordinary runnable work,
-- another lane does not cut in between jobs merely because it became ready,
-- ownership is released at the lane's natural idle boundary,
-- LLM may keep a short continuation grace window to bridge brief browser/orchestration gaps between causally related requests,
-- Inference Queue work may drain before yielding,
-- Inference Backlog is opportunistic low-priority work and should yield when another foreground local-GPU lane is waiting,
-- a running Training job remains non-preemptive because Training is a deliberately long-running lifecycle.
-
-This is intentionally simpler than cross-lane FIFO or priority arbitration. The goal is to avoid
-repeated model load/unload and GPU ownership thrash, not to build a general scheduler.
-
-If enforcing a fine-grained Backlog exception would make the resource handoff fragile, simplify the
-handoff rather than add a large decision tree. Backlog throughput is lower priority than predictable
-foreground execution; users can explicitly promote Backlog work into Queue when it matters.
-
-Training retains its deliberately special execution lifecycle.
-
-The North Star here is **KISS over theoretical fairness**: prefer a small lane-drain rule and narrow
-fixes for observed contention over increasingly elaborate arbitration.
+Runtime cleanup is lane-local maintenance, not a permission handshake. If cleanup itself fails, expose
+the concrete failure; do not create another ownership state or speculative blocker.
 
 ## 14. Runtime and failure semantics
 
-A queue should preserve user intent even when execution dependencies are unavailable.
+A domain queue should preserve user intent even when execution dependencies are unavailable.
+
+Shared GPU coordination should preserve **serialization**, not invent domain state.
 
 ### Eventual terminalization
 
-Every accepted job must have a path to a terminal state. A job may be queued, starting, running,
-stopping, or otherwise in-flight temporarily, but it must not remain non-terminal forever because
-an external provider, worker, or cancellation handshake disappeared.
+Every accepted domain job must have a path to a terminal state. A job may be queued, starting,
+running, stopping, or otherwise in-flight temporarily, but it must not remain non-terminal forever
+because an external provider, worker, or cancellation handshake disappeared.
 
 Stop/Cancel requests do not release semantic UI ownership merely because the request was issued.
-Ownership ends only when the job is actually terminal. Therefore the execution/reconciliation layer
-must guarantee eventual terminalization through normal completion, cancellation, stop, visible
-failure, interruption/recovery handling, or equivalent authoritative reconciliation.
+Ownership ends only when the job is actually terminal. Therefore the owning lane's
+execution/reconciliation logic must guarantee eventual terminalization through normal completion,
+cancellation, stop, visible failure, interruption/recovery handling, or equivalent authoritative
+reconciliation.
 
 The UI must never reopen mutable state on the assumption that a worker stopped when that has not
 been established.
 
-A queue should preserve user intent even when execution dependencies are unavailable.
-
 Examples:
 
-- ComfyUI unavailable before claim/start: valid inference work remains queued unchanged and waits;
-  this is not a failure state.
-- an inference attempt starts and then errors: preserve the frozen job in the queue and pause
-  Inference so the user can resolve the execution problem before resuming.
-- local GPU occupied: valid local work waits.
-- Director runtime busy: valid Director work waits.
-- Training owns GPU: other valid local-GPU work waits.
-- model/runtime execution fails: the job fails visibly with useful detail.
+- ComfyUI unavailable before claim/start: valid Inference work remains queued unchanged; Inference
+  remains unclaimed for that selection attempt and another lane may run,
+- an Inference attempt starts and then errors: preserve the frozen job in Queue and pause Inference,
+- local LLM is waiting for the GPU: its FIFO job remains queued while another lane owns the GPU,
+- remote LLM work: executes without local GPU ownership,
+- Training queue paused or not runnable: Training is not eligible for shared selection,
+- model/runtime execution fails after start: the owning job fails visibly with useful detail.
 
 WebCap should prefer truthful execution failure over speculative pre-emptive refusal.
+
+### Runtime truth
+
+Persistent state may identify work, ordering, future user intent, and exact runtime identities needed
+for cleanup or recovery.
+
+Persistent state has **zero authority over present physical runtime execution** by itself.
+
+Present runtime claims must come from the owning subsystem using the closest authoritative evidence
+available to that subsystem.
+
+Machine-level tools such as `nvidia-smi` may be useful for diagnostics or for corroborating exact
+owned process identity, but generic utilization, VRAM residency, or process presence is not a
+replacement for exact managed-runtime identity and must not become another shared scheduler oracle.
 
 ## 15. Destructive ownership semantics
 
@@ -697,8 +734,12 @@ If the answer to #6 is "queue admission" or #7 is "yes", the design should be re
 
 ## 19. Status of this document
 
-This is a North Star contract.
+This is the North Star contract for queue, dispatcher, and runtime-ownership semantics.
 
-It is intended to guide audits and future changes, not to trigger a broad queue/UI refactor by
-itself. Existing behavior should be changed only when a concrete bug or workflow problem justifies
-the change and the smallest safe implementation is understood.
+The centralized GPU-dispatcher migration is an intentional architectural change justified by repeated
+cross-lane scheduling, restart, and ownership ambiguity. Its implementation plan lives in
+`docs/gpu_dispatcher_plan.md`.
+
+Implementation should proceed incrementally, preserving the lane-specific behavior defined here while
+removing cross-lane GPU negotiation. Training's specialized queue must not be migrated merely to make
+the implementations look uniform.

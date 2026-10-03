@@ -327,6 +327,7 @@ function validateTrainingRunner(options) {
       resumeStage: options && options.resumeStage ? options.resumeStage : '',
       resumeActionId: options && options.resumeActionId ? options.resumeActionId : '',
       resumeOutputId: options && options.resumeOutputId ? options.resumeOutputId : '',
+      resumeCheckpointTag: options && options.resumeCheckpointTag ? options.resumeCheckpointTag : '',
       selected_media: getVisibleMediaSelectionForTraining(),
       fallback_captions: buildTrainingFallbackCaptions(getVisibleMediaSelectionForTraining()).fallbackCaptions,
       selection_criteria: buildTrainingSelectionCriteria(),
@@ -361,6 +362,7 @@ function getManagedTrainingOptions() {
   var customResumePath = manualResumeEl ? String(manualResumeEl.value || '').trim() : '';
   var resumeActionId = usingResume && !customResumePath && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-action-id') || '') : '';
   var resumeOutputId = usingResume && !customResumePath && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-output-id') || '') : '';
+  var resumeCheckpointTag = usingResume && !customResumePath && selectedCheckpoint ? String(selectedCheckpoint.getAttribute('data-checkpoint-tag') || '') : '';
   return {
     stages: stages,
     profileId: selectedProfile ? selectedProfile.id : '',
@@ -370,6 +372,7 @@ function getManagedTrainingOptions() {
     runName: runNameEl ? String(runNameEl.value || '').trim() : '',
     resumeOutputId: resumeOutputId,
     resumeActionId: resumeActionId,
+    resumeCheckpointTag: resumeCheckpointTag,
     resumeStage: stages,
     parentJobId: '',
     initializerActionId: initializer ? String(initializer.actionId || '') : '',
@@ -473,6 +476,7 @@ function startManagedTraining() {
            resumeStage: options.resumeStage,
            resumeActionId: options.resumeActionId,
            resumeOutputId: options.resumeOutputId,
+           resumeCheckpointTag: options.resumeCheckpointTag,
            runName: options.runName,
           selected_media: selectedMedia,
           total_media_count: Array.isArray(state.items) ? state.items.length : 0,
@@ -565,6 +569,30 @@ function scheduleManagedTrainingFinish(jobId) {
   });
 }
 
+
+function finishQueuedTrainingResume(jobId) {
+  var job = getTrainingRunnerJobById(jobId);
+  if (!job || job.status !== 'queued' || !String(job.resumeFromCheckpoint || '').trim()) {
+    setStatus('Only a queued resume can be finished without starting.');
+    return;
+  }
+  var point = job.resumePoint && typeof job.resumePoint === 'object' ? job.resumePoint : {};
+  var detail = Number(point.epoch) > 0
+    ? ' The existing checkpoint at epoch ' + Math.round(Number(point.epoch)) + ' will be kept as the final run state.'
+    : ' The existing saved checkpoint will be kept as the final run state.';
+  if (!window.confirm('Finish this queued resume now?' + detail + ' It will move to Training History without starting training again.')) return;
+  trainingRunnerRequest('/fs/training_runner/stop', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: job.id, finish: true })
+  }).then(function () {
+    setStatus('Queued resume finished and moved to Training History.');
+    refreshTrainingRunnerStatus();
+    refreshTrainingHistory(true);
+  }).catch(function (err) {
+    setStatus('Could not finish queued resume: ' + String(err && err.message ? err.message : err));
+  });
+}
 
 function cancelQueuedTrainingJob(jobId) {
   if (!window.confirm('Remove this job from the queue?')) return;
@@ -776,6 +804,7 @@ function buildTrainingQueueHtml(queuedJobs) {
               (queuedJob.actionPath ? '<button type="button" data-training-job-action="' + escapeHtml(queuedJob.id) + '">Open action folder</button>' : '') +
               '<button type="button" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
               '<button type="button" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>Move later</button>' +
+              (String(queuedJob.resumeFromCheckpoint || '').trim() ? '<button type="button" data-training-queue-action="finish" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Finish</button>' : '') +
               '<button type="button" class="training-runner-queue-cancel" data-training-queue-action="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Remove from queue</button>' +
             '</div>' +
           '</details>' +
@@ -974,7 +1003,7 @@ function renderTrainingRunner() {
     ? '<span class="training-runner-queue-state" title="' + escapeHtml(trainingWorkspaceState.runnerQueuePauseReason || 'Queue is paused.') + '">' + escapeHtml(trainingQueueHoldLabel()) + (activeCount ? ' — waiting for the current run to stop' : ' — Resume will start the first item') + '</span>'
     : '';
   var selectedQueuePosition = queued ? queuedJobs.indexOf(job) + 1 : 0;
-  var runOutputPath = String(job.outputRunPath || '').trim();
+  var runOutputPath = String(job.outputRunPath || job.resumeFromCheckpoint || '').trim();
   var finishScheduleTitle = isFinite(finishAfterEpoch) && finishAfterEpoch > 0
     ? 'Finish after epoch ' + Math.round(finishAfterEpoch) + ' saves. Click to change or cancel.'
     : 'Schedule Finish after a saved epoch';

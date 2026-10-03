@@ -25,7 +25,7 @@ function trainingCandidatesNumber(value, fallback) {
 
 var TRAINING_CANDIDATES_DISPLAY_SESSION_KEY = 'webcap.trainingCandidates.display.v1';
 var trainingCandidatesCloseHook = null;
-var keepLoraState = { open: false, stage: '', source: '', candidateFile: '', destination: '', epoch: null, modelLabel: '' };
+var keepLoraState = { open: false, stage: '', destination: '', epoch: null, runFolder: '', jobId: '', modelLabel: '', onSaved: null };
 
 function trainingCandidatesDefaultDisplayState() {
   return { smoothing: .99, yMin: null, yMax: null, showRawStep: false, showSmoothedStep: true, showEpochLoss: true };
@@ -455,20 +455,30 @@ function trainingCandidatesPinnedActionsHtml(epoch, data) {
   var escapedEpoch = escapeHtml(String(epoch));
   var inTestFolder = artifact.inTestFolder === true;
   var isSelected = data.selected && Number(data.selected.epoch) === Number(epoch);
+  var saveIcon = '<svg class="training-candidates-action-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5h9l2 2v9h-11z"></path><path d="M5 2.5v4h6v-4"></path><path d="M5 10h6v3.5H5z"></path></svg>';
+  var folderIcon = '<svg class="training-candidates-action-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4h5l1.5 1.5h6.5v7.5h-13z"></path><path d="M1.5 4V2.5h4.2L7 4"></path></svg>';
+  var testIcon = '<svg class="training-candidates-action-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.5h4"></path><path d="M7 2.5v4l-3.5 6a1 1 0 0 0 .9 1.5h7.2a1 1 0 0 0 .9-1.5L9 6.5v-4"></path><path d="M5.2 10h5.6"></path></svg>';
+  var trashIcon = '<svg class="training-candidates-action-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 4.5h9"></path><path d="M6 2.5h4l.5 2h-5z"></path><path d="M4.5 4.5l.6 9h5.8l.6-9"></path><path d="M7 7v4.5M9 7v4.5"></path></svg>';
+
+  var selectionClass = isSelected ? 'is-selected' : 'is-select';
+  var selectionLabel = isSelected ? 'Selected' : 'Select';
+  var selectionTitle = isSelected
+    ? 'This is the selected epoch for this run.'
+    : 'Save this LoRA and mark this epoch as the chosen result.';
+  var selectionDisabled = isSelected ? ' disabled' : '';
+
   var testAction = inTestFolder ? 'remove' : 'copy';
-  var testLabel = inTestFolder ? 'Remove from Test' : 'Copy to Test';
-  var testTitle = inTestFolder ? 'Removes only the staged test copy; the saved epoch remains.' : 'Copies this saved epoch into the configured Test staging folder.';
-  var selectionAction = isSelected ? 'clear' : 'select';
-  var selectionLabel = isSelected ? 'Selected · Clear' : 'Select Epoch';
-  var selectionTitle = isSelected ? 'Clear this run\'s selected epoch.' : 'Mark this saved epoch as the chosen result for this run.';
-  var keepAction = artifact.inTestFolder === true
-    ? '<button type="button" class="review-captions-btn training-candidates-keep-toggle" data-training-candidate-keep-epoch="' + escapedEpoch + '">Keep LoRA</button>'
-    : '';
+  var testTitle = inTestFolder ? 'Remove from Test' : 'Copy this epoch into Test Generations.';
+  var testLabel = inTestFolder ? trashIcon : testIcon + '<span>Test</span>';
+  var testAria = inTestFolder ? 'Remove from Test' : 'Test this epoch';
+  var testIconClass = inTestFolder ? ' training-candidates-icon-action' : '';
+
   return '<div class="training-candidates-pinned-actions">' +
-    '<button type="button" class="review-captions-btn training-candidates-select-toggle is-' + selectionAction + '" data-training-candidate-select-epoch="' + escapedEpoch + '" data-training-candidate-select-action="' + selectionAction + '" title="' + selectionTitle + '">' + selectionLabel + '</button>' +
-    keepAction +
-    '<button type="button" class="review-captions-btn training-candidates-open-epoch" data-training-candidate-epoch="' + escapedEpoch + '">Open Epoch Folder</button>' +
-    '<button type="button" class="review-captions-btn training-candidates-test-toggle is-' + testAction + '" data-training-candidate-test-epoch="' + escapedEpoch + '" data-training-candidate-test-action="' + testAction + '" title="' + testTitle + '">' + testLabel + '</button>' +
+    '<button type="button" class="review-captions-btn training-candidates-select-toggle ' + selectionClass + '" data-training-candidate-select-epoch="' + escapedEpoch + '" title="' + selectionTitle + '"' + selectionDisabled + '>' + saveIcon + '<span>' + selectionLabel + '</span></button>' +
+    '<div class="training-candidates-pinned-actions-secondary">' +
+      '<button type="button" class="review-captions-btn training-candidates-open-epoch training-candidates-icon-action" data-training-candidate-epoch="' + escapedEpoch + '" title="Open Epoch Folder" aria-label="Open Epoch Folder">' + folderIcon + '</button>' +
+      '<button type="button" class="review-captions-btn training-candidates-test-toggle is-' + testAction + testIconClass + '" data-training-candidate-test-epoch="' + escapedEpoch + '" data-training-candidate-test-action="' + testAction + '" title="' + testTitle + '" aria-label="' + testAria + '">' + testLabel + '</button>' +
+    '</div>' +
     '</div><div class="training-candidates-copy-status" data-training-candidate-copy-status aria-live="polite"></div>';
 }
 
@@ -568,41 +578,8 @@ function wireTrainingCandidatesChart() {
     if (selectButton) {
       event.stopPropagation();
       if (selectButton.disabled) return;
-      var selectedEpochValue = selectButton.getAttribute('data-training-candidate-select-epoch');
-      var selectionAction = selectButton.getAttribute('data-training-candidate-select-action');
-      var selectionFolder = String(trainingWorkspaceState.candidateFolder || '');
-      var selectionJobId = String(trainingWorkspaceState.candidateJobId || '');
-      if (!selectionFolder || !selectionJobId) throw new Error('Candidate analysis has no selected training run.');
-      if (selectionAction !== 'select' && selectionAction !== 'clear') throw new Error('Unknown epoch selection action.');
-      var selectionLabel = selectButton.textContent;
-      selectButton.disabled = true;
-      selectButton.textContent = selectionAction === 'clear' ? 'Clearing…' : 'Selecting…';
-      var body = { folder: selectionFolder, jobId: selectionJobId };
-      if (selectionAction === 'select') body.epoch = selectedEpochValue;
-      trainingRunnerRequest('/fs/training_candidates/' + (selectionAction === 'clear' ? 'clear_selection' : 'select'), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      }).then(function (response) {
-        if (String(trainingWorkspaceState.candidateFolder || '') !== selectionFolder || String(trainingWorkspaceState.candidateJobId || '') !== selectionJobId) return;
-        var analysisPayload = ((trainingWorkspaceState.candidatePayload || {}).analysis || {});
-        analysisPayload.selected = response && response.selected ? response.selected : null;
-        trainingWorkspaceState.candidatePinnedEpoch = Number(selectedEpochValue);
-        renderTrainingCandidates();
-      }).catch(function (err) {
-        if (!wrap.contains(popover) || Number(trainingWorkspaceState.candidatePinnedEpoch) !== Number(selectedEpochValue)) return;
-        selectButton.disabled = false;
-        selectButton.textContent = selectionLabel;
-        var status = popover.querySelector('[data-training-candidate-copy-status]');
-        if (status) status.textContent = String(err.message || err);
-        positionPinned(trainingCandidatesEpochPlotPoint(selectedEpochValue, data));
-      });
-      return;
-    }
-    var keepButton = event.target.closest ? event.target.closest('.training-candidates-keep-toggle') : null;
-    if (keepButton) {
-      event.stopPropagation();
       openKeepLora(
-        keepButton.getAttribute('data-training-candidate-keep-epoch'),
+        selectButton.getAttribute('data-training-candidate-select-epoch'),
         data
       );
       return;
@@ -617,9 +594,9 @@ function wireTrainingCandidatesChart() {
       var testJobId = String(trainingWorkspaceState.candidateJobId || '');
       if (!testFolder || !testJobId) throw new Error('Candidate analysis has no selected training run.');
       if (testAction !== 'copy' && testAction !== 'remove') throw new Error('Unknown test-folder action.');
-      var originalLabel = testButton.textContent;
+      var originalLabel = testButton.innerHTML;
       testButton.disabled = true;
-      testButton.textContent = testAction === 'remove' ? 'Removing…' : 'Copying…';
+      testButton.textContent = testAction === 'remove' ? 'Removing…' : 'Testing…';
       trainingRunnerRequest('/fs/training_candidates/' + (testAction === 'remove' ? 'remove_from_test' : 'copy_to_test'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder: testFolder, jobId: testJobId, epoch: testEpoch })
@@ -633,7 +610,7 @@ function wireTrainingCandidatesChart() {
       }).catch(function (err) {
         if (!wrap.contains(popover) || Number(trainingWorkspaceState.candidatePinnedEpoch) !== Number(testEpoch)) return;
         testButton.disabled = false;
-        testButton.textContent = originalLabel;
+        testButton.innerHTML = originalLabel;
         var status = popover.querySelector('[data-training-candidate-copy-status]');
         if (status) status.textContent = String(err.message || err);
         positionPinned(trainingCandidatesEpochPlotPoint(testEpoch, data));
@@ -774,31 +751,30 @@ function closeKeepLora() {
   }
 }
 
-function openKeepLora(epoch, data) {
-  var artifact = trainingCandidatesAvailableArtifact(epoch, data);
-  if (!artifact || artifact.inTestFolder !== true || !artifact.testFileName) {
-    throw new Error('This epoch is not currently staged in Test Generations.');
+function openEpochSaveModal(context) {
+  var input = context || {};
+  var epoch = Number(input.epoch);
+  var stage = String(input.stage || '').trim().toLowerCase();
+  var runFolder = String(input.folder || '').trim();
+  var jobId = String(input.jobId || '').trim();
+  if (!isFinite(epoch) || epoch <= 0 || !stage || !runFolder || !jobId) {
+    throw new Error('Epoch save requires training-run provenance.');
   }
-  var run = trainingWorkspaceState.candidatePayload && trainingWorkspaceState.candidatePayload.run || {};
-  var stage = String(artifact.testStage || run.stages || '').trim().toLowerCase();
-  var source = String(artifact.testSource || '').trim();
-  if (!stage || !source) throw new Error('This Test candidate has no usable staging location.');
 
   var els = keepLoraElements();
-  var setName = String(run.folder || '').replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'set';
+  var setName = runFolder.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'set';
   var modelLabel = '';
   keepLoraState = {
     open: true,
     stage: stage,
-    source: source,
-    candidateFile: String(artifact.testFileName || ''),
     destination: '',
-    filename: '',
-    epoch: Number(epoch),
-    runFolder: String(run.folder || ''),
-    modelLabel: modelLabel
+    epoch: epoch,
+    runFolder: runFolder,
+    jobId: jobId,
+    modelLabel: modelLabel,
+    onSaved: typeof input.onSaved === 'function' ? input.onSaved : null
   };
-  els.source.textContent = 'Epoch ' + String(epoch) + ' · ' + keepLoraState.candidateFile;
+  els.source.textContent = 'Epoch ' + String(epoch) + ' · ' + String(input.fileName || '.safetensors');
   els.filename.value = '';
   els.save.disabled = true;
   keepLoraSetStatus('Loading destination folders…', false);
@@ -817,6 +793,19 @@ function openKeepLora(epoch, data) {
   });
 }
 
+function openKeepLora(epoch, data) {
+  var artifact = trainingCandidatesAvailableArtifact(epoch, data);
+  if (!artifact) throw new Error('This epoch has no available saved LoRA.');
+  var run = trainingWorkspaceState.candidatePayload && trainingWorkspaceState.candidatePayload.run || {};
+  openEpochSaveModal({
+    epoch: epoch,
+    stage: run.stages,
+    folder: String(trainingWorkspaceState.candidateFolder || run.folder || ''),
+    jobId: String(trainingWorkspaceState.candidateJobId || ''),
+    fileName: artifact.fileName
+  });
+}
+
 function saveKeepLora() {
   var els = keepLoraElements();
   if (!keepLoraState.open) return;
@@ -825,33 +814,33 @@ function saveKeepLora() {
     keepLoraSetStatus('Enter a filename.', true);
     return;
   }
+  var selectedEpoch = Number(keepLoraState.epoch);
+  var selectionFolder = String(keepLoraState.runFolder || '');
+  var selectionJobId = String(keepLoraState.jobId || '');
+  if (!selectionFolder || !selectionJobId || !isFinite(selectedEpoch)) {
+    throw new Error('Candidate selection has no usable training-run provenance.');
+  }
+
   els.save.disabled = true;
-  keepLoraSetStatus('Saving…', false);
-  fetch('/fs/test_generations/keep_lora', {
+  keepLoraSetStatus('Saving and selecting…', false);
+  trainingRunnerRequest('/fs/training_candidates/save', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      folder: String(trainingWorkspaceState.candidateFolder || ''),
-      stage: keepLoraState.stage,
-      source: keepLoraState.source,
-      candidateFile: keepLoraState.candidateFile,
+      folder: selectionFolder,
+      jobId: selectionJobId,
+      epoch: selectedEpoch,
       destination: keepLoraState.destination,
       filename: filename
     })
-  }).then(function (response) {
-    return response.json().then(function (payload) {
-      if (!response.ok || !payload || payload.ok === false) throw new Error(payload && payload.error ? payload.error : 'Could not keep LoRA.');
-      return payload;
-    });
   }).then(function (payload) {
-    var artifacts = (((trainingWorkspaceState.candidatePayload || {}).analysis || {}).savedArtifacts || []);
-    artifacts.forEach(function (artifact) {
-      if (Number(artifact.epoch) === Number(keepLoraState.epoch)) artifact.inTestFolder = false;
-    });
+    var analysisPayload = ((trainingWorkspaceState.candidatePayload || {}).analysis || {});
+    analysisPayload.selected = payload && payload.selected ? payload.selected : null;
     renderTrainingCandidates();
-    var cleanupNote = payload.cleanupError ? ' The Test copy could not be removed: ' + payload.cleanupError : '';
+    var onSaved = keepLoraState.onSaved;
     closeKeepLora();
-    setStatus('Kept ' + String(payload.fileName || filename) + '.' + cleanupNote);
+    if (onSaved) onSaved(payload);
+    setStatus('Saved ' + String(payload && payload.fileName || filename) + ' and selected epoch ' + String(selectedEpoch) + '.');
   }).catch(function (err) {
     els.save.disabled = false;
     keepLoraSetStatus(String(err.message || err), true);
@@ -1098,5 +1087,7 @@ function wireTrainingCandidatesModal() {
   };
   els.modal.onclick = function (event) { if (event.target === els.modal) closeTrainingCandidates(); };
 }
+
+window.openEpochSaveModal = openEpochSaveModal;
 
 wireTrainingCandidatesModal();

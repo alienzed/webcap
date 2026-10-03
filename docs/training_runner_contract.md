@@ -18,10 +18,23 @@ The queue is globally running or paused. Only its first item is actionable.
 
 - `Pause` interrupts the active run, keeps that work first, and holds the queue.
 - `Resume` runs the first item again, using its recorded checkpoint when one exists.
-- `Finish` intentionally ends the active run and lets the next item start.
+- `Finish` intentionally ends the active run and lets the next item start. For a queued resume with an already-validated saved checkpoint, `Finish` may finalize that existing checkpoint directly into Training History without restarting training.
 - `Cancel` removes queued intent only. It does not delete trainer output.
 
 There is no independently paused item elsewhere in the queue and no user-facing action that merely disables a later handoff while the current run continues.
+
+## Resume Run Identity
+
+WebCap passes checkpoint Resume paths to Diffusion-Pipe as absolute paths. Under the current trainer behavior, resumed training continues in that same trainer-run directory.
+
+For live queue state:
+
+- a fresh job starts with both `resumeFromCheckpoint` and `outputRunPath` empty; `outputRunPath` is bound from trainer evidence after the timestamped run is created;
+- a resumed job keeps `resumeFromCheckpoint` as the launch instruction and records the same path in `outputRunPath` as the active trainer-run identity;
+- Pause keeps both fields pointed at the same resumable run instead of clearing `outputRunPath`;
+- older persisted queue rows with a resume path but no output path are normalized to this invariant when read.
+
+The two fields remain separate because they express different roles, even when their values are equal during Resume.
 
 ## Runner Recovery
 
@@ -37,10 +50,10 @@ Removing queue state means forgetting WebCap's queue. It does not kill external 
 
 ## State Ownership
 
-- `queue.json` owns ordered live dispatch state.
+- app-data `state/training_queue.json` owns ordered live dispatch state.
 - Each logical run under `output/runs/<set-root>/<logical-run>/` owns its captures, jobs, and output. A capture owns media, captions, inspected TOMLs, manifest, plan, and cache; its job directory owns launcher/PID/action/log/result evidence.
-- Queue and Recent Runs remain disposable state under `.webcap_training`; old state is reset rather than migrated if it cannot naturally continue from recorded paths.
-- `recent_runs.json` owns presentation history and never participates in scheduling.
+- Queue and Recent Runs are host-local persistent state under app-data `state/`; old state is reset rather than migrated if it cannot naturally continue from recorded paths.
+- app-data `state/recent_runs.json` owns presentation history and never participates in scheduling.
 - Set-local training metadata remembers optional conveniences such as the set's output group.
 
 Helpful metadata may fail independently. Only the explicit information needed to launch the next command may influence dispatch.

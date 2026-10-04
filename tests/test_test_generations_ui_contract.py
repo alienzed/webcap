@@ -1007,6 +1007,15 @@ def test_test_generations_can_generate_wildcard_prompt_from_set_captions():
 
 
 
+def test_test_wildcard_model_selection_does_not_rebuild_its_select():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    change_block = script.split("el('test-generations-wildcard-model').addEventListener('change'", 1)[1].split("});", 1)[0]
+    assert "wildcardDirector.modelId = this.value;" in change_block
+    assert "setDirectorModelPreference('webcap.testGenerations.directorModel', this.value);" in change_block
+    assert "renderWildcardDirector();" not in change_block
+
+
 def test_test_wildcard_helper_is_optional_and_stays_with_current_set():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 

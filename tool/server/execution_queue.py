@@ -560,13 +560,17 @@ def ephemeral_lane(lane_name):
         return queue
 
 
-def reserve_resource(owner):
+def reserve_resource(owner, admission_check=None):
     owner = str(owner or "").strip()
     if owner not in RESOURCE_OWNERS:
         raise ValueError("Execution resource owner must be training, llm, or inference.")
+    if admission_check is not None and not callable(admission_check):
+        raise TypeError("Execution resource admission check must be callable.")
     global _resource_owner
     with _lock:
         if _resource_owner:
+            return False
+        if admission_check is not None and not admission_check():
             return False
         _resource_owner = owner
         _logger.info("GPU resource owner: none -> %s", owner)

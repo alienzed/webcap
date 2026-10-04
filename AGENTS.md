@@ -65,9 +65,10 @@ Prefer the smallest change that cleanly solves the real problem.
 - Do not "modernize" into modules, classes, or frameworks just because it looks cleaner.
 - Do not add async behavior unless it is needed for correctness or safety.
 - Do not add complexity to support hypothetical future use.
-- Treat WebCap's actual supported workflows and invariants as the correctness boundary. Do not add permission gates, hidden exclusions, or compensating architecture solely to protect against hypothetical manual filesystem edits or other out-of-band states WebCap does not create.
-- Prefer warnings and fail-loudly behavior at the operation that truly requires stronger facts. If useful behavior is still possible with incomplete or inconsistent metadata, provide it rather than denying it for metadata purity.
-- Do not assume the user wants a different or more restrictive workflow than the one requested merely because an unusual state could be misused. Surface the concrete risk; change behavior only when current WebCap functionality requires it.
+- Treat WebCap's actual supported workflows and invariants as the correctness boundary. Do not add permission gates, hidden exclusions, purity checks, quarantine behavior, repair logic, or compensating architecture solely for states WebCap itself does not create.
+- Manual filesystem edits are outside WebCap's responsibility unless the current task explicitly concerns them. Do not invent guards for hypothetical moved, renamed, linked, malformed, or otherwise user-altered files. If WebCap can still perform the requested operation, let it; if the operation genuinely cannot proceed, fail loudly at that operation.
+- Prefer warnings for concrete observed risks. Do not turn speculative risks into behavior changes, and do not assume the user wants a more restrictive workflow than the one requested.
+- In audits, distinguish actual defects in supported WebCap workflows from stale tests, intentional legacy limitations, and hypothetical out-of-band misuse. Do not label the latter as product "mines."
 
 When in doubt, ask:
 

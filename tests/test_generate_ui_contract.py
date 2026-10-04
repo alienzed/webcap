@@ -426,7 +426,8 @@ def test_generate_prompt_assistant_activity_exposes_hard_stop_control():
 
     assert 'id="generate-director-stop"' in html
     assert "function stopDirectorJob()" in script
-    assert "operation: 'stop_or_cancel'" in script
+    assert "resetLlmExecution()" in script
+    assert "operation: 'stop_or_cancel'" not in script
     assert "generateState.director.jobId" in script
     assert "Prompt Assistant stopped." in script
     assert ".director-stop-btn {" in styles

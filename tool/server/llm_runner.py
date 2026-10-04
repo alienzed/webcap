@@ -521,12 +521,17 @@ def _advance_queue():
             # for another queued local job. Remote work does not need the GPU.
             _release_gpu()
 
-        from .storyboard_llm_runtime import clear_stop_request
-        clear_stop_request()
-        claimed = execution_claim_next(
-            EXECUTION_LANE,
-            expected_job_id=str(next_job.get("id") or ""),
-        )
+        try:
+            from .storyboard_llm_runtime import clear_stop_request
+            clear_stop_request()
+            claimed = execution_claim_next(
+                EXECUTION_LANE,
+                expected_job_id=str(next_job.get("id") or ""),
+            )
+        except Exception:
+            if local_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
+                _release_gpu()
+            raise
         if claimed is None:
             if local_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()

@@ -1382,16 +1382,19 @@ def test_stop_supported_accepts_detected_remote_ollama(monkeypatch):
     storyboard_llm_runtime.assert_stop_supported()
 
 
-def test_stop_supported_rejects_generic_remote_endpoint(monkeypatch):
+def test_stop_supported_accepts_generic_remote_endpoint(monkeypatch):
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "_director_config",
         lambda: {"mode": "remote"},
     )
-    monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda refresh=False: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_remote_is_ollama",
+        lambda refresh=False: pytest.fail("Generic remote Stop does not require provider detection."),
+    )
 
-    with pytest.raises(ValueError, match="generic remote OpenAI-compatible"):
-        storyboard_llm_runtime.assert_stop_supported()
+    storyboard_llm_runtime.assert_stop_supported()
 
 
 def test_stop_active_remote_request_sets_signal_and_closes_socket(monkeypatch):

@@ -348,6 +348,48 @@ def test_local_llm_completion_opens_short_gpu_drain_window(llm_root, monkeypatch
     assert llm_runner._monitor_has_work() is False
 
 
+def test_llm_gpu_cleanup_does_not_depend_on_consumable_terminal_receipt(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda model_id, contract, gpu_reserved=False: {
+            "text": "Done",
+            "model": model_id,
+        },
+    )
+    real_finish = llm_runner.execution_finish_job_transient
+    consumed = []
+
+    def finish_and_consume(job_id, **kwargs):
+        receipt = real_finish(job_id, **kwargs)
+        consumed.append(
+            llm_runner.execution_transient_receipt(receipt["id"], consume=True)
+        )
+        return receipt
+
+    monkeypatch.setattr(llm_runner, "execution_finish_job_transient", finish_and_consume)
+
+    job = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
+    )
+    result = llm_runner._advance_queue()
+
+    assert result["status"] == "completed"
+    assert consumed[0]["id"] == job["jobId"]
+    with pytest.raises(FileNotFoundError):
+        llm_runner.execution_transient_receipt(job["jobId"])
+    assert execution_queue.resource_owner() == "llm"
+    assert llm_runner._monitor_has_work() is True
+
+    llm_runner._local_gpu_drain_until = 0.0
+    llm_runner._advance_queue()
+
+    assert execution_queue.resource_owner() == ""
+    assert llm_runner._monitor_has_work() is False
+
 
 def test_training_cannot_claim_gpu_during_retained_llm_grace(llm_root, monkeypatch):
     from tool.server import training_runner

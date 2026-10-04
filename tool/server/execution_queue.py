@@ -771,7 +771,7 @@ def update_job(job_id, details):
 
 
 def requeue_active_and_pause(job_id, reason):
-    """Return one active job to pending state and pause its lane atomically."""
+    """Record the failed attempt, then return its frozen request to the paused queue."""
     now = time.time()
     with _lock:
         state = _read_state()
@@ -781,6 +781,15 @@ def requeue_active_and_pause(job_id, reason):
         if job.get("status") not in ACTIVE_STATUSES:
             raise ValueError("Only active execution work can be returned to the queue.")
         lane = _lane(state, lane_name)
+
+        attempt = copy.deepcopy(job)
+        attempt["status"] = "failed"
+        attempt["finishedAt"] = now
+        attempt["updatedAt"] = now
+        attempt["error"] = str(reason or "Queue paused after an execution error.")
+        attempt["requestedAction"] = ""
+        _record_recent(lane, attempt)
+
         job["status"] = "queued"
         job["startedAt"] = None
         job["finishedAt"] = None

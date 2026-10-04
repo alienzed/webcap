@@ -972,7 +972,6 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
 }
 
 function directorModelTestCalibrateOne(model, modelNumber) {
-  var llmEpoch = currentLlmResetEpoch();
   var protocol = directorModelTestState.calibrationProtocol || {};
   var contextSteps = Array.isArray(protocol.contextSteps) ? protocol.contextSteps.slice() : [];
   var outputSteps = Array.isArray(protocol.outputSteps) ? protocol.outputSteps.slice() : [];
@@ -1027,7 +1026,6 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   }
 
   function runAttempt(kind, target) {
-    directorModelTestRequireCurrentLlm(llmEpoch);
     return directorModelTestCalibrationAttempt(
       model,
       kind,
@@ -1079,8 +1077,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
     contextSteps.forEach(function (target) {
       chain = chain.then(function () {
         if (directorModelTestState.stopRequested) return;
-        directorModelTestRequireCurrentLlm(llmEpoch);
-        var previous = attempts.filter(function (attempt) { return attempt.kind === 'context'; });
+            var previous = attempts.filter(function (attempt) { return attempt.kind === 'context'; });
         if (previous.length && previous[previous.length - 1].status === 'failed') return;
         return runAttempt('context', target);
       });
@@ -1090,8 +1087,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   outputSteps.forEach(function (target) {
     chain = chain.then(function () {
       if (directorModelTestState.stopRequested) return;
-      directorModelTestRequireCurrentLlm(llmEpoch);
-      if (contextMode === 'calibrated' && !contextSize) return;
+        if (contextMode === 'calibrated' && !contextSize) return;
       var previousCapacity = attempts.filter(function (attempt) {
         return attempt.kind === 'output' || attempt.kind === 'prose';
       });
@@ -1161,7 +1157,6 @@ function directorModelAssessmentOrderModels(models) {
 
 function directorModelTestStartCalibration() {
   if (directorModelTestState.running) return;
-  var llmEpoch = currentLlmResetEpoch();
   var models = directorModelAssessmentOrderModels(directorModelAssessmentSelectedModels());
   if (!models.length) {
     directorModelTestSetStatus('Choose at least one model.', 'ready', 'Ready');
@@ -1185,8 +1180,7 @@ function directorModelTestStartCalibration() {
   models.forEach(function (model, index) {
     chain = chain.then(function () {
       if (directorModelTestState.stopRequested) return;
-      directorModelTestRequireCurrentLlm(llmEpoch);
-      return directorModelTestCalibrateOne(model, index + 1);
+        return directorModelTestCalibrateOne(model, index + 1);
     });
   });
 
@@ -1318,15 +1312,6 @@ function directorModelTestBuildRun(model, job, tracker, localStartedAt) {
   };
 }
 
-function directorModelTestRequireCurrentLlm(epoch) {
-  try {
-    assertLlmWorkflowCurrent(epoch);
-  } catch (error) {
-    directorModelTestState.stopRequested = true;
-    throw error;
-  }
-}
-
 function directorModelTestWaitForJob(jobId, tracker) {
   return new Promise(function (resolve, reject) {
     function poll() {
@@ -1402,7 +1387,6 @@ function directorModelTestRunOne(model, modelNumber) {
 
 function directorModelTestStart() {
   if (directorModelTestState.running) return;
-  var llmEpoch = currentLlmResetEpoch();
   var models = directorModelTestSelectedModels();
   if (!models.length) {
     directorModelTestSetStatus('Choose at least one model.', 'ready', 'Ready');
@@ -1443,8 +1427,7 @@ function directorModelTestStart() {
     models.forEach(function (model, index) {
       chain = chain.then(function () {
         if (directorModelTestState.stopRequested) return;
-        directorModelTestRequireCurrentLlm(llmEpoch);
-        return directorModelTestRunOne(model, index + 1).catch(function (error) {
+            return directorModelTestRunOne(model, index + 1).catch(function (error) {
           if (directorModelTestState.stopRequested) return;
           reportConsoleError('Director Model Test', error);
           var failedRun = {

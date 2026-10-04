@@ -439,13 +439,6 @@
       prompt.dataset.modelId = model.id;
     }
 
-    var list = el('generate-lora-options');
-    if (list) {
-      list.innerHTML = (model.loras || []).map(function (name) {
-        return '<option value="' + escapeHtml(name) + '"></option>';
-      }).join('');
-    }
-
     var referencePanel = el('generate-references');
     if (referencePanel) referencePanel.classList.toggle('hidden', !(model.references || []).length);
     ['first_frame', 'last_frame'].forEach(function (role) {
@@ -468,37 +461,133 @@
     var host = el('generate-lora-list');
     if (!host) return;
     var items = savedLoras(String(generateState.modelId || ''));
-    if (!items.length) {
-      host.innerHTML = '<div class="generate-empty-inline">No added LoRAs.</div>';
-      renderSweep();
-      return;
-    }
-    host.innerHTML = items.map(function (item, index) {
-      return '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
-        '<span title="' + escapeHtml(item.name) + '">' + escapeHtml(item.name) + '</span>' +
-        '<input type="number" min="-2" max="2" step="0.05" value="' + escapeHtml(String(item.strength)) + '" data-generate-lora-strength="' + index + '" aria-label="LoRA strength">' +
-        '<button type="button" class="review-captions-btn" data-generate-lora-remove="' + index + '">Remove</button>' +
-      '</div>';
-    }).join('');
+    host.innerHTML = items.length
+      ? items.map(function (item, index) {
+          return '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
+            '<span title="' + escapeHtml(item.name) + '">' + escapeHtml(item.name) + '</span>' +
+            '<input type="number" min="-2" max="2" step="0.05" value="' + escapeHtml(String(item.strength)) + '" data-generate-lora-strength="' + index + '" aria-label="LoRA strength">' +
+            '<button type="button" class="review-captions-btn" data-generate-lora-remove="' + index + '">Remove</button>' +
+          '</div>';
+        }).join('')
+      : '<div class="generate-empty-inline">No added LoRAs.</div>';
+    var picker = el('generate-lora-picker');
+    if (picker && picker.getAttribute('aria-expanded') === 'true') renderGenerateLoraPickerMenu();
     renderSweep();
   }
 
-  function addLora() {
-    var input = el('generate-lora-picker');
-    var name = String(input && input.value || '').trim();
-    if (!name) return;
+  function generateLoraNamesMatching(query) {
     var model = currentModel();
-    if (!model || (model.loras || []).indexOf(name) === -1) {
-      throw new Error('Choose an available LoRA.');
+    var needle = String(query || '').trim().toLowerCase();
+    var selected = {};
+    savedLoras(String(model && model.id || '')).forEach(function (item) {
+      selected[String(item.name || '').toLowerCase()] = true;
+    });
+    return (model && Array.isArray(model.loras) ? model.loras : []).filter(function (name) {
+      var key = String(name || '').toLowerCase();
+      return !selected[key] && (!needle || key.indexOf(needle) !== -1);
+    });
+  }
+
+  function setGenerateLoraPickerActive(index) {
+    var menu = el('generate-lora-picker-menu');
+    if (!menu) throw new Error('Generations LoRA picker menu is missing.');
+    var options = Array.prototype.slice.call(menu.querySelectorAll('[data-generate-lora-option]'));
+    if (!options.length) {
+      menu.dataset.activeIndex = '-1';
+      return;
     }
-    var items = savedLoras(model.id);
-    if (items.some(function (item) { return item.name === name; })) {
-      throw new Error('That LoRA is already added.');
-    }
-    items.push({ name: name, strength: 0.9 });
-    input.value = '';
+    var next = Math.max(0, Math.min(index, options.length - 1));
+    menu.dataset.activeIndex = String(next);
+    options.forEach(function (option, optionIndex) {
+      option.classList.toggle('active', optionIndex === next);
+    });
+    options[next].scrollIntoView({ block: 'nearest' });
+  }
+
+  function positionGenerateLoraPickerMenu() {
+    var picker = el('generate-lora-picker');
+    var menu = el('generate-lora-picker-menu');
+    if (!picker || !menu) throw new Error('Generations LoRA picker markup is missing.');
+    var pickerRect = picker.getBoundingClientRect();
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    var below = Math.max(0, viewportHeight - pickerRect.bottom - 8);
+    var above = Math.max(0, pickerRect.top - 8);
+    var opensUp = below < 180 && above > below;
+    var available = opensUp ? above : below;
+    menu.classList.toggle('opens-up', opensUp);
+    menu.style.maxHeight = String(Math.max(40, Math.min(220, Math.floor(available - 4)))) + 'px';
+  }
+
+  function renderGenerateLoraPickerMenu() {
+    var picker = el('generate-lora-picker');
+    var menu = el('generate-lora-picker-menu');
+    if (!picker || !menu) throw new Error('Generations LoRA picker markup is missing.');
+    var matches = generateLoraNamesMatching(picker.value);
+    menu.innerHTML = matches.length
+      ? matches.map(function (name) {
+          return '<button type="button" class="generate-lora-picker-option" data-generate-lora-option="' +
+            escapeHtml(name) + '" role="option">' + escapeHtml(name) + '</button>';
+        }).join('')
+      : '<div class="generate-lora-picker-empty">No matching LoRAs</div>';
+    menu.classList.remove('hidden');
+    picker.setAttribute('aria-expanded', 'true');
+    positionGenerateLoraPickerMenu();
+    setGenerateLoraPickerActive(matches.length ? 0 : -1);
+  }
+
+  function closeGenerateLoraPicker() {
+    var picker = el('generate-lora-picker');
+    var menu = el('generate-lora-picker-menu');
+    if (!picker || !menu) throw new Error('Generations LoRA picker markup is missing.');
+    menu.classList.add('hidden');
+    menu.classList.remove('opens-up');
+    menu.style.maxHeight = '';
+    menu.dataset.activeIndex = '-1';
+    picker.setAttribute('aria-expanded', 'false');
+  }
+
+  function chooseGenerateLora(name) {
+    var wanted = String(name || '').trim().toLowerCase();
+    var selectedName = generateLoraNamesMatching('').find(function (candidate) {
+      return String(candidate || '').toLowerCase() === wanted;
+    }) || '';
+    if (!selectedName) return;
+
+    savedLoras(generateState.modelId).push({ name: selectedName, strength: 0.9 });
     saveLoras();
+    el('generate-lora-picker').value = '';
+    closeGenerateLoraPicker();
     renderLoras();
+    el('generate-lora-picker').focus();
+  }
+
+  function handleGenerateLoraPickerKeydown(event) {
+    var menu = el('generate-lora-picker-menu');
+    if (!menu) throw new Error('Generations LoRA picker menu is missing.');
+    if (event.key === 'Escape') {
+      closeGenerateLoraPicker();
+      return;
+    }
+    if (menu.classList.contains('hidden')) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        renderGenerateLoraPickerMenu();
+      }
+      return;
+    }
+
+    var options = Array.prototype.slice.call(menu.querySelectorAll('[data-generate-lora-option]'));
+    var active = Number(menu.dataset.activeIndex || 0);
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setGenerateLoraPickerActive(Math.min(active + 1, options.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setGenerateLoraPickerActive(Math.max(active - 1, 0));
+    } else if (event.key === 'Enter' && options.length) {
+      event.preventDefault();
+      chooseGenerateLora(options[Math.max(0, active)].dataset.generateLoraOption);
+    }
   }
 
   function collectSettings() {
@@ -2201,9 +2290,19 @@
       var deleteButton = event.target.closest('[data-generate-prompt-delete]');
       if (deleteButton) deletePromptLibraryItem(deleteButton.dataset.generatePromptDelete);
     });
-    el('generate-lora-add').onclick = function () {
-      try { addLora(); } catch (err) { reportError(err); }
-    };
+    var fixedLoraPicker = el('generate-lora-picker');
+    fixedLoraPicker.addEventListener('focus', renderGenerateLoraPickerMenu);
+    fixedLoraPicker.addEventListener('click', renderGenerateLoraPickerMenu);
+    fixedLoraPicker.addEventListener('input', renderGenerateLoraPickerMenu);
+    fixedLoraPicker.addEventListener('keydown', handleGenerateLoraPickerKeydown);
+    el('generate-lora-picker-menu').addEventListener('click', function (event) {
+      var option = event.target.closest('[data-generate-lora-option]');
+      if (option) chooseGenerateLora(option.dataset.generateLoraOption);
+    });
+    document.addEventListener('pointerdown', function (event) {
+      if (event.target.closest('.generate-lora-picker-wrap')) return;
+      if (fixedLoraPicker.getAttribute('aria-expanded') === 'true') closeGenerateLoraPicker();
+    });
     el('generate-lora-selected-tab').onclick = function () { setLoraMode('selected'); };
     el('generate-lora-sweep-tab').onclick = function () { setLoraMode('sweep'); };
     el('generate-sweep-folder').addEventListener('change', function () {

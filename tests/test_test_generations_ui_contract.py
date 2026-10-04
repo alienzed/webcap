@@ -154,6 +154,16 @@ def test_test_generations_uses_explicit_workspace_root():
     assert "grid-area: workspace;" in shell_css
 
 
+def test_test_generations_exits_training_surface_before_running_test_workspace():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    open_block = script.split("function openPane()", 1)[1].split("function startRun", 1)[0]
+    assert "frame.classList.add('workspace-test-open');" in open_block
+    assert "node.classList.remove('hidden');" in open_block
+    assert "if (normalizeWorkspaceSurface(workspaceState.surface) === 'training')" in open_block
+    assert "setWorkspaceSurface('default');" in open_block
+
+
 def test_test_navigation_uses_global_set_context_and_local_run_choice():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")

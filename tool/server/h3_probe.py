@@ -159,9 +159,15 @@ def _refresh_runtime(runtime_path):
     if not runtime:
         raise FileNotFoundError("H3 calibration runtime state is missing.")
     if runtime.get("status") in ("starting", "running", "stopping"):
+        pid = _runtime_pid(runtime)
+        if runtime.get("status") == "starting" and pid <= 0:
+            # The launch callback publishes "starting" before the detached shell
+            # can write its PID file. Status polling must not terminalize that
+            # legitimate handoff window.
+            return runtime
         live = _runtime_is_live(runtime)
         if live and runtime.get("status") == "starting":
-            runtime["pid"] = _runtime_pid(runtime)
+            runtime["pid"] = pid
             runtime["status"] = "running"
             _write_json(runtime_path, runtime)
         elif not live:
@@ -383,15 +389,35 @@ def start_h3_probe(folder, file_name):
             + "pid=$!; printf '%s\\n' \"$pid\" > " + shlex.quote(pid_wsl)
             + "; echo \"$pid\""
         )
-        code, stdout, stderr = run_wsl(launch, timeout=15, distribution=settings["wslDistribution"])
+        launch_error = None
+        try:
+            code, stdout, stderr = run_wsl(launch, timeout=15, distribution=settings["wslDistribution"])
+        except Exception as exc:
+            code, stdout, stderr = -1, "", ""
+            launch_error = exc
+
         pid = (stdout or "").strip().splitlines()[-1] if (stdout or "").strip() else ""
+        if pid.isdigit():
+            runtime["pid"] = int(pid)
+
         if code != 0 or not pid.isdigit():
+            recovered_pid = _runtime_pid(runtime)
+            if recovered_pid > 0:
+                runtime["pid"] = recovered_pid
+                if _runtime_is_live(runtime):
+                    runtime["status"] = "running"
+                    _write_json(runtime_path, runtime)
+                    _remember_runtime(runtime)
+                    threading.Thread(target=_monitor_runtime, args=(runtime_path,), daemon=True).start()
+                    return {"ok": True, **_public_runtime(runtime)}
+
             runtime["status"] = "failed"
             runtime["finishedAt"] = _utc_now()
             _write_json(runtime_path, runtime)
+            if launch_error is not None:
+                raise RuntimeError("Could not confirm H3 calibration launch.") from launch_error
             raise RuntimeError((stderr or stdout or "Could not start H3 calibration.").strip())
 
-        runtime["pid"] = int(pid)
         runtime["status"] = "running"
         _write_json(runtime_path, runtime)
         _remember_runtime(runtime)

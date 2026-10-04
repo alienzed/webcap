@@ -35,7 +35,7 @@ def test_local_gpu_work_runnable_uses_real_ephemeral_fifo_head(llm_root, monkeyp
         "remote",
         {"operation": "freeform_chat", "prompt": "Remote.", "output": "text"},
     )
-    llm_runner.enqueue(
+    local = llm_runner.enqueue(
         "storyboard",
         "local",
         {"operation": "write_prompt", "prompt": "Local.", "output": "text"},
@@ -43,8 +43,8 @@ def test_local_gpu_work_runnable_uses_real_ephemeral_fifo_head(llm_root, monkeyp
 
     assert llm_runner.local_gpu_work_runnable() is False
 
-    execution_queue.ephemeral_lane("llm").reset_unfinished()
-    assert llm_runner.local_gpu_work_runnable() is False
+    execution_queue.ephemeral_lane("llm").reorder_job(local["jobId"], position=0)
+    assert llm_runner.local_gpu_work_runnable() is True
 
 
 def test_advance_queue_claims_only_the_fifo_head_it_evaluated(llm_root, monkeypatch):
@@ -1562,15 +1562,15 @@ def test_llm_reset_idle_releases_retained_gpu_hold(llm_root, monkeypatch):
 
 def test_llm_stopping_after_model_return_skips_client_ingest(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
-    job = execution_queue.enqueue(
+    job = llm_runner.execution_enqueue(
         llm_runner.EXECUTION_LANE,
         {"contract": {"operation": "write_prompt", "prompt": "Expand."}, "clientContext": {}},
         metadata={"client": "generate", "modelId": "qwen"},
     )
-    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
+    llm_runner.execution_claim_next(llm_runner.EXECUTION_LANE, expected_job_id=job["id"])
 
     def stopped_result(*_args, **_kwargs):
-        execution_queue.request_stop(job["id"])
+        llm_runner.execution_reset_unfinished()
         return {"text": "Do not ingest", "model": "qwen"}
 
     monkeypatch.setattr(storyboard_llm_runtime, "run_contract", stopped_result)

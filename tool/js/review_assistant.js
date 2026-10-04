@@ -79,11 +79,7 @@
   }
 
   function cancelReview() {
-    return activeJobId ? requestJson('/fs/director/job', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ operation: 'stop_or_cancel', jobId: activeJobId })
-    }) : Promise.resolve();
+    return activeJobId ? resetLlmExecution() : Promise.resolve();
   }
 
   window.registerAssistantMode({

@@ -1502,8 +1502,10 @@
   }
 
   function runSceneDirectorPass(storyId, sceneIds, instruction, modelId, onScene) {
+    var llmEpoch = currentLlmResetEpoch();
     return sceneIds.reduce(function (promise, sceneId, index) {
       return promise.then(function () {
+        assertLlmWorkflowCurrent(llmEpoch);
         if (onScene) onScene(sceneId, index);
         return requestSceneDirector(storyId, sceneId, 'refine_prompt', instruction, modelId, false);
       });
@@ -1921,8 +1923,10 @@
     var sourceUpdatedAt = '';
     var outline = null;
     var authoredScenes = [];
+    var llmEpoch = currentLlmResetEpoch();
 
     setDevelopStatus('Director is planning the Story…');
+    assertLlmWorkflowCurrent(llmEpoch);
     return directorRequest({
       storyId: storyId,
       operation: 'develop_story_outline',
@@ -1939,6 +1943,7 @@
     }).then(function () {
       return outline.scenes.reduce(function (promise, _plannedScene, index) {
         return promise.then(function () {
+          assertLlmWorkflowCurrent(llmEpoch);
           setDevelopStatus('Developing Scene ' + String(index + 1) + ' / ' + String(outline.scenes.length) + '…');
           return directorRequest({
             storyId: storyId,
@@ -1959,6 +1964,7 @@
         });
       }, Promise.resolve());
     }).then(function () {
+      assertLlmWorkflowCurrent(llmEpoch);
       setDevelopStatus('Applying ' + String(authoredScenes.length) + ' developed Scenes…');
       return directorRequest({
         storyId: storyId,
@@ -2088,6 +2094,14 @@
     return removed;
   }
 
+  function clearQueuedFirstCuts() {
+    storyState.storyActionQueue.forEach(function (action) {
+      action.queued = false;
+      action.cancelled = true;
+    });
+    storyState.storyActionQueue = [];
+  }
+
   function renderStoryAction() {
     if (storyState.storyActionTimer) clearTimeout(storyState.storyActionTimer);
     storyState.storyActionTimer = 0;
@@ -2164,6 +2178,7 @@
       err.storyActionStopped = true;
       throw err;
     }
+    assertLlmWorkflowCurrent(action.llmResetEpoch);
   }
 
   function updateStoryAction(action, phase, detail) {
@@ -2199,6 +2214,7 @@
     action.active = true;
     action.queued = false;
     action.cancelled = false;
+    action.llmResetEpoch = currentLlmResetEpoch();
     action.startedAt = Date.now() / 1000;
     action.phase = 'Preparing';
     action.detail = '';
@@ -2289,6 +2305,8 @@
     }).catch(function (err) {
       action.active = false;
       if (action.cancelled || err.storyActionStopped || directorWasStopped(err)) {
+        action.cancelled = true;
+        clearQueuedFirstCuts();
         action.phase = 'Stopped';
         action.detail = 'Completed steps were kept.';
       } else {

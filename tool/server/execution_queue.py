@@ -503,6 +503,31 @@ class EphemeralExecutionQueue:
             _refresh_positions(self._lane())
             return _public_job(job)
 
+    def reset_unfinished(self):
+        """Stop the active job and cancel every queued job in this ephemeral lane."""
+        now = time.time()
+        with _lock:
+            lane = self._lane()
+            active_id = str(lane.get("activeJobId") or "")
+            kept = []
+            for job in lane.get("jobs", []):
+                status = str(job.get("status") or "")
+                if status in PENDING_STATUSES:
+                    job["status"] = "cancelled"
+                    job["finishedAt"] = now
+                    job["updatedAt"] = now
+                    job["requestedAction"] = ""
+                    _remember_transient_receipt(_public_job(job))
+                    continue
+                if active_id and str(job.get("id") or "") == active_id and status in ACTIVE_STATUSES:
+                    job["status"] = "stopping"
+                    job["updatedAt"] = now
+                    job["requestedAction"] = "stop"
+                kept.append(job)
+            lane["jobs"] = kept
+            _refresh_positions(lane)
+            return self.lane_snapshot(include_terminal=False)
+
     def reorder_job(self, job_id, direction=None, position=None):
         with _lock:
             job = self._find_job(job_id)

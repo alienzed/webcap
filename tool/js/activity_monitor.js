@@ -229,44 +229,54 @@
 
   function createActiveCard(item) {
     var article = document.createElement('article');
-    article.className = 'activity-monitor-card status-' + String(item.status || '');
-
     var dot = document.createElement('span');
-    dot.className = 'activity-monitor-dot ' + (item.kind === 'storage' ? 'background' : 'active');
-
+    dot.dataset.activityRole = 'dot';
     var copy = document.createElement('div');
     copy.className = 'activity-monitor-copy';
     var title = document.createElement('strong');
-    title.textContent = activityTitle(item);
+    title.dataset.activityRole = 'title';
     var detail = document.createElement('span');
-    detail.textContent = activityDetail(item) || String(item.status || '').replace(/_/g, ' ');
+    detail.dataset.activityRole = 'detail';
     var meta = document.createElement('small');
-    var elapsed = formatElapsed(item.startedAt);
-    meta.textContent = [String(item.status || '').replace(/_/g, ' '), elapsed ? elapsed + ' elapsed' : ''].filter(Boolean).join(' · ');
+    meta.dataset.activityRole = 'meta';
+    var track = document.createElement('div');
+    track.className = 'activity-monitor-progress';
+    track.dataset.activityRole = 'progress';
+    var fill = document.createElement('span');
+    fill.dataset.activityRole = 'progress-fill';
+    track.appendChild(fill);
     copy.appendChild(title);
     copy.appendChild(detail);
     copy.appendChild(meta);
-
-    var percent = progressPercent(item);
-    if (percent !== null) {
-      var track = document.createElement('div');
-      track.className = 'activity-monitor-progress';
-      var fill = document.createElement('span');
-      fill.style.width = percent.toFixed(1) + '%';
-      track.appendChild(fill);
-      copy.appendChild(track);
-    }
-
+    copy.appendChild(track);
     var open = document.createElement('button');
     open.type = 'button';
     open.className = 'activity-monitor-open';
+    open.dataset.activityRole = 'open';
     open.textContent = 'Open';
-    open.onclick = function () { openItem(item); };
-
     article.appendChild(dot);
     article.appendChild(copy);
     article.appendChild(open);
+    syncActiveCard(article, item);
     return article;
+  }
+
+  function syncActiveCard(article, item) {
+    article.className = 'activity-monitor-card status-' + String(item.status || '');
+    article.querySelector('[data-activity-role="dot"]').className =
+      'activity-monitor-dot ' + (item.kind === 'storage' ? 'background' : 'active');
+    article.querySelector('[data-activity-role="title"]').textContent = activityTitle(item);
+    article.querySelector('[data-activity-role="detail"]').textContent =
+      activityDetail(item) || String(item.status || '').replace(/_/g, ' ');
+    var elapsed = formatElapsed(item.startedAt);
+    article.querySelector('[data-activity-role="meta"]').textContent =
+      [String(item.status || '').replace(/_/g, ' '), elapsed ? elapsed + ' elapsed' : ''].filter(Boolean).join(' · ');
+    var percent = progressPercent(item);
+    var track = article.querySelector('[data-activity-role="progress"]');
+    track.classList.toggle('hidden', percent === null);
+    article.querySelector('[data-activity-role="progress-fill"]').style.width =
+      percent === null ? '0%' : percent.toFixed(1) + '%';
+    article.querySelector('[data-activity-role="open"]').onclick = function () { openItem(item); };
   }
 
   function recentStatusClass(status) {
@@ -286,29 +296,36 @@
   function createRecentRow(item) {
     var button = document.createElement('button');
     button.type = 'button';
-    button.className = 'activity-monitor-recent-row ' + recentStatusClass(item.status);
-    button.onclick = function () { openItem(item); };
-
     var icon = document.createElement('span');
     icon.className = 'activity-monitor-recent-icon';
-    icon.textContent = recentStatusClass(item.status) === 'failed' ? '!' : '✓';
-
+    icon.dataset.activityRole = 'icon';
     var copy = document.createElement('span');
     copy.className = 'activity-monitor-recent-copy';
     var title = document.createElement('strong');
-    title.textContent = activityTitle(item) + ' ' + recentStatusLabel(item.status);
+    title.dataset.activityRole = 'title';
     var detail = document.createElement('small');
-    detail.textContent = item.error || activityDetail(item) || String(item.status || '').replace(/_/g, ' ');
+    detail.dataset.activityRole = 'detail';
     copy.appendChild(title);
     copy.appendChild(detail);
-
     var age = document.createElement('time');
-    age.textContent = formatAge(finishedAt(item));
-
+    age.dataset.activityRole = 'age';
     button.appendChild(icon);
     button.appendChild(copy);
     button.appendChild(age);
+    syncRecentRow(button, item);
     return button;
+  }
+
+  function syncRecentRow(button, item) {
+    var statusClass = recentStatusClass(item.status);
+    button.className = 'activity-monitor-recent-row ' + statusClass;
+    button.onclick = function () { openItem(item); };
+    button.querySelector('[data-activity-role="icon"]').textContent = statusClass === 'failed' ? '!' : '✓';
+    button.querySelector('[data-activity-role="title"]').textContent =
+      activityTitle(item) + ' ' + recentStatusLabel(item.status);
+    button.querySelector('[data-activity-role="detail"]').textContent =
+      item.error || activityDetail(item) || String(item.status || '').replace(/_/g, ' ');
+    button.querySelector('[data-activity-role="age"]').textContent = formatAge(finishedAt(item));
   }
 
   function recentKey(item) {
@@ -404,14 +421,22 @@
     var button = document.createElement('button');
     button.type = 'button';
     button.className = 'activity-monitor-queue-status';
-
+    button.dataset.activityQueueKey = key;
     var labelEl = document.createElement('strong');
     labelEl.textContent = label;
     var statusEl = document.createElement('span');
-    statusEl.textContent = queueText(queue, key !== 'training');
+    statusEl.dataset.activityRole = 'queue-status';
     button.appendChild(labelEl);
     button.appendChild(statusEl);
+    syncQueueStatus(button, label, key, queue);
+    return button;
+  }
 
+  function syncQueueStatus(button, label, key, queue) {
+    button.querySelector('[data-activity-role="queue-status"]').textContent = queueText(queue, key !== 'training');
+    button.disabled = false;
+    button.title = '';
+    button.onclick = null;
     var hasWork = queueHasWork(queue, key !== 'training');
     if (queue && queue.unavailable) {
       button.disabled = true;
@@ -432,7 +457,6 @@
       button.disabled = true;
       if (key === 'director' && hasWork) button.title = 'Queued Director requests are listed below.';
     }
-    return button;
   }
 
   function createQueueStatusBar(queues) {
@@ -442,6 +466,13 @@
     row.appendChild(createQueueStatus('Training', 'training', queues.training));
     row.appendChild(createQueueStatus('Director', 'director', queues.director));
     return row;
+  }
+
+  function syncQueueStatusBar(row, queues) {
+    [['Inference', 'inference'], ['Training', 'training'], ['Director', 'director']].forEach(function (entry) {
+      var button = row.querySelector('[data-activity-queue-key="' + entry[1] + '"]');
+      syncQueueStatus(button, entry[0], entry[1], queues[entry[1]]);
+    });
   }
 
   function directorQueueOperationLabel(job) {
@@ -468,56 +499,122 @@
   }
 
   function createDirectorQueueList(queue) {
-    queue = queue || {};
-    var jobs = Array.isArray(queue.jobs) ? queue.jobs : [];
-    if (!jobs.length) return null;
-
     var list = document.createElement('div');
     list.className = 'activity-monitor-director-queue';
-
-    jobs.forEach(function (job, index) {
-      var row = document.createElement('div');
-      row.className = 'activity-monitor-director-queue-row';
-
-      var position = document.createElement('span');
-      position.className = 'activity-monitor-director-queue-position';
-      position.textContent = '#' + String(Number(job.queuePosition || index + 1));
-
-      var copy = document.createElement('div');
-      copy.className = 'activity-monitor-director-queue-copy';
-
-      var title = document.createElement('strong');
-      title.textContent = directorQueueClientLabel(job) + ' · ' + directorQueueOperationLabel(job);
-
-      var detail = document.createElement('small');
-      var parts = [];
-      if (job.sceneId) parts.push('Scene ' + String(job.sceneId));
-      if (job.modelId) parts.push(String(job.modelId));
-      detail.textContent = parts.join(' · ') || 'Waiting';
-
-      copy.appendChild(title);
-      copy.appendChild(detail);
-      row.appendChild(position);
-      row.appendChild(copy);
-      list.appendChild(row);
-    });
+    syncDirectorQueueList(list, queue);
     return list;
   }
 
-  function appendSection(host, titleText, noteText) {
-    var section = document.createElement('section');
-    section.className = 'activity-monitor-section';
-    var heading = document.createElement('div');
-    heading.className = 'activity-monitor-section-heading';
-    var title = document.createElement('strong');
-    title.textContent = titleText;
-    var note = document.createElement('span');
-    note.textContent = noteText || '';
-    heading.appendChild(title);
-    heading.appendChild(note);
-    section.appendChild(heading);
-    host.appendChild(section);
+  function syncDirectorQueueList(list, queue) {
+    queue = queue || {};
+    var jobs = Array.isArray(queue.jobs) ? queue.jobs : [];
+    var existing = Object.create(null);
+    Array.prototype.forEach.call(list.children, function (row) {
+      var key = String(row.dataset.activityDirectorJobId || '');
+      if (key) existing[key] = row;
+    });
+    var desired = [];
+    jobs.forEach(function (job, index) {
+      var key = String(job.id || job.jobId || '');
+      var row = existing[key];
+      if (!row) {
+        row = document.createElement('div');
+        row.className = 'activity-monitor-director-queue-row';
+        row.dataset.activityDirectorJobId = key;
+        var position = document.createElement('span');
+        position.className = 'activity-monitor-director-queue-position';
+        position.dataset.activityRole = 'position';
+        var copy = document.createElement('div');
+        copy.className = 'activity-monitor-director-queue-copy';
+        var title = document.createElement('strong');
+        title.dataset.activityRole = 'title';
+        var detail = document.createElement('small');
+        detail.dataset.activityRole = 'detail';
+        copy.appendChild(title);
+        copy.appendChild(detail);
+        row.appendChild(position);
+        row.appendChild(copy);
+      }
+      row.querySelector('[data-activity-role="position"]').textContent =
+        '#' + String(Number(job.queuePosition || index + 1));
+      row.querySelector('[data-activity-role="title"]').textContent =
+        directorQueueClientLabel(job) + ' · ' + directorQueueOperationLabel(job);
+      var parts = [];
+      if (job.sceneId) parts.push('Scene ' + String(job.sceneId));
+      if (job.modelId) parts.push(String(job.modelId));
+      row.querySelector('[data-activity-role="detail"]').textContent = parts.join(' · ') || 'Waiting';
+      desired.push(row);
+      delete existing[key];
+    });
+    desired.forEach(function (row, index) {
+      var current = list.children[index];
+      if (current !== row) list.insertBefore(row, current || null);
+    });
+    Object.keys(existing).forEach(function (key) { existing[key].remove(); });
+  }
+
+  function appendSection(host, key, titleText, noteText) {
+    var section = null;
+    Array.prototype.some.call(host.children, function (child) {
+      if (String(child.dataset.activitySectionKey || '') !== key) return false;
+      section = child;
+      return true;
+    });
+    if (!section) {
+      section = document.createElement('section');
+      section.className = 'activity-monitor-section';
+      section.dataset.activitySectionKey = key;
+      var heading = document.createElement('div');
+      heading.className = 'activity-monitor-section-heading';
+      var title = document.createElement('strong');
+      title.dataset.activityRole = 'section-title';
+      var note = document.createElement('span');
+      note.dataset.activityRole = 'section-note';
+      heading.appendChild(title);
+      heading.appendChild(note);
+      var content = document.createElement('div');
+      content.dataset.activityRole = 'section-content';
+      section.appendChild(heading);
+      section.appendChild(content);
+      host.appendChild(section);
+    }
+    section.querySelector('[data-activity-role="section-title"]').textContent = titleText;
+    section.querySelector('[data-activity-role="section-note"]').textContent = noteText || '';
     return section;
+  }
+
+  function reconcileKeyedItems(host, items, keyFor, create, sync, emptyText) {
+    var existing = Object.create(null);
+    Array.prototype.forEach.call(host.children, function (node) {
+      var key = String(node.dataset.activityItemKey || '');
+      if (key) existing[key] = node;
+    });
+    var desired = [];
+    if (!items.length) {
+      var empty = existing.empty;
+      if (!empty) {
+        empty = document.createElement('div');
+        empty.className = 'activity-monitor-empty';
+        empty.dataset.activityItemKey = 'empty';
+      }
+      empty.textContent = emptyText;
+      desired.push(empty);
+      delete existing.empty;
+    } else {
+      items.forEach(function (item) {
+        var key = keyFor(item);
+        var node = existing[key] || create(item);
+        node.dataset.activityItemKey = key;
+        sync(node, item);
+        desired.push(node);
+        delete existing[key];
+      });
+    }
+    desired.forEach(function (node, index) {
+      var current = host.children[index];
+      if (current !== node) host.insertBefore(node, current || null);
+    });
+    Object.keys(existing).forEach(function (key) { existing[key].remove(); });
   }
 
   function syncActivityRailWork(active) {
@@ -576,33 +673,61 @@
       ? String(active.length) + ' active · ' + (unseen ? String(unseen) + ' new' : 'up to date')
       : (unseen ? String(unseen) + ' new this session' : 'Current work and this session');
 
-    host.innerHTML = '';
+    var nowSection = appendSection(host, 'now', 'Now', active.length ? String(active.length) + ' active' : '');
+    reconcileKeyedItems(
+      nowSection.querySelector('[data-activity-role="section-content"]'),
+      active,
+      function (item) { return String(item.lane || item.kind || '') + ':' + String(item.id || ''); },
+      createActiveCard,
+      syncActiveCard,
+      'Nothing is running right now.'
+    );
 
-    var nowSection = appendSection(host, 'Now', active.length ? String(active.length) + ' active' : '');
-    if (!active.length) {
-      var emptyNow = document.createElement('div');
-      emptyNow.className = 'activity-monitor-empty';
-      emptyNow.textContent = 'Nothing is running right now.';
-      nowSection.appendChild(emptyNow);
-    } else {
-      active.forEach(function (item) { nowSection.appendChild(createActiveCard(item)); });
-    }
+    var recentItems = recent.slice(0, 12);
+    var recentSection = appendSection(host, 'recent', 'Recent', unseen ? String(unseen) + ' new' : '');
+    reconcileKeyedItems(
+      recentSection.querySelector('[data-activity-role="section-content"]'),
+      recentItems,
+      recentKey,
+      createRecentRow,
+      syncRecentRow,
+      'No recent managed work.'
+    );
 
-    var recentSection = appendSection(host, 'Recent', unseen ? String(unseen) + ' new' : '');
-    if (!recent.length) {
-      var emptyRecent = document.createElement('div');
-      emptyRecent.className = 'activity-monitor-empty';
-      emptyRecent.textContent = 'No recent managed work.';
-      recentSection.appendChild(emptyRecent);
-    } else {
-      recent.slice(0, 12).forEach(function (item) { recentSection.appendChild(createRecentRow(item)); });
-    }
-
-    var queueSection = appendSection(host, 'Queue Status', '');
+    var queueSection = appendSection(host, 'queue', 'Queue Status', '');
     queueSection.classList.add('activity-monitor-queue-section');
-    queueSection.appendChild(createQueueStatusBar(queues));
-    var directorQueueList = createDirectorQueueList(queues.director);
-    if (directorQueueList) queueSection.appendChild(directorQueueList);
+    var queueContent = queueSection.querySelector('[data-activity-role="section-content"]');
+    var statusBar = queueContent.querySelector('[data-activity-queue-status-bar]');
+    if (!statusBar) {
+      statusBar = createQueueStatusBar(queues);
+      statusBar.dataset.activityQueueStatusBar = '1';
+      queueContent.appendChild(statusBar);
+    } else {
+      syncQueueStatusBar(statusBar, queues);
+    }
+    var directorList = queueContent.querySelector('[data-activity-director-queue]');
+    var directorJobs = queues.director && Array.isArray(queues.director.jobs) ? queues.director.jobs : [];
+    if (directorJobs.length) {
+      if (!directorList) {
+        directorList = createDirectorQueueList(queues.director);
+        directorList.dataset.activityDirectorQueue = '1';
+        queueContent.appendChild(directorList);
+      } else {
+        syncDirectorQueueList(directorList, queues.director);
+      }
+    } else if (directorList) {
+      directorList.remove();
+    }
+
+    ['now', 'recent', 'queue'].forEach(function (key, index) {
+      var section = null;
+      Array.prototype.some.call(host.children, function (child) {
+        if (String(child.dataset.activitySectionKey || '') !== key) return false;
+        section = child;
+        return true;
+      });
+      if (section && host.children[index] !== section) host.insertBefore(section, host.children[index] || null);
+    });
   }
 
   function refresh() {

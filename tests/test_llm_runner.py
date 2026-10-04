@@ -14,6 +14,7 @@ from tool.server import storyboard_store
 @pytest.fixture
 def llm_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
+    monkeypatch.setattr(app_config, "app_data_root", lambda: Path(tmp_path) / ".test-webcap-app-data")
     monkeypatch.setattr(app_config, "output_root", lambda: Path(tmp_path) / "output")
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
@@ -1695,7 +1696,7 @@ def test_individual_story_development_jobs_do_not_mutate_story_before_final_appl
     assert stored["updatedAt"] == original_updated_at
 
 
-def test_llm_stop_does_not_stop_runtime_after_target_is_no_longer_active(llm_root, monkeypatch):
+def test_llm_stop_rejects_target_that_finished_before_request(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     target = llm_runner.enqueue(
         "chat",
@@ -1703,19 +1704,116 @@ def test_llm_stop_does_not_stop_runtime_after_target_is_no_longer_active(llm_roo
         {"operation": "freeform_chat", "messages": [{"role": "user", "content": "one"}]},
     )
     llm_runner.execution_claim_next("llm", expected_job_id=target["jobId"])
+    llm_runner.execution_finish_job_transient(target["jobId"], status="completed")
     stopped = []
-    real_request_stop = llm_runner.execution_request_stop
-
-    def finish_during_stop(job_id):
-        current = real_request_stop(job_id)
-        llm_runner.execution_finish_job_transient(job_id, status="stopped")
-        return current
-
-    monkeypatch.setattr(llm_runner, "execution_request_stop", finish_during_stop)
     monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: stopped.append(True))
+
+    with pytest.raises(FileNotFoundError):
+        llm_runner.action("stop", target["jobId"])
+
+    assert stopped == []
+
+def test_llm_stop_cannot_hit_successor_after_stale_active_snapshot(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    target = llm_runner.enqueue(
+        "chat",
+        "remote",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "old"}]},
+    )
+    successor = llm_runner.enqueue(
+        "chat",
+        "remote",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "next"}]},
+    )
+    llm_runner.execution_claim_next("llm", expected_job_id=target["jobId"])
+
+    real_snapshot = llm_runner.execution_lane_snapshot
+    race_fired = []
+    stopped_active_ids = []
+
+    def stale_snapshot(*args, **kwargs):
+        snapshot = real_snapshot(*args, **kwargs)
+        if (
+            not race_fired
+            and snapshot.get("activeJobId") == target["jobId"]
+            and llm_runner.execution_get_job(target["jobId"]).get("status") == "stopping"
+        ):
+            race_fired.append(True)
+            llm_runner.execution_finish_job_transient(target["jobId"], status="stopped")
+            llm_runner.execution_claim_next("llm", expected_job_id=successor["jobId"])
+        return snapshot
+
+    monkeypatch.setattr(llm_runner, "execution_lane_snapshot", stale_snapshot)
+    monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: None)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "stop_active_request",
+        lambda: stopped_active_ids.append(real_snapshot("llm", include_terminal=False).get("activeJobId")),
+    )
 
     result = llm_runner.action("stop", target["jobId"])
 
     assert result["job"]["jobId"] == target["jobId"]
-    assert stopped == []
+    assert stopped_active_ids == [target["jobId"]]
+    assert race_fired == []
+
+
+def test_llm_claim_matches_fifo_head_used_for_gpu_decision(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda model_id: model_id == "local")
+    remote = llm_runner.enqueue(
+        "chat",
+        "remote",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "remote"}]},
+    )
+    local = llm_runner.enqueue(
+        "chat",
+        "local",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "local"}]},
+    )
+    executed = []
+
+    def cancel_observed_head():
+        llm_runner.execution_cancel_pending_transient(remote["jobId"])
+
+    monkeypatch.setattr(storyboard_llm_runtime, "clear_stop_request", cancel_observed_head)
+    monkeypatch.setattr(
+        llm_runner,
+        "_execute_claimed",
+        lambda job_id, gpu_reserved=False: executed.append((job_id, gpu_reserved)),
+    )
+
+    result = llm_runner._advance_queue()
+
+    assert result is None
+    assert executed == []
+    assert llm_runner.execution_get_job(local["jobId"])["status"] == "queued"
+
+
+def test_llm_preclaim_failure_releases_owned_gpu(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
+    job = llm_runner.enqueue(
+        "chat",
+        "local",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "local"}]},
+    )
+    released = []
+
+    def reserve():
+        execution_queue._resource_owner = llm_runner.GPU_RESERVATION_OWNER
+        return True
+
+    def release():
+        released.append(True)
+        execution_queue._resource_owner = ""
+
+    monkeypatch.setattr(llm_runner, "_reserve_gpu", reserve)
+    monkeypatch.setattr(llm_runner, "_release_gpu", release)
+    monkeypatch.setattr(storyboard_llm_runtime, "clear_stop_request", lambda: (_ for _ in ()).throw(RuntimeError("clear failed")))
+
+    with pytest.raises(RuntimeError, match="clear failed"):
+        llm_runner._advance_queue()
+
+    assert released == [True]
+    assert execution_queue._resource_owner == ""
+    assert llm_runner.execution_get_job(job["jobId"])["status"] == "queued"

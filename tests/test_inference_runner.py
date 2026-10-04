@@ -18,6 +18,7 @@ from tool.server import training_runner
 @pytest.fixture
 def inference_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
+    monkeypatch.setattr(app_config, "app_data_root", lambda: Path(tmp_path) / ".test-webcap-app-data")
     monkeypatch.setattr(app_config, "output_root", lambda: Path(tmp_path) / "output")
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
@@ -970,6 +971,12 @@ def test_inference_runner_pauses_and_preserves_head_job_after_unexpected_post_la
     assert [job["jobId"] for job in snapshot["jobs"]] == [queued["id"], waiting["id"]]
     assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2]
     assert cancelled == ["provider-123"]
+    recent = execution_queue.recent_snapshot(inference_runner.EXECUTION_LANE)
+    assert recent[0]["id"] == queued["id"]
+    assert recent[0]["status"] == "failed"
+    assert "provider polling exploded" in recent[0]["error"]
+    assert recent[0]["details"]["providerJobId"] == "provider-123"
+    assert recent[0]["details"]["providerStatus"] == "cancelled"
 
 
 def test_inference_runner_preserves_job_when_provider_already_terminal(inference_root, monkeypatch):

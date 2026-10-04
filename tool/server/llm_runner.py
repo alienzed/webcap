@@ -513,9 +513,17 @@ def _advance_queue():
             # for another queued local job. Remote work does not need the GPU.
             _release_gpu()
 
-        from .storyboard_llm_runtime import clear_stop_request
-        clear_stop_request()
-        claimed = execution_claim_next(EXECUTION_LANE)
+        try:
+            from .storyboard_llm_runtime import clear_stop_request
+            clear_stop_request()
+            claimed = execution_claim_next(
+                EXECUTION_LANE,
+                expected_job_id=str(next_job.get("id") or ""),
+            )
+        except Exception:
+            if local_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
+                _release_gpu()
+            raise
         if claimed is None:
             if local_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
@@ -812,13 +820,6 @@ def action(operation, job_id="", direction="", position=None):
             raise ValueError("Only queued or active LLM jobs can be stopped.")
         from .storyboard_llm_runtime import assert_stop_supported, stop_active_request
         assert_stop_supported()
-        stopping = current if status == "stopping" else execution_request_stop(job_id)
-        active_id = str(execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("activeJobId") or "")
-        if active_id == job_id:
-            stop_active_request()
-        # The worker may finish and remove the in-memory job while hard-stop is
-        # synchronously shutting llama.cpp down. Return the stopping snapshot
-        # captured before that race instead of re-reading a job that may already
-        # be an in-memory terminal receipt.
+        stopping = execution_request_stop(job_id, stop_callback=stop_active_request)
         return {"job": _job_view(stopping)}
     raise ValueError("Unsupported LLM queue action: " + operation)

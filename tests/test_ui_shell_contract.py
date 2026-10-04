@@ -1055,3 +1055,21 @@ def test_pending_media_reselection_waits_for_metadata_hydration():
     assert reselect in refresh
     assert refresh.index(capture) < refresh.index(metadata_refresh)
     assert refresh.index(metadata_refresh) < refresh.index(metadata_apply) < refresh.index(reselect)
+
+
+def test_polled_queue_surfaces_preserve_keyed_dom_identity():
+    inference = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+
+    assert "host.innerHTML = ''" not in inference
+    assert "actions.innerHTML = ''" not in inference
+    assert "data.inferenceQueueKey" not in inference
+    assert "dataset.inferenceQueueKey" in inference
+    assert "function reconcileQueueChildren" in inference
+    assert "function syncActionButtons" in inference
+
+    assert "host.innerHTML = ''" not in activity
+    assert "dataset.activitySectionKey" in activity
+    assert "dataset.activityItemKey" in activity
+    assert "function reconcileKeyedItems" in activity
+    assert "function syncDirectorQueueList" in activity

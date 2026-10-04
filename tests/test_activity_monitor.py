@@ -1,11 +1,19 @@
 import pytest
 
 from tool.server import activity_monitor
+from tool.server import config as app_config
+from tool.server import execution_queue
 
 
 @pytest.fixture(autouse=True)
-def _idle_gpu_owner(monkeypatch):
+def _idle_gpu_owner(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_config, "app_data_root", lambda: tmp_path / ".test-webcap-app-data")
     monkeypatch.setattr(activity_monitor, "execution_resource_owner", lambda: "")
+    execution_queue.clear_transient_receipts()
+    execution_queue.ephemeral_lane("llm").clear()
+    yield
+    execution_queue.clear_transient_receipts()
+    execution_queue.ephemeral_lane("llm").clear()
 
 
 def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
@@ -165,3 +173,34 @@ def test_execution_item_exposes_llm_finish_diagnostics():
     assert item["finishReason"] == "stop"
     assert item["promptTokens"] == 4210
     assert item["outputTokens"] == 3781
+
+
+def test_activity_recent_includes_transient_inference_and_llm_receipts(monkeypatch):
+    inference = execution_queue.enqueue(
+        "inference",
+        {"request": {"prompt": "image"}},
+        metadata={"client": "generate", "label": "Image"},
+    )
+    execution_queue.claim_next("inference", expected_job_id=inference["id"])
+    execution_queue.finish_job_transient(inference["id"], status="completed")
+
+    llm_queue = execution_queue.ephemeral_lane("llm")
+    llm = llm_queue.enqueue(
+        {"contract": {"prompt": "story"}},
+        metadata={"client": "storyboard", "label": "Director"},
+    )
+    llm_queue.claim_next(expected_job_id=llm["id"])
+    llm_queue.finish_job_transient(llm["id"], status="failed", error="model exploded")
+
+    monkeypatch.setattr(activity_monitor, "inference_snapshot", lambda include_terminal=False: {"paused": False, "pauseReason": "", "jobs": []})
+    monkeypatch.setattr(activity_monitor, "llm_snapshot", lambda include_terminal=False: {"paused": False, "pauseReason": "", "jobs": []})
+    monkeypatch.setattr(activity_monitor, "training_status_snapshot", lambda: ({"ok": True, "queuePaused": False, "queuePauseReason": "", "jobs": []}, 200))
+    monkeypatch.setattr(activity_monitor, "training_recent_jobs", lambda: [])
+    monkeypatch.setattr(activity_monitor, "storage_scan_status", lambda: {"ok": True, "scan": {}})
+
+    payload = activity_monitor.activity_snapshot(limit=10)
+
+    by_id = {item["id"]: item for item in payload["recent"]}
+    assert by_id[inference["id"]]["status"] == "completed"
+    assert by_id[llm["id"]]["status"] == "failed"
+    assert by_id[llm["id"]]["error"] == "model exploded"

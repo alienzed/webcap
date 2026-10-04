@@ -1266,7 +1266,7 @@
                             </div>
                             </section>
                             <section class="generate-conditioning">
-                            <div class="generate-conditioning-heading"><strong>Fixed LoRAs</strong><span class="generate-field-hint">Applied to every generation</span></div>
+                            <div class="generate-conditioning-heading"><strong>Fixed LoRAs</strong><span class="generate-field-hint">Applied to every generation</span><button id="generate-lora-refresh" type="button" class="review-captions-btn" title="Rescan available LoRAs from ComfyUI.">Refresh</button></div>
                             <span id="generate-base-loras" class="generate-base-loras hidden"></span>
                             <div id="generate-lora-selected-panel" class="generate-lora-mode-panel">
                                 <div class="generate-lora-picker-wrap">
@@ -1512,6 +1512,7 @@
                                         <div class="storyboard-scene-defaults-subheading">
                                             <strong>Story LoRAs</strong>
                                             <span>Inherited by all Scenes unless overridden.</span>
+                                            <button id="storyboard-story-lora-refresh" type="button" class="review-captions-btn" data-storyboard-lora-refresh title="Rescan available LoRAs from ComfyUI.">Refresh</button>
                                         </div>
                                         <div class="storyboard-story-lora-section-body">
                                             <div id="storyboard-story-lora-list" class="storyboard-lora-list"></div>

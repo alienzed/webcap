@@ -475,6 +475,49 @@
     renderSweep();
   }
 
+  function refreshLoraCatalog() {
+    var button = el('generate-lora-refresh');
+    if (!button) throw new Error('Generations LoRA refresh control is missing.');
+    var originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Refreshing…';
+    return requestJson('/fs/generate/capabilities').then(function (payload) {
+      if (payload.available === false) throw new Error(payload.error || 'ComfyUI unavailable.');
+
+      var freshById = {};
+      (payload.models || []).forEach(function (model) {
+        freshById[String(model.id || '')] = model;
+      });
+
+      var currentId = String(generateState.modelId || '');
+      if (currentId && !freshById[currentId]) {
+        throw new Error('Current Base Model is unavailable while refreshing LoRAs.');
+      }
+
+      generateState.models.forEach(function (model) {
+        var fresh = freshById[String(model.id || '')];
+        if (!fresh) return;
+        model.loras = Array.isArray(fresh.loras) ? fresh.loras.slice() : [];
+        model.baseLoras = Array.isArray(fresh.baseLoras) ? fresh.baseLoras.slice() : [];
+      });
+
+      var current = currentModel();
+      var base = el('generate-base-loras');
+      if (current && base) {
+        base.textContent = (current.baseLoras || []).length
+          ? 'Required workflow LoRA: ' + current.baseLoras.join(', ')
+          : '';
+        base.classList.toggle('hidden', !(current.baseLoras || []).length);
+      }
+      renderLoras();
+    }).catch(function (err) {
+      reportError(err, 'LoRA refresh failed');
+    }).then(function () {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    });
+  }
+
   function generateLoraNamesMatching(query) {
     var model = currentModel();
     var needle = String(query || '').trim().toLowerCase();
@@ -2335,6 +2378,7 @@
       var deleteButton = event.target.closest('[data-generate-prompt-delete]');
       if (deleteButton) deletePromptLibraryItem(deleteButton.dataset.generatePromptDelete);
     });
+    el('generate-lora-refresh').onclick = refreshLoraCatalog;
     var fixedLoraPicker = el('generate-lora-picker');
     fixedLoraPicker.addEventListener('focus', renderGenerateLoraPickerMenu);
     fixedLoraPicker.addEventListener('click', renderGenerateLoraPickerMenu);

@@ -2929,6 +2929,10 @@
   text-align: left;
 }
 
+.storyboard-scene-defaults-subheading > .review-captions-btn {
+  margin-left: auto;
+}
+
 .storyboard-scene-defaults-drawer #storyboard-story-lora-status {
   align-self: flex-start;
   font-size: 12px;

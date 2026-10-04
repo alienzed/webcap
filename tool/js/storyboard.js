@@ -311,7 +311,8 @@
     });
   }
 
-  function refreshGenerationCapabilities() {
+  function refreshGenerationCapabilities(options) {
+    options = options || {};
     return fetch('/fs/storyboard/generation/capabilities').then(function (response) {
       return response.json().then(function (body) {
         if (!response.ok || !body || !body.ok) {
@@ -322,8 +323,11 @@
         storyState.generationCapabilities.baseLoras = body.baseLoras || [];
         storyState.generationCapabilities.error = String(body.error || '');
         if (storyState.story) {
-          renderStoryLoras();
-          renderScenes();
+          if (options.preserveUi) syncGenerationCapabilityControls();
+          else {
+            renderStoryLoras();
+            renderScenes();
+          }
         }
         return body;
       });
@@ -333,8 +337,11 @@
       storyState.generationCapabilities.baseLoras = [];
       storyState.generationCapabilities.error = String(err && err.message ? err.message : err);
       if (storyState.story) {
-        renderStoryLoras();
-        renderScenes();
+        if (options.preserveUi) syncGenerationCapabilityControls();
+        else {
+          renderStoryLoras();
+          renderScenes();
+        }
       }
       return null;
     });
@@ -3184,6 +3191,51 @@
     }).join('');
   }
 
+  function syncGenerationCapabilityControls() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-story-lora-name], [data-scene-lora-name]'), function (select) {
+      var selectedName = select.value;
+      select.innerHTML = loraOptions(selectedName);
+      if (selectedName) select.value = selectedName;
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.storyboard-lora-picker[aria-expanded="true"]'), function (picker) {
+      renderLoraPickerMenu(picker);
+    });
+
+    var storyStatus = el('storyboard-story-lora-status');
+    if (storyStatus) {
+      storyStatus.textContent = storyState.generationCapabilities.available
+        ? (storyLorasFromUi().length ? 'Applied to every Scene by default.' : 'No Story-wide LoRAs.')
+        : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
+    }
+
+    var baseLoras = storyState.generationCapabilities.baseLoras || [];
+    var statusTitle = storyState.generationCapabilities.available
+      ? (baseLoras.length ? 'Required Turbo: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
+      : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
+    var statusText = storyState.generationCapabilities.available
+      ? (baseLoras.length ? 'Turbo active' : 'LoRAs ready')
+      : 'LoRAs unavailable';
+    Array.prototype.forEach.call(document.querySelectorAll('.storyboard-lora-status'), function (status) {
+      status.title = statusTitle;
+      status.textContent = statusText;
+    });
+  }
+
+  function setStoryboardLoraRefreshBusy(busy) {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-storyboard-lora-refresh]'), function (button) {
+      button.disabled = !!busy;
+      button.textContent = busy ? 'Refreshing…' : 'Refresh';
+    });
+  }
+
+  function refreshStoryboardLoraCatalog() {
+    setStoryboardLoraRefreshBusy(true);
+    return refreshGenerationCapabilities({ preserveUi: true }).then(function () {
+      setStoryboardLoraRefreshBusy(false);
+    });
+  }
+
   function loraNamesMatching(query, excludedNames) {
     var needle = String(query || '').trim().toLowerCase();
     var excluded = {};
@@ -3858,7 +3910,7 @@
               '<div class="storyboard-inspector-section-heading"><strong>Conditioning</strong><span>' + escapeHtml(conditioningSummary) + '</span></div>' +
               '<div class="storyboard-conditioning-body">' +
                 '<div class="storyboard-lora-panel">' +
-                  '<div class="storyboard-lora-header"><strong>LoRAs</strong></div>' +
+                  '<div class="storyboard-lora-header"><strong>LoRAs</strong><button type="button" class="review-captions-btn" data-storyboard-lora-refresh title="Rescan available LoRAs from ComfyUI.">Refresh</button></div>' +
                   (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Inherited from Story</span><div class="storyboard-lora-list" data-story-lora-inherited-list>' + inheritedLoraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list hidden" data-story-lora-inherited-list></div>') +
                   (storyLoras.length ? '<div class="storyboard-lora-subsection"><span class="storyboard-lora-subtitle">Scene only</span><div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div></div>' : '<div class="storyboard-lora-list" data-scene-lora-list>' + loraRowsHtml + '</div>') +
                   '<div class="storyboard-lora-picker-wrap">' +
@@ -5679,6 +5731,7 @@
       syncStoryLorasIntoScenes();
       scheduleStorySave();
     });
+    el('storyboard-story-lora-refresh').onclick = refreshStoryboardLoraCatalog;
     var storyLoraPicker = el('storyboard-story-lora-picker');
     storyLoraPicker.addEventListener('focus', function () { renderLoraPickerMenu(storyLoraPicker); });
     storyLoraPicker.addEventListener('click', function () { renderLoraPickerMenu(storyLoraPicker); });
@@ -5797,6 +5850,11 @@
     });
 
     el('storyboard-scenes-list').addEventListener('click', function (event) {
+      var refreshLoras = event.target.closest('[data-storyboard-lora-refresh]');
+      if (refreshLoras) {
+        refreshStoryboardLoraCatalog();
+        return;
+      }
       var openScene = event.target.closest('[data-scene-open]');
       if (openScene) {
         setSceneViewMode('focus', openScene.dataset.sceneOpen);

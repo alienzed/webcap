@@ -1280,3 +1280,22 @@ def test_storyboard_llm_workflows_unwind_on_lane_reset():
     assert "currentLlmResetEpoch" not in storyboard
     assert "assertLlmWorkflowCurrent" not in storyboard
     assert "body: JSON.stringify({ operation: 'stop_or_cancel', jobId: jobId })" not in storyboard
+
+
+def test_storyboard_lora_catalog_refresh_preserves_working_scene_dom():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-story-lora-refresh"' in html
+    assert 'data-storyboard-lora-refresh' in storyboard
+
+    refresh = storyboard.split("function refreshStoryboardLoraCatalog()", 1)[1].split("\n  function ", 1)[0]
+    assert "refreshGenerationCapabilities({ preserveUi: true })" in refresh
+
+    capabilities = storyboard.split("function refreshGenerationCapabilities(options)", 1)[1].split("\n  function ", 1)[0]
+    assert "if (options.preserveUi) syncGenerationCapabilityControls();" in capabilities
+
+    sync = storyboard.split("function syncGenerationCapabilityControls()", 1)[1].split("\n  function ", 1)[0]
+    assert "select.innerHTML = loraOptions(selectedName);" in sync
+    assert "renderLoraPickerMenu(picker);" in sync
+    assert "renderScenes();" not in sync

@@ -513,3 +513,17 @@ def test_generate_sweep_preserves_folder_prefixes_from_model_capabilities():
     assert "normalized.lastIndexOf('/')" in script
     assert "savedSweepFolder(model && model.id, folders)" in script
 
+
+
+def test_generate_lora_catalog_refresh_is_explicit_and_preserves_form_state():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert 'id="generate-lora-refresh"' in html
+    refresh = script.split("function refreshLoraCatalog()", 1)[1].split("\n  function ", 1)[0]
+    assert "requestJson('/fs/generate/capabilities')" in refresh
+    assert "model.loras = Array.isArray(fresh.loras)" in refresh
+    assert "renderLoras();" in refresh
+    assert "populateModelSelector();" not in refresh
+    assert "renderModelForm();" not in refresh
+    assert "el('generate-lora-refresh').onclick = refreshLoraCatalog;" in script

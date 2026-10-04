@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .execution_queue import lane_snapshot as execution_lane_snapshot
+from .folder_state_store import set_last_training_archive
 from .epoch_test_bench import clear_sessions as clear_test_sessions, session_cleanup_status as test_session_cleanup_status
 from .training_action import read_action
 from .training_candidates import aggregate_detailed_loss_by_epoch, map_detailed_loss_to_epochs, read_loss_events, smooth_step_loss
@@ -467,6 +468,7 @@ def finalize(folder, job_id, archive_name, retain_epochs=None, stage="", staged_
         "selectedEpoch": context["selectedEpoch"],
         "productionFileName": context["production"].name,
     }
+    set_last_training_archive(set_folder / ".webcap_state.json", last_training_archive)
     test_cleanup_warning = ""
     removed_test_sessions = 0
     try:

@@ -243,6 +243,24 @@ def test_execution_queue_transient_finish_removes_durable_job_and_keeps_recent_h
         execution_queue.transient_receipt(job["id"])
 
 
+def test_transient_cancel_keeps_recent_history(queue_root):
+    job = execution_queue.enqueue(
+        "inference",
+        {"request": {"prompt": "cancel me"}},
+        metadata={"client": "generate"},
+    )
+
+    cancelled = execution_queue.cancel_pending_transient(job["id"])
+
+    assert cancelled["status"] == "cancelled"
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(job["id"])
+    recent = execution_queue.recent_snapshot("inference")
+    assert len(recent) == 1
+    assert recent[0]["id"] == job["id"]
+    assert recent[0]["status"] == "cancelled"
+
+
 def test_execution_queue_can_resolve_committed_backlog_without_durable_history(queue_root):
     job = execution_queue.enqueue(
         "inference",

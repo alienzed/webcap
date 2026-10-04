@@ -121,6 +121,51 @@
     if (generateState.trackedJobIds.length !== before) saveTrackedGenerateJobs();
   }
 
+  function queuedGenerateJobs(queue) {
+    var tracked = generateState.trackedJobIds || [];
+    var jobs = queue && Array.isArray(queue.jobs) ? queue.jobs : [];
+    return jobs.filter(function (job) {
+      return tracked.indexOf(String(job.jobId || '')) !== -1 &&
+        ['queued', 'backlog'].indexOf(String(job.status || '')) !== -1;
+    });
+  }
+
+  function syncCancelQueuedButton(queue) {
+    var button = el('generate-cancel-queued-btn');
+    if (!button) throw new Error('Generations Cancel Queued control is missing.');
+    var pending = queuedGenerateJobs(
+      queue || (typeof window.getInferenceQueueSnapshot === 'function' ? window.getInferenceQueueSnapshot() : null)
+    );
+    button.classList.toggle('hidden', !pending.length);
+    button.disabled = !pending.length;
+    button.textContent = pending.length > 1 ? 'Cancel Queued (' + pending.length + ')' : 'Cancel Queued';
+    button.title = pending.length
+      ? 'Cancel ' + pending.length + ' queued Generations job' + (pending.length === 1 ? '' : 's')
+      : 'No queued Generations jobs';
+  }
+
+  function cancelQueuedGenerateJobs() {
+    var queue = typeof window.getInferenceQueueSnapshot === 'function' ? window.getInferenceQueueSnapshot() : null;
+    var pending = queuedGenerateJobs(queue);
+    if (!pending.length) {
+      syncCancelQueuedButton(queue);
+      return Promise.resolve();
+    }
+
+    var button = el('generate-cancel-queued-btn');
+    button.disabled = true;
+    return Promise.all(pending.map(function (job) {
+      return postJson('/fs/inference', { operation: 'cancel', jobId: String(job.jobId || '') });
+    })).then(function () {
+      return typeof window.refreshInferenceQueue === 'function' ? window.refreshInferenceQueue() : null;
+    }).catch(function (err) {
+      reportError(err, 'Cancel queued failed');
+      return typeof window.refreshInferenceQueue === 'function' ? window.refreshInferenceQueue() : null;
+    }).then(function (queueAfter) {
+      syncCancelQueuedButton(queueAfter);
+    });
+  }
+
   function savedLoras(modelId) {
     if (generateState.lorasByModel[modelId]) return generateState.lorasByModel[modelId];
     try {
@@ -2075,6 +2120,7 @@
     workspace.classList.remove('hidden');
     setGenerateViewMode(targetJobId ? 'create' : generateState.viewMode);
     setTakesCollapsed(generateState.takesCollapsed);
+    syncCancelQueuedButton();
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     Promise.all([
@@ -2105,6 +2151,9 @@
     };
     el('generate-library-mode-btn').onclick = function () {
       setGenerateViewMode('library');
+    };
+    el('generate-cancel-queued-btn').onclick = function () {
+      cancelQueuedGenerateJobs();
     };
     el('generate-takes-collapse-btn').onclick = function () {
       setTakesCollapsed(!generateState.takesCollapsed);
@@ -2251,6 +2300,7 @@
     });
     window.addEventListener('webcap:inference-queue-snapshot', function (event) {
       var queue = event && event.detail && event.detail.queue;
+      syncCancelQueuedButton(queue);
       refreshTrackedGenerateJobs(queue).catch(function (err) {
         reportError(err, 'Generation queue sync failed');
       });

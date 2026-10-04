@@ -422,6 +422,36 @@ def test_generate_list_normalizes_legacy_manifest_paths(tmp_path, monkeypatch):
     assert generate_store.resolve_result_media(result["mediaPath"]).read_bytes() == b"video"
 
 
+def test_generate_result_persists_captured_wildcard_prompt_provenance(tmp_path, monkeypatch):
+    monkeypatch.setattr(generate_store.app_config, "FS_ROOT", tmp_path)
+    root = tmp_path / "output"
+    monkeypatch.setattr(generate_store.app_config, "output_root", lambda: root)
+
+    payload = generate_store.persist_result(
+        "job-wildcard",
+        {
+            "modelId": "krea2",
+            "mediaKind": "image",
+            "sourcePrompt": "person in {studio|rooftop}",
+            "prompt": "person in {studio|rooftop}",
+            "resolvedPrompt": "person in rooftop",
+            "settings": {"seed": 42},
+            "loras": [],
+            "references": {},
+            "workflowFile": "workflow.json",
+        },
+        {"filename": "render.png", "type": "output"},
+        b"image",
+        "provider-1",
+        123,
+    )
+
+    assert payload["sourcePrompt"] == "person in {studio|rooftop}"
+    assert payload["submittedPrompt"] == "person in {studio|rooftop}"
+    assert payload["resolvedPrompt"] == "person in rooftop"
+    assert payload["resolvedPromptCaptured"] is True
+
+
 def test_generate_result_uses_configured_output_root_outside_fs_root(tmp_path, monkeypatch):
     fs_root = tmp_path / "sets"
     output_root = tmp_path / "creative"
@@ -529,6 +559,11 @@ def test_generate_execute_cleans_transient_refs_and_captured_provider_output(tmp
     )
     monkeypatch.setattr(generate_generation.inference_runtime, "available_names", lambda *_args: [])
     monkeypatch.setattr(generate_generation.inference_runtime, "resolve_name", lambda value, *_args: value)
+    monkeypatch.setattr(
+        generate_generation.inference_runtime,
+        "resolve_wildcard_prompt",
+        lambda prompt, seed: "Resolved Prompt" if prompt == "Prompt" and seed == 7 else "",
+    )
     monkeypatch.setattr(generate_generation.inference_runtime, "queue_managed_workflow", lambda _job_id, _workflow: "provider-1")
     monkeypatch.setattr(
         generate_generation.inference_runtime,

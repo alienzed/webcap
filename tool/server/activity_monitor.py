@@ -3,7 +3,7 @@ import time
 
 from .execution_queue import ExecutionQueueStateError, recent_snapshot as execution_recent_snapshot, resource_owner as execution_resource_owner
 from .inference_runner import snapshot as inference_snapshot
-from .llm_runner import snapshot as llm_snapshot
+from .llm_runner import recent_snapshot as llm_recent_snapshot, snapshot as llm_snapshot
 from .storage_manager import scan_status as storage_scan_status
 from .training_history import recent_jobs as training_recent_jobs
 from .training_runner import passive_status_snapshot as training_status_snapshot
@@ -133,7 +133,8 @@ def _training_recent(limit, since=0.0):
 
 def _execution_recent(lane, limit, since=0.0):
     items = []
-    for job in execution_recent_snapshot(lane, limit=limit):
+    recent = llm_recent_snapshot(limit=limit) if lane == "llm" else execution_recent_snapshot(lane, limit=limit)
+    for job in recent:
         status = str(job.get("status") or "")
         if status not in _TERMINAL_STATUSES or _finished_at(job) < since:
             continue

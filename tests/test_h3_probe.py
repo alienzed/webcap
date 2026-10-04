@@ -17,6 +17,11 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 SCRIPT_PATH = SCRIPTS_DIR / "h3_shape_probe.py"
 
 
+@pytest.fixture(autouse=True)
+def isolate_h3_app_data(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_module, "app_data_root", lambda: tmp_path / ".test-webcap-app-data")
+
+
 def load_probe_script():
     spec = importlib.util.spec_from_file_location("h3_shape_probe_test", SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
@@ -580,6 +585,14 @@ def test_start_and_stop_h3_probe_use_detached_runtime_state(tmp_path, monkeypatc
         return (0, "4242\n", "")
 
     monkeypatch.setattr(h3_probe_module, "run_wsl", fake_run_wsl)
+
+    class NoopThread:
+        def __init__(self, *args, **kwargs):
+            pass
+        def start(self):
+            pass
+
+    monkeypatch.setattr(h3_probe_module.threading, "Thread", NoopThread)
     payload = h3_probe_module.start_h3_probe("set", "clip.mp4")
     assert launch_wrappers == [True]
     assert payload["status"] == "running"

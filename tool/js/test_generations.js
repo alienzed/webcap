@@ -3304,7 +3304,6 @@
     el('test-generations-wildcard-model').addEventListener('change', function () {
       wildcardDirector.modelId = this.value;
       setDirectorModelPreference('webcap.testGenerations.directorModel', this.value);
-      renderWildcardDirector();
     });
     window.addEventListener('webcap:director-model-changed', function (event) {
       var selected = String(event && event.detail && event.detail.modelId || '');

@@ -125,6 +125,7 @@ Keep the UI efficient and calm.
 - Keep controls contextual.
 - Prefer visible status over hidden magic.
 - Do not force extra steps when a workflow can stay direct.
+- Viewing, selecting, refreshing, or navigating historical, derived, or reference state must not overwrite current user-authored working state unless that overwrite is the explicit purpose of the user action. Treat editable working state and historical/reference state as separate by default; copying historical state into an editor requires an explicit user action.
 - Polling and live refreshes must preserve DOM identity for stateful or interactive elements (especially video/audio playback, inputs, selection, scroll, and expanded controls). Reconcile by stable key and add/update/remove only what actually changed; do not replace whole live containers on a timer unless an intentional context reset requires it.
 - For a local list mutation, prefer updating/removing only the affected keyed element when the mutation's effect is local. If the operation legitimately changes other rows, ordering, grouping, filtering, or collection-wide state, use an authoritative refresh; do not use a scoped response to reconstruct unrelated items.
 

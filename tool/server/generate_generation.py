@@ -199,6 +199,11 @@ def execute(job_id, request):
             )
 
         filename_prefix = "webcap-generate/" + str(job_id) + "/render"
+        resolved_prompt = inference_runtime.resolve_wildcard_prompt(
+            request["prompt"],
+            request["settings"]["seed"],
+        )
+        request["resolvedPrompt"] = resolved_prompt
         workflow = model.build_workflow(
             template,
             request["prompt"],

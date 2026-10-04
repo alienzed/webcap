@@ -674,3 +674,76 @@ def test_h3_runtime_pid_recovers_from_runner_written_pid_file(tmp_path):
     (probe_root / h3_probe_module.PID_FILE_NAME).write_text("4242\n", encoding="utf-8")
 
     assert h3_probe_module._runtime_pid({"pid": 0, "seedPath": str(seed_path)}) == 4242
+
+
+def test_h3_launch_polling_does_not_terminalize_starting_runtime(tmp_path, monkeypatch):
+    fs_root = tmp_path / "fs"
+    probe_root = fs_root / "output" / "work" / "h3-probes" / "h3-race"
+    probe_root.mkdir(parents=True)
+    seed_path = probe_root / "seed.json"
+    seed_path.write_text("{}", encoding="utf-8")
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
+    monkeypatch.setattr(config_module, "CONFIG_PATH", config_path)
+    monkeypatch.setattr(config_module, "output_root", lambda: fs_root / "output")
+    monkeypatch.setattr(h3_probe_module, "prepare_h3_probe", lambda _folder, _file: {
+        "ok": True,
+        "probeId": "h3-race",
+        "seedPath": str(seed_path),
+        "command": "ignored",
+    })
+    monkeypatch.setattr(h3_probe_module, "configured_training_settings", lambda: {
+        "cwd": "/pipe",
+        "activate": "",
+        "wslDistribution": "",
+        "condaExecutable": "",
+        "condaEnvironment": "",
+    })
+    monkeypatch.setattr(h3_probe_module, "to_wsl_path", lambda value, _distribution: str(value))
+
+    owner = {"value": "training"}
+    observed = []
+
+    def launch_wrapper(callback):
+        try:
+            return callback()
+        except Exception:
+            owner["value"] = ""
+            raise
+
+    monkeypatch.setattr(training_runner_module, "launch_h3_probe_runtime", launch_wrapper)
+
+    class NoopThread:
+        def __init__(self, *args, **kwargs):
+            pass
+        def start(self):
+            pass
+
+    monkeypatch.setattr(h3_probe_module.threading, "Thread", NoopThread)
+
+    launch_calls = [0]
+
+    def fake_run_wsl(command, timeout, distribution):
+        if "/proc/4242" in command:
+            return (0, "python\nh3_shape_probe.py\n", "")
+        launch_calls[0] += 1
+        status = h3_probe_module.h3_probe_status()
+        observed.append((status["active"], status["status"]))
+        (probe_root / h3_probe_module.PID_FILE_NAME).write_text("4242\n", encoding="utf-8")
+        raise RuntimeError("lost launch reply")
+
+    monkeypatch.setattr(h3_probe_module, "run_wsl", fake_run_wsl)
+
+    payload = h3_probe_module.start_h3_probe("set", "clip.mp4")
+
+    assert launch_calls == [1]
+    assert observed == [(True, "starting")]
+    assert payload["status"] == "running"
+    assert payload["pid"] == 4242
+    assert owner["value"] == "training"
+    runtime = json.loads((probe_root / "runtime.json").read_text(encoding="utf-8"))
+    assert runtime["status"] == "running"
+    assert runtime["pid"] == 4242
+    assert h3_probe_module.training_gpu_runtime()["pid"] == 4242

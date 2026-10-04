@@ -27,6 +27,36 @@ def test_ephemeral_llm_queue_does_not_write_execution_state(queue_root):
     assert queue.lane_snapshot()["jobs"][0]["id"] == job["id"]
 
 
+def test_ephemeral_llm_reset_stops_active_and_cancels_all_queued(queue_root):
+    queue = execution_queue.ephemeral_lane("llm")
+    active = queue.enqueue({"prompt": "active"}, metadata={"client": "chat"})
+    queued_one = queue.enqueue({"prompt": "queued-1"}, metadata={"client": "chat"})
+    queued_two = queue.enqueue({"prompt": "queued-2"}, metadata={"client": "chat"})
+    queue.claim_next(expected_job_id=active["id"])
+    queue.mark_running(active["id"])
+
+    snapshot = queue.reset_unfinished()
+
+    assert snapshot["activeJobId"] == active["id"]
+    assert [job["id"] for job in snapshot["jobs"]] == [active["id"]]
+    assert snapshot["jobs"][0]["status"] == "stopping"
+    assert execution_queue.transient_receipt(queued_one["id"])["status"] == "cancelled"
+    assert execution_queue.transient_receipt(queued_two["id"])["status"] == "cancelled"
+
+
+def test_ephemeral_llm_reset_cancels_idle_queue_and_leaves_lane_empty(queue_root):
+    queue = execution_queue.ephemeral_lane("llm")
+    first = queue.enqueue({"prompt": "one"}, metadata={"client": "chat"})
+    second = queue.enqueue({"prompt": "two"}, metadata={"client": "chat"})
+
+    snapshot = queue.reset_unfinished()
+
+    assert snapshot["activeJobId"] == ""
+    assert snapshot["jobs"] == []
+    assert execution_queue.transient_receipt(first["id"])["status"] == "cancelled"
+    assert execution_queue.transient_receipt(second["id"])["status"] == "cancelled"
+
+
 def test_ephemeral_llm_queue_discards_old_persisted_lane(queue_root):
     state_path = app_config.execution_queue_state_path()
     state_path.parent.mkdir(parents=True, exist_ok=True)

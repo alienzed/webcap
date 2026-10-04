@@ -10,8 +10,6 @@ function assessmentUI() {
     Date,
     reportConsoleInfo() {},
     reportConsoleError(...args) { errors.push(args); },
-    currentLlmResetEpoch() { return 0; },
-    assertLlmWorkflowCurrent() {},
     resetLlmExecution() { return Promise.resolve({ ok: true }); },
   };
   const source = fs.readFileSync(path.join(__dirname, '../tool/js/director_model_test.js'), 'utf8');

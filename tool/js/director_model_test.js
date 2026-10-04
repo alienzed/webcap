@@ -1495,15 +1495,7 @@ function directorModelTestStop() {
   directorModelTestRenderStatus();
   var button = directorModelTestEl('director-model-test-stop');
   if (button) button.disabled = true;
-  if (!directorModelTestState.currentJobId) return;
-  directorModelTestRequest('/fs/director/job', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      operation: 'stop_or_cancel',
-      jobId: directorModelTestState.currentJobId
-    })
-  }).catch(function (error) {
+  resetLlmExecution().catch(function (error) {
     reportConsoleError('Director Model Test', error);
   });
 }

@@ -1092,6 +1092,59 @@
     return image;
   }
 
+  function generationPromptVariants(result) {
+    var source = String(result && result.sourcePrompt || '');
+    var resolved = String(result && result.resolvedPrompt || '');
+    var captured = !!(result && result.resolvedPromptCaptured);
+    return {
+      source: source,
+      result: captured && resolved ? resolved : (source || resolved),
+      distinct: captured && !!source && !!resolved && source !== resolved
+    };
+  }
+
+  function buildPromptViewer(result, className) {
+    var variants = generationPromptVariants(result);
+    var wrap = document.createElement('div');
+    wrap.className = className || 'generate-prompt-viewer';
+
+    if (variants.distinct) {
+      var toggle = document.createElement('div');
+      toggle.className = 'generate-prompt-toggle';
+      ['result', 'source'].forEach(function (mode) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'review-captions-btn' + (mode === 'result' ? ' active' : '');
+        button.dataset.generatePromptMode = mode;
+        button.textContent = mode === 'result' ? 'Result' : 'Source';
+        toggle.appendChild(button);
+      });
+      wrap.appendChild(toggle);
+    }
+
+    var prompt = document.createElement('p');
+    prompt.dataset.generatePromptText = '1';
+    prompt.dataset.promptResult = variants.result;
+    prompt.dataset.promptSource = variants.source || variants.result;
+    prompt.textContent = variants.result;
+    prompt.title = prompt.textContent;
+    wrap.appendChild(prompt);
+    return wrap;
+  }
+
+  function setPromptViewerMode(container, mode) {
+    var viewer = container && container.closest('.generate-prompt-viewer, .generate-result-prompt-viewer');
+    if (!viewer) throw new Error('Generation prompt viewer is missing.');
+    var prompt = viewer.querySelector('[data-generate-prompt-text]');
+    if (!prompt) throw new Error('Generation prompt text is missing.');
+    var selected = mode === 'source' ? 'source' : 'result';
+    prompt.textContent = selected === 'source' ? prompt.dataset.promptSource : prompt.dataset.promptResult;
+    prompt.title = prompt.textContent;
+    viewer.querySelectorAll('[data-generate-prompt-mode]').forEach(function (button) {
+      button.classList.toggle('active', button.dataset.generatePromptMode === selected);
+    });
+  }
+
   function renderActiveResult(result) {
     var host = el('generate-active-preview');
     var summary = el('generate-stage-summary');
@@ -1113,10 +1166,7 @@
 
     var caption = document.createElement('div');
     caption.className = 'generate-stage-caption';
-    var prompt = document.createElement('p');
-    prompt.textContent = String(result.resolvedPrompt || result.sourcePrompt || '');
-    prompt.title = prompt.textContent;
-    caption.appendChild(prompt);
+    caption.appendChild(buildPromptViewer(result, 'generate-prompt-viewer'));
 
     host.appendChild(media);
     host.appendChild(caption);
@@ -1460,9 +1510,7 @@
 
     var details = document.createElement('span');
     details.textContent = summary.join(' · ');
-    var prompt = document.createElement('p');
-    prompt.title = String(result.resolvedPrompt || '');
-    prompt.textContent = String(result.resolvedPrompt || '');
+    var prompt = buildPromptViewer(result, 'generate-result-prompt-viewer generate-prompt-viewer');
 
     var deleteButton = document.createElement('button');
     deleteButton.type = 'button';
@@ -2404,7 +2452,16 @@
         reportError(err, 'Generation queue sync failed');
       });
     });
+    el('generate-active-preview').addEventListener('click', function (event) {
+      var promptMode = event.target.closest('[data-generate-prompt-mode]');
+      if (promptMode) setPromptViewerMode(promptMode, promptMode.dataset.generatePromptMode);
+    });
     el('generate-results').addEventListener('click', function (event) {
+      var promptMode = event.target.closest('[data-generate-prompt-mode]');
+      if (promptMode) {
+        setPromptViewerMode(promptMode, promptMode.dataset.generatePromptMode);
+        return;
+      }
       var ratingButton = event.target.closest('[data-generate-rating-value]');
       if (ratingButton) {
         var ratingStorageId = String(ratingButton.dataset.generateRatingStorageId || '').trim();

@@ -55,18 +55,18 @@ def test_director_diagnostics_has_live_activity_card_and_compact_model_controls(
     assert ".director-model-test-model-actions" in css
     assert "flex-wrap: nowrap" in css
 
-def test_llm_stop_uses_shared_reset_epoch_and_diagnostics_honor_it():
+def test_llm_stop_uses_shared_reset_and_existing_diagnostics_stop_state():
     common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
     diagnostics = (ROOT / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
 
-    assert "var llmResetEpoch = 0;" in common
-    assert "function assertLlmWorkflowCurrent(epoch)" in common
     assert "function resetLlmExecution()" in common
-    assert "llmResetEpoch += 1;" in common
     assert "JSON.stringify({ operation: 'reset' })" in common
+    assert "llmResetEpoch" not in common
+    assert "assertLlmWorkflowCurrent" not in common
 
-    assert "function directorModelTestRequireCurrentLlm(epoch)" in diagnostics
     assert "directorModelTestState.stopRequested = true;" in diagnostics
-    assert "directorModelTestRequireCurrentLlm(llmEpoch);" in diagnostics
+    assert "status === 'cancelled' || status === 'stopped'" in diagnostics
     assert "resetLlmExecution().catch(function (error)" in diagnostics
+    assert "currentLlmResetEpoch" not in diagnostics
+    assert "assertLlmWorkflowCurrent" not in diagnostics
     assert "operation: 'stop_or_cancel'" not in diagnostics

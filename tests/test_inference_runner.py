@@ -329,6 +329,14 @@ def test_training_arbiter_gives_local_llm_fifo_head_priority_over_inference(infe
     assert execution_queue.resource_owner() == ""
 
 
+def test_training_arbiter_rechecks_local_llm_priority_at_owner_grant(inference_root, monkeypatch):
+    checks = iter([False, True])
+    monkeypatch.setattr(llm_runner, "local_gpu_work_runnable", lambda: next(checks))
+
+    assert training_runner.reserve_gpu_for_external_work("inference") is False
+    assert execution_queue.resource_owner() == ""
+
+
 def test_training_arbiter_does_not_block_inference_for_remote_llm_fifo_head(inference_root, monkeypatch):
     llm_runner.enqueue(
         "chat",

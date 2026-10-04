@@ -244,7 +244,36 @@ def test_generate_errors_keep_detail_in_console_and_use_concise_setup_badge():
 
 def test_generate_defaults_new_lora_strength_to_point_nine():
     js = Path("tool/js/generate.js").read_text(encoding="utf-8")
-    assert "items.push({ name: name, strength: 0.9 });" in js
+    assert "savedLoras(generateState.modelId).push({ name: selectedName, strength: 0.9 });" in js
+
+
+def test_generate_fixed_lora_picker_matches_storyboard_filter_click_flow():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert 'id="generate-lora-picker-menu"' in html
+    assert 'role="combobox"' in html
+    assert 'id="generate-lora-add"' not in html
+    assert 'id="generate-lora-options"' not in html
+    assert "function generateLoraNamesMatching(query)" in script
+    assert "data-generate-lora-option" in script
+    assert "function chooseGenerateLora(name)" in script
+    assert "handleGenerateLoraPickerKeydown" in script
+    assert ".generate-lora-picker-menu {" in css
+    assert ".generate-lora-picker-option.active" in css
+
+
+def test_generate_prompt_viewer_shows_captured_result_or_source_without_changing_open_restore():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "generate.css").read_text(encoding="utf-8")
+
+    assert "function generationPromptVariants(result)" in script
+    assert "result.resolvedPromptCaptured" in script
+    assert "button.textContent = mode === 'result' ? 'Result' : 'Source';" in script
+    assert "function setPromptViewerMode(container, mode)" in script
+    assert "prompt.value = String(result.sourcePrompt || result.resolvedPrompt || '');" in script
+    assert ".generate-prompt-toggle" in css
 
 
 def test_generate_library_open_does_not_overwrite_current_model_prompt_when_saved_model_is_unavailable():

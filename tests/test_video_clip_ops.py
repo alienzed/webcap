@@ -121,3 +121,60 @@ def test_queued_clip_reserves_non_overwrite_output_path(tmp_path, monkeypatch):
     assert first.status_code == 202
     assert second.status_code == 409
     assert second.get_json()["outputName"] == "same.mp4"
+
+
+def test_prune_tracking_never_discards_queued_work():
+    now = 1000.0
+    with video_clip_ops._video_clip_lock:
+        video_clip_ops._video_clip_jobs.clear()
+        video_clip_ops._video_clip_signatures.clear()
+        for index in range(video_clip_ops.VIDEO_CLIP_MAX_TRACKED_JOBS + 1):
+            video_clip_ops._video_clip_jobs["queued-" + str(index)] = {
+                "id": "queued-" + str(index),
+                "status": "queued",
+                "createdAt": float(index),
+                "updatedAt": float(index),
+            }
+
+        video_clip_ops._prune_tracking(now)
+
+        assert len(video_clip_ops._video_clip_jobs) == video_clip_ops.VIDEO_CLIP_MAX_TRACKED_JOBS + 1
+        assert "queued-0" in video_clip_ops._video_clip_jobs
+        assert all(job["status"] == "queued" for job in video_clip_ops._video_clip_jobs.values())
+
+        video_clip_ops._video_clip_jobs.clear()
+
+
+def test_prune_tracking_uses_terminal_history_for_overflow():
+    now = 1000.0
+    with video_clip_ops._video_clip_lock:
+        video_clip_ops._video_clip_jobs.clear()
+        video_clip_ops._video_clip_signatures.clear()
+        for index in range(video_clip_ops.VIDEO_CLIP_MAX_TRACKED_JOBS):
+            video_clip_ops._video_clip_jobs["queued-" + str(index)] = {
+                "id": "queued-" + str(index),
+                "status": "queued",
+                "createdAt": float(index + 100),
+                "updatedAt": float(index + 100),
+            }
+        video_clip_ops._video_clip_jobs["done-old"] = {
+            "id": "done-old",
+            "status": "completed",
+            "createdAt": 900.0,
+            "updatedAt": 900.0,
+        }
+        video_clip_ops._video_clip_jobs["done-new"] = {
+            "id": "done-new",
+            "status": "failed",
+            "createdAt": 950.0,
+            "updatedAt": 950.0,
+        }
+
+        video_clip_ops._prune_tracking(now)
+
+        assert len(video_clip_ops._video_clip_jobs) == video_clip_ops.VIDEO_CLIP_MAX_TRACKED_JOBS
+        assert "done-old" not in video_clip_ops._video_clip_jobs
+        assert "done-new" not in video_clip_ops._video_clip_jobs
+        assert all("queued-" + str(index) in video_clip_ops._video_clip_jobs for index in range(video_clip_ops.VIDEO_CLIP_MAX_TRACKED_JOBS))
+
+        video_clip_ops._video_clip_jobs.clear()

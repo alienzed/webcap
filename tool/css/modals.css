@@ -1646,15 +1646,13 @@ html[data-theme="dark"] .app-settings-radio-label {
 }
 
 .video-clip-status {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 14px;
-  z-index: 20;
+  position: relative;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 32px;
+  margin: 0 14px 14px;
   padding: 6px 10px;
   border: 1px solid rgba(148, 163, 184, 0.38);
   border-radius: 4px;

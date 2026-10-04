@@ -276,8 +276,21 @@ def recent_snapshot(lane_name, limit=30):
     with _lock:
         state = _read_state()
         lane = _lane(state, lane_name, create=False) or _default_lane()
-        recent = lane.get("recent") if isinstance(lane.get("recent"), list) else []
-        return [copy.deepcopy(item) for item in reversed(recent[-limit:]) if isinstance(item, dict)]
+        recent = [
+            copy.deepcopy(item)
+            for item in (lane.get("recent") if isinstance(lane.get("recent"), list) else [])
+            if isinstance(item, dict)
+        ]
+        recent.extend(
+            copy.deepcopy(receipt)
+            for receipt in _transient_receipts.values()
+            if isinstance(receipt, dict) and str(receipt.get("lane") or "") == str(lane_name or "")
+        )
+        recent.sort(
+            key=lambda item: float(item.get("finishedAt") or item.get("updatedAt") or 0),
+            reverse=True,
+        )
+        return recent[:limit]
 
 
 def _public_job(job):
@@ -489,7 +502,7 @@ class EphemeralExecutionQueue:
             _remember_transient_receipt(receipt)
             return receipt
 
-    def request_stop(self, job_id):
+    def request_stop(self, job_id, stop_callback=None):
         now = time.time()
         with _lock:
             job = self._find_job(job_id)
@@ -497,10 +510,15 @@ class EphemeralExecutionQueue:
                 raise FileNotFoundError("Execution queue job does not exist.")
             if job.get("status") not in ACTIVE_STATUSES:
                 raise ValueError("Only active execution jobs can be stopped.")
+            lane = self._lane()
+            if lane.get("activeJobId") != job["id"]:
+                raise RuntimeError("Execution queue job is not the active job for its lane.")
             job["requestedAction"] = "stop"
             job["status"] = "stopping"
             job["updatedAt"] = now
-            _refresh_positions(self._lane())
+            _refresh_positions(lane)
+            if stop_callback is not None:
+                stop_callback()
             return _public_job(job)
 
     def reorder_job(self, job_id, direction=None, position=None):
@@ -773,7 +791,7 @@ def update_job(job_id, details):
 
 
 def requeue_active_and_pause(job_id, reason):
-    """Return one active job to pending state and pause its lane atomically."""
+    """Record the failed attempt, then return its frozen request to the paused queue."""
     now = time.time()
     with _lock:
         state = _read_state()
@@ -783,6 +801,14 @@ def requeue_active_and_pause(job_id, reason):
         if job.get("status") not in ACTIVE_STATUSES:
             raise ValueError("Only active execution work can be returned to the queue.")
         lane = _lane(state, lane_name)
+        attempt = copy.deepcopy(job)
+        attempt["status"] = "failed"
+        attempt["finishedAt"] = now
+        attempt["updatedAt"] = now
+        attempt["error"] = str(reason or "Queue paused after an execution error.")
+        attempt["requestedAction"] = ""
+        _record_recent(lane, attempt)
+
         job["status"] = "queued"
         job["startedAt"] = None
         job["finishedAt"] = None

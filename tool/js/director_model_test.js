@@ -1077,7 +1077,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
     contextSteps.forEach(function (target) {
       chain = chain.then(function () {
         if (directorModelTestState.stopRequested) return;
-            var previous = attempts.filter(function (attempt) { return attempt.kind === 'context'; });
+        var previous = attempts.filter(function (attempt) { return attempt.kind === 'context'; });
         if (previous.length && previous[previous.length - 1].status === 'failed') return;
         return runAttempt('context', target);
       });
@@ -1087,7 +1087,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   outputSteps.forEach(function (target) {
     chain = chain.then(function () {
       if (directorModelTestState.stopRequested) return;
-        if (contextMode === 'calibrated' && !contextSize) return;
+      if (contextMode === 'calibrated' && !contextSize) return;
       var previousCapacity = attempts.filter(function (attempt) {
         return attempt.kind === 'output' || attempt.kind === 'prose';
       });
@@ -1180,7 +1180,7 @@ function directorModelTestStartCalibration() {
   models.forEach(function (model, index) {
     chain = chain.then(function () {
       if (directorModelTestState.stopRequested) return;
-        return directorModelTestCalibrateOne(model, index + 1);
+      return directorModelTestCalibrateOne(model, index + 1);
     });
   });
 
@@ -1427,7 +1427,7 @@ function directorModelTestStart() {
     models.forEach(function (model, index) {
       chain = chain.then(function () {
         if (directorModelTestState.stopRequested) return;
-            return directorModelTestRunOne(model, index + 1).catch(function (error) {
+        return directorModelTestRunOne(model, index + 1).catch(function (error) {
           if (directorModelTestState.stopRequested) return;
           reportConsoleError('Director Model Test', error);
           var failedRun = {

@@ -108,3 +108,11 @@ test('short prose cannot establish a long-form tier merely by emitting headings 
   assert.equal(missingMarker.attempt.failureKind, 'contract');
   assert.match(missingMarker.attempt.error, /Completion marker missing/);
 });
+
+test('stopped calibration probe is recorded as stopped rather than runtime failure', async () => {
+  const { attempt, errors } = await probe('', 'output', 'stopped', '', '');
+  assert.equal(attempt.status, 'stopped');
+  assert.equal(attempt.failureKind, 'stopped');
+  assert.equal(attempt.error, '');
+  assert.equal(errors.length, 0);
+});

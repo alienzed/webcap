@@ -1457,6 +1457,73 @@ def test_llm_queue_rejects_pause_resume_and_reorder_actions(llm_root):
             llm_runner.action(operation)
 
 
+def test_llm_reset_cancels_all_queued_jobs_without_touching_runtime(llm_root, monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "stop_active_request",
+        lambda: pytest.fail("Idle queued LLM reset must not touch the runtime."),
+    )
+    first = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "One.", "output": "text"},
+    )
+    second = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Two.", "output": "text"},
+    )
+
+    result = llm_runner.reset()
+
+    assert result["jobs"] == []
+    assert llm_runner.job_status(first["jobId"])["status"] == "cancelled"
+    assert llm_runner.job_status(second["jobId"])["status"] == "cancelled"
+
+
+def test_llm_reset_marks_active_stopping_and_clears_successors(llm_root, monkeypatch):
+    active = execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"operation": "write_prompt", "prompt": "Active."}, "clientContext": {}},
+        metadata={"client": "generate", "modelId": "qwen"},
+    )
+    queued = execution_queue.enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"operation": "write_prompt", "prompt": "Queued."}, "clientContext": {}},
+        metadata={"client": "generate", "modelId": "qwen"},
+    )
+    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
+    execution_queue.mark_running(active["id"])
+    calls = []
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: calls.append("stop") or True)
+
+    result = llm_runner.reset()
+
+    assert result["activeJobId"] == active["id"]
+    assert [job["jobId"] for job in result["jobs"]] == [active["id"]]
+    assert result["jobs"][0]["status"] == "stopping"
+    assert llm_runner.job_status(queued["id"])["status"] == "cancelled"
+    assert calls == ["stop"]
+
+
+def test_llm_reset_idle_releases_retained_gpu_hold(llm_root, monkeypatch):
+    execution_queue._resource_owner = "llm"
+    llm_runner._local_gpu_drain_until = time.monotonic() + 30
+    calls = []
+    monkeypatch.setattr(
+        llm_runner,
+        "_release_gpu",
+        lambda: calls.append("release") or execution_queue.release_resource("llm"),
+    )
+
+    result = llm_runner.reset()
+
+    assert result["jobs"] == []
+    assert llm_runner._local_gpu_drain_until == 0.0
+    assert calls == ["release"]
+    assert execution_queue.resource_owner() == ""
+
+
 def test_llm_stop_or_cancel_cancels_queued_job_without_touching_runtime(llm_root, monkeypatch):
     monkeypatch.setattr(
         storyboard_llm_runtime,

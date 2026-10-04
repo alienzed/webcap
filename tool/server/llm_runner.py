@@ -21,7 +21,6 @@ def _require_llm_lane(lane_name):
         raise ValueError("LLM execution lane is required.")
 
 
-execution_cancel_pending_transient = _execution_queue.cancel_pending_transient
 execution_clear_lane = _execution_queue.clear
 execution_consume_terminal_job = _execution_queue.consume_terminal_job
 
@@ -55,8 +54,6 @@ def execution_lane_snapshot(lane_name, include_terminal=True):
 execution_mark_running = _execution_queue.mark_running
 execution_reset_unfinished = _execution_queue.reset_unfinished
 
-
-execution_request_stop = _execution_queue.request_stop
 
 
 _dispatch_lock = threading.Lock()
@@ -827,30 +824,9 @@ def reset():
         return snapshot(include_terminal=False)
 
 
-def action(operation, job_id="", direction="", position=None):
+def action(operation):
     _ensure_execution_reconciled()
     operation = str(operation or "").strip()
-    job_id = str(job_id or "").strip()
     if operation == "reset":
         return {"queue": reset()}
-    if operation == "cancel":
-        return {"job": _job_view(execution_cancel_pending_transient(job_id))}
-    if operation in {"stop", "stop_or_cancel"}:
-        current = execution_get_job(job_id)
-        status = str(current.get("status") or "")
-        if operation == "stop_or_cancel" and status == "queued":
-            return {"job": _job_view(execution_cancel_pending_transient(job_id))}
-        if status not in {"starting", "running", "stopping"}:
-            raise ValueError("Only queued or active LLM jobs can be stopped.")
-        from .storyboard_llm_runtime import assert_stop_supported, stop_active_request
-        assert_stop_supported()
-        stopping = current if status == "stopping" else execution_request_stop(job_id)
-        active_id = str(execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("activeJobId") or "")
-        if active_id == job_id:
-            stop_active_request()
-        # The worker may finish and remove the in-memory job while hard-stop is
-        # synchronously shutting llama.cpp down. Return the stopping snapshot
-        # captured before that race instead of re-reading a job that may already
-        # be an in-memory terminal receipt.
-        return {"job": _job_view(stopping)}
     raise ValueError("Unsupported LLM queue action: " + operation)

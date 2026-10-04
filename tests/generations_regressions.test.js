@@ -8,6 +8,12 @@ const vm = require('node:vm');
 class Element {
   constructor(tag = 'div') { this.tagName = tag; this.children = []; this.dataset = {}; this.className = ''; this.attributes = {}; this.textContent = ''; }
   get childNodes() { return this.children; }
+  get firstChild() { return this.children[0] || null; }
+  get nextSibling() {
+    if (!this.parent) return null;
+    const index = this.parent.children.indexOf(this);
+    return index === -1 ? null : (this.parent.children[index + 1] || null);
+  }
   get classList() {
     return { contains: name => this.className.split(' ').includes(name),
       toggle: (name, active) => {
@@ -17,6 +23,7 @@ class Element {
       }, add: name => this.classList.toggle(name, true), remove: name => this.classList.toggle(name, false) };
   }
   setAttribute(name, value) { this.attributes[name] = value; }
+  removeAttribute(name) { delete this.attributes[name]; if (name.startsWith('data-')) delete this.dataset[name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())]; }
   appendChild(child) { return this.insertBefore(child, null); }
   insertBefore(child, before) {
     child.remove(); child.parent = this;
@@ -29,8 +36,12 @@ class Element {
   querySelectorAll(selector) {
     const [positive, negative] = selector.split(':not(');
     const matches = element => {
-      const classes = positive.split('.').slice(1);
-      return classes.every(name => element.classList.contains(name)) &&
+      const classMatch = positive.match(/\.([a-zA-Z0-9_-]+)/);
+      const attrMatch = positive.match(/\[data-([a-zA-Z0-9_-]+)\]/);
+      const classOk = !classMatch || element.classList.contains(classMatch[1]);
+      const dataKey = attrMatch ? attrMatch[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase()) : '';
+      const attrOk = !attrMatch || Object.prototype.hasOwnProperty.call(element.dataset, dataKey);
+      return classOk && attrOk &&
         (!negative || !element.classList.contains(negative.slice(1, -1)));
     };
     const found = [];

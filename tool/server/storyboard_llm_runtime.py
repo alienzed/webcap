@@ -567,13 +567,6 @@ def assert_stop_supported():
     settings = _active_runtime_settings()
     if settings.get("mode", "local") == "local":
         assert_hard_stop_supported()
-        return
-    with _use_runtime(settings.get("runtime_id", "")):
-        if not _remote_is_ollama(refresh=True):
-            raise ValueError(
-                "Stop is not supported by this generic remote OpenAI-compatible endpoint. "
-                "Remote cancellation is currently supported for Ollama."
-            )
 
 
 def stop_active_request():
@@ -1374,7 +1367,7 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             if _stop_requested.is_set():
                 raise RuntimeError("LLM request stopped.")
             _set_activity("generating", model_id=model_ref)
-            request_json = _remote_http_json_cancellable if _remote_is_ollama() else _http_json
+            request_json = _remote_http_json_cancellable
             request_started = time.perf_counter()
             try:
                 response = request_json(

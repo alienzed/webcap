@@ -480,21 +480,25 @@ def test_local_llm_queue_reuses_gpu_ownership_until_queued_work_is_drained(llm_r
     assert execution_queue.resource_owner() == ""
 
 
-def test_llm_terminal_receipt_is_removed_when_consumed(llm_root):
-    job = execution_queue.enqueue(
+def test_llm_terminal_receipt_is_removed_when_consumed_but_recent_remains(llm_root):
+    job = llm_runner.execution_enqueue(
         llm_runner.EXECUTION_LANE,
         {"contract": {"operation": "write_prompt"}, "clientContext": {}},
         metadata={"client": "generate", "modelId": "qwen"},
     )
-    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
-    execution_queue.finish_job_transient(job["id"], status="completed", result={"result": "done"})
+    llm_runner.execution_claim_next(llm_runner.EXECUTION_LANE, expected_job_id=job["id"])
+    llm_runner.execution_finish_job_transient(job["id"], status="completed", result={"result": "done"})
 
     delivered = llm_runner.job_status(job["id"], consume=True)
 
     assert delivered["status"] == "completed"
     assert delivered["result"]["result"] == "done"
     with pytest.raises(FileNotFoundError):
-        execution_queue.get_job(job["id"])
+        llm_runner.job_status(job["id"])
+    recent = llm_runner.recent_snapshot(limit=5)
+    assert len(recent) == 1
+    assert recent[0]["id"] == job["id"]
+    assert recent[0]["status"] == "completed"
 
 
 def test_llm_local_job_waits_while_shared_gpu_is_owned(llm_root, monkeypatch):

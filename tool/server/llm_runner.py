@@ -420,8 +420,11 @@ def _execute_claimed(job_id, gpu_reserved):
 
     running = execution_mark_running(job_id, details={"phase": "preparing"})
     if str(running.get("status") or "") == "stopping":
-        execution_finish_job_transient(job_id, status="stopped", error="LLM request stopped before execution.")
-        return
+        return execution_finish_job_transient(
+            job_id,
+            status="stopped",
+            error="LLM request stopped before execution.",
+        )
 
     from .storyboard_llm_runtime import run_contract, run_freeform_chat
     try:
@@ -457,8 +460,11 @@ def _execute_claimed(job_id, gpu_reserved):
     with _enqueue_lock:
         current = execution_get_job(job_id)
         if str(current.get("status") or "") == "stopping":
-            execution_finish_job_transient(job_id, status="stopped", error="LLM request stopped.")
-            return
+            return execution_finish_job_transient(
+                job_id,
+                status="stopped",
+                error="LLM request stopped.",
+            )
 
         try:
             result = _client_result(client, context, llm_result, job_id=job_id, frozen_contract=contract)
@@ -476,7 +482,7 @@ def _execute_claimed(job_id, gpu_reserved):
                 "WebCap ingest failed after a successful model response: " + str(exc)
             ) from exc
 
-        execution_finish_job_transient(job_id, status="completed", result=result)
+        return execution_finish_job_transient(job_id, status="completed", result=result)
 
 
 def _advance_queue():
@@ -528,21 +534,29 @@ def _advance_queue():
 
         job_id = str(claimed.get("id") or "")
         release_gpu = local_gpu
+        terminal = None
         try:
             if local_gpu:
                 from .gpu_prep import prepare_gpu_for
                 prepare_gpu_for(GPU_RESERVATION_OWNER)
-            _execute_claimed(job_id, gpu_reserved=local_gpu)
+            terminal = _execute_claimed(job_id, gpu_reserved=local_gpu)
         except Exception as exc:
             current = execution_get_job(job_id)
             current_status = str(current.get("status") or "")
             if current_status == "stopping":
-                execution_finish_job_transient(job_id, status="stopped", error="LLM request stopped.")
+                terminal = execution_finish_job_transient(
+                    job_id,
+                    status="stopped",
+                    error="LLM request stopped.",
+                )
             elif current_status in {"starting", "running"}:
-                execution_finish_job_transient(job_id, status="failed", error=str(exc))
+                terminal = execution_finish_job_transient(
+                    job_id,
+                    status="failed",
+                    error=str(exc),
+                )
             _logger.exception("Queued LLM job failed.")
         finally:
-            terminal = execution_transient_receipt(job_id)
             stopped = str((terminal or {}).get("status") or "") == "stopped"
             if local_gpu:
                 if not stopped:
@@ -565,7 +579,9 @@ def _advance_queue():
             if release_gpu:
                 _release_gpu()
 
-        return _job_view(execution_transient_receipt(job_id))
+        if terminal is None:
+            raise RuntimeError("LLM job ended without a terminal execution receipt.")
+        return _job_view(terminal)
 
 
 def _monitor_has_work():

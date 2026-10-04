@@ -1364,7 +1364,7 @@ def test_test_directory_preserves_full_current_set_path(tmp_path, monkeypatch):
     assert seen == {"stage": model.STAGING_KEY, "setFolder": "sets/demo"}
 
 
-def test_prepare_returns_only_candidates_owned_by_current_set(tmp_path, monkeypatch):
+def test_prepare_returns_candidates_from_current_test_folder(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     model = patch_default_test_model(monkeypatch, template={}, settings={"seed": 1})
     staged = tmp_path / "staged"
@@ -1375,7 +1375,7 @@ def test_prepare_returns_only_candidates_owned_by_current_set(tmp_path, monkeypa
 
     set_folder = tmp_path / "sets" / "demo"
     set_folder.mkdir(parents=True)
-    for name, owner in (("owned.safetensors", "sets/demo"), ("other.safetensors", "sets/other")):
+    for name, owner in (("owned.safetensors", "sets/demo"), ("moved.safetensors", "sets/other")):
         lora = staged / name
         lora.write_bytes(b"weights")
         lora.with_suffix(".webcap.json").write_text(json.dumps({
@@ -1388,11 +1388,11 @@ def test_prepare_returns_only_candidates_owned_by_current_set(tmp_path, monkeypa
         }), encoding="utf-8")
 
     payload = bench.prepare(set_folder, model.PROFILE_ID)
-    assert payload["files"] == ["owned.safetensors"]
-    assert payload["count"] == 1
+    assert payload["files"] == ["moved.safetensors", "owned.safetensors"]
+    assert payload["count"] == 2
 
 
-def test_selected_test_candidates_must_belong_to_current_set(tmp_path, monkeypatch):
+def test_selected_test_candidates_follow_current_test_folder(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     model = bench.get_test_model()
     staged = tmp_path / "staged"
@@ -1401,19 +1401,18 @@ def test_selected_test_candidates_must_belong_to_current_set(tmp_path, monkeypat
     set_folder = tmp_path / "sets" / "demo"
     set_folder.mkdir(parents=True)
 
-    foreign = staged / "foreign.safetensors"
-    foreign.write_bytes(b"weights")
-    foreign.with_suffix(".webcap.json").write_text(json.dumps({
+    moved = staged / "moved.safetensors"
+    moved.write_bytes(b"weights")
+    moved.with_suffix(".webcap.json").write_text(json.dumps({
         "version": 1,
         "sourceJobId": "foreign-job",
         "sourceEpoch": 2,
-        "sourceFileName": foreign.name,
+        "sourceFileName": moved.name,
         "sourceFolder": "sets/other",
         "stage": model.STAGING_KEY,
     }), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="does not belong to the current Set"):
-        bench._selected_lora_files_for_set(set_folder, model, [foreign.name])
+    assert bench._selected_lora_files_for_set(set_folder, model, [moved.name]) == [moved]
 
 
 def test_new_test_sessions_use_output_storage_and_freeze_candidate_provenance(tmp_path, monkeypatch):
@@ -1724,7 +1723,7 @@ def test_recent_test_prompts_are_distinct_and_newest_first(tmp_path, monkeypatch
     assert recent[0]["session"] == "newer-session"
 
 
-def test_manual_lora_without_webcap_provenance_is_not_a_test_candidate(tmp_path, monkeypatch):
+def test_manual_lora_without_webcap_provenance_is_a_test_candidate(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     staged = tmp_path / "test-root" / "manual"
     staged.mkdir(parents=True)
@@ -1735,10 +1734,10 @@ def test_manual_lora_without_webcap_provenance_is_not_a_test_candidate(tmp_path,
     set_folder = tmp_path / "sets" / "demo"
     set_folder.mkdir(parents=True)
 
-    assert bench._staged_loras_for_set(set_folder, model) == []
-    with pytest.raises(ValueError, match="does not belong to the current Set"):
-        bench.remove_candidate(set_folder, candidate.name, model_id=model.PROFILE_ID)
-    assert candidate.is_file()
+    assert bench._staged_loras_for_set(set_folder, model) == [candidate]
+    payload = bench.remove_candidate(set_folder, candidate.name, model_id=model.PROFILE_ID)
+    assert payload["removed"] == candidate.name
+    assert not candidate.exists()
 
 
 def test_session_history_is_scoped_by_set_and_model_not_historical_source(tmp_path, monkeypatch):

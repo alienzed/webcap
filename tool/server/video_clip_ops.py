@@ -373,15 +373,23 @@ def _prune_tracking(now_ts):
     for signature in stale_signatures:
         _video_clip_signatures.pop(signature, None)
 
-    # Keep map bounded under heavy use.
+    # Bound retained terminal history without ever discarding queued or
+    # running work that still has a queue token.
     if len(_video_clip_jobs) > VIDEO_CLIP_MAX_TRACKED_JOBS:
-        ordered = sorted(
-            _video_clip_jobs.items(),
+        terminal = sorted(
+            (
+                (job_id, job)
+                for job_id, job in _video_clip_jobs.items()
+                if str((job or {}).get("status") or "") in ("completed", "failed")
+            ),
             key=lambda kv: float((kv[1] or {}).get("updatedAt") or (kv[1] or {}).get("createdAt") or 0),
         )
-        to_drop = len(_video_clip_jobs) - VIDEO_CLIP_MAX_TRACKED_JOBS
+        to_drop = min(
+            len(terminal),
+            len(_video_clip_jobs) - VIDEO_CLIP_MAX_TRACKED_JOBS,
+        )
         for i in range(max(0, to_drop)):
-            _video_clip_jobs.pop(ordered[i][0], None)
+            _video_clip_jobs.pop(terminal[i][0], None)
 
 
 def _clip_worker_loop():

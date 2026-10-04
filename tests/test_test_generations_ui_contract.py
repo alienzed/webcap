@@ -154,14 +154,21 @@ def test_test_generations_uses_explicit_workspace_root():
     assert "grid-area: workspace;" in shell_css
 
 
-def test_test_generations_exits_training_surface_before_running_test_workspace():
+def test_test_generations_does_not_mutate_underlying_workspace_surface():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     open_block = script.split("function openPane()", 1)[1].split("function startRun", 1)[0]
     assert "frame.classList.add('workspace-test-open');" in open_block
     assert "node.classList.remove('hidden');" in open_block
-    assert "if (normalizeWorkspaceSurface(workspaceState.surface) === 'training')" in open_block
-    assert "setWorkspaceSurface('default');" in open_block
+    assert "setWorkspaceSurface(" not in open_block
+
+
+def test_test_generations_does_not_refresh_hidden_training_history_after_save():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    save_block = script.split("window.openEpochSaveModal({", 1)[1].split("});", 1)[0]
+    assert "refreshStagedFilesAfterCandidates().catch(showError);" in save_block
+    assert "refreshTrainingHistory" not in save_block
 
 
 def test_test_navigation_uses_global_set_context_and_local_run_choice():

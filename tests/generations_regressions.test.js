@@ -181,6 +181,27 @@ function generationPreviewExecutionFocusTests() {
   );
 }
 
+function generationCancelQueuedOwnershipTests() {
+  const env = environment();
+  env.reportConsoleError = () => {};
+  load('generate.js', env, `
+    window.api = { state: generateState, queued: queuedGenerateJobs };
+  `);
+  const api = env.window.api;
+  api.state.trackedJobIds = ['generate-queued', 'generate-running', 'generate-backlog'];
+  const jobs = api.queued({ jobs: [
+    { jobId: 'generate-queued', status: 'queued' },
+    { jobId: 'generate-running', status: 'running' },
+    { jobId: 'generate-backlog', status: 'backlog' },
+    { jobId: 'test-queued', status: 'queued' }
+  ] });
+  assert.deepEqual(
+    env.plain(jobs.map(job => job.jobId)),
+    ['generate-queued', 'generate-backlog'],
+    'Cancel Queued must only target pending jobs owned by Generations'
+  );
+}
+
 function timingTests() {
   const env = environment();
   env.reportConsoleError = () => {};
@@ -222,4 +243,4 @@ function timingTests() {
   assert.equal(env.timers.size, 1);
   api.close(); assert.equal(env.timers.size, 0);
 }
-(async () => { await sweepTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });
+(async () => { await sweepTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); generationCancelQueuedOwnershipTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });

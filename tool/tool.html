@@ -1269,10 +1269,9 @@
                             <div class="generate-conditioning-heading"><strong>Fixed LoRAs</strong><span class="generate-field-hint">Applied to every generation</span></div>
                             <span id="generate-base-loras" class="generate-base-loras hidden"></span>
                             <div id="generate-lora-selected-panel" class="generate-lora-mode-panel">
-                                <div class="generate-lora-picker-row">
-                                <input id="generate-lora-picker" class="generate-lora-picker" type="search" list="generate-lora-options" placeholder="Filter / choose LoRA…" autocomplete="off">
-                                <datalist id="generate-lora-options"></datalist>
-                                <button id="generate-lora-add" type="button" class="review-captions-btn">Add LoRA</button>
+                                <div class="generate-lora-picker-wrap">
+                                    <input id="generate-lora-picker" class="generate-lora-picker" type="search" placeholder="Filter / choose LoRA…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-label="Filter and choose Fixed LoRA">
+                                    <div id="generate-lora-picker-menu" class="generate-lora-picker-menu hidden" role="listbox"></div>
                                 </div>
                                 <div id="generate-lora-list" class="generate-lora-list"></div>
                             </div>

@@ -77,6 +77,7 @@ def test_activity_snapshot_projects_existing_domain_state(monkeypatch):
         },
     })
     monkeypatch.setattr(activity_monitor, "execution_recent_snapshot", lambda lane, limit=30: [])
+    monkeypatch.setattr(activity_monitor, "llm_recent_snapshot", lambda limit=30: [])
     monkeypatch.setattr(activity_monitor, "training_recent_jobs", lambda: [
         {
             "id": "train-done",
@@ -107,8 +108,12 @@ def test_activity_recent_is_limited_to_client_session(monkeypatch):
     monkeypatch.setattr(activity_monitor, "training_status_snapshot", lambda: ({"ok": True, "queuePaused": False, "queuePauseReason": "", "jobs": []}, 200))
     monkeypatch.setattr(activity_monitor, "storage_scan_status", lambda: {"ok": True, "scan": {}})
     monkeypatch.setattr(activity_monitor, "execution_recent_snapshot", lambda lane, limit=30: [
-        {"id": lane + "-old", "status": "completed", "finishedAt": 90.0, "metadata": {"client": "generate" if lane == "inference" else "storyboard"}},
-        {"id": lane + "-new", "status": "failed" if lane == "llm" else "completed", "finishedAt": 110.0, "error": "boom" if lane == "llm" else "", "metadata": {"client": "generate" if lane == "inference" else "storyboard"}},
+        {"id": "inference-old", "status": "completed", "finishedAt": 90.0, "metadata": {"client": "generate"}},
+        {"id": "inference-new", "status": "completed", "finishedAt": 110.0, "metadata": {"client": "generate"}},
+    ])
+    monkeypatch.setattr(activity_monitor, "llm_recent_snapshot", lambda limit=30: [
+        {"id": "llm-old", "status": "completed", "finishedAt": 90.0, "metadata": {"client": "storyboard"}},
+        {"id": "llm-new", "status": "failed", "finishedAt": 110.0, "error": "boom", "metadata": {"client": "storyboard"}},
     ])
     monkeypatch.setattr(activity_monitor, "training_recent_jobs", lambda: [
         {"id": "training-old", "status": "completed", "finishedAt": 80.0},
@@ -133,6 +138,7 @@ def test_activity_snapshot_keeps_other_domains_when_execution_state_is_unavailab
         "jobs": [{"id": "train-active", "status": "running", "runName": "Training", "startedAt": 10.0}],
     }, 200))
     monkeypatch.setattr(activity_monitor, "training_recent_jobs", lambda: [])
+    monkeypatch.setattr(activity_monitor, "llm_recent_snapshot", lambda limit=30: [])
     monkeypatch.setattr(activity_monitor, "storage_scan_status", lambda: {"ok": True, "scan": {}})
 
     payload = activity_monitor.activity_snapshot(limit=10)

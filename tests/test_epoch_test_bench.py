@@ -81,7 +81,7 @@ def test_resolved_wildcard_values_ignores_plain_or_unmatched_prompts():
 
 
 
-def test_staged_candidates_are_scoped_by_exact_set_provenance(tmp_path, monkeypatch):
+def test_staged_candidates_follow_test_folder_not_source_provenance(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     model = bench.get_test_model()
     staged = tmp_path / "staged"
@@ -103,24 +103,28 @@ def test_staged_candidates_are_scoped_by_exact_set_provenance(tmp_path, monkeypa
 
     set_folder = tmp_path / "datasets" / "set-a"
     set_folder.mkdir(parents=True)
-    owned = write_candidate("owned.safetensors", "datasets/set-a")
-    write_candidate("other.safetensors", "datasets/set-b")
+    write_candidate("owned.safetensors", "datasets/set-a")
+    write_candidate("moved.safetensors", "datasets/set-b")
 
-    assert bench._staged_loras_for_set(set_folder, model) == [owned]
+    assert [path.name for path in bench._staged_loras_for_set(set_folder, model)] == [
+        "moved.safetensors",
+        "owned.safetensors",
+    ]
 
 
-def test_staged_candidates_ignore_manual_loras_without_provenance(tmp_path, monkeypatch):
+def test_staged_candidates_include_manual_loras_without_provenance(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     model = bench.get_test_model()
     staged = tmp_path / "staged"
     staged.mkdir()
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
-    (staged / "legacy.safetensors").write_bytes(b"weights")
+    legacy = staged / "legacy.safetensors"
+    legacy.write_bytes(b"weights")
 
     set_folder = tmp_path / "datasets" / "set-a"
     set_folder.mkdir(parents=True)
 
-    assert bench._staged_loras_for_set(set_folder, model) == []
+    assert bench._staged_loras_for_set(set_folder, model) == [legacy]
 
 
 def test_recent_test_set_reports_owner_availability_from_set_identity(tmp_path, monkeypatch):

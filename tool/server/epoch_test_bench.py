@@ -641,19 +641,12 @@ def _is_webcap_staged_lora(lora_file, model):
 
 
 def _staged_loras_for_set(folder_path, model):
-    expected_folder = _relative_set_folder(folder_path)
     directory = _test_directory(folder_path, model)
     if not directory.is_dir():
         return []
-    candidates = []
-    for path in _lora_files(directory):
-        if not _is_webcap_staged_lora(path, model):
-            continue
-        provenance = _staged_lora_provenance(path)
-        source_folder = str(provenance.get("sourceFolder") or "").replace("\\", "/").strip("/")
-        if source_folder == expected_folder:
-            candidates.append(path)
-    return candidates
+    # The deterministic Test folder owns candidate membership. Provenance only
+    # enriches run-aware metadata and actions; it is not an admission gate.
+    return _lora_files(directory)
 
 
 def _selected_lora_files_for_set(folder_path, model, selected_files=None):

@@ -65,6 +65,9 @@ Prefer the smallest change that cleanly solves the real problem.
 - Do not "modernize" into modules, classes, or frameworks just because it looks cleaner.
 - Do not add async behavior unless it is needed for correctness or safety.
 - Do not add complexity to support hypothetical future use.
+- Treat WebCap's actual supported workflows and invariants as the correctness boundary. Do not add permission gates, hidden exclusions, or compensating architecture solely to protect against hypothetical manual filesystem edits or other out-of-band states WebCap does not create.
+- Prefer warnings and fail-loudly behavior at the operation that truly requires stronger facts. If useful behavior is still possible with incomplete or inconsistent metadata, provide it rather than denying it for metadata purity.
+- Do not assume the user wants a different or more restrictive workflow than the one requested merely because an unusual state could be misused. Surface the concrete risk; change behavior only when current WebCap functionality requires it.
 
 When in doubt, ask:
 

@@ -348,6 +348,12 @@
   white-space: nowrap;
 }
 
+.generate-takes-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .generate-takes {
   min-height: 0;
   overflow-y: auto;

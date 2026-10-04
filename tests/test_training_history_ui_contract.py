@@ -74,8 +74,8 @@ def test_training_history_exposes_finalize_and_archive_lifecycle():
     assert "testCleanupWarning" in backend
     assert "test_session_cleanup_status" in backend
     assert 'path.name != ".webcap"' in backend
-    assert "_record_last_training_archive" not in backend
-    assert "saveFolderStateForCurrentRoot()" in script
+    assert "set_last_training_archive" in backend
+    assert "the Set archive marker could not be saved" not in script
 
 
 def test_finalize_archive_uses_staged_candidate_folder_as_retention_truth_and_surfaces_legacy_archive_errors():

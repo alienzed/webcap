@@ -793,6 +793,11 @@ def _queue_wait_state(current):
     return {"queueDepth": len(queued), "waitOwner": "", "waitReason": ""}
 
 
+def recent_snapshot(limit=30):
+    _ensure_execution_reconciled()
+    return _execution_queue.recent_snapshot(limit=limit)
+
+
 def snapshot(include_terminal=False):
     _ensure_execution_reconciled()
     current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=include_terminal)

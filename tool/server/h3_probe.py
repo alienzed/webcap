@@ -221,9 +221,24 @@ def training_gpu_runtime():
     runtime = _read_json(path)
     if not runtime or runtime.get("status") not in ("starting", "running", "stopping"):
         return None
+
+    pid = _runtime_pid(runtime)
+    if runtime.get("status") == "starting" and pid <= 0:
+        # Status polling may observe this state while launch_h3_probe_runtime()
+        # still owns the Training admission lock. Reconciliation reaches here
+        # only when it is responsible for deciding runtime truth, so a missing
+        # launch identity is terminal rather than an indefinite blocker.
+        campaign = _campaign_result(path.parent)
+        runtime["status"] = str(campaign.get("status") or "failed")
+        runtime["finishedAt"] = _utc_now()
+        runtime["campaignStatus"] = campaign.get("status") or ""
+        _write_json(path, runtime)
+        _remember_runtime(runtime)
+        return None
+
     if not _runtime_is_live(runtime):
         return None
-    runtime["pid"] = _runtime_pid(runtime)
+    runtime["pid"] = pid
     return runtime
 
 

@@ -1,4 +1,5 @@
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -1482,18 +1483,18 @@ def test_llm_reset_cancels_all_queued_jobs_without_touching_runtime(llm_root, mo
 
 
 def test_llm_reset_marks_active_stopping_and_clears_successors(llm_root, monkeypatch):
-    active = execution_queue.enqueue(
+    active = llm_runner.execution_enqueue(
         llm_runner.EXECUTION_LANE,
         {"contract": {"operation": "write_prompt", "prompt": "Active."}, "clientContext": {}},
         metadata={"client": "generate", "modelId": "qwen"},
     )
-    queued = execution_queue.enqueue(
+    queued = llm_runner.execution_enqueue(
         llm_runner.EXECUTION_LANE,
         {"contract": {"operation": "write_prompt", "prompt": "Queued."}, "clientContext": {}},
         metadata={"client": "generate", "modelId": "qwen"},
     )
-    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
-    execution_queue.mark_running(active["id"])
+    llm_runner.execution_claim_next(llm_runner.EXECUTION_LANE)
+    llm_runner.execution_mark_running(active["id"])
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: calls.append("stop") or True)
 

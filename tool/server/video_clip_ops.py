@@ -24,7 +24,6 @@ safe_join_fs_root = app_config.safe_join_fs_root
 VIDEO_EXTS = {".mp4", ".webm", ".ogg", ".mov", ".mkv", ".avi", ".m4v", ".wmv", ".mpg", ".mpeg"}
 VIDEO_CLIP_RECENT_DUPLICATE_WINDOW_SEC = 2.0
 VIDEO_CLIP_JOB_RETENTION_SEC = 600.0
-VIDEO_CLIP_MAX_TRACKED_JOBS = 512
 
 _video_clip_queue = Queue()
 _video_clip_jobs = {}
@@ -372,16 +371,6 @@ def _prune_tracking(now_ts):
             stale_signatures.append(signature)
     for signature in stale_signatures:
         _video_clip_signatures.pop(signature, None)
-
-    # Keep map bounded under heavy use.
-    if len(_video_clip_jobs) > VIDEO_CLIP_MAX_TRACKED_JOBS:
-        ordered = sorted(
-            _video_clip_jobs.items(),
-            key=lambda kv: float((kv[1] or {}).get("updatedAt") or (kv[1] or {}).get("createdAt") or 0),
-        )
-        to_drop = len(_video_clip_jobs) - VIDEO_CLIP_MAX_TRACKED_JOBS
-        for i in range(max(0, to_drop)):
-            _video_clip_jobs.pop(ordered[i][0], None)
 
 
 def _clip_worker_loop():

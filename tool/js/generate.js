@@ -1694,10 +1694,7 @@
     if (!button || !jobId || button.disabled) return;
     button.disabled = true;
     button.textContent = 'Stopping…';
-    postJson('/fs/director/job', {
-      operation: 'stop_or_cancel',
-      jobId: jobId
-    }).then(function () {
+    resetLlmExecution().then(function () {
       return refreshDirectorActivity();
     }).catch(function (err) {
       button.disabled = false;

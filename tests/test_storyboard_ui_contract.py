@@ -1236,7 +1236,9 @@ def test_storyboard_cancel_takes_is_contextual_and_story_scoped():
     assert "function cancelStoryTakes()" in storyboard
     assert "operation: 'cancel_story'" in storyboard
     assert "storyId: storyId" in storyboard
-    assert "cancelTakesButton.classList.toggle('hidden', !generationBlocked)" in storyboard
+    assert "function storyHasQueuedGeneration(storyId)" in storyboard
+    assert "cancelTakesButton.classList.toggle('hidden', !queuedGeneration)" in storyboard
+    assert "The current Take will finish." in html
     assert "el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;" in storyboard
 
 

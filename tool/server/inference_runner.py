@@ -743,6 +743,25 @@ def _cleanup_generate_job_references(job_id):
     _cleanup_generate_references_from_job(stored)
 
 
+def cancel_storyboard_pending_jobs(story_id):
+    """Cancel this Story's queued/backlog Take jobs without touching the active Take."""
+    _ensure_execution_reconciled()
+    story_id = str(story_id or "").strip()
+    if not story_id:
+        raise ValueError("Story ID is required.")
+
+    cancelled = []
+    for job in execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("jobs", []):
+        metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+        if (
+            metadata.get("client") == "storyboard"
+            and str(metadata.get("storyId") or "") == story_id
+            and str(job.get("status") or "") in {"queued", "backlog"}
+        ):
+            cancelled.append(execution_cancel_pending_transient(str(job.get("id") or "")))
+    return cancelled
+
+
 def stop_storyboard_jobs(story_id, timeout=15):
     _ensure_execution_reconciled()
     story_id = str(story_id or "").strip()

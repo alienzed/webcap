@@ -632,9 +632,18 @@ def test_storyboard_route_can_upload_scene_reference(tmp_path, monkeypatch):
 
 
 
-def test_storyboard_generation_route_cancels_only_requested_story(monkeypatch):
-    stopped = []
-    monkeypatch.setattr(app_module, "stop_storyboard_jobs", lambda story_id: stopped.append(story_id))
+def test_storyboard_generation_route_cancels_only_queued_for_requested_story(monkeypatch):
+    cancelled = []
+    monkeypatch.setattr(
+        app_module,
+        "cancel_storyboard_pending_jobs",
+        lambda story_id: cancelled.append(story_id),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "stop_storyboard_jobs",
+        lambda _story_id: (_ for _ in ()).throw(AssertionError("Cancel Takes must not stop the active Take.")),
+    )
     monkeypatch.setattr(
         app_module,
         "storyboard_generation_queue",
@@ -644,7 +653,7 @@ def test_storyboard_generation_route_cancels_only_requested_story(monkeypatch):
                     "jobId": "remaining",
                     "storyId": story_id,
                     "sceneId": "scene-2",
-                    "status": "stopping",
+                    "status": "running",
                 }
             ]
         },
@@ -656,8 +665,8 @@ def test_storyboard_generation_route_cancels_only_requested_story(monkeypatch):
     })
 
     assert response.status_code == 200
-    assert stopped == ["story-1"]
-    assert response.get_json()["queue"]["jobs"][0]["storyId"] == "story-1"
+    assert cancelled == ["story-1"]
+    assert response.get_json()["queue"]["jobs"][0]["status"] == "running"
 
 
 

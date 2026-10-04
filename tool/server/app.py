@@ -48,7 +48,7 @@ from .generate_generation import capabilities as generate_capabilities, prepare_
 from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
 from .test_wildcard_contract import build_request as test_wildcard_build_request
-from .inference_runner import action as inference_action, enqueue_generate, job_status as inference_job_status, prepare_startup_backlog as prepare_inference_startup_backlog, snapshot as inference_snapshot, stop_storyboard_jobs
+from .inference_runner import action as inference_action, cancel_storyboard_pending_jobs, enqueue_generate, job_status as inference_job_status, prepare_startup_backlog as prepare_inference_startup_backlog, snapshot as inference_snapshot, stop_storyboard_jobs
 from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot, storyboard_story_busy as llm_storyboard_story_busy, storyboard_target_busy as llm_storyboard_target_busy
 from .activity_monitor import activity_snapshot
 from .director_model_test_store import register_routes as register_director_model_test_routes
@@ -840,7 +840,7 @@ def storyboard_generation_route():
         operation = str(data.get("operation") or "").strip()
         if operation == "cancel_story":
             story_id = str(data.get("storyId") or "").strip()
-            stop_storyboard_jobs(story_id)
+            cancel_storyboard_pending_jobs(story_id)
             return jsonify({
                 "ok": True,
                 "queue": storyboard_generation_queue(story_id),

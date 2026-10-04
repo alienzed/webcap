@@ -4751,14 +4751,25 @@
     });
   }
 
+  function storyHasQueuedGeneration(storyId) {
+    storyId = String(storyId || '');
+    return Object.keys(storyState.generationJobs).some(function (jobId) {
+      var job = storyState.generationJobs[jobId];
+      return job
+        && String(job.storyId || '') === storyId
+        && ['backlog', 'queued'].indexOf(String(job.status || '')) !== -1;
+    });
+  }
+
   function syncPlanReplacementControls() {
     if (!storyState.story) return;
     var storyId = String(storyState.story.id || '');
     var generationBlocked = storyHasPendingGeneration(storyId);
+    var queuedGeneration = storyHasQueuedGeneration(storyId);
     var queuedFirstCut = !!queuedFirstCutForStory(storyId);
     var cancelTakesButton = el('storyboard-cancel-takes-btn');
     if (!cancelTakesButton) throw new Error('Storyboard Cancel Takes control is missing.');
-    cancelTakesButton.classList.toggle('hidden', !generationBlocked);
+    cancelTakesButton.classList.toggle('hidden', !queuedGeneration);
     var developBlocked = generationBlocked || directorTargetBlocked({ kind: 'scenes', storyId: storyId });
     var firstCutBlocked = generationBlocked || directorTargetBlocked({ kind: 'story-action', storyId: storyId });
     var developButton = el('storyboard-develop-btn');

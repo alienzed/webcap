@@ -373,6 +373,31 @@ def test_storyboard_generation_allows_multiple_take_jobs_for_same_scene(storyboa
     assert len({payload["settings"]["seed"] for payload in payloads}) == 3
 
 
+def test_cancel_storyboard_pending_jobs_leaves_current_take_running(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, scene = storyboard_store.add_scene(story["id"], {
+        "prompt": "Prompt.",
+        "durationSeconds": 6,
+        "aspectRatio": "4:3 (Standard)",
+        "megapixels": 0.2,
+        "seedMode": "fixed",
+        "seed": 1,
+    })
+
+    active = storyboard_generation.start_generation(story["id"], scene["id"])
+    queued = storyboard_generation.start_generation(story["id"], scene["id"])
+    execution_queue.claim_next(inference_runner.EXECUTION_LANE)
+    execution_queue.mark_running(active["jobId"])
+
+    cancelled = inference_runner.cancel_storyboard_pending_jobs(story["id"])
+
+    assert [job["id"] for job in cancelled] == [queued["jobId"]]
+    assert execution_queue.get_job(active["jobId"])["status"] == "running"
+    with pytest.raises(FileNotFoundError):
+        execution_queue.get_job(queued["jobId"])
+    assert execution_queue.transient_receipt(queued["jobId"])["status"] == "cancelled"
+
+
 def test_storyboard_generation_exposes_only_cancel_and_stop(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
     story, scene = storyboard_store.add_scene(story["id"], {

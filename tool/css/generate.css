@@ -301,6 +301,32 @@
   white-space: nowrap;
 }
 
+.generate-prompt-viewer,
+.generate-result-prompt-viewer {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.generate-prompt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.generate-prompt-toggle .review-captions-btn {
+  width: auto;
+  min-height: 22px;
+  padding: 2px 7px;
+  border-color: transparent;
+  font-size: 11px;
+}
+
+.generate-prompt-toggle .review-captions-btn.active {
+  border-color: var(--border);
+  background: var(--hover);
+}
+
 .generate-stage-empty,
 .generate-stage-pending {
   grid-row: 1 / -1;

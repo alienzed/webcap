@@ -1312,18 +1312,7 @@
     if (!button || !jobId || button.disabled) return;
     button.disabled = true;
     button.textContent = 'Stopping…';
-    fetch('/fs/director/job', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ operation: 'stop_or_cancel', jobId: jobId })
-    }).then(function (response) {
-      return response.json().then(function (body) {
-        if (!response.ok || !body || body.ok === false) {
-          throw new Error((body && body.error) || 'Director Stop failed.');
-        }
-        return body;
-      });
-    }).then(function () {
+    resetLlmExecution().then(function () {
       storyState.director.dismissedActivityTargetKey = directorTargetKey(storyState.director.activityTarget);
       var card = el('storyboard-director-activity');
       if (card) card.classList.add('hidden');
@@ -2168,8 +2157,10 @@
     if (!action || !action.active || String(action.storyId || '') !== visibleStoryId) return;
     action.cancelled = true;
     action.detail = 'Stopping…';
+    clearQueuedFirstCuts();
+    renderLibrary();
     renderStoryAction();
-    stopDirectorJob();
+    resetLlmExecution().catch(reportError);
   }
 
   function requireStoryAction(action) {

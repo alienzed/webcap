@@ -13,6 +13,7 @@ from tool.server import inference_runtime
 
 def configure_execution_queue(monkeypatch, tmp_path):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(bench.app_config, "app_data_root", lambda: tmp_path / ".test-webcap-app-data")
     monkeypatch.setattr(bench.app_config, "output_root", lambda: tmp_path / "output")
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
@@ -1864,3 +1865,30 @@ def test_prepare_exposes_unique_training_run_provenance_for_staged_loras(tmp_pat
         "runSequence": "03",
         "runSummary": {"lr": 0.0001},
     }]
+
+
+def test_legacy_recovery_does_not_depend_on_removed_provider_cleanup_helper(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    legacy = execution_queue.enqueue(
+        bench.LEGACY_EXECUTION_LANE,
+        {"modelId": "minimax_h3"},
+        metadata={"folder": "sets/demo"},
+    )
+    execution_queue.claim_next(bench.LEGACY_EXECUTION_LANE, expected_job_id=legacy["id"])
+    execution_queue.mark_running(
+        legacy["id"],
+        details={"providerJobId": "provider-old", "session": "missing-session"},
+    )
+    calls = []
+    monkeypatch.setattr(inference_runtime, "cancel_job_and_wait", lambda provider_id: False)
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait_status",
+        lambda provider_id: calls.append(provider_id) or "",
+    )
+
+    bench.reconcile_startup()
+
+    assert calls == ["provider-old"]
+    assert bench._startup_reconciled is True
+    assert execution_queue.lane_snapshot(bench.LEGACY_EXECUTION_LANE, include_terminal=False)["jobs"] == []

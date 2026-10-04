@@ -566,7 +566,11 @@
     });
   }
 
-  function directorRequest(payload) {
+  function directorRequest(payload, llmEpoch) {
+    if (payload && !payload.previewOnly) {
+      if (llmEpoch == null) throw new Error('Storyboard LLM request is missing its workflow reset epoch.');
+      assertLlmWorkflowCurrent(llmEpoch);
+    }
     var options = payload
       ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
       : {};
@@ -1468,14 +1472,14 @@
     });
   }
 
-  function requestSceneDirector(storyId, sceneId, operation, instruction, modelId, clearCorrection) {
+  function requestSceneDirector(storyId, sceneId, operation, instruction, modelId, clearCorrection, llmEpoch) {
     return directorRequest({
       storyId: storyId,
       sceneId: sceneId,
       operation: operation,
       model: modelId,
       instruction: instruction || ''
-    }).then(function (payload) {
+    }, llmEpoch).then(function (payload) {
       return applyDirectorResultToVisibleStory({
         storyId: storyId,
         sceneId: sceneId,
@@ -1490,25 +1494,24 @@
     });
   }
 
-  function runSceneDirectorPass(storyId, sceneIds, instruction, modelId, onScene) {
-    var llmEpoch = currentLlmResetEpoch();
+  function runSceneDirectorPass(storyId, sceneIds, instruction, modelId, onScene, llmEpoch) {
     return sceneIds.reduce(function (promise, sceneId, index) {
       return promise.then(function () {
         assertLlmWorkflowCurrent(llmEpoch);
         if (onScene) onScene(sceneId, index);
-        return requestSceneDirector(storyId, sceneId, 'refine_prompt', instruction, modelId, false);
+        return requestSceneDirector(storyId, sceneId, 'refine_prompt', instruction, modelId, false, llmEpoch);
       });
     }, Promise.resolve());
   }
 
-  function requestStoryDirector(storyId, operation, modelId, replaceExisting) {
+  function requestStoryDirector(storyId, operation, modelId, replaceExisting, llmEpoch) {
     var requestPayload = {
       storyId: storyId,
       operation: operation,
       model: modelId
     };
     if (operation === 'develop_story') requestPayload.replaceExisting = !!replaceExisting;
-    return directorRequest(requestPayload).then(function (payload) {
+    return directorRequest(requestPayload, llmEpoch).then(function (payload) {
       return applyDirectorResultToVisibleStory({
         storyId: storyId,
         operation: operation,
@@ -1547,13 +1550,14 @@
       }
     }
 
+    var llmEpoch = currentLlmResetEpoch();
     var saveBarrier = flushPendingSaves();
     clearSceneDirectorCompletion(storyId, sceneId);
     setDirectorPending(directorTarget, true);
     updateSceneDirectorStatus(sceneId, 'Director working…');
     startDirectorActivity();
     saveBarrier.then(function () {
-      return requestSceneDirector(storyId, sceneId, operation, instruction, storyState.director.modelId, true);
+      return requestSceneDirector(storyId, sceneId, operation, instruction, storyState.director.modelId, true, llmEpoch);
     }).catch(function (err) {
       if (directorWasStopped(err)) updateSceneDirectorStatus(sceneId, 'Director stopped');
       else {
@@ -1745,6 +1749,7 @@
       return;
     }
 
+    var llmEpoch = currentLlmResetEpoch();
     var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     startDirectorActivity();
@@ -1753,7 +1758,7 @@
         storyId: storyId,
         operation: 'define_invariants',
         model: modelId
-      });
+      }, llmEpoch);
     }).then(function (payload) {
       return applyDirectorResultToVisibleStory({
         storyId: storyId,
@@ -1790,6 +1795,7 @@
       return;
     }
 
+    var llmEpoch = currentLlmResetEpoch();
     var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     setDevelopStatus('Director is expanding the concept…');
@@ -1799,7 +1805,7 @@
         storyId: storyId,
         operation: 'expand_concept',
         model: modelId
-      });
+      }, llmEpoch);
     }).then(function (payload) {
       return applyDirectorResultToVisibleStory({
         storyId: storyId,
@@ -1851,6 +1857,7 @@
 
   function reviseScenes(instruction, modelId) {
     if (!storyState.story) return Promise.reject(new Error('Choose a Story first.'));
+    var llmEpoch = currentLlmResetEpoch();
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'repair', storyId: storyId };
     if (directorTargetBlocked(directorTarget)) {
@@ -1887,7 +1894,8 @@
             'Revising Scene ' + String(index + 1) + ' / ' + String(sceneIds.length)
             + (scene && scene.title ? ' · ' + scene.title : '')
           );
-        }
+        },
+        llmEpoch
       );
     }).then(function () {
       if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
@@ -1908,11 +1916,10 @@
   }
 
 
-  function developStoryIndividually(storyId, modelId, hasScenes) {
+  function developStoryIndividually(storyId, modelId, hasScenes, llmEpoch) {
     var sourceUpdatedAt = '';
     var outline = null;
     var authoredScenes = [];
-    var llmEpoch = currentLlmResetEpoch();
 
     setDevelopStatus('Director is planning the Story…');
     assertLlmWorkflowCurrent(llmEpoch);
@@ -1921,7 +1928,7 @@
       operation: 'develop_story_outline',
       model: modelId,
       replaceExisting: hasScenes
-    }).then(function (outlineResult) {
+    }, llmEpoch).then(function (outlineResult) {
       sourceUpdatedAt = String(outlineResult.sourceUpdatedAt || '');
       outline = outlineResult.outline;
       if (!sourceUpdatedAt) throw new Error('Individual Story development is missing its source revision.');
@@ -1943,7 +1950,7 @@
               sceneIndex: index,
               previousScene: authoredScenes.length ? authoredScenes[authoredScenes.length - 1] : null
             }
-          }).then(function (sceneResult) {
+          }, llmEpoch).then(function (sceneResult) {
             if (!sceneResult.scene || typeof sceneResult.scene !== 'object') {
               throw new Error('Director returned an invalid individual Scene.');
             }
@@ -1962,7 +1969,7 @@
         replaceExisting: hasScenes,
         expectedUpdatedAt: sourceUpdatedAt,
         plan: { scenes: authoredScenes }
-      });
+      }, llmEpoch);
     }).then(function (payload) {
       return applyDirectorResultToVisibleStory({
         storyId: storyId,
@@ -2001,19 +2008,20 @@
     )) return;
 
     var individual = !!el('storyboard-develop-individual').checked;
+    var llmEpoch = currentLlmResetEpoch();
     var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     setDevelopStatus(individual ? 'Preparing individual Scene development…' : 'Director is developing the Story…');
     startDirectorActivity();
 
     saveBarrier.then(function () {
-      if (individual) return developStoryIndividually(storyId, modelId, hasScenes);
+      if (individual) return developStoryIndividually(storyId, modelId, hasScenes, llmEpoch);
       return directorRequest({
         storyId: storyId,
         operation: 'develop_story',
         model: modelId,
         replaceExisting: hasScenes
-      }).then(function (payload) {
+      }, llmEpoch).then(function (payload) {
         return applyDirectorResultToVisibleStory({
           storyId: storyId,
           operation: 'develop_story',
@@ -2224,15 +2232,15 @@
       var actionStory = payload.story;
       replaceExisting = Array.isArray(actionStory && actionStory.sceneOrder) && actionStory.sceneOrder.length > 0;
       updateStoryAction(action, 'Expanding Concept', '');
-      return requestStoryDirector(storyId, 'expand_concept', modelId, false);
+      return requestStoryDirector(storyId, 'expand_concept', modelId, false, action.llmResetEpoch);
     }).then(function () {
       requireStoryAction(action);
       updateStoryAction(action, 'Defining Continuity', '');
-      return requestStoryDirector(storyId, 'define_invariants', modelId, false);
+      return requestStoryDirector(storyId, 'define_invariants', modelId, false, action.llmResetEpoch);
     }).then(function () {
       requireStoryAction(action);
       updateStoryAction(action, 'Developing Scenes', '');
-      return requestStoryDirector(storyId, 'develop_story', modelId, replaceExisting);
+      return requestStoryDirector(storyId, 'develop_story', modelId, replaceExisting, action.llmResetEpoch);
     }).then(function () {
       requireStoryAction(action);
       return request(null, 'story=' + encodeURIComponent(storyId));
@@ -2259,7 +2267,8 @@
             String(index + 1) + ' / ' + String(sceneIds.length)
               + (scene && scene.title ? ' · ' + scene.title : '')
           );
-        }
+        },
+        action.llmResetEpoch
       ).then(function () {
         return sceneIds;
       });
@@ -4464,6 +4473,7 @@
       return;
     }
 
+    var llmEpoch = currentLlmResetEpoch();
     var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     setSaveState('Director inserting Scene...');
@@ -4474,7 +4484,7 @@
         sceneId: sceneId,
         operation: 'insert_scene',
         model: modelId
-      });
+      }, llmEpoch);
     }).then(function (payload) {
       return applyDirectorResultToVisibleStory({
         storyId: storyId,

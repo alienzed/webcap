@@ -47,6 +47,27 @@ def test_local_gpu_work_runnable_uses_real_ephemeral_fifo_head(llm_root, monkeyp
     assert llm_runner.local_gpu_work_runnable() is True
 
 
+def test_llm_preclaim_failure_releases_gpu_and_leaves_job_queued(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "clear_stop_request",
+        lambda: (_ for _ in ()).throw(RuntimeError("stop reset failed")),
+    )
+
+    job = llm_runner.enqueue(
+        "chat",
+        "qwen",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "hello"}]},
+    )
+
+    with pytest.raises(RuntimeError, match="stop reset failed"):
+        llm_runner._advance_queue()
+
+    assert llm_runner.job_status(job["jobId"])["status"] == "queued"
+    assert execution_queue.resource_owner() == ""
+
+
 def test_advance_queue_claims_only_the_fifo_head_it_evaluated(llm_root, monkeypatch):
     queue = execution_queue.ephemeral_lane("llm")
     first = llm_runner.enqueue(

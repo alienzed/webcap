@@ -406,11 +406,20 @@ def test_test_bench_activity_rail_and_live_session_contract():
     assert "saveTestBenchState(prompt);" in script
     assert "if (nextSeed) nextSeed.value = String(randomSeed());" in script
 
-def test_selected_test_session_does_not_overwrite_editable_prompt():
+def test_selected_test_session_is_preview_only_and_does_not_restore_working_controls():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     selection = script.split("function selectSessionStatus(status)", 1)[1].split("function renderStatus(status)", 1)[0]
+    assert "renderStatus(status);" in selection
     assert "test-generations-prompt" not in selection
+    assert "test-generations-aspect" not in selection
+    assert "test-generations-megapixels" not in selection
+    assert "test-generations-duration" not in selection
+    assert "test-generations-dimensions" not in selection
+    assert "selectedCandidates" not in selection
+    assert "setWorkingModelProfileId" not in selection
+    assert "saveTestBenchState" not in selection
+    assert "saveTestPromptDraft" not in selection
     assert "status.sourcePrompt" not in selection
 
 

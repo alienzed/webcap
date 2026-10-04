@@ -502,7 +502,7 @@ North Star semantics:
 - broad "same Story/target has pending work" admission rules are invalid,
 - feature UIs own semantic pending-state protection,
 - local/remote runtime choice affects execution resources, not semantic validity,
-- Stop/Cancel apply to the exact requested job,
+- LLM Stop is a lane reset, not a job-local operation,
 - stale-result protection belongs at application/commit time,
 - LLM work is simple FIFO; manual queue reordering is not a product requirement,
 - LLM has no product-level manual pause/resume queue semantic.
@@ -515,25 +515,36 @@ If the FIFO head is local, LLM exposes that head as its runnable local work for 
 A later remote LLM job does not bypass an earlier local job that is waiting for the GPU, and a later
 local job does not bypass an earlier remote job.
 
-Cancellation is **job-local**. Cancelling one queued LLM job removes only that job; later queued
-work remains queued and preserves its relative FIFO order. Cancellation does not cascade merely
-because another request was submitted afterward.
+LLM Stop is deliberately **lane-wide**. It resets unfinished LLM intent for the current server
+session rather than trying to surgically stop one job while preserving successors:
 
-Stopping the currently running LLM job is also job-local. Once that job reaches a terminal state,
-the LLM queue continues automatically with the next FIFO job. Stopping one job does not implicitly
-pause the whole LLM lane.
+- the active LLM request is stopped where WebCap owns the runtime, or abandoned where it does not,
+- every queued LLM request is cancelled/discarded,
+- results arriving after the reset must not mutate WebCap,
+- the LLM lane returns idle,
+- only a new explicit user action may create new LLM work afterward.
+
+The practical LLM state after Stop should match a WebCap server restart: no unfinished LLM intent
+survives. Unlike a real restart, Training, Inference, Story/Set state, and the rest of WebCap remain
+untouched.
+
+Semantic LLM requests are triggered by client-side actions and workflows; the backend executes only
+requests it has been given. Any client workflow that can submit follow-up LLM requests must therefore
+stop its own sequencing when LLM Stop occurs. Completed/applied work remains committed, and durable
+Inference work already accepted before Stop remains independent.
 
 LLM work is **server-session-bound** and held in backend memory rather than durable execution state:
 
 - browser refresh, navigation, or returning to the feature does not end the server session; queued
   or running LLM work remains authoritative and the UI should reconnect to it,
 - a WebCap server restart ends the LLM session,
-- all unfinished LLM work is discarded across server restart regardless of whether it was queued,
+- an explicit LLM Stop/reset has the same unfinished-work semantics without restarting WebCap,
+- all unfinished LLM work is discarded across either boundary regardless of whether it was queued,
   starting, running, or stopping,
-- restart creates **no LLM GPU ownership**,
+- restart/reset creates **no surviving LLM GPU ownership or scheduling intent**,
 - successfully applied Story/prompt state remains because the authoritative result already lives in
   its feature store,
-- orphaned external/remote model responses from the old server session must not later mutate WebCap.
+- orphaned external/remote model responses from before the restart/reset must not later mutate WebCap.
 
 For local LLM work, the LLM client owns llama.cpp lifecycle and GPU handoff.
 
@@ -541,6 +552,7 @@ LLM may retain ownership across consecutive local FIFO jobs so real queued LLM w
 needless model churn. It may also retain that already-established ownership through the existing short
 post-empty quiescence window so a burst of closely spaced LLM calls does not expose an artificial
 cross-lane gap. The timer only ends the current LLM turn; it never acquires or recreates ownership.
+An explicit LLM Stop/reset ends that turn rather than preserving the quiescence window.
 When LLM actually ends ownership, it is responsible for unloading/stopping its own local runtime to
 the required handoff boundary. Inference and Training must not independently inspect or clean up
 llama.cpp before they start.

@@ -468,7 +468,11 @@ def finalize(folder, job_id, archive_name, retain_epochs=None, stage="", staged_
         "selectedEpoch": context["selectedEpoch"],
         "productionFileName": context["production"].name,
     }
-    set_last_training_archive(set_folder / ".webcap_state.json", last_training_archive)
+    set_marker_warning = ""
+    try:
+        set_last_training_archive(set_folder / ".webcap_state.json", last_training_archive)
+    except (OSError, RuntimeError, ValueError) as exc:
+        set_marker_warning = str(exc)
     test_cleanup_warning = ""
     removed_test_sessions = 0
     try:
@@ -482,6 +486,7 @@ def finalize(folder, job_id, archive_name, retain_epochs=None, stage="", staged_
         "retainedAlternateEpochs": retained,
         "removedStagedCandidates": len(context["staged"]),
         "removedTestSessions": removed_test_sessions,
+        "setMarkerWarning": set_marker_warning,
         "testCleanupWarning": test_cleanup_warning,
         "lastTrainingArchive": last_training_archive,
         "actionRemoved": action_removed,

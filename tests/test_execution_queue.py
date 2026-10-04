@@ -379,6 +379,18 @@ def test_execution_queue_resource_claim_is_exclusive(queue_root):
     assert execution_queue.reserve_resource("llm") is True
 
 
+def test_execution_queue_resource_admission_check_runs_before_owner_grant(queue_root):
+    seen = []
+
+    def admission_check():
+        seen.append(execution_queue.resource_owner())
+        return False
+
+    assert execution_queue.reserve_resource("inference", admission_check=admission_check) is False
+    assert seen == [""]
+    assert execution_queue.resource_owner() == ""
+
+
 def test_execution_queue_resource_owner_is_closed_to_gpu_lanes(queue_root):
     with pytest.raises(ValueError, match="training, llm, or inference"):
         execution_queue.reserve_resource("takes")

@@ -154,6 +154,33 @@ function generateTakeIdentityTests() {
   assert.equal(takes.children[0].children[0].children[0], firstMedia, 'refresh must preserve the existing video DOM node');
 }
 
+function generationPreviewExecutionFocusTests() {
+  const env = environment();
+  env.reportConsoleError = () => {};
+  env.formatInferenceJobStatus = job => String(job.status || '');
+  load('generate.js', env, `
+    window.api = { state: generateState, syncPreview: syncGenerationPreviewCard };
+  `);
+  const api = env.window.api;
+
+  api.syncPreview({ jobId: 'running-job', modelId: 'h3', status: 'running' }, true);
+  assert.equal(api.state.activePendingJobId, 'running-job');
+
+  api.syncPreview({ jobId: 'later-queued-job', modelId: 'h3', status: 'queued' }, true);
+  assert.equal(
+    api.state.activePendingJobId,
+    'running-job',
+    'a later queued submission must not displace the executing generation'
+  );
+
+  api.syncPreview({ jobId: 'later-queued-job', modelId: 'h3', status: 'running' });
+  assert.equal(
+    api.state.activePendingJobId,
+    'later-queued-job',
+    'the preview must follow a tracked generation once it begins executing'
+  );
+}
+
 function timingTests() {
   const env = environment();
   env.reportConsoleError = () => {};
@@ -195,4 +222,4 @@ function timingTests() {
   assert.equal(env.timers.size, 1);
   api.close(); assert.equal(env.timers.size, 0);
 }
-(async () => { await sweepTests(); generateTakeIdentityTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });
+(async () => { await sweepTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });

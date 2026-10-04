@@ -220,7 +220,7 @@ def test_execution_queue_keeps_bounded_recent_receipt_after_terminal_delivery_is
     assert recent[0]["metadata"]["client"] == "generate"
 
 
-def test_execution_queue_transient_finish_removes_durable_job_without_recent_history(queue_root):
+def test_execution_queue_transient_finish_removes_durable_job_and_keeps_recent_history(queue_root):
     job = execution_queue.enqueue("inference", {"n": 1}, metadata={"client": "generate"})
     execution_queue.claim_next("inference")
 
@@ -233,7 +233,10 @@ def test_execution_queue_transient_finish_removes_durable_job_without_recent_his
     assert finished["status"] == "completed"
     with pytest.raises(FileNotFoundError):
         execution_queue.get_job(job["id"])
-    assert execution_queue.recent_snapshot("inference") == []
+    recent = execution_queue.recent_snapshot("inference")
+    assert len(recent) == 1
+    assert recent[0]["id"] == job["id"]
+    assert recent[0]["status"] == "completed"
     receipt = execution_queue.transient_receipt(job["id"], consume=True)
     assert receipt["result"] == {"mediaPath": "output/clip.mp4"}
     with pytest.raises(FileNotFoundError):
@@ -257,7 +260,10 @@ def test_execution_queue_can_resolve_committed_backlog_without_durable_history(q
     assert resolved["status"] == "completed"
     with pytest.raises(FileNotFoundError):
         execution_queue.get_job(job["id"])
-    assert execution_queue.recent_snapshot("inference") == []
+    recent = execution_queue.recent_snapshot("inference")
+    assert len(recent) == 1
+    assert recent[0]["id"] == job["id"]
+    assert recent[0]["status"] == "completed"
     assert execution_queue.transient_receipt(job["id"])["result"]["mediaPath"] == "output/result.png"
 
 

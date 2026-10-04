@@ -6,7 +6,14 @@ const { test } = require('node:test');
 
 function assessmentUI() {
   const errors = [];
-  const ui = { Date, reportConsoleInfo() {}, reportConsoleError(...args) { errors.push(args); } };
+  const ui = {
+    Date,
+    reportConsoleInfo() {},
+    reportConsoleError(...args) { errors.push(args); },
+    currentLlmResetEpoch() { return 0; },
+    assertLlmWorkflowCurrent() {},
+    resetLlmExecution() { return Promise.resolve({ ok: true }); },
+  };
   const source = fs.readFileSync(path.join(__dirname, '../tool/js/director_model_test.js'), 'utf8');
   vm.runInNewContext(source.replace(/initializeDirectorModelTest\(\);\s*$/, ''), ui);
   ui.directorModelTestRenderStatus = () => {};

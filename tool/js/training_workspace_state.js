@@ -80,7 +80,8 @@ var trainingWorkspaceState = {
 };
 
 function isTrainingWorkspaceActive() {
-  return normalizeWorkspaceSurface(workspaceState.surface) === 'training';
+  return normalizeWorkspaceSurface(workspaceState.surface) === 'training'
+    && deriveShellNavigationState().activity === 'training';
 }
 
 function setTrainingWorkspaceEntryMode(mode, options) {

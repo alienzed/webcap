@@ -2839,8 +2839,7 @@
     currentSessionModel = currentSession
       ? String(status.modelId || status.model || currentTestModelId() || '')
       : '';
-    var savedPrompt = currentSession ? String(status.sourcePrompt || status.prompt || '') : '';
-    if (savedPrompt.trim()) el('test-generations-prompt').value = savedPrompt;
+
     renderStatus(status);
   }
 

@@ -595,10 +595,7 @@
     if (!button || !jobId || button.disabled) return;
     button.disabled = true;
     button.textContent = 'Stopping…';
-    wildcardPostJson('/fs/director/job', {
-      operation: 'stop_or_cancel',
-      jobId: jobId
-    }).then(function () {
+    resetLlmExecution().then(function () {
       return refreshWildcardDirectorActivity();
     }).catch(function (err) {
       button.disabled = false;

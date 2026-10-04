@@ -771,7 +771,7 @@
       });
     }).then(function (payload) {
       trackGenerateJob(payload.job && payload.job.jobId);
-      syncGenerationPreviewCard(payload.job);
+      syncGenerationPreviewCard(payload.job, true);
       var submittedStatus = String(payload.job && payload.job.status || '');
       setStatus(
         submittedStatus === 'backlog'
@@ -855,7 +855,7 @@
       }).then(function (payload) {
         queued += 1;
         trackGenerateJob(payload.job && payload.job.jobId);
-        syncGenerationPreviewCard(payload.job);
+        syncGenerationPreviewCard(payload.job, true);
         setSweepSubmissionStatus(submission, 'Queued Sweep · ' + queued + ' / ' + submission.items.length);
       });
     });
@@ -1079,7 +1079,7 @@
         function (candidate) { return String(candidate.dataset.generateTakeKey || '') === key; }
       );
       if (!card) card = buildTakeCard(result);
-      host.insertBefore(card, anchor);
+      if (card !== anchor) host.insertBefore(card, anchor);
       anchor = card.nextSibling;
     });
 
@@ -1114,7 +1114,7 @@
     }
   }
 
-  function syncGenerationPreviewCard(job) {
+  function syncGenerationPreviewCard(job, focusStage) {
     var host = el('generate-takes');
     var jobId = String(job && job.jobId || '');
     if (!host) throw new Error('Generations Takes markup is missing.');
@@ -1160,7 +1160,13 @@
     if (statusNode) statusNode.textContent = statusText;
     if (modelNode) modelNode.textContent = String(job.modelId || 'Generate');
 
-    renderPendingStage(job);
+    if (
+      focusStage ||
+      String(generateState.activePendingJobId || '') === jobId ||
+      (!generateState.activePendingJobId && !generateState.activeResultKey)
+    ) {
+      renderPendingStage(job);
+    }
   }
 
 

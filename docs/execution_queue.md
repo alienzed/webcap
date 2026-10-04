@@ -2,7 +2,7 @@
 
 WebCap has one shared execution-queue substrate for scheduled accelerator-backed work.
 
-The substrate owns durable queue mechanics. Domain code owns execution semantics and result storage. WebCap now has three execution classes that share one exclusive local GPU resource:
+The substrate owns shared queue mechanics. Domain code owns execution semantics and result storage. Durable persistence is lane-specific: Inference is durable, while LLM work is intentionally server-session-bound and in memory. WebCap now has three execution classes that share one exclusive local GPU resource:
 
 - `training`: long-running Diffusion-Pipe work with its specialized scheduler;
 - `inference`: short-form ComfyUI work for Generate, Storyboard Takes, and Test renditions;
@@ -21,16 +21,20 @@ Every execution job has:
 - created, started, updated, and finished timestamps
 - generic metadata, runtime details, result data, and errors
 - a requested action field for domain executors to honor
-- persisted queue state under `<filesystem.root>/.webcap/execution_queue.json`
 
-Every lane supports the general queue mechanics useful across GPU work:
+Durable lanes persist the state they need under `<filesystem.root>/.webcap/execution_queue.json`.
+The LLM lane does not: its unfinished work is session-only and is discarded on WebCap restart or an
+explicit LLM reset.
+
+The substrate provides the general queue mechanics useful across GPU work; each domain uses only the
+ones that match its product semantics:
 
 - enqueue / start
-- pause / resume scheduling
-- stop active jobs
-- cancel queued jobs
-- reorder queued jobs
-- restart reconciliation
+- pause / resume scheduling where supported
+- stop/reset semantics owned by the lane
+- cancellation of pending work where supported
+- reordering where supported
+- restart reconciliation for durable lanes
 - exclusive GPU/resource ownership
 
 The substrate owns these mechanics and state transitions. It does not know how to stop Diffusion-Pipe, cancel a ComfyUI provider job, create a Storyboard Take, persist a standalone Generate result, or interpret a Test Generation session.
@@ -128,15 +132,15 @@ Prompt Assistant and Storyboard Director requests use the common `llm` lane.
 
 The LLM runner owns:
 
-- durable request ordering and queue position;
-- restart reconciliation;
+- server-session FIFO ordering and queue position;
 - lane-local LLM execution after shared GPU ownership is established;
-- serialization across Generate and Storyboard Director clients;
-- client-specific result finalization before a job becomes terminal.
+- serialization across Generate, Storyboard, Test/diagnostics, and Chat clients;
+- client-specific result finalization before a job becomes terminal;
+- lane reset: stop/abandon the active request, discard all queued LLM work, and reject late results from the old session intent.
 
 The Director runtime still owns llama.cpp process/model lifecycle, model loading/unloading, completion transport, structured-output parsing, and safe cleanup when model state cannot be confirmed.
 
-The browser enqueues Director work and polls the durable job instead of keeping one HTTP request open while waiting behind Training or inference.
+The browser enqueues LLM work and polls the session-bound job instead of keeping one HTTP request open while waiting behind Training or inference. Higher-level client workflows own their own sequencing; after an LLM reset, pre-reset workflows must not submit follow-up LLM requests.
 
 Preload remains speculative rather than queued work. It must yield to launchable inference or LLM work and may reserve the GPU only when no scheduled workload owns it.
 
@@ -170,7 +174,7 @@ permission and cleanup paths are implementation debt, not additional scheduling 
 
 Training keeps its always-on observer because it is a long-running scheduler.
 
-Inference and LLM execution are demand-driven. WebCap startup does not start new ComfyUI or llama.cpp work merely because the server is running. Persisted unfinished inference is reconciled into Backlog on restart; previously active provider work may receive a best-effort cancellation check, but restart uncertainty never reserves the shared GPU. Enqueueing new inference or explicitly resuming inference starts its worker; once active, the worker drains Queue first and then Backlog. Inference goes dormant when empty or paused; the LLM worker goes dormant when its FIFO is empty.
+Inference and LLM execution are demand-driven. WebCap startup does not start new ComfyUI or llama.cpp work merely because the server is running. Persisted unfinished inference is reconciled into Backlog on restart; previously active provider work may receive a best-effort cancellation check, but restart uncertainty never reserves the shared GPU. LLM work is not restored: restart begins with an empty LLM lane, matching the unfinished-work state produced by explicit LLM reset. Enqueueing new inference or explicitly resuming inference starts its worker; once active, the worker drains Queue first and then Backlog. Inference goes dormant when empty or paused; the LLM worker goes dormant when its FIFO is empty.
 
 Queue reads are passive and must not become a dispatch mechanism. Navigating to Media, captioning, Training, Storyboard, Test, Generate, or another activity does not itself start provider work.
 

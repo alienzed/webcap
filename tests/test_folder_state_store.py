@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from tool.server.folder_state_store import FolderStateUnsafeWriteError, reject_wholesale_state_map_clear, set_media_rating
+from tool.server.folder_state_store import FolderStateUnsafeWriteError, reject_wholesale_state_map_clear, set_last_training_archive, set_media_rating
 
 
 def test_scoped_assignment_map_cannot_be_wholesale_cleared():
@@ -65,3 +65,29 @@ def test_set_media_rating_can_clear_one_rating(tmp_path):
     saved = json.loads(state_path.read_text(encoding="utf-8"))
     assert saved_rating == 0
     assert saved["ratings_by_media"] == {"keep.mp4": 5}
+
+
+
+def test_set_last_training_archive_preserves_unrelated_folder_state(tmp_path):
+    state_path = tmp_path / ".webcap_state.json"
+    state_path.write_text(
+        json.dumps({
+            "flags": {"keep.mp4": "green"},
+            "ratings_by_media": {"other.mp4": 2},
+            "caption_set_notes": "keep me",
+        }),
+        encoding="utf-8",
+    )
+    marker = {
+        "archiveName": "20261002_07-27-29-penny",
+        "selectedEpoch": 44,
+    }
+
+    saved_marker = set_last_training_archive(state_path, marker)
+
+    saved = json.loads(state_path.read_text(encoding="utf-8"))
+    assert saved_marker == marker
+    assert saved["last_training_archive"] == marker
+    assert saved["flags"] == {"keep.mp4": "green"}
+    assert saved["ratings_by_media"] == {"other.mp4": 2}
+    assert saved["caption_set_notes"] == "keep me"

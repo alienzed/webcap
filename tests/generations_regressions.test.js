@@ -115,6 +115,34 @@ async function sweepTests() {
   await env.api.runGenerateSweep();
   assert.deepEqual(requests.slice(baselineStart).map(request => request.loras), [[]]);
 }
+
+function generateTakeIdentityTests() {
+  const env = environment();
+  env.reportConsoleError = () => {};
+  load('generate.js', env, `
+    window.api = { state: generateState, renderResults: renderResults };
+  `);
+  const api = env.window.api;
+  const result = {
+    jobId: 'video-job',
+    storageId: 'video-storage',
+    modelId: 'h3',
+    mediaKind: 'video',
+    mediaPath: 'video.mp4',
+    sourcePrompt: 'prompt',
+    resolvedPrompt: 'prompt',
+    settings: { duration: 5 },
+    seed: 7
+  };
+  api.renderResults([result]);
+  const takes = env.document.getElementById('generate-takes');
+  const firstCard = takes.children[0];
+  const firstMedia = firstCard.children[0].children[0];
+  api.renderResults([Object.assign({}, result)]);
+  assert.equal(takes.children[0], firstCard, 'refresh must preserve the existing Take card DOM node');
+  assert.equal(takes.children[0].children[0].children[0], firstMedia, 'refresh must preserve the existing video DOM node');
+}
+
 function timingTests() {
   const env = environment();
   env.reportConsoleError = () => {};
@@ -156,4 +184,4 @@ function timingTests() {
   assert.equal(env.timers.size, 1);
   api.close(); assert.equal(env.timers.size, 0);
 }
-(async () => { await sweepTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });
+(async () => { await sweepTests(); generateTakeIdentityTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });

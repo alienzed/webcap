@@ -633,6 +633,10 @@ function finalizeTrainingArchive() {
       }));
     }
     var notices = [];
+    if (archive.setMarkerWarning) {
+      notices.push('Set archive marker was not saved: ' + String(archive.setMarkerWarning));
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Training Archive', String(archive.setMarkerWarning));
+    }
     if (archive.testCleanupWarning) notices.push('Test sessions were not fully cleared: ' + String(archive.testCleanupWarning));
     setStatus(
       'Finalized and archived ' + archiveName + '.' +

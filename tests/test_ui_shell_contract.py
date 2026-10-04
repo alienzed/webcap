@@ -800,7 +800,7 @@ def test_test_generations_director_uses_visible_activity_card_and_stop():
     assert "stopWildcardDirectorJob" in script
     assert "wildcardRequestJson('/fs/director/activity')" in script
     assert "wildcardRequestJson('/fs/system_status')" in script
-    assert "operation: 'stop_or_cancel'" in script
+    assert "resetLlmExecution()" in script
     assert "observeTransientLlmActivity(values[0]);" in script
     assert ".test-generations-director-activity {" in css
     assert "item.client === 'test' ? 'Test'" in activity
@@ -930,7 +930,7 @@ def test_director_chat_uses_shared_transient_llm_job_lifecycle():
     assert "webcap.directorChat.model" in chat
     assert "trackTransientLlmJob(payload.job)" in chat
     assert "reportTransientLlmTiming(payload.job)" in chat
-    assert "operation: 'stop_or_cancel'" in chat
+    assert "resetLlmExecution()" in chat
     assert "window.openDirectorChatActivity" in chat
     assert "item.client === 'chat'" in activity
     assert "'director-chat-rail-btn'" in activity

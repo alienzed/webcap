@@ -820,9 +820,6 @@ def action(operation, job_id="", direction="", position=None):
             raise ValueError("Only queued or active LLM jobs can be stopped.")
         from .storyboard_llm_runtime import assert_stop_supported, stop_active_request
         assert_stop_supported()
-        if status == "stopping":
-            stopping = current
-        else:
-            stopping = execution_request_stop(job_id, stop_callback=stop_active_request)
+        stopping = execution_request_stop(job_id, stop_callback=stop_active_request)
         return {"job": _job_view(stopping)}
     raise ValueError("Unsupported LLM queue action: " + operation)

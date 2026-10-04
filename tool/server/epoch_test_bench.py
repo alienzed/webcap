@@ -240,10 +240,10 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
     test_directory = _test_directory(folder_path, model)
     candidate = test_directory / name
     sidecar = candidate.with_suffix(".webcap.json")
-    owned = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
+    available = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
 
     if candidate.exists() or candidate.is_symlink():
-        if name not in owned:
+        if name not in available:
             raise ValueError("Staged Test candidate does not belong to the current Set: " + name)
         if candidate.is_symlink() or not candidate.is_file():
             raise RuntimeError("Staged Test candidate is not a regular file: " + name)
@@ -617,7 +617,7 @@ def _staged_lora_provenance(lora_file):
     return payload if isinstance(payload, dict) else {}
 
 
-def _is_webcap_staged_lora(lora_file, model):
+def _has_webcap_staged_provenance(lora_file, model):
     payload = _staged_lora_provenance(lora_file)
     if payload.get("version") != 1:
         return False
@@ -682,7 +682,7 @@ def _selected_lora_files_for_set(folder_path, model, selected_files=None):
 def _staged_candidate_runs(lora_files, model):
     runs = {}
     for lora_file in lora_files:
-        if not _is_webcap_staged_lora(lora_file, model):
+        if not _has_webcap_staged_provenance(lora_file, model):
             continue
         provenance = _staged_lora_provenance(lora_file)
         source_job_id = str(provenance.get("sourceJobId") or "").strip()
@@ -717,7 +717,7 @@ def _staged_candidate_metadata(lora_files, model):
     selected_by_run = {}
     result = {}
     for lora_file in lora_files:
-        if not _is_webcap_staged_lora(lora_file, model):
+        if not _has_webcap_staged_provenance(lora_file, model):
             continue
         provenance = _staged_lora_provenance(lora_file)
         folder = str(provenance.get("sourceFolder") or "").strip()

@@ -323,33 +323,37 @@ def media_flip_horizontal_response(data):
         if originals_dir is None:
             raise RuntimeError("Cannot overwrite source in this folder")
         ensure_original_by_hash(src_media, originals_dir)
-        # Write to temp file, then replace original
-        tmp_path = src_media.with_suffix(src_media.suffix + ".tmp")
-        cmd = [
-            "ffmpeg", "-y", "-i", str(src_media),
-            "-vf", "hflip",
-            "-c:v", "libx264",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
-            "-c:a", "copy",
-            str(tmp_path)
-        ]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
-        if proc.returncode != 0:
-            stderr = (proc.stderr or proc.stdout or "").strip()
-            if tmp_path.exists():
-                try: tmp_path.unlink()
-                except Exception: pass
-            return jsonify({"error": "ffmpeg failed: " + stderr}), 400
-        # Atomically replace original
+        fd, tmp_name = tempfile.mkstemp(
+            prefix="." + src_media.stem + ".flip-",
+            suffix=src_media.suffix,
+            dir=str(src_media.parent),
+        )
+        os.close(fd)
+        tmp_path = Path(tmp_name)
         try:
+            cmd = [
+                "ffmpeg", "-y", "-i", str(src_media),
+                "-vf", "hflip",
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart",
+                "-c:a", "copy",
+                str(tmp_path)
+            ]
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            if proc.returncode != 0:
+                stderr = (proc.stderr or proc.stdout or "").strip()
+                return jsonify({"error": "ffmpeg failed: " + stderr}), 400
             os.replace(tmp_path, src_media)
             normalize_path_permissions(src_media)
-        except Exception as e:
-            if tmp_path.exists():
-                try: tmp_path.unlink()
-                except Exception: pass
-            return jsonify({"error": "Failed to replace original: " + str(e)}), 500
+        except OSError as exc:
+            return jsonify({"error": "Failed to replace original: " + str(exc)}), 500
+        finally:
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except Exception:
+                pass
         update_media_metadata(folder_path)
         return jsonify({"ok": True})
     except Exception as e:

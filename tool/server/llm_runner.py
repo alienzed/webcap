@@ -53,6 +53,7 @@ def execution_lane_snapshot(lane_name, include_terminal=True):
 
 
 execution_mark_running = _execution_queue.mark_running
+execution_reset_unfinished = _execution_queue.reset_unfinished
 
 
 execution_request_stop = _execution_queue.request_stop
@@ -453,28 +454,32 @@ def _execute_claimed(job_id, gpu_reserved):
             "Director/model stage failed before WebCap ingest: " + str(exc)
         ) from exc
 
-    current = execution_get_job(job_id)
-    if str(current.get("status") or "") == "stopping":
-        execution_finish_job_transient(job_id, status="stopped", error="LLM request stopped.")
-        return
+    # Enqueue, reset, and final result application share one ordering boundary.
+    # If reset wins this lock, the result is discarded. If apply wins it, the
+    # completed mutation is authoritative before reset begins.
+    with _enqueue_lock:
+        current = execution_get_job(job_id)
+        if str(current.get("status") or "") == "stopping":
+            execution_finish_job_transient(job_id, status="stopped", error="LLM request stopped.")
+            return
 
-    try:
-        result = _client_result(client, context, llm_result, job_id=job_id, frozen_contract=contract)
-    except Exception as exc:
-        _logger.exception(
-            "WebCap ingest rejected a successful LLM response.\n"
-            "--- FROZEN LLM CONTRACT ---\n%s\n"
-            "--- CLIENT CONTEXT ---\n%s\n"
-            "--- RAW MODEL RESPONSE ---\n%s",
-            json.dumps(contract, indent=2, ensure_ascii=False),
-            json.dumps(context, indent=2, ensure_ascii=False),
-            str(llm_result.get("text") or ""),
-        )
-        raise RuntimeError(
-            "WebCap ingest failed after a successful model response: " + str(exc)
-        ) from exc
+        try:
+            result = _client_result(client, context, llm_result, job_id=job_id, frozen_contract=contract)
+        except Exception as exc:
+            _logger.exception(
+                "WebCap ingest rejected a successful LLM response.\n"
+                "--- FROZEN LLM CONTRACT ---\n%s\n"
+                "--- CLIENT CONTEXT ---\n%s\n"
+                "--- RAW MODEL RESPONSE ---\n%s",
+                json.dumps(contract, indent=2, ensure_ascii=False),
+                json.dumps(context, indent=2, ensure_ascii=False),
+                str(llm_result.get("text") or ""),
+            )
+            raise RuntimeError(
+                "WebCap ingest failed after a successful model response: " + str(exc)
+            ) from exc
 
-    execution_finish_job_transient(job_id, status="completed", result=result)
+        execution_finish_job_transient(job_id, status="completed", result=result)
 
 
 def _advance_queue():
@@ -537,8 +542,11 @@ def _advance_queue():
                 execution_finish_job_transient(job_id, status="failed", error=str(exc))
             _logger.exception("Queued LLM job failed.")
         finally:
+            terminal = execution_transient_receipt(job_id)
+            stopped = str((terminal or {}).get("status") or "") == "stopped"
             if local_gpu:
-                _arm_local_gpu_drain_grace()
+                if not stopped:
+                    _arm_local_gpu_drain_grace()
                 if release_gpu:
                     current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
                     keep_gpu = (
@@ -549,7 +557,7 @@ def _advance_queue():
                                 and uses_local_gpu(_job_model_id(job))
                                 for job in current.get("jobs", [])
                             )
-                            or local_gpu_drain_pending()
+                            or (not stopped and local_gpu_drain_pending())
                         )
                     )
                     if keep_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
@@ -797,10 +805,34 @@ def snapshot(include_terminal=False):
     }
 
 
+def reset():
+    global _local_gpu_drain_until
+    _ensure_execution_reconciled()
+    with _enqueue_lock:
+        current = execution_reset_unfinished()
+        active_id = str(current.get("activeJobId") or "")
+        if active_id:
+            from .storyboard_llm_runtime import stop_active_request
+            try:
+                stop_active_request()
+            except (ValueError, RuntimeError) as exc:
+                # Some externally-owned or generic remote runtimes cannot be
+                # interrupted. The job remains stopping and its eventual result
+                # is still discarded before client application.
+                _logger.warning("LLM runtime could not be interrupted; abandoning its result: %s", exc)
+        else:
+            _local_gpu_drain_until = 0.0
+            if execution_resource_owner() == GPU_RESERVATION_OWNER:
+                _release_gpu()
+        return snapshot(include_terminal=False)
+
+
 def action(operation, job_id="", direction="", position=None):
     _ensure_execution_reconciled()
     operation = str(operation or "").strip()
     job_id = str(job_id or "").strip()
+    if operation == "reset":
+        return {"queue": reset()}
     if operation == "cancel":
         return {"job": _job_view(execution_cancel_pending_transient(job_id))}
     if operation in {"stop", "stop_or_cancel"}:

@@ -1269,14 +1269,14 @@ def test_director_selector_surfaces_only_compact_assessment_markers():
     assert "'△ ' + label" in common
     assert "coherentOutputTokens" not in common
 
-def test_storyboard_llm_workflows_stop_across_global_reset():
+def test_storyboard_llm_workflows_unwind_on_lane_reset():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    assert "Storyboard LLM request is missing its workflow reset epoch." in storyboard
-    assert "assertLlmWorkflowCurrent(llmEpoch);" in storyboard
-    assert "action.llmResetEpoch = currentLlmResetEpoch();" in storyboard
-    assert "assertLlmWorkflowCurrent(action.llmResetEpoch);" in storyboard
+    assert "function directorWasStopped(err)" in storyboard
     assert "function clearQueuedFirstCuts()" in storyboard
+    assert "action.cancelled = true;" in storyboard
     assert "clearQueuedFirstCuts();" in storyboard
     assert "resetLlmExecution().catch(reportError);" in storyboard
+    assert "currentLlmResetEpoch" not in storyboard
+    assert "assertLlmWorkflowCurrent" not in storyboard
     assert "body: JSON.stringify({ operation: 'stop_or_cancel', jobId: jobId })" not in storyboard

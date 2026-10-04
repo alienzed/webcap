@@ -1,6 +1,8 @@
 (function () {
   'use strict';
 
+  var TAKE_BATCH_SIZE = 5;
+
   var generateState = {
     models: [],
     unavailableModels: [],
@@ -34,6 +36,7 @@
     activeResultKey: '',
     activePendingJobId: '',
     takesCollapsed: window.localStorage.getItem('webcap.generate.takesCollapsed') === '1',
+    takesVisibleCount: TAKE_BATCH_SIZE,
     open: false
   };
 
@@ -1058,8 +1061,9 @@
     var host = el('generate-takes');
     var summary = el('generate-takes-summary');
     if (!host || !summary) throw new Error('Generations Takes markup is missing.');
-    var items = Array.isArray(results) ? results : [];
-    summary.textContent = items.length ? String(items.length) + ' recent' : 'No Takes yet';
+    var allItems = Array.isArray(results) ? results : [];
+    var items = allItems.slice(0, generateState.takesVisibleCount);
+    summary.textContent = allItems.length ? String(allItems.length) + ' recent' : 'No Takes yet';
 
     var desired = {};
     items.forEach(function (result) {
@@ -1082,6 +1086,21 @@
       if (card !== anchor) host.insertBefore(card, anchor);
       anchor = card.nextSibling;
     });
+
+    var loadMore = host.querySelector('[data-generate-takes-more]');
+    var remaining = allItems.length - items.length;
+    if (remaining > 0) {
+      if (!loadMore) {
+        loadMore = document.createElement('button');
+        loadMore.type = 'button';
+        loadMore.className = 'review-captions-btn';
+        loadMore.dataset.generateTakesMore = '1';
+      }
+      loadMore.textContent = 'Load ' + Math.min(TAKE_BATCH_SIZE, remaining) + ' more';
+      host.appendChild(loadMore);
+    } else if (loadMore) {
+      loadMore.remove();
+    }
 
     if (!generateState.activeResultKey && !generateState.activePendingJobId && items.length) {
       renderActiveResult(items[0]);
@@ -1373,7 +1392,7 @@
       host.appendChild(empty);
     }
 
-    renderTakes(items.slice(0, 12));
+    renderTakes(items);
     if (generateState.activePendingJobId) {
       var completed = items.find(function (result) {
         return String(result.jobId || '') === String(generateState.activePendingJobId || '');
@@ -2089,6 +2108,12 @@
       setTakesCollapsed(!generateState.takesCollapsed);
     };
     el('generate-takes').addEventListener('click', function (event) {
+      var loadMore = event.target.closest('[data-generate-takes-more]');
+      if (loadMore) {
+        generateState.takesVisibleCount += TAKE_BATCH_SIZE;
+        renderTakes(generateState.results);
+        return;
+      }
       var card = event.target.closest('[data-generate-take-key]');
       if (!card) return;
       var key = String(card.dataset.generateTakeKey || '');

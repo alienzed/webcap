@@ -10,7 +10,7 @@ from tool.server import execution_queue
 @pytest.fixture
 def queue_root(tmp_path, monkeypatch):
     monkeypatch.setattr(app_config, "FS_ROOT", Path(tmp_path))
-    monkeypatch.setattr(app_config, "app_state_root", lambda: Path(tmp_path) / ".test-webcap-app-data" / "state")
+    monkeypatch.setattr(app_config, "app_data_root", lambda: Path(tmp_path) / ".test-webcap-app-data")
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
     execution_queue.ephemeral_lane("llm").clear()
@@ -576,3 +576,39 @@ def test_execution_queue_inaccessible_state_is_not_treated_as_missing(queue_root
 
     with pytest.raises(execution_queue.ExecutionQueueStateError, match="cannot be inspected"):
         execution_queue.lane_snapshot("inference")
+
+
+def test_transient_receipts_are_visible_in_session_recent(queue_root):
+    job = execution_queue.enqueue("inference", {"n": 1})
+    execution_queue.claim_next("inference", expected_job_id=job["id"])
+    execution_queue.finish_job_transient(job["id"], status="completed", result={"ok": True})
+
+    recent = execution_queue.recent_snapshot("inference")
+
+    assert [item["id"] for item in recent] == [job["id"]]
+    assert recent[0]["status"] == "completed"
+    assert recent[0]["result"] == {"ok": True}
+
+
+def test_requeue_active_and_pause_records_failed_attempt_before_reset(queue_root):
+    job = execution_queue.enqueue("inference", {"n": 1})
+    execution_queue.claim_next("inference", expected_job_id=job["id"])
+    execution_queue.mark_running(
+        job["id"],
+        details={"providerJobId": "provider-123", "providerStatus": "in_progress", "timings": {"pollMs": 17}},
+    )
+
+    queued = execution_queue.requeue_active_and_pause(job["id"], "provider polling exploded")
+    recent = execution_queue.recent_snapshot("inference")
+
+    assert queued["status"] == "queued"
+    assert queued["details"] == {}
+    assert queued["startedAt"] is None
+    assert recent[0]["id"] == job["id"]
+    assert recent[0]["status"] == "failed"
+    assert recent[0]["error"] == "provider polling exploded"
+    assert recent[0]["details"] == {
+        "providerJobId": "provider-123",
+        "providerStatus": "in_progress",
+        "timings": {"pollMs": 17},
+    }

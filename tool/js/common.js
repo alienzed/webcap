@@ -339,6 +339,39 @@ window.trackTransientLlmJob = trackTransientLlmJob;
 window.observeTransientLlmActivity = observeTransientLlmActivity;
 window.reportTransientLlmTiming = reportTransientLlmTiming;
 
+var llmResetEpoch = 0;
+
+function currentLlmResetEpoch() {
+  return llmResetEpoch;
+}
+
+function assertLlmWorkflowCurrent(epoch) {
+  if (Number(epoch) === llmResetEpoch) return;
+  var error = new Error('LLM workflow stopped.');
+  error.jobStatus = 'stopped';
+  throw error;
+}
+
+function resetLlmExecution() {
+  llmResetEpoch += 1;
+  return fetch('/fs/director/job', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation: 'reset' })
+  }).then(function (response) {
+    return response.json().then(function (payload) {
+      if (!response.ok || !payload || payload.ok === false) {
+        throw new Error(payload && payload.error ? payload.error : 'LLM reset failed.');
+      }
+      return payload;
+    });
+  });
+}
+
+window.currentLlmResetEpoch = currentLlmResetEpoch;
+window.assertLlmWorkflowCurrent = assertLlmWorkflowCurrent;
+window.resetLlmExecution = resetLlmExecution;
+
 function debugLog() {
   if (!DEBUG) return;
   if (arguments.length === 1) {

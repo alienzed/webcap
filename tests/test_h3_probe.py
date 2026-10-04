@@ -760,3 +760,27 @@ def test_h3_launch_polling_does_not_terminalize_starting_runtime(tmp_path, monke
     assert runtime["status"] == "running"
     assert runtime["pid"] == 4242
     assert h3_probe_module.training_gpu_runtime()["pid"] == 4242
+
+
+def test_training_gpu_runtime_resolves_stale_starting_record_without_pid(tmp_path, monkeypatch):
+    probe_root = tmp_path / "output" / "work" / "h3-probes" / "h3-stale-start"
+    probe_root.mkdir(parents=True)
+    runtime_path = probe_root / "runtime.json"
+    runtime_path.write_text(json.dumps({
+        "version": 1,
+        "probeId": "h3-stale-start",
+        "status": "starting",
+        "startedAt": "2026-10-03T12:00:00+00:00",
+        "pid": 0,
+        "seedPath": str(probe_root / "seed.json"),
+        "wslDistribution": "",
+        "publishConfig": True,
+    }), encoding="utf-8")
+    monkeypatch.setattr(config_module, "output_root", lambda: tmp_path / "output")
+
+    runtime = h3_probe_module.training_gpu_runtime()
+
+    assert runtime is None
+    saved = json.loads(runtime_path.read_text(encoding="utf-8"))
+    assert saved["status"] == "failed"
+    assert saved["finishedAt"]

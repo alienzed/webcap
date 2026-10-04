@@ -626,15 +626,11 @@
     if (!state.jobId) return;
     stop.disabled = true;
     stop.textContent = 'Stopping…';
-    requestJson('/fs/director/job', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ operation: 'stop_or_cancel', jobId: state.jobId })
-    }).then(function (payload) {
-      if (payload.job) renderProgress({
-        phase: String(payload.job.status || '') === 'cancelled' ? 'stopped' : 'preparing',
-        jobStatus: payload.job.status,
-        model: payload.job.modelId || state.modelId
+    resetLlmExecution().then(function () {
+      renderProgress({
+        phase: 'stopped',
+        jobStatus: 'stopped',
+        model: state.modelId
       });
     }).catch(function (err) {
       stop.disabled = false;

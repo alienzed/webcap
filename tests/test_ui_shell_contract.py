@@ -357,6 +357,14 @@ def test_focus_uses_shell_identity_but_keeps_local_cleanup_exit():
     assert 'id="focused-annotation-close-btn"' in html
 
 
+def test_training_activity_predicate_requires_actual_training_activity():
+    state = (ROOT / "tool" / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
+
+    block = state.split("function isTrainingWorkspaceActive()", 1)[1].split("function setTrainingWorkspaceEntryMode", 1)[0]
+    assert "normalizeWorkspaceSurface(workspaceState.surface) === 'training'" in block
+    assert "deriveShellNavigationState().activity === 'training'" in block
+
+
 def test_working_model_state_is_shared_and_training_no_longer_owns_it():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     context = (ROOT / "tool" / "js" / "working_context.js").read_text(encoding="utf-8")

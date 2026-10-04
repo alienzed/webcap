@@ -612,17 +612,13 @@ function finalizeTrainingArchive() {
     trainingWorkspaceState.archivesLoaded = false;
     var archive = payload.archive || {};
     var archiveName = String(archive.archiveName || '');
-    var markerSave = Promise.resolve(true);
-    if (archive.lastTrainingArchive && typeof state === 'object' && state) {
+    if (
+      archive.lastTrainingArchive &&
+      typeof state === 'object' &&
+      state &&
+      String(state.folder || '') === String(preview.folder || '')
+    ) {
       state.lastTrainingArchive = JSON.parse(JSON.stringify(archive.lastTrainingArchive));
-      if (
-        String(state.folder || '') === String(preview.folder || '') &&
-        typeof saveFolderStateForCurrentRoot === 'function'
-      ) {
-        markerSave = Promise.resolve(saveFolderStateForCurrentRoot());
-      } else {
-        markerSave = Promise.resolve(false);
-      }
     }
     window.dispatchEvent(new CustomEvent('webcap:training-archived', {
       detail: {
@@ -636,22 +632,21 @@ function finalizeTrainingArchive() {
         detail: { folder: String(preview.folder || '') }
       }));
     }
-    return markerSave.catch(function () {
-      return false;
-    }).then(function (markerSaved) {
-      var notices = [];
-      if (markerSaved === false) notices.push('the Set archive marker could not be saved');
-      if (archive.testCleanupWarning) notices.push('Test sessions were not fully cleared: ' + String(archive.testCleanupWarning));
-      setStatus(
-        'Finalized and archived ' + archiveName + '.' +
-        (notices.length ? ' ' + notices.join(' · ') : '')
-      );
-      return refreshTrainingHistory(true).then(function () {
-        return loadTrainingArchives(true);
-      }).catch(function (err) {
-        setStatus('Finalized and archived, but Archive refresh failed: ' + String(err.message || err));
-        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Training Archive', String(err.message || err));
-      });
+    var notices = [];
+    if (archive.setMarkerWarning) {
+      notices.push('Set archive marker was not saved: ' + String(archive.setMarkerWarning));
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Training Archive', String(archive.setMarkerWarning));
+    }
+    if (archive.testCleanupWarning) notices.push('Test sessions were not fully cleared: ' + String(archive.testCleanupWarning));
+    setStatus(
+      'Finalized and archived ' + archiveName + '.' +
+      (notices.length ? ' ' + notices.join(' · ') : '')
+    );
+    return refreshTrainingHistory(true).then(function () {
+      return loadTrainingArchives(true);
+    }).catch(function (err) {
+      setStatus('Finalized and archived, but Archive refresh failed: ' + String(err.message || err));
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Training Archive', String(err.message || err));
     });
   }, function (err) {
     els.archiveModalConfirm.disabled = false;

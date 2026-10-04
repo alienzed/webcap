@@ -157,6 +157,12 @@ def test_finalize_persists_resume_branch_boundary(tmp_path, monkeypatch):
     monkeypatch.setattr(training_archive, "clear_history_job", lambda _folder, _job_id: None)
     monkeypatch.setattr(training_archive, "clear_test_sessions", lambda _folder: 0)
     monkeypatch.setattr(training_archive.app_config, "safe_join_fs_root", lambda _folder: tmp_path / "set")
+    saved_marker = {}
+    monkeypatch.setattr(
+        training_archive,
+        "set_last_training_archive",
+        lambda state_path, marker: saved_marker.update({"statePath": state_path, "marker": dict(marker)}),
+    )
     monkeypatch.setattr(training_archive, "_move_archive", lambda _source, _destination: None)
     monkeypatch.setattr(training_archive, "_epoch_directories", lambda _directory: {})
     monkeypatch.setattr(training_archive, "_global_step_directories", lambda _directory: [])
@@ -165,6 +171,9 @@ def test_finalize_persists_resume_branch_boundary(tmp_path, monkeypatch):
 
     assert captured["resumeCheckpointWallTime"] == 150.0
     assert captured["resumeBranchStartedAt"] == 250.0
+    assert saved_marker["statePath"] == tmp_path / "set" / ".webcap_state.json"
+    assert saved_marker["marker"]["archiveName"] == "resumed-archive"
+    assert saved_marker["marker"]["selectedEpoch"] == 6
 
 
 def test_staged_archive_cleanup_groups_candidates_by_timestamp_run_not_job_id(tmp_path, monkeypatch):

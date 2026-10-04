@@ -16,7 +16,7 @@ class FolderStateUnsafeWriteError(RuntimeError):
     pass
 
 
-_media_rating_lock = threading.Lock()
+_folder_state_mutation_lock = threading.Lock()
 
 
 def set_media_rating(state_path, media_key, rating):
@@ -31,7 +31,7 @@ def set_media_rating(state_path, media_key, rating):
         raise ValueError("Media rating must be between 0 and 5.")
 
     path = Path(state_path)
-    with _media_rating_lock:
+    with _folder_state_mutation_lock:
         state = read_folder_state(path)
         ratings = state.get("ratings_by_media")
         ratings = dict(ratings) if isinstance(ratings, dict) else {}
@@ -42,6 +42,18 @@ def set_media_rating(state_path, media_key, rating):
         state["ratings_by_media"] = ratings
         write_folder_state_atomic(path, state)
     return normalized
+
+
+def set_last_training_archive(state_path, archive_fact):
+    if not isinstance(archive_fact, dict) or not archive_fact:
+        raise ValueError("Training archive marker must be a non-empty object.")
+
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        state["last_training_archive"] = dict(archive_fact)
+        write_folder_state_atomic(path, state)
+    return dict(archive_fact)
 
 
 def reject_wholesale_state_map_clear(previous_state, next_state):

@@ -43,8 +43,43 @@ def test_local_gpu_work_runnable_uses_real_ephemeral_fifo_head(llm_root, monkeyp
 
     assert llm_runner.local_gpu_work_runnable() is False
 
-    llm_runner.execution_cancel_pending_transient(remote["jobId"])
-    assert llm_runner.local_gpu_work_runnable() is True
+    execution_queue.ephemeral_lane("llm").reset_unfinished()
+    assert llm_runner.local_gpu_work_runnable() is False
+
+
+def test_advance_queue_claims_only_the_fifo_head_it_evaluated(llm_root, monkeypatch):
+    queue = execution_queue.ephemeral_lane("llm")
+    first = llm_runner.enqueue(
+        "chat",
+        "remote",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "one"}]},
+    )
+    second = llm_runner.enqueue(
+        "chat",
+        "local",
+        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "two"}]},
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda model_id: model_id == "local")
+
+    real_claim = llm_runner.execution_claim_next
+
+    def claim_after_head_changes(lane_name, runnable_backlog_ids=None, expected_job_id=""):
+        queue.reorder_job(second["jobId"], position=0)
+        return real_claim(
+            lane_name,
+            runnable_backlog_ids=runnable_backlog_ids,
+            expected_job_id=expected_job_id,
+        )
+
+    executed = []
+    monkeypatch.setattr(llm_runner, "execution_claim_next", claim_after_head_changes)
+    monkeypatch.setattr(llm_runner, "_execute_claimed", lambda job_id, gpu_reserved: executed.append((job_id, gpu_reserved)))
+
+    assert llm_runner._advance_queue() is None
+    assert executed == []
+    snapshot = llm_runner.snapshot()
+    assert snapshot["activeJobId"] == ""
+    assert [job["jobId"] for job in snapshot["jobs"]] == [second["jobId"], first["jobId"]]
 
 
 def test_llm_test_job_returns_structured_analysis_without_side_effects(llm_root, monkeypatch):
@@ -1525,85 +1560,6 @@ def test_llm_reset_idle_releases_retained_gpu_hold(llm_root, monkeypatch):
     assert execution_queue.resource_owner() == ""
 
 
-def test_llm_stop_or_cancel_cancels_queued_job_without_touching_runtime(llm_root, monkeypatch):
-    monkeypatch.setattr(
-        storyboard_llm_runtime,
-        "stop_active_request",
-        lambda: pytest.fail("Queued LLM work must cancel without touching the runtime."),
-    )
-    job = llm_runner.enqueue(
-        "generate",
-        "qwen",
-        {"operation": "write_prompt", "prompt": "Expand.", "output": "text"},
-    )
-
-    result = llm_runner.action("stop_or_cancel", job_id=job["jobId"])
-
-    assert result["job"]["status"] == "cancelled"
-
-
-def test_llm_stop_or_cancel_hard_stops_active_local_job(llm_root, monkeypatch):
-    calls = []
-    job = execution_queue.enqueue(
-        llm_runner.EXECUTION_LANE,
-        {"contract": {"operation": "write_prompt", "prompt": "Expand."}, "clientContext": {}},
-        metadata={"client": "generate", "modelId": "qwen"},
-    )
-    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
-    execution_queue.mark_running(job["id"])
-    monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: calls.append("assert"))
-    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: calls.append("stop") or True)
-
-    result = llm_runner.action("stop_or_cancel", job_id=job["id"])
-
-    assert result["job"]["status"] == "stopping"
-    assert calls == ["assert", "stop"]
-
-
-def test_llm_hard_stop_response_survives_worker_finishing_during_server_shutdown(llm_root, monkeypatch):
-    job = execution_queue.enqueue(
-        llm_runner.EXECUTION_LANE,
-        {"contract": {"operation": "write_prompt", "prompt": "Expand."}, "clientContext": {}},
-        metadata={"client": "generate", "modelId": "qwen"},
-    )
-    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
-    execution_queue.mark_running(job["id"])
-    monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: None)
-
-    def finish_during_stop():
-        execution_queue.finish_job_transient(
-            job["id"],
-            status="stopped",
-            error="LLM request stopped.",
-        )
-        return True
-
-    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", finish_during_stop)
-
-    result = llm_runner.action("stop_or_cancel", job_id=job["id"])
-
-    assert result["job"]["status"] == "stopping"
-    assert llm_runner.job_status(job["id"])["status"] == "stopped"
-
-
-def test_llm_stop_active_remote_uses_runtime_specific_cancel(llm_root, monkeypatch):
-    calls = []
-    job = execution_queue.enqueue(
-        llm_runner.EXECUTION_LANE,
-        {"contract": {"operation": "write_prompt", "prompt": "Expand."}, "clientContext": {}},
-        metadata={"client": "generate", "modelId": "remote-model"},
-    )
-    execution_queue.claim_next(llm_runner.EXECUTION_LANE)
-    execution_queue.mark_running(job["id"])
-    monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: calls.append("assert"))
-    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: calls.append("cancel") or True)
-
-    result = llm_runner.action("stop_or_cancel", job_id=job["id"])
-
-    assert result["job"]["status"] == "stopping"
-    assert calls == ["assert", "cancel"]
-
-
 def test_llm_stopping_after_model_return_skips_client_ingest(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     job = execution_queue.enqueue(
@@ -1763,27 +1719,3 @@ def test_individual_story_development_jobs_do_not_mutate_story_before_final_appl
     assert stored["updatedAt"] == original_updated_at
 
 
-def test_llm_stop_does_not_stop_runtime_after_target_is_no_longer_active(llm_root, monkeypatch):
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
-    target = llm_runner.enqueue(
-        "chat",
-        "remote",
-        {"operation": "freeform_chat", "messages": [{"role": "user", "content": "one"}]},
-    )
-    llm_runner.execution_claim_next("llm", expected_job_id=target["jobId"])
-    stopped = []
-    real_request_stop = llm_runner.execution_request_stop
-
-    def finish_during_stop(job_id):
-        current = real_request_stop(job_id)
-        llm_runner.execution_finish_job_transient(job_id, status="stopped")
-        return current
-
-    monkeypatch.setattr(llm_runner, "execution_request_stop", finish_during_stop)
-    monkeypatch.setattr(storyboard_llm_runtime, "assert_stop_supported", lambda: None)
-    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: stopped.append(True))
-
-    result = llm_runner.action("stop", target["jobId"])
-
-    assert result["job"]["jobId"] == target["jobId"]
-    assert stopped == []

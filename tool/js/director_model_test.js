@@ -880,6 +880,25 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
     var totalSeconds = Math.max(0, (Number(job.finishedAt) || Date.now() / 1000) - (Number(job.createdAt) || localStartedAt));
     var tokensPerSecond = directorModelTestMetric(timings, 'predicted_per_second');
     var terminalStatus = String(job.status || '');
+    if (terminalStatus === 'stopped' || terminalStatus === 'cancelled') {
+      directorModelTestState.stopRequested = true;
+      return {
+        kind: kind,
+        target: Number(target),
+        status: 'stopped',
+        finishReason: finishReason,
+        error: '',
+        failureKind: 'stopped',
+        prompt: prompt,
+        text: text,
+        reasoning: String(result.reasoning || ''),
+        promptTokens: promptTokens,
+        completionTokens: completionTokens,
+        observedContextSize: isFinite(observedContext) && observedContext > 0 ? observedContext : 0,
+        totalSeconds: totalSeconds,
+        tokensPerSecond: tokensPerSecond
+      };
+    }
     if (terminalStatus === 'failed') reportConsoleError('Director Model Assessment', String(job.error || 'Director probe failed.'));
     var passed = terminalStatus === 'completed';
 
@@ -1366,9 +1385,11 @@ function directorModelTestRunOne(model, modelNumber) {
       directorModelTestRenderSession();
       reportConsoleInfo(
         'Director Model Test',
-        'Completed ' + (model.label || model.modelId || model.modelRef) +
-          ' · finish_reason=' + (run.finishReason || 'unknown') +
-          ' · completion_tokens=' + String(Math.round(run.completionTokens || 0))
+        (run.status === 'stopped' ? 'Stopped ' : 'Completed ') + (model.label || model.modelId || model.modelRef) +
+          (run.status === 'stopped'
+            ? '.'
+            : ' · finish_reason=' + (run.finishReason || 'unknown') +
+              ' · completion_tokens=' + String(Math.round(run.completionTokens || 0)))
       );
       return directorModelTestConsumeJob(directorModelTestState.currentJobId).then(function () { return run; });
     });

@@ -89,6 +89,11 @@ def test_candidate_ui_is_manual_read_only_charting():
     assert "/fs/training_candidates/" in script
     assert "remove_from_test" in script
     assert "copy_to_test" in script
+    assert "chart.addEventListener('dblclick'" in script
+    assert "training-candidates-epoch-marker[data-training-candidate-epoch]" in script
+    assert "testButton.click()" in script
+    assert "Double-click to copy to Test Folder" in script
+    assert "Double-click to remove from Test Folder" in script
     assert "artifact.status === 'available'" in script
     assert "scheduleTrainingCandidatesAutoRefresh" in script
     assert "setTimeout(function ()" in script

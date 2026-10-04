@@ -305,10 +305,23 @@ function commitVideoClipExactStart() {
     throw new Error('Resolve an exact frame before using it as the start');
   }
   var startEl = getVideoClipEl('video-clip-start-input');
-  if (!startEl) throw new Error('Video clip start input is missing');
-  startEl.value = formatVideoClipSeekSeconds(videoClipExactFrame.timestampSec);
-  syncVideoClipTrimInputs('start');
-  startEl.value = formatVideoClipSeekSeconds(videoClipExactFrame.timestampSec);
+  var endEl = getVideoClipEl('video-clip-end-input');
+  var durationEl = getVideoClipEl('video-clip-duration-input');
+  if (!startEl || !endEl || !durationEl) throw new Error('Video clip trim inputs are missing');
+
+  var previousDuration = Number(durationEl.value || 0);
+  var nextStart = Number(videoClipExactFrame.timestampSec);
+  var currentEnd = Number(endEl.value);
+
+  startEl.value = formatVideoClipSeekSeconds(nextStart);
+  if (isFinite(currentEnd) && currentEnd >= nextStart) {
+    syncVideoClipTrimInputs('end');
+  } else {
+    endEl.value = formatVideoClipSeekSeconds(nextStart + Math.max(0, isFinite(previousDuration) ? previousDuration : 0));
+    syncVideoClipTrimInputs('end');
+  }
+  startEl.value = formatVideoClipSeekSeconds(nextStart);
+
   videoClipExactStart = {
     frameIndex: videoClipExactFrame.frameIndex,
     sourceFingerprint: videoClipExactFrame.sourceFingerprint

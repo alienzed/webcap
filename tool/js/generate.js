@@ -1179,8 +1179,10 @@
     if (statusNode) statusNode.textContent = statusText;
     if (modelNode) modelNode.textContent = String(job.modelId || 'Generate');
 
+    var executing = ['starting', 'running', 'stopping'].indexOf(status) !== -1;
     if (
-      focusStage ||
+      executing ||
+      (focusStage && !generateState.activePendingJobId) ||
       String(generateState.activePendingJobId || '') === jobId ||
       (!generateState.activePendingJobId && !generateState.activeResultKey)
     ) {

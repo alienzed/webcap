@@ -767,6 +767,9 @@ function trainingCandidatesTooltipHtml(stepPoint, data) {
   lines.push('Saved: ' + escapeHtml(saved ? (saved.status === 'available' ? saved.fileName : 'ambiguous exports') : 'no'));
   if (data.selected && Number(data.selected.epoch) === epoch) lines.push('Selected epoch');
   if (saved && saved.inTestFolder) lines.push('In Test Folder');
+  if (saved && saved.status === 'available') {
+    lines.push(saved.inTestFolder ? 'Double-click to remove from Test Folder' : 'Double-click to copy to Test Folder');
+  }
   var testFolderStatus = data.testFolderStatus || {};
   if (testFolderStatus.state === 'unknown') lines.push('Test folder unavailable: ' + escapeHtml(String(testFolderStatus.error || 'Unknown error')));
   if (region) {
@@ -952,6 +955,20 @@ function wireTrainingCandidatesChart() {
     if (tooltipTop + tooltip.offsetHeight > bounds.bottom - 4) tooltipTop = anchorTop - tooltip.offsetHeight - 10;
     tooltip.style.left = Math.max(bounds.left + 4, Math.min(bounds.right - tooltip.offsetWidth - 4, tooltipLeft)) + 'px';
     tooltip.style.top = Math.max(bounds.top + 4, Math.min(bounds.bottom - tooltip.offsetHeight - 4, tooltipTop)) + 'px';
+  });
+  chart.addEventListener('dblclick', function (event) {
+    var marker = event.target.closest ? event.target.closest('.training-candidates-epoch-marker[data-training-candidate-epoch]') : null;
+    if (!marker) return;
+    event.preventDefault();
+    event.stopPropagation();
+    var epoch = marker.getAttribute('data-training-candidate-epoch');
+    showPinned(epoch);
+    var testButton = popover.querySelector('.training-candidates-test-toggle');
+    if (!testButton) {
+      setStatus('Epoch ' + String(epoch) + ' has no saved LoRA to add to Test Generations.');
+      return;
+    }
+    testButton.click();
   });
   wrap.addEventListener('click', function (event) {
     if (event.target.closest && event.target.closest('.training-candidates-compare-control')) return;

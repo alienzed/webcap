@@ -3036,9 +3036,6 @@
     }
     frame.classList.add('workspace-test-open');
     node.classList.remove('hidden');
-    if (normalizeWorkspaceSurface(workspaceState.surface) === 'training') {
-      setWorkspaceSurface('default');
-    }
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     if (summary) summary.textContent = 'Loading Test folder...';
@@ -3405,7 +3402,6 @@
           stagedFileName: fileName,
           onSaved: function () {
             refreshStagedFilesAfterCandidates().catch(showError);
-            if (typeof refreshTrainingHistory === 'function') refreshTrainingHistory(true);
           }
         });
         return;

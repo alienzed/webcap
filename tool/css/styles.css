@@ -2966,7 +2966,7 @@ iframe {
 }
 .test-generations-staged-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -3010,6 +3010,14 @@ iframe {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.test-generations-candidate-strength {
+  width: 68px;
+  min-width: 68px;
+  height: 29px;
+  padding: 2px 5px;
+  font-size: 12px;
+}
+
 .test-generations-staged-actions {
   display: flex;
   align-items: center;
@@ -6078,10 +6086,3 @@ html[data-theme="dark"] iframe {
 }
 
 
-.test-generations-strength-field {
-  align-self: end;
-}
-
-.test-generations-strength-field input {
-  width: 72px;
-}

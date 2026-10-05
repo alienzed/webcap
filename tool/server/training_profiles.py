@@ -61,7 +61,7 @@ _PROFILES = {
             "sessionSlug": "krea2",
             "mediaKind": "image",
             "workflowFile": "krea2_test_api.json",
-            "settings": ("dimensions", "seed"),
+            "settings": ("dimensions", "strength", "seed"),
         },
     },
     WAN21_PROFILE_ID: {
@@ -99,7 +99,7 @@ _PROFILES = {
             "sessionSlug": "h3",
             "mediaKind": "video",
             "workflowFile": "minimax_h3_test_api.json",
-            "settings": ("aspectRatio", "megapixels", "duration", "seed"),
+            "settings": ("aspectRatio", "megapixels", "duration", "strength", "seed"),
         },
     },
 }

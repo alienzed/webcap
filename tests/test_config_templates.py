@@ -315,6 +315,20 @@ def test_filesystem_output_root_defaults_blank_and_preserves_configured_path():
     assert configured["filesystem"]["output_root"] == "W:/webcap-output"
 
 
+def test_caption_assist_sequence_defaults_and_allows_natural_mode():
+    defaulted = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+    })
+    assert defaulted["caption_assist"]["preferred_sequence"] == config_module.DEFAULT_CAPTION_ASSIST_SEQUENCE
+    assert defaulted["caption_assist"]["preferred_sequence"].endswith("background\nlighting\nview")
+
+    natural = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "caption_assist": {"preferred_sequence": ""},
+    })
+    assert natural["caption_assist"]["preferred_sequence"] == ""
+
+
 def test_storyboard_director_limits_default_output_and_accept_overrides():
     normalized = config_module.validate_config_payload({
         "filesystem": {"root": "C:/training", "models": ""},

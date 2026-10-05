@@ -7,6 +7,7 @@ from flask import jsonify, request
 from .director_model_calibration import begin_calibration, clear_calibration, list_profiles, list_reports, save_profile, save_report
 from .director_model_capabilities import capability_for_model, list_capability_hints
 from .director_model_assessment_store import (
+    clear_assessments,
     delete_assessment,
     get_assessment,
     list_assessments,
@@ -424,6 +425,13 @@ def register_routes(app):
                 delete_assessment(data.get("assessmentId"))
                 return jsonify({
                     "ok": True,
+                    "assessmentRuns": list_assessments(),
+                })
+            if action == "clear_assessments":
+                deleted = clear_assessments()
+                return jsonify({
+                    "ok": True,
+                    "deleted": deleted,
                     "assessmentRuns": list_assessments(),
                 })
             if action == "begin_calibration":

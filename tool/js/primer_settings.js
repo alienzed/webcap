@@ -270,6 +270,7 @@ function updatePrimerCaptionResetUi() {
       syncCaptionApplyConfirmationUi();
       applyCaptionBtn.classList.add('hidden');
     }
+    syncFocusedCaptionControls();
     return;
   }
 
@@ -292,6 +293,7 @@ function updatePrimerCaptionResetUi() {
     applyCaptionBtn.classList.toggle('is-captionless-apply', !mediaItem.hasCaption);
     syncCaptionApplyConfirmationUi();
   }
+  syncFocusedCaptionControls();
 }
 
 function applyEditorTextAndTriggerInput(nextText) {
@@ -583,10 +585,12 @@ function runCaptionAssist() {
   }).then(function (result) {
     captionAssistPendingJobId = '';
     updatePrimerCaptionResetUi();
+    syncFocusedCaptionAfterAssist(sourceMediaKey);
     return result;
   }, function (err) {
     captionAssistPendingJobId = '';
     updatePrimerCaptionResetUi();
+    syncFocusedCaptionAfterAssist(sourceMediaKey);
     throw err;
   });
 }

@@ -1502,6 +1502,35 @@ iframe {
   font-size: 13px;
 }
 
+.primer-template-candidate {
+  margin-top: 6px;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+
+.primer-template-candidate pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.primer-template-candidate-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.primer-template-candidate-actions button {
+  padding: 3px 7px;
+  font-size: 12px;
+}
+
 .primer-template-placeholder-row {
   margin-top: 6px;
 }

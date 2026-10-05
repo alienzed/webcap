@@ -1175,3 +1175,22 @@ def test_test_generations_strength_control_is_compact_and_persisted():
     assert "settings.strength = String(el('test-generations-strength').value" in script
     assert "Strength must be between -2 and 2." in script
     assert ".test-generations-strength-field input" in css
+
+
+def test_global_director_model_control_lives_in_header():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert 'id="app-header-director-control"' in html
+    assert 'id="app-header-director-model"' in html
+    assert 'id="app-header-director-refresh"' in html
+    assert "function refreshApplicationDirectorModels()" in shell
+    assert "setDirectorModelPreference('webcap.director.model'" in shell
+    assert "webcap:director-model-changed" in shell
+    assert ".app-header-director-control" in css
+    assert "column-gap: 12px;" in css
+    assert ".test-generations-director-model-tools > select" in css
+    assert ".generate-director-model-tools > select" in css
+    assert ".storyboard-director-model-tools" in css
+    assert ".director-chat-model-tools" in css

@@ -929,6 +929,9 @@ function openFocusedAnnotationTermsEditor() {
 }
 
 function startFocusedAnnotation(targetMediaKey) {
+  if (isFocusedCaptionOpen()) {
+    stopFocusedCaption('Focus Caption ended.');
+  }
   var next = FocusedAnnotationNavigation.start(getFocusedAnnotationNavigationScope(), targetMediaKey);
   if (next.outcome !== 'active') {
     setStatus(next.outcome === 'scope-complete' ? 'Everything in this focused scope is already reviewed.' : 'No media or annotation groups are available for focused annotation.');

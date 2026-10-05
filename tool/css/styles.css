@@ -367,6 +367,21 @@ textarea:focus, input:focus {
   cursor: progress;
 }
 
+.editor-caption-wand-glyph {
+  display: inline-block;
+  transform-origin: center;
+}
+
+.editor-caption-wand-btn.is-pending .editor-caption-wand-glyph {
+  animation: editor-caption-wand-spin 1.1s linear infinite;
+}
+
+@keyframes editor-caption-wand-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .editor-floating-action-btn {
   background: rgba(15, 118, 110, 0.92);
   color: #f8fafc;
@@ -420,6 +435,9 @@ textarea:focus, input:focus {
 }
 
 .editor-caption-candidate-text {
+  max-height: min(42vh, 280px);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.45;

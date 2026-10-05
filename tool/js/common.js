@@ -2,7 +2,7 @@
 // No IIFE, encapsulation, or modular patterns are used by design.
 var APP_CONFIG = {};
 var DEFAULT_PRIMER_TEMPLATE = [
-  '{subject }{second_subject }{action, }',
+  'A person {subject }{second_subject }{action, }',
   '{position }{surface, }{body, }',
   '{clothing, }{hair, }{jewelry, }{traits, }{expression, }',
   '{second_subject_traits, }',

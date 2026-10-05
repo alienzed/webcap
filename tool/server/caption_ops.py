@@ -115,10 +115,13 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
     "Represent every selected tag faithfully while combining redundant wording naturally. "
     "The existing draft may guide wording and may contain useful details, but it must never override selected tags. "
     "Do not invent identity, demographic traits, colors, objects, actions, setting details, camera properties, mood, "
-    "or other visual facts that are not present in the selected annotations, required phrase, or draft. "
+    "or other visual facts that are not present in the selected annotations, required phrase, or draft, "
+    "apart from an explicit subject description authored in the template. "
     "If a required phrase is provided, include it verbatim exactly once. "
     "Use captionTemplate as the user's preferred structure and ordering, and renderedPrimer to understand "
     "how its keys, term affixes, and mappings resolve for this item. Smooth the wording into natural prose. "
+    "Use the template's literal subject description as the default opening; the draft or selected annotations "
+    "may explicitly refine it. Do not infer gender or subject count from clothing or appearance traits. "
     "Omit unpopulated parts; never invent facts to fill a template slot or copy unresolved placeholders. "
     "Keep each action and trait clearly attached to its subject. Include selected facts even when their group "
     "has no template placeholder, placing them beside semantically related details rather than appending a list. "
@@ -256,6 +259,8 @@ Design requirements:
   behavior.
 - Treat currentTemplate as an editable draft: improve it when useful, but do not preserve awkward structure merely
   because it already exists.
+- Preserve an explicit subject description authored in currentTemplate, such as a generic person opening, even
+  without a subject group. Do not infer gender or subject count from the vocabulary of clothing or traits.
 - Return only the template text. No markdown fences, labels, explanation, alternatives, or commentary.
 """.strip()
 

@@ -613,14 +613,14 @@ Shared coordination is intentionally small:
 
 - one process-local owner: `none | training | llm | inference`,
 - no durable dispatcher queue, submission registry, lease table, or second GPU-availability truth,
-- Training is the explicit arbitration backbone for new local-GPU turns,
-- when owner is `none`, Training applies deterministic order: Training, then local LLM FIFO head,
-  then foreground Inference Queue, then eligible Inference Backlog,
+- GPU requests are FIFO and lane-sticky; there is no built-in cross-lane priority order,
 - LLM and Inference expose only their own runnable state and do not inspect each other,
+- Training has stronger recovery/reconciliation because it is long-lived, not scheduling priority,
 - cross-runtime handoff preparation is one shared mechanical operation, not a client-lane permission,
 - remote LLM work never owns the local GPU,
 - running work is non-preemptive,
-- consecutive real same-lane work may continue according to that lane's queue semantics,
+- consecutive real same-lane work continues until that lane's ordinary queue drains,
+- Backlog is only a secondary stay-busy-when-idle source,
 - restart reconstructs ownership from runtime reality, never from persisted ownership history.
 
 Runtime cleanup is lane-local maintenance, not a permission handshake. If cleanup itself fails, expose

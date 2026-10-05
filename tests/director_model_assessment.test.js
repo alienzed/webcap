@@ -121,3 +121,24 @@ test('stopped calibration probe is recorded as stopped rather than runtime failu
   assert.equal(attempt.error, '');
   assert.equal(errors.length, 0);
 });
+
+test('completed assessment distinguishes an unproven higher tier from an unfinished run', () => {
+  const { ui } = assessmentUI();
+  assert.equal(ui.directorModelTestHealthLabel('assessment-incomplete', 'complete'),
+    'Assessment complete · higher tier unproven');
+  assert.match(ui.directorModelTestHealthLabel('assessment-incomplete', 'incomplete'), /Assessment incomplete/);
+});
+
+test('probe budget and contract outcomes are readable without error styling; runtime failures remain errors', () => {
+  const { ui } = assessmentUI();
+  ui.escapeHtml = text => String(text);
+  for (const [failureKind, label] of [['capacity', 'Budget exhausted'], ['contract', 'Not completed'], ['runtime', 'Failed']]) {
+    const html = ui.directorModelAssessmentRenderEvidence({status: 'complete', attempts: [{
+      kind: 'prose', target: 1024, status: 'failed', failureKind, error: 'probe detail',
+    }]});
+    assert.ok(html.includes(label));
+    assert.ok(html.includes('probe detail'));
+    assert.equal(html.includes('director-model-finding-error'), failureKind === 'runtime');
+    assert.equal(html.includes('Error: probe detail'), failureKind === 'runtime');
+  }
+});

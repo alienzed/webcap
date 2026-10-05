@@ -399,13 +399,15 @@ function directorModelTestAdvertisedCapability(modelRef) {
   }) || null;
 }
 
-function directorModelTestHealthLabel(value) {
+function directorModelTestHealthLabel(value, status) {
   value = String(value || '');
   if (value === 'healthy') return 'Healthy';
   if (value === 'limited') return 'Usable range · probe budget exhausted';
   if (value === 'warning') return 'Warning · usable range found';
   if (value === 'likely-unusable') return 'Likely unusable';
-  if (value === 'assessment-incomplete') return 'Assessment incomplete · usable range found';
+  if (value === 'assessment-incomplete') return status === 'complete'
+    ? 'Assessment complete · higher tier unproven'
+    : 'Assessment incomplete · usable range found';
   if (value === 'assessment-failed' || value === 'calibration-failed') return 'Assessment inconclusive';
   if (value === 'stopped') return 'Stopped';
   return 'Incomplete';
@@ -484,15 +486,18 @@ function directorModelTestRenderCalibrationProfiles() {
       : '';
     var profileText = profile ? ' · Auto profile saved' : '';
     var errorText = String(report.error || (lastFailure && lastFailure.error) || '');
+    var probeOutcome = !report.error && lastFailure &&
+      ['capacity', 'contract', 'malformed'].indexOf(lastFailure.failureKind) !== -1;
     var latestRun = directorModelAssessmentLatestRun(modelRef, report);
 
     var summaryHtml =
       '<span class="director-model-finding-title"><strong>' + escapeHtml(report.label || report.modelId || report.modelRef || '') + '</strong>' +
         '<span>' + escapeHtml(report.runtimeName || report.runtimeId || '') + '</span></span>' +
-      '<span class="app-settings-help"><strong>' + escapeHtml(directorModelTestHealthLabel(report.health)) + '</strong> · ' +
+      '<span class="app-settings-help"><strong>' + escapeHtml(directorModelTestHealthLabel(report.health, report.status)) + '</strong> · ' +
         escapeHtml(findings.join(' · ') + failureText + profileText) + '</span>' +
       (advertisedText ? '<span class="app-settings-help">' + escapeHtml(advertisedText) + '</span>' : '') +
-      (errorText ? '<span class="app-settings-help director-model-finding-error">Last probe error: ' + escapeHtml(errorText) + '</span>' : '');
+      (errorText ? '<span class="app-settings-help' + (probeOutcome ? '' : ' director-model-finding-error') + '">' +
+        (probeOutcome ? 'Last probe result: ' : 'Last probe error: ') + escapeHtml(errorText) + '</span>' : '');
 
     if (latestRun && latestRun.id) {
       return '<details class="director-model-calibration-profile director-model-calibration-finding" ' +
@@ -684,9 +689,12 @@ function directorModelAssessmentRenderEvidence(assessment) {
 
   var probes = attempts.map(function (attempt) {
     var failed = attempt.status === 'failed';
+    var probeOutcome = failed && ['capacity', 'contract', 'malformed'].indexOf(attempt.failureKind) !== -1;
     var target = directorModelTestFormatCapacity(attempt.target);
     var targetLabel = attempt.kind === 'context' ? target + ' context' : target + ' output budget';
-    var statusText = failed ? 'Failed' : 'Passed';
+    var statusText = attempt.status === 'stopped' ? 'Stopped' : (failed
+      ? (attempt.failureKind === 'capacity' ? 'Budget exhausted' : (probeOutcome ? 'Not completed' : 'Failed'))
+      : 'Passed');
     var failureText = failed && attempt.failureKind ? directorModelAssessmentFailureLabel(attempt.failureKind) : '';
     var probeMeta = [
       attempt.finishReason ? 'finish=' + attempt.finishReason : '',
@@ -706,7 +714,8 @@ function directorModelAssessmentRenderEvidence(assessment) {
       '</summary>' +
       '<div class="app-settings-disclosure-body">' +
         (probeMeta ? '<div class="app-settings-help director-model-assessment-probe-meta">' + escapeHtml(probeMeta) + '</div>' : '') +
-        (attempt.error ? '<div class="app-settings-help director-model-finding-error">Error: ' + escapeHtml(String(attempt.error)) + '</div>' : '') +
+        (attempt.error ? '<div class="app-settings-help' + (probeOutcome ? '' : ' director-model-finding-error') + '">' +
+          (probeOutcome ? 'Result: ' : 'Error: ') + escapeHtml(String(attempt.error)) + '</div>' : '') +
         '<div class="director-model-assessment-evidence-block"><strong>Prompt</strong>' +
           (prompt ? '<pre class="app-settings-json director-model-test-output">' + escapeHtml(prompt) + '</pre>' :
             '<p class="app-settings-help">Prompt was not captured because the probe failed before submission completed.</p>') +

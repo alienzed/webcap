@@ -46,6 +46,8 @@ A clean coherent-output tier of at least 8K is the current simple full-story sig
 
 An inconclusive, interrupted, stopped, or operationally failed assessment remains neutral in normal selectors even when a smaller usable tier was established. Its finding reports the tested range without recommending individual scenes from that inconclusive result. Observed output pathologies still warn. Expanded findings, raw runs, and already captured probe disclosures retain their DOM identity as results arrive or another raw run is deleted. A finding links only to evidence carrying that exact saved report timestamp; deleting it shows evidence unavailable rather than substituting an older run. After server restart, unfinished raw evidence is shown as interrupted/incomplete; corrupt evidence surfaces a read failure rather than disappearing silently. Persistence errors fail the assessment visibly and are never converted into extra model probes.
 
+A completed run whose higher probe misses its contract is labelled **Assessment complete · higher tier unproven**, separately from an unfinished run. Budget exhaustion and probe-contract misses are displayed as probe results rather than operational errors; the underlying evidence and neutral selector signal remain unchanged.
+
 ### Benchmark
 
 Runs the editable Director benchmark prompt across selected local or remote models for side-by-side qualitative comparison. Benchmark sessions remain server-session work, with timings, token counts, output, stop behavior, and export.

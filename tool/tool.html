@@ -700,12 +700,17 @@
                                             >&#10024;</button>
                                         </div>
                                         <textarea id="primer-template" rows="9"></textarea>
-                                        <div id="primer-template-candidate" class="primer-template-candidate hidden" aria-live="polite">
-                                            <pre id="primer-template-candidate-text"></pre>
-                                            <div class="primer-template-candidate-actions">
-                                                <button id="primer-template-candidate-use" type="button">Use</button>
-                                                <button id="primer-template-candidate-regenerate" type="button" title="Generate another template" aria-label="Generate another template">&#8635;</button>
-                                                <button id="primer-template-candidate-dismiss" type="button" title="Dismiss template" aria-label="Dismiss template">&times;</button>
+                                        <div id="primer-template-candidate" class="primer-template-candidate hidden" aria-live="polite" role="dialog" aria-modal="true" aria-labelledby="primer-template-candidate-title">
+                                            <div class="primer-template-candidate-dialog">
+                                                <div class="primer-template-candidate-header">
+                                                    <div id="primer-template-candidate-title" class="primer-template-candidate-title">Suggested Caption Template</div>
+                                                    <button id="primer-template-candidate-dismiss" type="button" class="primer-template-candidate-close" title="Dismiss template" aria-label="Dismiss template">&times;</button>
+                                                </div>
+                                                <pre id="primer-template-candidate-text"></pre>
+                                                <div class="primer-template-candidate-actions">
+                                                    <button id="primer-template-candidate-use" type="button">Use</button>
+                                                    <button id="primer-template-candidate-regenerate" type="button" title="Generate another template" aria-label="Generate another template">&#8635;</button>
+                                                </div>
                                             </div>
                                         </div>
                                         <div class="primer-template-placeholder-row">

@@ -60,8 +60,8 @@ That target means:
 - queue position is global across inference clients;
 - new requested inference enters the ordered **Queue** even when Training, LLM, or another inference job owns the GPU;
 - **Backlog** is ordered parked work, used for restart-preserved inference and explicit queue parking;
-- the scheduler always takes Queue work before Backlog work, while preserving FIFO order inside each bucket;
-- when Queue is empty, Backlog drains automatically while inference scheduling is active;
+- normal Queue work drains FIFO and keeps the Inference turn while Queue remains non-empty;
+- Backlog is only a secondary stay-busy-when-idle source: after Queue is empty and the shared GPU is free, one Backlog job may be attempted, and that turn ends before another Backlog item is considered;
 - a Backlog item may be explicitly added to the end of Queue when the user wants it sooner;
 - all queued work may be moved to Backlog without cancelling it;
 - Pause / Resume controls inference dispatch without moving jobs between Queue and Backlog;
@@ -70,7 +70,7 @@ That target means:
 - each client may show a contextual projection of the same shared lane;
 - the global **Inference Queue** drawer is the authoritative scheduling-management surface.
 
-No automatic client weights, fairness scheduler, or per-workspace scheduling controls are required. Queue-before-Backlog is the only priority rule.
+No automatic client weights, fairness scheduler, or cross-lane priority policy is required. Queue is normal requested work; Backlog is only idle-time fill.
 
 ## Migration state
 
@@ -161,11 +161,7 @@ Training continues to use its own queue/runner and shares only the global GPU ex
 
 The authoritative local-GPU coordination contract is `docs/gpu_coordination_invariants.md`.
 
-Only one process-local owner may exist: `training`, `llm`, `inference`, or none. Queued work does
-not itself own the GPU. When no lane owns it, shared selection is deterministic: runnable Training,
-then the local LLM FIFO head, then foreground Inference Queue, then eligible Inference Backlog.
-Running work is non-preemptive, remote LLM work never owns the local GPU, and each lane may inspect
-only its own runtime/readiness state.
+Only one process-local owner may exist: `training`, `llm`, `inference`, or none. GPU requests are FIFO and lane-sticky: there is no built-in lane priority. Once a lane owns the GPU, it drains its ordinary FIFO before releasing. Running work is non-preemptive, remote LLM work never owns the local GPU, and Backlog is not a competing request system.
 
 The current implementation is being simplified incrementally toward that contract; older cross-lane
 permission and cleanup paths are implementation debt, not additional scheduling semantics.
@@ -174,7 +170,7 @@ permission and cleanup paths are implementation debt, not additional scheduling 
 
 Training keeps its always-on observer because it is a long-running scheduler.
 
-Inference and LLM execution are demand-driven. WebCap startup does not start new ComfyUI or llama.cpp work merely because the server is running. Persisted unfinished inference is reconciled into Backlog on restart; previously active provider work may receive a best-effort cancellation check, but restart uncertainty never reserves the shared GPU. LLM work is not restored: restart begins with an empty LLM lane, matching the unfinished-work state produced by explicit LLM reset. Enqueueing new inference or explicitly resuming inference starts its worker; once active, the worker drains Queue first and then Backlog. Inference goes dormant when empty or paused; the LLM worker goes dormant when its FIFO is empty.
+Inference and LLM execution are demand-driven. WebCap startup does not start new ComfyUI or llama.cpp work merely because the server is running. Persisted unfinished inference is reconciled into Backlog on restart; previously active provider work may receive a best-effort cancellation check, but restart never recreates Inference ownership. LLM work is not restored: restart begins with an empty LLM lane, matching the unfinished-work state produced by explicit LLM reset. Enqueueing new inference or explicitly resuming inference starts its worker; normal Queue work drains first, while Backlog may supply one idle-time job at a time. Inference goes dormant when empty or paused; the LLM worker goes dormant when its FIFO is empty.
 
 Queue reads are passive and must not become a dispatch mechanism. Navigating to Media, captioning, Training, Storyboard, Test, Generate, or another activity does not itself start provider work.
 

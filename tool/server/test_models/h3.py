@@ -26,10 +26,12 @@ def default_prompt(workflow):
 def template_settings(workflow):
     resolution = ((workflow.get("115") or {}).get("inputs") or {})
     duration = ((workflow.get("133") or {}).get("inputs") or {})
+    lora = ((workflow.get("148") or {}).get("inputs") or {})
     return {
         "aspectRatio": str(resolution.get("aspect_ratio") or "").strip(),
         "megapixels": float(resolution.get("megapixels") or 0),
         "duration": float(duration.get("value") or 0),
+        "strength": float(lora.get("strength_model") if lora.get("strength_model") is not None else 0.9),
     }
 
 
@@ -42,8 +44,9 @@ def normalize_settings(workflow, new_seed, values=None):
     try:
         selected_megapixels = float(defaults["megapixels"] if selected.get("megapixels") in (None, "") else selected.get("megapixels"))
         selected_duration = float(defaults["duration"] if selected.get("duration") in (None, "") else selected.get("duration"))
+        selected_strength = float(defaults["strength"] if selected.get("strength") in (None, "") else selected.get("strength"))
     except (TypeError, ValueError) as exc:
-        raise ValueError("Test resolution and duration must be numeric.") from exc
+        raise ValueError("Test resolution, duration, and LoRA strength must be numeric.") from exc
     seed = selected.get("seed")
     selected_seed = validate_test_seed(
         new_seed() if seed is None or str(seed).strip() == "" else seed
@@ -52,10 +55,13 @@ def normalize_settings(workflow, new_seed, values=None):
         raise ValueError("Test resolution must be greater than zero megapixels.")
     if selected_duration <= 0:
         raise ValueError("Test duration must be greater than zero seconds.")
+    if selected_strength < -2 or selected_strength > 2:
+        raise ValueError("Test LoRA strength must be between -2 and 2.")
     return {
         "aspectRatio": selected_aspect,
         "megapixels": selected_megapixels,
         "duration": selected_duration,
+        "strength": selected_strength,
         "seed": selected_seed,
     }
 
@@ -110,6 +116,7 @@ def build_workflow(template, prompt, comfy_lora_name, settings=None, strength_mo
     selected = dict(settings) if settings is not None else template_settings(template)
     if "seed" not in selected:
         selected["seed"] = workflow_seed(template)
+    strength_model = float(selected.get("strength", strength_model))
     try:
         prompt_inputs = workflow["146"]["inputs"]
         prompt_inputs["wildcard_text"] = prompt

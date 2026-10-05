@@ -13,48 +13,32 @@ def _release_retained_llm(owner):
         return False
     except Exception:
         _logger.exception(
-            "Could not confirm Prompt Assistant / Director model cleanup before %s; "
-            "proceeding rather than blocking on runtime uncertainty.",
+            "Prompt Assistant / Director model cleanup failed before %s.",
             owner.capitalize(),
         )
+        raise
     return True
 
 
 def _prepare_comfyui_for_training():
-    """Use positive ComfyUI queue state for handoff; provider uncertainty never blocks Training."""
+    """Wait for any ComfyUI queue activity, then release cached models."""
     from . import inference_runtime
 
     try:
         provider_queue = inference_runtime.queue_snapshot()
     except (ConnectionError, TimeoutError):
-        _logger.info("ComfyUI is unavailable during Training handoff; proceeding without a provider hold.")
-        return True
-    except Exception:
-        _logger.exception(
-            "Could not inspect ComfyUI queue during Training handoff; proceeding rather than blocking on uncertainty."
-        )
+        _logger.info("ComfyUI is unavailable during Training handoff; proceeding.")
         return True
 
     running = provider_queue.get("running") or []
     pending = provider_queue.get("pending") or []
-    try:
-        managed_job_ids = inference_runtime.webcap_queue_job_ids(provider_queue)
-    except Exception:
-        _logger.exception(
-            "Could not classify ComfyUI queue ownership during Training handoff; proceeding rather than blocking on uncertainty."
-        )
-        return True
-    if managed_job_ids:
+    if running or pending:
         _logger.info(
-            "Training is waiting for %d positively identified WebCap ComfyUI job(s).",
-            len(managed_job_ids),
+            "Training is waiting for ComfyUI to become idle (%d running, %d pending).",
+            len(running),
+            len(pending),
         )
         return False
-    if running or pending:
-        _logger.warning(
-            "ComfyUI has non-WebCap queue activity during Training handoff; leaving it untouched and proceeding."
-        )
-        return True
 
     try:
         inference_runtime.free_cached_models()
@@ -65,7 +49,6 @@ def _prepare_comfyui_for_training():
             "ComfyUI cache release failed before Training; proceeding so the real launch failure remains visible."
         )
     return True
-
 
 def _prepare_comfyui_for_llm():
     """Release retained ComfyUI models before local LLM execution."""

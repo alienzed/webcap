@@ -5,6 +5,7 @@
     "app_data_root": "",
     "models": "C:\\path\\to\\model\\root\\models"
   },
+  "theme": "light",
   "training": {
     "diffusion_pipe_wsl": "/home/you/diffusion-pipe",
     "wsl_distribution": "Ubuntu",

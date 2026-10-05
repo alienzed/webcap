@@ -365,7 +365,15 @@ def index():
     video_clip_modal_path = TEMPLATES_DIR / "video_clip_modal.html"
     html = tool_html_path.read_text(encoding="utf-8")
     video_clip_modal = video_clip_modal_path.read_text(encoding="utf-8")
-    return Response(html.replace("<!-- VIDEO_CLIP_MODAL -->", video_clip_modal), mimetype="text/html")
+    try:
+        theme = str(app_config.load_config_from_disk().get("theme") or "light").strip().lower()
+    except Exception:
+        theme = str(app_config.get_config_snapshot().get("theme") or "light").strip().lower()
+    theme = "dark" if theme == "dark" else "light"
+    return Response(
+        html.replace("__WEBCAP_THEME__", theme).replace("<!-- VIDEO_CLIP_MODAL -->", video_clip_modal),
+        mimetype="text/html",
+    )
 
 @app.route("/favicon.ico")
 def favicon():

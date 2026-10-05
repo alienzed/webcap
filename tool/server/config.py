@@ -218,6 +218,11 @@ def validate_config_payload(payload):
 
     out["debug"] = bool(out.get("debug", False))
 
+    theme = str(out.get("theme") or "light").strip().lower()
+    if theme not in {"light", "dark"}:
+        raise ValueError("Config.theme must be light or dark.")
+    out["theme"] = theme
+
     training = out.get("training")
     if training is None:
         training = {}

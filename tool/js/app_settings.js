@@ -49,6 +49,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.storyboard.director || typeof out.storyboard.director !== 'object') out.storyboard.director = {};
   if (!out.requirements || typeof out.requirements !== 'object') out.requirements = {};
   if (typeof out.debug !== 'boolean') out.debug = !!out.debug;
+  out.theme = String(out.theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
   if (!out.filesystem.root) out.filesystem.root = '';
   if (!out.filesystem.output_root) out.filesystem.output_root = '';
   if (!out.filesystem.models) out.filesystem.models = '';
@@ -282,6 +283,7 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
   if (ui.appSettingsCaptionSequenceEl) ui.appSettingsCaptionSequenceEl.value = c.caption_assist.preferred_sequence;
   renderAppSettingsCaptionSequenceGroups();
+  if (typeof applyAppTheme === 'function') applyAppTheme(c.theme);
   if (ui.appSettingsDebugEl) ui.appSettingsDebugEl.checked = !!c.debug;
   if (ui.appSettingsEnableFaceAnalysisEl) ui.appSettingsEnableFaceAnalysisEl.checked = !!c.analysis.enableFaceAnalysis;
   if (ui.appSettingsEnableMediaPipeAnalysisEl) ui.appSettingsEnableMediaPipeAnalysisEl.checked = !!c.analysis.enableMediaPipeAnalysis;
@@ -294,6 +296,7 @@ function collectAppSettingsFormConfig() {
   base.filesystem.output_root = ui.appSettingsOutputRootEl ? ui.appSettingsOutputRootEl.value : '';
   base.filesystem.models = ui.appSettingsModelsEl ? ui.appSettingsModelsEl.value : '';
   base.debug = !!(ui.appSettingsDebugEl && ui.appSettingsDebugEl.checked);
+  base.theme = typeof getCurrentAppTheme === 'function' ? getCurrentAppTheme() : base.theme;
   base.training.diffusion_pipe_wsl = ui.appSettingsTrainingDiffusionPipeWslEl ? ui.appSettingsTrainingDiffusionPipeWslEl.value : '';
   base.training.wsl_distribution = ui.appSettingsTrainingWslDistributionEl ? ui.appSettingsTrainingWslDistributionEl.value : '';
   base.training.conda_executable = ui.appSettingsTrainingCondaExecutableEl ? ui.appSettingsTrainingCondaExecutableEl.value : '';
@@ -535,6 +538,12 @@ function openHelpReadmeInPreview() {
 
 function wireAppSettingsUi() {
   if (ui.shellSettingsBtn) ui.shellSettingsBtn.onclick = openAppSettingsModal;
+  if (ui.themeToggleBtn) {
+    ui.themeToggleBtn.onclick = function () {
+      toggleAppTheme();
+      syncAppSettingsJsonFromForm();
+    };
+  }
   if (ui.shellHelpBtn) ui.shellHelpBtn.onclick = openHelpReadmeInPreview;
   if (ui.shellFolderBtn) {
     ui.shellFolderBtn.onclick = function () {

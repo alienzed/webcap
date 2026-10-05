@@ -428,3 +428,22 @@ def test_storyboard_director_rejects_duplicate_remote_endpoint_ids():
 def test_training_repeat_reference_epochs_must_be_positive_integer():
     with pytest.raises(ValueError, match="repeat_reference_epochs"):
         config_module.validate_config_payload({"filesystem": {"root": "C:/training", "models": ""}, "training": {"repeat_reference_epochs": 0}})
+
+
+def test_app_theme_is_validated_as_durable_config():
+    defaulted = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+    })
+    assert defaulted["theme"] == "light"
+
+    dark = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "theme": "dark",
+    })
+    assert dark["theme"] == "dark"
+
+    with pytest.raises(ValueError, match="Config.theme"):
+        config_module.validate_config_payload({
+            "filesystem": {"root": "C:/training", "models": ""},
+            "theme": "sepia",
+        })

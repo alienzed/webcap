@@ -50,3 +50,18 @@ def test_director_remotes_render_as_runtime_cards():
     assert ".app-settings-runtime-card {" in styles
     assert ".app-settings-runtime-card-header {" in styles
     assert ".app-settings-runtime-card-actions {" in styles
+
+
+def test_theme_is_config_backed_not_browser_persistent():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
+    settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert "webcap.theme" not in html
+    assert "webcap.theme" not in common
+    assert "APP_THEME_STORAGE_KEY" not in common
+    assert "__WEBCAP_THEME__" in html
+    assert 'html.replace("__WEBCAP_THEME__", theme)' in app
+    assert "base.theme = typeof getCurrentAppTheme" in settings
+    assert "Stored in WebCap settings." in html

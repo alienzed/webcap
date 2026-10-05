@@ -8,9 +8,8 @@
         <script>
         (function () {
             try {
-                var storedTheme = localStorage.getItem('webcap.theme');
-                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-                var theme = (storedTheme === 'dark' || storedTheme === 'light') ? storedTheme : (prefersDark ? 'dark' : 'light');
+                var theme = '__WEBCAP_THEME__';
+                theme = theme === 'dark' ? 'dark' : 'light';
                 document.documentElement.setAttribute('data-theme', theme);
                 document.documentElement.style.colorScheme = theme;
             } catch (e) {}
@@ -1927,7 +1926,7 @@
                                     <span class="app-settings-field-label">Theme</span>
                                     <div class="app-settings-theme-row">
                                         <button id="app-settings-theme-btn" type="button" class="app-settings-theme-btn">Dark</button>
-                                        <span class="app-settings-theme-note">Stored in this browser.</span>
+                                        <span class="app-settings-theme-note">Stored in WebCap settings.</span>
                                     </div>
                                 </div>
                             </div>

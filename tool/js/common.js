@@ -703,27 +703,9 @@ function debounceCreate(waitMs) {
   };
 }
 
-var APP_THEME_STORAGE_KEY = 'webcap.theme';
-
-function getStoredAppTheme() {
-  try {
-    var theme = localStorage.getItem(APP_THEME_STORAGE_KEY);
-    if (theme === 'dark' || theme === 'light') return theme;
-  } catch (e) {}
-  return '';
-}
-
-function getSystemPreferredAppTheme() {
-  try {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-  } catch (e) {}
-  return 'light';
-}
-
 function getInitialAppTheme() {
-  return getStoredAppTheme() || getSystemPreferredAppTheme();
+  var theme = APP_CONFIG && typeof APP_CONFIG.theme === 'string' ? APP_CONFIG.theme : 'light';
+  return String(theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
 }
 
 function getCurrentAppTheme() {
@@ -745,16 +727,11 @@ function updateThemeToggleUi(theme) {
   ui.themeToggleBtn.setAttribute('aria-label', 'Switch to ' + nextTheme + ' theme');
 }
 
-function applyAppTheme(theme, persist) {
+function applyAppTheme(theme) {
   var nextTheme = String(theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
   if (document && document.documentElement) {
     document.documentElement.setAttribute('data-theme', nextTheme);
     document.documentElement.style.colorScheme = nextTheme;
-  }
-  if (persist) {
-    try {
-      localStorage.setItem(APP_THEME_STORAGE_KEY, nextTheme);
-    } catch (e) {}
   }
   updateThemeToggleUi(nextTheme);
   return nextTheme;
@@ -763,7 +740,7 @@ function applyAppTheme(theme, persist) {
 function toggleAppTheme() {
   var currentTheme = (document && document.documentElement && document.documentElement.getAttribute('data-theme')) || getInitialAppTheme();
   var nextTheme = String(currentTheme || '').toLowerCase() === 'dark' ? 'light' : 'dark';
-  return applyAppTheme(nextTheme, true);
+  return applyAppTheme(nextTheme);
 }
 
 function wireThemeToggleUi() {
@@ -773,7 +750,7 @@ function wireThemeToggleUi() {
       toggleAppTheme();
     };
   }
-  applyAppTheme(getInitialAppTheme(), false);
+  applyAppTheme(getInitialAppTheme());
 }
 
 function updateSidebarCollapseUi(collapsed) {

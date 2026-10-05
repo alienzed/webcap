@@ -141,6 +141,7 @@ def _normalize_attempt(attempt):
         "finishReason": str(attempt.get("finishReason") or ""),
         "error": str(attempt.get("error") or ""),
         "failureKind": str(attempt.get("failureKind") or "").strip(),
+        "note": str(attempt.get("note") or "").strip(),
     }
     for field in ("promptTokens", "completionTokens", "observedContextSize"):
         try:

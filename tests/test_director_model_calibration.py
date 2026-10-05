@@ -362,12 +362,19 @@ def test_declared_output_without_prose_evidence_is_not_proven(calibration_root):
     assert not signal["limited"] and not signal["fullStoryCapable"]
 
 
+def test_attempt_notes_are_preserved_in_reports(calibration_root):
+    report = _report()
+    report["attempts"][0]["note"] = "Completion marker omitted; the response otherwise completed the test."
+    saved = calibration.save_report(report)
+    assert saved["attempts"][0]["note"].startswith("Completion marker omitted")
+
+
 def test_contract_miss_after_proven_range_remains_neutral(calibration_root):
     from tool.server.storyboard_llm_runtime import _assessment_signal
     report = _report()
     report["attempts"].append({"kind": "prose", "target": 1024, "status": "failed", "failureKind": "contract"})
     saved = calibration.save_report(report)
-    assert saved["health"] == "assessment-incomplete"
+    assert saved["health"] == "healthy"
     signal = _assessment_signal(saved["modelRef"])
     assert signal["abilities"]["coherentOutputTokens"] == 512
     assert not signal["limited"] and not signal["seriousWarning"]
@@ -381,7 +388,7 @@ def test_earlier_capacity_failure_does_not_mask_later_contract_miss(calibration_
         {"kind": "prose", "target": 1024, "status": "failed", "failureKind": "contract"},
     ])
     saved = calibration.save_report(report)
-    assert saved["health"] == "assessment-incomplete"
+    assert saved["health"] == "healthy"
     signal = _assessment_signal(saved["modelRef"])
     assert not signal["limited"] and not signal["seriousWarning"]
 

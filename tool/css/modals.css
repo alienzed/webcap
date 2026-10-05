@@ -440,6 +440,32 @@
   font-size: 12px;
 }
 
+.app-settings-caption-sequence {
+  width: 100%;
+  min-height: 168px;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.app-settings-caption-sequence-groups-wrap {
+  display: grid;
+  gap: 7px;
+}
+
+.app-settings-caption-sequence-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  align-items: center;
+}
+
+.app-settings-caption-sequence-chip {
+  padding: 4px 7px;
+  font-size: 11px;
+}
+
 .app-settings-note {
   font-size: 12px;
   line-height: 1.4;

@@ -86,6 +86,22 @@ def test_bulk_raw_assessment_cleanup_refuses_active_evidence(assessment_root):
         assessment.clear_assessments()
 
 
+def test_raw_assessment_preserves_probe_note(assessment_root):
+    started = assessment.start_assessment(_model())
+    saved = assessment.update_assessment(
+        started["id"],
+        [{
+            "kind": "prose",
+            "target": 512,
+            "status": "passed",
+            "note": "Completion marker omitted; the response otherwise completed the test.",
+        }],
+        final=True,
+        status="complete",
+    )
+    assert saved["attempts"][0]["note"].startswith("Completion marker omitted")
+
+
 def test_stopped_probe_evidence_is_valid(assessment_root):
     started = assessment.start_assessment(_model())
     saved = assessment.update_assessment(

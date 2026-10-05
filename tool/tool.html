@@ -1705,6 +1705,7 @@
         <div id="app-overlay-root" class="app-overlay-root" aria-label="Application overlays">
             <div id="editor-caption-candidate" class="editor-caption-candidate hidden" aria-live="polite">
                 <section class="editor-caption-candidate-dialog" role="dialog" aria-modal="true" aria-label="AI caption candidate">
+                    <div id="editor-caption-candidate-missing" class="editor-caption-candidate-missing hidden"></div>
                     <div id="editor-caption-candidate-text" class="editor-caption-candidate-text"></div>
                     <div class="editor-caption-candidate-actions">
                         <button id="editor-caption-candidate-use" type="button">Use</button>
@@ -2098,6 +2099,22 @@
                             </details>
                             <p class="app-settings-help">Local models come from <code>&lt;Models Root&gt;/text_encoders</code>. Director model selection remains shared across Director-enabled workspaces.</p>
                             <p class="app-settings-help">Use <strong>Save + Reboot</strong> after changing Director runtime settings.</p>
+                        </section>
+                        <section class="app-settings-section" id="caption-assist-settings">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Caption Assist</div>
+                                <div class="app-settings-section-copy">Control how LLM-written captions are ordered. Annotation group order and Caption Primer order do not affect this setting.</div>
+                            </div>
+                            <label class="app-settings-field app-settings-field-wide">
+                                <span class="app-settings-field-label">Preferred caption sequence</span>
+                                <textarea id="app-settings-caption-sequence" class="app-settings-caption-sequence" rows="10" spellcheck="false" placeholder="Leave blank for natural caption ordering"></textarea>
+                                <span class="app-settings-note">One step per line. Clear the field for natural ordering. Any annotation groups not named here are still included immediately before the final background, lighting, and view portion.</span>
+                            </label>
+                            <div class="app-settings-caption-sequence-groups-wrap">
+                                <span class="app-settings-field-label">Current groups not explicitly named</span>
+                                <div id="app-settings-caption-sequence-groups" class="app-settings-caption-sequence-groups"></div>
+                                <span class="app-settings-note">Click a group to insert it at the last sequence cursor, or append it when no cursor has been placed.</span>
+                            </div>
                         </section>
                     </div>
 

@@ -452,6 +452,16 @@ textarea:focus, input:focus {
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
 }
 
+.editor-caption-candidate-missing {
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(217, 119, 6, 0.22);
+  background: rgba(245, 158, 11, 0.09);
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .editor-caption-candidate-text {
   min-height: 0;
   max-height: min(58vh, 560px);

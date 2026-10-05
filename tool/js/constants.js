@@ -167,6 +167,8 @@ ui = {
   appSettingsEnableFaceAnalysisEl: document.getElementById('app-settings-enable-face-analysis'),
   appSettingsEnableMediaPipeAnalysisEl: document.getElementById('app-settings-enable-mediapipe-analysis'),
   appSettingsPrimerTemplateEl: document.getElementById('app-settings-primer-template'),
+  appSettingsCaptionSequenceEl: document.getElementById('app-settings-caption-sequence'),
+  appSettingsCaptionSequenceGroupsEl: document.getElementById('app-settings-caption-sequence-groups'),
   appSettingsDebugEl: document.getElementById('app-settings-debug'),
   appSettingsJsonEl: document.getElementById('app-settings-json'),
   statsPhrasesEl: document.getElementById('stats-phrases'),

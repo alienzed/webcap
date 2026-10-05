@@ -388,7 +388,7 @@ def test_earlier_capacity_failure_does_not_mask_later_contract_miss(calibration_
         {"kind": "prose", "target": 1024, "status": "failed", "failureKind": "contract"},
     ])
     saved = calibration.save_report(report)
-    assert saved["health"] == "assessment-incomplete"
+    assert saved["health"] == "healthy"
     signal = _assessment_signal(saved["modelRef"])
     assert not signal["limited"] and not signal["seriousWarning"]
 

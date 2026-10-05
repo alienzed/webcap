@@ -498,6 +498,41 @@ function shellSetLabel(folder) {
   return parts.length ? parts[parts.length - 1] : String(folder || '');
 }
 
+function refreshApplicationDirectorModels() {
+  var control = document.getElementById('app-header-director-control');
+  var select = document.getElementById('app-header-director-model');
+  var refresh = document.getElementById('app-header-director-refresh');
+  if (!control || !select || !refresh) return Promise.resolve();
+
+  refresh.disabled = true;
+  select.disabled = true;
+  select.innerHTML = '<option value="">Loading models...</option>';
+
+  return fetch('/fs/storyboard/director').then(function (response) {
+    return response.json().then(function (payload) {
+      if (!response.ok || !payload || payload.ok === false) {
+        throw new Error(payload && payload.error ? payload.error : 'Could not load Director models.');
+      }
+      var models = Array.isArray(payload.models) ? payload.models : [];
+      if (!payload.available || !models.length) {
+        select.innerHTML = '<option value="">Director unavailable</option>';
+        select.disabled = true;
+        return;
+      }
+      var selected = renderDirectorModelOptions(select, models, getDirectorModelPreference());
+      setDirectorModelPreference('webcap.director.model', selected);
+      select.value = selected;
+      select.disabled = false;
+    });
+  }).catch(function (err) {
+    select.innerHTML = '<option value="">Director unavailable</option>';
+    select.disabled = true;
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Director', err);
+  }).then(function () {
+    refresh.disabled = false;
+  });
+}
+
 function renderApplicationSetSelector() {
   var control = document.getElementById('app-header-set-control');
   var select = document.getElementById('app-header-set-select');
@@ -999,6 +1034,27 @@ function wireShellMoreMenuUi() {
 
 function wireWorkspaceHeaderUi() {
   wireShellMoreMenuUi();
+  var directorSelect = document.getElementById('app-header-director-model');
+  var directorRefresh = document.getElementById('app-header-director-refresh');
+  if (directorSelect && !directorSelect.__directorWired) {
+    directorSelect.__directorWired = true;
+    directorSelect.onchange = function () {
+      setDirectorModelPreference('webcap.director.model', String(this.value || ''));
+    };
+    window.addEventListener('webcap:director-model-changed', function (event) {
+      var selected = String(event && event.detail && event.detail.modelId || '');
+      if (!selected || selected === String(directorSelect.value || '')) return;
+      if (Array.prototype.some.call(directorSelect.options, function (option) { return option.value === selected; })) {
+        directorSelect.value = selected;
+      }
+    });
+    refreshApplicationDirectorModels();
+  }
+  if (directorRefresh && !directorRefresh.__directorWired) {
+    directorRefresh.__directorWired = true;
+    directorRefresh.onclick = refreshApplicationDirectorModels;
+  }
+
   var setSelect = document.getElementById('app-header-set-select');
   if (setSelect && !setSelect.__workspaceWired) {
     setSelect.__workspaceWired = true;

@@ -59,6 +59,7 @@ function syncFocusedCaptionControls() {
     startBtn.classList.toggle('hidden', !hasItem || annotationOpen);
     startBtn.classList.remove('active');
     startBtn.setAttribute('aria-pressed', 'false');
+    startBtn.setAttribute('aria-label', 'Start Focus Caption');
     startBtn.title = 'Focus Caption: generate and review AI caption candidates across the current visible items';
     if (labelEl) labelEl.textContent = 'Focus Caption';
     skipBtn.classList.add('hidden');
@@ -69,6 +70,7 @@ function syncFocusedCaptionControls() {
   startBtn.classList.remove('hidden');
   startBtn.classList.add('active');
   startBtn.setAttribute('aria-pressed', 'true');
+  startBtn.setAttribute('aria-label', 'Exit Focus Caption');
   startBtn.title = 'Exit Focus Caption';
   if (labelEl) {
     labelEl.textContent = 'Caption ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length;

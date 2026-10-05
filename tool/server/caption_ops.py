@@ -183,3 +183,134 @@ def build_caption_assist_messages(assignments=None, tags=None, required_phrase="
         {"role": "system", "content": CAPTION_ASSIST_SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
     ]
+
+
+CAPTION_TEMPLATE_ASSIST_SYSTEM_PROMPT = """
+You design deterministic WebCap Caption Primer templates from the user's configured annotation schema.
+
+WebCap's Caption Primer is not a freeform caption generator. It resolves configured tag groups and custom mappings into
+named values, then renders a reusable text template. Your job is to improve that reusable template so captions read
+naturally across many combinations of selected values.
+
+Primer data model and rendering rules:
+1. Requirement/tag groups are ordered. Each group has a stable template key supplied in the input.
+2. A group's selected terms are rendered before template substitution. For each term:
+   - descriptorPrefix/descriptorSuffix are applied directly around the raw term first;
+   - wrapperPrefix/wrapperSuffix are then applied around that descriptor-rendered result;
+   - WebCap inserts a space between an affix and the text unless the affix already ends/starts with whitespace or
+     punctuation that implies direct attachment.
+   The input includes renderedDefault so you can see the resulting phrase for each vocabulary value.
+3. When multiple terms from one group are selected, WebCap applies its learned per-group precedence and joins the
+   rendered terms with that group's configured separator. The template receives the already-joined group value.
+4. Custom Primer mappings are additional replacement patterns:
+   - scope "tag": the mapping token matches an unscoped tag by normalized exact text;
+   - scope "file": the token matches a whole token in the lowercased filename;
+   - on match, the mapping contributes mapping.value (or its token when value is blank) to mapping.key.
+   Mapping values and group values share the same template-key namespace. Do not invent or modify mappings.
+5. Duplicate values are removed, and a shorter value is suppressed when it is wholly contained as a token inside a
+   longer value for the same key.
+
+Template grammar:
+- {key} emits the resolved value only when that key has a non-empty value; otherwise it disappears.
+- Punctuation/literal characters immediately around a simple key can be conditional by putting them inside the braces.
+  Example: {surface, } emits "wood floor, " only when surface exists.
+- {key|suffix} emits value + suffix only when key exists.
+- {prefix|key|suffix} emits prefix + value + suffix only when key exists.
+- Literal text outside braces is unconditional. Therefore words such as "lighting", "view", articles, prepositions,
+  commas, and sentence glue that depend on an optional value should usually be inside the same conditional placeholder.
+- Placeholders cannot nest.
+- WebCap trims trailing whitespace on each line, collapses three or more blank lines to two, and trims the final result.
+
+Design requirements:
+- Use only keys listed in availableKeys.
+- Preserve the user's actual group vocabulary, separators, affixes, mappings, and group order; do not invent facts,
+  groups, tags, affixes, or replacement rules.
+- Design for arbitrary subsets of groups being populated. A template that reads well only when every group is present
+  is not good enough.
+- Prefer concise natural training-caption prose over a raw comma-separated tag dump, while retaining deterministic
+  behavior.
+- Treat currentTemplate as an editable draft: improve it when useful, but do not preserve awkward structure merely
+  because it already exists.
+- Return only the template text. No markdown fences, labels, explanation, alternatives, or commentary.
+""".strip()
+
+
+def build_caption_template_assist_messages(groups=None, mappings=None, current_template=""):
+    clean_groups = []
+    available_keys = []
+    seen_keys = set()
+    for raw_group in groups if isinstance(groups, list) else []:
+        if not isinstance(raw_group, dict):
+            continue
+        label = str(raw_group.get("label") or raw_group.get("group") or "").strip()
+        key = str(raw_group.get("key") or "").strip().lower()
+        if not label or not key:
+            continue
+        if key not in seen_keys:
+            available_keys.append(key)
+            seen_keys.add(key)
+        terms = []
+        for raw_term in raw_group.get("terms") if isinstance(raw_group.get("terms"), list) else []:
+            if not isinstance(raw_term, dict):
+                continue
+            value = str(raw_term.get("value") or raw_term.get("term") or "").strip()
+            if not value:
+                continue
+            terms.append({
+                "value": value,
+                "descriptorPrefix": str(raw_term.get("descriptorPrefix") or ""),
+                "descriptorSuffix": str(raw_term.get("descriptorSuffix") or ""),
+                "wrapperPrefix": str(raw_term.get("wrapperPrefix") or ""),
+                "wrapperSuffix": str(raw_term.get("wrapperSuffix") or ""),
+                "renderedDefault": str(raw_term.get("renderedDefault") or value).strip(),
+            })
+        clean_groups.append({
+            "label": label,
+            "key": key,
+            "separator": str(raw_group.get("separator") if raw_group.get("separator") is not None else ", "),
+            "precedence": raw_group.get("precedence") if isinstance(raw_group.get("precedence"), dict) else {},
+            "terms": terms,
+        })
+
+    clean_mappings = []
+    for raw_mapping in mappings if isinstance(mappings, list) else []:
+        if not isinstance(raw_mapping, dict) or raw_mapping.get("enabled") is False:
+            continue
+        scope = str(raw_mapping.get("scope") or "tag").strip().lower()
+        if scope not in {"tag", "file"}:
+            continue
+        token = str(raw_mapping.get("token") or "").strip()
+        key = str(raw_mapping.get("key") or "").strip().lower()
+        value = str(raw_mapping.get("value") or "").strip()
+        if not token or not key:
+            continue
+        if key not in seen_keys:
+            available_keys.append(key)
+            seen_keys.add(key)
+        clean_mappings.append({
+            "scope": scope,
+            "token": token,
+            "key": key,
+            "value": value,
+        })
+
+    if not clean_groups and not clean_mappings:
+        raise ValueError("Caption Template Assist needs at least one configured group or Primer mapping.")
+
+    payload = {
+        "availableKeys": available_keys,
+        "groupsInOrder": clean_groups,
+        "customMappings": clean_mappings,
+        "currentTemplate": str(current_template or ""),
+    }
+    return [
+        {"role": "system", "content": CAPTION_TEMPLATE_ASSIST_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                "Create one improved WebCap Caption Primer template from this exact schema. "
+                "Use the vocabulary examples to choose grammatical placement and conditional glue.\n\n"
+                + json.dumps(payload, ensure_ascii=False, indent=2)
+            ),
+        },
+    ]

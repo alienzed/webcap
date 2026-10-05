@@ -111,6 +111,57 @@ var primerResetUndoState = null; // { mediaKey, text }
 var captionAssistPendingJobId = '';
 var captionAssistCandidate = null; // { mediaKey, text }
 var primerTemplateAssistPendingJobId = '';
+
+function isCaptionAssistRunning() {
+  return !!captionAssistPendingJobId;
+}
+
+function clearCaptionAssistCandidate() {
+  captionAssistCandidate = null;
+  syncCaptionAssistCandidateUi();
+}
+
+function useCaptionAssistCandidate() {
+  var mediaItem = getPrimerResetCurrentMediaItem();
+  if (!mediaItem || !captionAssistCandidate || captionAssistCandidate.mediaKey !== mediaItem.key) {
+    setStatus('No AI caption candidate is available for this item.');
+    syncCaptionAssistCandidateUi();
+    return Promise.resolve(false);
+  }
+
+  var nextCaption = String(captionAssistCandidate.text || '');
+  if (!isFocusedCaptionOpen()) {
+    captionAssistCandidate = null;
+    applyEditorTextAndTriggerInput(nextCaption);
+    syncCaptionAssistCandidateUi();
+    ui.editorEl.focus();
+    setStatus('AI caption candidate moved into the editor.');
+    return Promise.resolve(true);
+  }
+
+  captionAssistCandidate = null;
+  syncCaptionAssistCandidateUi();
+  cancelEditorAutosaveForCaption(state.folder, mediaItem.fileName);
+  return saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key, {
+    skipRenderFileList: true
+  }).then(function () {
+    ui.editorEl.value = nextCaption;
+    return advanceFocusedCaption();
+  }).catch(function (err) {
+    setStatus('Could not save AI caption candidate: ' + String(err && err.message ? err.message : err));
+    return false;
+  });
+}
+
+function dismissCaptionAssistCandidate() {
+  clearCaptionAssistCandidate();
+  if (isFocusedCaptionOpen()) {
+    return advanceFocusedCaption();
+  }
+  setStatus('AI caption candidate dismissed.');
+  return Promise.resolve(true);
+}
+
 var primerTemplateAssistCandidate = '';
 
 function wireStatsPrimerAutoSave() {
@@ -553,18 +604,7 @@ function wirePrimerCaptionResetUi() {
   if (!candidateUseBtn.__captionAssistBound) {
     candidateUseBtn.__captionAssistBound = true;
     candidateUseBtn.addEventListener('click', function () {
-      var mediaItem = getPrimerResetCurrentMediaItem();
-      if (!mediaItem || !captionAssistCandidate || captionAssistCandidate.mediaKey !== mediaItem.key) {
-        setStatus('No AI caption candidate is available for this item.');
-        syncCaptionAssistCandidateUi();
-        return;
-      }
-      var nextCaption = String(captionAssistCandidate.text || '');
-      captionAssistCandidate = null;
-      applyEditorTextAndTriggerInput(nextCaption);
-      syncCaptionAssistCandidateUi();
-      ui.editorEl.focus();
-      setStatus('AI caption candidate moved into the editor.');
+      useCaptionAssistCandidate();
     });
   }
 
@@ -580,9 +620,7 @@ function wirePrimerCaptionResetUi() {
   if (!candidateDismissBtn.__captionAssistBound) {
     candidateDismissBtn.__captionAssistBound = true;
     candidateDismissBtn.addEventListener('click', function () {
-      captionAssistCandidate = null;
-      syncCaptionAssistCandidateUi();
-      setStatus('AI caption candidate dismissed.');
+      dismissCaptionAssistCandidate();
     });
   }
 

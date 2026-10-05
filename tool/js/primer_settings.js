@@ -108,6 +108,7 @@ function statsGetPrimerOptionsFromDom() {
 
 var debouncedSaveFolderState = debounceCreate(600);
 var primerResetUndoState = null; // { mediaKey, text }
+var captionAssistPendingJobId = '';
 
 function wireStatsPrimerAutoSave() {
   var statsFields = [
@@ -189,13 +190,15 @@ function updatePrimerCaptionResetUi() {
   var resetBtn = document.getElementById('primer-reset-caption-btn');
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
   var applyCaptionBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
-  if (!resetBtn || !undoBtn) return;
+  var captionWandBtn = document.getElementById('editor-caption-wand-btn');
+  if (!resetBtn || !undoBtn || !captionWandBtn) return;
 
   var mediaItem = getPrimerResetCurrentMediaItem();
   var hasSelectedMedia = !!(mediaItem && ui && ui.editorEl && !ui.editorEl.readOnly);
   if (!hasSelectedMedia) {
     resetBtn.classList.add('hidden');
     undoBtn.classList.add('hidden');
+    captionWandBtn.classList.add('hidden');
     if (applyCaptionBtn) {
       syncCaptionApplyConfirmationUi();
       applyCaptionBtn.classList.add('hidden');
@@ -210,6 +213,12 @@ function updatePrimerCaptionResetUi() {
 
   var canUndo = !!(primerResetUndoState && primerResetUndoState.mediaKey === mediaItem.key);
   undoBtn.classList.toggle('hidden', !canUndo);
+  captionWandBtn.classList.remove('hidden');
+  captionWandBtn.disabled = !!captionAssistPendingJobId;
+  captionWandBtn.classList.toggle('is-pending', !!captionAssistPendingJobId);
+  captionWandBtn.title = captionAssistPendingJobId
+    ? 'AI caption rewrite is running'
+    : 'Rewrite this caption naturally from the selected annotations using the current Director model';
   if (applyCaptionBtn) {
     applyCaptionBtn.classList.remove('hidden');
     applyCaptionBtn.classList.toggle('is-captionless-apply', !mediaItem.hasCaption);
@@ -237,11 +246,131 @@ function syncCurrentFolderPrimerTemplateFromAppDefault() {
   return true;
 }
 
+function buildCaptionAssistRequest(mediaItem) {
+  var mediaKey = mediaItem && mediaItem.key;
+  if (!mediaKey) throw new Error('Caption Assist requires a selected media item.');
+
+  var assignments = getChecklistAssignmentEntriesForMediaKey(mediaKey).map(function (entry) {
+    return {
+      group: String(entry.requirement || '').trim(),
+      term: String(entry.term || '').trim()
+    };
+  }).filter(function (entry) {
+    return !!entry.term;
+  });
+
+  var requiredPhraseEl = document.getElementById('stats-required-phrase');
+  return {
+    model: getDirectorModelPreference('webcap.director.model'),
+    assignments: assignments,
+    tags: getUnscopedTagsForMediaKey(mediaKey),
+    requiredPhrase: requiredPhraseEl ? String(requiredPhraseEl.value || '').trim() : '',
+    draft: String((ui && ui.editorEl && ui.editorEl.value) || '').trim()
+  };
+}
+
+function captionAssistRequestJson(url, options) {
+  return fetch(url, options || {}).then(function (response) {
+    return response.json().then(function (payload) {
+      if (!response.ok || !payload || payload.ok === false) {
+        throw new Error(payload && payload.error ? payload.error : (response.statusText || 'Caption Assist request failed.'));
+      }
+      return payload;
+    });
+  });
+}
+
+function waitForCaptionAssistJob(job) {
+  if (!job || !job.jobId) throw new Error('Caption Assist did not return a queued job.');
+  trackTransientLlmJob(job);
+  function poll(current) {
+    var status = String(current.status || '');
+    if (status === 'completed') return Promise.resolve(current);
+    if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
+      throw new Error(current.error || ('Caption Assist job ' + status + '.'));
+    }
+    return new Promise(function (resolve) { setTimeout(resolve, status === 'queued' ? 2000 : 1200); })
+      .then(function () {
+        return captionAssistRequestJson('/fs/director/job?job=' + encodeURIComponent(current.jobId) + '&consume=1');
+      })
+      .then(function (payload) {
+        if (!payload.job) throw new Error('Caption Assist job response is missing its job.');
+        trackTransientLlmJob(payload.job);
+        return poll(payload.job);
+      });
+  }
+  return poll(job);
+}
+
+function runCaptionAssist() {
+  var mediaItem = getPrimerResetCurrentMediaItem();
+  if (!mediaItem) {
+    setStatus('Select a media item first.');
+    return Promise.resolve(false);
+  }
+  if (captionAssistPendingJobId) {
+    setStatus('Caption Assist is already running.');
+    return Promise.resolve(false);
+  }
+
+  var request = buildCaptionAssistRequest(mediaItem);
+  if (!request.model) {
+    setStatus('Select a Director model before using Caption Assist.');
+    return Promise.resolve(false);
+  }
+
+  var sourceMediaKey = mediaItem.key;
+  setStatus('Caption Assist queued...');
+  return captionAssistRequestJson('/caption/assist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request)
+  }).then(function (payload) {
+    if (!payload.job || !payload.job.jobId) throw new Error('Caption Assist did not return a queued job.');
+    captionAssistPendingJobId = String(payload.job.jobId);
+    trackTransientLlmJob(payload.job);
+    updatePrimerCaptionResetUi();
+    setStatus(payload.job.status === 'queued' ? 'Caption Assist waiting in the LLM queue...' : 'Caption Assist writing...');
+    return waitForCaptionAssistJob(payload.job);
+  }).then(function (job) {
+    var result = job.result && typeof job.result === 'object' ? job.result : {};
+    var nextCaption = String(result.text || '').trim();
+    if (!nextCaption) throw new Error('Caption Assist returned an empty caption.');
+    if (!state.currentItem || state.currentItem.key !== sourceMediaKey) {
+      setStatus('Caption Assist finished, but the selected media item changed; result was not applied.');
+      return false;
+    }
+    applyEditorTextAndTriggerInput(nextCaption);
+    ui.editorEl.focus();
+    setStatus('Caption rewritten with selected annotations.');
+    return true;
+  }).catch(function (err) {
+    setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));
+    return false;
+  }).then(function (result) {
+    captionAssistPendingJobId = '';
+    updatePrimerCaptionResetUi();
+    return result;
+  }, function (err) {
+    captionAssistPendingJobId = '';
+    updatePrimerCaptionResetUi();
+    throw err;
+  });
+}
+
 function wirePrimerCaptionResetUi() {
   var resetBtn = document.getElementById('primer-reset-caption-btn');
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
   var applyCaptionBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
-  if (!resetBtn || !undoBtn) return;
+  var captionWandBtn = document.getElementById('editor-caption-wand-btn');
+  if (!resetBtn || !undoBtn || !captionWandBtn) return;
+
+  if (!captionWandBtn.__captionAssistBound) {
+    captionWandBtn.__captionAssistBound = true;
+    captionWandBtn.addEventListener('click', function () {
+      runCaptionAssist();
+    });
+  }
 
   if (!resetBtn.__primerResetBound) {
     resetBtn.__primerResetBound = true;

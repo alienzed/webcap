@@ -446,6 +446,8 @@ def test_diagnostics_separates_assessment_from_benchmark():
     assert "directorModelAssessmentSelectedModels" in frontend
     assert "directorModelTestSelectedModels" in frontend
     assert "Delete Raw Evidence" in frontend
+    assert "Clear Raw Runs" in html
+    assert "clear_assessments" in frontend
     assert "Load Full Evidence" not in frontend
     assert "directorModelAssessmentRenderEvidence" in frontend
     assert "directorModelAssessmentWireEvidenceToggles" in frontend

@@ -381,8 +381,9 @@ function wirePrimerCaptionResetUi() {
   var applyCaptionBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
   var captionWandBtn = document.getElementById('editor-caption-wand-btn');
   var candidateUseBtn = document.getElementById('editor-caption-candidate-use');
+  var candidateRegenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
   var candidateDismissBtn = document.getElementById('editor-caption-candidate-dismiss');
-  if (!resetBtn || !undoBtn || !captionWandBtn || !candidateUseBtn || !candidateDismissBtn) return;
+  if (!resetBtn || !undoBtn || !captionWandBtn || !candidateUseBtn || !candidateRegenerateBtn || !candidateDismissBtn) return;
 
   if (!candidateUseBtn.__captionAssistBound) {
     candidateUseBtn.__captionAssistBound = true;
@@ -399,6 +400,15 @@ function wirePrimerCaptionResetUi() {
       syncCaptionAssistCandidateUi();
       ui.editorEl.focus();
       setStatus('AI caption candidate moved into the editor.');
+    });
+  }
+
+  if (!candidateRegenerateBtn.__captionAssistBound) {
+    candidateRegenerateBtn.__captionAssistBound = true;
+    candidateRegenerateBtn.addEventListener('click', function () {
+      captionAssistCandidate = null;
+      syncCaptionAssistCandidateUi();
+      runCaptionAssist();
     });
   }
 

@@ -1156,25 +1156,20 @@ def test_test_generations_exposes_training_candidates_link_from_unique_run_prove
     assert "trainingCandidatesCloseHook" in candidates
     assert "options && typeof options.onClose === 'function'" in candidates
 
-
-def test_test_generations_strength_control_is_compact_and_persisted():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+ 
+def test_test_generations_strength_control_is_per_candidate_row():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
-    assert 'id="test-generations-strength"' in html
-    assert 'min="-2"' in html
-    assert 'max="2"' in html
-    assert 'step="0.05"' in html
-    assert 'title="Strength"' in html
-    assert 'aria-label="Strength"' in html
-    strength_markup = html.split('id="test-generations-strength-field"', 1)[1].split("</div>", 1)[0]
-    assert "<span>" not in strength_markup
-    assert "strength: Number(el('test-generations-strength')" in script
-    assert "['strength', 'test-generations-strength-field']" in script
-    assert "settings.strength = String(el('test-generations-strength').value" in script
+    assert "test-generations-candidate-strength" in script
+    assert "strength.dataset.candidateStrength" in script
+    assert "strength.min = '-2';" in script
+    assert "strength.max = '2';" in script
+    assert "strength.step = '0.05';" in script
+    assert "strength.title = 'Strength';" in script
+    assert "candidateStrengths: selectedStrengths" in script
     assert "Strength must be between -2 and 2." in script
-    assert ".test-generations-strength-field input" in css
+    assert ".test-generations-candidate-strength" in css
 
 
 def test_global_director_model_control_lives_in_header():

@@ -6076,3 +6076,12 @@ html[data-theme="dark"] iframe {
     white-space: normal;
   }
 }
+
+
+.test-generations-strength-field {
+  align-self: end;
+}
+
+.test-generations-strength-field input {
+  width: 72px;
+}

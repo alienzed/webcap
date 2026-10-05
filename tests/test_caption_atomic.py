@@ -5,6 +5,28 @@ import pytest
 import tool.server.caption_ops as caption_ops
 
 
+def test_caption_assist_leaves_room_for_runtime_reasoning(monkeypatch):
+    from tool.server import app as app_module
+
+    captured = {}
+
+    def enqueue(client, model, contract, context=None, label=""):
+        captured.update(client=client, model=model, contract=contract, context=context)
+        return {"jobId": "caption-test"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
+    with app_module.app.test_client() as client:
+        response = client.post("/caption/assist", json={
+            "model": "remote-1::qwen",
+            "assignments": [{"group": "Position", "term": "standing"}],
+        })
+
+    assert response.status_code == 202
+    assert captured["client"] == "caption"
+    assert "runtimeOverrides" not in captured["context"]
+    assert "Write one fluent caption" in captured["contract"]["messages"][0]["content"]
+
+
 def test_failed_caption_replace_keeps_existing_caption(tmp_path, monkeypatch):
     folder = tmp_path / "set"
     folder.mkdir()

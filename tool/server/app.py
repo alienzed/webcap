@@ -553,9 +553,7 @@ def caption_assist_route():
                 "operation": "caption_assist",
                 "messages": messages,
             },
-            context={
-                "runtimeOverrides": {"maxTokens": 256},
-            },
+            context={},
             label="Caption Assist",
         )
         return jsonify({"ok": True, "job": job}), 202

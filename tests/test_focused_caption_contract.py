@@ -61,6 +61,8 @@ def test_focus_caption_candidate_actions_preserve_normal_editor_behavior():
     dismiss_end = primer.index("function wireStatsPrimerAutoSave()", dismiss_start)
     dismiss_candidate = primer[dismiss_start:dismiss_end]
     assert "if (isFocusedCaptionOpen())" in dismiss_candidate
+    assert "return advanceFocusedCaption();" not in dismiss_candidate
+    assert "Regenerate, edit, or Skip" in dismiss_candidate
     assert "AI caption candidate dismissed." in dismiss_candidate
 
 
@@ -78,7 +80,8 @@ def test_focus_caption_progress_is_visible_without_new_workspace_surface():
     css = _read("tool/css/workspace_shell.css")
     focus = _read("tool/js/focused_caption.js")
 
-    assert "Caption ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length" in focus
+    assert "'Exit \\u00b7 ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length" in focus
+    assert "event.key !== 'Escape'" in focus
     assert ".preview-workflow-actions .review-captions-btn.active" in css
     assert ".review-captions-btn.active .preview-header-btn-label" in css
     assert "setWorkspaceSurface(" not in focus

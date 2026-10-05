@@ -410,38 +410,31 @@ textarea:focus, input:focus {
 }
 
 .editor-caption-candidate {
-  margin-top: 8px;
-  padding: 10px;
+  width: min(360px, calc(100vw - 80px));
+  padding: 9px 10px;
   border: 1px solid rgba(148, 163, 184, 0.45);
   border-radius: 8px;
-  background: rgba(248, 250, 252, 0.96);
+  background: rgba(248, 250, 252, 0.98);
   color: #1f2937;
-}
-
-.editor-caption-candidate-label {
-  margin-bottom: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #64748b;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
 }
 
 .editor-caption-candidate-text {
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.45;
+  text-align: left;
 }
 
 .editor-caption-candidate-actions {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 7px;
 }
 
 .editor-caption-candidate-actions button {
-  padding: 5px 9px;
+  padding: 4px 8px;
   font-size: 12px;
 }
 

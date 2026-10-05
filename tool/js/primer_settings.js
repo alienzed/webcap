@@ -647,11 +647,10 @@ function wirePrimerCaptionResetUi() {
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
   var applyCaptionBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
   var captionWandBtn = document.getElementById('editor-caption-wand-btn');
-  var candidatePanel = document.getElementById('editor-caption-candidate');
   var candidateUseBtn = document.getElementById('editor-caption-candidate-use');
   var candidateRegenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
   var candidateDismissBtn = document.getElementById('editor-caption-candidate-dismiss');
-  if (!resetBtn || !undoBtn || !captionWandBtn || !candidatePanel || !candidateUseBtn || !candidateRegenerateBtn || !candidateDismissBtn) return;
+  if (!resetBtn || !undoBtn || !captionWandBtn || !candidateUseBtn || !candidateRegenerateBtn || !candidateDismissBtn) return;
 
   if (!candidateUseBtn.__captionAssistBound) {
     candidateUseBtn.__captionAssistBound = true;
@@ -674,23 +673,6 @@ function wirePrimerCaptionResetUi() {
     candidateDismissBtn.addEventListener('click', function () {
       dismissCaptionAssistCandidate();
     });
-  }
-
-  if (!candidatePanel.__captionAssistBackdropBound) {
-    candidatePanel.__captionAssistBackdropBound = true;
-    candidatePanel.addEventListener('click', function (event) {
-      if (event.target === candidatePanel) dismissCaptionAssistCandidate();
-    });
-  }
-
-  if (!document.__captionAssistEscapeBound) {
-    document.__captionAssistEscapeBound = true;
-    document.addEventListener('keydown', function (event) {
-      if (event.key !== 'Escape' || !captionAssistCandidate) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      dismissCaptionAssistCandidate();
-    }, true);
   }
 
   if (!captionWandBtn.__captionAssistBound) {

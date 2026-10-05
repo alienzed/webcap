@@ -1907,39 +1907,27 @@ def test_prepare_exposes_unique_training_run_provenance_for_staged_loras(tmp_pat
     }]
 
 
-def test_h3_test_strength_is_validated_and_written_to_workflow():
-    model = bench.get_test_model("minimax_h3")
-    template = model.load_template()
-    settings = model.normalize_settings(template, lambda: 1, {"strength": -1.25})
 
-    assert settings["strength"] == -1.25
-    workflow = model.build_workflow(
-        template,
-        "test prompt",
-        "candidate.safetensors",
-        settings=settings,
+def test_per_candidate_strength_is_frozen_into_test_request(tmp_path, monkeypatch):
+    staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+
+    request, loras, include_base = bench._new_inference_request(
+        tmp_path,
+        "prompt",
+        selected_files=[candidates[0].name],
+        candidate_strengths={candidates[0].name: -1.25},
+        include_base=False,
     )
-    assert workflow["148"]["inputs"]["strength_model"] == -1.25
-    assert workflow["148"]["inputs"]["strength_clip"] == 1
+
+    assert include_base is False
+    assert [path.name for path in loras] == [candidates[0].name]
+    assert request["candidateStrengths"] == {candidates[0].name: -1.25}
 
     with pytest.raises(ValueError, match="between -2 and 2"):
-        model.normalize_settings(template, lambda: 1, {"strength": 2.05})
-
-
-def test_krea_test_strength_is_validated_and_written_to_workflow():
-    model = bench.get_test_model("krea2_raw")
-    template = model.load_template()
-    settings = model.normalize_settings(template, lambda: 1, {"strength": 1.35})
-
-    assert settings["strength"] == 1.35
-    workflow = model.build_workflow(
-        template,
-        "test prompt",
-        "candidate.safetensors",
-        settings=settings,
-    )
-    assert workflow["334"]["inputs"]["strength_model"] == 1.35
-    assert workflow["334"]["inputs"]["strength_clip"] == 1
-
-    with pytest.raises(ValueError, match="between -2 and 2"):
-        model.normalize_settings(template, lambda: 1, {"strength": -2.05})
+        bench._new_inference_request(
+            tmp_path,
+            "prompt",
+            selected_files=[candidates[0].name],
+            candidate_strengths={candidates[0].name: 2.05},
+            include_base=False,
+        )

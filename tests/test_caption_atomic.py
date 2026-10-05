@@ -37,3 +37,42 @@ def test_caption_assist_prompt_preserves_group_order():
     assert '"groupOrder": [' in messages[1]["content"]
     assert messages[1]["content"].index('"Position"') < messages[1]["content"].index('"View"') < messages[1]["content"].index('"Lighting"')
     assert "include it verbatim exactly once" in messages[0]["content"]
+
+
+def test_caption_template_assist_prompt_explains_primer_grammar():
+    messages = caption_ops.build_caption_template_assist_messages(
+        groups=[{
+            "label": "Surface",
+            "key": "surface",
+            "separator": ", ",
+            "precedence": {"bed": {"floor": True}},
+            "terms": [{
+                "value": "bed",
+                "descriptorPrefix": "red",
+                "descriptorSuffix": "",
+                "wrapperPrefix": "on",
+                "wrapperSuffix": "",
+                "renderedDefault": "on red bed",
+            }],
+        }],
+        mappings=[{
+            "scope": "tag",
+            "token": "studio",
+            "key": "setting",
+            "value": "in a studio",
+            "enabled": True,
+        }],
+        current_template="{surface, }{setting}.",
+    )
+
+    system = messages[0]["content"]
+    user = messages[1]["content"]
+    assert "{prefix|key|suffix}" in system
+    assert "descriptorPrefix/descriptorSuffix" in system
+    assert "wrapperPrefix/wrapperSuffix" in system
+    assert 'scope "tag"' in system
+    assert 'scope "file"' in system
+    assert '"availableKeys"' in user
+    assert '"surface"' in user
+    assert '"setting"' in user
+    assert '"on red bed"' in user

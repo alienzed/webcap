@@ -115,10 +115,22 @@ function directorModelTestRenderModelChoices(hostId, dataAttribute) {
   }).join('');
 }
 
+function directorModelAssessmentSyncGroupSelectors() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-director-assessment-group]'), function (group) {
+    var selector = group.querySelector('[data-director-assessment-group-select]');
+    if (!selector) return;
+    var rows = Array.prototype.slice.call(group.querySelectorAll('[data-director-model-assessment-model]'));
+    var selected = rows.filter(function (input) { return input.checked; }).length;
+    selector.checked = rows.length > 0 && selected === rows.length;
+    selector.indeterminate = selected > 0 && selected < rows.length;
+  });
+}
+
 function directorModelAssessmentRenderSelectionSummary() {
   var progress = directorModelTestEl('director-model-assessment-progress');
   var selection = directorModelTestEl('director-model-assessment-selection-summary');
-  if (!progress || !selection) throw new Error('Director model assessment summary markup is missing.');
+  var assess = directorModelTestEl('director-model-assessment-run');
+  if (!progress || !selection || !assess) throw new Error('Director model assessment summary markup is missing.');
 
   var counts = { needs: 0, incomplete: 0, assessed: 0 };
   var selectedCount = 0;
@@ -133,11 +145,14 @@ function directorModelAssessmentRenderSelectionSummary() {
     function () { selectedCount += 1; }
   );
 
-  progress.textContent =
-    String(counts.assessed) + ' assessed · ' +
-    String(counts.incomplete) + ' incomplete · ' +
-    String(counts.needs) + ' remaining';
-  selection.textContent = String(selectedCount) + ' selected for assessment';
+  var needsWork = counts.needs + counts.incomplete;
+  progress.textContent = String(counts.assessed) + ' assessed · ' + String(needsWork) + ' need assessment';
+  selection.textContent =
+    String(counts.needs) + ' new · ' +
+    String(counts.incomplete) + ' retry · ' +
+    String(selectedCount) + ' selected';
+  assess.textContent = selectedCount ? 'Assess ' + String(selectedCount) : 'Assess Selected';
+  directorModelAssessmentSyncGroupSelectors();
 }
 
 function directorModelTestRenderModels() {
@@ -322,7 +337,7 @@ function directorModelTestSyncControls() {
   }
 
   run.disabled = directorModelTestState.running || !directorModelTestState.models.length;
-  assess.disabled = directorModelTestState.running || !directorModelTestState.models.length;
+  assess.disabled = directorModelTestState.running || !directorModelAssessmentSelectedModels().length;
   clearCalibration.disabled = directorModelTestState.running || (!directorModelTestState.calibrationProfiles.length && !directorModelTestState.calibrationReports.length);
   clearRaw.disabled = directorModelTestState.running || !directorModelTestState.assessmentRuns.length;
   benchmarkRefresh.disabled = directorModelTestState.running;
@@ -508,20 +523,33 @@ function directorModelAssessmentModelState(report, profile) {
   return 'incomplete';
 }
 
+function directorModelAssessmentRetryReason(report) {
+  if (!report) return 'Retry to establish a dependable WebCap usage profile.';
+  if (String(report.status || '') === 'stopped' || String(report.health || '') === 'stopped') {
+    return 'Previous assessment was stopped.';
+  }
+  var attempts = Array.isArray(report.attempts) ? report.attempts : [];
+  var failed = attempts.slice().reverse().find(function (attempt) {
+    return attempt.status === 'failed';
+  }) || null;
+  if (failed) {
+    return directorModelAssessmentAttemptShortLabel(failed.kind) + ' test: ' +
+      directorModelAssessmentFailureShortLabel(failed.failureKind || 'failed') + '.';
+  }
+  if (String(report.error || '').trim()) return 'Previous assessment hit a runtime error.';
+  return 'Previous assessment did not establish a dependable usage profile.';
+}
+
 function directorModelAssessmentCapability(report, profile) {
   if (!report && !profile) {
-    return {
-      label: 'Needs assessment',
-      tone: 'neutral',
-      copy: 'No WebCap usage profile yet.'
-    };
+    return { label: '', tone: 'neutral', copy: '' };
   }
 
   if (!report && profile) {
     var savedOutput = Number(profile.maxTokens || 0);
     return savedOutput >= 8192
-      ? { label: 'Full-story Director', tone: 'good', copy: 'Saved profile supports First Cut and full-story development.' }
-      : { label: 'Scene-by-scene Director', tone: 'good', copy: 'Saved profile supports individual scene work.' };
+      ? { label: 'Full-story Director', tone: 'good', copy: 'First Cut + full-story development.' }
+      : { label: 'Scene-by-scene Director', tone: 'good', copy: 'Scene development + revisions.' };
   }
 
   var health = String(report.health || '');
@@ -533,34 +561,34 @@ function directorModelAssessmentCapability(report, profile) {
     return {
       label: 'Not recommended',
       tone: 'bad',
-      copy: 'Assessment found model-output problems; expand for details.'
+      copy: 'Assessment found model-output problems.'
     };
   }
   if (status !== 'complete' || ['assessment-failed', 'calibration-failed', 'assessment-incomplete', 'stopped'].indexOf(health) !== -1) {
     return {
-      label: 'Assessment incomplete',
+      label: 'Needs retry',
       tone: 'limited',
-      copy: 'Retry before relying on this model for Director work.'
+      copy: directorModelAssessmentRetryReason(report)
     };
   }
   if (coherentOutput >= 8192) {
     return {
       label: 'Full-story Director',
       tone: health === 'warning' ? 'limited' : 'good',
-      copy: 'Use for First Cut and full-story development.' + (health === 'warning' ? ' Quality warning recorded.' : '')
+      copy: 'First Cut + full-story development.' + (health === 'warning' ? ' Quality warning recorded.' : '')
     };
   }
   if (coherentOutput > 0) {
     return {
       label: 'Scene-by-scene Director',
       tone: health === 'warning' ? 'limited' : 'good',
-      copy: 'Use for individual scene development and revisions.' + (health === 'warning' ? ' Quality warning recorded.' : '')
+      copy: 'Scene development + revisions.' + (health === 'warning' ? ' Quality warning recorded.' : '')
     };
   }
   return {
-    label: 'Assessment incomplete',
+    label: 'Needs retry',
     tone: 'limited',
-    copy: 'No dependable Director workflow has been proven yet.'
+    copy: directorModelAssessmentRetryReason(report)
   };
 }
 
@@ -635,15 +663,16 @@ function directorModelAssessmentModelRow(model, report, profile, previousSelecti
   var state = directorModelAssessmentModelState(report, profile);
   var capability = directorModelAssessmentCapability(report, profile);
   var previous = previousSelection[modelRef] || null;
-  var checked = previous
-    ? !!previous.checked
-    : state !== 'assessed';
+  var checked = previous ? !!previous.checked : false;
   if (previous && previous.state !== 'assessed' && state === 'assessed') checked = false;
 
   var latestRun = report ? directorModelAssessmentLatestRun(modelRef, report) : null;
   var runtime = String(model.runtimeName || model.runtimeId || (String(model.runtimeId || '') === 'local' ? 'Local' : ''));
   var size = directorModelTestSize(model.sizeBytes);
   var meta = [runtime, size !== '—' ? size : ''].filter(Boolean).join(' · ');
+  var runtimeTitle = String(model.runtimeId || '') === 'local'
+    ? 'Local assessment uses the shared GPU and waits while Training or Inference owns it.'
+    : 'Remote assessment does not require the local GPU.';
   var label = String(model.label || model.modelId || model.id || '');
   var open = !!previousOpen[modelRef];
 
@@ -670,12 +699,14 @@ function directorModelAssessmentModelRow(model, report, profile, previousSelecti
       '</span>' +
       '<span class="director-model-assessment-model-identity" title="' + escapeHtml(label) + '">' +
         '<strong>' + escapeHtml(label) + '</strong>' +
-        '<span>' + escapeHtml(meta) + '</span>' +
+        '<span title="' + escapeHtml(runtimeTitle) + '">' + escapeHtml(meta) + '</span>' +
       '</span>' +
-      '<span class="director-model-assessment-capability">' +
-        '<span class="director-model-verdict director-model-verdict-' + escapeHtml(capability.tone) + '">' + escapeHtml(capability.label) + '</span>' +
-        '<span class="director-model-assessment-capability-copy">' + escapeHtml(capability.copy) + '</span>' +
-      '</span>' +
+      (capability.label || capability.copy
+        ? '<span class="director-model-assessment-capability">' +
+            (capability.label ? '<span class="director-model-verdict director-model-verdict-' + escapeHtml(capability.tone) + '">' + escapeHtml(capability.label) + '</span>' : '') +
+            (capability.copy ? '<span class="director-model-assessment-capability-copy">' + escapeHtml(capability.copy) + '</span>' : '') +
+          '</span>'
+        : '<span class="director-model-assessment-capability director-model-assessment-capability-empty"></span>') +
     '</summary>' +
     '<div class="app-settings-disclosure-body director-model-assessment-model-details">' + details + '</div>' +
   '</details>';
@@ -689,7 +720,11 @@ function directorModelAssessmentRenderGroup(key, title, copy, models, reportByRe
   return '<details class="director-model-assessment-group director-model-assessment-group-' + escapeHtml(key) + '" ' +
       'data-director-assessment-group="' + escapeHtml(key) + '"' + (open ? ' open' : '') + '>' +
     '<summary>' +
-      '<span><strong>' + escapeHtml(title) + '</strong> <span class="director-model-assessment-group-count">' + String(models.length) + '</span></span>' +
+      '<span class="director-model-assessment-group-heading">' +
+        '<input type="checkbox" data-director-assessment-group-select="' + escapeHtml(key) + '" aria-label="Select all models in ' + escapeHtml(title) + '">' +
+        '<strong>' + escapeHtml(title) + '</strong>' +
+        '<span class="director-model-assessment-group-count">' + String(models.length) + '</span>' +
+      '</span>' +
       '<span class="app-settings-help">' + escapeHtml(copy) + '</span>' +
     '</summary>' +
     '<div class="director-model-assessment-group-body">' +
@@ -753,7 +788,7 @@ function directorModelAssessmentRenderModels() {
     directorModelAssessmentRenderGroup(
       'needs',
       'Needs assessment',
-      'Not tested yet. These are selected by default.',
+      'Not tested yet.',
       groups.needs,
       reportByRef,
       profileByRef,
@@ -763,8 +798,8 @@ function directorModelAssessmentRenderModels() {
     ) +
     directorModelAssessmentRenderGroup(
       'incomplete',
-      'Incomplete',
-      'Retry these to establish a dependable WebCap usage profile.',
+      'Needs retry',
+      'Previous assessment did not establish a dependable WebCap profile.',
       groups.incomplete,
       reportByRef,
       profileByRef,
@@ -775,7 +810,7 @@ function directorModelAssessmentRenderModels() {
     directorModelAssessmentRenderGroup(
       'assessed',
       'Assessed',
-      'WebCap already has a usable result. Expand or select one only when needed.',
+      'WebCap already has a usable Director profile.',
       groups.assessed,
       reportByRef,
       profileByRef,
@@ -1418,7 +1453,11 @@ function directorModelTestCalibrateOne(model, modelNumber) {
 }
 
 function directorModelAssessmentOrderModels(models) {
-  if (!shellWorkloadState.trainingActive) return models;
+  var sharedGpuBusy = shellWorkloadState.trainingActive ||
+    shellWorkloadState.testingActive ||
+    shellWorkloadState.generatingActive ||
+    shellWorkloadState.inferenceActive;
+  if (!sharedGpuBusy) return models;
 
   var remote = models.filter(function (model) { return model.runtimeId !== 'local'; });
   var local = models.filter(function (model) { return model.runtimeId === 'local'; });
@@ -1802,25 +1841,26 @@ function initializeDirectorModelTest() {
   directorModelTestEl('director-model-test-select-none').addEventListener('click', function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-director-model-test-model]'), function (input) { input.checked = false; });
   });
-  directorModelTestEl('director-model-assessment-select-unfinished').addEventListener('click', function () {
-    Array.prototype.forEach.call(document.querySelectorAll('[data-director-model-assessment-model]'), function (input) {
-      input.checked = String(input.getAttribute('data-director-model-state') || '') !== 'assessed';
-    });
-    directorModelAssessmentRenderSelectionSummary();
-  });
-  directorModelTestEl('director-model-assessment-select-all').addEventListener('click', function () {
-    Array.prototype.forEach.call(document.querySelectorAll('[data-director-model-assessment-model]'), function (input) { input.checked = true; });
-    directorModelAssessmentRenderSelectionSummary();
-  });
-  directorModelTestEl('director-model-assessment-select-none').addEventListener('click', function () {
-    Array.prototype.forEach.call(document.querySelectorAll('[data-director-model-assessment-model]'), function (input) { input.checked = false; });
-    directorModelAssessmentRenderSelectionSummary();
-  });
   directorModelTestEl('director-model-assessment-models').addEventListener('click', function (event) {
-    if (event.target.matches('[data-director-model-assessment-model]')) event.stopPropagation();
+    if (event.target.matches('[data-director-model-assessment-model], [data-director-assessment-group-select]')) {
+      event.stopPropagation();
+    }
   });
   directorModelTestEl('director-model-assessment-models').addEventListener('change', function (event) {
-    if (event.target.matches('[data-director-model-assessment-model]')) directorModelAssessmentRenderSelectionSummary();
+    if (event.target.matches('[data-director-assessment-group-select]')) {
+      var group = event.target.closest('[data-director-assessment-group]');
+      if (!group) throw new Error('Director assessment group selector is detached from its group.');
+      Array.prototype.forEach.call(group.querySelectorAll('[data-director-model-assessment-model]'), function (input) {
+        input.checked = event.target.checked;
+      });
+      directorModelAssessmentRenderSelectionSummary();
+      directorModelTestSyncControls();
+      return;
+    }
+    if (event.target.matches('[data-director-model-assessment-model]')) {
+      directorModelAssessmentRenderSelectionSummary();
+      directorModelTestSyncControls();
+    }
   });
 
   directorModelTestEl('director-model-test-run').addEventListener('click', directorModelTestStart);

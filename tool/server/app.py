@@ -547,6 +547,7 @@ def caption_assist_route():
             draft=data.get("draft", ""),
             template=data.get("template", ""),
             rendered_primer=data.get("renderedPrimer", ""),
+            preferred_sequence=data.get("preferredCaptionSequence", ""),
         )
         job = enqueue_llm(
             "caption",

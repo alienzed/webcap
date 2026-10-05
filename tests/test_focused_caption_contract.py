@@ -22,6 +22,20 @@ def test_focus_caption_reuses_single_item_ui_and_existing_caption_assist():
     assert "saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key" in primer
 
 
+def test_caption_assist_surfaces_missing_groups_only_with_candidate():
+    html = _read("tool/tool.html")
+    primer = _read("tool/js/primer_settings.js")
+    settings = _read("tool/js/app_settings.js")
+
+    assert 'id="editor-caption-candidate-missing"' in html
+    assert 'id="app-settings-caption-sequence"' in html
+    assert 'id="app-settings-caption-sequence-groups"' in html
+    assert "getCaptionAssistMissingGroups" in primer
+    assert "Missing annotations: " in primer
+    assert "preferredCaptionSequence: getPreferredCaptionSequence()" in primer
+    assert "renderAppSettingsCaptionSequenceGroups" in settings
+
+
 def test_focus_caption_snapshots_current_visible_scope_once():
     focus = _read("tool/js/focused_caption.js")
 

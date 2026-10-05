@@ -2200,43 +2200,28 @@
                         <section class="app-settings-section" id="director-model-assessment-settings">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Director Models <span id="director-model-assessment-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
-                                <div class="app-settings-section-copy">Assess usable context and output capacity, preserve diagnostic evidence, and surface only meaningful model warnings or limitations to the rest of WebCap.</div>
+                                <div class="app-settings-section-copy">Learn which WebCap Director workflows each model can reliably handle. Expand a model for the underlying assessment tests and evidence.</div>
                             </div>
                             <div class="director-model-assessment-toolbar">
                                 <div class="director-model-assessment-toolbar-copy">
-                                    <span class="app-settings-field-label">Models to assess</span>
+                                    <strong id="director-model-assessment-progress">Loading model status…</strong>
                                     <span id="director-model-assessment-selection-summary" class="app-settings-help">Loading selection…</span>
                                 </div>
                                 <div class="director-model-test-model-actions">
                                     <button id="director-model-assessment-refresh" type="button" class="review-captions-btn">Refresh Models</button>
+                                    <button id="director-model-assessment-select-unfinished" type="button" class="review-captions-btn" title="Select models that still need a completed assessment">Unfinished</button>
                                     <button id="director-model-assessment-select-all" type="button" class="review-captions-btn">All</button>
                                     <button id="director-model-assessment-select-none" type="button" class="review-captions-btn">None</button>
                                     <button id="director-model-assessment-run" type="button">Assess Selected</button>
                                     <button id="director-model-assessment-stop" type="button" class="hidden">Stop</button>
                                 </div>
                             </div>
-                            <details id="director-model-assessment-picker" class="director-model-assessment-picker">
-                                <summary>Model selection</summary>
-                                <div id="director-model-assessment-models" class="director-model-test-models"></div>
-                            </details>
                             <div id="director-model-assessment-activity" class="director-model-test-activity" aria-live="polite"></div>
-                            <div class="app-settings-section-header director-model-assessment-results-heading">
-                                <div class="director-model-assessment-heading-copy">
-                                    <div class="app-settings-section-title">Current Findings</div>
-                                    <div class="app-settings-section-copy">High-level interpretation only. Expand a finding to inspect the latest full probe evidence.</div>
-                                </div>
-                                <button id="director-model-test-clear-calibration" type="button" class="review-captions-btn director-model-secondary-action" disabled>Clear Learned Results</button>
+                            <div id="director-model-assessment-models" class="director-model-assessment-groups">
+                                <p class="app-settings-help">Open this tab to load Director models.</p>
                             </div>
-                            <div class="director-model-findings-shell">
-                                <div id="director-model-findings-columns" class="director-model-findings-columns hidden" aria-hidden="true">
-                                    <span>Model</span>
-                                    <span>Verdict</span>
-                                    <span>Context</span>
-                                    <span>Structured</span>
-                                    <span>Long form</span>
-                                    <span>Last issue</span>
-                                </div>
-                                <div id="director-model-test-calibration-profiles"><p class="app-settings-help">No assessment findings yet.</p></div>
+                            <div class="director-model-assessment-learned-actions">
+                                <button id="director-model-test-clear-calibration" type="button" class="review-captions-btn" disabled>Clear Learned Results</button>
                             </div>
                             <details class="director-model-assessment-raw">
                                 <summary>
@@ -2250,7 +2235,7 @@
                                     <div id="director-model-assessment-history"><p class="app-settings-help">No raw assessment runs are available.</p></div>
                                 </div>
                             </details>
-                        </section>
+                                                </section>
                     </div>
                     <div id="diagnostics-panel-benchmark" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="benchmark" role="tabpanel" aria-labelledby="diagnostics-tab-benchmark" hidden>
                         <section class="app-settings-section" id="director-model-test-settings">

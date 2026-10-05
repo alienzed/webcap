@@ -29,6 +29,19 @@ H3_CALIBRATION_MAX_SHAPES = {
     "square": (768, 768), "43": (1024, 768), "169": (1344, 768),
 }
 
+DEFAULT_CAPTION_ASSIST_SEQUENCE = "\n".join((
+    "subject",
+    "position / action",
+    "required phrase",
+    "setting",
+    "body",
+    "traits",
+    "clothing",
+    "background",
+    "lighting",
+    "view",
+))
+
 
 def debug_print(*args, **kwargs):
     if FS_DEBUG:
@@ -375,6 +388,18 @@ def validate_config_payload(payload):
         raise ValueError("Config.primer must be an object when provided.")
     out["primer"] = {
         "template": str(primer.get("template") or "").replace("\r\n", "\n"),
+    }
+
+    caption_assist = out.get("caption_assist")
+    if caption_assist is None:
+        caption_assist = {}
+    if not isinstance(caption_assist, dict):
+        raise ValueError("Config.caption_assist must be an object when provided.")
+    preferred_sequence = caption_assist.get("preferred_sequence", DEFAULT_CAPTION_ASSIST_SEQUENCE)
+    if not isinstance(preferred_sequence, str):
+        raise ValueError("Config.caption_assist.preferred_sequence must be a string.")
+    out["caption_assist"] = {
+        "preferred_sequence": preferred_sequence.replace("\r\n", "\n"),
     }
 
     requirements = out.get("requirements")

@@ -27,8 +27,8 @@ Persisted `running`, provider IDs, queue state, or old ownership records cannot 
 Each managed local runtime has one concrete source of truth:
 
 - **Training:** the recorded managed runner PID identifies the process to check. H3 calibration is Training traffic and uses the same rule: its recorded exact probe PID identifies the expected `h3_shape_probe.py` process. No exact PID means no surviving Training process. A PID that is not alive as the expected managed runner means no surviving Training process. Only an exact expected managed Training or H3 probe process being alive establishes active Training.
-- **Inference:** only exact current-session ComfyUI work that WebCap started and can positively identify as still active establishes continuing Inference execution. Persisted provider IDs from a prior WebCap process never recreate GPU ownership.
-- **LLM:** only current-session WebCap local LLM execution establishes LLM ownership. A loaded/cached model is not execution. Remote LLM work never owns the local GPU.
+- **Inference / ComfyUI:** ComfyUI's own queue answers whether ComfyUI is busy. Any running or pending ComfyUI work counts, regardless of who submitted it. WebCap provider identity is still used to associate and recover WebCap requests, but it is not required to decide whether ComfyUI itself is busy. Persisted provider IDs from a prior WebCap process never recreate WebCap GPU ownership.
+- **LLM:** only current-session WebCap local LLM execution establishes LLM ownership. A loaded/cached model is not execution. Remote LLM work never owns the local GPU. The managed local runtime may be queried or stopped as needed; inability to do so is an operation failure, not an uncertain scheduling state.
 
 ## 4. Runtime questions are binary
 
@@ -44,9 +44,7 @@ Queued work does not own the GPU.
 
 Backlogged work does not own the GPU.
 
-A timer cannot acquire or recreate GPU ownership. A short deterministic quiescence deadline may
-bound when an already-owning lane ends a same-lane drain turn; during that interval the canonical
-`owner` remains the only ownership fact.
+A timer cannot acquire, recreate, or extend GPU ownership after a lane's ordinary queue is empty.
 
 Cached model/runtime residency by itself does not own the GPU.
 
@@ -58,29 +56,19 @@ That execution reaches its defined terminal/handoff boundary -> ownership ends.
 
 If exact current-session provider work is positively still executing, the Inference execution has not reached that boundary yet.
 
-## 6. Idle selection is deterministic
+## 6. Requests are FIFO and lanes are sticky
 
-Training is the explicit local-GPU arbitration backbone. When `owner == none`, it applies this order
-when granting a new local-GPU turn:
+There is no built-in lane priority.
 
-```text
-Training
-> local LLM FIFO head
-> foreground Inference Queue
-> eligible Inference Backlog
-```
+When `owner == none`, the first legitimate GPU request to acquire ownership gets it. Once a lane owns the GPU, it drains its ordinary FIFO before releasing. New ordinary work added to that lane joins that FIFO and extends the turn. Nothing preempts active work.
 
-Already-running work is non-preemptive. LLM and Inference request a turn through the Training
-arbiter; they do not reproduce this priority rule themselves.
+Backlog is not a competing request system. It may supply one Inference job at a time only as a secondary stay-busy-when-idle mechanism; each Backlog job ends its turn before another Backlog item may be attempted.
 
 ## 7. Client lanes stay local; handoff prep is shared
 
-LLM and Inference know their own queue/runtime state only. They do not inspect each other, infer each
-other's intent, or independently decide shared priority.
+LLM and Inference know their own queue/runtime state only. They do not inspect each other or infer each other's intent.
 
-Training is intentionally asymmetric: as the durable arbitration backbone, it may inspect the narrow
-lane-local readiness facts required to apply the ordering above. That authority does not create a
-second ownership fact; `owner` remains canonical.
+Training is intentionally asymmetric only where its long-lived runtime and durable queue require stronger reconciliation/protection. External lanes request the same canonical GPU owner through that boundary, but Training does not assign a lane priority.
 
 Cross-runtime GPU handoff preparation is a shared operation independent of client-lane health. It may
 invoke concrete runtime cleanup primitives directly (for example unloading a retained local LLM model

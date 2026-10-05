@@ -1162,8 +1162,8 @@ function directorModelTestCalibrateOne(model, modelNumber) {
     var runtimeFailure = attempts.slice().reverse().find(function (attempt) {
       return attempt.status === 'failed' && attempt.failureKind === 'runtime';
     }) || null;
-    var reportStatus = runtimeFailure ? 'error' : (maxTokens > 0 ? 'complete' : 'incomplete');
-    var reportError = runtimeFailure ? String(runtimeFailure.error || '') : '';
+    var reportStatus = maxTokens > 0 ? 'complete' : (runtimeFailure ? 'error' : 'incomplete');
+    var reportError = maxTokens > 0 ? '' : (runtimeFailure ? String(runtimeFailure.error || '') : '');
     return record(reportStatus, reportError, true).then(function () {
       if (contextMode === 'calibrated' && !contextSize) {
         reportConsoleWarning('Director Model Calibration', 'No local context tier passed for ' + model.label + '; findings were saved but no Auto profile was created.');

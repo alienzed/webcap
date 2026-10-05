@@ -61,7 +61,14 @@ function syncFocusedCaptionControls() {
     labelEl.textContent = 'Caption ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length;
   }
   skipBtn.classList.remove('hidden');
-  skipBtn.disabled = false;
+  skipBtn.disabled = isCaptionAssistRunning();
+}
+
+function syncFocusedCaptionAfterAssist(sourceMediaKey) {
+  if (!focusedCaptionState.open || isCaptionAssistRunning()) return;
+  if (!state.currentItem || state.currentItem.key !== focusedCaptionState.itemKey) return;
+  if (state.currentItem.key === String(sourceMediaKey || '')) return;
+  prepareFocusedCaptionCurrentItem();
 }
 
 function stopFocusedCaption(message) {
@@ -222,4 +229,5 @@ window.startFocusedCaptionForMediaItem = startFocusedCaptionForMediaItem;
 window.stopFocusedCaption = stopFocusedCaption;
 window.syncFocusedCaptionSelection = syncFocusedCaptionSelection;
 window.syncFocusedCaptionControls = syncFocusedCaptionControls;
+window.syncFocusedCaptionAfterAssist = syncFocusedCaptionAfterAssist;
 window.advanceFocusedCaption = advanceFocusedCaption;

@@ -81,6 +81,57 @@ async function probe(text, kind = 'output', status = 'completed', finishReason =
   return { attempt: await ui.directorModelTestCalibrationAttempt({ modelRef: 'ollama::qwen' }, kind, 512), errors };
 }
 
+
+test('output ladder continues after non-capacity failures and stops at truncation', async () => {
+  const { ui } = assessmentUI();
+  ui.directorModelTestAdvertisedCapability = () => null;
+  ui.directorModelTestStartAssessment = () => Promise.resolve({ id: 'assessment' });
+  ui.directorModelTestRenderCalibrationProfiles = () => {};
+  ui.directorModelTestUpdateAssessment = () => Promise.resolve({});
+  ui.directorModelTestSaveCalibrationReport = () => Promise.resolve({ updatedAt: 'latest' });
+  ui.directorModelTestState.calibrationProtocol.outputSteps = [512, 1024, 2048];
+  ui.directorModelTestState.calibrationProtocol.contextSteps = [];
+
+  const calls = [];
+  ui.directorModelTestCalibrationAttempt = (_model, kind, target) => {
+    calls.push([kind, target]);
+    if (kind === 'output' && target === 512) {
+      return Promise.resolve({ kind, target, status: 'failed', failureKind: 'contract', error: 'format miss' });
+    }
+    if (kind === 'output' && target === 1024) {
+      return Promise.resolve({ kind, target, status: 'passed', failureKind: '' });
+    }
+    if (kind === 'prose' && target === 1024) {
+      return Promise.resolve({ kind, target, status: 'passed', failureKind: '' });
+    }
+    if (kind === 'output' && target === 2048) {
+      return Promise.resolve({ kind, target, status: 'failed', failureKind: 'capacity', finishReason: 'length' });
+    }
+    return Promise.resolve({ kind, target, status: 'failed', failureKind: 'contract' });
+  };
+  ui.directorModelTestPost = payload => {
+    if (payload.action === 'begin_calibration') return Promise.resolve({ calibrationProfiles: [], calibrationReports: [] });
+    if (payload.action === 'save_calibration_profile') return Promise.resolve({ profile: {}, calibrationProfiles: [], calibrationReports: [] });
+    return Promise.resolve({});
+  };
+
+  await ui.directorModelTestCalibrateOne({
+    modelRef: 'ollama::qwen',
+    runtimeId: 'remote',
+    runtimeName: 'Ollama',
+    modelId: 'qwen',
+    label: 'Qwen',
+  }, 1);
+
+  assert.deepEqual(calls, [
+    ['output', 512],
+    ['prose', 512],
+    ['output', 1024],
+    ['prose', 1024],
+    ['output', 2048],
+  ]);
+});
+
 test('operational failure stays operational even with pathological partial output and logs its detail', async () => {
   const { attempt, errors } = await probe('<think>partial', 'output', 'failed', '', 'Connection reset: provider detail');
   assert.equal(attempt.failureKind, 'runtime');

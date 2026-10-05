@@ -423,9 +423,7 @@ Its responsibilities are:
 - stop active work,
 - expose Inference-local failures and wait reasons.
 
-It does **not** arbitrate the shared GPU against LLM or Training. Inference exposes only its own
-runnable Queue/Backlog state and requests a local-GPU turn from the Training arbiter. Training applies
-the ordering in `docs/gpu_coordination_invariants.md`.
+It does **not** arbitrate the shared GPU against LLM or Training. Inference exposes only its own Queue/Backlog state and requests the canonical local-GPU owner. There is no built-in cross-lane priority order; ownership is FIFO and lane-sticky as defined in `docs/gpu_coordination_invariants.md`.
 
 **Pause affects execution, not admission.** While the Inference Queue is paused, valid Generate,
 Storyboard Take, and Test requests may still be queued normally. They simply do not become runnable
@@ -446,18 +444,15 @@ Inference work is **durable across normal WebCap server restarts**:
 
 **Queue and Backlog have distinct execution meaning:**
 
-- **Queue** contains normal foreground Inference work,
-- **Backlog** contains parked durable low-priority work behind the normal Queue,
-- fresh/manual Inference requests enter Queue, so they run ahead of existing Backlog work,
-- Backlog is consumed only when Queue has no runnable work and Backlog draining is explicitly active,
-- foreground Queue work may retain Inference ownership while consecutive Queue jobs drain,
-- at the Queue-to-Backlog boundary, Inference ends ownership,
-- eligible Backlog work re-enters shared idle selection as lower-priority Inference work,
+- **Queue** contains normal requested Inference work and drains FIFO while Inference owns the GPU,
+- **Backlog** is parked durable work, not a competing GPU request system,
+- fresh/manual Inference requests enter Queue,
+- when Queue is empty and the shared GPU is idle, Backlog may supply one Inference job as a stay-busy convenience,
+- that Backlog job ends its Inference turn before another Backlog item may be attempted,
 - while Inference is paused, neither Queue nor Backlog advances,
 - moving work between Queue and Backlog changes Inference execution order/intent only; the frozen request itself remains unchanged.
 
-"Backlog draining" is an Inference implementation detail, not a separate product queue. Users can
-explicitly Add all to Queue when backlogged work should become foreground work.
+Users can explicitly Add all to Queue when backlogged work should become normal requested work.
 
 Inference is not the authority for feature-specific semantic validity. A feature decides whether an
 action should be enabled. The Inference Queue preserves and orders the resulting valid request.

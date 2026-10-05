@@ -16,7 +16,11 @@ def template_settings(workflow):
     dimensions = str((((workflow.get("328") or {}).get("inputs") or {}).get("dimensions") or ""))
     if not dimensions.strip():
         raise ValueError("Krea Test workflow has no dimensions in node 328.")
-    return {"dimensions": dimensions}
+    lora = ((workflow.get("334") or {}).get("inputs") or {})
+    return {
+        "dimensions": dimensions,
+        "strength": float(lora.get("strength_model") if lora.get("strength_model") is not None else 1),
+    }
 
 
 def normalize_settings(workflow, new_seed, values=None):
@@ -25,12 +29,19 @@ def normalize_settings(workflow, new_seed, values=None):
     selected_dimensions = str(selected.get("dimensions") or defaults["dimensions"])
     if not selected_dimensions.strip():
         raise ValueError("Test dimensions are required.")
+    try:
+        selected_strength = float(defaults["strength"] if selected.get("strength") in (None, "") else selected.get("strength"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Test LoRA strength must be numeric.") from exc
+    if selected_strength < -2 or selected_strength > 2:
+        raise ValueError("Test LoRA strength must be between -2 and 2.")
     seed = selected.get("seed")
     selected_seed = validate_test_seed(
         new_seed() if seed is None or str(seed).strip() == "" else seed
     )
     return {
         "dimensions": selected_dimensions,
+        "strength": selected_strength,
         "seed": selected_seed,
     }
 
@@ -106,6 +117,7 @@ def build_workflow(
     selected = dict(settings) if settings is not None else template_settings(template)
     if "seed" not in selected:
         selected["seed"] = workflow_seed(template)
+    strength_model = float(selected.get("strength", strength_model))
     try:
         prompt_inputs = workflow["332"]["inputs"]
         prompt_inputs["wildcard_text"] = prompt

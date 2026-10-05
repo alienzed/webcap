@@ -410,6 +410,9 @@ function syncSelectionWithVisibleMedia(mediaItems) {
   if (typeof isFocusedAnnotationOpen === 'function' && isFocusedAnnotationOpen()) {
     return;
   }
+  if (isFocusedCaptionOpen()) {
+    return;
+  }
 
   if (!Array.isArray(mediaItems) || !mediaItems.length) {
     if (typeof clearEditorAndPreview === 'function') clearEditorAndPreview();
@@ -586,6 +589,9 @@ function selectPathMedia(mediaItem) {
     renderFileList();
     scrollCurrentMediaRowIntoView();
     updateBalanceDistributionWheel();
+    if (isFocusedCaptionOpen()) {
+      syncFocusedCaptionSelection(mediaItem.key);
+    }
     resolve(mediaItem);
   });
 }

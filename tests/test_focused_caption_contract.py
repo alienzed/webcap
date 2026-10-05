@@ -85,3 +85,30 @@ def test_focus_caption_progress_is_visible_without_new_workspace_surface():
     assert ".preview-workflow-actions .review-captions-btn.active" in css
     assert ".review-captions-btn.active .preview-header-btn-label" in css
     assert "setWorkspaceSurface(" not in focus
+
+
+def test_caption_assist_candidate_is_viewport_modal_and_owns_escape():
+    html = _read("tool/tool.html")
+    css = _read("tool/css/styles.css")
+    primer = _read("tool/js/primer_settings.js")
+
+    overlay_start = html.index('id="app-overlay-root"')
+    scripts_start = html.index('<!-- JS load order:')
+    candidate_position = html.index('id="editor-caption-candidate"')
+    assert overlay_start < candidate_position < scripts_start
+    assert 'class="editor-caption-candidate-dialog"' in html
+    assert 'role="dialog"' in html
+    assert 'aria-modal="true"' in html
+
+    candidate_css = css.split(".editor-caption-candidate {", 1)[1].split("}", 1)[0]
+    dialog_css = css.split(".editor-caption-candidate-dialog {", 1)[1].split("}", 1)[0]
+    text_css = css.split(".editor-caption-candidate-text {", 1)[1].split("}", 1)[0]
+    assert "position: fixed;" in candidate_css
+    assert "inset: 0;" in candidate_css
+    assert "max-height: calc(100vh - 32px);" in dialog_css
+    assert "overflow: hidden;" in dialog_css
+    assert "overflow: auto;" in text_css
+
+    assert "if (event.target === candidatePanel) dismissCaptionAssistCandidate();" in primer
+    assert "event.stopImmediatePropagation();" in primer
+    assert "}, true);" in primer

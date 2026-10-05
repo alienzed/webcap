@@ -670,7 +670,7 @@ function wirePrimerCaptionResetUi() {
       event.preventDefault();
       event.stopImmediatePropagation();
       dismissCaptionAssistCandidate();
-    });
+    }, true);
   }
 
   if (!captionWandBtn.__captionAssistBound) {

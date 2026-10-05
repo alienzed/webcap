@@ -2198,22 +2198,19 @@
                     </div>
                     <div id="diagnostics-panel-models" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="models" role="tabpanel" aria-labelledby="diagnostics-tab-models" hidden>
                         <section class="app-settings-section" id="director-model-assessment-settings">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Director Models <span id="director-model-assessment-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
+                            <div class="app-settings-section-header director-model-assessment-header">
+                                <div class="director-model-assessment-title-row">
+                                    <div class="app-settings-section-title">Director Models <span id="director-model-assessment-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
+                                    <div class="director-model-assessment-header-actions">
+                                        <button id="director-model-assessment-refresh" type="button" class="review-captions-btn">Refresh Models</button>
+                                        <button id="director-model-assessment-run" type="button">Assess Selected</button>
+                                        <button id="director-model-assessment-stop" type="button" class="hidden">Stop</button>
+                                    </div>
+                                </div>
                                 <div class="app-settings-section-copy">Learn which WebCap Director workflows each model can reliably handle. Expand a model for the underlying assessment tests and evidence.</div>
-                            </div>
-                            <div class="director-model-assessment-toolbar">
-                                <div class="director-model-assessment-toolbar-copy">
+                                <div class="director-model-assessment-progress-row">
                                     <strong id="director-model-assessment-progress">Loading model status…</strong>
                                     <span id="director-model-assessment-selection-summary" class="app-settings-help">Loading selection…</span>
-                                </div>
-                                <div class="director-model-test-model-actions">
-                                    <button id="director-model-assessment-refresh" type="button" class="review-captions-btn">Refresh Models</button>
-                                    <button id="director-model-assessment-select-unfinished" type="button" class="review-captions-btn" title="Select models that still need a completed assessment">Unfinished</button>
-                                    <button id="director-model-assessment-select-all" type="button" class="review-captions-btn">All</button>
-                                    <button id="director-model-assessment-select-none" type="button" class="review-captions-btn">None</button>
-                                    <button id="director-model-assessment-run" type="button">Assess Selected</button>
-                                    <button id="director-model-assessment-stop" type="button" class="hidden">Stop</button>
                                 </div>
                             </div>
                             <div id="director-model-assessment-activity" class="director-model-test-activity" aria-live="polite"></div>

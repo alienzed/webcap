@@ -172,11 +172,6 @@ def external_gpu_work_block_reason(owner):
         if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
             return "training"
 
-    if owner == "inference":
-        from .llm_runner import local_gpu_work_runnable
-        if local_gpu_work_runnable():
-            return "llm"
-
     resource_owner = execution_resource_owner()
     if resource_owner and resource_owner != owner:
         return resource_owner
@@ -197,16 +192,10 @@ def reserve_gpu_for_external_work(owner):
             return False
         if not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
             return False
-        admission_check = None
-        if owner == "inference":
-            from .llm_runner import local_gpu_work_runnable
-            if local_gpu_work_runnable():
-                return False
-            admission_check = lambda: not local_gpu_work_runnable()
         resource_owner = execution_resource_owner()
         if resource_owner:
             return False
-        return reserve_execution_resource(owner, admission_check=admission_check)
+        return reserve_execution_resource(owner)
 
 
 def gpu_reservation_block_reason(owner):

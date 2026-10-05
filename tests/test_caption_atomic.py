@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import pytest
 
@@ -18,13 +19,44 @@ def test_caption_assist_leaves_room_for_runtime_reasoning(monkeypatch):
     with app_module.app.test_client() as client:
         response = client.post("/caption/assist", json={
             "model": "remote-1::qwen",
-            "assignments": [{"group": "Position", "term": "standing"}],
+            "assignments": [{"group": "Position", "key": "position", "term": "standing"}],
+            "template": "{position, }{background}",
+            "renderedPrimer": "standing, plain wall",
         })
 
     assert response.status_code == 202
     assert captured["client"] == "caption"
     assert "runtimeOverrides" not in captured["context"]
     assert "Write one fluent caption" in captured["contract"]["messages"][0]["content"]
+    payload = json.loads(captured["contract"]["messages"][1]["content"].split("\n\n", 1)[1])
+    assert payload["captionTemplate"] == "{position, }{background}"
+    assert payload["renderedPrimer"] == "standing, plain wall"
+    assert payload["groupedAnnotations"][0]["key"] == "position"
+
+
+def test_template_assist_receives_custom_group_meaning_and_uses_runtime_budget(monkeypatch):
+    from tool.server import app as app_module
+
+    captured = {}
+    def enqueue(client, model, contract, context=None, label=""):
+        captured.update(contract=contract, context=context)
+        return {"jobId": "template-test"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
+    groups = [{"label": "BT Shape", "key": "bt_shape", "terms": [
+        {"value": "triangle", "renderedDefault": "triangle top"},
+        {"value": "bandeau", "renderedDefault": "bandeau top"},
+    ]}]
+    with app_module.app.test_client() as client:
+        response = client.post("/caption/template-assist", json={
+            "model": "remote-1::gemma", "groups": groups, "currentTemplate": "{bt_shape}",
+        })
+    assert response.status_code == 202
+    assert "runtimeOverrides" not in captured["context"]
+    payload = json.loads(captured["contract"]["messages"][1]["content"].split("\n\n", 1)[1])
+    assert payload["availableKeys"] == ["bt_shape"]
+    assert payload["groupsInOrder"][0]["terms"][1]["renderedDefault"] == "bandeau top"
+    assert payload["currentTemplate"] == "{bt_shape}"
 
 
 def test_failed_caption_replace_keeps_existing_caption(tmp_path, monkeypatch):

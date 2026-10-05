@@ -82,12 +82,14 @@ function openPrimerTemplateHelpInPreview() {
   }
   renderAdvancedHelpPreview(
     'Caption Template Help',
-    '<p style="margin:0 0 10px 0;">Caption Template builds a starter caption from your tags and template keys.</p>' +
+    '<p style="margin:0 0 10px 0;">Caption Template builds a starter caption from your tags and provides structure for Caption Assist. Saved Set templates take precedence over the app default.</p>' +
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">How It Works</h4>' +
     '<ul style="margin:0 0 8px 18px;padding:0;">' +
     '<li style="margin:0 0 6px 0;">Write placeholders like <code>{position}</code>, <code>{lighting}</code>, and <code>{view}</code>.</li>' +
     '<li style="margin:0 0 6px 0;">Use the live group placeholder buttons under the template to insert the current requirement keys without typing them manually.</li>' +
     '<li style="margin:0 0 6px 0;">If a placeholder has no matching value, it disappears cleanly.</li>' +
+    '<li style="margin:0 0 6px 0;">The built-in starter includes custom groups among the subject details. Use Template Assist to refine their placement from the group names and vocabulary, then review and accept the result.</li>' +
+    '<li style="margin:0 0 6px 0;">Keep optional wording inside its placeholder: <code>{lighting| lighting.}</code> disappears entirely when lighting is absent.</li>' +
     '<li style="margin:0 0 6px 0;">Punctuation inside braces stays attached to the value, for example <code>{surface, }</code> becomes <code>wood floor, </code> only when a surface value exists.</li>' +
     '</ul>' +
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">Default Template</h4>' +
@@ -486,6 +488,7 @@ function buildCaptionAssistRequest(mediaItem) {
   var assignments = getChecklistAssignmentEntriesForMediaKey(mediaKey).map(function (entry) {
     return {
       group: String(entry.requirement || '').trim(),
+      key: normalizeRequirementPrimerKey(entry.requirement),
       term: String(entry.term || '').trim()
     };
   }).filter(function (entry) {
@@ -493,11 +496,14 @@ function buildCaptionAssistRequest(mediaItem) {
   });
 
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
+  var primer = statsGetPrimerOptionsFromDom();
   return {
     model: getDirectorModelPreference('webcap.director.model'),
     assignments: assignments,
     tags: getUnscopedTagsForMediaKey(mediaKey),
     requiredPhrase: requiredPhraseEl ? String(requiredPhraseEl.value || '').trim() : '',
+    template: primer.template,
+    renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
     draft: String((ui && ui.editorEl && ui.editorEl.value) || '').trim()
   };
 }

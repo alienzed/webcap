@@ -545,6 +545,8 @@ def caption_assist_route():
             tags=data.get("tags"),
             required_phrase=data.get("requiredPhrase", ""),
             draft=data.get("draft", ""),
+            template=data.get("template", ""),
+            rendered_primer=data.get("renderedPrimer", ""),
         )
         job = enqueue_llm(
             "caption",
@@ -578,9 +580,7 @@ def caption_template_assist_route():
                 "operation": "caption_template_assist",
                 "messages": messages,
             },
-            context={
-                "runtimeOverrides": {"maxTokens": 512},
-            },
+            context={},
             label="Caption Template Assist",
         )
         return jsonify({"ok": True, "job": job}), 202

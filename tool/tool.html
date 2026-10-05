@@ -699,10 +699,7 @@
                                                 aria-label="Generate Caption Template"
                                             >&#10024;</button>
                                         </div>
-                                        <textarea id="primer-template" rows="9">{position }{surface, }{setting, }{body, }
-{clothing, }{traits, }{expression, }
-{background, }
-{lighting} lighting, {view} view.</textarea>
+                                        <textarea id="primer-template" rows="9"></textarea>
                                         <div id="primer-template-candidate" class="primer-template-candidate hidden" aria-live="polite">
                                             <pre id="primer-template-candidate-text"></pre>
                                             <div class="primer-template-candidate-actions">
@@ -1935,7 +1932,7 @@
                                 <label class="app-settings-field app-settings-field-wide">
                                     <span class="app-settings-field-label">Default Caption Template</span>
                                     <textarea id="app-settings-primer-template" rows="5" class="app-settings-caption-template" spellcheck="false" placeholder="{position }{surface, }{setting, }{body, }"></textarea>
-                                    <span class="app-settings-note">App-wide fallback when a folder does not define its own caption template.</span>
+                                    <span class="app-settings-note">App-wide fallback when a Set has no saved template. Leave blank to use the built-in starter, including the Set's custom groups. Caption Assist uses the template for structure.</span>
                                 </label>
                             </div>
                         </details>

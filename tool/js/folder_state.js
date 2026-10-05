@@ -490,7 +490,7 @@ function applyFolderStateToDom(folderState) {
   loadReviewRulesRows(clean.stats.reviewRules);
   
   if (templateEl) {
-    templateEl.value = hasSavedPrimerTemplate ? clean.primer.template : getDefaultPrimerTemplate();
+    templateEl.value = hasSavedPrimerTemplate ? clean.primer.template : getDefaultPrimerTemplate(clean.caption_requirements);
   }
   if (typeof resetPrimerTemplateSectionCollapsed === 'function') {
     resetPrimerTemplateSectionCollapsed();

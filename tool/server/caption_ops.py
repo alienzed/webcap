@@ -117,12 +117,19 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
     "Do not invent identity, demographic traits, colors, objects, actions, setting details, camera properties, mood, "
     "or other visual facts that are not present in the selected annotations, required phrase, or draft. "
     "If a required phrase is provided, include it verbatim exactly once. "
+    "Use captionTemplate as the user's preferred structure and ordering, and renderedPrimer to understand "
+    "how its keys, term affixes, and mappings resolve for this item. Smooth the wording into natural prose. "
+    "Omit unpopulated parts; never invent facts to fill a template slot or copy unresolved placeholders. "
+    "Keep each action and trait clearly attached to its subject. Include selected facts even when their group "
+    "has no template placeholder, placing them beside semantically related details rather than appending a list. "
+    "Preserve distinctive multiword tag phrases verbatim where they already read naturally; do not needlessly "
+    "paraphrase them, change their subject scope, or emphasize incidental details. "
     "Write one fluent caption, not a comma-separated tag dump. "
     "Return only the caption text with no quotes, labels, commentary, or markdown."
 )
 
 
-def build_caption_assist_messages(assignments=None, tags=None, required_phrase="", draft=""):
+def build_caption_assist_messages(assignments=None, tags=None, required_phrase="", draft="", template="", rendered_primer=""):
     grouped = []
     seen_grouped = set()
     for entry in assignments if isinstance(assignments, list) else []:
@@ -138,6 +145,7 @@ def build_caption_assist_messages(assignments=None, tags=None, required_phrase="
         seen_grouped.add(key)
         grouped.append({
             "group": group or "Annotation",
+            "key": str(entry.get("key") or "").strip(),
             "tag": term,
         })
 
@@ -172,11 +180,14 @@ def build_caption_assist_messages(assignments=None, tags=None, required_phrase="
         "groupedAnnotations": grouped,
         "otherTags": other_tags,
         "currentDraft": draft,
+        "captionTemplate": str(template or "").strip(),
+        "renderedPrimer": str(rendered_primer or "").strip(),
     }
     user_prompt = (
         "Write the caption using these WebCap inputs. Group names explain the meaning of selected tags; "
-        "they are not text that must appear in the caption. groupOrder is the user's preferred semantic order: "
-        "generally introduce facts in that order when natural, but never make the sentence awkward just to obey it.\n\n"
+        "they are not text that must appear in the caption. Infer meaning from group names and their selected "
+        "values together. groupOrder records annotation UI order, not a required caption order. "
+        "Follow captionTemplate when supplied; otherwise arrange related facts naturally.\n\n"
         + json.dumps(payload, ensure_ascii=False, indent=2)
     )
     return [
@@ -193,7 +204,8 @@ named values, then renders a reusable text template. Your job is to improve that
 naturally across many combinations of selected values.
 
 Primer data model and rendering rules:
-1. Requirement/tag groups are ordered. Each group has a stable template key supplied in the input.
+1. Each group has a stable template key supplied in the input. groupsInOrder records annotation UI order;
+   it does not prescribe caption order.
 2. A group's selected terms are rendered before template substitution. For each term:
    - descriptorPrefix/descriptorSuffix are applied directly around the raw term first;
    - wrapperPrefix/wrapperSuffix are then applied around that descriptor-rendered result;
@@ -223,8 +235,21 @@ Template grammar:
 
 Design requirements:
 - Use only keys listed in availableKeys.
-- Preserve the user's actual group vocabulary, separators, affixes, mappings, and group order; do not invent facts,
+- Include every available key so no configured group or mapping loses its place in the template.
+- Preserve the user's actual group vocabulary, separators, affixes, and mappings; do not invent facts,
   groups, tags, affixes, or replacement rules.
+- Infer each group's meaning from its label AND vocabulary, including renderedDefault and affixes. Abbreviated or
+  unfamiliar labels are not enough by themselves: values may reveal garment shape, limb positioning, accessories,
+  a second subject, a relationship, or environmental detail. Do not expand uncertain abbreviations into invented facts.
+- Prefer this broad progression when it fits the actual schema: subject/key phrase; another subject and their
+  interaction when applicable; main position and concept modifiers; subject-specific details and traits;
+  the other subject's details; incidental face visibility/censorship; background/setting; lighting; viewpoint.
+  This is guidance, not a fixed list of required groups. Infer what each group describes, keep related groups and
+  each subject's details together, and adjust the order for clear grammar and the user's current template.
+  Concept-specific groups usually belong with the main concept or relevant subject's details, before the other
+  subject's description or the background. Do not drop unfamiliar groups or dump them at the end.
+- Only include actions or other details through populated keys; a schema must also work for still images and
+  items with no action annotations. Preserve the vocabulary's wording rather than substituting synonyms.
 - Design for arbitrary subsets of groups being populated. A template that reads well only when every group is present
   is not good enough.
 - Prefer concise natural training-caption prose over a raw comma-separated tag dump, while retaining deterministic

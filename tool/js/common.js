@@ -2,18 +2,32 @@
 // No IIFE, encapsulation, or modular patterns are used by design.
 var APP_CONFIG = {};
 var DEFAULT_PRIMER_TEMPLATE = [
-  '{position }{surface, }{setting, }{body, }',
-  '{clothing, }{traits, }{expression, }',
-  '{background, }',
-  '{lighting} lighting, {view} view.'
+  '{subject }{second_subject }{action, }',
+  '{position }{surface, }{body, }',
+  '{clothing, }{hair, }{jewelry, }{traits, }{expression, }',
+  '{second_subject_traits, }',
+  '{background, }{setting, }',
+  '{lighting| lighting.}',
+  '{view| view.}'
 ].join('\n');
 
-function getConfiguredPrimerTemplate() {
+function getConfiguredPrimerTemplate(requirements) {
   var appTemplate = APP_CONFIG && APP_CONFIG.primer && typeof APP_CONFIG.primer.template === 'string'
     ? APP_CONFIG.primer.template
     : '';
   var text = String(appTemplate || '');
-  return text.trim() ? text : DEFAULT_PRIMER_TEMPLATE;
+  if (text.trim()) return text;
+  var template = DEFAULT_PRIMER_TEMPLATE;
+  var standardKeys = template.match(/\{[a-z_]+/g).map(function (key) { return key.slice(1); });
+  var seen = new Set(standardKeys);
+  var custom = [];
+  (requirements || checklistItems).forEach(function (label) {
+    var key = normalizeRequirementPrimerKey(label);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    custom.push('{' + key + ', }');
+  });
+  return template.replace('{clothing, }', custom.join('') + '{clothing, }');
 }
 
 function setRuntimeAppConfig(cfg) {
@@ -422,8 +436,8 @@ function setStatus(text) {
   appendToConsolePanel(text || '');
 }
 
-function getDefaultPrimerTemplate() {
-  return getConfiguredPrimerTemplate();
+function getDefaultPrimerTemplate(requirements) {
+  return getConfiguredPrimerTemplate(requirements);
 }
 
 function recordUndoOperation(op) {

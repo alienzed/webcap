@@ -130,3 +130,6 @@ def test_caption_template_assist_prompt_explains_primer_grammar():
     assert '"surface"' in user
     assert '"setting"' in user
     assert '"on red bed"' in user
+    assert "groupsInOrder is the user's intended template order" in system
+    assert "keep group placeholders in that relative order" in user
+    assert "does not prescribe caption order" not in system

@@ -350,6 +350,23 @@ textarea:focus, input:focus {
   z-index: 20;
 }
 
+.editor-floating-action-primary-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-caption-wand-btn {
+  min-width: 30px;
+  padding-left: 7px;
+  padding-right: 7px;
+}
+
+.editor-caption-wand-btn.is-pending {
+  opacity: 0.65;
+  cursor: progress;
+}
+
 .editor-floating-action-btn {
   background: rgba(15, 118, 110, 0.92);
   color: #f8fafc;

@@ -226,9 +226,6 @@ def test_llm_chat_job_runs_through_shared_lane_without_persisting_conversation(l
     assert finished["operation"] == "freeform_chat"
     assert finished["result"]["text"] == "Hello there."
     assert captured == {"model": "qwen", "messages": messages, "gpu_reserved": True}
-    assert calls == ["reserve"]
-    assert execution_queue.resource_owner() == "llm"
-    llm_runner._advance_queue()
     assert calls == ["reserve", "release"]
     assert execution_queue.resource_owner() == ""
 
@@ -271,9 +268,6 @@ def test_llm_generate_job_runs_through_shared_lane(llm_root, monkeypatch):
     assert finished["status"] == "completed"
     assert finished["result"]["result"] == "Expanded prompt"
     assert finished["result"]["model"] == "qwen"
-    assert calls == ["reserve"]
-    assert execution_queue.resource_owner() == "llm"
-    llm_runner._advance_queue()
     assert calls == ["reserve", "release"]
     assert execution_queue.resource_owner() == ""
 
@@ -299,10 +293,6 @@ def test_local_llm_failure_terminalizes_without_uncertainty_pause(llm_root, monk
     assert failed["status"] == "failed"
     assert "model exploded" in failed["error"]
     assert llm_runner.snapshot()["paused"] is False
-    assert execution_queue.resource_owner() == "llm"
-    assert llm_runner.local_gpu_drain_pending() is True
-    llm_runner._advance_queue()
-
     assert execution_queue.resource_owner() == ""
 
 
@@ -334,7 +324,7 @@ def test_local_llm_uses_shared_gpu_prep_before_execution(llm_root, monkeypatch):
     assert calls == [("prep", "llm"), ("execute", True)]
 
 
-def test_local_llm_completion_opens_short_gpu_drain_window(llm_root, monkeypatch):
+def test_local_llm_completion_releases_gpu_when_queue_is_empty(llm_root, monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -353,11 +343,6 @@ def test_local_llm_completion_opens_short_gpu_drain_window(llm_root, monkeypatch
     llm_runner._advance_queue()
 
     assert llm_runner.job_status(job["jobId"])["status"] == "completed"
-    assert llm_runner.local_gpu_drain_pending() is True
-    assert execution_queue.resource_owner() == "llm"
-    assert llm_runner._monitor_has_work() is True
-    llm_runner._advance_queue()
-
     assert execution_queue.resource_owner() == ""
     assert llm_runner._monitor_has_work() is False
 
@@ -395,10 +380,6 @@ def test_llm_gpu_cleanup_does_not_depend_on_consumable_terminal_receipt(llm_root
     assert consumed[0]["id"] == job["jobId"]
     with pytest.raises(FileNotFoundError):
         llm_runner.execution_transient_receipt(job["jobId"])
-    assert execution_queue.resource_owner() == "llm"
-    assert llm_runner._monitor_has_work() is True
-    llm_runner._advance_queue()
-
     assert execution_queue.resource_owner() == ""
     assert llm_runner._monitor_has_work() is False
 
@@ -1516,9 +1497,8 @@ def test_llm_reset_marks_active_stopping_and_clears_successors(llm_root, monkeyp
     assert calls == ["stop"]
 
 
-def test_llm_reset_idle_releases_retained_gpu_hold(llm_root, monkeypatch):
+def test_llm_reset_idle_releases_owned_gpu(llm_root, monkeypatch):
     execution_queue._resource_owner = "llm"
-    llm_runner._local_gpu_drain_until = time.monotonic() + 30
     calls = []
     monkeypatch.setattr(
         llm_runner,
@@ -1529,7 +1509,6 @@ def test_llm_reset_idle_releases_retained_gpu_hold(llm_root, monkeypatch):
     result = llm_runner.reset()
 
     assert result["jobs"] == []
-    assert llm_runner._local_gpu_drain_until == 0.0
     assert calls == ["release"]
     assert execution_queue.resource_owner() == ""
 

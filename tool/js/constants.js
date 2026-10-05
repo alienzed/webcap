@@ -81,6 +81,8 @@ ui = {
   sidebarCollapseToggleBtn: document.getElementById('sidebar-collapse-toggle-btn'),
   sidebarContentEl: document.getElementById('sidebar-content'),
   previewFocusBtnEl: document.getElementById('preview-open-focused-btn'),
+  previewFocusCaptionBtnEl: document.getElementById('preview-open-focus-caption-btn'),
+  previewFocusCaptionSkipBtnEl: document.getElementById('preview-focus-caption-skip-btn'),
   mediaListEl: document.getElementById('media-list'),
   filterEl: document.getElementById('media-filter'),
   captionFilterClearAllBtn: document.getElementById('caption-filter-clear-all-btn'),

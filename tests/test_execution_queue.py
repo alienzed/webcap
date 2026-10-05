@@ -343,6 +343,14 @@ def test_execution_queue_requeues_active_job_and_pauses_lane(queue_root):
     assert stored["payload"]["request"]["prompt"] == "first"
     assert stored["startedAt"] is None
     assert stored["details"] == {}
+    recent = execution_queue.recent_snapshot("inference")
+    assert recent[0]["id"] == first["id"]
+    assert recent[0]["status"] == "failed"
+    assert recent[0]["details"]["providerJobId"] == "provider-1"
+    assert recent[0]["details"]["providerStatus"] == "in_progress"
+    assert recent[0]["error"] == "Inference paused after an execution error: boom"
+    assert recent[0]["startedAt"] is not None
+    assert recent[0]["finishedAt"] is not None
     assert execution_queue.claim_next("inference") is None
 
 

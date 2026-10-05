@@ -571,23 +571,33 @@ def assert_stop_supported():
 
 def stop_active_request():
     settings = _active_runtime_settings()
-    if settings.get("mode", "local") == "local":
-        return stop_owned_server()
-    with _use_runtime(settings.get("runtime_id", "")):
-        assert_stop_supported()
+    if settings.get("mode", "local") == "remote":
+        with _use_runtime(settings.get("runtime_id", "")):
+            assert_stop_supported()
+
+    # Signal first so work that currently owns a runtime lifecycle lock can
+    # unwind itself instead of making Stop wait for that lifecycle step.
     _stop_requested.set()
+
+    # Model load/unload requests use the same cancellable connection slot as
+    # remote generation. Closing it makes an in-flight local /models/load
+    # return promptly instead of waiting for its long HTTP timeout.
+    connection_stopped = False
     with _remote_request_lock:
         connection = _active_remote_connection
-    if connection is None:
-        return False
-    sock = getattr(connection, "sock", None)
-    if sock is not None:
-        try:
-            sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-    connection.close()
-    return True
+    if connection is not None:
+        sock = getattr(connection, "sock", None)
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+        connection.close()
+        connection_stopped = True
+
+    if settings.get("mode", "local") == "local":
+        return bool(stop_owned_server() or connection_stopped)
+    return connection_stopped
 
 
 def _health_ok():
@@ -783,6 +793,9 @@ def _ensure_server():
             # serially consuming two network timeouts.
             return
 
+        if _stop_requested.is_set():
+            raise RuntimeError("LLM request stopped.")
+
         desired_signature = _server_signature(settings)
 
         if _process is not None and _process.poll() is None:
@@ -797,7 +810,11 @@ def _ensure_server():
                 raise RuntimeError(
                     "The Storyboard Director port is already occupied by an incompatible service."
                 ) from exc
-            return
+            raise RuntimeError(
+                "The Storyboard Director local port is already occupied by a llama.cpp server "
+                "that this WebCap process does not own. Stop that server or configure it as a "
+                "remote Director runtime."
+            )
 
         models_dir = settings["models_dir"]
         models_dir.mkdir(parents=True, exist_ok=True)
@@ -843,6 +860,9 @@ def _ensure_server():
 
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
+            if _stop_requested.is_set():
+                _stop_server_locked()
+                raise RuntimeError("LLM request stopped.")
             if _process.poll() is not None:
                 tail = _log_tail()
                 _stop_server_locked()
@@ -1073,6 +1093,8 @@ def _model_record(model_ref):
 def _wait_for_model(model_id, wanted, timeout=180):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        if _stop_requested.is_set():
+            raise RuntimeError("LLM request stopped.")
         for model in _list_models_for_current_runtime(reload=False):
             if model["id"] != model_id:
                 continue
@@ -1085,14 +1107,28 @@ def _wait_for_model(model_id, wanted, timeout=180):
 
 
 def _load_model(model_id):
-    response = _http_json("/models/load", method="POST", payload={"model": model_id}, timeout=180)
+    if _stop_requested.is_set():
+        raise RuntimeError("LLM request stopped.")
+    response = _remote_http_json_cancellable(
+        "/models/load",
+        method="POST",
+        payload={"model": model_id},
+        timeout=180,
+    )
     if response.get("success") is not True:
         raise RuntimeError("llama.cpp did not load the selected Director model.")
     _wait_for_model(model_id, "loaded", timeout=180)
 
 
 def _unload_model(model_id):
-    response = _http_json("/models/unload", method="POST", payload={"model": model_id}, timeout=30)
+    if _stop_requested.is_set():
+        raise RuntimeError("LLM request stopped.")
+    response = _remote_http_json_cancellable(
+        "/models/unload",
+        method="POST",
+        payload={"model": model_id},
+        timeout=30,
+    )
     if response.get("success") is not True:
         raise RuntimeError("llama.cpp did not unload the selected Director model.")
     _wait_for_model(model_id, "unloaded", timeout=30)

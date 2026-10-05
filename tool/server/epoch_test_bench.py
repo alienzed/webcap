@@ -1667,28 +1667,13 @@ def reconcile_startup():
             if prompt_id:
                 try:
                     from . import inference_runtime
-                    if not inference_runtime.cancel_job_and_wait(prompt_id):
-                        from .inference_runner import hold_provider_cleanup
-                        hold_provider_cleanup(
-                            prompt_id,
-                            (
-                                "Queue paused: interrupted legacy Test provider work "
-                                "could not be confirmed stopped after restart."
-                            ),
-                        )
+                    terminal_status = inference_runtime.cancel_job_and_wait_status(prompt_id)
+                    if not terminal_status:
                         _logger.error(
                             "Interrupted legacy Test provider job %s did not confirm cancellation.",
                             prompt_id,
                         )
                 except Exception:
-                    from .inference_runner import hold_provider_cleanup
-                    hold_provider_cleanup(
-                        prompt_id,
-                        (
-                            "Queue paused: interrupted legacy Test provider work "
-                            "could not be confirmed stopped after restart."
-                        ),
-                    )
                     _logger.exception("Could not cancel interrupted legacy Test provider job %s.", prompt_id)
             folder = str(metadata.get("folder") or "").strip()
             session_name = str(details.get("session") or "").strip()

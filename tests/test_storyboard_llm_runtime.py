@@ -490,6 +490,33 @@ def test_ensure_local_model_loaded_switches_models(monkeypatch):
     assert storyboard_llm_runtime._ensure_local_model_loaded("qwen-small") is True
     assert calls == ["unload:qwen-large", "load:qwen-small"]
 
+def test_local_model_load_uses_cancellable_transport(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_remote_http_json_cancellable",
+        lambda path, method="GET", payload=None, timeout=30: calls.append(
+            (path, method, payload, timeout)
+        ) or {"success": True},
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_wait_for_model",
+        lambda model_id, wanted, timeout=180: calls.append(
+            ("wait", model_id, wanted, timeout)
+        ),
+    )
+    storyboard_llm_runtime.clear_stop_request()
+
+    try:
+        storyboard_llm_runtime._load_model("qwen-small")
+        assert calls[0] == ("/models/load", "POST", {"model": "qwen-small"}, 180)
+        assert calls[1] == ("wait", "qwen-small", "loaded", 180)
+    finally:
+        storyboard_llm_runtime.clear_stop_request()
+
+
 def test_chat_stops_owned_router_if_model_cannot_be_confirmed_unloaded(monkeypatch):
     calls = []
     owned_process = object()
@@ -758,6 +785,26 @@ def test_ensure_server_accepts_compatible_existing_router(tmp_path, monkeypatch)
     )
 
     storyboard_llm_runtime._ensure_server()
+
+
+def test_local_runtime_refuses_healthy_unowned_router(tmp_path, monkeypatch):
+    settings = {
+        "mode": "local",
+        "llama_server": "/owned/llama-server",
+        "models_dir": tmp_path / "text_encoders",
+        "port": 8189,
+        "context_size": 8192,
+        "max_tokens": 4096,
+    }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_process", None)
+    monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: settings)
+    monkeypatch.setattr(storyboard_llm_runtime, "_health_ok", lambda: True)
+    monkeypatch.setattr(storyboard_llm_runtime, "_http_json", lambda *args, **kwargs: {"data": []})
+    storyboard_llm_runtime.clear_stop_request()
+
+    with pytest.raises(RuntimeError, match="does not own"):
+        storyboard_llm_runtime._ensure_server()
 
 
 def test_owned_router_restarts_when_runtime_settings_change(tmp_path, monkeypatch):
@@ -1470,6 +1517,45 @@ def test_stop_owned_server_sets_stop_signal_and_terminates_owned_runtime(monkeyp
         assert calls == ["stop"]
     finally:
         storyboard_llm_runtime.clear_stop_request()
+
+
+def test_stop_active_local_request_closes_inflight_model_load_and_stops_owned_runtime(monkeypatch):
+    calls = []
+
+    class FakeSocket:
+        def shutdown(self, how):
+            calls.append(("shutdown", how))
+
+    class FakeConnection:
+        sock = FakeSocket()
+
+        def close(self):
+            calls.append(("close", None))
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_active_runtime_settings",
+        lambda: {"mode": "local", "runtime_id": "local"},
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_active_remote_connection", FakeConnection())
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "stop_owned_server",
+        lambda: calls.append(("stop", None)) or True,
+    )
+    storyboard_llm_runtime.clear_stop_request()
+
+    try:
+        assert storyboard_llm_runtime.stop_active_request() is True
+        assert storyboard_llm_runtime._stop_requested.is_set()
+        assert calls == [
+            ("shutdown", storyboard_llm_runtime.socket.SHUT_RDWR),
+            ("close", None),
+            ("stop", None),
+        ]
+    finally:
+        storyboard_llm_runtime.clear_stop_request()
+        storyboard_llm_runtime._active_remote_connection = None
 
 
 def test_run_contract_honors_stop_requested_before_runtime_work(monkeypatch):

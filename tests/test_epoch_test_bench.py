@@ -35,6 +35,44 @@ def patch_default_test_model(monkeypatch, template=None, settings=None):
 
 
 
+def test_legacy_recovery_uses_terminal_status_without_provider_hold(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    calls = []
+
+    monkeypatch.setattr(
+        bench,
+        "execution_recover_lane",
+        lambda lane, reason="": [{
+            "id": "legacy-1",
+            "metadata": {},
+            "details": {"providerJobId": "provider-1"},
+        }],
+    )
+    monkeypatch.setattr(
+        bench,
+        "execution_lane_snapshot",
+        lambda lane, include_terminal=False: {"jobs": []},
+    )
+    monkeypatch.setattr(
+        bench,
+        "execution_discard_terminal_and_recent",
+        lambda lane: calls.append(("discard", lane)),
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "cancel_job_and_wait_status",
+        lambda provider_id: calls.append(("cancel", provider_id)) or "",
+    )
+
+    bench.reconcile_startup()
+
+    assert calls == [
+        ("cancel", "provider-1"),
+        ("discard", bench.LEGACY_EXECUTION_LANE),
+    ]
+    assert bench._startup_reconciled is True
+
+
 def test_lora_files_are_filtered_and_sorted(tmp_path):
     (tmp_path / "epoch10.safetensors").write_bytes(b"")
     (tmp_path / "Epoch02.safetensors").write_bytes(b"")

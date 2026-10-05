@@ -47,6 +47,13 @@
                         <span class="app-header-model-label">Base Model</span>
                         <select id="app-header-model-profile-select" aria-label="Base Model"></select>
                     </label>
+                    <label id="app-header-director-control" class="app-header-director-control">
+                        <span class="app-header-director-label">Director</span>
+                        <select id="app-header-director-model" aria-label="Director model">
+                            <option value="">Loading models...</option>
+                        </select>
+                        <button id="app-header-director-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
+                    </label>
                 </div>
                 <div id="app-header-workspace-actions" class="app-header-workspace-actions hidden" aria-label="Workspace controls">
                     <button id="storyboard-story-toggle" type="button" class="review-captions-btn hidden" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Overview</button>
@@ -1075,7 +1082,7 @@
                                         </div>
                                         <textarea id="test-generations-prompt" rows="5"></textarea>
                                     </div>
-                                    <div class="test-generations-wildcard-tools">
+                                    <div class="test-generations-wildcard-tools test-generations-director-model-tools">
                                         <select id="test-generations-wildcard-model" aria-label="Wildcard Director model"></select>
                                         <button id="test-generations-wildcard-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
                                         <button id="test-generations-wildcard-btn" type="button" class="review-captions-btn" title="Analyze this Set's captions and build a wildcard prompt from their common terms and observed variation.">Generate Wildcard</button>
@@ -1226,7 +1233,7 @@
                             <details id="generate-prompt-assistant" class="generate-collapsible generate-prompt-assistant">
                             <summary><strong>Prompt Assistant</strong><span>Expand or refine with a local / remote LLM</span></summary>
                             <div class="generate-collapsible-body">
-                            <div class="generate-prompt-tools">
+                            <div class="generate-prompt-tools generate-director-model-tools">
                             <select id="generate-director-model" aria-label="Generate Prompt Assistant model"><option value="">Prompt Assistant unavailable</option></select>
                             <button id="generate-director-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
                             </div>
@@ -1557,7 +1564,7 @@
                                     <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
                                 </div>
                                 <div class="storyboard-scenes-heading-actions">
-                                    <div class="storyboard-director-header">
+                                    <div class="storyboard-director-header storyboard-director-model-tools">
                                         <label for="storyboard-director-model">Director</label>
                                         <select id="storyboard-director-model" aria-label="Storyboard Director model">
                                             <option value="">Director unavailable</option>
@@ -1599,7 +1606,7 @@
                     <span>Quick</span>
                     <div id="director-chat-mode-presets" class="director-chat-mode-presets"></div>
                 </div>
-                <div class="director-chat-model-row">
+                <div class="director-chat-model-row director-chat-model-tools">
                     <label for="director-chat-model">Model</label>
                     <select id="director-chat-model" aria-label="Assistant model">
                         <option value="">Loading models...</option>

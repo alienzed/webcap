@@ -81,6 +81,57 @@ async function probe(text, kind = 'output', status = 'completed', finishReason =
   return { attempt: await ui.directorModelTestCalibrationAttempt({ modelRef: 'ollama::qwen' }, kind, 512), errors };
 }
 
+
+test('output ladder continues after non-capacity failures and stops at truncation', async () => {
+  const { ui } = assessmentUI();
+  ui.directorModelTestAdvertisedCapability = () => null;
+  ui.directorModelTestStartAssessment = () => Promise.resolve({ id: 'assessment' });
+  ui.directorModelTestRenderCalibrationProfiles = () => {};
+  ui.directorModelTestUpdateAssessment = () => Promise.resolve({});
+  ui.directorModelTestSaveCalibrationReport = () => Promise.resolve({ updatedAt: 'latest' });
+  ui.directorModelTestState.calibrationProtocol.outputSteps = [512, 1024, 2048];
+  ui.directorModelTestState.calibrationProtocol.contextSteps = [];
+
+  const calls = [];
+  ui.directorModelTestCalibrationAttempt = (_model, kind, target) => {
+    calls.push([kind, target]);
+    if (kind === 'output' && target === 512) {
+      return Promise.resolve({ kind, target, status: 'failed', failureKind: 'contract', error: 'format miss' });
+    }
+    if (kind === 'output' && target === 1024) {
+      return Promise.resolve({ kind, target, status: 'passed', failureKind: '' });
+    }
+    if (kind === 'prose' && target === 1024) {
+      return Promise.resolve({ kind, target, status: 'passed', failureKind: '' });
+    }
+    if (kind === 'output' && target === 2048) {
+      return Promise.resolve({ kind, target, status: 'failed', failureKind: 'capacity', finishReason: 'length' });
+    }
+    return Promise.resolve({ kind, target, status: 'failed', failureKind: 'contract' });
+  };
+  ui.directorModelTestPost = payload => {
+    if (payload.action === 'begin_calibration') return Promise.resolve({ calibrationProfiles: [], calibrationReports: [] });
+    if (payload.action === 'save_calibration_profile') return Promise.resolve({ profile: {}, calibrationProfiles: [], calibrationReports: [] });
+    return Promise.resolve({});
+  };
+
+  await ui.directorModelTestCalibrateOne({
+    modelRef: 'ollama::qwen',
+    runtimeId: 'remote',
+    runtimeName: 'Ollama',
+    modelId: 'qwen',
+    label: 'Qwen',
+  }, 1);
+
+  assert.deepEqual(calls, [
+    ['output', 512],
+    ['prose', 512],
+    ['output', 1024],
+    ['prose', 1024],
+    ['output', 2048],
+  ]);
+});
+
 test('operational failure stays operational even with pathological partial output and logs its detail', async () => {
   const { attempt, errors } = await probe('<think>partial', 'output', 'failed', '', 'Connection reset: provider detail');
   assert.equal(attempt.failureKind, 'runtime');
@@ -105,13 +156,24 @@ test('a terminal item and marker cannot prove skipped structured output', async 
   assert.equal(attempt.failureKind, 'contract');
 });
 
-test('short prose cannot establish a long-form tier merely by emitting headings and the marker', async () => {
+test('completion marker omission is noted but does not invalidate otherwise complete prose', async () => {
   assert.equal((await probe('Section 1: short\nSection 2: short\nWEB_CAP_LONGFORM_COMPLETE', 'prose')).attempt.failureKind, 'contract');
   const prose = `Section 1: ${Array(80).fill('first').join(' ')}\nSection 2: ${Array(80).fill('second').join(' ')}\nWEB_CAP_LONGFORM_COMPLETE`;
-  assert.equal((await probe(prose, 'prose')).attempt.status, 'passed');
+  const complete = await probe(prose, 'prose');
+  assert.equal(complete.attempt.status, 'passed');
+  assert.equal(complete.attempt.note, '');
+
   const missingMarker = await probe(prose.replace('WEB_CAP_LONGFORM_COMPLETE', ''), 'prose');
-  assert.equal(missingMarker.attempt.failureKind, 'contract');
-  assert.match(missingMarker.attempt.error, /Completion marker missing/);
+  assert.equal(missingMarker.attempt.status, 'passed');
+  assert.equal(missingMarker.attempt.failureKind, '');
+  assert.match(missingMarker.attempt.note, /Completion marker omitted/);
+});
+
+test('completion marker omission is also only a note for structurally complete numbered output', async () => {
+  const numbered = Array.from({ length: 12 }, (_, index) => `${index + 1}. item ${index + 1}`).join('\n');
+  const attempt = (await probe(numbered)).attempt;
+  assert.equal(attempt.status, 'passed');
+  assert.match(attempt.note, /Completion marker omitted/);
 });
 
 test('stopped calibration probe is recorded as stopped rather than runtime failure', async () => {
@@ -122,17 +184,18 @@ test('stopped calibration probe is recorded as stopped rather than runtime failu
   assert.equal(errors.length, 0);
 });
 
-test('completed assessment distinguishes an unproven higher tier from an unfinished run', () => {
+test('assessment health labels are written for a human rather than the probe implementation', () => {
   const { ui } = assessmentUI();
   assert.equal(ui.directorModelTestHealthLabel('assessment-incomplete', 'complete'),
-    'Assessment complete · higher tier unproven');
+    'Usable range found · some checks inconclusive');
+  assert.equal(ui.directorModelTestHealthLabel('limited', 'complete'), 'Usable · output limit found');
   assert.match(ui.directorModelTestHealthLabel('assessment-incomplete', 'incomplete'), /Assessment incomplete/);
 });
 
 test('probe budget and contract outcomes are readable without error styling; runtime failures remain errors', () => {
   const { ui } = assessmentUI();
   ui.escapeHtml = text => String(text);
-  for (const [failureKind, label] of [['capacity', 'Budget exhausted'], ['contract', 'Not completed'], ['runtime', 'Failed']]) {
+  for (const [failureKind, label] of [['capacity', 'Hit output limit'], ['contract', 'Did not follow test format'], ['runtime', 'Runtime failed']]) {
     const html = ui.directorModelAssessmentRenderEvidence({status: 'complete', attempts: [{
       kind: 'prose', target: 1024, status: 'failed', failureKind, error: 'probe detail',
     }]});
@@ -141,4 +204,19 @@ test('probe budget and contract outcomes are readable without error styling; run
     assert.equal(html.includes('director-model-finding-error'), failureKind === 'runtime');
     assert.equal(html.includes('Error: probe detail'), failureKind === 'runtime');
   }
+});
+
+
+test('successful probe notes are shown as notes, not failures', () => {
+  const { ui } = assessmentUI();
+  ui.escapeHtml = text => String(text);
+  const html = ui.directorModelAssessmentRenderEvidence({status: 'complete', attempts: [{
+    kind: 'prose',
+    target: 512,
+    status: 'passed',
+    note: 'Completion marker omitted; the response otherwise completed the test.',
+  }]});
+  assert.ok(html.includes('Passed'));
+  assert.ok(html.includes('Note: Completion marker omitted'));
+  assert.equal(html.includes('director-model-finding-error'), false);
 });

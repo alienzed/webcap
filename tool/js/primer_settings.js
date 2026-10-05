@@ -111,7 +111,7 @@ function statsGetPrimerOptionsFromDom() {
 var debouncedSaveFolderState = debounceCreate(600);
 var primerResetUndoState = null; // { mediaKey, text }
 var captionAssistPendingJobId = '';
-var captionAssistCandidate = null; // { mediaKey, text }
+var captionAssistCandidate = null; // { mediaKey, text, missingGroups }
 var primerTemplateAssistPendingJobId = '';
 
 function isCaptionAssistRunning() {
@@ -247,12 +247,16 @@ function clearCaptionApplyConfirmation() {
 
 function syncCaptionAssistCandidateUi() {
   var panel = document.getElementById('editor-caption-candidate');
+  var missingEl = document.getElementById('editor-caption-candidate-missing');
   var textEl = document.getElementById('editor-caption-candidate-text');
-  if (!panel || !textEl) return;
+  if (!panel || !missingEl || !textEl) throw new Error('Caption Assist candidate markup is incomplete.');
   var mediaKey = state && state.currentItem && state.currentItem.key;
   var candidate = captionAssistCandidate;
   var visible = !!(candidate && mediaKey && candidate.mediaKey === mediaKey && candidate.text);
+  var missingGroups = visible && Array.isArray(candidate.missingGroups) ? candidate.missingGroups : [];
   panel.classList.toggle('hidden', !visible);
+  missingEl.classList.toggle('hidden', !missingGroups.length);
+  missingEl.textContent = missingGroups.length ? ('Missing annotations: ' + missingGroups.join(' · ')) : '';
   textEl.textContent = visible ? candidate.text : '';
 }
 
@@ -501,6 +505,19 @@ function wirePrimerTemplateAssistUi() {
   }
 }
 
+function getCaptionAssistMissingGroups(mediaKey) {
+  var assigned = {};
+  getChecklistAssignmentEntriesForMediaKey(mediaKey).forEach(function (entry) {
+    var group = String(entry && entry.requirement || '').trim().toLowerCase();
+    var term = String(entry && entry.term || '').trim();
+    if (group && term) assigned[group] = true;
+  });
+  return (Array.isArray(checklistItems) ? checklistItems : []).filter(function (label) {
+    var key = String(label || '').trim().toLowerCase();
+    return !!key && !assigned[key];
+  });
+}
+
 function buildCaptionAssistRequest(mediaItem) {
   var mediaKey = mediaItem && mediaItem.key;
   if (!mediaKey) throw new Error('Caption Assist requires a selected media item.');
@@ -522,6 +539,7 @@ function buildCaptionAssistRequest(mediaItem) {
     assignments: assignments,
     tags: getUnscopedTagsForMediaKey(mediaKey),
     requiredPhrase: requiredPhraseEl ? String(requiredPhraseEl.value || '').trim() : '',
+    preferredCaptionSequence: getPreferredCaptionSequence(),
     template: primer.template,
     renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
     draft: String((ui && ui.editorEl && ui.editorEl.value) || '').trim()
@@ -579,6 +597,7 @@ function runCaptionAssist() {
   }
 
   var sourceMediaKey = mediaItem.key;
+  var missingGroups = getCaptionAssistMissingGroups(sourceMediaKey);
   setStatus('Caption Assist queued...');
   return captionAssistRequestJson('/caption/assist', {
     method: 'POST',
@@ -601,7 +620,8 @@ function runCaptionAssist() {
     }
     captionAssistCandidate = {
       mediaKey: sourceMediaKey,
-      text: nextCaption
+      text: nextCaption,
+      missingGroups: missingGroups
     };
     syncCaptionAssistCandidateUi();
     setStatus('AI caption candidate ready.');

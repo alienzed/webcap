@@ -718,7 +718,7 @@ def enqueue(client, model_id, contract, context=None, label=""):
     runtime_overrides = context.get("runtimeOverrides")
     if runtime_overrides is not None:
         if client not in {"chat", "caption"} or not isinstance(runtime_overrides, dict):
-            raise ValueError("LLM runtimeOverrides are supported only for chat jobs.")
+            raise ValueError("LLM runtimeOverrides are supported only for chat and caption jobs.")
         unknown_overrides = set(runtime_overrides) - {"maxTokens", "contextSize"}
         if unknown_overrides:
             raise ValueError("Unsupported LLM runtime override: " + sorted(unknown_overrides)[0])

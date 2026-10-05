@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 from . import config as app_config
-from .caption_ops import _resolve_folder, list_media_files, load_caption_text, save_caption_text, serve_media_file
+from .caption_ops import _resolve_folder, build_caption_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .originals import copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
 from .file_ops import duplicate_folder_response, duplicate_media_response, open_in_explorer_response, open_path_in_explorer_response, open_in_vscode_response, rename_response
 from .media import color_suggestions_response, media_blur_background_response, media_convert_fps_response, media_convert_webp_png_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
@@ -535,6 +535,34 @@ def caption_save_route():
     except Exception as exc:
         # print("[BACKEND][SAVE] ERROR in /caption/save:", exc)
         return jsonify({"error": str(exc)}), 400
+
+@app.route("/caption/assist", methods=["POST"])
+def caption_assist_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        messages = build_caption_assist_messages(
+            assignments=data.get("assignments"),
+            tags=data.get("tags"),
+            required_phrase=data.get("requiredPhrase", ""),
+            draft=data.get("draft", ""),
+        )
+        job = enqueue_llm(
+            "caption",
+            str(data.get("model") or "").strip(),
+            {
+                "operation": "caption_assist",
+                "messages": messages,
+            },
+            context={
+                "runtimeOverrides": {"maxTokens": 256},
+            },
+            label="Caption Assist",
+        )
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("CAPTION ASSIST FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
 
 @app.route("/caption/media", methods=["GET"])
 def caption_media_route():

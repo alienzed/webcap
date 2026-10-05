@@ -1476,6 +1476,7 @@
   }
 
   function requestSceneDirector(storyId, sceneId, operation, instruction, modelId, clearCorrection) {
+    followVisibleWorkingScene(storyId, sceneId);
     return directorRequest({
       storyId: storyId,
       sceneId: sceneId,
@@ -2462,6 +2463,31 @@
     }
     if (order.indexOf(storyState.activeSceneId) < 0) storyState.activeSceneId = order[0];
     return storyState.activeSceneId;
+  }
+
+  function followVisibleWorkingScene(storyId, sceneId) {
+    var workspace = el('storyboard-workspace');
+    var currentStory = storyState.story;
+    var targetStoryId = String(storyId || '');
+    var targetSceneId = String(sceneId || '');
+    if (!workspace || workspace.classList.contains('hidden') || !currentStory) return;
+    if (String(currentStory.id || '') !== targetStoryId) return;
+
+    var order = Array.isArray(currentStory.sceneOrder) ? currentStory.sceneOrder : [];
+    if (
+      order.indexOf(targetSceneId) < 0 ||
+      !currentStory.scenes ||
+      !currentStory.scenes[targetSceneId]
+    ) return;
+
+    if (storyState.activeSceneId === targetSceneId) return;
+    storyState.activeSceneId = targetSceneId;
+
+    if (storyState.sceneViewMode === 'focus') {
+      clearSceneNewTakeCount(targetSceneId);
+      renderScenes();
+      if (directorActivityActive()) positionDirectorActivity();
+    }
   }
 
   function sceneDirectorCompletionKey(storyId, sceneId) {

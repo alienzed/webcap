@@ -286,18 +286,20 @@ function directorModelTestSyncControls() {
   var run = directorModelTestEl('director-model-test-run');
   var assess = directorModelTestEl('director-model-assessment-run');
   var clearCalibration = directorModelTestEl('director-model-test-clear-calibration');
+  var clearRaw = directorModelTestEl('director-model-assessment-clear-raw');
   var benchmarkStop = directorModelTestEl('director-model-test-stop');
   var assessmentStop = directorModelTestEl('director-model-assessment-stop');
   var benchmarkRefresh = directorModelTestEl('director-model-test-refresh');
   var assessmentRefresh = directorModelTestEl('director-model-assessment-refresh');
 
-  if (!run || !assess || !clearCalibration || !benchmarkStop || !assessmentStop || !benchmarkRefresh || !assessmentRefresh) {
+  if (!run || !assess || !clearCalibration || !clearRaw || !benchmarkStop || !assessmentStop || !benchmarkRefresh || !assessmentRefresh) {
     throw new Error('Director diagnostic controls are incomplete.');
   }
 
   run.disabled = directorModelTestState.running || !directorModelTestState.models.length;
   assess.disabled = directorModelTestState.running || !directorModelTestState.models.length;
   clearCalibration.disabled = directorModelTestState.running || (!directorModelTestState.calibrationProfiles.length && !directorModelTestState.calibrationReports.length);
+  clearRaw.disabled = directorModelTestState.running || !directorModelTestState.assessmentRuns.length;
   benchmarkRefresh.disabled = directorModelTestState.running;
   assessmentRefresh.disabled = directorModelTestState.running;
 
@@ -849,7 +851,25 @@ function directorModelAssessmentDeleteEvidence(assessmentId) {
     directorModelTestState.assessmentRuns = Array.isArray(payload.assessmentRuns) ? payload.assessmentRuns : [];
     directorModelAssessmentRenderHistory();
     directorModelTestRenderCalibrationProfiles();
+    directorModelTestSyncControls();
     reportConsoleInfo('Director Model Assessment', 'Deleted raw assessment evidence; learned model results were preserved.');
+  });
+}
+
+
+function directorModelAssessmentClearEvidence() {
+  if (directorModelTestState.running || !directorModelTestState.assessmentRuns.length) return Promise.resolve();
+  return directorModelTestPost({
+    action: 'clear_assessments'
+  }).then(function (payload) {
+    directorModelTestState.assessmentRuns = Array.isArray(payload.assessmentRuns) ? payload.assessmentRuns : [];
+    directorModelAssessmentRenderHistory();
+    directorModelTestRenderCalibrationProfiles();
+    directorModelTestSyncControls();
+    reportConsoleInfo(
+      'Director Model Assessment',
+      'Cleared ' + Number(payload.deleted || 0) + ' raw assessment run(s); learned model results were preserved.'
+    );
   });
 }
 
@@ -1551,6 +1571,11 @@ function initializeDirectorModelTest() {
   directorModelTestEl('director-model-test-run').addEventListener('click', directorModelTestStart);
   directorModelTestEl('director-model-assessment-run').addEventListener('click', directorModelTestStartCalibration);
   directorModelTestEl('director-model-test-clear-calibration').addEventListener('click', directorModelTestClearCalibration);
+  directorModelTestEl('director-model-assessment-clear-raw').addEventListener('click', function () {
+    directorModelAssessmentClearEvidence().catch(function (error) {
+      reportConsoleError('Director Model Assessment', error);
+    });
+  });
   directorModelTestEl('director-model-test-stop').addEventListener('click', directorModelTestStop);
   directorModelTestEl('director-model-assessment-stop').addEventListener('click', directorModelTestStop);
   directorModelTestEl('director-model-test-export').addEventListener('click', directorModelTestExport);

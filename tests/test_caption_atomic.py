@@ -91,6 +91,9 @@ def test_caption_assist_prompt_preserves_group_order():
     assert '"groupOrder": [' in messages[1]["content"]
     assert messages[1]["content"].index('"Position"') < messages[1]["content"].index('"View"') < messages[1]["content"].index('"Lighting"')
     assert "include it verbatim exactly once" in messages[0]["content"]
+    assert "compact photographic phrases" in messages[0]["content"]
+    assert "high-angle three-quarter rear view" in messages[0]["content"]
+    assert "viewed from the front" in messages[0]["content"]
 
 
 def test_caption_template_assist_prompt_explains_primer_grammar():
@@ -131,5 +134,8 @@ def test_caption_template_assist_prompt_explains_primer_grammar():
     assert '"setting"' in user
     assert '"on red bed"' in user
     assert "groupsInOrder is the user's intended template order" in system
+    assert "compact compositional photographic wording" in system
+    assert '"[angle] [orientation] view"' in system
+    assert "viewed from the front" in system
     assert "keep group placeholders in that relative order" in user
     assert "does not prescribe caption order" not in system

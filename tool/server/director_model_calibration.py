@@ -90,7 +90,7 @@ def _normalize_attempt(attempt):
     if kind not in {"context", "output", "prose"}:
         raise ValueError("Director calibration attempt kind is invalid.")
     status = str(attempt.get("status") or "").strip()
-    if status not in {"passed", "failed"}:
+    if status not in {"passed", "failed", "stopped"}:
         raise ValueError("Director calibration attempt status is invalid.")
     normalized = {
         "kind": kind,
@@ -99,6 +99,7 @@ def _normalize_attempt(attempt):
         "finishReason": str(attempt.get("finishReason") or ""),
         "error": str(attempt.get("error") or ""),
         "failureKind": str(attempt.get("failureKind") or "").strip(),
+        "note": str(attempt.get("note") or "").strip(),
     }
     for field in ("promptTokens", "completionTokens", "observedContextSize"):
         value = attempt.get(field)

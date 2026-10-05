@@ -90,7 +90,7 @@ def _normalize_attempt(attempt):
     if kind not in {"context", "output", "prose"}:
         raise ValueError("Director calibration attempt kind is invalid.")
     status = str(attempt.get("status") or "").strip()
-    if status not in {"passed", "failed"}:
+    if status not in {"passed", "failed", "stopped"}:
         raise ValueError("Director calibration attempt status is invalid.")
     normalized = {
         "kind": kind,
@@ -99,6 +99,7 @@ def _normalize_attempt(attempt):
         "finishReason": str(attempt.get("finishReason") or ""),
         "error": str(attempt.get("error") or ""),
         "failureKind": str(attempt.get("failureKind") or "").strip(),
+        "note": str(attempt.get("note") or "").strip(),
     }
     for field in ("promptTokens", "completionTokens", "observedContextSize"):
         value = attempt.get(field)
@@ -171,9 +172,12 @@ def _report_health(attempts, context_mode, context_size, max_tokens, status):
     if max_tokens > 0:
         if status != "complete":
             return "assessment-incomplete"
-        if any(attempt.get("failureKind") != "capacity" for attempt in failed):
+        if any(attempt.get("failureKind") == "runtime" for attempt in failed):
             return "assessment-incomplete"
-        if failed:
+        if any(
+            attempt.get("failureKind") == "capacity" and attempt.get("kind") in {"output", "prose"}
+            for attempt in failed
+        ):
             return "limited"
         return "healthy"
 

@@ -967,14 +967,49 @@ def _list_models_for_current_runtime(reload=False):
     return models
 
 
-def list_models(reload=False):
+def _list_local_models_passive():
+    """Discover configured local GGUFs without starting or probing llama.cpp."""
+    settings = _runtime_settings("local")
+    models_dir = Path(settings["models_dir"])
+    if not models_dir.exists():
+        return []
+    if not models_dir.is_dir():
+        raise NotADirectoryError("Director models directory is not a directory: " + str(models_dir))
+
+    models = []
+    for path in models_dir.iterdir():
+        if path.suffix.casefold() != ".gguf":
+            continue
+        try:
+            if not path.is_file():
+                continue
+            size_bytes = int(path.stat().st_size)
+        except OSError as exc:
+            _logger.info("Skipping unavailable local Director model %s: %s", path.name, exc)
+            continue
+        models.append({
+            "id": path.stem,
+            "label": path.name,
+            "path": str(path),
+            "status": "unloaded",
+            "sizeBytes": max(0, size_bytes),
+        })
+    models.sort(key=lambda model: model["label"].casefold())
+    return models
+
+
+def list_models(reload=False, probe_local_runtime=False):
     models = []
     warnings = []
     base = _director_base_config()
 
     try:
         with _use_runtime("local"):
-            local_models = _list_models_for_current_runtime(reload=reload)
+            local_models = (
+                _list_models_for_current_runtime(reload=reload)
+                if probe_local_runtime
+                else _list_local_models_passive()
+            )
         for model in local_models:
             model["runtimeId"] = "local"
             model["runtimeName"] = "Local"

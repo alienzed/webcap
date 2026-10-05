@@ -1,5 +1,6 @@
 var focusedCaptionState = {
   open: false,
+  folder: '',
   itemKeys: [],
   itemIndex: 0,
   itemKey: ''
@@ -42,6 +43,18 @@ function syncFocusedCaptionControls() {
   var hasItem = !!(state && state.currentItem && state.currentItem.fileName);
   var annotationOpen = isFocusedAnnotationOpen();
 
+  if (
+    focusedCaptionState.open &&
+    (!hasItem || String(focusedCaptionState.folder || '') !== String((state && state.folder) || ''))
+  ) {
+    focusedCaptionState.open = false;
+    focusedCaptionState.folder = '';
+    focusedCaptionState.itemKeys = [];
+    focusedCaptionState.itemIndex = 0;
+    focusedCaptionState.itemKey = '';
+    clearCaptionAssistCandidate();
+  }
+
   if (!focusedCaptionState.open) {
     startBtn.classList.toggle('hidden', !hasItem || annotationOpen);
     startBtn.classList.remove('active');
@@ -74,6 +87,7 @@ function syncFocusedCaptionAfterAssist(sourceMediaKey) {
 function stopFocusedCaption(message) {
   if (!focusedCaptionState.open) return;
   focusedCaptionState.open = false;
+  focusedCaptionState.folder = '';
   focusedCaptionState.itemKeys = [];
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = '';
@@ -173,6 +187,7 @@ function startFocusedCaption(targetMediaKey) {
   }
 
   focusedCaptionState.open = true;
+  focusedCaptionState.folder = String((state && state.folder) || '');
   focusedCaptionState.itemKeys = itemKeys;
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = itemKeys[0];

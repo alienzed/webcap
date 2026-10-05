@@ -425,37 +425,19 @@ textarea:focus, input:focus {
 }
 
 .editor-caption-candidate {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.46);
-  color: #1f2937;
-}
-
-.editor-caption-candidate.hidden {
-  display: none !important;
-}
-
-.editor-caption-candidate-dialog {
-  width: min(760px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  width: min(360px, calc(100vw - 80px));
+  padding: 9px 10px;
   border: 1px solid rgba(148, 163, 184, 0.45);
-  border-radius: 10px;
-  background: rgba(248, 250, 252, 0.99);
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.98);
+  color: #1f2937;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
 }
 
 .editor-caption-candidate-missing {
-  padding: 10px 16px;
+  padding: 7px 0;
+  margin-bottom: 7px;
   border-bottom: 1px solid rgba(217, 119, 6, 0.22);
-  background: rgba(245, 158, 11, 0.09);
   color: #92400e;
   font-size: 12px;
   font-weight: 600;
@@ -463,27 +445,24 @@ textarea:focus, input:focus {
 }
 
 .editor-caption-candidate-text {
-  min-height: 0;
-  max-height: min(58vh, 560px);
-  overflow: auto;
+  max-height: min(42vh, 280px);
+  overflow-y: auto;
   overflow-wrap: anywhere;
-  padding: 16px;
   white-space: pre-wrap;
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.45;
   text-align: left;
 }
 
 .editor-caption-candidate-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 10px 14px 12px;
-  border-top: 1px solid rgba(148, 163, 184, 0.28);
+  gap: 6px;
+  margin-top: 7px;
 }
 
 .editor-caption-candidate-actions button {
-  padding: 5px 10px;
+  padding: 4px 8px;
   font-size: 12px;
 }
 

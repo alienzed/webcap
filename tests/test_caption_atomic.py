@@ -22,6 +22,7 @@ def test_caption_assist_leaves_room_for_runtime_reasoning(monkeypatch):
             "assignments": [{"group": "Position", "key": "position", "term": "standing"}],
             "template": "{position, }{background}",
             "renderedPrimer": "standing, plain wall",
+            "preferredCaptionSequence": "subject\nposition / action\nbackground\nlighting\nview",
         })
 
     assert response.status_code == 202
@@ -31,7 +32,9 @@ def test_caption_assist_leaves_room_for_runtime_reasoning(monkeypatch):
     payload = json.loads(captured["contract"]["messages"][1]["content"].split("\n\n", 1)[1])
     assert payload["captionTemplate"] == "{position, }{background}"
     assert payload["renderedPrimer"] == "standing, plain wall"
+    assert payload["preferredCaptionSequence"].startswith("subject\nposition / action")
     assert payload["groupedAnnotations"][0]["key"] == "position"
+    assert "groupOrder" not in payload
 
 
 def test_template_assist_receives_custom_group_meaning_and_uses_runtime_budget(monkeypatch):
@@ -74,27 +77,42 @@ def test_failed_caption_replace_keeps_existing_caption(tmp_path, monkeypatch):
     assert not list(folder.glob(".clip.txt.*.tmp"))
 
 
-def test_caption_assist_prompt_preserves_group_order():
+def test_caption_assist_prompt_uses_house_sequence_not_annotation_order():
+    sequence = "subject\nposition / action\nrequired phrase\nsetting\nbody\ntraits\nclothing\nbackground\nlighting\nview"
     messages = caption_ops.build_caption_assist_messages(
         assignments=[
-            {"group": "Position", "term": "standing"},
             {"group": "View", "term": "front"},
+            {"group": "Position", "term": "standing"},
             {"group": "Lighting", "term": "soft"},
+            {"group": "BT Shape", "term": "triangle"},
         ],
         tags=["studio"],
         required_phrase="subject",
         draft="standing studio, soft lighting, front view",
+        preferred_sequence=sequence,
     )
 
     assert messages[0]["role"] == "system"
     assert messages[1]["role"] == "user"
-    assert '"groupOrder": [' in messages[1]["content"]
-    assert messages[1]["content"].index('"Position"') < messages[1]["content"].index('"View"') < messages[1]["content"].index('"Lighting"')
+    payload = json.loads(messages[1]["content"].split("\n\n", 1)[1])
+    assert payload["preferredCaptionSequence"] == sequence
+    assert "groupOrder" not in payload
+    assert "groupedAnnotations also does not define caption order" in messages[0]["content"]
+    assert "captionTemplate and renderedPrimer" in messages[0]["content"]
+    assert "unlisted groups immediately before the final background, lighting, and view portion" in messages[1]["content"]
     assert "include it verbatim exactly once" in messages[0]["content"]
     assert "compact photographic phrases" in messages[0]["content"]
     assert "high-angle three-quarter rear view" in messages[0]["content"]
-    assert "viewed from the front" in messages[0]["content"]
 
+
+def test_caption_assist_blank_sequence_uses_natural_order():
+    messages = caption_ops.build_caption_assist_messages(
+        assignments=[{"group": "Position", "term": "standing"}],
+        preferred_sequence="",
+    )
+    payload = json.loads(messages[1]["content"].split("\n\n", 1)[1])
+    assert payload["preferredCaptionSequence"] == ""
+    assert "do not impose a house order" in messages[1]["content"]
 
 def test_caption_template_assist_prompt_explains_primer_grammar():
     messages = caption_ops.build_caption_template_assist_messages(

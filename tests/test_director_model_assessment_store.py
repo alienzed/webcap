@@ -69,6 +69,35 @@ def test_deleting_raw_assessment_removes_only_evidence_file(assessment_root):
     assert assessment.list_assessments() == []
 
 
+def test_bulk_raw_assessment_cleanup_removes_inactive_evidence(assessment_root):
+    first = assessment.start_assessment(_model())
+    assessment.update_assessment(first["id"], [], final=True, status="complete")
+    second = assessment.start_assessment(_model())
+    assessment.update_assessment(second["id"], [], final=True, status="stopped")
+
+    assert assessment.clear_assessments() == 2
+    assert assessment.list_assessments() == []
+
+
+def test_bulk_raw_assessment_cleanup_refuses_active_evidence(assessment_root):
+    assessment.start_assessment(_model())
+
+    with pytest.raises(RuntimeError, match="Active Director assessment"):
+        assessment.clear_assessments()
+
+
+def test_stopped_probe_evidence_is_valid(assessment_root):
+    started = assessment.start_assessment(_model())
+    saved = assessment.update_assessment(
+        started["id"],
+        [{"kind": "prose", "target": 512, "status": "stopped", "failureKind": "stopped"}],
+        final=True,
+        status="stopped",
+    )
+
+    assert saved["attempts"][0]["status"] == "stopped"
+
+
 def test_assessment_rejects_invalid_evidence_shape(assessment_root):
     started = assessment.start_assessment(_model())
 

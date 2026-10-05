@@ -798,6 +798,9 @@ def _ensure_server():
 
         desired_signature = _server_signature(settings)
 
+        if _process is not None and _process.poll() is not None:
+            _stop_server_locked()
+
         if _process is not None and _process.poll() is None:
             if _server_settings_signature == desired_signature and _health_ok():
                 return

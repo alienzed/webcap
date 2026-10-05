@@ -122,7 +122,7 @@ def _normalize_attempt(attempt):
     if kind not in {"context", "output", "prose"}:
         raise ValueError("Director assessment attempt kind is invalid.")
     status = str(attempt.get("status") or "").strip()
-    if status not in {"passed", "failed"}:
+    if status not in {"passed", "failed", "stopped"}:
         raise ValueError("Director assessment attempt status is invalid.")
     try:
         target = int(attempt.get("target"))
@@ -219,3 +219,16 @@ def delete_assessment(assessment_id):
     except FileNotFoundError:
         raise FileNotFoundError("Director assessment does not exist: " + str(assessment_id))
     return True
+
+
+def clear_assessments():
+    if _active_assessment_ids:
+        raise RuntimeError("Active Director assessment evidence cannot be cleared while it is being written.")
+    root = assessment_root()
+    if not root.is_dir():
+        return 0
+    deleted = 0
+    for path in root.glob("*.json"):
+        path.unlink()
+        deleted += 1
+    return deleted

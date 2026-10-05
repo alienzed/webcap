@@ -35,6 +35,9 @@
   "primer": {
     "template": ""
   },
+  "caption_assist": {
+    "preferred_sequence": "subject\nposition / action\nrequired phrase\nsetting\nbody\ntraits\nclothing\nbackground\nlighting\nview"
+  },
   "set_destinations": {
     "presets": [
       {

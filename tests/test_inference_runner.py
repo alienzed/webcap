@@ -22,8 +22,6 @@ def inference_root(tmp_path, monkeypatch):
     execution_queue._resource_owner = ""
     execution_queue.clear_transient_receipts()
     inference_runner._startup_reconciled = True
-    from tool.server import llm_runner
-    llm_runner._local_gpu_drain_until = 0.0
     with inference_runner._provider_runtime_hold_lock:
         inference_runner._provider_runtime_holds.clear()
     with inference_runner._backlog_lock:
@@ -310,33 +308,6 @@ def test_inference_yields_retained_director_after_reserving_gpu(inference_root, 
     assert inference_runner.job_status(queued["jobId"])["status"] == "completed"
 
 
-def test_training_arbiter_gives_local_llm_fifo_head_priority_over_inference(inference_root, monkeypatch):
-    monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
-    queued = inference_runner.enqueue_generate(
-        {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}
-    )
-    llm_runner.enqueue(
-        "storyboard",
-        "qwen-local",
-        {"operation": "write_prompt", "prompt": "Prompt.", "output": "text"},
-    )
-    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
-
-    assert inference_runner._advance_queue() is None
-
-    assert execution_queue.get_job(queued["jobId"])["status"] == "queued"
-    assert inference_runner.snapshot()["waitReason"] == "Waiting for Prompt Assistant / Director."
-    assert execution_queue.resource_owner() == ""
-
-
-def test_training_arbiter_rechecks_local_llm_priority_at_owner_grant(inference_root, monkeypatch):
-    checks = iter([False, True])
-    monkeypatch.setattr(llm_runner, "local_gpu_work_runnable", lambda: next(checks))
-
-    assert training_runner.reserve_gpu_for_external_work("inference") is False
-    assert execution_queue.resource_owner() == ""
-
-
 def test_training_arbiter_does_not_block_inference_for_remote_llm_fifo_head(inference_root, monkeypatch):
     llm_runner.enqueue(
         "chat",
@@ -348,7 +319,7 @@ def test_training_arbiter_does_not_block_inference_for_remote_llm_fifo_head(infe
     assert training_runner.external_gpu_work_block_reason(inference_runner.GPU_RESERVATION_OWNER) == ""
 
 
-def test_inference_yields_while_llm_retains_gpu_during_grace(inference_root, monkeypatch):
+def test_inference_waits_while_llm_owns_gpu(inference_root, monkeypatch):
     monkeypatch.setattr(inference_runner, "_start_worker_for_requested_inference", lambda: None)
     queued = inference_runner.enqueue_generate(
         {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Prompt"}

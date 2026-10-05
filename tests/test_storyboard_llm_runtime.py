@@ -370,7 +370,6 @@ def test_chat_uses_selected_model_disables_thinking_with_existing_gpu_ownership(
 
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: calls.append("server"))
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: calls.append("free-comfy"))
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "_ensure_local_model_loaded",
@@ -424,7 +423,6 @@ def test_chat_uses_selected_model_disables_thinking_with_existing_gpu_ownership(
     assert captured["payload"]["max_tokens"] == 4096
     assert calls == [
         "server",
-        "free-comfy",
         "ensure:qwen-large",
     ]
 
@@ -432,7 +430,6 @@ def test_chat_uses_selected_model_disables_thinking_with_existing_gpu_ownership(
 def test_chat_omits_max_tokens_when_limit_is_auto(monkeypatch):
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: {
         "mode": "local",
@@ -524,7 +521,6 @@ def test_chat_stops_owned_router_if_model_cannot_be_confirmed_unloaded(monkeypat
     monkeypatch.setattr(storyboard_llm_runtime, "_process", owned_process)
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_status", lambda model_id: "loaded")
     monkeypatch.setattr(storyboard_llm_runtime, "stop_server", lambda: calls.append("stop"))
@@ -566,7 +562,6 @@ def test_chat_external_router_cleanup_failure_leaves_gpu_release_to_caller(monke
     monkeypatch.setattr(storyboard_llm_runtime, "_process", None)
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_status", lambda model_id: "loaded")
     monkeypatch.setattr(
@@ -805,6 +800,58 @@ def test_local_runtime_refuses_healthy_unowned_router(tmp_path, monkeypatch):
 
     with pytest.raises(RuntimeError, match="does not own"):
         storyboard_llm_runtime._ensure_server()
+
+
+def test_ensure_server_cleans_up_terminated_owned_router_before_restart(tmp_path, monkeypatch):
+    calls = []
+    health = iter([False, True])
+
+    class DeadProcess:
+        def poll(self):
+            return 0
+
+    class LiveProcess:
+        def poll(self):
+            return None
+
+    storyboard_llm_runtime._process = DeadProcess()
+    storyboard_llm_runtime._log_handle = None
+    storyboard_llm_runtime._server_settings_signature = ("/owned/llama-server", str(tmp_path / "text_encoders"), 8189, 8192)
+
+    settings = {
+        "mode": "local",
+        "llama_server": "/owned/llama-server",
+        "models_dir": tmp_path / "text_encoders",
+        "port": 8189,
+        "context_size": 8192,
+        "max_tokens": 4096,
+    }
+
+    def fake_stop():
+        calls.append("cleanup-dead")
+        storyboard_llm_runtime._process = None
+        storyboard_llm_runtime._server_settings_signature = None
+
+    def fake_popen(command, **_kwargs):
+        calls.append("start")
+        return LiveProcess()
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: settings)
+    monkeypatch.setattr(storyboard_llm_runtime, "_resolve_executable", lambda: "/owned/llama-server")
+    monkeypatch.setattr(storyboard_llm_runtime, "_runtime_dir", lambda: tmp_path)
+    monkeypatch.setattr(storyboard_llm_runtime, "_health_ok", lambda: next(health))
+    monkeypatch.setattr(storyboard_llm_runtime, "_stop_server_locked", fake_stop)
+    monkeypatch.setattr(storyboard_llm_runtime.subprocess, "Popen", fake_popen)
+
+    try:
+        storyboard_llm_runtime._ensure_server()
+        assert calls == ["cleanup-dead", "start"]
+    finally:
+        if storyboard_llm_runtime._log_handle is not None:
+            storyboard_llm_runtime._log_handle.close()
+        storyboard_llm_runtime._log_handle = None
+        storyboard_llm_runtime._process = None
+        storyboard_llm_runtime._server_settings_signature = None
 
 
 def test_owned_router_restarts_when_runtime_settings_change(tmp_path, monkeypatch):
@@ -1048,7 +1095,6 @@ def test_chat_wraps_json_schema_for_llama_cpp(monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_status", lambda model_id: "unloaded")
     monkeypatch.setattr(storyboard_llm_runtime, "_director_config", lambda: {
@@ -1104,7 +1150,6 @@ def test_chat_uses_external_llm_gpu_reservation_without_double_claim(monkeypatch
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: calls.append("free-comfy"))
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: calls.append("load:" + model_id))
     monkeypatch.setattr(storyboard_llm_runtime, "_model_status", lambda model_id: "loaded")
     monkeypatch.setattr(
@@ -1132,7 +1177,7 @@ def test_chat_uses_external_llm_gpu_reservation_without_double_claim(monkeypatch
     )
 
     assert result["text"] == "queued response"
-    assert calls == ["free-comfy", "load:qwen"]
+    assert calls == ["load:qwen"]
 
 
 def test_remote_native_url_strips_openai_v1_prefix_for_ollama_probe(monkeypatch):
@@ -1310,7 +1355,6 @@ def test_remote_chat_uses_openai_compatible_endpoint_without_local_gpu_managemen
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: calls.append("server"))
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: calls.append("free-comfy"))
     monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: calls.append("load:" + model_id))
     monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append("unload:" + model_id))
     monkeypatch.setattr(
@@ -1581,7 +1625,6 @@ def test_chat_hard_stop_does_not_restart_or_unload_runtime(monkeypatch):
     storyboard_llm_runtime.clear_stop_request()
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_id: {"id": model_id})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -1738,7 +1781,6 @@ def test_chat_uses_calibrated_limits_when_director_settings_are_auto(monkeypatch
         lambda: observed.update({"context": storyboard_llm_runtime._director_config()["context_size"]}),
     )
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_ref: {"id": model_ref})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
 
     def fake_http(path, method="GET", payload=None, timeout=30):
@@ -1778,7 +1820,6 @@ def test_explicit_director_settings_take_priority_over_calibration(monkeypatch, 
         lambda: observed.update({"context": storyboard_llm_runtime._director_config()["context_size"]}),
     )
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_ref: {"id": model_ref})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -1815,7 +1856,6 @@ def test_per_request_calibration_override_takes_priority_over_saved_profile(monk
         lambda: observed.update({"context": storyboard_llm_runtime._director_config()["context_size"]}),
     )
     monkeypatch.setattr(storyboard_llm_runtime, "_model_record", lambda model_ref: {"id": model_ref})
-    monkeypatch.setattr(storyboard_llm_runtime, "_free_comfy_models", lambda: None)
     monkeypatch.setattr(storyboard_llm_runtime, "_ensure_local_model_loaded", lambda model_id: None)
     monkeypatch.setattr(
         storyboard_llm_runtime,

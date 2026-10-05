@@ -563,6 +563,15 @@
                                             <button id="editor-caption-wand-btn" type="button" class="editor-floating-action-btn editor-caption-wand-btn hidden" title="Generate a candidate caption from the selected annotations using the current Director model" aria-label="Generate candidate caption with AI"><span class="editor-caption-wand-glyph" aria-hidden="true">&#10024;</span></button>
                                             <button id="editor-apply-primer-btn" type="button" class="editor-floating-action-btn hidden" title="Write the current caption to disk. Shift+click to apply it and go to the next captionless item.">Apply</button>
                                         </div>
+                                        <div id="editor-caption-candidate" class="editor-caption-candidate hidden" aria-live="polite">
+                                            <div id="editor-caption-candidate-missing" class="editor-caption-candidate-missing hidden"></div>
+                                            <div id="editor-caption-candidate-text" class="editor-caption-candidate-text"></div>
+                                            <div class="editor-caption-candidate-actions">
+                                                <button id="editor-caption-candidate-use" type="button">Use</button>
+                                                <button id="editor-caption-candidate-regenerate" type="button" title="Generate another candidate" aria-label="Generate another candidate">&#8635;</button>
+                                                <button id="editor-caption-candidate-dismiss" type="button" title="Dismiss candidate and stay on this item" aria-label="Dismiss candidate and stay on this item">&times;</button>
+                                            </div>
+                                        </div>
                                         <button id="primer-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Reset the current caption to the current primer output">Reset</button>
                                         <button id="primer-undo-reset-caption-btn" type="button" class="editor-floating-action-btn hidden" title="Undo last reset for current item">Undo Reset</button>
                                     </div>
@@ -1703,17 +1712,6 @@
             </div>
         </div>
         <div id="app-overlay-root" class="app-overlay-root" aria-label="Application overlays">
-            <div id="editor-caption-candidate" class="editor-caption-candidate hidden" aria-live="polite">
-                <section class="editor-caption-candidate-dialog" role="dialog" aria-modal="true" aria-label="AI caption candidate">
-                    <div id="editor-caption-candidate-missing" class="editor-caption-candidate-missing hidden"></div>
-                    <div id="editor-caption-candidate-text" class="editor-caption-candidate-text"></div>
-                    <div class="editor-caption-candidate-actions">
-                        <button id="editor-caption-candidate-use" type="button">Use</button>
-                        <button id="editor-caption-candidate-regenerate" type="button" title="Generate another candidate" aria-label="Generate another candidate">&#8635;</button>
-                        <button id="editor-caption-candidate-dismiss" type="button" title="Dismiss candidate and stay on this item" aria-label="Dismiss candidate and stay on this item">&times;</button>
-                    </div>
-                </section>
-            </div>
 <div id="training-review-modal" class="training-review-modal hidden" aria-hidden="true" data-escape-close-id="training-review-modal-close">
                     <section class="training-review-dialog" role="dialog" aria-modal="true" aria-labelledby="training-review-modal-title">
                         <header class="training-review-modal-header">

@@ -1786,3 +1786,42 @@ def test_individual_story_development_jobs_do_not_mutate_story_before_final_appl
     assert stored["updatedAt"] == original_updated_at
 
 
+
+
+def test_caption_client_runs_through_shared_llm_lane(llm_root, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_freeform_chat",
+        lambda model_id, messages, gpu_reserved=False, max_tokens=None, **_kwargs: captured.update({
+            "model": model_id,
+            "messages": messages,
+            "gpu_reserved": gpu_reserved,
+            "max_tokens": max_tokens,
+        }) or {
+            "text": "A subject stands facing the camera.",
+            "model": model_id,
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    messages = [
+        {"role": "system", "content": "Write one concise caption."},
+        {"role": "user", "content": "Position: standing; View: front"},
+    ]
+    job = llm_runner.enqueue(
+        "caption",
+        "qwen",
+        {"operation": "caption_assist", "messages": messages},
+        context={"runtimeOverrides": {"maxTokens": 256}},
+        label="Caption Assist",
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["result"]["text"] == "A subject stands facing the camera."
+    assert captured["messages"] == messages
+    assert captured["max_tokens"] == 256

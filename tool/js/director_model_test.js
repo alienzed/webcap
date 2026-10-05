@@ -403,28 +403,29 @@ function directorModelTestAdvertisedCapability(modelRef) {
 
 function directorModelTestHealthLabel(value, status) {
   value = String(value || '');
-  if (value === 'healthy') return 'Healthy';
-  if (value === 'limited') return 'Usable range · probe budget exhausted';
-  if (value === 'warning') return 'Warning · usable range found';
-  if (value === 'likely-unusable') return 'Likely unusable';
+  if (value === 'healthy') return 'Assessment complete';
+  if (value === 'limited') return 'Usable · output limit found';
+  if (value === 'warning') return 'Usable · quality warning';
+  if (value === 'likely-unusable') return 'Not recommended';
   if (value === 'assessment-incomplete') return status === 'complete'
-    ? 'Assessment complete · higher tier unproven'
+    ? 'Usable range found · some checks inconclusive'
     : 'Assessment incomplete · usable range found';
-  if (value === 'assessment-failed' || value === 'calibration-failed') return 'Assessment inconclusive';
+  if (value === 'assessment-failed' || value === 'calibration-failed') return 'Assessment interrupted';
   if (value === 'stopped') return 'Stopped';
   return 'Incomplete';
 }
 
 function directorModelAssessmentFailureLabel(value) {
   value = String(value || '');
-  if (value === 'runtime') return 'runtime failure';
-  if (value === 'capacity') return 'output budget exhausted';
-  if (value === 'contract') return 'probe contract not completed';
-  if (value === 'malformed') return 'unexpected response';
-  if (value === 'looping') return 'repetition / looping';
-  if (value === 'leakage') return 'control / reasoning leakage';
+  if (value === 'runtime') return 'runtime failed';
+  if (value === 'capacity') return 'output limit reached';
+  if (value === 'contract') return 'test instructions not followed';
+  if (value === 'malformed') return 'unexpected response format';
+  if (value === 'looping') return 'repetitive / looping output';
+  if (value === 'leakage') return 'internal / control text leaked';
   if (value === 'garbled') return 'garbled output';
-  if (value === 'empty') return 'empty output';
+  if (value === 'empty') return 'empty response';
+  if (value === 'stopped') return 'stopped';
   return value;
 }
 
@@ -458,14 +459,20 @@ function directorModelTestRenderCalibrationProfiles() {
     var advertised = directorModelTestAdvertisedCapability(modelRef);
     var coherentOutput = Number(abilities.coherentOutputTokens || 0);
     var findings = [
-      Number(abilities.contextTokens || 0) > 0 ? directorModelTestFormatCapacity(abilities.contextTokens) + (report.contextMode === 'runtime' ? ' runtime context observed' : ' context proven') : '',
-      Number(abilities.structuredOutputTokens || 0) > 0 ? directorModelTestFormatCapacity(abilities.structuredOutputTokens) + ' structured output budget' : '',
-      coherentOutput > 0 ? directorModelTestFormatCapacity(coherentOutput) + ' coherent output budget' : ''
+      Number(abilities.contextTokens || 0) > 0
+        ? (report.contextMode === 'runtime' ? 'Context observed: ' : 'Context tested: ') + directorModelTestFormatCapacity(abilities.contextTokens)
+        : '',
+      Number(abilities.structuredOutputTokens || 0) > 0
+        ? 'Structured responses: up to ' + directorModelTestFormatCapacity(abilities.structuredOutputTokens) + ' tokens'
+        : '',
+      coherentOutput > 0
+        ? 'Long-form writing: up to ' + directorModelTestFormatCapacity(coherentOutput) + ' tokens'
+        : ''
     ].filter(Boolean);
-    if (!findings.length) findings.push('No successful capability tier yet');
-    if (coherentOutput >= 8192) findings.push('full-story output proven');
+    if (!findings.length) findings.push('No usable output range proven yet');
+    if (coherentOutput >= 8192) findings.push('Best use: full stories');
     else if (coherentOutput > 0 && report.status === 'complete' &&
-        ['healthy', 'limited', 'warning'].indexOf(report.health) !== -1) findings.push('individual scenes recommended');
+        ['healthy', 'limited', 'warning'].indexOf(report.health) !== -1) findings.push('Best use: scene-by-scene');
 
     var pathologies = Array.isArray(report.pathologies) ? report.pathologies : [];
     if (pathologies.length) {
@@ -474,17 +481,25 @@ function directorModelTestRenderCalibrationProfiles() {
 
     var advertisedText = '';
     if (advertised) {
-      advertisedText = advertised.contextLabel ? 'Advertised ' + advertised.contextLabel + ' context' : '';
+      advertisedText = advertised.contextLabel ? 'Published spec: ' + advertised.contextLabel + ' context' : 'Published spec';
       if (Number(advertised.recommendedOutputTokens || 0) > 0) {
-        advertisedText += (advertisedText ? ' · ' : '') + directorModelTestFormatCapacity(advertised.recommendedOutputTokens) + ' recommended output';
+        advertisedText += (advertisedText ? ' · ' : '') + directorModelTestFormatCapacity(advertised.recommendedOutputTokens) + ' output';
       }
     }
 
-    var failures = Array.isArray(report.attempts) ? report.attempts.filter(function (attempt) { return attempt.status === 'failed'; }) : [];
+    var reportAttempts = Array.isArray(report.attempts) ? report.attempts : [];
+    var failures = reportAttempts.filter(function (attempt) { return attempt.status === 'failed'; });
     var lastFailure = failures.length ? failures[failures.length - 1] : null;
     var failureText = lastFailure
-      ? ' · last probe: ' + lastFailure.kind + ' ' + directorModelTestFormatCapacity(lastFailure.target) +
-        (lastFailure.failureKind ? ' · ' + directorModelAssessmentFailureLabel(lastFailure.failureKind) : '')
+      ? ' · Last issue: ' + directorModelTestFormatCapacity(lastFailure.target) + '-token ' +
+        directorModelAssessmentAttemptLabel(lastFailure.kind).toLowerCase() + ' test — ' +
+        directorModelAssessmentFailureLabel(lastFailure.failureKind || 'failed')
+      : '';
+    var notes = reportAttempts.filter(function (attempt) { return String(attempt.note || '').trim(); });
+    var lastNote = notes.length ? notes[notes.length - 1] : null;
+    var noteText = lastNote
+      ? directorModelTestFormatCapacity(lastNote.target) + '-token ' +
+        directorModelAssessmentAttemptLabel(lastNote.kind).toLowerCase() + ' test: ' + String(lastNote.note)
       : '';
     var profileText = profile ? ' · Auto profile saved' : '';
     var errorText = String(report.error || (lastFailure && lastFailure.error) || '');
@@ -498,6 +513,7 @@ function directorModelTestRenderCalibrationProfiles() {
       '<span class="app-settings-help"><strong>' + escapeHtml(directorModelTestHealthLabel(report.health, report.status)) + '</strong> · ' +
         escapeHtml(findings.join(' · ') + failureText + profileText) + '</span>' +
       (advertisedText ? '<span class="app-settings-help">' + escapeHtml(advertisedText) + '</span>' : '') +
+      (noteText ? '<span class="app-settings-help">Note: ' + escapeHtml(noteText) + '</span>' : '') +
       (errorText ? '<span class="app-settings-help' + (probeOutcome ? '' : ' director-model-finding-error') + '">' +
         (probeOutcome ? 'Last probe result: ' : 'Last probe error: ') + escapeHtml(errorText) + '</span>' : '');
 
@@ -695,7 +711,9 @@ function directorModelAssessmentRenderEvidence(assessment) {
     var target = directorModelTestFormatCapacity(attempt.target);
     var targetLabel = attempt.kind === 'context' ? target + ' context' : target + ' output budget';
     var statusText = attempt.status === 'stopped' ? 'Stopped' : (failed
-      ? (attempt.failureKind === 'capacity' ? 'Budget exhausted' : (probeOutcome ? 'Not completed' : 'Failed'))
+      ? (attempt.failureKind === 'capacity' ? 'Hit output limit' :
+        (attempt.failureKind === 'contract' ? 'Did not follow test format' :
+          (attempt.failureKind === 'runtime' ? 'Runtime failed' : (probeOutcome ? 'Not completed' : 'Quality warning'))))
       : 'Passed');
     var failureText = failed && attempt.failureKind ? directorModelAssessmentFailureLabel(attempt.failureKind) : '';
     var probeMeta = [
@@ -716,6 +734,7 @@ function directorModelAssessmentRenderEvidence(assessment) {
       '</summary>' +
       '<div class="app-settings-disclosure-body">' +
         (probeMeta ? '<div class="app-settings-help director-model-assessment-probe-meta">' + escapeHtml(probeMeta) + '</div>' : '') +
+        (attempt.note ? '<div class="app-settings-help">Note: ' + escapeHtml(String(attempt.note)) + '</div>' : '') +
         (attempt.error ? '<div class="app-settings-help' + (probeOutcome ? '' : ' director-model-finding-error') + '">' +
           (probeOutcome ? 'Result: ' : 'Error: ') + escapeHtml(String(attempt.error)) + '</div>' : '') +
         '<div class="director-model-assessment-evidence-block"><strong>Prompt</strong>' +
@@ -930,6 +949,7 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
     }
     if (terminalStatus === 'failed') reportConsoleError('Director Model Assessment', String(job.error || 'Director probe failed.'));
     var passed = terminalStatus === 'completed';
+    var completionMarkerMissing = false;
 
     if (kind === 'context') {
       passed = passed && observedContext >= Number(target) && text.trim() === 'CONTEXT_OK';
@@ -942,18 +962,20 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
         var proseWords = text.replace(/Section\s+\d+\s*:/gi, '')
           .replace(String(calibrationProtocol.proseMarker), '').trim().split(/\s+/).length;
         passed = passed &&
-          text.indexOf(String(calibrationProtocol.proseMarker || 'WEB_CAP_LONGFORM_COMPLETE')) !== -1 &&
           sections.length === expectedSections && sections.every(function (heading, index) {
             return Number(heading.match(/\d+/)[0]) === index + 1;
           }) && proseWords >= expectedSections * 80;
+        completionMarkerMissing = passed &&
+          text.indexOf(String(calibrationProtocol.proseMarker || 'WEB_CAP_LONGFORM_COMPLETE')) === -1;
       } else {
         var expectedItems = Number((calibrationProtocol.outputItemCounts || {})[String(target)] || 0);
         var items = text.match(/(^|\n)\s*\d+[\.\)]\s+/gm) || [];
         passed = passed &&
-          text.indexOf(String(calibrationProtocol.marker || 'WEB_CAP_CALIBRATION_COMPLETE')) !== -1 &&
           items.length === expectedItems && items.every(function (heading, index) {
             return parseInt(heading, 10) === index + 1;
           });
+        completionMarkerMissing = passed &&
+          text.indexOf(String(calibrationProtocol.marker || 'WEB_CAP_CALIBRATION_COMPLETE')) === -1;
       }
     }
 
@@ -963,6 +985,9 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
     if (obviousPathology) passed = false;
     var failureKind = directorModelTestCalibrationFailureKind(kind, terminalStatus, text, finishReason, passed);
     var probeError = passed ? '' : directorModelAssessmentFailureLabel(failureKind);
+    var probeNote = passed && completionMarkerMissing
+      ? 'Completion marker omitted; the response otherwise completed the test.'
+      : '';
     if (failureKind === 'contract' && kind === 'prose') {
       probeError = 'Expected ' + expectedSections + ' consecutive sections and at least ' + (expectedSections * 80) +
         ' prose words plus the completion marker; received ' + sections.length + ' sections and ' + proseWords +
@@ -981,6 +1006,7 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
       finishReason: finishReason,
       error: String(job.error || probeError),
       failureKind: failureKind,
+      note: probeNote,
       prompt: prompt,
       text: text,
       reasoning: String(result.reasoning || ''),
@@ -1120,9 +1146,9 @@ function directorModelTestCalibrateOne(model, modelNumber) {
       var previousCapacity = attempts.filter(function (attempt) {
         return attempt.kind === 'output' || attempt.kind === 'prose';
       });
-      if (previousCapacity.length && previousCapacity[previousCapacity.length - 1].status === 'failed') return;
+      if (previousCapacity.length && previousCapacity[previousCapacity.length - 1].failureKind === 'capacity') return;
       return runAttempt('output', target).then(function (attempt) {
-        if (!attempt || attempt.status !== 'passed' || directorModelTestState.stopRequested) return;
+        if (!attempt || attempt.status === 'stopped' || attempt.failureKind === 'capacity' || directorModelTestState.stopRequested) return;
         return runAttempt('prose', target);
       });
     });

@@ -1508,8 +1508,8 @@ def normalize_freeform_messages(messages):
         if not isinstance(message, dict):
             raise ValueError("Director Chat messages must be objects.")
         role = str(message.get("role") or "").strip().lower()
-        if role not in {"user", "assistant"}:
-            raise ValueError("Director Chat supports only user and assistant messages.")
+        if role not in {"system", "user", "assistant"}:
+            raise ValueError("Director Chat supports only system, user, and assistant messages.")
         content = str(message.get("content") or "").strip()
         if not content:
             raise ValueError("Director Chat messages cannot be empty.")

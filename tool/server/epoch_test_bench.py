@@ -821,6 +821,7 @@ def prepare(folder_path, model_id=None):
         "warnings": prepare_warnings,
         "defaultPrompt": model.default_prompt(template),
         "defaults": defaults,
+        "defaultStrength": float(defaults.get("strength", 1)),
         "aspectRatioOptions": list(getattr(model, "ASPECT_RATIO_OPTIONS", ())),
         "count": len(loras),
         "files": [path.name for path in loras],
@@ -900,6 +901,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             seed=criteria.get("seed"),
             name=criteria.get("name"),
             selected_files=criteria.get("selectedFiles"),
+            candidate_strengths=criteria.get("candidateStrengths"),
             include_base=criteria.get("includeBase"),
             model_id=criteria.get("modelId"),
         )
@@ -943,7 +945,7 @@ def _resolved_wildcard_values(source_prompt, resolved_prompt):
 
 
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
-                           selected_files=None, include_base=True, model_id=None,
+                           selected_files=None, candidate_strengths=None, include_base=True, model_id=None,
                            aspect_ratio=None, megapixels=None, duration=None):
     from . import inference_runtime
 
@@ -952,6 +954,21 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     if not prompt:
         raise ValueError("A test prompt is required.")
     loras = _selected_lora_files_for_set(folder_path, model, selected_files=selected_files)
+    strength_by_file = {}
+    if candidate_strengths is not None:
+        if not isinstance(candidate_strengths, dict):
+            raise ValueError("Test candidate strengths must be an object keyed by staged filename.")
+        for path in loras:
+            raw_strength = candidate_strengths.get(path.name)
+            if raw_strength is None:
+                continue
+            try:
+                strength = float(raw_strength)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Test candidate strength must be numeric.") from exc
+            if strength < -2 or strength > 2:
+                raise ValueError("Test candidate strength must be between -2 and 2.")
+            strength_by_file[path.name] = strength
     session_name = str(name or "").strip()
     if len(session_name) > 120:
         raise ValueError("Test session name must be 120 characters or fewer.")
@@ -988,6 +1005,7 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
         "promptNeedsResolve": prompt_needs_resolve,
         "settings": dict(normalized_settings),
         "workflow": copy.deepcopy(template),
+        "candidateStrengths": strength_by_file,
     }
     request.update(_workflow_evidence(model, template))
     return request, loras, include_base is not False
@@ -1423,6 +1441,7 @@ def execute_inference(job_id, request, context):
             prompt,
             comfy_lora_name,
             settings=settings,
+            strength_model=float(context.get("candidateStrength")) if candidate_kind == "lora" else 1,
             filename_prefix=output_prefix,
         )
         provider_job_id = inference_runtime.queue_managed_workflow(str(job_id), workflow)
@@ -1524,6 +1543,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
             "label": path.name,
             "file": path.name,
             "provenance": _staged_lora_provenance(path),
+            "strength": float((request.get("candidateStrengths") or {}).get(path.name, (request.get("settings") or {}).get("strength", 1))),
         }
         for path in loras
     )
@@ -1584,6 +1604,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 "candidateLabel": candidate["label"],
                 "candidateIndex": index,
                 "candidateProvenance": dict(candidate.get("provenance") or {}),
+                "candidateStrength": candidate.get("strength"),
                 "wildcardValues": _resolved_wildcard_values(
                     request.get("sourcePrompt"),
                     request.get("prompt"),
@@ -1779,7 +1800,7 @@ def reconcile_startup():
 
 
 def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
-            include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None):
+            candidate_strengths=None, include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None):
     reconcile_startup()
     request, loras, include_base = _new_inference_request(
         folder_path,
@@ -1788,6 +1809,7 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
         seed=seed,
         name=name,
         selected_files=selected_files,
+        candidate_strengths=candidate_strengths,
         include_base=include_base,
         model_id=model_id,
         aspect_ratio=aspect_ratio,

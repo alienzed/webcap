@@ -80,6 +80,10 @@
   gap: 6px;
 }
 
+.app-header-context {
+  column-gap: 12px;
+}
+
 .app-header-workspace-actions {
   position: absolute;
   left: calc(42px + 255px + 22px);
@@ -177,7 +181,8 @@
   display: none;
 }
 
-.app-header-model-control {
+.app-header-model-control,
+.app-header-director-control {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -185,7 +190,15 @@
   min-width: 0;
 }
 
-.app-header-model-label {
+.app-header-model-control,
+.app-header-director-control {
+  margin-left: 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+
+.app-header-model-label,
+.app-header-director-label {
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
@@ -196,7 +209,8 @@
   display: none;
 }
 
-.app-header-model-control select {
+.app-header-model-control select,
+.app-header-director-control select {
   width: auto;
   max-width: 180px;
   min-height: 26px;
@@ -2643,4 +2657,22 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
     right: 8px;
     width: min(420px, calc(100% - 54px));
   }
+}
+
+
+.app-header-director-control select {
+  max-width: 220px;
+}
+
+.app-header-director-control .director-model-refresh-btn {
+  flex: 0 0 auto;
+}
+
+.test-generations-director-model-tools > select,
+.test-generations-director-model-tools > .director-model-refresh-btn,
+.generate-director-model-tools > select,
+.generate-director-model-tools > .director-model-refresh-btn,
+.storyboard-director-model-tools,
+.director-chat-model-tools {
+  display: none !important;
 }

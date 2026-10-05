@@ -139,15 +139,16 @@ function useCaptionAssistCandidate() {
     return Promise.resolve(true);
   }
 
-  captionAssistCandidate = null;
-  syncCaptionAssistCandidateUi();
   cancelEditorAutosaveForCaption(state.folder, mediaItem.fileName);
   return saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key, {
     skipRenderFileList: true
   }).then(function () {
+    captionAssistCandidate = null;
+    syncCaptionAssistCandidateUi();
     ui.editorEl.value = nextCaption;
     return advanceFocusedCaption();
   }).catch(function (err) {
+    syncCaptionAssistCandidateUi();
     setStatus('Could not save AI caption candidate: ' + String(err && err.message ? err.message : err));
     return false;
   });

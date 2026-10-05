@@ -159,7 +159,8 @@ function useCaptionAssistCandidate() {
 function dismissCaptionAssistCandidate() {
   clearCaptionAssistCandidate();
   if (isFocusedCaptionOpen()) {
-    return advanceFocusedCaption();
+    setStatus('AI caption candidate dismissed. Regenerate, edit, or Skip when you are ready to move on.');
+    return Promise.resolve(true);
   }
   setStatus('AI caption candidate dismissed.');
   return Promise.resolve(true);

@@ -62,8 +62,6 @@ _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _monitor_lock = threading.Lock()
 _monitor_thread = None
-_local_gpu_drain_until = 0.0
-LOCAL_GPU_DRAIN_GRACE_SECONDS = 3.0
 _logger = logging.getLogger(__name__)
 
 
@@ -75,15 +73,6 @@ def _reserve_gpu():
 def _release_gpu():
     from .training_runner import release_gpu_for_external_work
     release_gpu_for_external_work(GPU_RESERVATION_OWNER)
-
-
-def _arm_local_gpu_drain_grace():
-    global _local_gpu_drain_until
-    _local_gpu_drain_until = time.monotonic() + LOCAL_GPU_DRAIN_GRACE_SECONDS
-
-
-def local_gpu_drain_pending():
-    return time.monotonic() < _local_gpu_drain_until
 
 
 def _job_model_id(job):
@@ -498,10 +487,7 @@ def _advance_queue():
 
         queued = [job for job in snapshot.get("jobs", []) if job.get("status") == "queued"]
         if not queued:
-            if (
-                execution_resource_owner() == GPU_RESERVATION_OWNER
-                and not local_gpu_drain_pending()
-            ):
+            if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
             return None
 
@@ -562,25 +548,18 @@ def _advance_queue():
                 )
             _logger.exception("Queued LLM job failed.")
         finally:
-            stopped = str((terminal or {}).get("status") or "") == "stopped"
-            if local_gpu:
-                if not stopped:
-                    _arm_local_gpu_drain_grace()
-                if release_gpu:
-                    current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
-                    keep_gpu = (
-                        not current.get("paused")
-                        and (
-                            any(
-                                str(job.get("status") or "") == "queued"
-                                and uses_local_gpu(_job_model_id(job))
-                                for job in current.get("jobs", [])
-                            )
-                            or (not stopped and local_gpu_drain_pending())
-                        )
+            if local_gpu and release_gpu:
+                current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
+                keep_gpu = (
+                    not current.get("paused")
+                    and any(
+                        str(job.get("status") or "") == "queued"
+                        and uses_local_gpu(_job_model_id(job))
+                        for job in current.get("jobs", [])
                     )
-                    if keep_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
-                        release_gpu = False
+                )
+                if keep_gpu and execution_resource_owner() == GPU_RESERVATION_OWNER:
+                    release_gpu = False
             if release_gpu:
                 _release_gpu()
 
@@ -597,10 +576,7 @@ def _monitor_has_work():
         return False
     if any(str(job.get("status") or "") == "queued" for job in snapshot.get("jobs", [])):
         return True
-    return (
-        execution_resource_owner() == GPU_RESERVATION_OWNER
-        and local_gpu_drain_pending()
-    )
+    return False
 
 
 def _monitor_loop():
@@ -832,7 +808,6 @@ def snapshot(include_terminal=False):
 
 
 def reset():
-    global _local_gpu_drain_until
     _ensure_execution_reconciled()
     with _enqueue_lock:
         current = execution_reset_unfinished()
@@ -847,7 +822,6 @@ def reset():
                 # is still discarded before client application.
                 _logger.warning("LLM runtime could not be interrupted; abandoning its result: %s", exc)
         else:
-            _local_gpu_drain_until = 0.0
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()
         return snapshot(include_terminal=False)

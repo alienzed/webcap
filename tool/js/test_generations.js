@@ -17,6 +17,7 @@
   var pendingActivityFolder = '';
   var testActivity = {};
   var selectedCandidates = null;
+  var candidateStrengths = null;
   var pendingActivitySession = '';
   var queuedTestJobs = [];
   var trackedTestInferenceSessions = Object.create(null);
@@ -755,7 +756,9 @@
       megapixels: Number(el('test-generations-megapixels') && el('test-generations-megapixels').value || 0),
       duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0),
       dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || ''),
-      strength: Number(el('test-generations-strength') && el('test-generations-strength').value || 0),
+      candidateStrengths: candidateStrengths && typeof candidateStrengths === 'object'
+        ? Object.assign({}, candidateStrengths)
+        : {},
       selectedFiles: selectedCandidateFiles(),
       includeBase: !el('test-generations-base-include') || el('test-generations-base-include').checked
     };
@@ -1171,6 +1174,23 @@
     Array.from(selectedCandidates).forEach(function (fileName) {
       if (files.indexOf(fileName) === -1) selectedCandidates.delete(fileName);
     });
+    if (!candidateStrengths || typeof candidateStrengths !== 'object') {
+      candidateStrengths = Object.create(null);
+      var savedStrengths = savedSettings.candidateStrengths && typeof savedSettings.candidateStrengths === 'object'
+        ? savedSettings.candidateStrengths
+        : {};
+      var defaultStrength = Number(payload && payload.defaultStrength);
+      if (!isFinite(defaultStrength)) defaultStrength = 1;
+      files.forEach(function (fileName) {
+        var savedStrength = Number(savedStrengths[fileName]);
+        candidateStrengths[fileName] = isFinite(savedStrength) && savedStrength >= -2 && savedStrength <= 2
+          ? savedStrength
+          : defaultStrength;
+      });
+    }
+    Object.keys(candidateStrengths).forEach(function (fileName) {
+      if (files.indexOf(fileName) === -1) delete candidateStrengths[fileName];
+    });
     var summary = el('test-generations-summary');
     var countEl = el('test-generations-files-count');
     var host = el('test-generations-files');
@@ -1271,6 +1291,18 @@
       detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
       copy.appendChild(name);
       if (detail.textContent) copy.appendChild(detail);
+
+      var strength = document.createElement('input');
+      strength.type = 'number';
+      strength.className = 'test-generations-candidate-strength';
+      strength.dataset.candidateStrength = String(fileName || '');
+      strength.min = '-2';
+      strength.max = '2';
+      strength.step = '0.05';
+      strength.title = 'Strength';
+      strength.setAttribute('aria-label', 'Strength for ' + String(parts.label || fileName || 'candidate'));
+      strength.value = String(candidateStrengths[fileName]);
+
       var actions = document.createElement('div');
       actions.className = 'test-generations-staged-actions';
       if (metadata && metadata.folder && metadata.stage && Number(metadata.epoch) > 0) {
@@ -1304,6 +1336,7 @@
       actions.appendChild(remove);
       row.appendChild(include);
       row.appendChild(copy);
+      row.appendChild(strength);
       row.appendChild(actions);
       host.appendChild(row);
     });
@@ -2969,7 +3002,6 @@
     var megapixels = el('test-generations-megapixels');
     var duration = el('test-generations-duration');
     var dimensions = el('test-generations-dimensions');
-    var strength = el('test-generations-strength');
     var seed = el('test-generations-seed');
     var prompt = el('test-generations-prompt');
 
@@ -2977,7 +3009,6 @@
       ['aspectRatio', 'test-generations-aspect-field'],
       ['megapixels', 'test-generations-megapixels-field'],
       ['duration', 'test-generations-duration-field'],
-      ['strength', 'test-generations-strength-field'],
       ['dimensions', 'test-generations-dimensions-field'],
       ['seed', 'test-generations-seed-field']
     ].forEach(function (entry) {
@@ -2996,7 +3027,6 @@
     }
     if (megapixels) megapixels.value = String(savedSettings.megapixels || defaults.megapixels || '');
     if (duration) duration.value = String(savedSettings.duration || defaults.duration || '');
-    if (strength) strength.value = String(savedSettings.strength !== undefined ? savedSettings.strength : (defaults.strength !== undefined ? defaults.strength : ''));
     if (dimensions) {
       var dimensionOptions = payload.settingOptions && Array.isArray(payload.settingOptions.dimensions)
         ? payload.settingOptions.dimensions.slice()
@@ -3050,6 +3080,7 @@
     }
     prepared = null;
     selectedCandidates = null;
+    candidateStrengths = null;
     currentStatus = {};
     showSessionError = false;
     compareIndex = 0;
@@ -3136,16 +3167,20 @@
     if (declaredSettings.indexOf('aspectRatio') !== -1) settings.aspectRatio = String(el('test-generations-aspect').value || '').trim();
     if (declaredSettings.indexOf('megapixels') !== -1) settings.megapixels = String(el('test-generations-megapixels').value || '').trim();
     if (declaredSettings.indexOf('duration') !== -1) settings.duration = String(el('test-generations-duration').value || '').trim();
-    if (declaredSettings.indexOf('strength') !== -1) settings.strength = String(el('test-generations-strength').value || '').trim();
     if (declaredSettings.indexOf('dimensions') !== -1) settings.dimensions = String(el('test-generations-dimensions').value || '');
     if (declaredSettings.indexOf('seed') !== -1) settings.seed = String(el('test-generations-seed').value || '').trim();
     if (!selectedFiles.length) return showError(new Error('Select at least one staged LoRA to test.'));
     if (!prompt) return showError(new Error('A test prompt is required.'));
     if (declaredSettings.indexOf('aspectRatio') !== -1 && !settings.aspectRatio) return showError(new Error('An aspect ratio is required.'));
     if (declaredSettings.indexOf('dimensions') !== -1 && !settings.dimensions.trim()) return showError(new Error('Dimensions are required.'));
-    if (declaredSettings.indexOf('strength') !== -1) {
-      var strengthValue = Number(settings.strength);
-      if (!isFinite(strengthValue) || strengthValue < -2 || strengthValue > 2) return showError(new Error('Strength must be between -2 and 2.'));
+    var selectedStrengths = {};
+    for (var strengthIndex = 0; strengthIndex < selectedFiles.length; strengthIndex += 1) {
+      var strengthFile = selectedFiles[strengthIndex];
+      var strengthValue = Number(candidateStrengths && candidateStrengths[strengthFile]);
+      if (!isFinite(strengthValue) || strengthValue < -2 || strengthValue > 2) {
+        return showError(new Error('Strength must be between -2 and 2.'));
+      }
+      selectedStrengths[strengthFile] = strengthValue;
     }
     saveTestPromptDraft(prompt);
     saveTestBenchState(prompt);
@@ -3158,6 +3193,7 @@
       selectedFiles: selectedFiles,
       modelId: getWorkingModelProfileId(),
       includeBase: includeBase,
+      candidateStrengths: selectedStrengths,
       prompt: prompt,
       settings: settings
     }).then(function (payload) {
@@ -3361,6 +3397,19 @@
       try { openRecentPromptsMenu(this); } catch (err) { showError(err); }
     };
     el('test-generations-files').addEventListener('change', function (event) {
+      var strengthInput = event.target.closest('[data-candidate-strength]');
+      if (strengthInput) {
+        var strengthFile = String(strengthInput.dataset.candidateStrength || '');
+        var strengthValue = Number(strengthInput.value);
+        if (!isFinite(strengthValue) || strengthValue < -2 || strengthValue > 2) {
+          showError(new Error('Strength must be between -2 and 2.'));
+          renderStagedFiles(prepared || { files: [], count: 0, candidateScores: {} });
+          return;
+        }
+        candidateStrengths[strengthFile] = strengthValue;
+        saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
+        return;
+      }
       var checkbox = event.target.closest('[data-candidate-select]');
       if (!checkbox) return;
       var fileName = String(checkbox.dataset.candidateSelect || '');

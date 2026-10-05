@@ -110,33 +110,35 @@ def serve_media_file(folder: str, media_name: str):
 
 
 CAPTION_ASSIST_SYSTEM_PROMPT = (
-    "You write concise, natural-language training captions for media dataset items. "
-    "The user's selected annotation tags are authoritative factual constraints. "
-    "Represent every selected tag faithfully while combining redundant wording naturally. "
+    "You write concise, information-dense natural-language training captions for media dataset items. "
+    "The user's selected annotation tags are authoritative factual constraints. Represent every selected tag faithfully "
+    "while combining redundant wording naturally. Prefer compact visual phrases over prose padding: do not add phrases "
+    "such as 'the photo shows', 'can be seen', or 'the photo was taken' when they add no visual fact. "
     "The existing draft may guide wording and may contain useful details, but it must never override selected tags. "
     "Do not invent identity, demographic traits, colors, objects, actions, setting details, camera properties, mood, "
-    "or other visual facts that are not present in the selected annotations, required phrase, or draft, "
-    "apart from an explicit subject description authored in the template. "
-    "If a required phrase is provided, include it verbatim exactly once. "
-    "Use captionTemplate as the user's preferred structure and ordering, and renderedPrimer to understand "
-    "how its keys, term affixes, and mappings resolve for this item. Smooth the wording into natural prose. "
-    "Use the template's literal subject description as the default opening; the draft or selected annotations "
-    "may explicitly refine it. Do not infer gender or subject count from clothing or appearance traits. "
-    "Omit unpopulated parts; never invent facts to fill a template slot or copy unresolved placeholders. "
-    "Keep each action and trait clearly attached to its subject. Include selected facts even when their group "
-    "has no template placeholder, placing them beside semantically related details rather than appending a list. "
-    "Preserve distinctive multiword tag phrases verbatim where they already read naturally; do not needlessly "
-    "paraphrase them, change their subject scope, or emphasize incidental details. "
-    "Treat concise camera and viewpoint wording as a preferred surface form, not prose to expand: compose supplied "
-    "angle and orientation facts into compact photographic phrases such as 'front view', 'low-angle side view', or "
-    "'high-angle three-quarter rear view' when their groups support that meaning. Do not rewrite these as "
-    "'viewed from the front', 'from a front view', 'seen from the side', or similar verbose variants. "
-    "Write one fluent caption, not a comma-separated tag dump. "
+    "or other visual facts that are not present in the selected annotations, required phrase, or draft, apart from an "
+    "explicit subject description authored in captionTemplate. If a required phrase is provided, include it verbatim "
+    "exactly once. captionTemplate and renderedPrimer are reference material for subject wording, vocabulary, affixes, "
+    "and resolved tag meaning; they do not define caption order. The order of groupedAnnotations also does not define "
+    "caption order. Omit unpopulated facts and never invent content to fill a group. Keep each action and trait clearly "
+    "attached to its subject. Preserve distinctive multiword tag phrases verbatim where they already read naturally. "
+    "Treat concise camera and viewpoint wording as a preferred surface form: compose supplied angle and orientation "
+    "facts into compact photographic phrases such as 'front view', 'low-angle side view', or "
+    "'high-angle three-quarter rear view'. Do not rewrite these as 'viewed from the front', 'from a front view', "
+    "'seen from the side', or similar verbose variants. Write one fluent caption, not a comma-separated tag dump. "
     "Return only the caption text with no quotes, labels, commentary, or markdown."
 )
 
 
-def build_caption_assist_messages(assignments=None, tags=None, required_phrase="", draft="", template="", rendered_primer=""):
+def build_caption_assist_messages(
+    assignments=None,
+    tags=None,
+    required_phrase="",
+    draft="",
+    template="",
+    rendered_primer="",
+    preferred_sequence="",
+):
     grouped = []
     seen_grouped = set()
     for entry in assignments if isinstance(assignments, list) else []:
@@ -168,34 +170,36 @@ def build_caption_assist_messages(assignments=None, tags=None, required_phrase="
 
     required_phrase = str(required_phrase or "").strip()
     draft = str(draft or "").strip()
+    preferred_sequence = str(preferred_sequence or "").replace("\r\n", "\n").strip()
     if not grouped and not other_tags and not required_phrase and not draft:
         raise ValueError("Caption Assist needs selected annotations, a required phrase, or an existing draft.")
 
-    group_order = []
-    seen_groups = set()
-    for entry in grouped:
-        group = str(entry.get("group") or "").strip()
-        key = group.lower()
-        if not group or key in seen_groups:
-            continue
-        seen_groups.add(key)
-        group_order.append(group)
-
     payload = {
         "requiredPhrase": required_phrase,
-        "groupOrder": group_order,
         "groupedAnnotations": grouped,
         "otherTags": other_tags,
         "currentDraft": draft,
         "captionTemplate": str(template or "").strip(),
         "renderedPrimer": str(rendered_primer or "").strip(),
+        "preferredCaptionSequence": preferred_sequence,
     }
+    if preferred_sequence:
+        ordering = (
+            "preferredCaptionSequence is the user's caption house style. Follow it closely, making only small local "
+            "moves required for grammar or to keep a detail attached to its subject. Annotation groups not explicitly "
+            "named in the sequence still belong in the caption; place those unlisted groups immediately before the "
+            "final background, lighting, and view portion when that terminal portion is present. "
+        )
+    else:
+        ordering = (
+            "preferredCaptionSequence is blank, so do not impose a house order. Arrange every supplied fact in the "
+            "most natural concise order while preserving all facts. "
+        )
     user_prompt = (
-        "Write the caption using these WebCap inputs. Group names explain the meaning of selected tags; "
-        "they are not text that must appear in the caption. Infer meaning from group names and their selected "
-        "values together. groupOrder is the user's preferred semantic order: generally introduce facts in that "
-        "order when natural, making only small local moves when grammar requires them. "
-        "Follow captionTemplate when supplied; otherwise use groupOrder as the default structure.\n\n"
+        "Write the caption using these WebCap inputs. Group names explain the meaning of selected tags; they are not "
+        "text that must appear in the caption. Infer meaning from group names and selected values together. "
+        + ordering +
+        "Do not use annotation group order or captionTemplate placeholder order as caption order.\n\n"
         + json.dumps(payload, ensure_ascii=False, indent=2)
     )
     return [

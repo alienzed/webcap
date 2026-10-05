@@ -127,6 +127,10 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
     "has no template placeholder, placing them beside semantically related details rather than appending a list. "
     "Preserve distinctive multiword tag phrases verbatim where they already read naturally; do not needlessly "
     "paraphrase them, change their subject scope, or emphasize incidental details. "
+    "Treat concise camera and viewpoint wording as a preferred surface form, not prose to expand: compose supplied "
+    "angle and orientation facts into compact photographic phrases such as 'front view', 'low-angle side view', or "
+    "'high-angle three-quarter rear view' when their groups support that meaning. Do not rewrite these as "
+    "'viewed from the front', 'from a front view', 'seen from the side', or similar verbose variants. "
     "Write one fluent caption, not a comma-separated tag dump. "
     "Return only the caption text with no quotes, labels, commentary, or markdown."
 )
@@ -256,6 +260,11 @@ Design requirements:
   is not good enough.
 - Prefer concise natural training-caption prose over a raw comma-separated tag dump, while retaining deterministic
   behavior.
+- Prefer compact compositional photographic wording for camera/view groups. When the schema supplies angle and
+  orientation fragments, combine them as an "[angle] [orientation] view" phrase where that matches the vocabulary,
+  such as "front view", "low-angle side view", or "high-angle three-quarter rear view". Keep the supplied vocabulary
+  wording; do not expand it into "viewed from the front", "from a front view", "seen from the side", or similar prose.
+  Conditional template glue should make the compact phrase work when either optional component is absent.
 - Treat currentTemplate as an editable draft: improve it when useful, but do not preserve awkward structure merely
   because it already exists.
 - Preserve an explicit subject description authored in currentTemplate, such as a generic person opening, even

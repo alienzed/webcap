@@ -304,7 +304,10 @@ function validatePrimerTemplateCandidate(template, request) {
   (request.groups || []).forEach(function (group) { if (group && group.key) available[String(group.key).toLowerCase()] = true; });
   (request.mappings || []).forEach(function (mapping) { if (mapping && mapping.key) available[String(mapping.key).toLowerCase()] = true; });
 
+  if (/^```/.test(text) || /```$/.test(text)) throw new Error('Template Assist returned markdown instead of template text.');
+  var placeholderCount = 0;
   var stripped = text.replace(/\{([^{}]+)\}/g, function (_, rawInner) {
+    placeholderCount += 1;
     var inner = String(rawInner || '');
     var parts = inner.split('|');
     var key = '';
@@ -318,6 +321,7 @@ function validatePrimerTemplateCandidate(template, request) {
     return '';
   });
   if (/[{}]/.test(stripped)) throw new Error('Template Assist returned malformed placeholder braces.');
+  if (!placeholderCount) throw new Error('Template Assist returned no usable placeholders.');
   return text;
 }
 

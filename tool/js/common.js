@@ -11,6 +11,27 @@ var DEFAULT_PRIMER_TEMPLATE = [
   '{view| view.}'
 ].join('\n');
 
+var DEFAULT_CAPTION_ASSIST_SEQUENCE = [
+  'subject',
+  'position / action',
+  'required phrase',
+  'setting',
+  'body',
+  'traits',
+  'clothing',
+  'background',
+  'lighting',
+  'view'
+].join('\n');
+
+function getPreferredCaptionSequence() {
+  var captionAssist = APP_CONFIG && APP_CONFIG.caption_assist && typeof APP_CONFIG.caption_assist === 'object'
+    ? APP_CONFIG.caption_assist
+    : null;
+  if (captionAssist && typeof captionAssist.preferred_sequence === 'string') return captionAssist.preferred_sequence;
+  return DEFAULT_CAPTION_ASSIST_SEQUENCE;
+}
+
 function getConfiguredPrimerTemplate(requirements) {
   var appTemplate = APP_CONFIG && APP_CONFIG.primer && typeof APP_CONFIG.primer.template === 'string'
     ? APP_CONFIG.primer.template

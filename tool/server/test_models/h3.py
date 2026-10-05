@@ -116,7 +116,6 @@ def build_workflow(template, prompt, comfy_lora_name, settings=None, strength_mo
     selected = dict(settings) if settings is not None else template_settings(template)
     if "seed" not in selected:
         selected["seed"] = workflow_seed(template)
-    strength_model = float(selected.get("strength", strength_model))
     try:
         prompt_inputs = workflow["146"]["inputs"]
         prompt_inputs["wildcard_text"] = prompt

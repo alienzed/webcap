@@ -451,6 +451,7 @@ function renderPreviewHeaderMeta() {
   var metadataEl = document.getElementById('preview-header-meta');
   var gridOpen = typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen();
   var focusOpen = isFocusedAnnotationOpen();
+  var captionFocusOpen = isFocusedCaptionOpen();
   var visibleMedia = typeof getFilteredMediaItems === 'function' ? getFilteredMediaItems(false) : [];
   var hasItem = !!(state.currentItem && state.currentItem.fileName);
   var sidebarCollapsed = !!(ui.appEl && ui.appEl.classList.contains('left-rail-collapsed'));
@@ -483,8 +484,15 @@ function renderPreviewHeaderMeta() {
   }
   function updateWorkflowVisibility() {
     if (!workflowActionsEl) return;
-    var showFocus = !!(ui.previewFocusBtnEl && !ui.previewFocusBtnEl.classList.contains('hidden'));
-    workflowActionsEl.classList.toggle('hidden', !showFocus);
+    var buttons = [
+      ui.previewFocusBtnEl,
+      ui.previewFocusCaptionBtnEl,
+      ui.previewFocusCaptionSkipBtnEl
+    ];
+    var showWorkflow = buttons.some(function (button) {
+      return !!(button && !button.classList.contains('hidden'));
+    });
+    workflowActionsEl.classList.toggle('hidden', !showWorkflow);
   }
   function appendOverlayWarning(text) {
     if (!overlayStatusEl || !text) return;
@@ -503,9 +511,10 @@ function renderPreviewHeaderMeta() {
   }
 
   if (ui.previewFocusBtnEl) {
-    ui.previewFocusBtnEl.classList.toggle('hidden', !hasItem || focusOpen);
+    ui.previewFocusBtnEl.classList.toggle('hidden', !hasItem || focusOpen || captionFocusOpen);
     ui.previewFocusBtnEl.disabled = false;
   }
+  syncFocusedCaptionControls();
   updateWorkflowVisibility();
 
   if (!hasItem) {

@@ -110,8 +110,11 @@ var debouncedSaveFolderState = debounceCreate(600);
 var primerResetUndoState = null; // { mediaKey, text }
 var captionAssistPendingJobId = '';
 var captionAssistCandidate = null; // { mediaKey, text }
+var primerTemplateAssistPendingJobId = '';
+var primerTemplateAssistCandidate = '';
 
 function wireStatsPrimerAutoSave() {
+  wirePrimerTemplateAssistUi();
   var statsFields = [
     document.getElementById('stats-required-phrase'),
     document.getElementById('stats-phrases'),
@@ -258,6 +261,164 @@ function syncCurrentFolderPrimerTemplateFromAppDefault() {
   }
   refreshCurrentPrimerDerivedUi();
   return true;
+}
+
+function buildPrimerTemplateAssistRequest() {
+  var templateEl = document.getElementById('primer-template');
+  var groups = [];
+  var items = Array.isArray(checklistItems) ? checklistItems.slice() : [];
+  items.forEach(function (label) {
+    var key = normalizeRequirementPrimerKey(label);
+    if (!key) return;
+    var terms = getChecklistKeywordTermsForRequirement(label).map(function (term) {
+      var affixes = getChecklistGroupTermAffixes(label, term, '');
+      return {
+        value: term,
+        descriptorPrefix: affixes.descriptorPrefix || '',
+        descriptorSuffix: affixes.descriptorSuffix || '',
+        wrapperPrefix: affixes.wrapperPrefix || '',
+        wrapperSuffix: affixes.wrapperSuffix || '',
+        renderedDefault: renderChecklistGroupTermWithAffixes(label, term, '') || term
+      };
+    });
+    groups.push({
+      label: label,
+      key: key,
+      separator: getChecklistPrimerSeparatorForRequirement(label),
+      precedence: JSON.parse(JSON.stringify(checklistPrimerPrecedenceByGroup[label] || {})),
+      terms: terms
+    });
+  });
+  return {
+    model: getDirectorModelPreference('webcap.director.model'),
+    groups: groups,
+    mappings: typeof getPrimerMappingsRows === 'function' ? getPrimerMappingsRows() : [],
+    currentTemplate: templateEl ? String(templateEl.value || '') : ''
+  };
+}
+
+function validatePrimerTemplateCandidate(template, request) {
+  var text = String(template || '').trim();
+  if (!text) throw new Error('Template Assist returned an empty template.');
+  var available = {};
+  (request.groups || []).forEach(function (group) { if (group && group.key) available[String(group.key).toLowerCase()] = true; });
+  (request.mappings || []).forEach(function (mapping) { if (mapping && mapping.key) available[String(mapping.key).toLowerCase()] = true; });
+
+  var stripped = text.replace(/\{([^{}]+)\}/g, function (_, rawInner) {
+    var inner = String(rawInner || '');
+    var parts = inner.split('|');
+    var key = '';
+    if (parts.length === 2) key = String(parts[0] || '').trim().toLowerCase();
+    else if (parts.length === 3) key = String(parts[1] || '').trim().toLowerCase();
+    else {
+      var punctuated = inner.match(/^([^A-Za-z0-9_]*)([A-Za-z0-9_]+)([^A-Za-z0-9_]*)$/);
+      key = punctuated ? String(punctuated[2] || '').toLowerCase() : String(inner || '').trim().toLowerCase();
+    }
+    if (!key || !available[key]) throw new Error('Template Assist invented an unavailable placeholder: {' + inner + '}');
+    return '';
+  });
+  if (/[{}]/.test(stripped)) throw new Error('Template Assist returned malformed placeholder braces.');
+  return text;
+}
+
+function syncPrimerTemplateAssistCandidateUi() {
+  var panel = document.getElementById('primer-template-candidate');
+  var textEl = document.getElementById('primer-template-candidate-text');
+  if (!panel || !textEl) return;
+  panel.classList.toggle('hidden', !primerTemplateAssistCandidate);
+  textEl.textContent = primerTemplateAssistCandidate || '';
+}
+
+function runPrimerTemplateAssist() {
+  if (primerTemplateAssistPendingJobId) {
+    setStatus('Caption Template Assist is already running.');
+    return Promise.resolve(false);
+  }
+  var request = buildPrimerTemplateAssistRequest();
+  if (!request.model) {
+    setStatus('Select a Director model before generating a Caption Template.');
+    return Promise.resolve(false);
+  }
+  if (!request.groups.length && !request.mappings.length) {
+    setStatus('Configure at least one tag group or Primer mapping first.');
+    return Promise.resolve(false);
+  }
+
+  primerTemplateAssistPendingJobId = 'submitting';
+  var wand = document.getElementById('primer-template-wand-btn');
+  if (wand) wand.disabled = true;
+  setStatus('Caption Template Assist queued...');
+  return captionAssistRequestJson('/caption/template-assist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request)
+  }).then(function (payload) {
+    if (!payload.job || !payload.job.jobId) throw new Error('Caption Template Assist did not return a queued job.');
+    primerTemplateAssistPendingJobId = String(payload.job.jobId);
+    trackTransientLlmJob(payload.job);
+    setStatus(payload.job.status === 'queued' ? 'Caption Template Assist waiting in the LLM queue...' : 'Caption Template Assist writing...');
+    return waitForCaptionAssistJob(payload.job);
+  }).then(function (job) {
+    var result = job.result && typeof job.result === 'object' ? job.result : {};
+    primerTemplateAssistCandidate = validatePrimerTemplateCandidate(result.text, request);
+    syncPrimerTemplateAssistCandidateUi();
+    setStatus('AI Caption Template candidate ready.');
+    return true;
+  }).catch(function (err) {
+    setStatus('Caption Template Assist failed: ' + String(err && err.message ? err.message : err));
+    return false;
+  }).then(function (result) {
+    primerTemplateAssistPendingJobId = '';
+    if (wand) wand.disabled = false;
+    return result;
+  }, function (err) {
+    primerTemplateAssistPendingJobId = '';
+    if (wand) wand.disabled = false;
+    throw err;
+  });
+}
+
+function wirePrimerTemplateAssistUi() {
+  var wand = document.getElementById('primer-template-wand-btn');
+  var use = document.getElementById('primer-template-candidate-use');
+  var regenerate = document.getElementById('primer-template-candidate-regenerate');
+  var dismiss = document.getElementById('primer-template-candidate-dismiss');
+  var templateEl = document.getElementById('primer-template');
+  if (!wand || !use || !regenerate || !dismiss || !templateEl) return;
+
+  if (!wand.__primerTemplateAssistBound) {
+    wand.__primerTemplateAssistBound = true;
+    wand.addEventListener('click', runPrimerTemplateAssist);
+  }
+  if (!use.__primerTemplateAssistBound) {
+    use.__primerTemplateAssistBound = true;
+    use.addEventListener('click', function () {
+      if (!primerTemplateAssistCandidate) return;
+      templateEl.value = primerTemplateAssistCandidate;
+      primerTemplateAssistCandidate = '';
+      if (state) state.folderHasSavedPrimerTemplate = true;
+      templateEl.dispatchEvent(new Event('input', { bubbles: true }));
+      syncPrimerTemplateAssistCandidateUi();
+      templateEl.focus();
+      setStatus('AI Caption Template moved into the editor.');
+    });
+  }
+  if (!regenerate.__primerTemplateAssistBound) {
+    regenerate.__primerTemplateAssistBound = true;
+    regenerate.addEventListener('click', function () {
+      primerTemplateAssistCandidate = '';
+      syncPrimerTemplateAssistCandidateUi();
+      runPrimerTemplateAssist();
+    });
+  }
+  if (!dismiss.__primerTemplateAssistBound) {
+    dismiss.__primerTemplateAssistBound = true;
+    dismiss.addEventListener('click', function () {
+      primerTemplateAssistCandidate = '';
+      syncPrimerTemplateAssistCandidateUi();
+      setStatus('AI Caption Template candidate dismissed.');
+    });
+  }
 }
 
 function buildCaptionAssistRequest(mediaItem) {

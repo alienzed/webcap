@@ -156,15 +156,27 @@ def build_caption_assist_messages(assignments=None, tags=None, required_phrase="
     if not grouped and not other_tags and not required_phrase and not draft:
         raise ValueError("Caption Assist needs selected annotations, a required phrase, or an existing draft.")
 
+    group_order = []
+    seen_groups = set()
+    for entry in grouped:
+        group = str(entry.get("group") or "").strip()
+        key = group.lower()
+        if not group or key in seen_groups:
+            continue
+        seen_groups.add(key)
+        group_order.append(group)
+
     payload = {
         "requiredPhrase": required_phrase,
+        "groupOrder": group_order,
         "groupedAnnotations": grouped,
         "otherTags": other_tags,
         "currentDraft": draft,
     }
     user_prompt = (
         "Write the caption using these WebCap inputs. Group names explain the meaning of selected tags; "
-        "they are not text that must appear in the caption.\n\n"
+        "they are not text that must appear in the caption. groupOrder is the user's preferred semantic order: "
+        "generally introduce facts in that order when natural, but never make the sentence awkward just to obey it.\n\n"
         + json.dumps(payload, ensure_ascii=False, indent=2)
     )
     return [

@@ -18,3 +18,22 @@ def test_failed_caption_replace_keeps_existing_caption(tmp_path, monkeypatch):
 
     assert caption.read_text(encoding="utf-8") == "existing caption"
     assert not list(folder.glob(".clip.txt.*.tmp"))
+
+
+def test_caption_assist_prompt_preserves_group_order():
+    messages = caption_ops.build_caption_assist_messages(
+        assignments=[
+            {"group": "Position", "term": "standing"},
+            {"group": "View", "term": "front"},
+            {"group": "Lighting", "term": "soft"},
+        ],
+        tags=["studio"],
+        required_phrase="subject",
+        draft="standing studio, soft lighting, front view",
+    )
+
+    assert messages[0]["role"] == "system"
+    assert messages[1]["role"] == "user"
+    assert '"groupOrder": [' in messages[1]["content"]
+    assert messages[1]["content"].index('"Position"') < messages[1]["content"].index('"View"') < messages[1]["content"].index('"Lighting"')
+    assert "include it verbatim exactly once" in messages[0]["content"]

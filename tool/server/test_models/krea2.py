@@ -117,7 +117,6 @@ def build_workflow(
     selected = dict(settings) if settings is not None else template_settings(template)
     if "seed" not in selected:
         selected["seed"] = workflow_seed(template)
-    strength_model = float(selected.get("strength", strength_model))
     try:
         prompt_inputs = workflow["332"]["inputs"]
         prompt_inputs["wildcard_text"] = prompt

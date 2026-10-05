@@ -82,3 +82,35 @@ def test_llm_cleanup_error_is_not_turned_into_scheduler_uncertainty(monkeypatch)
 
     with pytest.raises(RuntimeError, match="cleanup exploded"):
         gpu_prep.prepare_gpu_for("inference")
+
+
+def test_llm_waits_for_any_comfyui_queue_activity(monkeypatch):
+    monkeypatch.setattr(
+        inference_runtime,
+        "queue_snapshot",
+        lambda: {"running": [], "pending": [["external"]]},
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "free_cached_models",
+        lambda: pytest.fail("Busy ComfyUI must not have its models released."),
+    )
+
+    assert gpu_prep.prepare_gpu_for("llm") is False
+
+
+def test_llm_releases_comfyui_models_when_idle(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        inference_runtime,
+        "queue_snapshot",
+        lambda: {"running": [], "pending": []},
+    )
+    monkeypatch.setattr(
+        inference_runtime,
+        "free_cached_models",
+        lambda: calls.append("free"),
+    )
+
+    assert gpu_prep.prepare_gpu_for("llm") is True
+    assert calls == ["free"]

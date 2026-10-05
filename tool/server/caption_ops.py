@@ -1,5 +1,6 @@
 
 from pathlib import Path
+import json
 import os
 import tempfile
 from flask import send_from_directory
@@ -106,3 +107,67 @@ def serve_media_file(folder: str, media_name: str):
             pass
         return send_from_directory(folder_path, media_name)
     return run_with_directory_repair(folder_path, serve)
+
+
+CAPTION_ASSIST_SYSTEM_PROMPT = (
+    "You write concise, natural-language training captions for media dataset items. "
+    "The user's selected annotation tags are authoritative factual constraints. "
+    "Represent every selected tag faithfully while combining redundant wording naturally. "
+    "The existing draft may guide wording and may contain useful details, but it must never override selected tags. "
+    "Do not invent identity, demographic traits, colors, objects, actions, setting details, camera properties, mood, "
+    "or other visual facts that are not present in the selected annotations, required phrase, or draft. "
+    "If a required phrase is provided, include it verbatim exactly once. "
+    "Write one fluent caption, not a comma-separated tag dump. "
+    "Return only the caption text with no quotes, labels, commentary, or markdown."
+)
+
+
+def build_caption_assist_messages(assignments=None, tags=None, required_phrase="", draft=""):
+    grouped = []
+    seen_grouped = set()
+    for entry in assignments if isinstance(assignments, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        group = str(entry.get("group") or entry.get("requirement") or "").strip()
+        term = str(entry.get("term") or entry.get("tag") or "").strip()
+        if not term:
+            continue
+        key = (group.lower(), term.lower())
+        if key in seen_grouped:
+            continue
+        seen_grouped.add(key)
+        grouped.append({
+            "group": group or "Annotation",
+            "tag": term,
+        })
+
+    other_tags = []
+    seen_tags = set()
+    for value in tags if isinstance(tags, list) else []:
+        tag = str(value or "").strip()
+        key = tag.lower()
+        if not tag or key in seen_tags:
+            continue
+        seen_tags.add(key)
+        other_tags.append(tag)
+
+    required_phrase = str(required_phrase or "").strip()
+    draft = str(draft or "").strip()
+    if not grouped and not other_tags and not required_phrase and not draft:
+        raise ValueError("Caption Assist needs selected annotations, a required phrase, or an existing draft.")
+
+    payload = {
+        "requiredPhrase": required_phrase,
+        "groupedAnnotations": grouped,
+        "otherTags": other_tags,
+        "currentDraft": draft,
+    }
+    user_prompt = (
+        "Write the caption using these WebCap inputs. Group names explain the meaning of selected tags; "
+        "they are not text that must appear in the caption.\n\n"
+        + json.dumps(payload, ensure_ascii=False, indent=2)
+    )
+    return [
+        {"role": "system", "content": CAPTION_ASSIST_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]

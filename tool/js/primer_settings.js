@@ -390,6 +390,13 @@ function syncPrimerTemplateAssistCandidateUi() {
   textEl.textContent = primerTemplateAssistCandidate || '';
 }
 
+function dismissPrimerTemplateAssistCandidate() {
+  if (!primerTemplateAssistCandidate) return;
+  primerTemplateAssistCandidate = '';
+  syncPrimerTemplateAssistCandidateUi();
+  setStatus('AI Caption Template candidate dismissed.');
+}
+
 function runPrimerTemplateAssist() {
   if (primerTemplateAssistPendingJobId) {
     setStatus('Caption Template Assist is already running.');
@@ -444,8 +451,9 @@ function wirePrimerTemplateAssistUi() {
   var use = document.getElementById('primer-template-candidate-use');
   var regenerate = document.getElementById('primer-template-candidate-regenerate');
   var dismiss = document.getElementById('primer-template-candidate-dismiss');
+  var panel = document.getElementById('primer-template-candidate');
   var templateEl = document.getElementById('primer-template');
-  if (!wand || !use || !regenerate || !dismiss || !templateEl) return;
+  if (!wand || !use || !regenerate || !dismiss || !panel || !templateEl) return;
 
   if (!wand.__primerTemplateAssistBound) {
     wand.__primerTemplateAssistBound = true;
@@ -474,10 +482,21 @@ function wirePrimerTemplateAssistUi() {
   }
   if (!dismiss.__primerTemplateAssistBound) {
     dismiss.__primerTemplateAssistBound = true;
-    dismiss.addEventListener('click', function () {
-      primerTemplateAssistCandidate = '';
-      syncPrimerTemplateAssistCandidateUi();
-      setStatus('AI Caption Template candidate dismissed.');
+    dismiss.addEventListener('click', dismissPrimerTemplateAssistCandidate);
+  }
+  if (!panel.__primerTemplateAssistBackdropBound) {
+    panel.__primerTemplateAssistBackdropBound = true;
+    panel.addEventListener('click', function (event) {
+      if (event.target === panel) dismissPrimerTemplateAssistCandidate();
+    });
+  }
+  if (!document.__primerTemplateAssistEscapeBound) {
+    document.__primerTemplateAssistEscapeBound = true;
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' || !primerTemplateAssistCandidate) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      dismissPrimerTemplateAssistCandidate();
     });
   }
 }

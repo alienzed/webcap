@@ -1299,3 +1299,21 @@ def test_storyboard_lora_catalog_refresh_preserves_working_scene_dom():
     assert "select.innerHTML = loraOptions(selectedName);" in sync
     assert "renderLoraPickerMenu(picker);" in sync
     assert "renderScenes();" not in sync
+
+
+def test_storyboard_director_scene_follow_is_visible_story_scoped():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+
+    helper = storyboard.split("function followVisibleWorkingScene(storyId, sceneId)", 1)[1].split("\n  function ", 1)[0]
+    assert "workspace.classList.contains('hidden')" in helper
+    assert "String(currentStory.id || '') !== targetStoryId" in helper
+    assert "order.indexOf(targetSceneId) < 0" in helper
+    assert "!currentStory.scenes[targetSceneId]" in helper
+    assert "storyState.activeSceneId = targetSceneId;" in helper
+    assert "storyState.sceneViewMode === 'focus'" in helper
+    assert "renderScenes();" in helper
+    assert "setSceneViewMode(" not in helper
+    assert "openStory(" not in helper
+
+    scene_request = storyboard.split("function requestSceneDirector(storyId, sceneId, operation, instruction, modelId, clearCorrection)", 1)[1].split("\n  function ", 1)[0]
+    assert "followVisibleWorkingScene(storyId, sceneId);" in scene_request

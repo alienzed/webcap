@@ -174,7 +174,10 @@ def _report_health(attempts, context_mode, context_size, max_tokens, status):
             return "assessment-incomplete"
         if any(attempt.get("failureKind") == "runtime" for attempt in failed):
             return "assessment-incomplete"
-        if any(attempt.get("failureKind") == "capacity" for attempt in failed):
+        if any(
+            attempt.get("failureKind") == "capacity" and attempt.get("kind") in {"output", "prose"}
+            for attempt in failed
+        ):
             return "limited"
         return "healthy"
 

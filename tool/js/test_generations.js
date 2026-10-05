@@ -755,6 +755,7 @@
       megapixels: Number(el('test-generations-megapixels') && el('test-generations-megapixels').value || 0),
       duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0),
       dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || ''),
+      strength: Number(el('test-generations-strength') && el('test-generations-strength').value || 0),
       selectedFiles: selectedCandidateFiles(),
       includeBase: !el('test-generations-base-include') || el('test-generations-base-include').checked
     };
@@ -2968,6 +2969,7 @@
     var megapixels = el('test-generations-megapixels');
     var duration = el('test-generations-duration');
     var dimensions = el('test-generations-dimensions');
+    var strength = el('test-generations-strength');
     var seed = el('test-generations-seed');
     var prompt = el('test-generations-prompt');
 
@@ -2975,6 +2977,7 @@
       ['aspectRatio', 'test-generations-aspect-field'],
       ['megapixels', 'test-generations-megapixels-field'],
       ['duration', 'test-generations-duration-field'],
+      ['strength', 'test-generations-strength-field'],
       ['dimensions', 'test-generations-dimensions-field'],
       ['seed', 'test-generations-seed-field']
     ].forEach(function (entry) {
@@ -2993,6 +2996,7 @@
     }
     if (megapixels) megapixels.value = String(savedSettings.megapixels || defaults.megapixels || '');
     if (duration) duration.value = String(savedSettings.duration || defaults.duration || '');
+    if (strength) strength.value = String(savedSettings.strength !== undefined ? savedSettings.strength : (defaults.strength !== undefined ? defaults.strength : ''));
     if (dimensions) {
       var dimensionOptions = payload.settingOptions && Array.isArray(payload.settingOptions.dimensions)
         ? payload.settingOptions.dimensions.slice()
@@ -3132,12 +3136,17 @@
     if (declaredSettings.indexOf('aspectRatio') !== -1) settings.aspectRatio = String(el('test-generations-aspect').value || '').trim();
     if (declaredSettings.indexOf('megapixels') !== -1) settings.megapixels = String(el('test-generations-megapixels').value || '').trim();
     if (declaredSettings.indexOf('duration') !== -1) settings.duration = String(el('test-generations-duration').value || '').trim();
+    if (declaredSettings.indexOf('strength') !== -1) settings.strength = String(el('test-generations-strength').value || '').trim();
     if (declaredSettings.indexOf('dimensions') !== -1) settings.dimensions = String(el('test-generations-dimensions').value || '');
     if (declaredSettings.indexOf('seed') !== -1) settings.seed = String(el('test-generations-seed').value || '').trim();
     if (!selectedFiles.length) return showError(new Error('Select at least one staged LoRA to test.'));
     if (!prompt) return showError(new Error('A test prompt is required.'));
     if (declaredSettings.indexOf('aspectRatio') !== -1 && !settings.aspectRatio) return showError(new Error('An aspect ratio is required.'));
     if (declaredSettings.indexOf('dimensions') !== -1 && !settings.dimensions.trim()) return showError(new Error('Dimensions are required.'));
+    if (declaredSettings.indexOf('strength') !== -1) {
+      var strengthValue = Number(settings.strength);
+      if (!isFinite(strengthValue) || strengthValue < -2 || strengthValue > 2) return showError(new Error('Strength must be between -2 and 2.'));
+    }
     saveTestPromptDraft(prompt);
     saveTestBenchState(prompt);
     var runBtn = el('test-generations-run-btn');

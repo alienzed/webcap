@@ -98,7 +98,10 @@ Silent failure is worse than a visible breakage in this project. â€œFail loudlyâ
 
 For local work started by WebCap, durable uncertainty is a bug, not a safety state.
 
-- GPU coordination must obey `docs/gpu_coordination_invariants.md`. Training is the explicit local-GPU arbitration backbone; LLM and Inference do not arbitrate against each other. Cross-runtime handoff cleanup belongs to the shared GPU prep path, not to a client lane. Runtime coordination questions resolve to yes/no or raise; ambiguity is never a scheduling state.
+- GPU coordination must obey `docs/gpu_coordination_invariants.md`. Queue/GPU semantics are frozen: GPU requests are FIFO and lane-sticky; there is no built-in lane priority. Backlog is not a competing request system; it is only a secondary stay-busy-when-idle mechanism. Training gets stronger recovery/protection because it is long-lived, not because it outranks other lanes. Do not change these semantics as cleanup, simplification, or refactoring without explicit user direction.
+- GPU availability for WebCap-managed runtimes is deterministic: **yes, no, or operation error**. `unknown`, `maybe`, `uncertain`, and conservative-busy are not valid scheduling states. If code cannot answer a required runtime question, surface the failure; do not turn uncertainty into queue logic.
+- ComfyUI's own queue is authoritative for whether ComfyUI is busy: any running or pending ComfyUI work counts regardless of who submitted it. Unrelated GPU use outside WebCap-managed runtimes (for example a game or Ollama) is outside WebCap's scheduling responsibility.
+- Cross-runtime handoff cleanup belongs to the shared GPU prep path, not to a client lane.
 
 - Record a stable runtime identity before, or atomically with, the external side effect that starts the work.
 - After restart or crash, reconcile managed work from that exact identity plus authoritative runtime evidence. Managed work must resolve to active, terminal, absent, or failed; "possibly still running" must not become a durable state.

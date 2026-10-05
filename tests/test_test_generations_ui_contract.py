@@ -1189,3 +1189,22 @@ def test_global_director_model_control_lives_in_header():
     assert ".generate-director-model-tools > select" in css
     assert ".storyboard-director-model-tools" in css
     assert ".director-chat-model-tools" in css
+
+
+def test_primer_template_assistant_uses_existing_template_editor():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "primer_settings.js").read_text(encoding="utf-8")
+
+    assert 'id="primer-template-wand-btn"' in html
+    assert 'id="primer-template-candidate"' in html
+    assert 'id="primer-template-candidate-use"' in html
+    assert "function buildPrimerTemplateAssistRequest()" in script
+    assert "getChecklistKeywordTermsForRequirement(label)" in script
+    assert "getChecklistGroupTermAffixes(label, term, '')" in script
+    assert "getChecklistPrimerSeparatorForRequirement(label)" in script
+    assert "getPrimerMappingsRows()" in script
+    assert "validatePrimerTemplateCandidate" in script
+    assert "Template Assist invented an unavailable placeholder" in script
+    assert "templateEl.dispatchEvent(new Event('input', { bubbles: true }))" in script
+    assert "fetch(url, options || {})" in script
+    assert "'/caption/template-assist'" in script

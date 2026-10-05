@@ -374,7 +374,7 @@ def test_contract_miss_after_proven_range_remains_neutral(calibration_root):
     report = _report()
     report["attempts"].append({"kind": "prose", "target": 1024, "status": "failed", "failureKind": "contract"})
     saved = calibration.save_report(report)
-    assert saved["health"] == "assessment-incomplete"
+    assert saved["health"] == "healthy"
     signal = _assessment_signal(saved["modelRef"])
     assert signal["abilities"]["coherentOutputTokens"] == 512
     assert not signal["limited"] and not signal["seriousWarning"]

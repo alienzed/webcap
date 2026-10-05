@@ -109,6 +109,7 @@ function statsGetPrimerOptionsFromDom() {
 var debouncedSaveFolderState = debounceCreate(600);
 var primerResetUndoState = null; // { mediaKey, text }
 var captionAssistPendingJobId = '';
+var captionAssistCandidate = null; // { mediaKey, text }
 
 function wireStatsPrimerAutoSave() {
   var statsFields = [
@@ -186,6 +187,17 @@ function clearCaptionApplyConfirmation() {
   syncCaptionApplyConfirmationUi();
 }
 
+function syncCaptionAssistCandidateUi() {
+  var panel = document.getElementById('editor-caption-candidate');
+  var textEl = document.getElementById('editor-caption-candidate-text');
+  if (!panel || !textEl) return;
+  var mediaKey = state && state.currentItem && state.currentItem.key;
+  var candidate = captionAssistCandidate;
+  var visible = !!(candidate && mediaKey && candidate.mediaKey === mediaKey && candidate.text);
+  panel.classList.toggle('hidden', !visible);
+  textEl.textContent = visible ? candidate.text : '';
+}
+
 function updatePrimerCaptionResetUi() {
   var resetBtn = document.getElementById('primer-reset-caption-btn');
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
@@ -199,6 +211,7 @@ function updatePrimerCaptionResetUi() {
     resetBtn.classList.add('hidden');
     undoBtn.classList.add('hidden');
     captionWandBtn.classList.add('hidden');
+    syncCaptionAssistCandidateUi();
     if (applyCaptionBtn) {
       syncCaptionApplyConfirmationUi();
       applyCaptionBtn.classList.add('hidden');
@@ -217,8 +230,9 @@ function updatePrimerCaptionResetUi() {
   captionWandBtn.disabled = !!captionAssistPendingJobId;
   captionWandBtn.classList.toggle('is-pending', !!captionAssistPendingJobId);
   captionWandBtn.title = captionAssistPendingJobId
-    ? 'AI caption rewrite is running'
-    : 'Rewrite this caption naturally from the selected annotations using the current Director model';
+    ? 'AI caption candidate is being generated'
+    : 'Generate a candidate caption from the selected annotations using the current Director model';
+  syncCaptionAssistCandidateUi();
   if (applyCaptionBtn) {
     applyCaptionBtn.classList.remove('hidden');
     applyCaptionBtn.classList.toggle('is-captionless-apply', !mediaItem.hasCaption);
@@ -340,9 +354,12 @@ function runCaptionAssist() {
       setStatus('Caption Assist finished, but the selected media item changed; result was not applied.');
       return false;
     }
-    applyEditorTextAndTriggerInput(nextCaption);
-    ui.editorEl.focus();
-    setStatus('Caption rewritten with selected annotations.');
+    captionAssistCandidate = {
+      mediaKey: sourceMediaKey,
+      text: nextCaption
+    };
+    syncCaptionAssistCandidateUi();
+    setStatus('AI caption candidate ready.');
     return true;
   }).catch(function (err) {
     setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));
@@ -363,7 +380,36 @@ function wirePrimerCaptionResetUi() {
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
   var applyCaptionBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
   var captionWandBtn = document.getElementById('editor-caption-wand-btn');
-  if (!resetBtn || !undoBtn || !captionWandBtn) return;
+  var candidateUseBtn = document.getElementById('editor-caption-candidate-use');
+  var candidateDismissBtn = document.getElementById('editor-caption-candidate-dismiss');
+  if (!resetBtn || !undoBtn || !captionWandBtn || !candidateUseBtn || !candidateDismissBtn) return;
+
+  if (!candidateUseBtn.__captionAssistBound) {
+    candidateUseBtn.__captionAssistBound = true;
+    candidateUseBtn.addEventListener('click', function () {
+      var mediaItem = getPrimerResetCurrentMediaItem();
+      if (!mediaItem || !captionAssistCandidate || captionAssistCandidate.mediaKey !== mediaItem.key) {
+        setStatus('No AI caption candidate is available for this item.');
+        syncCaptionAssistCandidateUi();
+        return;
+      }
+      var nextCaption = String(captionAssistCandidate.text || '');
+      captionAssistCandidate = null;
+      applyEditorTextAndTriggerInput(nextCaption);
+      syncCaptionAssistCandidateUi();
+      ui.editorEl.focus();
+      setStatus('AI caption candidate moved into the editor.');
+    });
+  }
+
+  if (!candidateDismissBtn.__captionAssistBound) {
+    candidateDismissBtn.__captionAssistBound = true;
+    candidateDismissBtn.addEventListener('click', function () {
+      captionAssistCandidate = null;
+      syncCaptionAssistCandidateUi();
+      setStatus('AI caption candidate dismissed.');
+    });
+  }
 
   if (!captionWandBtn.__captionAssistBound) {
     captionWandBtn.__captionAssistBound = true;

@@ -40,6 +40,7 @@ function syncFocusedCaptionControls() {
   }
 
   var labelEl = startBtn.querySelector('.preview-header-btn-label');
+  var glyphEl = startBtn.querySelector('.btn-glyph');
   var hasItem = !!(state && state.currentItem && state.currentItem.fileName);
   var annotationOpen = isFocusedAnnotationOpen();
 
@@ -61,6 +62,7 @@ function syncFocusedCaptionControls() {
     startBtn.setAttribute('aria-pressed', 'false');
     startBtn.setAttribute('aria-label', 'Start Focus Caption');
     startBtn.title = 'Focus Caption: generate and review AI caption candidates across the current visible items';
+    if (glyphEl) glyphEl.textContent = '\u2728';
     if (labelEl) labelEl.textContent = 'Focus Caption';
     skipBtn.classList.add('hidden');
     skipBtn.disabled = false;
@@ -71,9 +73,10 @@ function syncFocusedCaptionControls() {
   startBtn.classList.add('active');
   startBtn.setAttribute('aria-pressed', 'true');
   startBtn.setAttribute('aria-label', 'Exit Focus Caption');
-  startBtn.title = 'Exit Focus Caption';
+  startBtn.title = 'Exit Focus Caption (Esc)';
+  if (glyphEl) glyphEl.textContent = '\u00d7';
   if (labelEl) {
-    labelEl.textContent = 'Caption ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length;
+    labelEl.textContent = 'Exit \u00b7 ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length;
   }
   skipBtn.classList.remove('hidden');
   skipBtn.disabled = isCaptionAssistRunning();
@@ -233,6 +236,15 @@ function wireFocusedCaption() {
     ui.previewFocusCaptionSkipBtnEl.__focusedCaptionBound = true;
     ui.previewFocusCaptionSkipBtnEl.addEventListener('click', function () {
       skipFocusedCaptionItem();
+    });
+  }
+  if (!document.__focusedCaptionEscapeBound) {
+    document.__focusedCaptionEscapeBound = true;
+    document.addEventListener('keydown', function (event) {
+      if (!focusedCaptionState.open || event.key !== 'Escape') return;
+      event.preventDefault();
+      stopFocusedCaption('Focus Caption ended.');
+      renderFileList();
     });
   }
   syncFocusedCaptionControls();

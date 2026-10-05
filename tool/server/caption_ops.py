@@ -189,8 +189,9 @@ def build_caption_assist_messages(assignments=None, tags=None, required_phrase="
     user_prompt = (
         "Write the caption using these WebCap inputs. Group names explain the meaning of selected tags; "
         "they are not text that must appear in the caption. Infer meaning from group names and their selected "
-        "values together. groupOrder records annotation UI order, not a required caption order. "
-        "Follow captionTemplate when supplied; otherwise arrange related facts naturally.\n\n"
+        "values together. groupOrder is the user's preferred semantic order: generally introduce facts in that "
+        "order when natural, making only small local moves when grammar requires them. "
+        "Follow captionTemplate when supplied; otherwise use groupOrder as the default structure.\n\n"
         + json.dumps(payload, ensure_ascii=False, indent=2)
     )
     return [
@@ -207,8 +208,9 @@ named values, then renders a reusable text template. Your job is to improve that
 naturally across many combinations of selected values.
 
 Primer data model and rendering rules:
-1. Each group has a stable template key supplied in the input. groupsInOrder records annotation UI order;
-   it does not prescribe caption order.
+1. Each group has a stable template key supplied in the input. groupsInOrder is the user's intended template order.
+   Preserve the relative order of group placeholders by default; make only small local deviations when grammar requires
+   a value to stay attached to related literal text.
 2. A group's selected terms are rendered before template substitution. For each term:
    - descriptorPrefix/descriptorSuffix are applied directly around the raw term first;
    - wrapperPrefix/wrapperSuffix are then applied around that descriptor-rendered result;
@@ -244,13 +246,10 @@ Design requirements:
 - Infer each group's meaning from its label AND vocabulary, including renderedDefault and affixes. Abbreviated or
   unfamiliar labels are not enough by themselves: values may reveal garment shape, limb positioning, accessories,
   a second subject, a relationship, or environmental detail. Do not expand uncertain abbreviations into invented facts.
-- Prefer this broad progression when it fits the actual schema: subject/key phrase; another subject and their
-  interaction when applicable; main position and concept modifiers; subject-specific details and traits;
-  the other subject's details; incidental face visibility/censorship; background/setting; lighting; viewpoint.
-  This is guidance, not a fixed list of required groups. Infer what each group describes, keep related groups and
-  each subject's details together, and adjust the order for clear grammar and the user's current template.
-  Concept-specific groups usually belong with the main concept or relevant subject's details, before the other
-  subject's description or the background. Do not drop unfamiliar groups or dump them at the end.
+- Treat groupsInOrder as the primary sequence. Infer what each group describes so you can write good conditional
+  glue around it, but do not reorganize the schema into your own preferred semantic order. Keep adjacent related
+  groups together when they are adjacent in groupsInOrder. Mapping-only keys may be placed where their meaning fits
+  without disturbing the relative order of group keys. Do not drop unfamiliar groups or dump them at the end.
 - Only include actions or other details through populated keys; a schema must also work for still images and
   items with no action annotations. Preserve the vocabulary's wording rather than substituting synonyms.
 - Design for arbitrary subsets of groups being populated. A template that reads well only when every group is present
@@ -339,7 +338,10 @@ def build_caption_template_assist_messages(groups=None, mappings=None, current_t
             "role": "user",
             "content": (
                 "Create one improved WebCap Caption Primer template from this exact schema. "
-                "Use the vocabulary examples to choose grammatical placement and conditional glue.\n\n"
+                "groupsInOrder is the user's intended template sequence: keep group placeholders in that relative "
+                "order unless a small local move is necessary for grammatical attachment. Do not reorganize the "
+                "groups into your own preferred semantic order. Use the vocabulary examples to choose grammatical "
+                "placement and conditional glue.\n\n"
                 + json.dumps(payload, ensure_ascii=False, indent=2)
             ),
         },

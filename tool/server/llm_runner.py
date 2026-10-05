@@ -176,7 +176,7 @@ def _assert_storyboard_contract_current(context, frozen_contract):
 
 
 def _client_result(client, context, llm_result, job_id="", frozen_contract=None):
-    if client == "chat":
+    if client in {"chat", "caption"}:
         return {
             "text": llm_result["text"],
             "reasoning": llm_result.get("reasoning", ""),
@@ -428,7 +428,7 @@ def _execute_claimed(job_id, gpu_reserved):
 
     from .storyboard_llm_runtime import run_contract, run_freeform_chat
     try:
-        if client == "chat":
+        if client in {"chat", "caption"}:
             overrides = context.get("runtimeOverrides") if isinstance(context.get("runtimeOverrides"), dict) else {}
             chat_kwargs = {"gpu_reserved": bool(gpu_reserved)}
             if context.get("assessmentEvidence"):
@@ -689,7 +689,7 @@ def storyboard_story_busy(story_id):
 
 
 def _request_diagnostic(client, contract):
-    if client == "chat":
+    if client in {"chat", "caption"}:
         from .storyboard_llm_runtime import normalize_freeform_messages
         messages = normalize_freeform_messages(contract.get("messages"))
     else:
@@ -707,7 +707,7 @@ def enqueue(client, model_id, contract, context=None, label=""):
     _ensure_execution_reconciled()
     client = str(client or "").strip()
     model_id = str(model_id or "").strip()
-    if client not in {"storyboard", "generate", "test", "chat"}:
+    if client not in {"storyboard", "generate", "test", "chat", "caption"}:
         raise ValueError("Unsupported LLM client: " + (client or "empty"))
     if not model_id:
         raise ValueError("LLM model is required.")
@@ -717,7 +717,7 @@ def enqueue(client, model_id, contract, context=None, label=""):
     context = copy.deepcopy(context) if isinstance(context, dict) else {}
     runtime_overrides = context.get("runtimeOverrides")
     if runtime_overrides is not None:
-        if client != "chat" or not isinstance(runtime_overrides, dict):
+        if client not in {"chat", "caption"} or not isinstance(runtime_overrides, dict):
             raise ValueError("LLM runtimeOverrides are supported only for chat jobs.")
         unknown_overrides = set(runtime_overrides) - {"maxTokens", "contextSize"}
         if unknown_overrides:

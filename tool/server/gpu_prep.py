@@ -51,13 +51,29 @@ def _prepare_comfyui_for_training():
     return True
 
 def _prepare_comfyui_for_llm():
-    """Release retained ComfyUI models before local LLM execution."""
+    """Wait for ComfyUI to be idle, then release cached models before local LLM execution."""
     from . import inference_runtime
+
+    try:
+        provider_queue = inference_runtime.queue_snapshot()
+    except (ConnectionError, TimeoutError):
+        _logger.info("ComfyUI is unavailable during LLM handoff; proceeding.")
+        return True
+
+    running = provider_queue.get("running") or []
+    pending = provider_queue.get("pending") or []
+    if running or pending:
+        _logger.info(
+            "LLM is waiting for ComfyUI to become idle (%d running, %d pending).",
+            len(running),
+            len(pending),
+        )
+        return False
 
     try:
         inference_runtime.free_cached_models()
     except (ConnectionError, TimeoutError):
-        _logger.info("ComfyUI is unavailable during LLM handoff; proceeding.")
+        _logger.info("ComfyUI became unavailable while releasing cached models before LLM; proceeding.")
     return True
 
 

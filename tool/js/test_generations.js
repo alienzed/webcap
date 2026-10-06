@@ -3057,6 +3057,16 @@
     renderResults(status || {});
   }
 
+  function testStatusHasPendingWork(status) {
+    if (!status) return false;
+    var state = String(status.status || '').toLowerCase();
+    if (['complete', 'stopped', 'failed', 'interrupted'].indexOf(state) !== -1) return false;
+    if (['starting', 'queued', 'running', 'stopping'].indexOf(state) !== -1) return true;
+    var total = Number(status.total || 0);
+    var processed = Number(status.completed || 0) + Number(status.failed || 0);
+    return total > processed;
+  }
+
   function pollStatus() {
     if (pollTimer) clearTimeout(pollTimer);
     if (!isOpen()) return;
@@ -3070,7 +3080,7 @@
         currentSession !== activeSession &&
         currentStatus &&
         String(currentStatus.session || '') === currentSession &&
-        (currentStatus.status === 'running' || currentStatus.status === 'stopping')
+        testStatusHasPendingWork(currentStatus)
       );
       var previewRefresh = Promise.resolve();
 
@@ -3083,7 +3093,7 @@
       }
 
       return previewRefresh.then(function () {
-        if (status && (status.status === 'running' || status.status === 'stopping')) {
+        if (testStatusHasPendingWork(status) || testStatusHasPendingWork(currentStatus)) {
           if (queuedTestJobs.length) refreshSessionsIfDue(10000).catch(showError);
           pollTimer = setTimeout(pollStatus, 4000);
           return null;
@@ -3401,6 +3411,7 @@
     request('test_open_session', { session: String(sessionName || '') }).then(function (status) {
       showSessionError = true;
       selectSessionStatus(status);
+      if (testStatusHasPendingWork(status)) pollStatus();
     }).catch(showError);
   }
 

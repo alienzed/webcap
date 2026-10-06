@@ -244,7 +244,7 @@ def test_generate_errors_keep_detail_in_console_and_use_concise_setup_badge():
 
 def test_generate_defaults_new_lora_strength_to_point_nine():
     js = Path("tool/js/generate.js").read_text(encoding="utf-8")
-    assert "savedLoras(generateState.modelId).push({ name: selectedName, strength: 0.9 });" in js
+    assert "selectedLoras(generateState.modelId).push({ name: selectedName, strength: 0.9 });" in js
 
 
 def test_generate_fixed_lora_picker_matches_storyboard_filter_click_flow():
@@ -544,3 +544,13 @@ def test_generate_ephemeral_ui_state_stays_in_memory():
         "webcap.generate.sweepFolder.",
     ):
         assert obsolete not in script
+
+
+def test_generate_loras_are_session_only_but_library_restore_rehydrates_them():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "function selectedLoras(modelId)" in script
+    assert "webcap.generate.loras." not in script
+    assert "function saveLoras" not in script
+    assert "generateState.lorasByModel[resultModelId] = Array.isArray(result.loras)" in script
+    assert "strength: isFinite(strength) ? strength : 1" in script

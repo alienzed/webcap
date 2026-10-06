@@ -2081,6 +2081,75 @@ def test_normalize_models_exposes_image_input_capability():
     assert models[0]["architecture"]["input_modalities"] == ["text", "image"]
 
 
+def test_model_file_size_resolves_unloaded_router_subdirectory_preset(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    vision_dir = models_dir / "vision"
+    vision_dir.mkdir(parents=True)
+    model_path = vision_dir / "qwen-vl.gguf"
+    model_path.write_bytes(b"x" * 1234)
+    (vision_dir / "mmproj-q8.gguf").write_bytes(b"y" * 10)
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"models_dir": models_dir},
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_runtime_settings",
+        lambda runtime_id="": {"models_dir": models_dir, "mode": "local"},
+    )
+
+    size = storyboard_llm_runtime._model_file_size({
+        "id": "vision",
+        "path": "",
+        "status": "unloaded",
+    })
+
+    assert size == 1234
+
+
+def test_live_local_model_list_keeps_unloaded_subdirectory_preset(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    vision_dir = models_dir / "vision"
+    vision_dir.mkdir(parents=True)
+    (vision_dir / "qwen-vl.gguf").write_bytes(b"x" * 1234)
+    (vision_dir / "mmproj-q8.gguf").write_bytes(b"y" * 10)
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_ensure_server", lambda: None)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {
+            "models_dir": models_dir,
+            "mode": "local",
+            "port": 8189,
+        },
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_runtime_settings",
+        lambda runtime_id="": {"models_dir": models_dir, "mode": "local"},
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda *args, **kwargs: {
+            "data": [{
+                "id": "vision",
+                "status": {"value": "unloaded"},
+                "architecture": {"input_modalities": ["text", "image"]},
+            }]
+        },
+    )
+
+    models = storyboard_llm_runtime._list_models_for_current_runtime(reload=False)
+
+    assert [model["id"] for model in models] == ["vision"]
+    assert models[0]["sizeBytes"] == 1234
+    assert models[0]["inputModalities"] == ["text", "image"]
+
+
 def test_passive_local_discovery_recognizes_multimodal_subfolder(monkeypatch, tmp_path):
     models_dir = tmp_path / "text_encoders"
     models_dir.mkdir()

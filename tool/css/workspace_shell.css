@@ -2730,10 +2730,6 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   max-width: 220px;
 }
 
-.app-header-director-control .director-model-refresh-btn {
-  flex: 0 0 auto;
-}
-
 .test-generations-director-model-tools > select,
 .test-generations-director-model-tools > .director-model-refresh-btn,
 .generate-director-model-tools > select,
@@ -2746,4 +2742,9 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .app-header-vision-control select {
   max-width: 220px;
+}
+
+.app-header-models-refresh {
+  flex: 0 0 auto;
+  margin-left: 4px;
 }

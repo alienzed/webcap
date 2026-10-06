@@ -104,7 +104,7 @@ def test_focus_caption_progress_is_visible_without_new_workspace_surface():
     assert "setWorkspaceSurface(" not in focus
 
 
-def test_caption_assist_candidate_is_viewport_modal_and_owns_escape():
+def test_caption_assist_candidate_becomes_right_side_focus_panel_and_owns_escape():
     html = _read("tool/tool.html")
     css = _read("tool/css/styles.css")
     primer = _read("tool/js/primer_settings.js")
@@ -114,17 +114,17 @@ def test_caption_assist_candidate_is_viewport_modal_and_owns_escape():
     candidate_position = html.index('id="editor-caption-candidate"')
     assert overlay_start < candidate_position < scripts_start
     assert 'class="editor-caption-candidate-dialog"' in html
-    assert 'role="dialog"' in html
-    assert 'aria-modal="true"' in html
+    assert 'id="editor-caption-vision-toggle"' in html
+    assert 'id="editor-caption-vision-findings"' in html
 
     candidate_css = css.split(".editor-caption-candidate {", 1)[1].split("}", 1)[0]
-    dialog_css = css.split(".editor-caption-candidate-dialog {", 1)[1].split("}", 1)[0]
+    focus_css = css.split(".editor-caption-candidate.is-focus-caption {", 1)[1].split("}", 1)[0]
     text_css = css.split(".editor-caption-candidate-text {", 1)[1].split("}", 1)[0]
     assert "position: fixed;" in candidate_css
-    assert "inset: 0;" in candidate_css
-    assert "max-height: calc(100vh - 32px);" in dialog_css
-    assert "overflow: hidden;" in dialog_css
+    assert "left: 50vw;" in focus_css
+    assert "width: 50vw;" in focus_css
     assert "overflow: auto;" in text_css
+    assert "panel.classList.toggle('is-focus-caption'" in primer
 
     assert "if (event.target === candidatePanel) dismissCaptionAssistCandidate();" in primer
     assert "event.stopImmediatePropagation();" in primer
@@ -210,3 +210,32 @@ def test_focus_caption_prefetch_failures_reach_global_console():
     assert "reportConsoleWarning('Focus Caption', 'Could not cancel speculative Caption Assist job:" in focus
     assert "reportConsoleError('Focus Caption', err);" in focus
     assert "console.warn('[Focus Caption]" not in focus
+
+
+def test_focus_caption_vision_is_opt_in_actionable_and_one_deep():
+    html = _read("tool/tool.html")
+    vision = _read("tool/js/caption_vision.js")
+    focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
+
+    assert 'id="editor-caption-vision-toggle"' in html
+    assert "var captionVisionEnabled = false;" in vision
+    assert "requestCaptionVisionCandidate" in vision
+    assert "assignChecklistTagToMediaKey(mediaKey, group, term)" in vision
+    assert "Refreshing caption suggestion" in vision
+    assert "visionJobId" in focus
+    assert "visionPromise" in focus
+    assert "beginFocusedCaptionPrefetchVision" in focus
+    assert "adoptCaptionVisionPrefetch" in focus
+    assert "loadCaptionVisionCapabilities();" in focus
+    assert "maybeRunCaptionVisionForCandidate(candidate)" in primer
+
+
+def test_caption_vision_has_no_browser_persistence_or_new_setting():
+    vision = _read("tool/js/caption_vision.js")
+    settings = _read("tool/js/app_settings.js")
+
+    assert "localStorage" not in vision
+    assert "sessionStorage" not in vision
+    assert "vision_model" not in settings
+    assert "caption_vision" not in settings

@@ -34,6 +34,8 @@
     busy: false,
     jobId: '',
     requestDiagnostic: null,
+    modalOpen: false,
+    previewSelections: [],
     requestFolder: '',
     analysis: null,
     activityStartedAt: 0,
@@ -200,32 +202,183 @@
     button.title = 'Generate a wildcard prompt from this Set\'s captions';
   }
 
+  function parseWildcardGroups(value) {
+    var text = String(value || '');
+    var groups = [];
+    var pattern = /\{([^{}]*\|[^{}]*)\}/g;
+    var match;
+    while ((match = pattern.exec(text))) {
+      groups.push({
+        start: match.index,
+        end: pattern.lastIndex,
+        raw: match[0],
+        options: match[1].split('|')
+      });
+    }
+    return groups;
+  }
+
+  function wildcardGroupLabel(index, group, analysisGroups) {
+    var semantic = Array.isArray(analysisGroups) ? analysisGroups[index] : null;
+    var label = semantic && String(semantic.label || '').trim();
+    return label || ('Dimension ' + (index + 1));
+  }
+
+  function resolveWildcardPreview(value, groups, selections) {
+    var text = String(value || '');
+    if (!groups.length) return text;
+    var resolved = '';
+    var cursor = 0;
+    groups.forEach(function (group, index) {
+      var options = group.options || [];
+      var selectedIndex = Number(selections[index]);
+      if (!isFinite(selectedIndex) || selectedIndex < 0 || selectedIndex >= options.length) selectedIndex = 0;
+      resolved += text.slice(cursor, group.start) + String(options[selectedIndex] || '');
+      cursor = group.end;
+    });
+    return resolved + text.slice(cursor);
+  }
+
+  function renderWildcardDimensions() {
+    var output = el('test-generations-wildcard-output');
+    var list = el('test-generations-wildcard-dimension-list');
+    var preview = el('test-generations-wildcard-preview');
+    var use = el('test-generations-wildcard-use-btn');
+    if (!output || !list || !preview || !use) throw new Error('Wildcard Builder dimension controls are missing.');
+
+    var value = String(output.value || '');
+    var groups = parseWildcardGroups(value);
+    var semanticGroups = wildcardDirector.analysis && Array.isArray(wildcardDirector.analysis.variationGroups)
+      ? wildcardDirector.analysis.variationGroups
+      : [];
+    wildcardDirector.previewSelections = groups.map(function (group, index) {
+      var previous = Number(wildcardDirector.previewSelections[index]);
+      return isFinite(previous) && previous >= 0 && previous < group.options.length ? previous : 0;
+    });
+
+    list.innerHTML = '';
+    groups.forEach(function (group, index) {
+      var row = document.createElement('div');
+      row.className = 'test-generations-wildcard-dimension-row';
+
+      var copy = document.createElement('div');
+      copy.className = 'test-generations-wildcard-dimension-copy';
+      var label = document.createElement('strong');
+      label.textContent = wildcardGroupLabel(index, group, semanticGroups);
+      var count = document.createElement('span');
+      count.textContent = group.options.length + ' options';
+      copy.appendChild(label);
+      copy.appendChild(count);
+
+      var select = document.createElement('select');
+      select.setAttribute('aria-label', label.textContent);
+      group.options.forEach(function (option, optionIndex) {
+        var item = document.createElement('option');
+        item.value = String(optionIndex);
+        item.textContent = option || '(none)';
+        select.appendChild(item);
+      });
+      select.value = String(wildcardDirector.previewSelections[index] || 0);
+      select.dataset.wildcardDimension = String(index);
+
+      var reroll = document.createElement('button');
+      reroll.type = 'button';
+      reroll.className = 'review-captions-btn test-generations-wildcard-reroll';
+      reroll.dataset.wildcardReroll = String(index);
+      reroll.title = 'Reroll only this dimension';
+      reroll.setAttribute('aria-label', 'Reroll ' + label.textContent);
+      reroll.textContent = '↻';
+
+      row.appendChild(copy);
+      row.appendChild(select);
+      row.appendChild(reroll);
+      list.appendChild(row);
+    });
+
+    if (!groups.length) {
+      var empty = document.createElement('div');
+      empty.className = 'test-generations-wildcard-dimensions-empty';
+      empty.textContent = value.trim() ? 'No {a|b|c} wildcard groups detected.' : 'Generate or enter a wildcard prompt to inspect its dimensions.';
+      list.appendChild(empty);
+    }
+
+    preview.textContent = resolveWildcardPreview(value, groups, wildcardDirector.previewSelections);
+    use.disabled = !value.trim();
+  }
+
   function renderWildcardAnalysis(analysis) {
     var panel = el('test-generations-wildcard-analysis');
     var output = el('test-generations-wildcard-output');
     var stable = el('test-generations-wildcard-stable');
-    var variations = el('test-generations-wildcard-variations');
     var use = el('test-generations-wildcard-use-btn');
-    if (!panel || !output || !stable || !variations || !use) throw new Error('Test wildcard analysis markup is missing.');
+    if (!panel || !output || !stable || !use) throw new Error('Wildcard Builder analysis markup is missing.');
     if (!analysis) {
       panel.classList.add('hidden');
       output.value = '';
       stable.textContent = '';
-      variations.textContent = '';
+      wildcardDirector.previewSelections = [];
       use.disabled = true;
+      renderWildcardDimensions();
       return;
     }
     var stableTerms = Array.isArray(analysis.stableTerms) ? analysis.stableTerms : [];
-    var groups = Array.isArray(analysis.variationGroups) ? analysis.variationGroups : [];
     output.value = String(analysis.wildcard || '');
     stable.textContent = stableTerms.length ? stableTerms.join(' · ') : 'No strong stable terms identified.';
-    variations.textContent = groups.length
-      ? groups.map(function (group) {
-          return String(group.label || 'Variation') + ': ' + (Array.isArray(group.options) ? group.options.join(' / ') : '');
-        }).join(' · ')
-      : 'No meaningful variation groups identified.';
-    use.disabled = !output.value.trim();
+    wildcardDirector.previewSelections = [];
+    renderWildcardDimensions();
     panel.classList.remove('hidden');
+  }
+
+  function openWildcardBuilder() {
+    var modal = el('test-generations-wildcard-modal');
+    var setLabel = el('test-generations-wildcard-set');
+    var focus = el('test-generations-wildcard-focus');
+    if (!modal || !setLabel || !focus) throw new Error('Wildcard Builder modal markup is missing.');
+    var folder = owningSetFolder(launchFolder || (state && state.folder) || '');
+    var parts = String(folder || '').split('/').filter(Boolean);
+    var name = parts.length ? parts[parts.length - 1] : folder;
+    setLabel.textContent = name
+      ? 'Mining captions from ' + name + '. Focus is optional; otherwise WebCap infers the dominant concept.'
+      : 'Mine concrete, composable variation from this Set\'s captions.';
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    wildcardDirector.modalOpen = true;
+    renderWildcardAnalysis(wildcardDirector.analysis);
+    window.setTimeout(function () { focus.focus(); }, 0);
+  }
+
+  function closeWildcardBuilder() {
+    var modal = el('test-generations-wildcard-modal');
+    if (!modal) throw new Error('Wildcard Builder modal markup is missing.');
+    if (wildcardDirector.busy) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    wildcardDirector.modalOpen = false;
+  }
+
+  function shuffleWildcardPreview(index) {
+    var output = el('test-generations-wildcard-output');
+    if (!output) throw new Error('Wildcard Builder output is missing.');
+    var groups = parseWildcardGroups(output.value);
+    if (!groups.length) return;
+    if (index == null) {
+      wildcardDirector.previewSelections = groups.map(function (group, groupIndex) {
+        if (group.options.length < 2) return 0;
+        var current = Number(wildcardDirector.previewSelections[groupIndex] || 0);
+        var next = Math.floor(Math.random() * group.options.length);
+        if (next === current) next = (next + 1) % group.options.length;
+        return next;
+      });
+    } else {
+      var groupIndex = Number(index);
+      var group = groups[groupIndex];
+      if (!group || group.options.length < 2) return;
+      var current = Number(wildcardDirector.previewSelections[groupIndex] || 0);
+      var next = Math.floor(Math.random() * group.options.length);
+      if (next === current) next = (next + 1) % group.options.length;
+      wildcardDirector.previewSelections[groupIndex] = next;
+    }
+    renderWildcardDimensions();
   }
 
   function useGeneratedWildcard() {
@@ -237,6 +390,7 @@
     saveTestWorkspacePrompt(value);
     saveTestBenchState();
     el('test-generations-wildcard-status').textContent = 'Wildcard copied to Prompt.';
+    closeWildcardBuilder();
   }
 
   function refreshWildcardDirector() {
@@ -637,17 +791,20 @@
     if (wildcardDirector.busy) return;
     if (!wildcardDirector.modelId) throw new Error('Choose a Director model.');
     var requestFolder = owningSetFolder(launchFolder || (state && state.folder) || '');
+    var focus = String(el('test-generations-wildcard-focus') && el('test-generations-wildcard-focus').value || '').trim();
     wildcardDirector.busy = true;
     wildcardDirector.requestFolder = requestFolder;
     wildcardDirector.analysis = null;
     el('test-generations-wildcard-status').textContent = 'Analyzing Set captions…';
+    el('test-generations-wildcard-modal-status').textContent = 'Analyzing Set captions…';
     renderWildcardAnalysis(null);
     renderWildcardDirector();
     startWildcardDirectorActivity();
 
     return wildcardPostJson('/fs/test_generations/wildcard', {
       folder: requestFolder,
-      directorModel: wildcardDirector.modelId
+      directorModel: wildcardDirector.modelId,
+      focus: focus
     }).then(function (payload) {
       wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
       wildcardDirector.requestDiagnostic = payload.job && payload.job.request || null;
@@ -661,16 +818,20 @@
       if (owningSetFolder(launchFolder || (state && state.folder) || '') !== requestFolder) {
         wildcardDirector.analysis = null;
         el('test-generations-wildcard-status').textContent = 'Wildcard finished for a different Set. Generate again here.';
+        el('test-generations-wildcard-modal-status').textContent = 'Wildcard finished for a different Set. Generate again here.';
         return;
       }
       wildcardDirector.analysis = analysis;
       renderWildcardAnalysis(analysis);
       el('test-generations-wildcard-status').textContent = 'Wildcard generated. Review it before using it.';
+      el('test-generations-wildcard-modal-status').textContent = 'Wildcard generated. Edit it freely, preview combinations, then apply.';
     }).catch(function (err) {
       if (err && ['stopped', 'cancelled'].indexOf(String(err.jobStatus || '')) !== -1) {
         el('test-generations-wildcard-status').textContent = 'Wildcard analysis stopped.';
+        el('test-generations-wildcard-modal-status').textContent = 'Wildcard analysis stopped.';
       } else {
         el('test-generations-wildcard-status').textContent = 'Wildcard analysis failed.';
+        el('test-generations-wildcard-modal-status').textContent = 'Wildcard analysis failed.';
         showError(err);
       }
     }).then(function () {
@@ -3080,8 +3241,11 @@
     showSessionError = false;
     compareIndex = 0;
     wildcardDirector.analysis = null;
+    wildcardDirector.previewSelections = [];
+    if (wildcardDirector.modalOpen) closeWildcardBuilder();
     renderWildcardAnalysis(null);
     el('test-generations-wildcard-status').textContent = '';
+    el('test-generations-wildcard-modal-status').textContent = '';
     setResultsView('grid');
     renderStatus({ status: 'idle' });
     refreshActivityButton();
@@ -3326,7 +3490,11 @@
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
     el('test-generations-wildcard-btn').onclick = function () {
-      generateWildcardFromSet().catch(showError);
+      try {
+        openWildcardBuilder();
+      } catch (err) {
+        showError(err);
+      }
     };
     el('test-generations-wildcard-refresh').onclick = function () {
       var button = this;
@@ -3367,9 +3535,31 @@
     el('test-generations-wildcard-use-btn').onclick = function () {
       try { useGeneratedWildcard(); } catch (err) { showError(err); }
     };
-    el('test-generations-wildcard-output').addEventListener('input', function () {
-      el('test-generations-wildcard-use-btn').disabled = !this.value.trim();
+    el('test-generations-wildcard-regenerate').onclick = function () {
+      generateWildcardFromSet().catch(showError);
+    };
+    el('test-generations-wildcard-close').onclick = closeWildcardBuilder;
+    el('test-generations-wildcard-dismiss').onclick = closeWildcardBuilder;
+    el('test-generations-wildcard-modal').addEventListener('click', function (event) {
+      if (event.target === this) closeWildcardBuilder();
     });
+    el('test-generations-wildcard-output').addEventListener('input', function () {
+      renderWildcardDimensions();
+    });
+    el('test-generations-wildcard-dimension-list').addEventListener('change', function (event) {
+      var select = event.target.closest('[data-wildcard-dimension]');
+      if (!select) return;
+      wildcardDirector.previewSelections[Number(select.dataset.wildcardDimension)] = Number(select.value);
+      renderWildcardDimensions();
+    });
+    el('test-generations-wildcard-dimension-list').addEventListener('click', function (event) {
+      var reroll = event.target.closest('[data-wildcard-reroll]');
+      if (!reroll) return;
+      shuffleWildcardPreview(Number(reroll.dataset.wildcardReroll));
+    });
+    el('test-generations-wildcard-shuffle').onclick = function () {
+      shuffleWildcardPreview(null);
+    };
     el('test-generations-rail-toggle-btn').onclick = toggleTestRailCollapsed;
     el('test-generations-clear-queue-btn').onclick = function () { var button = this; button.disabled = true; clearQueuedTests().catch(showError).then(function () { button.disabled = false; }); };
     el('test-generations-clear-sessions-btn').onclick = function () {

@@ -318,7 +318,31 @@ function setAnnotateStripVisible(nextVisible, persistNow) {
   }
 }
 
-function toggleAnnotateTag(requirementLabel, term) {
+var annotateStripDeferredFilterRefreshFolder = '';
+
+function deferAnnotateStripFilterRefresh() {
+  annotateStripDeferredFilterRefreshFolder = String((state && state.folder) || '');
+}
+
+function clearAnnotateStripDeferredFilterRefresh() {
+  annotateStripDeferredFilterRefreshFolder = '';
+}
+
+function flushAnnotateStripDeferredFilterRefresh() {
+  if (!annotateStripDeferredFilterRefreshFolder) return false;
+  var deferredFolder = annotateStripDeferredFilterRefreshFolder;
+  clearAnnotateStripDeferredFilterRefresh();
+  if (!state || String(state.folder || '') !== deferredFolder) return false;
+  var mediaKey = state.currentItem && state.currentItem.key ? state.currentItem.key : '';
+  if (mediaKey) {
+    refreshTagDrivenPanelsForMediaKey(mediaKey);
+  } else {
+    renderFileList();
+  }
+  return true;
+}
+
+function toggleAnnotateTag(requirementLabel, term, deferFilterRefresh) {
   var requirement = normalizeChecklistRequirementKey(requirementLabel);
   var text = normalizeCatalogTerm(term);
   if (!requirement || !text) return;
@@ -327,10 +351,18 @@ function toggleAnnotateTag(requirementLabel, term) {
     return;
   }
   var mediaKey = state.currentItem.key;
+  var mutationOptions = deferFilterRefresh ? { skipRefresh: true } : undefined;
+  var changed = false;
   if (hasChecklistAssignedTagForMediaKey(mediaKey, requirement, text)) {
-    unassignChecklistTagFromMediaKey(mediaKey, requirement, text);
+    changed = unassignChecklistTagFromMediaKey(mediaKey, requirement, text, mutationOptions);
   } else {
-    assignChecklistTagToMediaKey(mediaKey, requirement, text);
+    changed = assignChecklistTagToMediaKey(mediaKey, requirement, text, mutationOptions);
+  }
+  if (!changed) return;
+  if (deferFilterRefresh) {
+    deferAnnotateStripFilterRefresh();
+  } else {
+    clearAnnotateStripDeferredFilterRefresh();
   }
   renderAnnotateStrip();
 }
@@ -542,8 +574,9 @@ function renderAnnotateStrip() {
       }
       chipTitle += ' - right-click to edit prefix/suffix';
       chip.title = chipTitle;
-      chip.onclick = function () {
-        toggleAnnotateTag(groupRequirementLabel, term);
+      chip.onclick = function (e) {
+        var deferFilterRefresh = !!(e && e.shiftKey && hasAnyActiveMediaFilter());
+        toggleAnnotateTag(groupRequirementLabel, term, deferFilterRefresh);
       };
       chip.oncontextmenu = function (e) {
         e.preventDefault();
@@ -581,6 +614,13 @@ function renderAnnotateStrip() {
 
   stripEl.appendChild(groupsWrap);
 }
+
+window.addEventListener('keyup', function (e) {
+  if (e && e.key === 'Shift') flushAnnotateStripDeferredFilterRefresh();
+}, true);
+window.addEventListener('blur', function () {
+  flushAnnotateStripDeferredFilterRefresh();
+});
 
 window.renderAnnotateStrip = renderAnnotateStrip;
 window.setAnnotateStripVisible = setAnnotateStripVisible;

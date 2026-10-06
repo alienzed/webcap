@@ -563,8 +563,11 @@ function getCaptionAssistDraftForMediaItem(mediaItem) {
   return String(buildAutoPrimer(mediaItem.fileName, mediaKey) || '').trim();
 }
 
-function captionAssistRequestFingerprint(request) {
-  return JSON.stringify(request || {});
+function captionAssistRequestFingerprint(mediaItem, request) {
+  return JSON.stringify({
+    mediaKey: String(mediaItem && mediaItem.key || ''),
+    request: request || {}
+  });
 }
 
 function buildCaptionAssistRequest(mediaItem) {
@@ -628,6 +631,54 @@ function waitForCaptionAssistJob(job) {
   return poll(job);
 }
 
+function cancelCaptionAssistJob(jobId) {
+  var id = String(jobId || '').trim();
+  if (!id) return Promise.resolve(false);
+  return captionAssistRequestJson('/fs/director/job', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation: 'cancel_job', jobId: id })
+  }).then(function () {
+    return true;
+  });
+}
+
+function requestCaptionAssistCandidate(mediaItem, request, options) {
+  var opts = options || {};
+  var sourceMediaKey = String(mediaItem && mediaItem.key || '').trim();
+  if (!sourceMediaKey) return Promise.reject(new Error('Caption Assist requires a selected media item.'));
+  if (!request || !request.model) return Promise.reject(new Error('Select a Director model before using Caption Assist.'));
+  var missingGroups = getCaptionAssistMissingGroups(sourceMediaKey);
+
+  return captionAssistRequestJson('/caption/assist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request)
+  }).then(function (payload) {
+    if (!payload.job || !payload.job.jobId) throw new Error('Caption Assist did not return a queued job.');
+    trackTransientLlmJob(payload.job);
+    var hookResult = opts.onJob ? opts.onJob(payload.job) : null;
+    return Promise.resolve(hookResult).then(function () {
+      return waitForCaptionAssistJob(payload.job);
+    });
+  }).then(function (job) {
+    var result = job.result && typeof job.result === 'object' ? job.result : {};
+    var nextCaption = String(result.text || '').trim();
+    if (!nextCaption) throw new Error('Caption Assist returned an empty caption.');
+    return {
+      mediaKey: sourceMediaKey,
+      text: nextCaption,
+      missingGroups: missingGroups,
+      omittedAssignments: getCaptionAssistOmittedAssignments(
+        sourceMediaKey,
+        nextCaption,
+        request.assignments
+      ),
+      requestFingerprint: captionAssistRequestFingerprint(mediaItem, request)
+    };
+  });
+}
+
 function runCaptionAssist() {
   var mediaItem = getPrimerResetCurrentMediaItem();
   if (!mediaItem) {
@@ -646,44 +697,26 @@ function runCaptionAssist() {
   }
 
   var sourceMediaKey = mediaItem.key;
-  var missingGroups = getCaptionAssistMissingGroups(sourceMediaKey);
   setStatus('Caption Assist queued...');
-  return captionAssistRequestJson('/caption/assist', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request)
-  }).then(function (payload) {
-    if (!payload.job || !payload.job.jobId) throw new Error('Caption Assist did not return a queued job.');
-    captionAssistPendingJobId = String(payload.job.jobId);
-    trackTransientLlmJob(payload.job);
-    updatePrimerCaptionResetUi();
-    setStatus(payload.job.status === 'queued' ? 'Caption Assist waiting in the LLM queue...' : 'Caption Assist writing...');
-    return waitForCaptionAssistJob(payload.job);
-  }).then(function (job) {
-    var result = job.result && typeof job.result === 'object' ? job.result : {};
-    var nextCaption = String(result.text || '').trim();
-    if (!nextCaption) throw new Error('Caption Assist returned an empty caption.');
+  return requestCaptionAssistCandidate(mediaItem, request, {
+    onJob: function (job) {
+      captionAssistPendingJobId = String(job.jobId || '');
+      updatePrimerCaptionResetUi();
+      setStatus(job.status === 'queued' ? 'Caption Assist waiting in the LLM queue...' : 'Caption Assist writing...');
+    }
+  }).then(function (candidate) {
     if (!state.currentItem || state.currentItem.key !== sourceMediaKey) {
       setStatus('Caption Assist finished, but the selected media item changed; result was not applied.');
       return false;
     }
-    var omittedAssignments = getCaptionAssistOmittedAssignments(
-      sourceMediaKey,
-      nextCaption,
-      request.assignments
-    );
-    captionAssistCandidate = {
-      mediaKey: sourceMediaKey,
-      text: nextCaption,
-      missingGroups: missingGroups,
-      omittedAssignments: omittedAssignments
-    };
+    captionAssistCandidate = candidate;
     syncCaptionAssistCandidateUi();
     setStatus(
-      omittedAssignments.length
+      candidate.omittedAssignments.length
         ? 'Caption Assist candidate failed annotation validation.'
         : 'AI caption candidate ready.'
     );
+    if (isFocusedCaptionOpen()) startFocusedCaptionPrefetch(sourceMediaKey);
     return true;
   }).catch(function (err) {
     setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));
@@ -698,6 +731,13 @@ function runCaptionAssist() {
     updatePrimerCaptionResetUi();
     syncFocusedCaptionAfterAssist(sourceMediaKey);
     throw err;
+  });
+}
+
+function runCaptionAssistFromUi() {
+  if (!isFocusedCaptionOpen()) return runCaptionAssist();
+  return cancelFocusedCaptionPrefetch().then(function () {
+    return runCaptionAssist();
   });
 }
 
@@ -724,7 +764,7 @@ function wirePrimerCaptionResetUi() {
     candidateRegenerateBtn.addEventListener('click', function () {
       captionAssistCandidate = null;
       syncCaptionAssistCandidateUi();
-      runCaptionAssist();
+      runCaptionAssistFromUi();
     });
   }
 
@@ -755,7 +795,7 @@ function wirePrimerCaptionResetUi() {
   if (!captionWandBtn.__captionAssistBound) {
     captionWandBtn.__captionAssistBound = true;
     captionWandBtn.addEventListener('click', function () {
-      runCaptionAssist();
+      runCaptionAssistFromUi();
     });
   }
 

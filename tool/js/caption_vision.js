@@ -294,7 +294,7 @@ function syncCaptionVisionUi() {
 
   toggleWrap.classList.toggle('hidden', !candidateVisible || !supported);
   toggle.checked = !!captionVisionEnabled;
-  toggle.disabled = !!captionVisionPendingJobId;
+  toggle.disabled = false;
 
   findings.innerHTML = '';
   findings.classList.add('hidden');

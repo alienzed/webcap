@@ -580,7 +580,7 @@ function selectPathMedia(mediaItem) {
     ui.editorEl.value = nextEditorValue;
     renderPathPreview(state.folder, mediaItem.fileName);
     setStatus(buildSelectedMediaStatus(mediaItem));
-    updatePreviewActionControls(mediaItems);
+    updatePreviewActionControls();
     renderChecklistPanel();
     renderItemTagsPanel();
     renderItemMetadataPanel();
@@ -935,7 +935,7 @@ async function renderFileList() {
   });
 
   syncSelectionWithVisibleMedia(mediaItems);
-  updatePreviewActionControls();
+  updatePreviewActionControls(mediaItems);
   updateBalanceDistributionWheel();
   if (typeof updateFocusSetUi === 'function') {
     updateFocusSetUi();

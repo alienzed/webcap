@@ -2860,6 +2860,154 @@ iframe {
   font-size: 12px;
   line-height: 1.4;
 }
+
+.test-generations-wildcard-modal {
+  z-index: 1180;
+}
+.test-generations-wildcard-dialog {
+  width: min(980px, calc(100vw - 48px));
+  max-height: min(88vh, 920px);
+}
+.test-generations-wildcard-content {
+  display: grid;
+  gap: 14px;
+  overflow: auto;
+}
+.test-generations-wildcard-focus {
+  display: grid;
+  gap: 5px;
+}
+.test-generations-wildcard-focus > span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.test-generations-wildcard-focus > span small,
+.test-generations-wildcard-focus > small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.test-generations-wildcard-focus input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.test-generations-wildcard-modal .test-generations-wildcard-analysis {
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.test-generations-wildcard-modal .test-generations-wildcard-output textarea {
+  min-height: 150px;
+  padding: 10px;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  line-height: 1.45;
+}
+.test-generations-wildcard-common {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+}
+.test-generations-wildcard-dimensions {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+.test-generations-wildcard-dimensions-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.test-generations-wildcard-dimensions-heading > div {
+  display: grid;
+  gap: 2px;
+}
+.test-generations-wildcard-dimensions-heading span,
+.test-generations-wildcard-preview-wrap > span,
+.test-generations-wildcard-dimension-copy span,
+.test-generations-wildcard-dimensions-empty,
+.test-generations-wildcard-modal-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+.test-generations-wildcard-dimension-list {
+  display: grid;
+  gap: 6px;
+}
+.test-generations-wildcard-dimension-row {
+  display: grid;
+  grid-template-columns: minmax(120px, .8fr) minmax(180px, 1.4fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+.test-generations-wildcard-dimension-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.test-generations-wildcard-dimension-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.test-generations-wildcard-dimension-row select {
+  min-width: 0;
+  width: 100%;
+}
+.test-generations-wildcard-reroll {
+  width: 34px;
+  min-width: 34px;
+  padding-left: 0;
+  padding-right: 0;
+  font-size: 17px;
+}
+.test-generations-wildcard-preview-wrap {
+  display: grid;
+  gap: 5px;
+}
+.test-generations-wildcard-preview {
+  min-height: 54px;
+  max-height: 150px;
+  margin: 0;
+  padding: 9px 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font: inherit;
+}
+.test-generations-wildcard-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.test-generations-wildcard-footer-actions {
+  display: flex;
+  gap: 8px;
+}
+@media (max-width: 720px) {
+  .test-generations-wildcard-dialog {
+    width: calc(100vw - 24px);
+  }
+  .test-generations-wildcard-dimension-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .test-generations-wildcard-dimension-row select {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
 .test-generations-form-title {
   display: flex;
   align-items: center;

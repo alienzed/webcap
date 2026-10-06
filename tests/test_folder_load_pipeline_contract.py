@@ -90,3 +90,25 @@ def test_render_file_list_reuses_filtered_items_for_header_and_grid_visibility()
     assert "updatePreviewActionControls(mediaItems);" in render
     assert "function mediaGridUpdateEntryVisibility(visibleItems, options)" in grid
     assert "function renderPreviewHeaderMeta(visibleMediaOverride)" in details
+
+
+def test_temporary_folder_and_ui_performance_probes_are_removed():
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
+    ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+    details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
+    media = (ROOT / "tool" / "server" / "media.py").read_text(encoding="utf-8")
+
+    assert "PerformanceObserver" not in common
+    assert "[Performance]" not in common
+    assert "[Folder Load Timing]" not in ui
+    assert "applyBreakdown" not in ui
+    assert "X-WebCap-Metadata-Timing" not in details
+    assert "serverTimingMs" not in details
+    assert "perf_counter" not in media
+    assert "timingMs" not in media
+    assert 'X-WebCap-Metadata-Timing' not in media
+
+    # Keep useful production metadata counts.
+    assert 'X-WebCap-Metadata-Checked' in media
+    assert 'X-WebCap-Metadata-Pending' in media
+    assert 'X-WebCap-Metadata-Generated' in media

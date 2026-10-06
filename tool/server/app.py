@@ -516,6 +516,27 @@ def app_director_model_save():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/app/config/generate_model", methods=["POST"])
+def app_generate_model_save():
+    data = request.get_json(silent=True)
+    try:
+        if not isinstance(data, dict):
+            raise ValueError("Generate Base Model preference requires a JSON object.")
+        selected = data.get("modelId", "")
+        if not isinstance(selected, str):
+            raise ValueError("Generate Base Model preference must be a string.")
+        current = app_config.load_config_from_disk()
+        current["generate_model"] = selected.strip()
+        saved = app_config.save_config_to_disk(current)
+        return jsonify({"ok": True, "config": saved})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        if app_config.FS_DEBUG:
+            app_config.debug_traceback()
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/app/reset_app", methods=["POST"])
 def app_reset_app():
     try:

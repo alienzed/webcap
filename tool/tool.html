@@ -1704,11 +1704,12 @@
         <div id="app-overlay-root" class="app-overlay-root" aria-label="Application overlays">
             <div id="editor-caption-candidate" class="editor-caption-candidate hidden" aria-live="polite">
                 <section class="editor-caption-candidate-dialog" role="dialog" aria-modal="true" aria-label="AI caption candidate">
+                    <div id="editor-caption-candidate-omissions" class="editor-caption-candidate-omissions hidden"></div>
                     <div id="editor-caption-candidate-missing" class="editor-caption-candidate-missing hidden"></div>
                     <div id="editor-caption-candidate-text" class="editor-caption-candidate-text"></div>
                     <div class="editor-caption-candidate-actions">
                         <button id="editor-caption-candidate-use" type="button">Use</button>
-                        <button id="editor-caption-candidate-regenerate" type="button" title="Generate another candidate" aria-label="Generate another candidate">&#8635;</button>
+                        <button id="editor-caption-candidate-regenerate" class="editor-caption-candidate-regenerate" type="button" title="Generate another candidate" aria-label="Generate another candidate">&#8635;</button>
                         <button id="editor-caption-candidate-dismiss" type="button" title="Dismiss candidate and stay on this item" aria-label="Dismiss candidate and stay on this item">&times;</button>
                     </div>
                 </section>

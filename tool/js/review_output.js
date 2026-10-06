@@ -86,7 +86,7 @@ function setReviewDetailTab(tab, options) {
   if (ui && ui.appEl) ui.appEl.classList.toggle('qa-utility-open', value !== 'qa');
 
   if (value === 'qa') {
-    if (typeof renderQaWorkbench === 'function') renderQaWorkbench();
+    if (typeof renderQaWorkbench === 'function') renderQaWorkbench(true);
     return;
   }
   if (value === 'captions') {

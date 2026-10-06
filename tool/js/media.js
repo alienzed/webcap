@@ -303,6 +303,19 @@ function mediaFilterTermMatches(haystack, term) {
   return false;
 }
 
+function mediaFilterScopedTermMatches(mediaKey, term) {
+  if (term.charAt(0) !== '@') return null;
+  var separator = term.indexOf(':', 1);
+  if (separator <= 1 || separator >= term.length - 1) return null;
+  var requirement = term.slice(1, separator).trim().toLowerCase();
+  var tag = term.slice(separator + 1).trim().toLowerCase();
+  if (!requirement || !tag) return null;
+  return getChecklistAssignmentEntriesForMediaKey(mediaKey).some(function (entry) {
+    return String(entry && entry.requirement || '').toLowerCase() === requirement &&
+      String(entry && entry.term || '').toLowerCase() === tag;
+  });
+}
+
 function mediaItemMatchesFilterQuery(item, query, mode) {
   var label = String(item && item.label || '').toLowerCase();
   var fileName = String(item && item.fileName || '').toLowerCase();
@@ -310,6 +323,8 @@ function mediaItemMatchesFilterQuery(item, query, mode) {
   var tags = getTagsForMediaKey(item && item.key).join(' ').toLowerCase();
   var haystack = label + '\n' + fileName + '\n' + caption + '\n' + tags;
   var termMatches = function (term) {
+    var scopedMatch = mediaFilterScopedTermMatches(item && item.key, term);
+    if (scopedMatch !== null) return scopedMatch;
     return mediaFilterTermMatches(haystack, term);
   };
   for (var i = 0; i < query.negative.length; i += 1) {

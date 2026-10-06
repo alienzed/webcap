@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import config as app_config
 from .folder_state_store import read_folder_state, set_media_rating
+from .media_embedded_metadata import write_webcap_metadata
 
 
 MANIFEST_NAME = "generation.json"
@@ -18,6 +19,50 @@ PROMPT_LIBRARY_NAME = "prompts.json"
 
 _logger = logging.getLogger(__name__)
 _PROMPT_LIBRARY_LOCK = threading.RLock()
+_EMBEDDED_METADATA_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".mp4"}
+_DERIVABLE_GENERATION_SETTINGS = {"dimensions", "width", "height", "aspectRatio", "megapixels", "duration"}
+
+
+def _generation_embedded_metadata(request):
+    source_prompt = str(request.get("sourcePrompt") or request.get("prompt") or "")
+    resolved_prompt = str(request.get("resolvedPrompt") or request.get("prompt") or source_prompt)
+    settings = request.get("settings") if isinstance(request.get("settings"), dict) else {}
+    payload = {
+        "model": str(request.get("modelId") or ""),
+        "prompt": resolved_prompt,
+    }
+    if source_prompt and source_prompt != resolved_prompt:
+        payload["sourcePrompt"] = source_prompt
+    if settings.get("seed") is not None:
+        payload["seed"] = settings.get("seed")
+    parameters = {
+        str(key): value
+        for key, value in settings.items()
+        if key != "seed" and key not in _DERIVABLE_GENERATION_SETTINGS
+    }
+    if parameters:
+        payload["parameters"] = parameters
+    loras = []
+    for item in request.get("loras") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        entry = {"name": name}
+        if item.get("strength") is not None:
+            entry["strength"] = item.get("strength")
+        loras.append(entry)
+    if loras:
+        payload["loras"] = loras
+    references = {}
+    for role, value in (request.get("references") or {}).items():
+        name = Path(str(value or "")).name
+        if name:
+            references[str(role)] = name
+    if references:
+        payload["references"] = references
+    return payload
 
 
 def generation_root():
@@ -183,6 +228,8 @@ def persist_result(job_id, request, output_ref, media_bytes, provider_job_id, el
         media_name = "result" + suffix
         media_path = directory / media_name
         media_path.write_bytes(media_bytes)
+        if suffix in _EMBEDDED_METADATA_EXTENSIONS:
+            write_webcap_metadata(media_path, _generation_embedded_metadata(request))
 
         root = app_config.output_root().resolve()
         relative_media = str(media_path.resolve().relative_to(root)).replace("\\", "/")

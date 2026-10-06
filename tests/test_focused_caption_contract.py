@@ -420,3 +420,27 @@ def test_focus_caption_visual_pass_is_theme_aware_and_compact():
 
     assert "useBtn.textContent = useArmed ? 'Press Enter again' : 'Apply Caption';" in primer
     assert "Regenerate caption and recheck Vision" in primer
+
+
+def test_caption_vision_discards_known_tag_omissions_already_expressed_in_caption():
+    vision = _read("tool/js/caption_vision.js")
+
+    assert "function filterCaptionVisionFindings(mediaItem, captionText, findings)" in vision
+    assert "String(finding.type || '').toLowerCase() !== 'omitted'" in vision
+    assert "checklistGroupTermAppearsInCaptionText(group, term, mediaKey, text)" in vision
+    assert "findings: filterCaptionVisionFindings(mediaItem, captionText, vision.findings)" in vision
+
+
+def test_caption_assist_modal_close_is_header_right_and_vision_is_footer_left():
+    html = _read("tool/tool.html")
+
+    header = html.index('class="editor-caption-candidate-header"')
+    close = html.index('id="editor-caption-candidate-dismiss"', header)
+    body = html.index('id="editor-caption-candidate-text"', header)
+    actions = html.index('class="editor-caption-candidate-actions"', body)
+    left = html.index('class="editor-caption-candidate-actions-left"', actions)
+    vision = html.index('id="editor-caption-vision-toggle-wrap"', left)
+    right = html.index('class="editor-caption-candidate-actions-right"', left)
+
+    assert header < close < body
+    assert actions < left < vision < right

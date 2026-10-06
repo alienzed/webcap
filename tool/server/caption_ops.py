@@ -125,7 +125,11 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
     "Treat concise camera and viewpoint wording as a preferred surface form: compose supplied angle and orientation "
     "facts into compact photographic phrases such as 'front view', 'low-angle side view', or "
     "'high-angle three-quarter rear view'. Do not rewrite these as 'viewed from the front', 'from a front view', "
-    "'seen from the side', or similar verbose variants. Write one fluent caption, not a comma-separated tag dump. "
+    "'seen from the side', or similar verbose variants. Write complete, natural sentences using only the connective "
+    "language needed for grammatical and semantic clarity. Interpret each selected value through its annotation group: "
+    "use the group meaning to understand what the value modifies or describes, and when the group meanings establish "
+    "a clear relationship among supplied details, express those details together as a coherent phrase or clause. "
+    "Keep the caption concise and information-dense while preserving the supplied visual facts and distinctive tag wording. "
     "Return only the caption text with no quotes, labels, commentary, or markdown."
 )
 
@@ -224,8 +228,8 @@ def build_caption_assist_messages(
             "omitted or mishandled; explicitly fix those items while preserving all other valid caption content. "
         )
     user_prompt = (
-        "Write the caption using these WebCap inputs. Group names explain the meaning of selected tags; they are not "
-        "text that must appear in the caption. Infer meaning from group names and selected values together. "
+        "Write the caption using these WebCap inputs. Use annotation group names as semantic context for interpreting "
+        "selected values, and express those values as natural caption language. "
         + repair_instruction
         + ordering +
         "Do not use annotation group order or captionTemplate placeholder order as caption order.\n\n"

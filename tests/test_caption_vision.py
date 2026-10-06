@@ -146,3 +146,34 @@ def test_caption_vision_route_accepts_remote_ollama_vision_model(monkeypatch):
     assert response.status_code == 202
     assert captured["model"] == "workstation::huihui_ai/qwen3-vl-abliterated:8b"
     assert captured["contract"]["messages"][1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
+
+
+def test_caption_vision_prompt_verifies_before_reporting_and_accepts_empty_success():
+    from tool.server.caption_vision import CAPTION_VISION_SYSTEM_PROMPT, build_caption_vision_messages
+
+    assert "check both the image and the current caption before reporting it" in CAPTION_VISION_SYSTEM_PROMPT
+    assert "Treat semantically equivalent wording as present" in CAPTION_VISION_SYSTEM_PROMPT
+    assert "Use each annotation group as semantic context" in CAPTION_VISION_SYSTEM_PROMPT
+    assert "An empty findings list is a successful result" in CAPTION_VISION_SYSTEM_PROMPT
+
+    messages, _ = build_caption_vision_messages(
+        "a blue floral bikini with crossover-straps and a v-front bottom",
+        [{"group": "BT Shape", "options": ["crossover-straps"], "selected": ["crossover-straps"]}],
+        "set/item.jpg",
+    )
+    assert 'Returning {"findings": []} is correct' in messages[1]["content"][0]["text"]
+
+
+def test_caption_assist_prompt_targets_natural_semantic_prose():
+    from tool.server.caption_ops import CAPTION_ASSIST_SYSTEM_PROMPT, build_caption_assist_messages
+
+    assert "Write complete, natural sentences" in CAPTION_ASSIST_SYSTEM_PROMPT
+    assert "Interpret each selected value through its annotation group" in CAPTION_ASSIST_SYSTEM_PROMPT
+    assert "what the value modifies or describes" in CAPTION_ASSIST_SYSTEM_PROMPT
+    assert "comma-separated tag dump" not in CAPTION_ASSIST_SYSTEM_PROMPT
+
+    messages = build_caption_assist_messages(
+        assignments=[{"group": "BT Shape", "term": "crossover-straps"}],
+        draft="a blue floral bikini",
+    )
+    assert "Use annotation group names as semantic context" in messages[1]["content"]

@@ -90,6 +90,18 @@ function captionVisionRequestFingerprint(mediaItem, captionText) {
   return JSON.stringify(buildCaptionVisionRequest(mediaItem, captionText));
 }
 
+function filterCaptionVisionFindings(mediaItem, captionText, findings) {
+  var mediaKey = String(mediaItem && mediaItem.key || '');
+  var text = String(captionText || '').trim();
+  return (Array.isArray(findings) ? findings : []).filter(function (finding) {
+    if (!finding || String(finding.type || '').toLowerCase() !== 'omitted' || !finding.knownTag) return true;
+    var group = String(finding.knownTag.group || '').trim();
+    var term = String(finding.knownTag.term || '').trim();
+    if (!mediaKey || !group || !term) return true;
+    return !checklistGroupTermAppearsInCaptionText(group, term, mediaKey, text);
+  });
+}
+
 function requestCaptionVisionCandidate(mediaItem, captionText, options) {
   var opts = options || {};
   return loadCaptionVisionCapabilities().then(function () {
@@ -115,7 +127,7 @@ function requestCaptionVisionCandidate(mediaItem, captionText, options) {
       return {
         mediaKey: String(mediaItem.key || ''),
         captionText: String(captionText || '').trim(),
-        findings: vision.findings,
+        findings: filterCaptionVisionFindings(mediaItem, captionText, vision.findings),
         model: String(result.model || ''),
         requestFingerprint: JSON.stringify(request)
       };

@@ -45,12 +45,16 @@ CAPTION_VISION_RESPONSE_SCHEMA = {
 
 
 CAPTION_VISION_SYSTEM_PROMPT = (
-    "You validate a training caption against one image. "
-    "Look for visually meaningful repeatable attributes that are omitted or incorrect. "
-    "Prioritize the supplied annotation groups and exact known tag options, but you may also report a genuinely useful novel visual detail. "
-    "Do not rewrite the caption. Do not invent details. Ignore trivial photographic noise and subjective aesthetics. "
-    "When a finding exactly matches one supplied known tag, return that exact group and tag spelling. "
-    "Return JSON only."
+    "You verify a training caption against one image. "
+    "For each candidate discrepancy, check both the image and the current caption before reporting it. "
+    "Report a finding only when the image provides clear visual evidence and the caption fails to express the same fact, "
+    "or expresses a conflicting fact. Treat semantically equivalent wording as present even when it differs from the "
+    "supplied tag spelling. Use each annotation group as semantic context for what its known tag options describe and "
+    "which caption phrase they correspond to. Prioritize visually meaningful, repeatable attributes represented by the "
+    "supplied groups and exact known tag options; novel details should be rare and genuinely useful for training. "
+    "An empty findings list is a successful result when the caption accurately represents the image. "
+    "When a finding clearly maps to one supplied known tag, return that exact group and tag spelling. "
+    "Keep descriptions concise and factual. Return JSON only."
 )
 
 
@@ -121,8 +125,9 @@ def build_caption_vision_messages(caption, groups, media_relative_path):
         },
     }
     text = (
-        "Compare the image to the current training caption and annotation vocabulary. "
-        "Return at most four useful findings. If there is no meaningful discrepancy, return {\"findings\": []}.\n\n"
+        "Verify the current training caption against the image and annotation vocabulary. "
+        "Return at most four findings that meet the system criteria. Returning {\"findings\": []} is correct when "
+        "the caption already covers the meaningful visual facts.\n\n"
         + json.dumps(payload, ensure_ascii=False)
     )
     return [

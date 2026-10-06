@@ -468,6 +468,12 @@ function buildMediaContextMenuActions(mediaItem, key) {
     }
   });
   actions.push({
+    label: 'Focus Caption...',
+    run: function () {
+      startFocusedCaptionForMediaItem(mediaItem);
+    }
+  });
+  actions.push({
     label: 'Copy Tags',
     run: function () {
       copyTagsForMediaKey(mediaItem.key);

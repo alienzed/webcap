@@ -297,7 +297,7 @@ function mediaFilterTermMatches(haystack, term) {
   while (searchFrom <= haystack.length) {
     var index = haystack.indexOf(term, searchFrom);
     if (index === -1) return false;
-    if (index === 0 || !/[a-z0-9]/.test(haystack.charAt(index - 1))) return true;
+    if (index === 0 || !/[a-z0-9]/i.test(haystack.charAt(index - 1))) return true;
     searchFrom = index + 1;
   }
   return false;

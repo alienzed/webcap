@@ -1300,7 +1300,7 @@ function removeTagFromMediaKey(mediaKey, tagText) {
   if (next.length) captionItemTagsByMedia[key] = next;
   else delete captionItemTagsByMedia[key];
   // Removing an assigned term is a correction and does not invalidate an existing group review.
-  saveItemTagsToFolderState();
+  saveItemTagsToFolderState(key);
   refreshTagDrivenPanelsForMediaKey(key);
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();

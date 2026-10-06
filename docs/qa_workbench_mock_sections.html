@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WebCap QA Workbench — Section-first mock</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{color-scheme:dark;--bg:#15171a;--panel:#1e2227;--panel2:#252a30;--line:#363c45;--text:#edf0f3;--muted:#9ca5af;--accent:#b9c8ff;--warn:#ffd18b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,sans-serif}button{font:inherit;color:inherit;background:#292e35;border:1px solid #404751;border-radius:7px;padding:7px 10px}.primary{background:#34466d}
+.app{max-width:1380px;margin:auto}.top{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}h1{margin:0;font-size:20px}.sub{color:var(--muted)}.grow{flex:1}.top-actions{display:flex;gap:7px}
+main{padding:18px 20px}.overview{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:8px;margin-bottom:18px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}.stat b{font-size:21px;display:block}.stat span{color:var(--muted)}
+.health{font-size:12px;color:var(--muted);margin:-7px 0 16px}.health a{color:var(--accent);margin-right:14px}
+.qa-section{border:1px solid var(--line);background:var(--panel);border-radius:11px;margin:10px 0;overflow:hidden}.qa-section summary{padding:13px 15px;cursor:pointer;display:flex;align-items:center;gap:9px;list-style:none}.qa-section summary::-webkit-details-marker{display:none}.qa-section summary strong{font-size:15px}.badge{background:#2b3037;border:1px solid #3b424b;border-radius:999px;padding:2px 7px;color:var(--muted);font-size:12px}.summary-copy{color:var(--muted);margin-left:auto}
+.inside{border-top:1px solid var(--line);padding:5px 14px 14px}.row{display:grid;grid-template-columns:110px 1fr auto;gap:12px;padding:12px 3px;border-bottom:1px solid #2e333a}.row:last-child{border-bottom:0}.kind{font-size:11px;text-transform:uppercase;color:var(--warn);letter-spacing:.05em}.title{font-weight:650}.desc{color:#c8cfd6;margin-top:3px}.evidence{color:var(--muted);font-size:12px;margin-top:4px}
+.utility{margin-top:20px;padding:13px;background:#191c20;border:1px dashed var(--line);border-radius:10px;display:flex;gap:8px;align-items:center}.utility span{color:var(--muted)}
+@media(max-width:800px){.overview{grid-template-columns:repeat(2,1fr)}.top{flex-wrap:wrap;gap:10px}.top-actions{width:100%;overflow:auto}.row{grid-template-columns:1fr}.summary-copy{display:none}}
+</style>
+</head><body>
+<div class="app">
+<div class="top"><div><h1>Quality Assurance</h1><div class="sub">Bikini Set · 312 items</div></div><div class="grow"></div><div class="top-actions"><button>Combined Captions</button><button>Metadata</button><button>Refresh</button><button class="primary">✦ Intelligence</button></div></div>
+<main>
+<div class="overview">
+ <div class="stat"><b>12</b><span>Needs attention</span></div><div class="stat"><b>4</b><span>Prune / duplicate</span></div><div class="stat"><b>3</b><span>Consistency</span></div><div class="stat"><b>2</b><span>Balance</span></div><div class="stat"><b>3</b><span>Media</span></div>
+</div>
+<div class="health"><a href="#">0 captionless</a><a href="#">7 incomplete</a><a href="#">19 unreviewed</a><a href="#">3 tag mismatch</a><a href="#">0 invalid AR</a></div>
+
+<details class="qa-section" open><summary><strong>Prune & Redundancy</strong><span class="badge">4</span><span class="summary-copy">Blocking media problems, duplicates, training redundancy</span></summary>
+<div class="inside">
+ <div class="row"><div class="kind">Blocking</div><div><div class="title">2 unsupported aspect-ratio items</div><div class="desc">Technical media issue already confirmed by Prune Candidates.</div><div class="evidence">1000×1400 · 1170×1300</div></div><div><button class="primary">Inspect 2</button></div></div>
+ <div class="row"><div class="kind">Check</div><div><div class="title">3 near-duplicate image pairs</div><div class="desc">Visual-hash similarity suggests redundant source material.</div></div><div><button>Compare</button></div></div>
+</div></details>
+
+<details class="qa-section" open><summary><strong>Consistency</strong><span class="badge">3</span><span class="summary-copy">Exceptions, terminology, likely annotation omissions</span></summary>
+<div class="inside">
+ <div class="row"><div class="kind">Check</div><div><div class="title">ruched → v-string has one exception</div><div class="desc">17/18 ruched items also use v-string; IMG_184.webp does not.</div><div class="evidence">Deterministic association · support 18 · 94%</div></div><div><button class="primary">Inspect 18</button></div></div>
+ <div class="row"><div class="kind">AI · High</div><div><div class="title">Possible terminology drift in ring construction</div><div class="desc">“ring connectors” and “dual-ring” appear semantically overlapping across similar examples.</div></div><div><button>Inspect 11</button></div></div>
+</div></details>
+
+<details class="qa-section"><summary><strong>Balance & Coverage</strong><span class="badge">2</span><span class="summary-copy">Configured + discovered dimensions</span></summary>
+<div class="inside"><div class="row"><div class="kind">Info</div><div><div class="title">Top Shape: triangle dominates at 71%</div><div class="desc">Structured group distribution; no implication that the dataset must be artificially balanced.</div></div><div><button>Explore</button></div></div></div></details>
+
+<details class="qa-section"><summary><strong>Media Composition</strong><span class="badge">3</span><span class="summary-copy">Tiny cohorts and metadata outliers</span></summary>
+<div class="inside"><div class="row"><div class="kind">Info</div><div><div class="title">Only 3 items are 9:16</div><div class="desc">Small AR cohort worth a quick visual check.</div></div><div><button>Inspect 3</button></div></div></div></details>
+
+<details class="qa-section"><summary><strong>Caption Quality</strong><span class="badge">2</span><span class="summary-copy">Typos, wording drift, length and copy residue</span></summary>
+<div class="inside"><div class="row"><div class="kind">AI · High</div><div><div class="title">Likely typo: “tringle”</div><div class="desc">Appears once; “triangle” appears 86 times in the same semantic context.</div></div><div><button>Open item</button></div></div></div></details>
+
+<div class="utility"><strong>Reference</strong><span>Need the raw corpus or table?</span><div class="grow"></div><button>Combined Captions</button><button>Metadata Explorer</button></div>
+</main></div></body></html>

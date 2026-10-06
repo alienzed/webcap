@@ -447,3 +447,25 @@ def test_app_theme_is_validated_as_durable_config():
             "filesystem": {"root": "C:/training", "models": ""},
             "theme": "sepia",
         })
+
+
+def test_director_model_is_validated_as_durable_config():
+    defaulted = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "training": {},
+    })
+    assert defaulted["director_model"] == ""
+
+    selected = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "training": {},
+        "director_model": "  local-model-id  ",
+    })
+    assert selected["director_model"] == "local-model-id"
+
+    with pytest.raises(ValueError, match="Config.director_model"):
+        config_module.validate_config_payload({
+            "filesystem": {"root": "C:/training", "models": ""},
+            "training": {},
+            "director_model": 42,
+        })

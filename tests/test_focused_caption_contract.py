@@ -199,5 +199,6 @@ def test_focus_caption_prefetch_is_cancelled_at_lifecycle_boundaries():
     assert "function cancelFocusedCaptionPrefetch()" in focus
     assert "return cancelCaptionAssistJob(prefetch.jobId)" in focus
     assert "prefetch.discarded = true;" in focus
+    assert "captionAssistPendingJobId === 'prefetch'" in focus
     assert "if (prefetch.discarded) return cancelCaptionAssistJob(prefetch.jobId);" in focus
     assert focus.count("cancelFocusedCaptionPrefetch();") >= 2

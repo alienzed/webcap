@@ -14,7 +14,7 @@ from .dataset_prep import (
     write_prepared_caption,
 )
 from .training_config_files import apply_captured_initializer, apply_review_config_settings, with_dataset_path, with_output_dir
-from .training_profiles import config_for_stage, normalize_mode, profile_for_mode
+from .training_profiles import resolved_profile
 from .training_runtime import to_wsl_path
 from .training_review import validate_managed_review_stage
 
@@ -235,7 +235,7 @@ def _detail_subset_members(rows, bucket, profile_id):
         return []
     temporal_frames = int(roles[0][1])
     detail_frames = int(roles[1][1])
-    selected_profile = profile_for_mode(profile_id)
+    selected_profile = resolved_profile(profile_id)
     members = []
     for row in rows:
         frames = coerce_frames(row, selected_profile.get("videoFps"))
@@ -266,7 +266,7 @@ def _warn_unsafe_direct_stanza(data, source_name, manifest, profile_id):
     if not source_rows:
         print(f"[WARN] Direct {group} stanza {source_name} has no captured source rows to audit.", flush=True)
         return
-    selected_profile = profile_for_mode(profile_id)
+    selected_profile = resolved_profile(profile_id)
     for bucket in buckets:
         if not isinstance(bucket, list) or len(bucket) != 3 or not all(isinstance(value, int) for value in bucket):
             print(f"[WARN] Direct {group} stanza {source_name} has an invalid size bucket; preserving it exactly.", flush=True)
@@ -371,7 +371,7 @@ def _materialize_dataset_config(text, media_root, distribution, manifest, stage,
     return rendered
 
 
-def _build_bundle_summary(selected_profile, selected_mode, manifest, plan, bundle_artifacts):
+def _build_bundle_summary(selected_profile, manifest, plan, bundle_artifacts):
     capture_actions = {}
     media_by_directory = {}
     for kind in ("images", "videos"):
@@ -424,7 +424,6 @@ def _build_bundle_summary(selected_profile, selected_mode, manifest, plan, bundl
         "version": 2,
         "profileId": selected_profile["id"],
         "profileLabel": selected_profile["label"],
-        "mode": selected_mode,
         "capturedItems": sum(capture_actions.values()),
         "captureActions": capture_actions,
         "skipped": list(manifest.get("skipped") or []),
@@ -444,7 +443,6 @@ def materialize_training_bundle(
     folder_path,
     action_root,
     profile_id,
-    mode,
     stages,
     selected_media,
     fallback_captions=None,
@@ -459,8 +457,7 @@ def materialize_training_bundle(
 ):
     folder = Path(folder_path)
     action = Path(action_root)
-    selected_mode = normalize_mode(mode)
-    selected_profile = profile_for_mode(profile_id, selected_mode)
+    selected_profile = resolved_profile(profile_id)
     stage_names = _selected_stages(selected_profile, stages)
     output_dirs = dict(output_dirs or {})
     manifest = build_dataset_manifest(
@@ -570,7 +567,6 @@ def materialize_training_bundle(
     )
     summary = _build_bundle_summary(
         selected_profile,
-        selected_mode,
         manifest,
         plan_artifacts["plan"],
         bundle_artifacts,

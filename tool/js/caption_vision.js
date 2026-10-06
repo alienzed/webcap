@@ -509,6 +509,13 @@ function closeVisionImageCaption() {
   if (pending) cancelVisionImageCaptionRequest();
 }
 
+function syncVisionImageCaptionSelection(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  if (!visionImageCaptionState.open || !visionImageCaptionState.mediaKey) return;
+  if (key === visionImageCaptionState.mediaKey) return;
+  closeVisionImageCaption();
+}
+
 function runVisionImageCaption() {
   var mediaItem = state && state.currentItem;
   if (!mediaItem || !mediaItem.key || !mediaItem.fileName) {
@@ -749,6 +756,7 @@ window.adoptCaptionVisionPrefetch = adoptCaptionVisionPrefetch;
 window.isCaptionVisionSupportedMedia = isCaptionVisionSupportedMedia;
 window.getCaptionVisionModelId = getCaptionVisionModelId;
 window.syncVisionImageCaptionActionUi = syncVisionImageCaptionActionUi;
+window.syncVisionImageCaptionSelection = syncVisionImageCaptionSelection;
 window.runVisionImageCaption = runVisionImageCaption;
 
 window.createCaptionVisionTask = createCaptionVisionTask;

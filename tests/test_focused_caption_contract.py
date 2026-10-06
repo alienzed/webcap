@@ -287,6 +287,9 @@ def test_standalone_vision_caption_is_preview_adjacent_and_requires_explicit_edi
     run_end = vision.index("function copyVisionImageCaption()", run_start)
     assert "assignChecklistTagToMediaKey" not in vision[run_start:run_end]
     assert "applyEditorTextAndTriggerInput(text);" in vision
+    assert "function syncVisionImageCaptionSelection(mediaKey)" in vision
+    media = _read("tool/js/media.js")
+    assert "syncVisionImageCaptionSelection(mediaItem.key);" in media
     assert 'caption_operation in {"caption_vision_validate", "vision_image_caption"}' in runner
 
 

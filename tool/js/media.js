@@ -649,6 +649,7 @@ function selectPathMedia(mediaItem) {
     });
     state.currentItem = mediaItem;
     state.currentConfigFile = null;
+    syncVisionImageCaptionSelection(mediaItem.key);
     var keepSpecialWorkspaceSurface = typeof workspaceState !== 'undefined' &&
       workspaceState &&
       (workspaceState.surface === 'focus' || workspaceState.surface === 'grid');

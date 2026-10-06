@@ -452,6 +452,141 @@ textarea:focus, input:focus {
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
 }
 
+.editor-caption-candidate.is-focus-caption {
+  left: 50vw;
+  right: 0;
+  width: 50vw;
+  padding: 12px;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.editor-caption-candidate.is-focus-caption .editor-caption-candidate-dialog {
+  width: min(720px, calc(50vw - 24px));
+  max-height: calc(100vh - 24px);
+}
+
+.editor-caption-candidate-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+  font-size: 14px;
+}
+
+.editor-caption-vision-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  user-select: none;
+}
+
+.editor-caption-vision-toggle input {
+  margin: 0;
+}
+
+.editor-caption-vision-status {
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(14, 116, 144, 0.22);
+  background: rgba(14, 116, 144, 0.08);
+  color: #155e75;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.editor-caption-vision-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(241, 245, 249, 0.78);
+}
+
+.caption-vision-finding {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.30);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.caption-vision-finding-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.caption-vision-finding-meta {
+  margin-bottom: 2px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.caption-vision-finding-text {
+  color: #1e293b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.caption-vision-tag-action {
+  flex: 0 0 auto;
+  max-width: 44%;
+  padding: 5px 8px;
+  border: 1px solid rgba(13, 148, 136, 0.35);
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.10);
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+.caption-vision-tag-action:hover {
+  background: rgba(13, 148, 136, 0.18);
+}
+
+.caption-vision-novel {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.caption-vision-confidence-low {
+  opacity: 0.74;
+}
+
+@media (max-width: 900px) {
+  .editor-caption-candidate.is-focus-caption {
+    left: 42vw;
+    width: 58vw;
+  }
+
+  .editor-caption-candidate.is-focus-caption .editor-caption-candidate-dialog {
+    width: calc(58vw - 24px);
+  }
+}
+
 .editor-caption-candidate-omissions {
   padding: 10px 16px;
   border-bottom: 1px solid rgba(220, 38, 38, 0.28);

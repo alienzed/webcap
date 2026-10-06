@@ -223,7 +223,7 @@ def test_focus_caption_vision_is_opt_in_actionable_and_one_deep():
     assert "var captionVisionEnabled = false;" in vision
     assert "requestCaptionVisionCandidate" in vision
     assert "assignChecklistTagToMediaKey(mediaKey, group, term)" in vision
-    assert "Refreshing caption suggestion" in vision
+    assert "Revising caption for " in vision
     assert "visionTask" in focus
     assert "createCaptionVisionTask" in focus
     assert "cancelCaptionVisionTask" in focus
@@ -287,3 +287,36 @@ def test_global_vision_selector_is_separate_from_focus_enable_toggle():
     assert "webcap:vision-model-changed" in vision
     assert "cancelFocusedCaptionPrefetch()" in vision
     assert "runCaptionVisionForCandidate(captionAssistCandidate)" in vision
+
+
+def test_caption_omissions_and_vision_share_explicit_fix_path():
+    primer = _read("tool/js/primer_settings.js")
+    vision = _read("tool/js/caption_vision.js")
+    css = _read("tool/css/styles.css")
+
+    assert "function getCaptionAssistOmittedCorrections" in primer
+    assert "function repairCaptionAssistCandidate(corrections)" in primer
+    assert "request.draft = String(candidate.text || '').trim();" in primer
+    assert "request.corrections = cleanCorrections;" in primer
+    assert "fixOmissionsBtn.textContent = 'Fix';" in primer
+    assert "repairCaptionAssistCandidate(candidate.omittedCorrections || [])" in primer
+    assert ".caption-assist-fix-btn {" in css
+
+    assert "function isCaptionVisionKnownTagSelected" in vision
+    assert "button.textContent = selected ? 'Fix caption' : 'Apply + fix';" in vision
+    assert "assignChecklistTagToMediaKey(mediaKey, group, term);" in vision
+    assert "repairCaptionAssistCandidate([{" in vision
+    assert "runCaptionAssist();" not in vision.split("function applyCaptionVisionKnownTag", 1)[1].split("function renderCaptionVisionFinding", 1)[0]
+
+
+def test_caption_fix_is_user_initiated_not_automatic():
+    primer = _read("tool/js/primer_settings.js")
+    vision = _read("tool/js/caption_vision.js")
+
+    request_start = primer.index("function requestCaptionAssistCandidate")
+    request_end = primer.index("function repairCaptionAssistCandidate", request_start)
+    assert "repairCaptionAssistCandidate(" not in primer[request_start:request_end]
+
+    bind_start = vision.index("function bindCaptionVisionTaskToCandidate")
+    bind_end = vision.index("function runCaptionVisionForCandidate", bind_start)
+    assert "repairCaptionAssistCandidate(" not in vision[bind_start:bind_end]

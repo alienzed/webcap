@@ -157,3 +157,48 @@ def test_caption_template_assist_prompt_explains_primer_grammar():
     assert "viewed from the front" in system
     assert "keep group placeholders in that relative order" in user
     assert "does not prescribe caption order" not in system
+
+
+def test_caption_assist_corrections_make_retry_a_targeted_repair():
+    messages = caption_ops.build_caption_assist_messages(
+        assignments=[{"group": "Bikini Color", "term": "red"}],
+        draft="a woman wearing a triangle bikini",
+        corrections=[{
+            "group": "Bikini Color",
+            "term": "red",
+            "note": "The current candidate omitted the visible selected color.",
+        }],
+    )
+
+    payload = json.loads(messages[1]["content"].split("\n\n", 1)[1])
+    assert payload["currentDraft"] == "a woman wearing a triangle bikini"
+    assert payload["corrections"] == [{
+        "group": "Bikini Color",
+        "term": "red",
+        "note": "The current candidate omitted the visible selected color.",
+    }]
+    assert "targeted repair of currentDraft" in messages[1]["content"]
+    assert "explicitly fix those items" in messages[1]["content"]
+
+
+def test_caption_assist_route_passes_corrections_to_prompt(monkeypatch):
+    from tool.server import app as app_module
+
+    captured = {}
+
+    def enqueue(client, model, contract, context=None, label=""):
+        captured["contract"] = contract
+        return {"jobId": "caption-repair"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
+    with app_module.app.test_client() as client:
+        response = client.post("/caption/assist", json={
+            "model": "remote-1::qwen",
+            "assignments": [{"group": "Bikini Color", "term": "red"}],
+            "draft": "triangle bikini",
+            "corrections": [{"group": "Bikini Color", "term": "red"}],
+        })
+
+    assert response.status_code == 202
+    payload = json.loads(captured["contract"]["messages"][1]["content"].split("\n\n", 1)[1])
+    assert payload["corrections"][0]["term"] == "red"

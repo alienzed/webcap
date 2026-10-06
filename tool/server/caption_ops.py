@@ -138,6 +138,7 @@ def build_caption_assist_messages(
     template="",
     rendered_primer="",
     preferred_sequence="",
+    corrections=None,
 ):
     grouped = []
     seen_grouped = set()
@@ -171,6 +172,25 @@ def build_caption_assist_messages(
     required_phrase = str(required_phrase or "").strip()
     draft = str(draft or "").strip()
     preferred_sequence = str(preferred_sequence or "").replace("\r\n", "\n").strip()
+    repair_corrections = []
+    seen_corrections = set()
+    for raw in corrections if isinstance(corrections, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        group = str(raw.get("group") or "").strip()
+        term = str(raw.get("term") or "").strip()
+        note = str(raw.get("note") or raw.get("description") or "").strip()
+        if not term:
+            continue
+        key = (group.casefold(), term.casefold())
+        if key in seen_corrections:
+            continue
+        seen_corrections.add(key)
+        repair_corrections.append({
+            "group": group or "Annotation",
+            "term": term,
+            "note": note,
+        })
     if not grouped and not other_tags and not required_phrase and not draft:
         raise ValueError("Caption Assist needs selected annotations, a required phrase, or an existing draft.")
 
@@ -182,6 +202,7 @@ def build_caption_assist_messages(
         "captionTemplate": str(template or "").strip(),
         "renderedPrimer": str(rendered_primer or "").strip(),
         "preferredCaptionSequence": preferred_sequence,
+        "corrections": repair_corrections,
     }
     if preferred_sequence:
         ordering = (
@@ -195,9 +216,17 @@ def build_caption_assist_messages(
             "preferredCaptionSequence is blank, so do not impose a house order. Arrange every supplied fact in the "
             "most natural concise order while preserving all facts. "
         )
+    repair_instruction = ""
+    if repair_corrections:
+        repair_instruction = (
+            "This is a targeted repair of currentDraft, not a fresh rewrite. Keep the current wording and structure "
+            "as intact as practical. Every item in corrections is a verified selected fact that the current candidate "
+            "omitted or mishandled; explicitly fix those items while preserving all other valid caption content. "
+        )
     user_prompt = (
         "Write the caption using these WebCap inputs. Group names explain the meaning of selected tags; they are not "
         "text that must appear in the caption. Infer meaning from group names and selected values together. "
+        + repair_instruction
         + ordering +
         "Do not use annotation group order or captionTemplate placeholder order as caption order.\n\n"
         + json.dumps(payload, ensure_ascii=False, indent=2)

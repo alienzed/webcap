@@ -93,10 +93,10 @@ function runPreviewActionByLabel(label) {
   action.run();
 }
 
-function updatePreviewActionControls() {
+function updatePreviewActionControls(visibleMedia) {
   if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
   if (typeof renderPreviewHeaderMeta === 'function') {
-    renderPreviewHeaderMeta();
+    renderPreviewHeaderMeta(visibleMedia);
   }
 
   var hasRating = function () {
@@ -580,7 +580,7 @@ function selectPathMedia(mediaItem) {
     ui.editorEl.value = nextEditorValue;
     renderPathPreview(state.folder, mediaItem.fileName);
     setStatus(buildSelectedMediaStatus(mediaItem));
-    updatePreviewActionControls();
+    updatePreviewActionControls(mediaItems);
     renderChecklistPanel();
     renderItemTagsPanel();
     renderItemMetadataPanel();
@@ -824,7 +824,7 @@ async function renderFileList() {
     ui.createSetFromResultsBtn.classList.toggle('hidden', !showCreateSetBtn);
   }
   if (typeof mediaGridUpdateEntryVisibility === 'function') {
-    mediaGridUpdateEntryVisibility();
+    mediaGridUpdateEntryVisibility(mediaItems, { skipHeader: true });
   }
   if (typeof mediaGridRefreshFromCurrentFilters === 'function') {
     mediaGridRefreshFromCurrentFilters();

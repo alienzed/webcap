@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import traceback
 from pathlib import Path
 
@@ -510,6 +511,7 @@ def write_media_metadata_file(metadata_path, metadata):
 
 
 def update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None, summary=None):
+    timing_started = time.perf_counter()
     folder_path = Path(folder_path)
     metadata_path = folder_path / "media_metadata.json"
     if metadata_path.exists():
@@ -517,6 +519,7 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
             metadata = json.load(f)
     else:
         metadata = {}
+    cache_read_done = time.perf_counter()
     face_detector = None
     selection_pose_analyzers = None
     pending_entries = []
@@ -524,6 +527,7 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
     scoped_filename_set = None
     if scoped_filenames:
         scoped_filename_set = {str(name or "").strip() for name in scoped_filenames if str(name or "").strip()}
+    scan_started = time.perf_counter()
     for entry in folder_path.iterdir():
         if not entry.is_file() or entry.suffix.lower() not in MEDIA_ALL_EXTS or is_transient_media_name(entry.name):
             continue
@@ -556,9 +560,11 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
         if cached and cached.get("mtime") == mtime and cached.get("size") == size and not needs_face_focus and not needs_selection_pose and not needs_scene_complexity:
             continue
         pending_entries.append(entry)
+    scan_done = time.perf_counter()
     optional_analysis_warnings = []
     face_focus_unavailable = False
     selection_pose_unavailable = False
+    analyzer_started = time.perf_counter()
     if include_face_focus and any(is_face_focus_image(entry) for entry in pending_entries):
         try:
             face_detector = get_face_focus_detector()
@@ -575,7 +581,9 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
             message = "MediaPipe selection analysis unavailable: " + str(exc)
             logger.warning(message)
             optional_analysis_warnings.append(message)
+    analyzer_done = time.perf_counter()
 
+    probe_started = time.perf_counter()
     generated_count = 0
     for entry in pending_entries:
         cached = metadata.get(entry.name)
@@ -620,17 +628,30 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
         generated_count += 1
         if (include_face_focus and is_face_focus_image(entry)) or (include_selection_pose and is_selection_pose_image(entry)):
             write_media_metadata_file(metadata_path, metadata)
+    probe_done = time.perf_counter()
+    cleanup_started = time.perf_counter()
     to_remove = [k for k in metadata if not (folder_path / k).exists() or is_transient_media_name(k)]
     for k in to_remove:
         del metadata[k]
     if generated_count or to_remove or not metadata_path.exists():
         write_media_metadata_file(metadata_path, metadata)
+    cleanup_done = time.perf_counter()
     if summary is not None:
         summary.update({
             "checked": checked_count,
+            "pending": len(pending_entries),
             "generated": generated_count,
             "removed": len(to_remove),
+            "metadataEntries": len(metadata),
             "optionalAnalysisWarnings": optional_analysis_warnings,
+            "timingMs": {
+                "readCache": round((cache_read_done - timing_started) * 1000, 1),
+                "scan": round((scan_done - scan_started) * 1000, 1),
+                "analyzers": round((analyzer_done - analyzer_started) * 1000, 1),
+                "probe": round((probe_done - probe_started) * 1000, 1),
+                "cleanupWrite": round((cleanup_done - cleanup_started) * 1000, 1),
+                "total": round((cleanup_done - timing_started) * 1000, 1),
+            },
         })
     return metadata
 
@@ -865,10 +886,12 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
             ),
         )
         print(
-            "[metadata] Checked {checked} media file(s); generated {generated}; removed {removed}.".format(
+            "[metadata] Checked {checked} media file(s); pending {pending}; generated {generated}; removed {removed}; timing {timing}.".format(
                 checked=metadata_summary.get("checked", 0),
+                pending=metadata_summary.get("pending", 0),
                 generated=metadata_summary.get("generated", 0),
                 removed=metadata_summary.get("removed", 0),
+                timing=metadata_summary.get("timingMs", {}),
             ),
             flush=True,
         )
@@ -920,8 +943,10 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
             metadata_list.append(record)
         response = jsonify(metadata_list)
         response.headers["X-WebCap-Metadata-Checked"] = str(metadata_summary.get("checked", 0))
+        response.headers["X-WebCap-Metadata-Pending"] = str(metadata_summary.get("pending", 0))
         response.headers["X-WebCap-Metadata-Generated"] = str(metadata_summary.get("generated", 0))
         response.headers["X-WebCap-Metadata-Removed"] = str(metadata_summary.get("removed", 0))
+        response.headers["X-WebCap-Metadata-Timing"] = json.dumps(metadata_summary.get("timingMs", {}), separators=(",", ":"))
         warnings = metadata_summary.get("optionalAnalysisWarnings") or []
         if warnings:
             response.headers["X-WebCap-Optional-Analysis-Warnings"] = json.dumps(warnings)

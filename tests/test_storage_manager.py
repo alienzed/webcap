@@ -588,6 +588,31 @@ def test_workspace_scan_prunes_unchanged_stale_measurements(monkeypatch, tmp_pat
     assert stale_key not in after["items"]
 
 
+def test_workspace_scan_preserves_staged_measurements_outside_current_set(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    current = tmp_path / "sets" / "current"
+    other = tmp_path / "sets" / "other"
+    current.mkdir(parents=True)
+    other.mkdir(parents=True)
+    _write_json(current / ".webcap_state.json", {"ratings_by_media": {}})
+    _write_json(other / ".webcap_state.json", {"ratings_by_media": {}})
+
+    other_key = storage_manager._cache_key("staged", "h3/other.safetensors", "sets/other")
+    storage_manager.register_usage(
+        "staged",
+        "h3/other.safetensors",
+        "sets/other",
+        bytes_used=123,
+        file_count=1,
+        source="producer",
+    )
+
+    storage_manager._scan_workspace("sets/current", cancel_check=lambda: False, progress=lambda event: None)
+
+    after = json.loads(storage_manager._cache_path().read_text(encoding="utf-8"))
+    assert after["items"][other_key]["bytes"] == 123
+
+
 def test_workspace_scan_discovers_historical_tests_and_records_usage(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     _generation(tmp_path, job_id="job-scan")

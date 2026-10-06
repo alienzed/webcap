@@ -54,6 +54,79 @@ def test_generate_embedded_metadata_keeps_only_portable_reproduction_fields():
     }
 
 
+def test_generate_persist_result_embeds_portable_metadata(tmp_path, monkeypatch):
+    output_root = tmp_path / "output"
+    monkeypatch.setattr(generate_store.app_config, "output_root", lambda: output_root)
+    captured = {}
+
+    def capture_metadata(path, payload):
+        captured["path"] = path
+        captured["payload"] = dict(payload)
+        return payload
+
+    monkeypatch.setattr(generate_store, "write_webcap_metadata", capture_metadata)
+
+    result = generate_store.persist_result(
+        "job-embed",
+        {
+            "modelId": "krea2",
+            "mediaKind": "image",
+            "sourcePrompt": "person in {studio|rooftop}",
+            "prompt": "person in {studio|rooftop}",
+            "resolvedPrompt": "person in rooftop",
+            "settings": {"seed": 42, "dimensions": "1024x1024"},
+            "loras": [{"name": "detail.safetensors", "strength": 0.7}],
+            "references": {},
+            "workflowFile": "workflow.json",
+        },
+        {"filename": "render.png", "type": "output"},
+        b"image",
+        "provider-1",
+        123,
+    )
+
+    assert captured["path"] == output_root / result["mediaPath"]
+    assert captured["payload"] == {
+        "model": "krea2",
+        "prompt": "person in rooftop",
+        "sourcePrompt": "person in {studio|rooftop}",
+        "seed": 42,
+        "loras": [{"name": "detail.safetensors", "strength": 0.7}],
+    }
+
+
+def test_generate_persist_result_metadata_failure_removes_partial_result(tmp_path, monkeypatch):
+    output_root = tmp_path / "output"
+    monkeypatch.setattr(generate_store.app_config, "output_root", lambda: output_root)
+
+    def fail_metadata(_path, _payload):
+        raise RuntimeError("metadata write failed")
+
+    monkeypatch.setattr(generate_store, "write_webcap_metadata", fail_metadata)
+
+    with pytest.raises(RuntimeError, match="metadata write failed"):
+        generate_store.persist_result(
+            "job-failed-metadata",
+            {
+                "modelId": "krea2",
+                "mediaKind": "image",
+                "sourcePrompt": "idea",
+                "prompt": "idea",
+                "resolvedPrompt": "idea",
+                "settings": {"seed": 7},
+                "loras": [],
+                "references": {},
+                "workflowFile": "workflow.json",
+            },
+            {"filename": "render.png", "type": "output"},
+            b"image",
+            "provider-1",
+            123,
+        )
+
+    assert not list(generate_store.generation_root().glob("*/job-failed-metadata"))
+
+
 def test_generate_enqueue_is_global_and_uses_frozen_prepared_request(monkeypatch):
     prepared = {
         "modelId": "minimax_h3",

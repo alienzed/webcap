@@ -146,7 +146,7 @@ function renderTrainingHistory() {
     if (!searchText) return true;
     var model = job.model && typeof job.model === 'object' ? job.model : {};
     var haystack = [
-      job.folder, job.datasetTarget, job.profileId, job.mode, job.stages, job.status, job.modelLabel, model.label, model.source,
+      job.folder, job.profileId, job.stages, job.status, job.modelLabel, model.label, model.source,
       job.runName, trainingHistoryRunSummary(job)
     ].join(' ').toLowerCase();
     return haystack.indexOf(searchText) !== -1;
@@ -706,7 +706,6 @@ function resumeTrainingHistoryJob(jobId) {
       resumeFromCheckpoint: resumePath,
       profileId: job.profileId || '',
       runId: job.runId || '',
-      mode: job.mode || 'normal',
       reuseCaptureActionId: job.actionId,
       reuseCapturePath: job.inputPath
     })

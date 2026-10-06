@@ -572,7 +572,7 @@ function wireTrainingCandidatesComparison() {
     var testFolder = String(trainingWorkspaceState.candidateFolder || '');
     var profileId = trainingCandidatesTestProfileId();
     if (!testFolder || !profileId) throw new Error('Candidate analysis has no supported Test Generations context.');
-    setWorkingModelProfileId(profileId, testFolder);
+    setWorkingModelProfileId(profileId);
     closeTrainingCandidates();
     window.openTestBenchForFolder(testFolder);
   });
@@ -978,7 +978,7 @@ function wireTrainingCandidatesChart() {
       var testFolder = String(trainingWorkspaceState.candidateFolder || '');
       var profileId = trainingCandidatesTestProfileId();
       if (!testFolder || !profileId) throw new Error('Candidate analysis has no supported Test Generations context.');
-      setWorkingModelProfileId(profileId, testFolder);
+      setWorkingModelProfileId(profileId);
       closeTrainingCandidates();
       window.openTestBenchForFolder(testFolder);
       return;

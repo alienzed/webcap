@@ -223,6 +223,11 @@ def validate_config_payload(payload):
         raise ValueError("Config.theme must be light or dark.")
     out["theme"] = theme
 
+    director_model = out.get("director_model", "")
+    if not isinstance(director_model, str):
+        raise ValueError("Config.director_model must be a string.")
+    out["director_model"] = director_model.strip()
+
     training = out.get("training")
     if training is None:
         training = {}

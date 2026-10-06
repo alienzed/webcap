@@ -9,7 +9,17 @@ var focusedCaptionState = {
   useArmedText: ''
 };
 
-var focusedCaptionPrefetch = null; // one-deep speculative caption + optional vision assessment
+var focusedCaptionPrefetch = null; // one-deep speculative caption + optional vision assessment/phrases
+var focusedCaptionVisionPhrases = {
+  enabled: false,
+  mediaKey: '',
+  description: '',
+  phrases: [],
+  model: '',
+  pending: false,
+  error: '',
+  task: null
+};
 
 function isFocusedCaptionOpen() {
   return !!focusedCaptionState.open;
@@ -133,6 +143,100 @@ function armOrUseFocusedCaptionCandidate() {
   return Promise.resolve(true);
 }
 
+function extractFocusedCaptionVisionPhrases(text) {
+  var clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  var phrases = [];
+  var seen = {};
+  clean.split(/[.!?]+/).forEach(function (sentence) {
+    var sentenceText = String(sentence || '').trim();
+    if (!sentenceText) return;
+    var parts = sentenceText.split(/\s*[,;:]\s*/);
+    if (parts.length === 1 && sentenceText.split(/\s+/).length > 14) {
+      parts = sentenceText.split(/\s+(?:and|while)\s+/i);
+    }
+    parts.forEach(function (raw) {
+      var phrase = String(raw || '').trim().replace(/^(?:and|while)\s+/i, '');
+      var words = phrase.split(/\s+/).filter(Boolean);
+      if (!phrase || words.length < 2 || words.length > 16) return;
+      var key = phrase.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      phrases.push(phrase);
+    });
+  });
+  if (!phrases.length && clean.split(/\s+/).length <= 16) phrases.push(clean.replace(/[.!?]+$/, ''));
+  return phrases.slice(0, 10);
+}
+
+function createFocusedCaptionVisionPhraseTask(mediaItem) {
+  var task = {
+    mediaKey: String(mediaItem && mediaItem.key || ''),
+    jobId: '',
+    cancelled: false,
+    result: null,
+    promise: null
+  };
+  task.promise = requestVisionImageCaptionDescription(mediaItem, {
+    onJob: function (job) {
+      task.jobId = String(job && job.jobId || '');
+      if (!task.cancelled) return null;
+      return cancelCaptionAssistJob(task.jobId);
+    }
+  }).then(function (result) {
+    if (task.cancelled || !result) return null;
+    task.result = {
+      mediaKey: String(result.mediaKey || task.mediaKey),
+      description: String(result.text || ''),
+      phrases: extractFocusedCaptionVisionPhrases(result.text),
+      model: String(result.model || '')
+    };
+    return task.result;
+  });
+  return task;
+}
+
+function cancelFocusedCaptionVisionPhraseTask(task, label) {
+  if (!task) return Promise.resolve(false);
+  task.cancelled = true;
+  var jobId = String(task.jobId || '');
+  if (!jobId || task.result) return Promise.resolve(true);
+  return cancelCaptionAssistJob(jobId).catch(function (err) {
+    reportConsoleWarning(
+      label || 'Focus Caption Vision phrases',
+      'Could not cancel Vision phrase job: ' + String(err && err.message ? err.message : err)
+    );
+    return false;
+  });
+}
+
+function clearFocusedCaptionVisionPhrases(options) {
+  var opts = options || {};
+  var task = focusedCaptionVisionPhrases.task;
+  if (task && !task.result) cancelFocusedCaptionVisionPhraseTask(task);
+  focusedCaptionVisionPhrases.mediaKey = '';
+  focusedCaptionVisionPhrases.description = '';
+  focusedCaptionVisionPhrases.phrases = [];
+  focusedCaptionVisionPhrases.model = '';
+  focusedCaptionVisionPhrases.pending = false;
+  focusedCaptionVisionPhrases.error = '';
+  focusedCaptionVisionPhrases.task = null;
+  if (!opts.keepEnabled) focusedCaptionVisionPhrases.enabled = false;
+  if (typeof syncFocusedCaptionVisionPhrasesUi === 'function') syncFocusedCaptionVisionPhrasesUi();
+}
+
+function setFocusedCaptionVisionPhraseResult(result) {
+  result = result && typeof result === 'object' ? result : {};
+  focusedCaptionVisionPhrases.mediaKey = String(result.mediaKey || '');
+  focusedCaptionVisionPhrases.description = String(result.description || '');
+  focusedCaptionVisionPhrases.phrases = Array.isArray(result.phrases) ? result.phrases.slice() : [];
+  focusedCaptionVisionPhrases.model = String(result.model || '');
+  focusedCaptionVisionPhrases.pending = false;
+  focusedCaptionVisionPhrases.error = '';
+  focusedCaptionVisionPhrases.task = null;
+  syncFocusedCaptionVisionPhrasesUi();
+}
+
 function findFocusedCaptionMediaItemByKey(mediaKey) {
   var key = String(mediaKey || '').trim();
   if (!key || !state || !Array.isArray(state.items)) return null;
@@ -175,6 +279,9 @@ function cancelFocusedCaptionPrefetch() {
   if (prefetch.visionTask && !prefetch.visionTask.result) {
     cancellations.push(cancelCaptionVisionTask(prefetch.visionTask, 'Focus Caption Vision'));
   }
+  if (prefetch.phraseTask && !prefetch.phraseTask.result) {
+    cancellations.push(cancelFocusedCaptionVisionPhraseTask(prefetch.phraseTask, 'Focus Caption Vision phrases'));
+  }
   if (!cancellations.length) return Promise.resolve(true);
   return Promise.all(cancellations).then(function () { return true; });
 }
@@ -189,6 +296,21 @@ function beginFocusedCaptionPrefetchVision(prefetch, mediaItem, candidate) {
   task.promise.catch(function (err) {
     if (!task.cancelled && !prefetch.discarded && focusedCaptionPrefetch === prefetch && captionVisionEnabled) {
       reportConsoleError('Focus Caption Vision', err);
+    }
+    return null;
+  });
+  return task.promise;
+}
+
+function beginFocusedCaptionPrefetchPhrases(prefetch, mediaItem) {
+  if (!focusedCaptionVisionPhrases.enabled || !prefetch || !mediaItem) return Promise.resolve(false);
+  if (!isCaptionVisionSupportedMedia(mediaItem.fileName)) return Promise.resolve(false);
+  if (prefetch.phraseTask) return prefetch.phraseTask.promise;
+  var task = createFocusedCaptionVisionPhraseTask(mediaItem);
+  prefetch.phraseTask = task;
+  task.promise.catch(function (err) {
+    if (!task.cancelled && !prefetch.discarded && focusedCaptionPrefetch === prefetch) {
+      reportConsoleError('Focus Caption Vision phrases', err);
     }
     return null;
   });
@@ -241,6 +363,7 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
       promise: null,
       candidate: null,
       visionTask: null,
+      phraseTask: null,
       discarded: false
     };
     focusedCaptionPrefetch = prefetch;
@@ -254,6 +377,7 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
       if (prefetch.discarded || focusedCaptionPrefetch !== prefetch) return null;
       prefetch.candidate = candidate;
       if (captionVisionEnabled) beginFocusedCaptionPrefetchVision(prefetch, target.item, candidate);
+      if (focusedCaptionVisionPhrases.enabled) beginFocusedCaptionPrefetchPhrases(prefetch, target.item);
       return candidate;
     }).catch(function (err) {
       if (!prefetch.discarded && focusedCaptionPrefetch === prefetch) {
@@ -298,6 +422,29 @@ function useFocusedCaptionPrefetchForCurrentItem() {
     focusedCaptionPrefetch = null;
     candidate.missingGroups = getCaptionAssistMissingGroups(candidate.mediaKey);
     captionAssistCandidate = candidate;
+    clearFocusedCaptionVisionPhrases({ keepEnabled: true });
+    if (focusedCaptionVisionPhrases.enabled && adoptedPrefetch.phraseTask) {
+      var phraseTask = adoptedPrefetch.phraseTask;
+      focusedCaptionVisionPhrases.mediaKey = candidate.mediaKey;
+      focusedCaptionVisionPhrases.pending = !phraseTask.result;
+      focusedCaptionVisionPhrases.task = phraseTask;
+      if (phraseTask.result) {
+        setFocusedCaptionVisionPhraseResult(phraseTask.result);
+      } else {
+        phraseTask.promise.then(function (result) {
+          if (
+            result &&
+            focusedCaptionState.open &&
+            state.currentItem &&
+            state.currentItem.key === candidate.mediaKey
+          ) {
+            setFocusedCaptionVisionPhraseResult(result);
+          }
+        }).catch(function (err) {
+          if (!phraseTask.cancelled) reportConsoleError('Focus Caption Vision phrases', err);
+        });
+      }
+    }
     syncCaptionAssistCandidateUi();
     setStatus(
       candidate.omittedAssignments.length
@@ -418,6 +565,7 @@ function stopFocusedCaption(message) {
   }
   cancelFocusedCaptionPrefetch();
   cancelCurrentCaptionVision();
+  clearFocusedCaptionVisionPhrases();
   clearCaptionAssistCandidate();
   clearCaptionVisionResult();
   syncFocusedCaptionControls();
@@ -437,6 +585,7 @@ function prepareFocusedCaptionCurrentItem() {
   }
 
   resetFocusedCaptionUseArm();
+  clearFocusedCaptionVisionPhrases({ keepEnabled: true });
   clearCaptionAssistCandidate();
   syncFocusedCaptionControls();
   syncCaptionAssistCandidateUi();
@@ -558,6 +707,7 @@ function startFocusedCaption(targetMediaKey) {
   }
 
   focusedCaptionState.open = true;
+  focusedCaptionVisionPhrases.enabled = false;
   focusedCaptionState.folder = String((state && state.folder) || '');
   loadCaptionVisionCapabilities();
   focusedCaptionState.itemKeys = itemKeys;
@@ -680,6 +830,8 @@ window.advanceFocusedCaption = advanceFocusedCaption;
 window.startFocusedCaptionPrefetch = startFocusedCaptionPrefetch;
 window.cancelFocusedCaptionPrefetch = cancelFocusedCaptionPrefetch;
 window.syncFocusedCaptionVisionPreference = syncFocusedCaptionVisionPreference;
+window.extractFocusedCaptionVisionPhrases = extractFocusedCaptionVisionPhrases;
+window.focusedCaptionVisionPhrases = focusedCaptionVisionPhrases;
 window.beginFocusedCaptionRequest = beginFocusedCaptionRequest;
 window.isFocusedCaptionRequestCurrent = isFocusedCaptionRequestCurrent;
 window.isFocusedCaptionUseArmedForCandidate = isFocusedCaptionUseArmedForCandidate;

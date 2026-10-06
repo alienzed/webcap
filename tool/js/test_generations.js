@@ -23,6 +23,7 @@
   var trackedTestInferenceSessions = Object.create(null);
   var pendingTestCompletionChecks = Object.create(null);
   var showSessionError = false;
+  var missingWorkingModelContextReported = false;
   var reportedFailureKeys = new Set();
   var debouncedWorkspacePromptSave = debounceCreate(500);
   var debouncedTestBenchStateSave = debounceCreate(500);
@@ -702,7 +703,14 @@
   }
 
   function currentTestModelId() {
-    return String(getWorkingModelProfileId() || '');
+    if (typeof window.getWorkingModelProfileId !== 'function') {
+      if (!missingWorkingModelContextReported) {
+        missingWorkingModelContextReported = true;
+        console.error('[Test Generations] Shared working model context is unavailable; Test Generations is disabled until it loads.');
+      }
+      return '';
+    }
+    return String(window.getWorkingModelProfileId() || '');
   }
 
   function saveTestWorkspacePrompt(prompt) {
@@ -986,7 +994,7 @@
   }
 
   function isTestModelSupported() {
-    return supportedTestModelIds.indexOf(String(getWorkingModelProfileId() || '')) !== -1;
+    return supportedTestModelIds.indexOf(currentTestModelId()) !== -1;
   }
 
   function refreshSupportedTestModels() {
@@ -1081,7 +1089,7 @@
   }
 
   function refreshStagedFilesAfterCandidates() {
-    return request('test_prepare', { modelId: getWorkingModelProfileId() }).then(function (payload) {
+    return request('test_prepare', { modelId: currentTestModelId() }).then(function (payload) {
       prepared = payload;
       renderStagedFiles(payload);
       syncCandidatesButton(payload);
@@ -3093,7 +3101,7 @@
       el('test-generations-wildcard-status').textContent = 'Director unavailable.';
       reportConsoleError('Test Generations', err);
     });
-    request('test_prepare', { modelId: getWorkingModelProfileId() }).then(function (payload) {
+    request('test_prepare', { modelId: currentTestModelId() }).then(function (payload) {
       prepared = payload;
       syncCandidatesButton(payload);
       if (Array.isArray(payload.warnings)) {
@@ -3178,7 +3186,7 @@
     request('test_enqueue', {
       name: name,
       selectedFiles: selectedFiles,
-      modelId: getWorkingModelProfileId(),
+      modelId: currentTestModelId(),
       includeBase: includeBase,
       candidateStrengths: selectedStrengths,
       prompt: prompt,
@@ -3276,7 +3284,7 @@
     return request('test_remove_candidate', {
       fileName: String(fileName || ''),
       session: String(sessionName || ''),
-      modelId: getWorkingModelProfileId()
+      modelId: currentTestModelId()
     }).then(function (payload) {
       if (prepared && String(payload.modelId || '') === String(prepared.modelId || '')) {
         prepared.count = Number(payload.count || 0);

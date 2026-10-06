@@ -603,9 +603,14 @@ def _session_status(session_directory):
         visible["modelId"] = str(visible.get("model") or get_test_model().PROFILE_ID)
     if not visible.get("resultFolder"):
         visible["resultFolder"] = _session_result_folder(session_directory)
-    visible["wildcardValues"] = _resolved_wildcard_values(
-        visible.get("sourcePrompt"),
-        visible.get("resolvedPrompt") or visible.get("prompt"),
+    stored_wildcard_values = visible.get("wildcardValues")
+    visible["wildcardValues"] = (
+        list(stored_wildcard_values)
+        if isinstance(stored_wildcard_values, list) and stored_wildcard_values
+        else _resolved_wildcard_values(
+            visible.get("sourcePrompt"),
+            visible.get("resolvedPrompt") or visible.get("prompt"),
+        )
     )
     return visible
 
@@ -1438,9 +1443,14 @@ def _sync_inference_session(session_directory):
         visible["running"] = 1 if active is not None else 0
         visible["session"] = Path(session_directory).name
         visible["resultFolder"] = visible.get("resultFolder") or _session_result_folder(session_directory)
-        visible["wildcardValues"] = _resolved_wildcard_values(
-            visible.get("sourcePrompt"),
-            visible.get("resolvedPrompt") or visible.get("prompt"),
+        stored_wildcard_values = visible.get("wildcardValues")
+        visible["wildcardValues"] = (
+            list(stored_wildcard_values)
+            if isinstance(stored_wildcard_values, list) and stored_wildcard_values
+            else _resolved_wildcard_values(
+                visible.get("sourcePrompt"),
+                visible.get("resolvedPrompt") or visible.get("prompt"),
+            )
         )
 
         if active is not None:

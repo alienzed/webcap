@@ -158,7 +158,7 @@ def test_caption_assist_offscreen_request_uses_target_item_draft():
     assert "var savedCaption = String(mediaItem.caption || '');" in primer
     assert "buildAutoPrimer(mediaItem.fileName, mediaKey)" in primer
     assert "draft: getCaptionAssistDraftForMediaItem(mediaItem)" in primer
-    assert "function captionAssistRequestFingerprint(request)" in primer
+    assert "function captionAssistRequestFingerprint(mediaItem, request)" in primer
     assert "ui.editorEl.value = nextEditorValue;" in media
 
 
@@ -187,6 +187,7 @@ def test_focus_caption_prefetch_is_one_deep_request_validated_and_ephemeral():
     assert "requestCaptionAssistCandidate(target.item, request" in focus
     assert "captionAssistRequestFingerprint(target.item, request)" in focus
     assert "captionAssistRequestFingerprint(state.currentItem, latestRequest) !== prefetch.fingerprint" in focus
+    assert "candidate.missingGroups = getCaptionAssistMissingGroups(candidate.mediaKey);" in focus
     assert "focusedCaptionPrefetch = null;" in focus
     assert "localStorage" not in focus
     assert "sessionStorage" not in focus

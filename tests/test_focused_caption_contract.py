@@ -202,3 +202,11 @@ def test_focus_caption_prefetch_is_cancelled_at_lifecycle_boundaries():
     assert "captionAssistPendingJobId === 'prefetch'" in focus
     assert "if (prefetch.discarded) return cancelCaptionAssistJob(prefetch.jobId);" in focus
     assert focus.count("cancelFocusedCaptionPrefetch();") >= 2
+
+
+def test_focus_caption_prefetch_failures_reach_global_console():
+    focus = _read("tool/js/focused_caption.js")
+
+    assert "reportConsoleWarning('Focus Caption', 'Could not cancel speculative Caption Assist job:" in focus
+    assert "reportConsoleError('Focus Caption', err);" in focus
+    assert "console.warn('[Focus Caption]" not in focus

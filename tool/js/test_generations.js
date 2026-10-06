@@ -182,7 +182,8 @@
     var button = el('test-generations-wildcard-btn');
     var refresh = el('test-generations-wildcard-refresh');
     var status = el('test-generations-wildcard-status');
-    if (!select || !button || !refresh || !status) throw new Error('Test wildcard controls are missing.');
+    var regenerate = el('test-generations-wildcard-regenerate');
+    if (!select || !button || !refresh || !status || !regenerate) throw new Error('Test wildcard controls are missing.');
 
     refresh.disabled = wildcardDirector.busy;
 
@@ -190,6 +191,7 @@
       select.innerHTML = '<option value="">Director unavailable</option>';
       select.disabled = true;
       button.disabled = true;
+      regenerate.disabled = true;
       return;
     }
 
@@ -198,6 +200,7 @@
     select.value = wildcardDirector.modelId;
     select.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
     button.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
+    regenerate.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
     button.textContent = wildcardDirector.busy ? 'Analyzing…' : 'Generate Wildcard';
     button.title = 'Generate a wildcard prompt from this Set\'s captions';
   }
@@ -303,7 +306,7 @@
     }
 
     preview.textContent = resolveWildcardPreview(value, groups, wildcardDirector.previewSelections);
-    use.disabled = !value.trim();
+    use.disabled = !value.trim() || !groups.length;
   }
 
   function renderWildcardAnalysis(analysis) {
@@ -3246,6 +3249,7 @@
     wildcardDirector.analysis = null;
     wildcardDirector.previewSelections = [];
     if (wildcardDirector.modalOpen) closeWildcardBuilder();
+    el('test-generations-wildcard-focus').value = '';
     renderWildcardAnalysis(null);
     el('test-generations-wildcard-status').textContent = '';
     el('test-generations-wildcard-modal-status').textContent = '';

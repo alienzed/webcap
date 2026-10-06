@@ -23,6 +23,7 @@
         <link rel="stylesheet" href="/static/css/generate.css">
         <link rel="stylesheet" href="/static/css/storage_manager.css">
         <link rel="stylesheet" href="/static/css/workbench.css">
+        <link rel="stylesheet" href="/static/css/qa_workbench.css">
         <link rel="stylesheet" href="/static/css/modals.css">
         <link rel="stylesheet" href="/static/css/media_grid.css">
         <link rel="stylesheet" href="/static/css/crop_modal.css">
@@ -775,12 +776,20 @@
                 </div>
                 <section id="review-detail-surface" class="workbench-card review-detail-surface hidden" aria-label="Review artifacts">
                     <div class="workspace-artifact-tabs" role="tablist" aria-label="Review artifacts">
-                        <button type="button" class="workspace-artifact-tab active" data-review-detail-tab="metadata" role="tab" aria-selected="true">Media Metadata</button>
+                        <button type="button" class="workspace-artifact-tab active" data-review-detail-tab="qa" role="tab" aria-selected="true">Quality Assurance</button>
+                        <button type="button" class="workspace-artifact-tab" data-review-detail-tab="metadata" role="tab" aria-selected="false">Media Metadata</button>
                         <button type="button" class="workspace-artifact-tab" data-review-detail-tab="report" role="tab" aria-selected="false">Caption Report</button>
                         <button type="button" class="workspace-artifact-tab" data-review-detail-tab="prune" role="tab" aria-selected="false">Prune Candidates</button>
                         <button type="button" class="workspace-artifact-tab" data-review-detail-tab="duplicates" role="tab" aria-selected="false">Duplicates</button>
                     </div>
-                    <section id="review-metadata-pane" class="review-detail-pane">
+                    <section id="caption-sheet-pane" class="review-detail-pane caption-sheet-pane hidden">
+                        <div class="review-output-column-header">
+                            <div class="review-output-column-title">Combined Captions <span id="caption-sheet-summary" class="caption-sheet-summary"></span></div>
+                            <div class="review-output-column-subtitle">Current training-selection captions for proofreading. This view does not save edits.</div>
+                        </div>
+                        <textarea id="caption-sheet-text" class="caption-sheet-text" readonly spellcheck="true" aria-label="Combined captions"></textarea>
+                    </section>
+                    <section id="review-metadata-pane" class="review-detail-pane hidden">
                         <div class="review-output-column-header">
                             <div class="review-output-column-title">Media Metadata</div>
                             <div class="review-output-column-subtitle">Current-scope media dimensions, duration, and aspect-ratio groups.</div>
@@ -828,11 +837,9 @@
                 aria-label="Collapse sidebar"
                 aria-pressed="false"
             >&lt;</button>
-                <section id="review-output-surface" class="review-output-surface hidden" data-workspace-root="review" aria-label="Review workspace">
-                    <div class="review-output-surface-header"><button id="review-output-assistant-btn" type="button" class="review-captions-btn" title="Analyze the current visible captions with Assistant" aria-label="Review current visible captions with Assistant">&#10024; Assistant</button><button id="review-output-back-btn" type="button" class="review-captions-btn">Back</button></div>
-                    <div class="review-output-columns">
-                        <section id="caption-sheet-pane" class="review-output-column caption-sheet-pane"><div class="review-output-column-header"><div class="review-output-column-title">Caption Sheet <span id="caption-sheet-summary" class="caption-sheet-summary"></span></div><div class="review-output-column-subtitle">Current visible captions for proofreading. This view does not save edits.</div></div><textarea id="caption-sheet-text" class="caption-sheet-text" readonly spellcheck="true" aria-label="Caption sheet"></textarea></section>
-                    </div>
+                <section id="review-output-surface" class="review-output-surface hidden" data-workspace-root="review" aria-label="Quality Assurance workspace">
+                    <div id="qa-workbench" class="qa-workbench"></div>
+                    <button id="review-output-back-btn" type="button" class="review-captions-btn hidden">Back</button>
                 </section>
                     <section id="training-navigator" class="training-navigator hidden" data-workspace-root="training" aria-label="Training workspace">
                         <section id="training-run-setup" class="training-run-setup training-set-only" aria-label="Training run setup">
@@ -2511,6 +2518,7 @@
         <script src="/static/js/training_candidates.js"></script>
         <script src="/static/js/training_workspace.js"></script>
         <script src="/static/js/workspace_shell.js"></script>
+        <script src="/static/js/qa_workbench.js"></script>
         <script src="/static/js/director_chat.js"></script>
         <script src="/static/js/review_assistant.js"></script>
         <script src="/static/js/inference_queue.js"></script>

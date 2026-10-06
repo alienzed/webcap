@@ -13,9 +13,9 @@ function applyPreviewInspectMode() {
   btn.setAttribute('aria-label', label);
   btn.title = label;
 
-  if (!ui || !ui.previewEl) return;
+  if (!ui || !ui.previewEl) throw new Error('Preview iframe wiring is missing.');
   var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
-  if (!doc) return;
+  if (!doc) throw new Error('Preview iframe document is unavailable.');
   var mediaEl = doc.querySelector('[data-preview-media="1"]');
   if (!mediaEl) return;
 

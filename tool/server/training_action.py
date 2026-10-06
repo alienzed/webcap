@@ -191,7 +191,7 @@ def action_paths(action_id):
     return root, captures, captures, data
 
 
-def allocate_action(folder_path, profile, mode, stages, run_name=""):
+def allocate_action(folder_path, profile, stages, run_name=""):
     """Create an empty, visible action parent using mkdir as the allocation lock."""
     run_name, run_slug = normalize_run_name(run_name)
     with _action_lock:
@@ -226,7 +226,6 @@ def allocate_action(folder_path, profile, mode, stages, run_name=""):
                 "folder": _relative_folder(folder_path),
                 "profileId": str(profile.get("id") or ""),
                 "profileLabel": str(profile.get("label") or ""),
-                "mode": str(mode or "normal"),
                 "requestedStages": list(stages),
                 "createdAt": time.time(),
                 "captures": [],

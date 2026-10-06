@@ -827,7 +827,7 @@ def _ensure_server():
             _log_relay_offset = log_path.stat().st_size
         except OSError:
             _log_relay_offset = 0
-        _log_handle = open(log_path, "a", encoding="utf-8")
+        _log_handle = open(log_path, "w", encoding="utf-8")
         command = [
             executable,
             "--models-dir", str(models_dir),

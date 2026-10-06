@@ -438,7 +438,7 @@ def _build_review_plan(folder, profile_id, setup, manifest, profile_plan):
             "datasetEntries": training_plan_entries(entries, repeats), "settings": settings,
         }
         all_excluded.extend(dict(item, stage=stage) for item in excluded)
-    return {"version": TRAINING_PLAN_VERSION, "profileId": profile_id, "mode": "review", "stages": stages, "excluded": all_excluded}
+    return {"version": TRAINING_PLAN_VERSION, "profileId": profile_id, "stages": stages, "excluded": all_excluded}
 
 
 def _review_bucket_comment_lines(entry, profile_id):

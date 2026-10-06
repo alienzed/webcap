@@ -603,6 +603,10 @@ def _session_status(session_directory):
         visible["modelId"] = str(visible.get("model") or get_test_model().PROFILE_ID)
     if not visible.get("resultFolder"):
         visible["resultFolder"] = _session_result_folder(session_directory)
+    visible["wildcardValues"] = _resolved_wildcard_values(
+        visible.get("sourcePrompt"),
+        visible.get("resolvedPrompt") or visible.get("prompt"),
+    )
     return visible
 
 
@@ -1062,7 +1066,7 @@ def _resolved_wildcard_values(source_prompt, resolved_prompt):
     pattern = []
     cursor = 0
     for match in matches:
-        options = [option.strip() for option in match.group(1).split("|") if option.strip()]
+        options = [option.strip() for option in match.group(1).split("|")]
         if len(options) < 2:
             return []
         pattern.append(re.escape(source[cursor:match.start()]))
@@ -1409,6 +1413,10 @@ def _sync_inference_session(session_directory):
         visible["running"] = 1 if active is not None else 0
         visible["session"] = Path(session_directory).name
         visible["resultFolder"] = visible.get("resultFolder") or _session_result_folder(session_directory)
+        visible["wildcardValues"] = _resolved_wildcard_values(
+            visible.get("sourcePrompt"),
+            visible.get("resolvedPrompt") or visible.get("prompt"),
+        )
 
         if active is not None:
             metadata = active.get("metadata") if isinstance(active.get("metadata"), dict) else {}

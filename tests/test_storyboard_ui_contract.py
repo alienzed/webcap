@@ -880,6 +880,7 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert 'data-story-section="story" open' in html
     assert 'data-story-section="continuity" open' not in html
     assert "var STORY_SECTION_DEFAULTS = {" in storyboard
+    assert "localStorage" not in storyboard
     assert "story: true" in storyboard
     assert "continuity: false" in storyboard
     assert "defaults: false" in storyboard

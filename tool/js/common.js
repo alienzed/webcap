@@ -145,35 +145,33 @@ try {
 
 window.setRuntimeAppConfig = setRuntimeAppConfig;
 
-var DIRECTOR_MODEL_STORAGE_KEY = 'webcap.director.model';
-
 function getDirectorModelPreference(_storageKey) {
-  var selected = '';
-  try {
-    selected = String(window.localStorage.getItem(DIRECTOR_MODEL_STORAGE_KEY) || '').trim();
-    if (!selected) {
-      var legacyKeys = [
-        'webcap.storyboard.directorModel',
-        'webcap.generate.directorModel',
-        'webcap.testGenerations.directorModel',
-        'webcap.directorChat.model'
-      ];
-      for (var i = 0; i < legacyKeys.length && !selected; i += 1) {
-        selected = String(window.localStorage.getItem(legacyKeys[i]) || '').trim();
-      }
-      if (selected) window.localStorage.setItem(DIRECTOR_MODEL_STORAGE_KEY, selected);
-    }
-  } catch (_err) {}
-  return selected;
+  return String(APP_CONFIG && APP_CONFIG.director_model || '').trim();
 }
 
 function setDirectorModelPreference(_storageKey, modelId) {
   var selected = String(modelId || '').trim();
-  try {
-    if (selected) window.localStorage.setItem(DIRECTOR_MODEL_STORAGE_KEY, selected);
-    else window.localStorage.removeItem(DIRECTOR_MODEL_STORAGE_KEY);
-  } catch (_err) {}
+  if (!APP_CONFIG || typeof APP_CONFIG !== 'object') setRuntimeAppConfig({});
+  APP_CONFIG.director_model = selected;
+  window.APP_CONFIG = APP_CONFIG;
   window.dispatchEvent(new CustomEvent('webcap:director-model-changed', { detail: { modelId: selected } }));
+
+  HttpModule.postJson('/app/config/director_model', { modelId: selected }, function (status, responseText) {
+    if (status === 200) {
+      try {
+        var payload = JSON.parse(responseText);
+        if (payload && payload.config) setRuntimeAppConfig(payload.config);
+      } catch (_err) {}
+      return;
+    }
+    var message = 'Failed to save Director model preference.';
+    try {
+      var failure = JSON.parse(responseText);
+      if (failure && failure.error) message = String(failure.error);
+    } catch (_err) {}
+    console.error(message);
+    if (typeof setStatus === 'function') setStatus(message);
+  });
   return selected;
 }
 

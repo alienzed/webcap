@@ -144,8 +144,10 @@ function useCaptionAssistCandidate() {
   }
 
   cancelEditorAutosaveForCaption(state.folder, mediaItem.fileName);
-  return saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key, {
-    skipRenderFileList: true
+  return cancelCurrentCaptionVision().then(function () {
+    return saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key, {
+      skipRenderFileList: true
+    });
   }).then(function () {
     captionAssistCandidate = null;
     syncCaptionAssistCandidateUi();
@@ -778,9 +780,11 @@ function wirePrimerCaptionResetUi() {
   if (!candidateRegenerateBtn.__captionAssistBound) {
     candidateRegenerateBtn.__captionAssistBound = true;
     candidateRegenerateBtn.addEventListener('click', function () {
-      captionAssistCandidate = null;
-      syncCaptionAssistCandidateUi();
-      runCaptionAssistFromUi();
+      cancelCurrentCaptionVision().then(function () {
+        captionAssistCandidate = null;
+        syncCaptionAssistCandidateUi();
+        return runCaptionAssistFromUi();
+      });
     });
   }
 

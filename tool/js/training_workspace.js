@@ -1,15 +1,3 @@
-function normalizeTrainingWorkspaceMode(mode) {
-  return 'normal';
-}
-
-function syncTrainingWorkspaceProfile() {
-  trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);
-}
-
-function getTrainingWorkspaceSelectedProfile(folder) {
-  return normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);
-}
-
 function fetchTrainingProfiles() {
   if (trainingWorkspaceState.profiles.length) return Promise.resolve(trainingWorkspaceState.profiles);
   return fetch('/fs/training_profiles').then(function (response) {
@@ -34,10 +22,7 @@ function getSelectedTrainingModelProfile() {
 }
 
 function getSelectedTrainingSetup() {
-  var profile = getSelectedTrainingModelProfile();
-  var mode = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);
-  if (!profile || !profile.setups || !profile.setups[mode]) return null;
-  return profile.setups[mode];
+  return getSelectedTrainingModelProfile();
 }
 
 function getTrainingProfileRunForStage(profile, stage) {
@@ -65,8 +50,6 @@ function syncWorkingModelProfileSelect(folder) {
   select.value = selectedProfileId;
   if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
   if (isTrainingWorkspaceActive()) {
-    trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);
-    syncTrainingWorkspaceProfile();
     setManagedTrainingStages(trainingWorkspaceState.runStages);
   }
 }
@@ -115,7 +98,6 @@ function ensureSelectedTrainingSetup(resetFile) {
     body: JSON.stringify({
       folder: state.folder,
       profileId: getWorkingModelProfileId(),
-      mode: normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode),
       selected_media: selection.selected_media,
       total_media_count: selection.total_media_count,
       selection_criteria: selection.selection_criteria,
@@ -335,8 +317,7 @@ function renderTrainingWorkspaceConfigList(files) {
     return;
   }
   var profile = getSelectedTrainingModelProfile();
-  var modeLabel = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode).toUpperCase();
-  els.configList.innerHTML = '<section class="training-config-group"><div class="training-config-group-heading"><strong>' + escapeHtml((profile ? profile.label : 'Training') + ' · ' + modeLabel) + '</strong><span>' + visibleFiles.length + ' files</span></div><div class="training-config-links">' + visibleFiles.map(function (fileName) {
+  els.configList.innerHTML = '<section class="training-config-group"><div class="training-config-group-heading"><strong>' + escapeHtml(profile ? profile.label : 'Training') + '</strong><span>' + visibleFiles.length + ' files</span></div><div class="training-config-links">' + visibleFiles.map(function (fileName) {
       var active = !!(state.currentConfigFile && state.currentConfigFile.folder === state.folder && state.currentConfigFile.file === fileName);
       var reset = '<button type="button" class="training-config-reset" data-training-reset-config="' + encodeURIComponent(fileName) + '">Reset</button>';
       return '<div class="training-config-file"><button type="button" class="training-config-link' + (active ? ' active' : '') + '" data-training-config="' + encodeURIComponent(fileName) + '">' + escapeHtml(fileName) + '</button>' + reset + '</div>';
@@ -483,8 +464,6 @@ function refreshTrainingWorkspace() {
     .then(function () {
       if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
       syncWorkingModelProfileSelect(folder);
-      trainingWorkspaceState.selectedMode = 'normal';
-      syncTrainingWorkspaceProfile();
       if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
       return getVisibleMediaSelectionForTraining().length ? ensureSelectedTrainingSetup() : Promise.resolve(null);
     })
@@ -547,14 +526,13 @@ function openTrainingWorkspaceFolder(folder) {
   refreshCurrentDirectory();
 }
 
-function switchTrainingSetup(profileId, mode) {
+function switchTrainingSetup(profileId) {
   var priorConfig = state.currentConfigFile;
   var savePromise = priorConfig && priorConfig.folder === state.folder
     ? Promise.resolve(saveCurrentEditorContent())
     : Promise.resolve();
   savePromise.then(function () {
     if (profileId) setSelectedTrainingModelProfile(profileId);
-    if (mode) trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(mode);
 
     // Model-specific workspace state must never survive a model switch. The
     // next refresh may fail, and stale files/review from the previous model
@@ -614,7 +592,7 @@ function wireTrainingWorkspace() {
   };
   if (modelProfileSelect) modelProfileSelect.onchange = function () {
     if (isTrainingWorkspaceActive()) {
-      switchTrainingSetup(modelProfileSelect.value, '');
+      switchTrainingSetup(modelProfileSelect.value);
       return;
     }
     setWorkingModelProfileId(modelProfileSelect.value, state.folder);

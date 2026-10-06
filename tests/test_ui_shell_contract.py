@@ -373,15 +373,15 @@ def test_working_model_state_is_shared_and_training_no_longer_owns_it():
 
     assert html.index('src="/static/js/working_context.js"') < html.index('src="/static/js/training_workspace_state.js"')
     assert "modelProfileId: 'wan22_t2v'" in context
-    assert "webcap.trainingProfile." in context
+    assert "localStorage" not in context
     assert "function getWorkingModelProfileId()" in context
-    assert "function setWorkingModelProfileId(profileId, folder)" in context
-    assert "function syncWorkingModelProfileForFolder(folder, profiles)" in context
+    assert "function setWorkingModelProfileId(profileId)" in context
+    assert "function syncWorkingModelProfile(profiles)" in context
     assert "selectedProfileId" not in state
     assert "trainingWorkspaceState.selectedProfileId" not in training
     assert "trainingProfileStorageKey" not in training
     assert "getWorkingModelProfileId()" in training
-    assert "setWorkingModelProfileId(profileId, state.folder)" in training
+    assert "setWorkingModelProfileId(profileId)" in training
     assert 'id="app-header-model-profile-select"' in html
 
 
@@ -408,7 +408,7 @@ def test_model_selector_is_single_real_control_in_permanent_header():
     assert "modelSelect.disabled = navigation.activity === 'test'" in shell
     assert "modelProfileSelect:" not in training_state
     assert "getWorkingModelProfileSelect()" in training
-    assert "syncWorkingModelProfileSelect(folder)" in training
+    assert "syncWorkingModelProfileSelect()" in training
     assert "select.disabled = false" not in training
     assert "window.syncApplicationShellContext()" in training
     assert "window.refreshWorkingModelSelector = refreshWorkingModelSelector" in training
@@ -416,7 +416,7 @@ def test_model_selector_is_single_real_control_in_permanent_header():
     assert "var workingModelProfileId = getWorkingModelProfileId();" in shell
     assert "window.addEventListener('webcap:working-model-changed', syncApplicationShellContext);" in shell
     assert "if (isTrainingWorkspaceActive())" in training
-    assert "setWorkingModelProfileId(modelProfileSelect.value, state.folder);" in training
+    assert "setWorkingModelProfileId(modelProfileSelect.value);" in training
     assert "app-header-model-profile-select" not in test_bench
     assert "getWorkingModelProfileId()" in test_bench
     assert "webcap:working-model-changed" in test_bench

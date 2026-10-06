@@ -6,6 +6,7 @@
     "models": "C:\\path\\to\\model\\root\\models"
   },
   "theme": "light",
+  "director_model": "",
   "training": {
     "diffusion_pipe_wsl": "/home/you/diffusion-pipe",
     "wsl_distribution": "Ubuntu",

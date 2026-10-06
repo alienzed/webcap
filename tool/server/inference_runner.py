@@ -134,6 +134,28 @@ def prepare_startup_backlog():
     return execution_lane_snapshot(EXECUTION_LANE, include_terminal=False).get("jobs", [])
 
 
+def _test_job_wildcard_values(job, metadata, details):
+    values = details.get("wildcardValues")
+    if isinstance(values, list):
+        return copy.deepcopy(values)
+    if str(metadata.get("client") or "") != "test":
+        return []
+    job_id = str(job.get("id") or "").strip()
+    if not job_id:
+        return []
+    try:
+        stored = execution_get_job(job_id, include_payload=True)
+    except FileNotFoundError:
+        return []
+    payload = stored.get("payload") if isinstance(stored.get("payload"), dict) else {}
+    request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+    from .epoch_test_bench import _resolved_wildcard_values
+    return _resolved_wildcard_values(
+        request.get("sourcePrompt"),
+        request.get("resolvedPrompt") or request.get("prompt"),
+    )
+
+
 def _job_view(job):
     if not isinstance(job, dict):
         return None
@@ -153,11 +175,7 @@ def _job_view(job):
         "source": str(metadata.get("source") or ""),
         "candidateKind": str(metadata.get("candidateKind") or ""),
         "candidateFile": str(metadata.get("candidateFile") or ""),
-        "wildcardValues": copy.deepcopy(
-            details.get("wildcardValues")
-            if isinstance(details.get("wildcardValues"), list)
-            else metadata.get("wildcardValues") or []
-        ),
+        "wildcardValues": _test_job_wildcard_values(job, metadata, details),
         "status": str(job.get("status") or ""),
         "queuePosition": int(job.get("queuePosition") or 0),
         "createdAt": job.get("createdAt"),
@@ -682,7 +700,6 @@ def enqueue_test(request, context, label="", deferred=False):
             "sessionId": session_id,
             "candidateKind": candidate_kind,
             "candidateFile": str(context.get("candidateFile") or ""),
-            "wildcardValues": copy.deepcopy(context.get("wildcardValues") or []),
         },
         initial_status=status,
     )

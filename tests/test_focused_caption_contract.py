@@ -160,3 +160,17 @@ def test_caption_assist_offscreen_request_uses_target_item_draft():
     assert "draft: getCaptionAssistDraftForMediaItem(mediaItem)" in primer
     assert "function captionAssistRequestFingerprint(request)" in primer
     assert "ui.editorEl.value = nextEditorValue;" in media
+
+
+def test_caption_assist_submission_is_reusable_for_prefetch():
+    primer = _read("tool/js/primer_settings.js")
+
+    assert "function requestCaptionAssistCandidate(mediaItem, request, options)" in primer
+    assert "function cancelCaptionAssistJob(jobId)" in primer
+    assert "operation: 'cancel_job'" in primer
+    assert "requestFingerprint: captionAssistRequestFingerprint(mediaItem, request)" in primer
+    assert "function captionAssistRequestFingerprint(mediaItem, request)" in primer
+    assert "mediaKey: String(mediaItem && mediaItem.key || '')" in primer
+    assert "if (isFocusedCaptionOpen()) startFocusedCaptionPrefetch(sourceMediaKey);" in primer
+    assert "function runCaptionAssistFromUi()" in primer
+    assert "return cancelFocusedCaptionPrefetch().then(function ()" in primer

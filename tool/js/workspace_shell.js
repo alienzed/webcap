@@ -501,10 +501,8 @@ function shellSetLabel(folder) {
 function refreshApplicationDirectorModels() {
   var control = document.getElementById('app-header-director-control');
   var select = document.getElementById('app-header-director-model');
-  var refresh = document.getElementById('app-header-director-refresh');
-  if (!control || !select || !refresh) return Promise.resolve();
+  if (!control || !select) return Promise.resolve();
 
-  refresh.disabled = true;
   select.disabled = true;
   select.innerHTML = '<option value="">Loading models...</option>';
 
@@ -528,8 +526,22 @@ function refreshApplicationDirectorModels() {
     select.innerHTML = '<option value="">Director unavailable</option>';
     select.disabled = true;
     if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Director', err);
-  }).then(function () {
+  });
+}
+
+function refreshApplicationHeaderModels() {
+  var refresh = document.getElementById('app-header-models-refresh');
+  if (!refresh) throw new Error('Shared model refresh button is missing.');
+  refresh.disabled = true;
+  return Promise.all([
+    refreshApplicationDirectorModels(),
+    refreshApplicationVisionModels(true)
+  ]).then(function (results) {
     refresh.disabled = false;
+    return results;
+  }, function (err) {
+    refresh.disabled = false;
+    throw err;
   });
 }
 
@@ -1078,7 +1090,7 @@ function wireShellMoreMenuUi() {
 function wireWorkspaceHeaderUi() {
   wireShellMoreMenuUi();
   var directorSelect = document.getElementById('app-header-director-model');
-  var directorRefresh = document.getElementById('app-header-director-refresh');
+  var modelsRefresh = document.getElementById('app-header-models-refresh');
   var visionSelect = document.getElementById('app-header-vision-model');
   if (directorSelect && !directorSelect.__directorWired) {
     directorSelect.__directorWired = true;
@@ -1094,11 +1106,12 @@ function wireWorkspaceHeaderUi() {
     });
     refreshApplicationDirectorModels();
   }
-  if (directorRefresh && !directorRefresh.__directorWired) {
-    directorRefresh.__directorWired = true;
-    directorRefresh.onclick = function () {
-      refreshApplicationDirectorModels();
-      refreshApplicationVisionModels(true);
+  if (modelsRefresh && !modelsRefresh.__modelsWired) {
+    modelsRefresh.__modelsWired = true;
+    modelsRefresh.onclick = function () {
+      refreshApplicationHeaderModels().catch(function (err) {
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Models', err);
+      });
     };
   }
   if (visionSelect && !visionSelect.__visionWired) {
